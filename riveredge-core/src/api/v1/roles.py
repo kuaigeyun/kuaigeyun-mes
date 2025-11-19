@@ -19,7 +19,7 @@ from api.deps import get_current_user
 from models.user import User
 
 # 创建路由
-router = APIRouter(prefix="/roles", tags=["角色管理"])
+router = APIRouter(prefix="/roles", tags=["Roles"])
 
 
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)

@@ -4,7 +4,10 @@
  * 提供租户注册相关的 API 接口
  */
 
-import { request } from '@umijs/max';
+// 使用 apiRequest 统一处理 HTTP 请求
+
+
+import { apiRequest } from './api';
 
 /**
  * 租户注册请求数据
@@ -37,7 +40,7 @@ export interface TenantRegisterResponse {
 export async function registerTenant(data: TenantRegisterData): Promise<TenantRegisterResponse> {
   return request('/api/v1/register', {
     method: 'POST',
-    data,
+    body: JSON.stringify(data),
   });
 }
 

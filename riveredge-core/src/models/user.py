@@ -21,26 +21,28 @@ class User(BaseModel):
     用户模型
     
     用于管理 SaaS 多租户系统中的用户信息。
-    所有用户必须属于某个租户（tenant_id），实现多租户数据隔离。
-    同一租户内用户名必须唯一。
+    普通用户必须属于某个租户（tenant_id），实现多租户数据隔离。
+    系统级超级管理员（is_superuser=True 且 tenant_id=None）可以跨租户访问和管理数据。
+    同一租户内用户名必须唯一，系统级超级管理员用户名全局唯一。
     
     Attributes:
         id: 用户 ID（主键）
-        tenant_id: 租户 ID（外键，关联到 core_tenants 表）
-        username: 用户名（租户内唯一）
+        tenant_id: 租户 ID（外键，关联到 core_tenants 表，可为空用于系统级超级管理员）
+        username: 用户名（租户内唯一，系统级超级管理员全局唯一）
         email: 用户邮箱（可选，符合中国用户使用习惯）
         password_hash: 密码哈希值（使用 bcrypt 加密）
         full_name: 用户全名（可选）
         is_active: 是否激活
-        is_superuser: 是否为超级用户（租户内）
+        is_superuser: 是否为超级用户（租户内超级用户或系统级超级管理员）
         is_tenant_admin: 是否为租户管理员
         last_login: 最后登录时间（可选）
         created_at: 创建时间
         updated_at: 更新时间
     """
-    
-    tenant_id = fields.IntField(description="租户 ID（外键，关联到 core_tenants 表）")
-    username = fields.CharField(max_length=50, description="用户名（租户内唯一）")
+
+    id = fields.IntField(primary_key=True, description="用户 ID（主键）")
+    tenant_id = fields.IntField(null=True, description="租户 ID（外键，关联到 core_tenants 表，可为空用于系统级超级管理员）")
+    username = fields.CharField(max_length=50, description="用户名（租户内唯一，系统级超级管理员全局唯一）")
     email = fields.CharField(max_length=255, null=True, description="用户邮箱（可选，符合中国用户使用习惯）")
     password_hash = fields.CharField(max_length=255, description="密码哈希值（使用 bcrypt 加密）")
     full_name = fields.CharField(max_length=100, null=True, description="用户全名（可选）")
@@ -65,7 +67,10 @@ class User(BaseModel):
             ("tenant_id",),           # 租户 ID 索引
             ("username",),            # 用户名索引
             ("tenant_id", "username"),  # 租户 ID + 用户名联合索引（租户内用户名唯一）
+            ("is_superuser",),       # 超级用户索引
         ]
+        # 注意：系统级超级管理员（tenant_id=None）用户名全局唯一，由应用层保证
+        # 租户内用户名唯一，由 unique_together 保证
         unique_together = [("tenant_id", "username")]  # 同一租户下用户名唯一
     
     def __str__(self) -> str:

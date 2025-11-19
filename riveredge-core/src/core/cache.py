@@ -31,7 +31,7 @@ class Cache:
         在应用启动时调用，建立 Redis 连接
         """
         try:
-            # 使用 redis 库的异步接口（兼容 Python 3.13）
+            # 使用 redis 库的异步接口（兼容 Python 3.12）
             cls._pool = ConnectionPool.from_url(
                 settings.REDIS_URL,
                 encoding="utf-8",
@@ -147,6 +147,31 @@ class Cache:
             raise RuntimeError("Redis 未连接，请先调用 connect()")
 
         return await cls._redis.expire(key, seconds)
+
+
+async def check_redis_connection() -> bool:
+    """
+    检查 Redis 连接状态
+
+    用于健康检查，验证 Redis 是否可连接
+
+    Returns:
+        bool: True 如果连接正常，False 如果连接失败
+    """
+    try:
+        # 如果已有连接实例，使用 ping 检查
+        if cache._redis:
+            await cache._redis.ping()
+            return True
+
+        # 如果没有连接实例，创建临时连接检查
+        temp_redis = Redis.from_url(settings.REDIS_URL)
+        await temp_redis.ping()
+        await temp_redis.aclose()
+        return True
+    except Exception as e:
+        logger.warning(f"Redis 连接检查失败: {e}")
+        return False
 
 
 # 创建全局缓存实例

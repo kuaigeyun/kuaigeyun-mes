@@ -35,11 +35,14 @@ interface LoginFormData {
  */
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { message } = App.useApp(); // 使用 App.useApp() 获取 message 实例，避免静态方法警告
+  const { message } = App.useApp();
+  // 使用自定义 hooks 管理用户状态（Zustand状态管理规范）
   const { setCurrentUser } = useUserModel();
   
   /**
    * 处理登录提交
+   * 
+   * 登录成功后更新用户状态，然后刷新页面以触发 getInitialState
    * 
    * @param values - 表单数据
    */
@@ -48,17 +51,17 @@ export default function LoginPage() {
       const response = await login(values);
 
       if (response && response.access_token) {
-        // 保存 Token（后端返回 access_token）
+        // 保存 Token
         setToken(response.access_token);
 
-        // 保存租户 ID（如果响应中包含）
+        // 保存租户 ID
         if (response.user?.tenant_id) {
           setTenantId(response.user.tenant_id);
         } else if (response.default_tenant_id) {
           setTenantId(response.default_tenant_id);
         }
 
-        // 更新用户状态（关键：通知权限系统用户已登录）
+        // 更新用户状态（getInitialState 会在页面刷新时自动获取）
         setCurrentUser({
           id: response.user.id,
           username: response.user.username,
@@ -70,15 +73,14 @@ export default function LoginPage() {
 
         message.success('登录成功');
 
-        // 延迟跳转，确保状态更新完成
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 100);
+        // 使用 React Router 进行页面跳转
+        const urlParams = new URL(window.location.href).searchParams;
+        // 跳转到指定页面或默认dashboard
+        navigate(urlParams.get('redirect') || '/dashboard');
       } else {
         message.error('登录失败，请检查用户名和密码');
       }
     } catch (error: any) {
-      // 处理错误信息
       const errorMessage = error?.response?.data?.detail || error?.message || '登录失败，请稍后重试';
       message.error(errorMessage);
     }

@@ -8,7 +8,6 @@ from models.tenant_config import TenantConfig
 from models.user import User
 from models.role import Role
 from models.permission import Permission
-from models.superadmin import SuperAdmin
 
 __all__ = [
     "BaseModel",
@@ -19,5 +18,4 @@ __all__ = [
     "User",
     "Role",
     "Permission",
-    "SuperAdmin",
 ]

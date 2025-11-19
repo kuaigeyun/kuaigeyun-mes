@@ -7,7 +7,7 @@
 
 import { ProForm, ProFormText } from '@ant-design/pro-components';
 import { message } from 'antd';
-import { useNavigate } from '@umijs/max';
+import { useNavigate } from 'react-router-dom';
 import { registerTenant } from '@/services/register';
 import './index.less';
 

@@ -9,7 +9,7 @@ import React, { useRef } from 'react';
 import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
 import { message, Popconfirm, Button, Tag } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { history } from '@umijs/max';
+import { useNavigate } from 'react-router-dom';
 import {
   getTenantList,
   deleteTenant,
@@ -43,6 +43,7 @@ const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
  * 租户列表页面组件
  */
 const TenantList: React.FC = () => {
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>();
 
   /**
@@ -171,7 +172,7 @@ const TenantList: React.FC = () => {
           key="edit"
           type="link"
           size="small"
-          onClick={() => history.push(`/tenant/form?id=${record.id}`)}
+          onClick={() => navigate(`/tenant/form?id=${record.id}`)}
         >
           编辑
         </Button>,
@@ -179,7 +180,7 @@ const TenantList: React.FC = () => {
           key="detail"
           type="link"
           size="small"
-          onClick={() => history.push(`/tenant/detail?id=${record.id}`)}
+          onClick={() => navigate(`/tenant/detail?id=${record.id}`)}
         >
           详情
         </Button>,
@@ -249,7 +250,7 @@ const TenantList: React.FC = () => {
           key="add"
           type="primary"
           icon={<PlusOutlined />}
-          onClick={() => history.push('/tenant/form')}
+          onClick={() => navigate('/tenant/form')}
         >
           新建租户
         </Button>,

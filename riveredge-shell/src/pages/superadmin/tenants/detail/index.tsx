@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { PageContainer } from '@ant-design/pro-components';
 import { Button, Tag, message, Space } from 'antd';
-import { history, useSearchParams } from '@umijs/max';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   getTenantById,
   Tenant,
@@ -17,7 +17,10 @@ import {
   activateTenant,
   deactivateTenant,
 } from '@/services/tenant';
-import { request } from '@umijs/max';
+// 使用 apiRequest 统一处理 HTTP 请求
+
+// @ts-ignore
+import { apiRequest } from '@/services/api';
 
 /**
  * 租户状态标签映射
@@ -42,6 +45,7 @@ const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
  * 超级管理员租户详情页面组件
  */
 const SuperAdminTenantDetail: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tenantId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
@@ -75,7 +79,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   const handleApprove = async () => {
     if (!tenantId) return;
     try {
-      await request(`/api/v1/superadmin/tenants/${tenantId}/approve`, {
+      await apiRequest(`/api/v1/superadmin/tenants/${tenantId}/approve`, {
         method: 'POST',
       });
       message.success('审核通过成功');
@@ -91,7 +95,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   const handleReject = async () => {
     if (!tenantId) return;
     try {
-      await request(`/api/v1/superadmin/tenants/${tenantId}/reject`, {
+      await apiRequest(`/api/v1/superadmin/tenants/${tenantId}/reject`, {
         method: 'POST',
       });
       message.success('审核拒绝成功');
@@ -142,7 +146,7 @@ const SuperAdminTenantDetail: React.FC = () => {
       title="租户详情（超级管理员）"
       extra={
         <Space>
-          <Button onClick={() => history.back()}>返回</Button>
+          <Button onClick={() => navigate(-1)}>返回</Button>
           {isInactive && (
             <>
               <Button type="primary" onClick={handleApprove}>

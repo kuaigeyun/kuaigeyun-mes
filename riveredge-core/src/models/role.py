@@ -29,7 +29,8 @@ class Role(BaseModel):
         created_at: 创建时间
         updated_at: 更新时间
     """
-    
+
+    id = fields.IntField(primary_key=True, description="角色 ID（主键）")
     tenant_id = fields.IntField(description="租户 ID（外键，关联到 core_tenants 表）")
     name = fields.CharField(max_length=50, description="角色名称（租户内唯一）")
     code = fields.CharField(max_length=50, description="角色代码（租户内唯一，用于程序识别）")

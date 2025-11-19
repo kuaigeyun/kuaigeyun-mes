@@ -12,7 +12,7 @@ from tortoise import Tortoise
 
 from fastapi.testclient import TestClient
 from app.main import app
-from models.superadmin import SuperAdmin
+from models.user import User
 from models.tenant import Tenant, TenantStatus
 from services.superadmin_service import SuperAdminService
 from services.superadmin_auth_service import SuperAdminAuthService

@@ -1,7 +1,8 @@
 """
-超级管理员认证服务模块
+系统级超级管理员认证服务模块
 
-提供超级管理员认证相关的业务逻辑，包括登录、Token 刷新等功能
+提供系统级超级管理员认证相关的业务逻辑，包括登录、Token 刷新等功能
+注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）
 """
 
 from typing import Optional, Dict, Any
@@ -9,7 +10,7 @@ from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
 from loguru import logger
 
-from models.superadmin import SuperAdmin
+from models.user import User
 from schemas.superadmin import SuperAdminLoginRequest
 from services.superadmin_service import SuperAdminService
 from core.superadmin_security import create_token_for_superadmin
@@ -17,10 +18,10 @@ from core.superadmin_security import create_token_for_superadmin
 
 class SuperAdminAuthService:
     """
-    超级管理员认证服务类
+    系统级超级管理员认证服务类
     
-    提供超级管理员认证相关的业务逻辑处理。
-    注意：超级管理员认证独立于租户系统，Token 不包含 tenant_id。
+    提供系统级超级管理员认证相关的业务逻辑处理。
+    注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）。
     """
     
     async def login(
@@ -69,7 +70,7 @@ class SuperAdminAuthService:
         # 生成 Token（不包含 tenant_id）⭐ 关键
         token_info = create_token_for_superadmin(admin)
         
-        logger.info(f"超级管理员登录成功: {admin.username} (ID: {admin.id})")
+        logger.info(f"系统级超级管理员登录成功: {admin.username} (ID: {admin.id})")
         
         from schemas.superadmin import SuperAdminResponse
         
@@ -81,17 +82,17 @@ class SuperAdminAuthService:
     async def get_current_superadmin_from_token(
         self,
         token: str
-    ) -> Optional[SuperAdmin]:
+    ) -> Optional[User]:
         """
-        从 Token 获取当前超级管理员
+        从 Token 获取当前系统级超级管理员
         
-        验证 Token 并返回对应的超级管理员对象。
+        验证 Token 并返回对应的系统级超级管理员用户对象。
         
         Args:
             token: JWT Token 字符串
             
         Returns:
-            Optional[SuperAdmin]: 超级管理员对象，如果验证失败则返回 None
+            Optional[User]: 系统级超级管理员用户对象，如果验证失败则返回 None
         """
         from core.superadmin_security import get_superadmin_token_payload
         
@@ -99,11 +100,15 @@ class SuperAdminAuthService:
         if not payload:
             return None
         
-        admin_id = int(payload.get("sub"))
-        admin = await SuperAdmin.get_or_none(id=admin_id)
+        user_id = int(payload.get("sub"))
+        user = await User.get_or_none(
+            id=user_id,
+            is_superuser=True,
+            tenant_id__isnull=True
+        )
         
-        if not admin or not admin.is_active:
+        if not user or not user.is_active:
             return None
         
-        return admin
+        return user
 

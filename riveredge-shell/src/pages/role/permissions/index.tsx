@@ -7,13 +7,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { Tree, Card, Button, message, Spin } from 'antd';
-import { history, useSearchParams } from '@umijs/max';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getRoleById, getRolePermissions, assignPermissions, getAllPermissions, Permission } from '@/services/role';
 
 /**
  * 角色权限分配页面组件
  */
 const RolePermissions: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const roleId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,7 @@ const RolePermissions: React.FC = () => {
         })
         .catch((error: any) => {
           message.error(error.message || '加载数据失败');
-          history.push('/role/list');
+          navigate('/role/list');
         })
         .finally(() => {
           setLoading(false);
@@ -101,7 +102,7 @@ const RolePermissions: React.FC = () => {
     try {
       await assignPermissions(Number(roleId), permissionIds);
       message.success('权限分配成功');
-      history.push('/role/list');
+      navigate('/role/list');
     } catch (error: any) {
       message.error(error.message || '权限分配失败');
     } finally {

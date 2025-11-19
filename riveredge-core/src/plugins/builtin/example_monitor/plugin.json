@@ -1,0 +1,41 @@
+{
+    "name": "example_monitor",
+    "version": "1.0.0",
+    "description": "示例监控插件，提供基础的系统监控功能",
+    "author": "RiverEdge Team",
+    "dependencies": [],
+    "requires": ["fastapi", "psutil"],
+    "provides": ["system_monitor", "api_monitoring"],
+    "tags": ["monitor", "system", "example"],
+    "homepage": "https://github.com/riveredge/example_monitor",
+    "license": "MIT",
+    "config_schema": {
+        "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否启用插件"
+        },
+        "monitor_interval": {
+            "type": "integer",
+            "default": 60,
+            "minimum": 10,
+            "maximum": 3600,
+            "description": "监控间隔（秒）"
+        },
+        "alert_thresholds": {
+            "type": "object",
+            "properties": {
+                "cpu_percent": {
+                    "type": "number",
+                    "default": 80.0,
+                    "description": "CPU使用率告警阈值"
+                },
+                "memory_percent": {
+                    "type": "number",
+                    "default": 85.0,
+                    "description": "内存使用率告警阈值"
+                }
+            }
+        }
+    }
+}

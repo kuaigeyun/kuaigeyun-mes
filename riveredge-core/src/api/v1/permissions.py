@@ -14,7 +14,7 @@ from models.user import User
 from core.tenant_context import get_current_tenant_id
 
 # 创建路由
-router = APIRouter(prefix="/permissions", tags=["权限管理"])
+router = APIRouter(prefix="/permissions", tags=["Permissions"])
 
 
 @router.get("", response_model=PermissionListResponse)

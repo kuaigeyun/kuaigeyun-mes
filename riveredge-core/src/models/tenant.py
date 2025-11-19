@@ -38,11 +38,11 @@ class TenantPlan(str, Enum):
 class Tenant(BaseModel):
     """
     租户模型
-    
+
     用于管理 SaaS 多租户系统中的租户信息。
     租户表本身不包含 tenant_id（因为租户本身就是租户的定义），
     但继承 BaseModel 以保持一致性（tenant_id 为 None）。
-    
+
     Attributes:
         id: 租户 ID（主键）
         name: 租户名称
@@ -56,7 +56,8 @@ class Tenant(BaseModel):
         created_at: 创建时间
         updated_at: 更新时间
     """
-    
+
+    id = fields.IntField(primary_key=True, description="租户 ID（主键）")
     name = fields.CharField(max_length=100, description="租户名称")
     domain = fields.CharField(max_length=100, unique=True, description="租户域名（用于子域名访问）")
     status = fields.CharEnumField(
@@ -73,7 +74,7 @@ class Tenant(BaseModel):
     max_users = fields.IntField(default=10, description="最大用户数限制")
     max_storage = fields.IntField(default=1024, description="最大存储空间限制（MB）")
     expires_at = fields.DatetimeField(null=True, description="过期时间（可选）")
-    
+
     class Meta:
         """
         模型元数据

@@ -42,32 +42,34 @@ async def init_users() -> None:
         
         logger.info(f"找到默认租户: {default_tenant.name} (ID: {default_tenant.id})")
         
-        # 1. 创建超级用户（系统级，在默认租户中）
+        # 1. 创建系统级超级管理员（tenant_id=None，可以跨租户访问）
         logger.info("\n" + "=" * 60)
-        logger.info("1. 创建超级用户")
+        logger.info("1. 创建系统级超级管理员")
         logger.info("=" * 60)
         
         superuser_username = "superadmin"
         superuser_email = "superadmin@riveredge.local"
         superuser_password = "SuperAdmin@2024"  # 默认密码，建议首次登录后修改
         
+        # 系统级超级管理员：tenant_id=None 且 is_superuser=True
         existing_superuser = await User.get_or_none(
-            tenant_id=default_tenant.id,
-            username=superuser_username
+            tenant_id__isnull=True,
+            username=superuser_username,
+            is_superuser=True
         )
         
         if existing_superuser:
-            logger.info(f"超级用户已存在: {existing_superuser.username} (ID: {existing_superuser.id})")
+            logger.info(f"系统级超级管理员已存在: {existing_superuser.username} (ID: {existing_superuser.id})")
         else:
             superuser = await User.create(
-                tenant_id=default_tenant.id,
+                tenant_id=None,  # ⭐ 关键：系统级超级管理员 tenant_id 为 None
                 username=superuser_username,
                 email=superuser_email,
                 password_hash=hash_password(superuser_password),
-                full_name="超级管理员",
+                full_name="系统级超级管理员",
                 is_active=True,
-                is_superuser=True,  # 租户内超级用户
-                is_tenant_admin=True,  # 租户管理员
+                is_superuser=True,  # 系统级超级用户
+                is_tenant_admin=False,  # 系统级超级管理员不是租户管理员
             )
             logger.success(f"✅ 超级用户创建成功:")
             logger.info(f"   用户名: {superuser.username}")

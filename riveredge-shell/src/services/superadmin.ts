@@ -4,7 +4,10 @@
  * 提供超级管理员相关的 API 接口
  */
 
-import { request } from '@umijs/max';
+// 使用 apiRequest 统一处理 HTTP 请求
+
+
+import { apiRequest } from './api';
 
 /**
  * 超级管理员信息接口
@@ -125,7 +128,7 @@ export async function superadminLogin(data: {
 }): Promise<{ token: string; token_type: string; expires_in: number; user: SuperAdmin }> {
   return request('/api/v1/superadmin/auth/login', {
     method: 'POST',
-    data,
+    body: JSON.stringify(data),
   });
 }
 

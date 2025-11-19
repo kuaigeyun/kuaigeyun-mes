@@ -2,7 +2,7 @@
 超级管理员安全工具模块
 
 提供超级管理员 JWT Token 生成、验证功能
-注意：超级管理员 Token 不包含 tenant_id
+注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）
 """
 
 from datetime import datetime, timedelta
@@ -11,37 +11,37 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 
 from app.config import settings
-from models.superadmin import SuperAdmin
+from models.user import User
 
 
 def create_superadmin_token(
-    admin: SuperAdmin,
+    user: User,
     expires_delta: Optional[timedelta] = None
 ) -> str:
     """
-    创建超级管理员 JWT 访问令牌
+    创建系统级超级管理员 JWT 访问令牌
     
-    生成包含超级管理员信息的 JWT Token。
-    注意：超级管理员 Token 不包含 tenant_id。
+    生成包含系统级超级管理员信息的 JWT Token。
+    注意：系统级超级管理员 Token 的 tenant_id 为 None。
     
     Args:
-        admin: 超级管理员对象
+        user: 系统级超级管理员用户对象（is_superuser=True 且 tenant_id=None）
         expires_delta: 过期时间增量（可选，默认使用配置中的过期时间）
         
     Returns:
         str: JWT Token 字符串
         
     Example:
-        >>> admin = SuperAdmin(id=1, username="superadmin")
-        >>> token = create_superadmin_token(admin)
+        >>> user = User(id=1, username="superadmin", is_superuser=True, tenant_id=None)
+        >>> token = create_superadmin_token(user)
         >>> len(token) > 0
         True
     """
     to_encode: Dict[str, Any] = {
-        "sub": str(admin.id),  # 用户 ID
-        "username": admin.username,
-        "is_superadmin": True,  # ⭐ 关键：标记为超级管理员
-        # ⭐ 关键：不包含 tenant_id
+        "sub": str(user.id),  # 用户 ID
+        "username": user.username,
+        "is_superadmin": True,  # ⭐ 关键：标记为系统级超级管理员
+        "tenant_id": None,  # ⭐ 关键：系统级超级管理员 tenant_id 为 None
     }
     
     if expires_delta:
@@ -73,8 +73,8 @@ def get_superadmin_token_payload(token: str) -> Optional[Dict[str, Any]]:
         Optional[Dict[str, Any]]: Token 载荷数据，如果验证失败则返回 None
         
     Example:
-        >>> admin = SuperAdmin(id=1, username="superadmin")
-        >>> token = create_superadmin_token(admin)
+        >>> user = User(id=1, username="superadmin", is_superuser=True, tenant_id=None)
+        >>> token = create_superadmin_token(user)
         >>> payload = get_superadmin_token_payload(token)
         >>> payload is not None
         True
@@ -97,25 +97,25 @@ def get_superadmin_token_payload(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def create_token_for_superadmin(admin: SuperAdmin) -> Dict[str, Any]:
+def create_token_for_superadmin(user: User) -> Dict[str, Any]:
     """
-    为超级管理员创建 Token 信息
+    为系统级超级管理员创建 Token 信息
     
     创建访问令牌和刷新令牌（如果需要）。
     
     Args:
-        admin: 超级管理员对象
+        user: 系统级超级管理员用户对象（is_superuser=True 且 tenant_id=None）
         
     Returns:
         Dict[str, Any]: 包含 token、token_type、expires_in 的字典
         
     Example:
-        >>> admin = SuperAdmin(id=1, username="superadmin")
-        >>> result = create_token_for_superadmin(admin)
+        >>> user = User(id=1, username="superadmin", is_superuser=True, tenant_id=None)
+        >>> result = create_token_for_superadmin(user)
         >>> "token" in result
         True
     """
-    access_token = create_superadmin_token(admin)
+    access_token = create_superadmin_token(user)
     
     return {
         "token": access_token,

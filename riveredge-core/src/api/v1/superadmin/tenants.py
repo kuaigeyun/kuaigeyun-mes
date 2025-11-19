@@ -13,7 +13,7 @@ from schemas.tenant import TenantResponse, TenantListResponse, TenantUpdate
 from services.tenant_service import TenantService
 from models.tenant import TenantStatus, TenantPlan
 from api.deps import get_current_superadmin
-from models.superadmin import SuperAdmin
+from models.user import User
 
 # 创建路由
 router = APIRouter(prefix="/superadmin/tenants", tags=["SuperAdmin Tenants"])
@@ -26,7 +26,7 @@ async def list_tenants_for_superadmin(
     status: Optional[TenantStatus] = Query(None, description="租户状态筛选"),
     plan: Optional[TenantPlan] = Query(None, description="租户套餐筛选"),
     keyword: Optional[str] = Query(None, description="关键词搜索（租户名称、域名）"),
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     获取租户列表（超级管理员）
@@ -89,7 +89,7 @@ async def list_tenants_for_superadmin(
 @router.post("/{tenant_id}/approve", response_model=TenantResponse)
 async def approve_tenant_registration(
     tenant_id: int,
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     审核通过租户注册
@@ -133,7 +133,7 @@ async def approve_tenant_registration(
 async def reject_tenant_registration(
     tenant_id: int,
     reason: Optional[str] = Query(None, description="拒绝原因"),
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     审核拒绝租户注册
@@ -191,7 +191,7 @@ async def reject_tenant_registration(
 @router.post("/{tenant_id}/activate", response_model=TenantResponse)
 async def activate_tenant_by_superadmin(
     tenant_id: int,
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     激活租户（超级管理员）
@@ -224,7 +224,7 @@ async def activate_tenant_by_superadmin(
 @router.post("/{tenant_id}/deactivate", response_model=TenantResponse)
 async def deactivate_tenant_by_superadmin(
     tenant_id: int,
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     停用租户（超级管理员）
@@ -257,7 +257,7 @@ async def deactivate_tenant_by_superadmin(
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant_by_superadmin(
     tenant_id: int,
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     删除租户（超级管理员，软删除）

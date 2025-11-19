@@ -16,18 +16,37 @@ export interface LoginRequest {
 
 /**
  * 登录响应数据接口
+ * 
+ * 与后端返回的数据结构匹配：
+ * - access_token: JWT 访问令牌
+ * - token_type: 令牌类型（通常为 "bearer"）
+ * - expires_in: 令牌过期时间（秒）
+ * - user: 用户信息
+ * - tenants: 用户可访问的租户列表（可选）
+ * - default_tenant_id: 默认租户 ID（可选）
+ * - requires_tenant_selection: 是否需要选择租户（当用户有多个租户时）
  */
 export interface LoginResponse {
-  token: string;
-  refresh_token?: string;
-  tenant_id?: number;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
   user: {
     id: number;
     username: string;
     email?: string;
+    full_name?: string;
+    tenant_id?: number;
     is_superuser?: boolean;
     is_tenant_admin?: boolean;
   };
+  tenants?: Array<{
+    id: number;
+    name: string;
+    domain: string;
+    status: string;
+  }>;
+  default_tenant_id?: number;
+  requires_tenant_selection?: boolean;
 }
 
 /**

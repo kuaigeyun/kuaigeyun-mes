@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from schemas.superadmin import SuperAdminLoginRequest, SuperAdminLoginResponse
 from services.superadmin_auth_service import SuperAdminAuthService
 from api.deps import get_current_superadmin
-from models.superadmin import SuperAdmin
+from models.user import User
 from schemas.superadmin import SuperAdminResponse
 
 # 创建路由
@@ -48,7 +48,7 @@ async def superadmin_login(data: SuperAdminLoginRequest):
 
 @router.get("/me", response_model=SuperAdminResponse)
 async def get_current_superadmin_info(
-    current_admin: SuperAdmin = Depends(get_current_superadmin)
+    current_admin: User = Depends(get_current_superadmin)
 ):
     """
     获取当前超级管理员信息接口

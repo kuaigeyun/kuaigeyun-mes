@@ -20,8 +20,11 @@ from schemas.user import UserResponse
 from services.auth_service import AuthService
 from api.deps import get_current_user
 from models.user import User
+import logging
 
-router = APIRouter(prefix="/auth", tags=["认证"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # OAuth2 密码流（用于 Swagger UI 测试）
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -73,19 +76,19 @@ async def login(
 ):
     """
     用户登录接口
-    
+
     验证用户凭据并返回 JWT Token（包含 tenant_id）。
     登录成功后自动设置租户上下文。
-    
+
     Args:
         data: 登录请求数据（username, password, tenant_id 可选）
-        
+
     Returns:
         LoginResponse: 登录成功的响应数据（包含 access_token）
-        
+
     Raises:
         HTTPException: 当用户名/密码错误或用户未激活时抛出
-        
+
     Example:
         ```json
         {
@@ -95,10 +98,77 @@ async def login(
         }
         ```
     """
-    service = AuthService()
-    result = await service.login(data)
-    
-    return LoginResponse(**result)
+    try:
+        # 使用 Tortoise ORM 验证用户身份（异步）
+        logger.info(f"开始验证用户: {data.username}")
+        from models.user import User
+        from core.security import verify_password
+
+        # 查询用户
+        if data.username == "superadmin":
+            # 超级管理员
+            user = await User.get_or_none(
+                username=data.username,
+                is_superuser=True,
+                tenant_id__isnull=True
+            )
+            logger.info(f"超级管理员查询结果: {user}")
+        else:
+            # 普通用户
+            user = await User.get_or_none(
+                username=data.username,
+                tenant_id=data.tenant_id or 1
+            )
+            logger.info(f"普通用户查询结果: {user}")
+
+        if user and user.is_active:
+            # 验证密码
+            logger.info(f"验证密码: {user.password_hash[:20]}...")
+            password_valid = verify_password(data.password, user.password_hash)
+            logger.info(f"密码验证结果: {password_valid}")
+
+            if password_valid:
+                # 登录成功，创建 JWT Token
+                from core.security import create_token_for_user
+
+                # 生成访问令牌
+                access_token = create_token_for_user(
+                    user_id=user.id,
+                    username=user.username,
+                    tenant_id=user.tenant_id,
+                    is_superuser=user.is_superuser,
+                    is_tenant_admin=user.is_tenant_admin
+                )
+
+                return LoginResponse(
+                    access_token=access_token,
+                    token_type="bearer",
+                    expires_in=1800,  # 30分钟
+                    user={
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                        "full_name": "超级管理员" if user.is_superuser else "普通用户",
+                        "tenant_id": user.tenant_id,
+                        "is_superuser": user.is_superuser,
+                        "is_tenant_admin": user.is_tenant_admin,
+                    }
+                )
+
+        # 用户不存在或密码错误
+        logger.info("用户不存在或密码错误")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误"
+        )
+
+    except Exception as e:
+        # 记录内部错误并抛出统一异常
+        logger.error(f"用户登录失败: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="服务器内部错误"
+        )
 
 
 @router.post("/login/form", response_model=LoginResponse)

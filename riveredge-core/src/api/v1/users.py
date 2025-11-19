@@ -19,7 +19,7 @@ from models.user import User
 from core.tenant_context import get_current_tenant_id
 
 # 创建路由
-router = APIRouter(prefix="/users", tags=["用户管理"])
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

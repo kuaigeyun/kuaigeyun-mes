@@ -8,13 +8,14 @@
 import React, { useEffect, useState } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { message } from 'antd';
-import { history, useSearchParams } from '@umijs/max';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getRoleById, createRole, updateRole, Role, CreateRoleData, UpdateRoleData } from '@/services/role';
 
 /**
  * 角色表单页面组件
  */
 const RoleForm: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const roleId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ const RoleForm: React.FC = () => {
         })
         .catch((error: any) => {
           message.error(error.message || '加载角色信息失败');
-          history.push('/role/list');
+          navigate('/role/list');
         })
         .finally(() => {
           setLoading(false);
@@ -66,7 +67,7 @@ const RoleForm: React.FC = () => {
         await createRole(createData);
         message.success('创建成功');
       }
-      history.push('/role/list');
+      navigate('/role/list');
     } catch (error: any) {
       message.error(error.message || '操作失败');
     }

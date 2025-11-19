@@ -9,7 +9,7 @@ import React, { useRef } from 'react';
 import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
 import { message, Popconfirm, Button, Tag, Space } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
-import { history } from '@umijs/max';
+import { useNavigate } from 'react-router-dom';
 import {
   getTenantList,
   Tenant,
@@ -18,7 +18,10 @@ import {
   activateTenant,
   deactivateTenant,
 } from '@/services/tenant';
-import { request } from '@umijs/max';
+// 使用 apiRequest 统一处理 HTTP 请求
+
+// @ts-ignore
+import { apiRequest } from '@/services/api';
 
 /**
  * 租户状态标签映射
@@ -46,7 +49,7 @@ const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
  */
 const approveTenant = async (tenantId: number) => {
   try {
-    await request(`/api/v1/superadmin/tenants/${tenantId}/approve`, {
+    await apiRequest(`/api/v1/superadmin/tenants/${tenantId}/approve`, {
       method: 'POST',
     });
     message.success('审核通过成功');
@@ -65,7 +68,7 @@ const approveTenant = async (tenantId: number) => {
  */
 const rejectTenant = async (tenantId: number, reason?: string) => {
   try {
-    await request(`/api/v1/superadmin/tenants/${tenantId}/reject`, {
+    await apiRequest(`/api/v1/superadmin/tenants/${tenantId}/reject`, {
       method: 'POST',
       params: { reason },
     });
@@ -81,6 +84,7 @@ const rejectTenant = async (tenantId: number, reason?: string) => {
  * 超级管理员租户列表页面组件
  */
 const SuperAdminTenantList: React.FC = () => {
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>();
 
   /**
@@ -167,7 +171,7 @@ const SuperAdminTenantList: React.FC = () => {
               type="link"
               size="small"
               onClick={() => {
-                history.push(`/superadmin/tenants/detail?id=${record.id}`);
+                navigate(`/superadmin/tenants/detail?id=${record.id}`);
               }}
             >
               详情

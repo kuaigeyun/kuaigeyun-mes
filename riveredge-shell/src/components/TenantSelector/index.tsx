@@ -9,17 +9,34 @@ import React, { useState, useEffect } from 'react';
 import { Select, Tag, message } from 'antd';
 import { ApartmentOutlined } from '@ant-design/icons';
 import { getTenantById, Tenant } from '@/services/tenant';
-import { getTenantId, setTenantId } from '@/utils/auth';
-import { useModel } from '@umijs/max';
+import { getTenantId, setTenantId, getToken } from '@/utils/auth';
+import { getCurrentUser, CurrentUser } from '@/services/auth';
 
 /**
  * 租户选择器组件
  */
 const TenantSelector: React.FC = () => {
-  const { initialState } = useModel('@@initialState');
-  const currentUser = initialState?.currentUser;
+  const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(undefined);
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(false);
+
+  /**
+   * 加载当前用户信息
+   */
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      if (getToken()) {
+        try {
+          const user = await getCurrentUser();
+          setCurrentUser(user);
+        } catch (error) {
+          console.error('加载用户信息失败:', error);
+        }
+      }
+    };
+    
+    loadUserInfo();
+  }, []);
 
   /**
    * 加载当前租户信息

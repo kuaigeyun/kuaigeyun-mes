@@ -9,13 +9,14 @@ import React, { useRef } from 'react';
 import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
 import { message, Popconfirm, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { history } from '@umijs/max';
+import { useNavigate } from 'react-router-dom';
 import { getUserList, deleteUser, toggleUserStatus, User } from '@/services/user';
 
 /**
  * 用户列表页面组件
  */
 const UserList: React.FC = () => {
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>();
 
   /**
@@ -129,7 +130,7 @@ const UserList: React.FC = () => {
         <a
           key="edit"
           onClick={() => {
-            history.push(`/user/form?id=${record.id}`);
+            navigate(`/user/form?id=${record.id}`);
           }}
         >
           编辑
@@ -166,7 +167,7 @@ const UserList: React.FC = () => {
           key="primary"
           icon={<PlusOutlined />}
           onClick={() => {
-            history.push('/user/form');
+            navigate('/user/form');
           }}
         >
           新建用户

@@ -9,7 +9,6 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from models.user import User
-from models.superadmin import SuperAdmin
 from core.security import get_token_payload
 from core.superadmin_security import get_superadmin_token_payload
 from core.tenant_context import set_current_tenant_id
@@ -115,59 +114,63 @@ async def get_current_active_user(
 
 async def get_current_superadmin(
     token: str = Depends(superadmin_oauth2_scheme)
-) -> SuperAdmin:
+) -> User:
     """
-    获取当前超级管理员依赖
+    获取当前系统级超级管理员依赖
     
-    从请求头中提取超级管理员 JWT Token，验证并返回当前超级管理员对象。
-    注意：超级管理员独立于租户系统，Token 不包含 tenant_id。
+    从请求头中提取系统级超级管理员 JWT Token，验证并返回当前系统级超级管理员用户对象。
+    注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）。
     
     Args:
         token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
         
     Returns:
-        SuperAdmin: 当前超级管理员对象
+        User: 当前系统级超级管理员用户对象（is_superuser=True 且 tenant_id=None）
         
     Raises:
-        HTTPException: 当 Token 无效、超级管理员不存在或未激活时抛出
+        HTTPException: 当 Token 无效、用户不存在、不是系统级超级管理员或未激活时抛出
         
     Example:
         ```python
         @router.get("/superadmin/protected")
         async def protected_route(
-            current_admin: SuperAdmin = Depends(get_current_superadmin)
+            current_admin: User = Depends(get_current_superadmin)
         ):
             return {"admin_id": current_admin.id}
         ```
     """
-    # 验证超级管理员 Token
+    # 验证系统级超级管理员 Token
     payload = get_superadmin_token_payload(token)
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的 Token 或不是超级管理员 Token",
+            detail="无效的 Token 或不是系统级超级管理员 Token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 获取超级管理员 ID
-    admin_id = int(payload.get("sub"))
+    # 获取用户 ID
+    user_id = int(payload.get("sub"))
     
-    # 获取超级管理员
-    admin = await SuperAdmin.get_or_none(id=admin_id)
-    if not admin:
+    # 获取系统级超级管理员（is_superuser=True 且 tenant_id=None）
+    user = await User.get_or_none(
+        id=user_id,
+        is_superuser=True,
+        tenant_id__isnull=True
+    )
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="超级管理员不存在",
+            detail="系统级超级管理员不存在",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if not admin.is_active:
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="超级管理员未激活",
+            detail="系统级超级管理员未激活",
         )
     
-    return admin
+    return user
 
 
 def require_permissions(*permission_codes: str):

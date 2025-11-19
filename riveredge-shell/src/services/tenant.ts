@@ -5,7 +5,10 @@
  * 注意：租户管理通常需要超级管理员权限
  */
 
-import { request } from '@umijs/max';
+// 使用 apiRequest 统一处理 HTTP 请求
+
+
+import { apiRequest } from './api';
 
 /**
  * 租户状态枚举
@@ -126,7 +129,7 @@ export async function getTenantById(tenantId: number): Promise<Tenant> {
 export async function createTenant(data: CreateTenantData): Promise<Tenant> {
   return request('/api/v1/tenants', {
     method: 'POST',
-    data,
+    body: JSON.stringify(data),
   });
 }
 
@@ -140,7 +143,7 @@ export async function createTenant(data: CreateTenantData): Promise<Tenant> {
 export async function updateTenant(tenantId: number, data: UpdateTenantData): Promise<Tenant> {
   return request(`/api/v1/tenants/${tenantId}`, {
     method: 'PUT',
-    data,
+    body: JSON.stringify(data),
   });
 }
 

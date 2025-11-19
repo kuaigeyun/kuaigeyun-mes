@@ -4,8 +4,8 @@
 
 ## ⚠️ 重要锁定声明
 
-**UMI版本已被永久锁定为 `@umijs/max@4.0.90`，禁止任何更新或更改。**
-详见：[UMI版本锁定策略](UMI_VERSION_LOCK.md)
+**前端采用纯React生态最佳实践，基于Vite 5.4.8 + Zustand 5.0.0 + TanStack Query 5.51.1构建。**
+详见：[前端技术栈说明](Farming Plan/1.plan/1.最终技术选型.md)
 
 ## 📋 项目概述
 

@@ -5,7 +5,7 @@
  */
 
 import { Result, Button } from 'antd';
-import { useNavigate } from '@umijs/max';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * 404 页面组件

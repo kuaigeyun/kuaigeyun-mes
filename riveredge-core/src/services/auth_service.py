@@ -4,17 +4,11 @@
 提供用户认证相关的业务逻辑，包括注册、登录、Token 刷新等功能
 """
 
-from datetime import datetime
-from typing import Optional
-
 from fastapi import HTTPException, status
-from loguru import logger
 
 from models.user import User
 from models.tenant import Tenant, TenantStatus
 from schemas.auth import LoginRequest, UserRegisterRequest
-from schemas.user import UserCreate
-from services.tenant_service import TenantService
 from core.security import (
     create_token_for_user,
     verify_password,
@@ -132,16 +126,38 @@ class AuthService:
             True
         """
         # 查找用户（仅支持用户名登录，符合中国用户使用习惯）
+        # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
         # 如果提供了 tenant_id，同时过滤租户，避免多租户用户名冲突
-        if data.tenant_id is not None:
+        # 使用数据库连接检查和重试机制
+        from core.database import db_operation_with_retry
+        
+        # 定义查询用户的函数
+        async def query_user():
+            """查询用户的内部函数"""
+            # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
+            # 系统级超级管理员不需要 tenant_id，可以跨租户访问
             user = await User.get_or_none(
                 username=data.username,
-                tenant_id=data.tenant_id
+                tenant_id__isnull=True,
+                is_superuser=True
             )
-        else:
-            # 如果没有提供 tenant_id，只根据用户名查找（可能多个租户有相同用户名）
-            # 这种情况下，返回第一个匹配的激活用户
-            user = await User.get_or_none(username=data.username)
+            
+            # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
+            if not user:
+                if data.tenant_id is not None:
+                    # 提供了 tenant_id，查找该租户内的用户
+                    user = await User.get_or_none(
+                        username=data.username,
+                        tenant_id=data.tenant_id
+                    )
+                else:
+                    # 没有提供 tenant_id，查找任意租户的用户（可能多个租户有相同用户名）
+                    user = await User.get_or_none(username=data.username)
+            
+            return user
+        
+        # 使用重试机制执行查询（重试机制内部会处理连接检查）
+        user = await db_operation_with_retry(query_user, max_retries=3, retry_delay=0.1)
         
         if not user:
             raise HTTPException(
@@ -163,8 +179,12 @@ class AuthService:
                 detail="用户未激活"
             )
         
+        # 判断是否为系统级超级管理员
+        is_system_superuser = user.is_superuser and user.tenant_id is None
+        
         # 如果提供了 tenant_id，验证用户是否属于该租户（双重验证）
-        if data.tenant_id is not None:
+        # 系统级超级管理员可以访问任何租户，不需要验证
+        if data.tenant_id is not None and not is_system_superuser:
             if user.tenant_id != data.tenant_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -172,11 +192,17 @@ class AuthService:
                 )
         
         # 确定要使用的租户 ID（用于生成 Token）
-        # 如果提供了 tenant_id，使用提供的；否则使用用户的租户
-        final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
+        # 系统级超级管理员：如果提供了 tenant_id，使用提供的；否则使用 None
+        # 普通用户：如果提供了 tenant_id，使用提供的；否则使用用户的租户
+        if is_system_superuser:
+            final_tenant_id = data.tenant_id if data.tenant_id is not None else None
+        else:
+            final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
         
         # 设置租户上下文（在查询租户列表之前设置，确保后续查询使用正确的租户上下文）
-        set_current_tenant_id(final_tenant_id)
+        # 系统级超级管理员可以不设置租户上下文（允许跨租户访问）
+        if final_tenant_id is not None:
+            set_current_tenant_id(final_tenant_id)
         
         # 生成 JWT Token（包含 tenant_id）⭐ 关键
         # 注意：在生成 Token 之前不进行额外的数据库查询，避免连接问题

@@ -34,8 +34,7 @@ class TestModel(BaseModel):
         table = "test_models"
 
 
-@pytest.fixture(scope="function")
-@pytest.mark.asyncio
+@pytest.fixture
 async def setup_db():
     """
     设置测试数据库

@@ -8,13 +8,14 @@
 import React, { useEffect, useState } from 'react';
 import { ProForm, ProFormText, ProFormSwitch, ProFormSelect } from '@ant-design/pro-components';
 import { message } from 'antd';
-import { history, useSearchParams } from '@umijs/max';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getUserById, createUser, updateUser, User, CreateUserData, UpdateUserData } from '@/services/user';
 
 /**
  * 用户表单页面组件
  */
 const UserForm: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const userId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ const UserForm: React.FC = () => {
         })
         .catch((error: any) => {
           message.error(error.message || '加载用户信息失败');
-          history.push('/user/list');
+          navigate('/user/list');
         })
         .finally(() => {
           setLoading(false);
@@ -76,7 +77,7 @@ const UserForm: React.FC = () => {
         await createUser(createData);
         message.success('创建成功');
       }
-      history.push('/user/list');
+      navigate('/user/list');
     } catch (error: any) {
       message.error(error.message || '操作失败');
     }

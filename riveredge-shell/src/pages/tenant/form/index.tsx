@@ -8,7 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker } from '@ant-design/pro-components';
 import { message } from 'antd';
-import { history, useSearchParams } from '@umijs/max';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   getTenantById,
   createTenant,
@@ -24,6 +24,7 @@ import {
  * 租户表单页面组件
  */
 const TenantForm: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tenantId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,7 @@ const TenantForm: React.FC = () => {
         })
         .catch((error: any) => {
           message.error(error.message || '加载租户信息失败');
-          history.push('/tenant/list');
+          navigate('/tenant/list');
         })
         .finally(() => {
           setLoading(false);
@@ -83,7 +84,7 @@ const TenantForm: React.FC = () => {
         await createTenant(createData);
         message.success('创建成功');
       }
-      history.push('/tenant/list');
+      navigate('/tenant/list');
     } catch (error: any) {
       message.error(error.message || '操作失败');
     }

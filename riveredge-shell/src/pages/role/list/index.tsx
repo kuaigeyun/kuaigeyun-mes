@@ -9,13 +9,14 @@ import React, { useRef } from 'react';
 import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
 import { message, Popconfirm, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { history } from '@umijs/max';
+import { useNavigate } from 'react-router-dom';
 import { getRoleList, deleteRole, Role } from '@/services/role';
 
 /**
  * 角色列表页面组件
  */
 const RoleList: React.FC = () => {
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>();
 
   /**
@@ -89,7 +90,7 @@ const RoleList: React.FC = () => {
         <a
           key="edit"
           onClick={() => {
-            history.push(`/role/form?id=${record.id}`);
+            navigate(`/role/form?id=${record.id}`);
           }}
         >
           编辑
@@ -97,7 +98,7 @@ const RoleList: React.FC = () => {
         <a
           key="permissions"
           onClick={() => {
-            history.push(`/role/permissions?id=${record.id}`);
+            navigate(`/role/permissions?id=${record.id}`);
           }}
         >
           权限分配
@@ -133,7 +134,7 @@ const RoleList: React.FC = () => {
           key="primary"
           icon={<PlusOutlined />}
           onClick={() => {
-            history.push('/role/form');
+            navigate('/role/form');
           }}
         >
           新建角色

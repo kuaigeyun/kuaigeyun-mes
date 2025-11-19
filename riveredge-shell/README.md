@@ -4,14 +4,16 @@
 
 ## 📋 技术栈
 
-- **核心框架**: React 19.2+
-- **应用框架**: Umi V4 (@umijs/max)
-- **UI 组件库**: Ant Design v6 + Ant Design Pro Components 2.x
-- **状态管理**: Umi Model
-- **类型系统**: TypeScript 5.6+
-- **HTTP 客户端**: Umi Request
-- **路由**: React Router 6 (Umi 内置)
-- **构建工具**: Vite (Umi 内置)
+- **核心框架**: React 18.3.1
+- **构建工具**: Vite 5.4.8
+- **路由管理**: React Router DOM 6.26.2
+- **状态管理**: Zustand 5.0.0 + TanStack Query 5.51.1
+- **UI 组件库**: Ant Design 5.21.4 + Ant Design Pro Components 2.8.2
+- **类型系统**: TypeScript 5.6.3
+- **表单管理**: React Hook Form 7.53.0 + Zod 3.23.8
+- **国际化**: React i18next 14.1.3
+- **权限管理**: 自定义 Context + Router 守卫
+- **动画库**: Framer Motion 11.5.4
 
 ## 🚀 快速开始
 
@@ -39,13 +41,17 @@ riveredge-shell/
 │   ├── pages/              # 页面目录
 │   ├── components/         # 公共组件
 │   ├── services/           # API 服务
-│   ├── models/             # Umi Model (数据流)
+│   ├── stores/             # Zustand 状态管理
+│   ├── hooks/              # 自定义 Hooks
+│   ├── contexts/           # React Context
+│   ├── guards/             # 路由守卫
+│   ├── router/             # 路由配置
 │   ├── utils/              # 工具函数
 │   ├── locales/            # 国际化文件
 │   ├── access.ts           # 权限定义
-│   └── app.tsx             # 应用入口
+│   └── App.tsx             # 应用入口
 ├── public/                 # 静态资源
-├── .umirc.ts               # Umi 配置
+├── vite.config.ts          # Vite 配置
 └── package.json
 ```
 

@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { PageContainer } from '@ant-design/pro-components';
 import { Button, Tag, message } from 'antd';
-import { history, useSearchParams } from '@umijs/max';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   getTenantById,
   activateTenant,
@@ -42,6 +42,7 @@ const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
  * 租户详情页面组件
  */
 const TenantDetail: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tenantId = searchParams.get('id');
   const [loading, setLoading] = useState(false);
@@ -59,14 +60,14 @@ const TenantDetail: React.FC = () => {
         })
         .catch((error: any) => {
           message.error(error.message || '加载租户信息失败');
-          history.push('/tenant/list');
+          navigate('/tenant/list');
         })
         .finally(() => {
           setLoading(false);
         });
     } else {
       message.error('缺少租户 ID');
-      history.push('/tenant/list');
+      navigate('/tenant/list');
     }
   }, [tenantId]);
 
@@ -114,7 +115,7 @@ const TenantDetail: React.FC = () => {
       title="租户详情"
       loading={loading}
       extra={[
-        <Button key="edit" onClick={() => history.push(`/tenant/form?id=${tenant.id}`)}>
+        <Button key="edit" onClick={() => navigate(`/tenant/form?id=${tenant.id}`)}>
           编辑
         </Button>,
         tenant.status === TenantStatus.ACTIVE ? (

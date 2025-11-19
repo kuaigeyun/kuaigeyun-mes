@@ -13,8 +13,12 @@ from passlib.context import CryptContext
 from app.config import settings
 
 
-# 密码加密上下文（使用 bcrypt）
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 密码加密上下文（使用 pbkdf2，更好的跨平台兼容性）
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+    pbkdf2_sha256__default_rounds=30000
+)
 
 
 def create_access_token(
@@ -135,7 +139,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_token_for_user(
     user_id: int,
     username: str,
-    tenant_id: int,
+    tenant_id: Optional[int],
     is_superuser: bool = False,
     is_tenant_admin: bool = False,
     expires_delta: Optional[timedelta] = None
@@ -144,12 +148,13 @@ def create_token_for_user(
     为用户创建 JWT Token
     
     生成包含用户信息和租户信息的 JWT Token。
+    系统级超级管理员的 tenant_id 可以为 None。
     
     Args:
         user_id: 用户 ID
         username: 用户名
-        tenant_id: 租户 ID（关键：用于多租户隔离）
-        is_superuser: 是否为超级用户（租户内）
+        tenant_id: 租户 ID（关键：用于多租户隔离，系统级超级管理员可为 None）
+        is_superuser: 是否为超级用户（租户内超级用户或系统级超级管理员）
         is_tenant_admin: 是否为租户管理员
         expires_delta: 过期时间增量（可选）
         
@@ -170,7 +175,7 @@ def create_token_for_user(
     data = {
         "sub": str(user_id),  # 用户 ID（标准 JWT 字段）
         "username": username,
-        "tenant_id": tenant_id,  # ⭐ 关键：租户 ID，用于多租户隔离
+        "tenant_id": tenant_id,  # ⭐ 关键：租户 ID，用于多租户隔离（系统级超级管理员可为 None）
         "is_superuser": is_superuser,
         "is_tenant_admin": is_tenant_admin,
     }

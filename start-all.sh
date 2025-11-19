@@ -127,7 +127,7 @@ kill_process_on_port() {
 
         # Windows环境下也尝试taskkill
         if command -v taskkill &> /dev/null; then
-            taskkill /PID $pid /F >nul 2>&1 || true
+            taskkill /PID $pid /F >> ../logs/taskkill.log 2>&1 || true
         fi
 
         # 等待进程结束
@@ -245,7 +245,7 @@ start_frontend() {
     sed "s/PORT=[0-9]\+/PORT=$port/" riveredge-shell/package.json > riveredge-shell/package.json.tmp && mv riveredge-shell/package.json.tmp riveredge-shell/package.json
 
     # 更新前端代理配置
-    sed "s/target: 'http:\/\/localhost:[0-9]\+'/target: 'http:\/\/localhost:$backend_port'/" riveredge-shell/.umirc.ts > riveredge-shell/.umirc.ts.tmp && mv riveredge-shell/.umirc.ts.tmp riveredge-shell/.umirc.ts
+    # 配置前端代理到后端端口（已在vite.config.ts中配置）
 
     # 进入前端目录并启动
     cd riveredge-shell
@@ -292,7 +292,7 @@ stop_all() {
             kill -TERM $backend_pid 2>/dev/null || true
             # Windows环境下也尝试taskkill
             if command -v taskkill &> /dev/null; then
-                taskkill /PID $backend_pid /F >nul 2>&1 || true
+                taskkill /PID $backend_pid /F >> logs/taskkill.log 2>&1 || true
             fi
         fi
         rm -f logs/backend.pid
@@ -306,7 +306,7 @@ stop_all() {
             kill -TERM $frontend_pid 2>/dev/null || true
             # Windows环境下也尝试taskkill
             if command -v taskkill &> /dev/null; then
-                taskkill /PID $frontend_pid /F >nul 2>&1 || true
+                taskkill /PID $frontend_pid /F >> logs/taskkill.log 2>&1 || true
             fi
         fi
         rm -f logs/frontend.pid
@@ -314,13 +314,13 @@ stop_all() {
 
     # 清理可能残留的进程
     pkill -f "python scripts/start_backend.py" 2>/dev/null || true
-    pkill -f "umi dev" 2>/dev/null || true
+    pkill -f "vite" 2>/dev/null || true
     pkill -f "npm.*run.*dev" 2>/dev/null || true
 
     # Windows环境下额外清理
     if command -v taskkill &> /dev/null; then
-        taskkill /F /IM python.exe /FI "WINDOWTITLE eq " >nul 2>&1 || true
-        taskkill /F /IM node.exe /FI "WINDOWTITLE eq " >nul 2>&1 || true
+        taskkill /F /IM python.exe /FI "WINDOWTITLE eq " >> logs/taskkill.log 2>&1 || true
+        taskkill /F /IM node.exe /FI "WINDOWTITLE eq " >> logs/taskkill.log 2>&1 || true
     fi
 
     # 等待进程完全停止
@@ -393,6 +393,9 @@ main() {
     log_info "====================================="
     log_info "严禁使用CMD和PowerShell，只使用bash和Linux命令"
 
+    # 创建日志目录
+    mkdir -p logs
+
     # 检查必要命令
     check_command curl
     check_command python
@@ -449,6 +452,7 @@ main() {
     log_info "📝 日志文件:"
     log_info "   后端日志:    logs/backend.log"
     log_info "   前端日志:    logs/frontend.log"
+    log_info "   进程清理日志: logs/taskkill.log"
     echo
     log_info "🔧 管理命令:"
     log_info "   查看状态:    ./start-all.sh status"

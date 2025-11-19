@@ -1,10 +1,49 @@
 # RiverEdge SaaS 多租户框架 - Cursor AI 开发规范
 
+## 🚨 【第一优先级 - 永久锁定】React生态最佳实践规范
+
+**⚠️ 绝对锁定 - 永久不得更改**：
+- **React版本**：`18.3.1` (最新稳定版，性能优化)
+- **构建工具**：`Vite 5.4.8` (现代化构建工具)
+- **状态管理**：`Zustand 5.0.0` (轻量级现代化状态管理)
+- **数据获取**：`TanStack Query 5.51.1` (智能服务端状态管理)
+- **路由管理**：`React Router DOM 6.26.2` (React官方路由解决方案)
+- **表单管理**：`React Hook Form 7.53.0` (高性能表单库)
+- **测试框架**：`Vitest 2.1.8` (现代化测试框架，原生ESM支持)
+- **CSS方案**：`UnoCSS` (原子化CSS引擎，推荐)
+
+**违规处理**：
+- 发现任何违反上述技术栈的地方，立即停止所有操作
+- 必须明确说明："❌ 违反了React生态最佳实践规范"
+- 不得辩解，立即修正为正确的技术栈
+- 这不是建议，而是绝对规则
+
+---
+
 ## 📋 概述
 
 本文档为 AI 助手提供 **RiverEdge SaaS 多租户框架 (RiverEdge SaaS Multi-tenant Framework)** 的**统一开发规范**，确保 AI 助手在协助开发时始终遵循框架的技术选型、命名规范、注释规范和数据库规范。
 
-**重要提示**：AI 助手在生成代码、提供建议或修改代码时，**必须严格遵循**本文档中的所有规范。
+**⚠️ 绝对规则 - 违反即终止**：
+- **绝对禁止使用 PowerShell 进行任何操作**（包括文件操作、进程管理、命令执行等）
+- **绝对禁止在数据库连接测试中假设默认密码**（必须从配置文件读取实际密码）
+- 所有规则必须严格遵循，不得跳过或违反
+- 违反任何规则必须立即停止并说明原因
+
+**🚨 违规处理机制**：
+1. **立即停止**：一旦检测到违规行为，AI 助手必须立即停止当前所有操作
+2. **明确说明**：必须向用户明确说明违反了哪条规则，以及为什么违反
+3. **使用替代方案**：必须使用规则中指定的替代方案重新执行操作
+4. **记录违规**：如果用户发现违规，AI 助手必须承认错误，不得辩解或推脱
+5. **永久禁止**：违反绝对规则（如使用 PowerShell、违反React生态最佳实践规范）的行为是不可接受的，必须立即纠正
+
+**🚨 React生态规范特殊处理**：
+- React生态最佳实践规范是第一优先级，违反将立即终止所有操作
+- 必须明确说明："❌ 违反了React生态最佳实践规范"
+- 不允许任何形式的辩解或推脱
+- 必须立即修正为正确的现代化语法
+
+**重要提示**：AI 助手在生成代码、提供建议或修改代码时，**必须严格遵循**本文档中的所有规范。**任何违反规则的行为都是不可接受的。**
 
 ## 🎯 核心原则
 
@@ -33,7 +72,59 @@
 - Git 配置：确保 Git 正确处理 UTF-8 文件
 - 文件检查：使用工具检查文件编码（如 `file -bi filename`）
 
-### 2. 库选择优先级规范
+### 2. 数据库连接测试规范 ⚠️ **绝对禁止 - 违反即终止**
+
+**在进行任何数据库连接测试时，必须严格遵循以下规则**：
+
+**⚠️ 绝对禁止假设默认密码**：
+- ❌ **绝对禁止**在测试脚本中硬编码默认密码（如 `postgres`、`root`、`admin` 等）
+- ❌ **绝对禁止**假设配置文件中的密码是默认值
+- ❌ **绝对禁止**跳过读取实际配置文件就直接测试连接
+
+**✅ 必须执行的步骤**：
+1. **首先读取配置文件**：在进行任何数据库连接测试前，必须先读取 `.env` 文件或配置文件，获取实际的数据库密码
+2. **使用实际配置**：所有测试脚本必须使用从配置文件读取的实际密码，而不是假设的默认值
+3. **验证配置加载**：在测试连接前，必须先验证配置是否正确加载（打印配置信息，但不输出密码明文）
+
+**测试脚本示例**：
+```python
+# ✅ 正确：先读取配置，再测试连接
+from app.config import settings
+
+# 验证配置已加载（不输出密码）
+print(f'DB_HOST: {settings.DB_HOST}')
+print(f'DB_USER: {settings.DB_USER}')
+print(f'DB_PASSWORD: {"*" * len(settings.DB_PASSWORD)}')  # 只显示长度，不显示明文
+
+# 使用实际配置测试连接
+conn = await asyncpg.connect(
+    host=settings.DB_HOST,
+    port=settings.DB_PORT,
+    user=settings.DB_USER,
+    password=settings.DB_PASSWORD,  # 使用配置文件中的实际密码
+    database=settings.DB_NAME,
+)
+
+# ❌ 错误：硬编码默认密码
+conn = await asyncpg.connect(
+    host='localhost',
+    user='postgres',
+    password='postgres',  # ❌ 绝对禁止：假设默认密码
+    database='riveredge',
+)
+```
+
+**违规处理机制**：
+- **立即停止**：一旦发现测试脚本中硬编码了默认密码，必须立即停止并修正
+- **承认错误**：必须明确承认错误，不得辩解或推脱
+- **重新测试**：必须使用正确的配置重新测试
+- **严重性**：违反此规则可能导致浪费大量时间（如数小时），是不可接受的严重错误
+
+**历史教训**：
+- 2025-11-18：因在测试脚本中硬编码默认密码 `postgres`，而实际密码是 `jetema4ev`，导致浪费 5 小时排查连接问题
+- 必须永远记住：**永远不要假设密码是默认值，必须从配置文件读取**
+
+### 3. 库选择优先级规范
 
 **所有设计和功能开发时，必须按照以下优先级顺序选择库**：
 
@@ -41,11 +132,14 @@
 
 1. **Ant Design Pro Components** - 优先使用 Ant Design Pro 官方组件
 2. **React** - 使用 React 官方库或 React 生态成熟库
-3. **FastAPI** - 使用 FastAPI 官方扩展或 FastAPI 生态成熟库
-4. **Tortoise ORM** - 使用 Tortoise ORM 官方功能或扩展
-5. **PostgreSQL** - 使用 PostgreSQL 原生功能或官方扩展
-6. **其他成熟库** - 如果以上都无法满足，选择成熟稳定的第三方库
-7. **自定义实现** - 最后才考虑自己实现
+3. **TanStack Query** - 使用 TanStack Query 官方功能
+4. **Zustand** - 使用 Zustand 官方功能
+5. **React Hook Form** - 使用 React Hook Form 官方功能
+6. **React Router DOM** - 使用 React Router DOM 官方功能
+7. **React i18next** - 使用 React i18next 官方功能
+8. **FastAPI** - 使用 FastAPI 官方扩展或 FastAPI 生态成熟库
+9. **Tortoise ORM** - 使用 Tortoise ORM 官方功能或扩展
+10. **PostgreSQL** - 使用 PostgreSQL 原生功能或官方扩展
 
 #### 选择原则
 
@@ -77,11 +171,11 @@
 
 **必须使用以下技术，不得替换或添加其他技术**：
 
-- **编程语言**: Python 3.13+
-- **Web 框架**: FastAPI 0.115+（**不得使用 Flask、Django 等**）
-- **数据验证**: Pydantic v2.9+（**不得使用其他验证库**）
+- **编程语言**: Python 3.11 LTS（**不得使用其他版本**）
+- **Web 框架**: FastAPI 0.110.0（**不得使用 Flask、Django 等**）
+- **数据验证**: Pydantic v2.7.0（**不得使用其他验证库**）
 - **数据库**: PostgreSQL 15+（**不得使用 MySQL、MongoDB 等**）
-- **ORM 框架**: Tortoise ORM 0.20+（**不得使用 SQLAlchemy、Django ORM 等**）
+- **ORM 框架**: Tortoise ORM 0.21.1（**不得使用 SQLAlchemy、Django ORM 等**）
 - **数据库迁移**: Aerich 0.7+（**不得使用 Alembic 等**）
 - **缓存**: Redis 7.2+（**不得使用 Memcached 等**）
 - **Redis 客户端**: redis-py (redis>=5.0.0)，使用 `redis.asyncio` 异步接口（**不得使用 aioredis 等**）
@@ -95,20 +189,65 @@
 
 **必须使用以下技术，不得替换或添加其他技术**：
 
-- **核心框架**: React 19.2+（**不得使用 Vue、Angular 等**）
-- **应用框架**: Umi V4 (@umijs/max)（**不得使用 Next.js、Create React App 等**）
-- **UI 组件库**: Ant Design v6 + Ant Design Pro Components 2.x（**不得使用 Material-UI、Element UI 等**）
-- **状态管理**: Umi Model（**不得使用 Redux、Zustand 等**）
-- **类型系统**: TypeScript 5.6+（**必须使用 TypeScript，不得使用 JavaScript**）
-- **HTTP 客户端**: Umi Request（**不得使用 Axios、fetch 等**）
-- **路由**: React Router 6 (Umi 内置)（**不得使用其他路由库**）
-- **构建工具**: Vite (Umi 内置)（**不得使用 Webpack 等**）
+- **核心框架**: React 18.3.1（**不得使用 Vue、Angular 等**）
+- **构建工具**: Vite 5.4.8（**不得使用 Webpack 等**）
+- **路由管理**: React Router DOM 6.26.2（**不得使用其他路由库**）
+- **状态管理**: Zustand 5.0.0（**不得使用 Redux 等**）
+- **数据获取**: TanStack Query 5.51.1（**不得使用 Axios、fetch 等**）
+- **表单管理**: React Hook Form 7.53.0（**不得使用其他表单库**）
+- **UI 组件库**: Ant Design 5.21.4 + Ant Design Pro Components 2.8.2（**不得使用 Material-UI、Element UI 等**）
+- **类型系统**: TypeScript 5.6.3（**必须使用 TypeScript，不得使用 JavaScript**）
+- **国际化**: React i18next 14.1.3（**不得使用其他国际化库**）
+- **权限管理**: 自定义 Context + Router 守卫（**不得使用其他权限库**）
 - **图表库**: @ant-design/charts（**不得使用 ECharts、Chart.js 等**）
-- **表单自定义字段**: Formily (@formily/core + @formily/react + @formily/antd-v5)（**不得使用其他表单库**）
+- **表单验证**: Zod 3.23.8（**TypeScript优先的模式验证**）
 - **打印模板设计**: react-to-print + jspdf + html2canvas（**不得使用其他打印库**）
 - **图标库**: @ant-design/icons（**不得使用其他图标库**）
 - **日期处理**: dayjs（**不得使用 moment.js 等**）
 - **工具函数**: lodash-es（**不得使用其他工具库**）
+- **动画库**: Framer Motion 11.5.4（**现代化动画库**）
+
+## 🔧 React生态语法规范 ⭐ **重要 - 必须严格遵循**
+
+**⚠️ 必须使用 React 18.3.1 + TypeScript 5.6.3 + 现代化 React 生态语法**：
+
+**React 组件规范**：
+- ✅ **正确**：使用现代化 React Hooks
+  ```typescript
+  import React, { useState, useEffect } from 'react';
+
+  interface UserCardProps {
+    userId: number;
+    userName: string;
+  }
+
+  export default function UserCard({ userId, userName }: UserCardProps) {
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+      // 获取用户数据
+    }, [userId]);
+
+    return <div>{userName}</div>;
+  }
+  ```
+
+**禁止使用的过时语法**：
+- ❌ **禁止使用类组件**：必须使用函数组件 + Hooks
+- ❌ **禁止使用过时的生命周期方法**：必须使用 useEffect
+- ❌ **禁止使用过时的 Context API**：必须使用现代 Context
+- ❌ **禁止使用过时的 Ref API**：必须使用 useRef 或 useCallback
+
+**必须遵循**：
+1. **始终参考 React 18 官方文档**：https://react.dev/
+2. **使用 TypeScript 进行类型检查**：所有组件和函数必须有正确的类型定义
+3. **遵循 React Hooks 规则**：Hooks 调用顺序必须稳定，不能在条件语句中使用
+4. **性能优化**：使用 React.memo、useMemo、useCallback 进行必要的优化
+
+**违规处理**：
+- 如果发现使用了过时的 React 语法，必须立即停止并修复
+- 必须明确说明违反了哪条规则，以及正确的现代化语法
+- 不得重复使用过时语法
 
 ### 数据库技术栈
 
@@ -362,6 +501,70 @@ async def create_user(
  */
 ```
 
+## 📖 FastAPI 文档生成规范（必须严格遵循）
+
+> **详细规范请参考**：[6.API设计规范.md](./Farming%20Plan/2.rules/6.API设计规范.md) - FastAPI 文档生成规范章节
+
+### API Tags 规范
+
+**规则**：所有 API 路由的 `tags` 必须使用**英文**，保持统一性和国际化
+
+**规范**：
+```python
+# ✅ 正确：使用英文 tags
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(prefix="/roles", tags=["Roles"])
+router = APIRouter(prefix="/permissions", tags=["Permissions"])
+
+# ❌ 错误：使用中文 tags
+router = APIRouter(prefix="/auth", tags=["认证"])
+router = APIRouter(prefix="/users", tags=["用户管理"])
+```
+
+**Tags 命名规范**：
+- 使用**英文**，首字母大写
+- 使用**复数形式**（如 `Users`, `Roles`, `Permissions`）
+- 多个单词使用**空格分隔**（如 `SuperAdmin Auth`, `SuperAdmin Tenants`）
+
+**标准 Tags 列表**：
+- `Authentication` - 认证相关 API
+- `Users` - 用户管理 API
+- `Roles` - 角色管理 API
+- `Permissions` - 权限管理 API
+- `Tenants` - 租户管理 API
+- `Register` - 租户注册 API
+- `SuperAdmin Auth` - 超级管理员认证 API
+- `SuperAdmin Tenants` - 超级管理员租户管理 API
+- `SuperAdmin Monitoring` - 超级管理员监控 API
+
+### API 描述规范
+
+**规则**：API 路由的**描述（函数文档字符串）使用中文**，便于团队理解
+
+**规范**：
+```python
+@router.post("/login", response_model=LoginResponse)
+async def login(data: LoginRequest):
+    """
+    用户登录接口  # 描述: 中文
+    
+    验证用户凭据并返回 JWT Token（包含 tenant_id）。
+    登录成功后自动设置租户上下文。
+    
+    Args:
+        data: 登录请求数据（username, password, tenant_id 可选）
+        
+    Returns:
+        LoginResponse: 登录成功的响应数据（包含 access_token）
+    """
+    pass
+```
+
+**总结**：
+- **Tags（标签）**：使用**英文**，用于 API 文档分组和分类
+- **描述（文档字符串）**：使用**中文**，用于详细说明 API 功能
+
 ## 🗄️ 数据库规范（必须严格遵循）
 
 > **详细规范请参考**：[3.数据库命名规范.md](./Farming%20Plan/2.rules/3.数据库命名规范.md)
@@ -485,8 +688,8 @@ try {
   message.error(error.message || '创建失败');
 }
 
-// ✅ 正确：使用 Umi Request 统一错误处理
-// 在 request 拦截器中统一处理错误
+// ✅ 正确：使用 TanStack Query 统一错误处理
+// 在 query client 中统一处理错误
 ```
 
 ## 🔄 Git 提交规范（必须严格遵循）
@@ -612,10 +815,14 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 
 在生成代码前，AI 助手必须检查：
 
-### 通用规范检查
+### 通用规范检查 ⚠️ **必须逐项检查，违反即终止**
 
 - [ ] 文件编码是否为 UTF-8？
-- [ ] **是否完全避免了使用 PowerShell？**（绝对禁止，全程严禁使用 PowerShell 进行任何操作）
+- [ ] **⚠️ 是否完全避免了使用 PowerShell？**（绝对禁止，全程严禁使用 PowerShell 进行任何操作）
+  - [ ] 是否使用了 `powershell`、`pwsh`、`powershell.exe`、`pwsh.exe` 等命令？
+  - [ ] 是否使用了 PowerShell 的 `-Command` 或 `-File` 参数？
+  - [ ] 是否使用了 PowerShell 的任何命令（如 `Get-Content`、`Set-Content`、`Out-File`、`Stop-Process`、`Get-Process` 等）？
+  - [ ] 如果使用了，必须立即停止并改用替代方案
 - [ ] **是否使用了 Git Bash 或 VS Code 进行 Git 操作？**（禁止使用 PowerShell）
 - [ ] **是否使用了 Python 脚本或 VS Code 进行批量操作？**（禁止使用 PowerShell）
 - [ ] 是否按照优先级顺序检查了库选择？
@@ -632,6 +839,19 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 
 - [ ] 是否使用了正确的技术栈？
 - [ ] 是否引入了禁止使用的技术？
+- [ ] **是否严格遵循React生态最佳实践规范？** ⭐ **第一优先级**
+  - [ ] 是否使用了 React 18.3.1？
+  - [ ] 是否使用了 Vite 5.4.8 作为构建工具？
+  - [ ] 是否使用了 Zustand 5.0.0 进行状态管理？
+  - [ ] 是否使用了 TanStack Query 5.51.1 进行数据获取？
+  - [ ] 是否使用了 React Router DOM 6.26.2 进行路由管理？
+  - [ ] 是否使用了 React Hook Form 7.53.0 进行表单管理？
+  - [ ] 是否使用了 Vitest 2.1.8 进行测试？
+- [ ] **是否完全避免了使用 PowerShell？** ⭐ **绝对禁止**（违反即终止）
+  - [ ] 是否使用了 `powershell`、`pwsh`、`powershell.exe`、`pwsh.exe` 等命令？
+  - [ ] 是否使用了 PowerShell 的 `-Command` 或 `-File` 参数？
+  - [ ] 是否使用了 PowerShell 的任何命令（如 `Get-Content`、`Set-Content`、`Out-File`、`Stop-Process`、`Get-Process` 等）？
+  - [ ] 如果使用了，必须立即停止并改用替代方案
 
 ### 命名规范检查
 
@@ -647,6 +867,8 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 ### 代码质量检查
 
 - [ ] 是否包含完整的注释（中文）？
+- [ ] **API Tags 是否使用英文？**（如 `Authentication`, `Users`, `Roles`, `Permissions`）
+- [ ] **API 描述是否使用中文？**（函数文档字符串）
 - [ ] **表名是否包含模块前缀？**（核心系统：`core_`，应用插件：`seed_插件名_`，符合框架命名哲学）
 - [ ] **索引名中的表名是否包含模块前缀？**
 - [ ] 是否包含 `tenant_id` 字段？
@@ -664,30 +886,59 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 
 ## 禁止事项
 
-### 工具和操作禁止
-- ❌ **绝对禁止使用 PowerShell 批量修改文件**（极易产生中文乱码问题）
-  - 禁止使用 PowerShell 的 `Get-Content`、`Set-Content`、`Out-File` 等命令批量处理包含中文的文件
-  - 禁止使用 PowerShell 脚本批量替换文件内容
-  - **为什么无法彻底解决**：
-    - PowerShell 默认编码不一致，不同命令编码行为不同
+### 工具和操作禁止 ⚠️ **绝对禁止，违反即终止**
+
+- ❌ **绝对禁止使用 PowerShell 进行任何操作**（包括但不限于：文件操作、进程管理、命令执行等）
+  - **禁止使用 PowerShell 命令**：`powershell`、`pwsh`、`powershell.exe`、`pwsh.exe` 等
+  - **禁止使用 PowerShell 脚本**：`.ps1` 文件、`-Command` 参数、`-File` 参数等
+  - **禁止使用 PowerShell 命令**：`Get-Content`、`Set-Content`、`Out-File`、`Stop-Process`、`Get-Process`、`Invoke-Command` 等
+  - **禁止在任何场景下使用 PowerShell**：包括但不限于：
+    - 文件批量操作
+    - 进程管理（启动、停止服务等）
+    - 系统命令执行
+    - 环境变量操作
+    - 网络操作
+    - 任何其他操作
+  - **为什么绝对禁止**：
+    - PowerShell 默认编码不一致，极易产生中文乱码问题
+    - 不同命令编码行为不同，无法保证在所有场景下都稳定
     - BOM 问题、字符串处理和管道传递时编码可能变化
     - 即使设置了 UTF-8，也无法保证在所有场景下都稳定
+    - 违反项目编码规范（UTF-8）
   - **推荐替代方案**：
-    - ✅ 使用 Python 脚本进行批量操作（推荐，Python 3 默认 UTF-8）
-    - ✅ 使用专业的文本编辑器（如 VS Code、Notepad++）
-    - ✅ 直接使用文件编辑工具逐个修改
-  - 如需批量操作，必须使用 UTF-8 编码安全的工具
+    - ✅ **进程管理**：使用 `taskkill`（Windows CMD）、`kill`（Linux/Mac）、或直接告诉用户在运行服务的终端按 `Ctrl+C`
+    - ✅ **文件批量操作**：使用 Python 脚本（推荐，Python 3 默认 UTF-8）
+    - ✅ **文件编辑**：使用专业的文本编辑器（如 VS Code、Notepad++）
+    - ✅ **命令执行**：使用 Git Bash、CMD、或直接告诉用户手动操作
+  - **违规处理机制**（严格执行）：
+    1. **立即停止**：一旦检测到使用 PowerShell，AI 助手必须立即停止当前所有操作
+    2. **明确说明**：必须向用户明确说明："❌ 违反了绝对规则：禁止使用 PowerShell"
+    3. **承认错误**：必须承认错误，不得辩解、推脱或找借口
+    4. **使用替代方案**：必须使用规则中指定的替代方案（如 `taskkill`、Python 脚本等）重新执行操作
+    5. **不得重复**：如果再次违反，必须立即停止并提醒用户规则已被违反
+    6. **用户监督**：用户有权随时检查 AI 助手是否遵守规则，AI 助手必须配合
 
 ### 技术栈禁止
 
 - ❌ **禁止使用 Flask、Django 等 Web 框架**（必须使用 FastAPI）
 - ❌ **禁止使用 SQLAlchemy、Django ORM 等 ORM**（必须使用 Tortoise ORM）
 - ❌ **禁止使用 MySQL、SQLite 等数据库**（必须使用 PostgreSQL）
-- ❌ **禁止使用 Axios、fetch 等 HTTP 客户端**（必须使用 Umi Request）
-- ❌ **禁止使用 Redux、Zustand 等状态管理**（必须使用 Umi Model）
+- ❌ **禁止使用 Axios、fetch 等 HTTP 客户端**（必须使用 TanStack Query）
+- ❌ **禁止使用 Redux 等状态管理**（必须使用 Zustand）
 - ❌ **禁止使用 Material-UI、Element UI 等 UI 库**（必须使用 Ant Design）
 - ❌ **禁止使用 ECharts、Chart.js 等图表库**（必须使用 @ant-design/charts）
 - ❌ **禁止使用 aioredis 等 Redis 客户端**（必须使用 redis-py 的 redis.asyncio 接口）
+- ❌ **绝对禁止违反React生态最佳实践规范**
+  - ❌ **禁止更改React版本**（必须使用 18.3.1，最新稳定版）
+  - ❌ **禁止使用非推荐的构建工具**（必须使用 Vite 5.4.8）
+  - ❌ **禁止使用非推荐的状态管理**（必须使用 Zustand 5.0.0）
+  - ❌ **禁止使用非推荐的数据获取库**（必须使用 TanStack Query 5.51.1）
+  - ❌ **禁止使用非推荐的路由库**（必须使用 React Router DOM 6.26.2）
+  - ❌ **禁止使用非推荐的表单库**（必须使用 React Hook Form 7.53.0）
+  - ❌ **禁止使用非推荐的测试框架**（必须使用 Vitest 2.1.8）
+  - ❌ **禁止使用类组件语法**（必须使用函数组件 + Hooks）
+  - ❌ **禁止使用过时的生命周期方法**（必须使用 useEffect）
+  - ❌ **禁止使用过时的 Context API**（必须使用现代 Context）
 
 ### 命名禁止
 - ❌ 禁止使用驼峰命名（Python 后端）（必须使用 snake_case）
@@ -701,6 +952,10 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 - ❌ 禁止使用英文注释（必须使用中文注释）
 - ❌ 禁止省略函数参数说明
 - ❌ 禁止省略返回值说明
+
+### API 文档禁止
+- ❌ **禁止使用中文 Tags**（API 路由的 tags 必须使用英文，如 `Authentication`, `Users`, `Roles`）
+- ❌ **禁止使用英文描述**（API 路由的描述必须使用中文，函数文档字符串）
 
 ## 🔄 开发流程规范
 
@@ -721,6 +976,8 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 - [ ] 是否使用了正确的技术栈？
 - [ ] 命名是否符合规范？
 - [ ] 注释是否完整？
+- [ ] **API Tags 是否使用英文？**（如 `Authentication`, `Users`, `Roles`）
+- [ ] **API 描述是否使用中文？**（函数文档字符串）
 - [ ] 是否包含 `tenant_id` 字段？
 - [ ] 查询是否自动过滤租户？
 - [ ] 类型提示是否完整？
@@ -796,3 +1053,45 @@ AI 助手在协助开发 **RiverEdge SaaS 多租户框架 (RiverEdge SaaS Multi-
 - **第三方依赖管理规范**：[10.第三方依赖管理规范.md](./Farming%20Plan/2.rules/10.第三方依赖管理规范.md)
 
 **违反任何规范都将导致代码无法通过审查，必须立即修正。**
+
+## 🚨 违规处理与监督机制
+
+### 违规处理流程
+
+**如果 AI 助手违反规则，必须按以下流程处理**：
+
+1. **立即停止**：一旦检测到违规（包括用户指出），AI 助手必须立即停止当前所有操作
+2. **明确承认**：必须明确说明："❌ 违反了规则：[具体规则内容]"
+3. **不得辩解**：不得找借口、推脱或试图解释为什么违反规则
+4. **使用替代方案**：必须使用规则中指定的替代方案重新执行操作
+5. **记录教训**：必须记住这次违规，确保不再重复
+
+### 重复违规处理
+
+**如果 AI 助手重复违反同一规则**：
+
+1. **立即终止**：用户有权要求 AI 助手立即停止所有操作
+2. **明确警告**：AI 助手必须明确说明："⚠️ 警告：重复违反了规则 [规则内容]，这是不可接受的"
+3. **请求指导**：AI 助手应该请求用户明确指示下一步该怎么做
+4. **严格遵守**：之后必须严格遵守规则，不得再次违反
+
+### 用户监督权利
+
+**用户有权**：
+- 随时检查 AI 助手是否遵守规则
+- 指出 AI 助手的违规行为
+- 要求 AI 助手立即停止违规操作
+- 要求 AI 助手使用替代方案重新执行
+- 要求 AI 助手明确承认错误
+
+**AI 助手必须**：
+- 配合用户的监督和检查
+- 立即响应违规指正
+- 不得抗拒或辩解
+- 严格遵守所有规则
+
+---
+
+## 📊 更新记录
+
+**最后更新**：2025-11-19（同步React生态最佳实践规范，全面抛弃UMI相关内容）
