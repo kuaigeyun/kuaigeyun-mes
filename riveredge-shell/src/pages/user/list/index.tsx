@@ -130,7 +130,7 @@ const UserList: React.FC = () => {
         <a
           key="edit"
           onClick={() => {
-            navigate(`/user/form?id=${record.id}`);
+            navigate(`/users/${record.id}/edit`);
           }}
         >
           编辑
@@ -167,7 +167,7 @@ const UserList: React.FC = () => {
           key="primary"
           icon={<PlusOutlined />}
           onClick={() => {
-            navigate('/user/form');
+            navigate('/users/create');
           }}
         >
           新建用户

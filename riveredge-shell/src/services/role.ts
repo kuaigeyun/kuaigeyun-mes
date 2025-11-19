@@ -90,7 +90,7 @@ export interface UpdateRoleData {
  * @returns 角色列表响应数据
  */
 export async function getRoleList(params: RoleListParams): Promise<RoleListResponse> {
-  return apiRequest<RoleListResponse>('/api/v1/roles', {
+  return apiRequest<RoleListResponse>('/roles', {
     params,
   });
 }
@@ -104,7 +104,7 @@ export async function getRoleList(params: RoleListParams): Promise<RoleListRespo
  * @returns 角色信息
  */
 export async function getRoleById(roleId: number): Promise<Role> {
-  return apiRequest<Role>(`/api/v1/roles/${roleId}`);
+  return apiRequest<Role>(`/roles/${roleId}`);
 }
 
 /**
@@ -116,9 +116,9 @@ export async function getRoleById(roleId: number): Promise<Role> {
  * @returns 创建的角色信息
  */
 export async function createRole(data: CreateRoleData): Promise<Role> {
-  return apiRequest<Role>('/api/v1/roles', {
+  return apiRequest<Role>('/roles', {
     method: 'POST',
-    body: JSON.stringify(data),
+    data,
   });
 }
 
@@ -132,9 +132,9 @@ export async function createRole(data: CreateRoleData): Promise<Role> {
  * @returns 更新后的角色信息
  */
 export async function updateRole(roleId: number, data: UpdateRoleData): Promise<Role> {
-  return apiRequest<Role>(`/api/v1/roles/${roleId}`, {
+  return apiRequest<Role>(`/roles/${roleId}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    data,
   });
 }
 
@@ -147,7 +147,7 @@ export async function updateRole(roleId: number, data: UpdateRoleData): Promise<
  * @param roleId - 角色 ID
  */
 export async function deleteRole(roleId: number): Promise<void> {
-  return apiRequest<void>(`/api/v1/roles/${roleId}`, {
+  return apiRequest<void>(`/roles/${roleId}`, {
     method: 'DELETE',
   });
 }
@@ -162,7 +162,7 @@ export async function deleteRole(roleId: number): Promise<void> {
  * @returns 更新后的角色信息
  */
 export async function assignPermissions(roleId: number, permissionIds: number[]): Promise<Role> {
-  return apiRequest<Role>(`/api/v1/roles/${roleId}/permissions`, {
+  return apiRequest<Role>(`/roles/${roleId}/permissions`, {
     method: 'POST',
     data: permissionIds, // 后端 Body 接收数组
   });
@@ -177,7 +177,7 @@ export async function assignPermissions(roleId: number, permissionIds: number[])
  * @returns 权限列表
  */
 export async function getRolePermissions(roleId: number): Promise<Permission[]> {
-  return apiRequest<Permission[]>(`/api/v1/roles/${roleId}/permissions`);
+  return apiRequest<Permission[]>(`/roles/${roleId}/permissions`);
 }
 
 /**
@@ -189,7 +189,7 @@ export async function getRolePermissions(roleId: number): Promise<Permission[]> 
  * @returns 权限列表响应数据
  */
 export async function getAllPermissions(params?: { page?: number; page_size?: number; keyword?: string }): Promise<PermissionListResponse> {
-  return apiRequest<PermissionListResponse>('/api/v1/permissions', {
+  return apiRequest<PermissionListResponse>('/permissions', {
     params,
   });
 }

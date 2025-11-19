@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from loguru import logger
 from tortoise import Tortoise
 
-from core.database import TORTOISE_ORM, init_db, close_db
+from core.database import TORTOISE_ORM
 from models.tenant import Tenant, TenantStatus, TenantPlan
 from models.user import User
 from schemas.auth import LoginRequest, RegisterRequest
@@ -31,9 +31,9 @@ async def test_auth_service():
     logger.info("开始测试认证服务")
     logger.info("=" * 60)
     
-    # 初始化数据库连接
+    # 初始化数据库连接（使用 Tortoise ORM 官方方法）
     logger.info("\n初始化数据库连接...")
-    await init_db()
+    await Tortoise.init(config=TORTOISE_ORM)
     logger.success("✅ 数据库连接初始化成功")
     
     try:
@@ -158,9 +158,9 @@ async def test_auth_service():
         traceback.print_exc()
     
     finally:
-        # 关闭数据库连接
+        # 关闭数据库连接（使用 Tortoise ORM 官方方法）
         logger.info("\n关闭数据库连接...")
-        await close_db()
+        await Tortoise.close_connections()
         logger.success("✅ 数据库连接已关闭")
 
 

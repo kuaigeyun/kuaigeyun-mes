@@ -38,9 +38,9 @@ export interface TenantRegisterResponse {
  * @returns 注册响应数据
  */
 export async function registerTenant(data: TenantRegisterData): Promise<TenantRegisterResponse> {
-  return request('/api/v1/register', {
+  return apiRequest<TenantRegisterResponse>('/register', {
     method: 'POST',
-    body: JSON.stringify(data),
+    data,
   });
 }
 

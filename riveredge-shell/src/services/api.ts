@@ -35,31 +35,108 @@ export interface PageResponse<T = any> {
  *
  * @param url - 请求 URL
  * @param options - 请求选项
+ * @param options.method - HTTP 方法（GET, POST, PUT, DELETE 等）
+ * @param options.data - 请求体数据（会自动序列化为 JSON）
+ * @param options.body - 请求体（如果提供了 data，则忽略此字段）
+ * @param options.headers - 请求头
  * @returns 响应数据
  */
 export async function apiRequest<T = any>(
   url: string,
-  options?: any
+  options?: {
+    method?: string;
+    data?: any;
+    body?: any;
+    params?: Record<string, any>; // 查询参数
+    headers?: Record<string, string>;
+    [key: string]: any;
+  }
 ): Promise<T> {
   // 使用相对路径，确保代理生效
   // 相对路径会被 Vite 的 proxy 配置自动代理到后端服务器
-  const requestUrl = `${API_BASE_URL}${url}`;
+  let requestUrl = `${API_BASE_URL}${url}`;
+  
+  // 处理查询参数
+  if (options?.params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(options.params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const queryString = searchParams.toString();
+    if (queryString) {
+      requestUrl += `?${queryString}`;
+    }
+  }
+
+  // 构建请求配置
+  const fetchOptions: RequestInit = {
+    method: options?.method || 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  };
+
+  // 处理请求体：如果提供了 data，则序列化为 JSON；否则使用 body
+  if (options?.data !== undefined) {
+    fetchOptions.body = JSON.stringify(options.data);
+  } else if (options?.body !== undefined) {
+    fetchOptions.body = typeof options.body === 'string' 
+      ? options.body 
+      : JSON.stringify(options.body);
+  }
+
+  // 合并其他选项（但排除 data，因为已经处理过了）
+  const { data, body, ...otherOptions } = options || {};
+  Object.assign(fetchOptions, otherOptions);
 
   try {
-    const response = await fetch(requestUrl, {
-      ...options,
-      // 设置默认 headers
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    });
+    const response = await fetch(requestUrl, fetchOptions);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // 读取响应体（无论成功还是失败都需要读取）
+    let data: any;
+    try {
+      const text = await response.text();
+      data = text ? JSON.parse(text) : null;
+    } catch (e) {
+      // 如果响应体不是 JSON，则使用空对象
+      data = null;
     }
 
-    const data = await response.json();
+    // 检查响应状态
+    if (!response.ok) {
+      // 尝试从响应体中提取错误信息
+      if (data && typeof data === 'object') {
+        // 如果是统一错误格式 { success: false, error: ... }
+        if (data.success === false && data.error) {
+          const errorMessage = data.error.message || data.error.details || '请求失败';
+          const error = new Error(errorMessage) as any;
+          error.response = { data, status: response.status };
+          throw error;
+        }
+        // 如果是 FastAPI 错误格式 { detail: ... }
+        if (data.detail) {
+          const errorMessage = typeof data.detail === 'string' 
+            ? data.detail 
+            : JSON.stringify(data.detail);
+          const error = new Error(errorMessage) as any;
+          error.response = { data, status: response.status };
+          throw error;
+        }
+        // 如果是旧格式 { code: ..., message: ... }
+        if (data.code && data.code !== 200) {
+          const error = new Error(data.message || '请求失败') as any;
+          error.response = { data, status: response.status };
+          throw error;
+        }
+      }
+      // 如果无法提取错误信息，使用默认错误
+      const error = new Error(`HTTP error! status: ${response.status}`) as any;
+      error.response = { data, status: response.status };
+      throw error;
+    }
 
     // 检查后端响应格式
     if (data && typeof data === 'object') {
@@ -88,26 +165,15 @@ export async function apiRequest<T = any>(
     // 直接返回响应（兼容简单数据响应）
     return data;
   } catch (error: any) {
-    // 如果是 Fetch API 的错误，重新抛出
-    if (error.message?.includes('HTTP error!')) {
-      // 尝试从响应体中提取错误信息
-      try {
-        const responseData = await error.response?.json?.() || error.response;
-        if (responseData && typeof responseData === 'object') {
-          if (responseData.success === false && responseData.error) {
-            throw new Error(responseData.error.message || '请求失败');
-          }
-          if (responseData.code && responseData.code !== 200) {
-            throw new Error(responseData.message || '请求失败');
-          }
-        }
-      } catch (e) {
-        // 如果解析失败，保留原始错误
-      }
+    // 如果错误已经有 response 信息（我们在上面已经处理过了），直接抛出
+    if (error.response) {
+      throw error;
     }
-
-    // 重新抛出原始错误
-    throw error;
+    
+    // 如果是网络错误或其他错误，包装后抛出
+    const wrappedError = new Error(error.message || '请求失败') as any;
+    wrappedError.originalError = error;
+    throw wrappedError;
   }
 }
 

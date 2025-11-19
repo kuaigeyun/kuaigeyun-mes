@@ -100,7 +100,7 @@ async def test_database():
         raise ImportError("asyncpg 未安装，需要编译工具（Microsoft C++ Build Tools）")
 
     try:
-        from core.database import TORTOISE_ORM, close_db, init_db
+        from core.database import TORTOISE_ORM
         from app.config import settings
         from tortoise import Tortoise
 
@@ -111,8 +111,8 @@ async def test_database():
         print(f"  数据库: {settings.DB_NAME}")
         print()
 
-        # 初始化数据库连接
-        await init_db()
+        # 初始化数据库连接（使用 Tortoise ORM 官方方法）
+        await Tortoise.init(config=TORTOISE_ORM)
         print("✅ 数据库连接初始化成功")
 
         # 测试查询
@@ -163,7 +163,8 @@ async def test_database():
 
     finally:
         try:
-            await close_db()
+            # 关闭数据库连接（使用 Tortoise ORM 官方方法）
+            await Tortoise.close_connections()
         except:
             pass
 

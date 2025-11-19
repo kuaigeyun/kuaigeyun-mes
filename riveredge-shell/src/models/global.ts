@@ -1,7 +1,6 @@
 /**
  * 全局状态管理
  * 
- * 使用 Umi Model 管理全局状态，如主题配置、系统设置等
  */
 
 import { useState, useCallback } from 'react';

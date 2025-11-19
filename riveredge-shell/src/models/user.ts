@@ -1,7 +1,6 @@
 /**
  * 用户状态管理
  * 
- * 使用 Umi Model 管理用户信息、权限信息等全局状态
  */
 
 import { useState, useCallback } from 'react';

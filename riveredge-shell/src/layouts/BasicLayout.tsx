@@ -1,13 +1,12 @@
 /**
- * 基础布局组件
+ * RiverEdge SaaS 多租户框架 - 基础布局组件
  * 
- * 使用 ProLayout 实现页面布局，包含顶部导航栏、侧边栏菜单等
+ * 使用 ProLayout 实现现代化页面布局，集成状态管理和权限控制
  */
 
 import { ProLayout } from '@ant-design/pro-components';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useMemo } from 'react';
-// MenuDataItem 类型可以从 @ant-design/pro-components 导入
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
   DashboardOutlined,
@@ -15,126 +14,110 @@ import {
   TeamOutlined,
   ApartmentOutlined,
   CrownOutlined,
+  LogoutOutlined,
+  UserSwitchOutlined,
 } from '@ant-design/icons';
+import { Avatar, Dropdown, Space, message } from 'antd';
+import type { MenuProps } from 'antd';
 import TenantSelector from '@/components/TenantSelector';
+import { useGlobalStore } from '@/app';
 
 /**
- * 图标映射
- * 
- * 将字符串图标名称映射为实际的图标组件
+ * 菜单配置
  */
-const iconMap: Record<string, React.ReactNode> = {
-  DashboardOutlined: <DashboardOutlined />,
-  UserOutlined: <UserOutlined />,
-  TeamOutlined: <TeamOutlined />,
-  ApartmentOutlined: <ApartmentOutlined />,
-  CrownOutlined: <CrownOutlined />,
-};
-
-/**
- * 菜单数据渲染
- * 
- * 处理菜单数据，将图标字符串转换为图标组件
- */
-const menuDataRender = (menuList: MenuDataItem[]): MenuDataItem[] => {
-  return menuList.map((item) => {
-    // 处理图标：如果是字符串，从 iconMap 中获取；如果已经是组件，直接使用
-    let icon = item.icon;
-    if (typeof item.icon === 'string' && iconMap[item.icon]) {
-      icon = iconMap[item.icon];
-    }
-
-    return {
-      ...item,
-      icon,
-      children: item.children ? menuDataRender(item.children) : undefined,
-    };
-  });
-};
-
-/**
- * 路由配置（React Router 菜单配置）
- *
- * 定义所有菜单项的路由配置
- */
-const routeConfig: MenuDataItem[] = [
+const menuConfig: MenuDataItem[] = [
   {
     path: '/dashboard',
     name: '仪表盘',
-    icon: 'DashboardOutlined',
+    icon: <DashboardOutlined />,
   },
   {
-    path: '/user',
+    path: '/users',
     name: '用户管理',
-    icon: 'UserOutlined',
-    children: [
-      {
-        path: '/user/list',
-        name: '用户列表',
-      },
-    ],
+    icon: <UserOutlined />,
   },
   {
-    path: '/role',
+    path: '/roles',
     name: '角色管理',
-    icon: 'TeamOutlined',
-    children: [
-      {
-        path: '/role/list',
-        name: '角色列表',
-      },
-    ],
+    icon: <TeamOutlined />,
   },
   {
-    path: '/tenant',
+    path: '/tenants',
     name: '租户管理',
-    icon: 'ApartmentOutlined',
-    children: [
-      {
-        path: '/tenant/list',
-        name: '租户列表',
-      },
-    ],
+    icon: <ApartmentOutlined />,
   },
   {
     path: '/superadmin',
     name: '超级管理员',
-    icon: 'CrownOutlined',
+    icon: <CrownOutlined />,
     children: [
       {
         path: '/superadmin/tenants',
         name: '租户管理',
-        children: [
-          {
-            path: '/superadmin/tenants/list',
-            name: '租户列表',
-          },
-        ],
       },
     ],
   },
 ];
 
 /**
+ * 用户菜单项
+ */
+const getUserMenuItems = (logout: () => void): MenuProps['items'] => [
+  {
+    key: 'profile',
+    icon: <UserSwitchOutlined />,
+    label: '个人资料',
+  },
+  {
+    type: 'divider',
+  },
+  {
+    key: 'logout',
+    icon: <LogoutOutlined />,
+    label: '退出登录',
+    onClick: logout,
+  },
+];
+
+/**
  * 基础布局组件
  */
-export default function BasicLayout() {
+export default function BasicLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { currentUser, logout } = useGlobalStore();
 
-  // 过滤菜单项：移除 hideInMenu 为 true 的项
-  const menuData = useMemo(() => {
-    const filterMenu = (items: MenuDataItem[]): MenuDataItem[] => {
-      return items
-        .filter((item) => !item.hideInMenu)
-        .map((item) => ({
-          ...item,
-          children: item.children ? filterMenu(item.children) : undefined,
-        }));
-    };
-    return filterMenu(routeConfig);
-  }, []);
+  // 根据用户权限过滤菜单
+  const filteredMenuData = useMemo(() => {
+    if (!currentUser) return [];
+
+    let menuItems = [...menuConfig];
+
+    // 如果不是超级管理员，隐藏超级管理员菜单
+    if (!currentUser.is_superuser) {
+      menuItems = menuItems.filter(item => item.path !== '/superadmin');
+    }
+
+    // 如果不是租户管理员且不是超级管理员，隐藏租户管理菜单
+    if (!currentUser.is_tenant_admin && !currentUser.is_superuser) {
+      menuItems = menuItems.filter(item => item.path !== '/tenants');
+    }
+
+    return menuItems;
+  }, [currentUser]);
+
+  // 处理用户菜单点击
+  const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+    switch (key) {
+      case 'profile':
+        message.info('个人资料功能开发中');
+        break;
+      case 'logout':
+        logout();
+        break;
+    }
+  };
 
   return (
     <ProLayout
@@ -145,20 +128,58 @@ export default function BasicLayout() {
       onCollapse={setCollapsed}
       location={location}
       menu={{
-        request: async () => {
-          // 返回菜单数据
-          return menuData;
-        },
+        request: async () => filteredMenuData,
       }}
-      menuDataRender={menuDataRender}
       onMenuHeaderClick={() => navigate('/dashboard')}
       menuItemRender={(item, dom) => (
-        <div onClick={() => item.path && navigate(item.path)}>{dom}</div>
+        <div
+          onClick={() => {
+            if (item.path && item.path !== location.pathname) {
+              navigate(item.path);
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+        >
+          {dom}
+        </div>
       )}
       headerContentRender={() => <TenantSelector />}
-      footerRender={() => null}
+      rightContentRender={() => (
+        <Space>
+          {currentUser && (
+            <Dropdown
+              menu={{
+                items: getUserMenuItems(logout),
+                onClick: handleUserMenuClick,
+              }}
+              placement="bottomRight"
     >
-      <Outlet />
+              <Space style={{ cursor: 'pointer' }}>
+                <Avatar
+                  size="small"
+                  src={currentUser.avatar}
+                  style={{ backgroundColor: '#1890ff' }}
+                >
+                  {currentUser.username?.[0]?.toUpperCase()}
+                </Avatar>
+                <span>{currentUser.username}</span>
+              </Space>
+            </Dropdown>
+          )}
+        </Space>
+      )}
+      footerRender={() => (
+        <div style={{
+          textAlign: 'center',
+          padding: '16px',
+          color: '#666',
+          fontSize: '12px'
+        }}>
+          © 2025 RiverEdge SaaS 多租户框架
+        </div>
+      )}
+    >
+      {children}
     </ProLayout>
   );
 }

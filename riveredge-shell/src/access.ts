@@ -12,7 +12,7 @@ import { CurrentUser } from '@/types/api';
  * 
  * 自定义权限方式：根据用户信息判断权限
  * 
- * @param initialState - 初始状态（包含用户信息，由 getInitialState 提供）
+ * @param initialState - 初始状态（包含用户信息，由 Zustand 全局状态提供）
  * @returns 权限对象
  */
 export default function access(initialState: { currentUser?: CurrentUser } | undefined) {

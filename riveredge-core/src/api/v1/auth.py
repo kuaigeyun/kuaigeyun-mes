@@ -99,14 +99,16 @@ async def login(
         ```
     """
     try:
-        # 使用 Tortoise ORM 验证用户身份（异步）
+        # 使用 Tortoise ORM 验证用户身份
+        # 注意：使用 register_tortoise 后，连接池会自动管理，不需要手动检查
         logger.info(f"开始验证用户: {data.username}")
         from models.user import User
         from core.security import verify_password
 
-        # 查询用户
+        # 查询用户（Tortoise ORM 会自动管理连接池）
         if data.username == "superadmin":
             # 超级管理员
+            logger.info("查询超级管理员用户...")
             user = await User.get_or_none(
                 username=data.username,
                 is_superuser=True,
@@ -115,6 +117,7 @@ async def login(
             logger.info(f"超级管理员查询结果: {user}")
         else:
             # 普通用户
+            logger.info(f"查询普通用户，租户ID: {data.tenant_id or 1}")
             user = await User.get_or_none(
                 username=data.username,
                 tenant_id=data.tenant_id or 1
@@ -162,12 +165,23 @@ async def login(
             detail="用户名或密码错误"
         )
 
+    except HTTPException:
+        # 重新抛出 HTTP 异常（如 401 未授权）
+        raise
     except Exception as e:
         # 记录内部错误并抛出统一异常
+        import traceback
+        error_trace = traceback.format_exc()
         logger.error(f"用户登录失败: {e}")
+        logger.error(f"错误堆栈:\n{error_trace}")
+        
+        # 始终返回详细错误信息（便于调试）
+        # 在生产环境中可以改为只返回通用错误信息
+        error_detail = f"服务器内部错误: {str(e)}"
+        logger.error(f"登录API错误详情: {error_detail}")
         raise HTTPException(
             status_code=500,
-            detail="服务器内部错误"
+            detail=error_detail
         )
 
 

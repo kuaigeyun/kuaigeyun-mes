@@ -1,19 +1,19 @@
 # RiverEdge SaaS 多租户框架 - 后端依赖 (Python 3.11.9 + pip 24.x)
 # 锁定版本 - 确保可重现的构建环境
-# 生成时间: 2025-11-18
+# 生成时间: 2025-11-19
 
 # Web 框架 - 稳定兼容版本
-fastapi==0.110.0
+fastapi==0.104.1
 uvicorn[standard]==0.30.0
 
 # 数据验证 - 稳定兼容版本
-pydantic==2.7.0
+pydantic==2.8.0
 pydantic-settings==2.5.0
 
 # ORM 和数据库 - 稳定兼容版本
-tortoise-orm==0.21.1  # 与FastAPI 0.110.0完美兼容
+tortoise-orm==0.20.1  # 与FastAPI 0.104.1完美兼容
 aerich==0.7.1
-asyncpg==0.28.0  # Python 3.11+ 预编译包
+asyncpg==0.29.0  # Python 3.11+ 预编译包
 psycopg2-binary==2.9.7  # 同步备选方案
 
 # 缓存

@@ -180,9 +180,6 @@ start_backend() {
         exit 1
     fi
 
-    # 更新后端端口配置 (Windows兼容)
-    sed "s/port=[0-9]\+/port=$port/" riveredge-core/scripts/start_backend.py > riveredge-core/scripts/start_backend.py.tmp && mv riveredge-core/scripts/start_backend.py.tmp riveredge-core/scripts/start_backend.py
-
     # 进入后端目录并启动
     cd riveredge-core
 
@@ -196,6 +193,9 @@ start_backend() {
         log_error "虚拟环境未找到，请检查 venv311 目录"
         exit 1
     fi
+
+    # 设置端口环境变量
+    export PORT=$port
 
     # 清理旧的PID文件
     rm -f ../logs/backend.pid
@@ -240,12 +240,23 @@ start_frontend() {
         exit 1
     fi
 
-    # 更新前端端口配置 (Windows兼容)
-    # 使用临时文件避免直接修改JSON文件导致的解析错误
-    sed "s/PORT=[0-9]\+/PORT=$port/" riveredge-shell/package.json > riveredge-shell/package.json.tmp && mv riveredge-shell/package.json.tmp riveredge-shell/package.json
+    # 检查前端依赖
+    cd riveredge-shell
+    if [ ! -d "node_modules" ]; then
+        log_info "安装前端依赖..."
+        npm install --legacy-peer-deps || {
+            log_error "前端依赖安装失败"
+            cd ..
+            exit 1
+        }
+        log_success "前端依赖安装完成"
+    fi
 
     # 更新前端代理配置
-    # 配置前端代理到后端端口（已在vite.config.ts中配置）
+    # 配置前端代理到后端端口
+    sed "s|http://localhost:[0-9]\+|http://localhost:$backend_port|g" vite.config.ts > vite.config.ts.tmp && mv vite.config.ts.tmp vite.config.ts
+
+    cd ..
 
     # 进入前端目录并启动
     cd riveredge-shell
@@ -254,7 +265,7 @@ start_frontend() {
     rm -f ../logs/frontend.pid
 
     # 启动前端服务
-    nohup npm run dev > ../logs/frontend.log 2>&1 &
+    nohup npm run dev -- --port $port > ../logs/frontend.log 2>&1 &
     local frontend_pid=$!
     echo $frontend_pid > ../logs/frontend.pid
 
@@ -412,9 +423,21 @@ main() {
 
     # 检查虚拟环境
     if [ ! -d "venv311" ]; then
-        log_error "虚拟环境未找到，请先创建 venv311"
-        log_error "运行: python -m venv venv311"
+        log_error "虚拟环境未找到，正在创建 venv311..."
+        python -m venv venv311 || {
+            log_error "创建虚拟环境失败"
+            exit 1
+        }
+        log_success "虚拟环境已创建"
+
+        # 激活虚拟环境并安装依赖
+        log_info "安装后端依赖..."
+        source venv311/Scripts/activate && cd riveredge-core && pip install -r requirements.txt || {
+            log_error "安装后端依赖失败"
         exit 1
+        }
+        cd ..
+        log_success "后端依赖安装完成"
     fi
 
     # 停止现有服务

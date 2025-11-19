@@ -7,7 +7,7 @@
 import pytest
 from tortoise import Tortoise
 
-from core.database import TORTOISE_ORM, close_db, init_db
+from core.database import TORTOISE_ORM
 
 
 @pytest.mark.asyncio
@@ -18,8 +18,8 @@ async def test_database_connection():
     验证能否成功连接到 PostgreSQL 数据库
     """
     try:
-        # 初始化数据库连接
-        await init_db()
+        # 初始化数据库连接（使用 Tortoise ORM 官方方法）
+        await Tortoise.init(config=TORTOISE_ORM)
 
         # 测试连接：执行一个简单的查询
         result = await Tortoise.get_connection("default").execute_query(
@@ -38,8 +38,8 @@ async def test_database_connection():
         raise
 
     finally:
-        # 关闭数据库连接
-        await close_db()
+        # 关闭数据库连接（使用 Tortoise ORM 官方方法）
+        await Tortoise.close_connections()
 
 
 @pytest.mark.asyncio

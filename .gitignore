@@ -95,11 +95,6 @@ build/
 .next/
 out/
 
-# Umi
-.umi/
-.umi-production/
-.umi-test/
-
 # TypeScript
 *.tsbuildinfo
 

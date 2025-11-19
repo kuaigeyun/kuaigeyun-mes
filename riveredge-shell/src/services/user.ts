@@ -82,7 +82,7 @@ export interface UpdateUserData {
  * @returns 用户列表响应数据
  */
 export async function getUserList(params: UserListParams): Promise<UserListResponse> {
-  return apiRequest<UserListResponse>('users', {
+  return apiRequest<UserListResponse>('/users', {
     params,
   });
 }
@@ -96,7 +96,7 @@ export async function getUserList(params: UserListParams): Promise<UserListRespo
  * @returns 用户信息
  */
 export async function getUserById(userId: number): Promise<User> {
-  return apiRequest<User>(`users/${userId}`);
+  return apiRequest<User>(`/users/${userId}`);
 }
 
 /**
@@ -108,9 +108,9 @@ export async function getUserById(userId: number): Promise<User> {
  * @returns 创建的用户信息
  */
 export async function createUser(data: CreateUserData): Promise<User> {
-  return apiRequest<User>('users', {
+  return apiRequest<User>('/users', {
     method: 'POST',
-    body: JSON.stringify(data),
+    data,
   });
 }
 
@@ -124,9 +124,9 @@ export async function createUser(data: CreateUserData): Promise<User> {
  * @returns 更新后的用户信息
  */
 export async function updateUser(userId: number, data: UpdateUserData): Promise<User> {
-  return apiRequest<User>(`users/${userId}`, {
+  return apiRequest<User>(`/users/${userId}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    data,
   });
 }
 
@@ -138,7 +138,7 @@ export async function updateUser(userId: number, data: UpdateUserData): Promise<
  * @param userId - 用户 ID
  */
 export async function deleteUser(userId: number): Promise<void> {
-  return apiRequest<void>(`users/${userId}`, {
+  return apiRequest<void>(`/users/${userId}`, {
     method: 'DELETE',
   });
 }
@@ -152,7 +152,7 @@ export async function deleteUser(userId: number): Promise<void> {
  * @returns 更新后的用户信息
  */
 export async function toggleUserStatus(userId: number): Promise<User> {
-  return apiRequest<User>(`users/${userId}/toggle-status`, {
+  return apiRequest<User>(`/users/${userId}/toggle-status`, {
     method: 'PATCH',
   });
 }

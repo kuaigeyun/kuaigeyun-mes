@@ -7,14 +7,14 @@ name = "riveredge-core"
 version = "1.0.0"
 description = "RiverEdge SaaS 多租户框架 - 后端核心系统"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.12"
 dependencies = [
-    "fastapi>=0.115.0",
+    "fastapi==0.104.1",
     "uvicorn[standard]>=0.30.0",
-    "pydantic>=2.9.0",
+    "pydantic==2.5.0",
     "pydantic-settings>=2.5.0",
-    "tortoise-orm==0.21.0",  # 使用稳定版本 0.21.0（满足 aerich 要求，与 asyncpg 0.29.0 兼容性更好）
-    "aerich>=0.7.0",
+    "tortoise-orm==0.20.1",  # 使用稳定版本 0.20.1（与FastAPI 0.104.1完美兼容）
+    "aerich==0.7.1",
     "asyncpg==0.29.0",  # 使用稳定版本 0.29.0（Python 3.12 支持预编译包）
     "redis>=5.0.0",  # redis-p, 使用 redis.asyncio 异步接口
     "python-jose[cryptography]>=3.3.0",
@@ -34,14 +34,14 @@ dev = [
 
 [tool.black]
 line-length = 100
-target-version = ['py312']
+target-version = ['py311']
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 

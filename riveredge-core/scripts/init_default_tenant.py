@@ -11,7 +11,8 @@ from pathlib import Path
 # 添加 src 目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from core.database import init_db, close_db
+from core.database import TORTOISE_ORM
+from tortoise import Tortoise
 from services.tenant_service import TenantService
 from schemas.tenant import TenantCreate
 from models.tenant import TenantStatus, TenantPlan
@@ -25,9 +26,9 @@ async def init_default_tenant() -> None:
     检查是否已存在默认租户（domain="default"），如果不存在则创建。
     """
     try:
-        # 初始化数据库连接
+        # 初始化数据库连接（使用 Tortoise ORM 官方方法）
         logger.info("正在初始化数据库连接...")
-        await init_db()
+        await Tortoise.init(config=TORTOISE_ORM)
         logger.info("数据库连接初始化成功")
         
         # 创建租户服务实例
@@ -69,9 +70,9 @@ async def init_default_tenant() -> None:
         logger.error(f"初始化默认租户时出错: {e}")
         raise
     finally:
-        # 关闭数据库连接
+        # 关闭数据库连接（使用 Tortoise ORM 官方方法）
         logger.info("正在关闭数据库连接...")
-        await close_db()
+        await Tortoise.close_connections()
         logger.info("数据库连接已关闭")
 
 

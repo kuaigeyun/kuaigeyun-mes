@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from loguru import logger
 from tortoise import Tortoise
-from core.database import TORTOISE_ORM, close_db
+from core.database import TORTOISE_ORM
 from models.tenant import Tenant
 from models.user import User
 from models.role import Role
@@ -67,7 +67,7 @@ async def truncate_all_tables() -> None:
         logger.error(traceback.format_exc())
         raise
     finally:
-        await close_db()
+        await Tortoise.close_connections()
 
 
 async def init_default_tenant() -> None:
@@ -113,7 +113,7 @@ async def init_default_tenant() -> None:
         logger.error(traceback.format_exc())
         raise
     finally:
-        await close_db()
+        await Tortoise.close_connections()
 
 
 async def init_users(default_tenant: Tenant) -> None:
@@ -261,7 +261,7 @@ async def init_users(default_tenant: Tenant) -> None:
         logger.error(traceback.format_exc())
         raise
     finally:
-        await close_db()
+        await Tortoise.close_connections()
 
 
 async def main() -> None:

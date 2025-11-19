@@ -20,7 +20,7 @@ from tortoise.exceptions import OperationalError
 from app.config import settings
 from app.middleware import TenantContextMiddleware
 from core.cache import cache
-from core.database import register_db
+from core.database import register_db, TORTOISE_ORM
 from core.exceptions import RiverEdgeException, create_error_response
 from core.api_middleware import (
     APIVersionMiddleware,
@@ -49,18 +49,8 @@ async def lifespan(app: FastAPI):
     """
     # 启动时执行
     logger.info("应用启动中...")
-
-    # 初始化数据库连接
-    # 注意：register_tortoise 在自定义 lifespan 中可能不会自动初始化
-    # 需要手动初始化以确保 Tortoise 在请求处理前就绪
-    try:
-        from core.database import init_db
-        await init_db()
-        logger.info("数据库连接初始化成功")
-    except Exception as e:
-        logger.error(f"数据库连接初始化失败: {e}")
-        # 数据库连接失败时不应该阻止应用启动，让连接在首次请求时重试
-        logger.warning("应用将继续启动，但数据库功能可能不可用")
+    
+    # 注意：数据库连接由 register_tortoise 自动管理，不需要手动初始化
 
     # 连接 Redis（如果连接失败，记录警告但不阻塞启动）
     try:
@@ -85,14 +75,8 @@ async def lifespan(app: FastAPI):
 
     # 关闭时执行
     logger.info("应用关闭中...")
-
-    # 关闭数据库连接
-    try:
-        from core.database import close_db
-        await close_db()
-        logger.info("数据库连接已关闭")
-    except Exception as e:
-        logger.warning(f"数据库断开连接时出错: {e}")
+    
+    # 注意：数据库连接由 register_tortoise 自动关闭，不需要手动关闭
 
     # 断开 Redis 连接
     try:
@@ -153,6 +137,10 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     logger.error(f"HTTP 异常: {exc.status_code} - {exc.detail}")
     logger.error(f"请求路径: {request.url.path}")
     logger.error(f"请求方法: {request.method}")
+    
+    # 记录完整的错误信息（包括堆栈，如果有的话）
+    import traceback
+    logger.error(f"HTTP异常堆栈:\n{traceback.format_exc()}")
 
     return JSONResponse(
         status_code=exc.status_code,
@@ -160,7 +148,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "success": False,
             "error": {
                 "code": "HTTP_EXCEPTION",
-                "message": exc.detail,
+                "message": exc.detail,  # 这里会包含我们设置的详细错误信息
                 "details": {},
                 "path": request.url.path,
             },
@@ -259,13 +247,18 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"错误堆栈: {traceback.format_exc()}")
 
     # 返回标准化的错误响应
+    # 在开发环境下返回详细的错误信息
+    error_message = "服务器内部错误"
+    if settings.DEBUG:
+        error_message = f"服务器内部错误: {str(exc)}"
+    
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "success": False,
             "error": {
                 "code": "INTERNAL_SERVER_ERROR",
-                "message": "服务器内部错误",
+                "message": error_message,
                 "details": {
                     "exception_type": type(exc).__name__,
                     "original_error": str(exc)
@@ -282,19 +275,12 @@ app.add_middleware(RateLimitMiddleware)      # 请求限流
 app.add_middleware(APIVersionMiddleware)     # API 版本控制
 app.add_middleware(TenantContextMiddleware)  # 租户上下文（最内层）
 
-# 数据库连接在 lifespan 中手动管理，不使用 register_db
+# 注册 Tortoise ORM（使用官方推荐的 register_tortoise，自动管理连接池）
+register_db(app)
 
 # 注册路由（延迟导入避免循环依赖）
 def register_routes():
     """注册所有路由"""
-    # 在注册路由前初始化 Tortoise ORM，确保模型可以正常导入
-    try:
-        from core.database import init_db
-        import asyncio
-        asyncio.run(init_db())
-        logger.info("路由注册前 Tortoise ORM 初始化成功")
-    except Exception as e:
-        logger.warning(f"路由注册前 Tortoise ORM 初始化失败: {e}")
 
     from api.v1.tenants import router as tenants_router
     from api.v1.auth import router as auth_router

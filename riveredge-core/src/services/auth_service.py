@@ -128,36 +128,27 @@ class AuthService:
         # 查找用户（仅支持用户名登录，符合中国用户使用习惯）
         # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
         # 如果提供了 tenant_id，同时过滤租户，避免多租户用户名冲突
-        # 使用数据库连接检查和重试机制
-        from core.database import db_operation_with_retry
+        # 注意：使用 register_tortoise 后，连接池会自动管理，直接使用 Tortoise ORM 原生查询
         
-        # 定义查询用户的函数
-        async def query_user():
-            """查询用户的内部函数"""
-            # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
-            # 系统级超级管理员不需要 tenant_id，可以跨租户访问
-            user = await User.get_or_none(
-                username=data.username,
-                tenant_id__isnull=True,
-                is_superuser=True
-            )
-            
-            # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
-            if not user:
-                if data.tenant_id is not None:
-                    # 提供了 tenant_id，查找该租户内的用户
-                    user = await User.get_or_none(
-                        username=data.username,
-                        tenant_id=data.tenant_id
-                    )
-                else:
-                    # 没有提供 tenant_id，查找任意租户的用户（可能多个租户有相同用户名）
-                    user = await User.get_or_none(username=data.username)
-            
-            return user
+        # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
+        # 系统级超级管理员不需要 tenant_id，可以跨租户访问
+        user = await User.get_or_none(
+            username=data.username,
+            tenant_id__isnull=True,
+            is_superuser=True
+        )
         
-        # 使用重试机制执行查询（重试机制内部会处理连接检查）
-        user = await db_operation_with_retry(query_user, max_retries=3, retry_delay=0.1)
+        # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
+        if not user:
+            if data.tenant_id is not None:
+                # 提供了 tenant_id，查找该租户内的用户
+                user = await User.get_or_none(
+                    username=data.username,
+                    tenant_id=data.tenant_id
+                )
+            else:
+                # 没有提供 tenant_id，查找任意租户的用户（可能多个租户有相同用户名）
+                user = await User.get_or_none(username=data.username)
         
         if not user:
             raise HTTPException(

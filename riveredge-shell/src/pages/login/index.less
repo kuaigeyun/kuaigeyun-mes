@@ -11,6 +11,32 @@
   display: flex;
   min-height: 100vh;
   background: #f0f2f5;
+  position: relative;
+}
+
+/* LOGO 和框架名称（手机端显示在顶部） */
+.logo-header {
+  display: none; /* 默认隐藏，手机端显示 */
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  position: relative;
+  z-index: 10;
+
+  .logo-img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+  }
+
+  .logo-title {
+    margin: 0 !important;
+    color: #fff !important;
+    font-size: 20px !important;
+    font-weight: 600 !important;
+  }
 }
 
 /* 左侧品牌展示区 */
@@ -200,45 +226,14 @@
     flex-direction: column;
   }
 
+  /* 手机端显示顶部 LOGO 和框架名 */
+  .logo-header {
+    display: flex;
+  }
+
+  /* 手机端隐藏左侧区域 */
   .login-left {
-    flex: 0 0 auto;
-    min-height: 200px;
-    padding: 40px 24px;
-
-    .logo-top-left {
-      top: 24px;
-      left: 24px;
-      gap: 8px;
-    }
-
-    .logo-img {
-      width: 40px;
-      height: 40px;
-    }
-
-    .logo-title {
-      font-size: 20px !important;
-    }
-
-    .login-left-content {
-      gap: 24px;
-    }
-
-    .login-decoration-img {
-      max-width: 95%;
-      max-height: 40vh;
-    }
-
-    .login-description {
-      .description-title {
-        font-size: 20px !important;
-        margin-bottom: 8px !important;
-      }
-
-      .description-text {
-        font-size: 14px !important;
-      }
-    }
+    display: none;
   }
 
   .login-right {
@@ -253,43 +248,25 @@
 
 /* 小屏幕优化 */
 @media (max-width: 480px) {
-  .login-left {
-    min-height: 150px;
-    padding: 24px 16px;
-
-    .logo-top-left {
-      top: 16px;
-      left: 16px;
-      gap: 6px;
-    }
+  /* 手机端显示顶部 LOGO 和框架名 */
+  .logo-header {
+    display: flex;
+    padding: 20px 16px;
+    gap: 10px;
 
     .logo-img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
     }
 
     .logo-title {
-      font-size: 16px !important;
+      font-size: 18px !important;
     }
+  }
 
-    .login-left-content {
-      gap: 16px;
-    }
-
-    .login-decoration-img {
-      max-width: 98%;
-      max-height: 35vh;
-    }
-
-    .login-description {
-      .description-title {
-        font-size: 18px !important;
-      }
-
-      .description-text {
-        font-size: 12px !important;
-      }
-    }
+  /* 手机端隐藏左侧区域 */
+  .login-left {
+    display: none;
   }
 
   .login-right {

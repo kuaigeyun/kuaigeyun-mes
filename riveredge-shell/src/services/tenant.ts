@@ -102,7 +102,7 @@ export interface UpdateTenantData {
  * @returns 租户列表响应数据
  */
 export async function getTenantList(params: TenantListParams): Promise<TenantListResponse> {
-  return request('/api/v1/tenants', {
+  return apiRequest<TenantListResponse>('/tenants', {
     method: 'GET',
     params,
   });
@@ -115,7 +115,7 @@ export async function getTenantList(params: TenantListParams): Promise<TenantLis
  * @returns 租户详情
  */
 export async function getTenantById(tenantId: number): Promise<Tenant> {
-  return request(`/api/v1/tenants/${tenantId}`, {
+  return apiRequest<Tenant>(`/tenants/${tenantId}`, {
     method: 'GET',
   });
 }
@@ -127,9 +127,9 @@ export async function getTenantById(tenantId: number): Promise<Tenant> {
  * @returns 创建的租户
  */
 export async function createTenant(data: CreateTenantData): Promise<Tenant> {
-  return request('/api/v1/tenants', {
+  return apiRequest<Tenant>('/tenants', {
     method: 'POST',
-    body: JSON.stringify(data),
+    data,
   });
 }
 
@@ -141,9 +141,9 @@ export async function createTenant(data: CreateTenantData): Promise<Tenant> {
  * @returns 更新后的租户
  */
 export async function updateTenant(tenantId: number, data: UpdateTenantData): Promise<Tenant> {
-  return request(`/api/v1/tenants/${tenantId}`, {
+  return apiRequest<Tenant>(`/tenants/${tenantId}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    data,
   });
 }
 
@@ -153,7 +153,7 @@ export async function updateTenant(tenantId: number, data: UpdateTenantData): Pr
  * @param tenantId - 租户 ID
  */
 export async function deleteTenant(tenantId: number): Promise<void> {
-  return request(`/api/v1/tenants/${tenantId}`, {
+  return apiRequest<void>(`/tenants/${tenantId}`, {
     method: 'DELETE',
   });
 }
@@ -165,7 +165,7 @@ export async function deleteTenant(tenantId: number): Promise<void> {
  * @returns 更新后的租户
  */
 export async function activateTenant(tenantId: number): Promise<Tenant> {
-  return request(`/api/v1/tenants/${tenantId}/activate`, {
+  return apiRequest<Tenant>(`/tenants/${tenantId}/activate`, {
     method: 'POST',
   });
 }
@@ -177,7 +177,7 @@ export async function activateTenant(tenantId: number): Promise<Tenant> {
  * @returns 更新后的租户
  */
 export async function deactivateTenant(tenantId: number): Promise<Tenant> {
-  return request(`/api/v1/tenants/${tenantId}/deactivate`, {
+  return apiRequest<Tenant>(`/tenants/${tenantId}/deactivate`, {
     method: 'POST',
   });
 }

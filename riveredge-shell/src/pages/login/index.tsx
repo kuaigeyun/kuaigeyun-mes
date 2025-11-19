@@ -12,7 +12,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { login } from '@/services/auth';
 import { setToken, setTenantId } from '@/utils/auth';
-import useUserModel from '@/models/user';
+import { useGlobalStore } from '@/app';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -36,13 +36,13 @@ interface LoginFormData {
 export default function LoginPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
-  // 使用自定义 hooks 管理用户状态（Zustand状态管理规范）
-  const { setCurrentUser } = useUserModel();
+  // 使用全局状态管理（Zustand状态管理规范）
+  const { setCurrentUser } = useGlobalStore();
   
   /**
    * 处理登录提交
    * 
-   * 登录成功后更新用户状态，然后刷新页面以触发 getInitialState
+   * 登录成功后更新用户状态并跳转到首页
    * 
    * @param values - 表单数据
    */
@@ -61,7 +61,7 @@ export default function LoginPage() {
           setTenantId(response.default_tenant_id);
         }
 
-        // 更新用户状态（getInitialState 会在页面刷新时自动获取）
+        // 更新用户状态（使用 Zustand 全局状态管理）
         setCurrentUser({
           id: response.user.id,
           username: response.user.username,
@@ -81,16 +81,46 @@ export default function LoginPage() {
         message.error('登录失败，请检查用户名和密码');
       }
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.detail || error?.message || '登录失败，请稍后重试';
+      // 提取错误信息（支持多种错误格式）
+      let errorMessage = '登录失败，请稍后重试';
+      
+      if (error?.response?.data) {
+        const errorData = error.response.data;
+        // 统一错误格式 { success: false, error: { message: ... } }
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        }
+        // FastAPI 错误格式 { detail: ... }
+        else if (errorData.detail) {
+          errorMessage = typeof errorData.detail === 'string' 
+            ? errorData.detail 
+            : JSON.stringify(errorData.detail);
+        }
+        // 旧格式 { message: ... }
+        else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      }
+      // 如果 error 本身是 Error 对象
+      else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       message.error(errorMessage);
     }
   };
   
   return (
     <div className="login-container">
-      {/* 左侧品牌展示区 */}
+      {/* LOGO 和框架名称（手机端显示在顶部） */}
+      <div className="logo-header">
+        <img src="/logo.png" alt="RiverEdge Logo" className="logo-img" />
+        <Title level={2} className="logo-title">RiverEdge SaaS</Title>
+      </div>
+
+      {/* 左侧品牌展示区（桌面端显示，手机端隐藏） */}
       <div className="login-left">
-        {/* LOGO 和框架名称放在左上角 */}
+        {/* LOGO 和框架名称放在左上角（桌面端） */}
         <div className="logo-top-left">
           <img src="/logo.png" alt="RiverEdge Logo" className="logo-img" />
           <Title level={2} className="logo-title">RiverEdge SaaS</Title>

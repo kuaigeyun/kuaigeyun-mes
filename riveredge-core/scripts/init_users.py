@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from loguru import logger
-from core.database import init_db, close_db
+from core.database import TORTOISE_ORM
+from tortoise import Tortoise
 from models.tenant import Tenant
 from models.user import User
 from core.security import hash_password
@@ -28,9 +29,9 @@ async def init_users() -> None:
     在默认租户中创建超级用户、租户管理员和普通用户。
     """
     try:
-        # 初始化数据库连接
+        # 初始化数据库连接（使用 Tortoise ORM 官方方法）
         logger.info("正在初始化数据库连接...")
-        await init_db()
+        await Tortoise.init(config=TORTOISE_ORM)
         logger.info("数据库连接初始化成功")
         
         # 获取或创建默认租户
@@ -171,9 +172,9 @@ async def init_users() -> None:
         logger.error(traceback.format_exc())
         raise
     finally:
-        # 关闭数据库连接
+        # 关闭数据库连接（使用 Tortoise ORM 官方方法）
         logger.info("\n正在关闭数据库连接...")
-        await close_db()
+        await Tortoise.close_connections()
         logger.info("数据库连接已关闭")
 
 

@@ -49,7 +49,7 @@ const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
  */
 const approveTenant = async (tenantId: number) => {
   try {
-    await apiRequest(`/api/v1/superadmin/tenants/${tenantId}/approve`, {
+    await apiRequest(`/superadmin/tenants/${tenantId}/approve`, {
       method: 'POST',
     });
     message.success('审核通过成功');
@@ -68,9 +68,9 @@ const approveTenant = async (tenantId: number) => {
  */
 const rejectTenant = async (tenantId: number, reason?: string) => {
   try {
-    await apiRequest(`/api/v1/superadmin/tenants/${tenantId}/reject`, {
+    await apiRequest(`/superadmin/tenants/${tenantId}/reject`, {
       method: 'POST',
-      params: { reason },
+      data: { reason },
     });
     message.success('审核拒绝成功');
     return true;

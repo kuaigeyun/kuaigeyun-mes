@@ -4,16 +4,17 @@
 
 ## 📋 技术栈
 
-- **核心框架**: React 18.3.1
+- **核心框架**: React 18.2.0
 - **构建工具**: Vite 5.4.8
-- **路由管理**: React Router DOM 6.26.2
-- **状态管理**: Zustand 5.0.0 + TanStack Query 5.51.1
-- **UI 组件库**: Ant Design 5.21.4 + Ant Design Pro Components 2.8.2
-- **类型系统**: TypeScript 5.6.3
-- **表单管理**: React Hook Form 7.53.0 + Zod 3.23.8
+- **路由管理**: React Router DOM 6.22.0
+- **状态管理**: Zustand 4.5.0 + TanStack Query 5.45.0
+- **UI 组件库**: Ant Design 5.17.0 + Ant Design Pro Components 2.7.10
+- **类型系统**: TypeScript 5.5.4
+- **表单管理**: React Hook Form 7.51.0 + Zod 3.23.8
 - **国际化**: React i18next 14.1.3
 - **权限管理**: 自定义 Context + Router 守卫
 - **动画库**: Framer Motion 11.5.4
+- **测试框架**: Vitest 1.6.0
 
 ## 🚀 快速开始
 
