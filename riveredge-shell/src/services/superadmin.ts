@@ -24,7 +24,7 @@ export interface SuperAdmin {
 }
 
 /**
- * 租户统计信息接口
+ * 组织统计信息接口
  */
 export interface TenantStatistics {
   total: number;
@@ -43,7 +43,7 @@ export interface TenantStatistics {
 }
 
 /**
- * 租户活跃度数据接口
+ * 组织活跃度数据接口
  */
 export interface TenantActivity {
   tenant_id?: number;
@@ -56,7 +56,7 @@ export interface TenantActivity {
 }
 
 /**
- * 租户资源使用数据接口
+ * 组织资源使用数据接口
  */
 export interface TenantResourceUsage {
   tenant_id?: number;
@@ -70,7 +70,7 @@ export interface TenantResourceUsage {
 }
 
 /**
- * 租户数据统计接口
+ * 组织数据统计接口
  */
 export interface TenantDataStatistics {
   tenant_id?: number;
@@ -88,6 +88,12 @@ export interface SystemStatus {
   database: string;
   redis: string;
   uptime_seconds: number;
+  start_time?: string;
+  cpu_count?: number;
+  cpu_count_logical?: number;
+  timezone?: string;
+  app_version?: string;
+  environment?: string;
   updated_at: string;
 }
 
@@ -144,9 +150,9 @@ export async function getCurrentSuperAdmin(): Promise<SuperAdmin> {
 }
 
 /**
- * 获取租户统计信息
+ * 获取组织统计信息
  * 
- * @returns 租户统计信息
+ * @returns 组织统计信息
  */
 export async function getTenantStatistics(): Promise<TenantStatistics> {
   return apiRequest<TenantStatistics>('/superadmin/monitoring/tenants/statistics', {
@@ -155,10 +161,10 @@ export async function getTenantStatistics(): Promise<TenantStatistics> {
 }
 
 /**
- * 获取租户活跃度数据
+ * 获取组织活跃度数据
  * 
  * @param params - 查询参数
- * @returns 租户活跃度数据
+ * @returns 组织活跃度数据
  */
 export async function getTenantActivity(params?: {
   tenant_id?: number;
@@ -171,10 +177,10 @@ export async function getTenantActivity(params?: {
 }
 
 /**
- * 获取租户资源使用数据
+ * 获取组织资源使用数据
  * 
  * @param params - 查询参数
- * @returns 租户资源使用数据
+ * @returns 组织资源使用数据
  */
 export async function getTenantResourceUsage(params?: {
   tenant_id?: number;
@@ -186,10 +192,10 @@ export async function getTenantResourceUsage(params?: {
 }
 
 /**
- * 获取租户数据统计
+ * 获取组织数据统计
  * 
  * @param params - 查询参数
- * @returns 租户数据统计
+ * @returns 组织数据统计
  */
 export async function getTenantDataStatistics(params?: {
   tenant_id?: number;
@@ -240,6 +246,63 @@ export async function getSystemPerformance(): Promise<SystemPerformance> {
  */
 export async function getSystemAlerts(): Promise<any[]> {
   return apiRequest<any[]>('/superadmin/monitoring/system/alerts', {
+    method: 'GET',
+  });
+}
+
+/**
+ * 系统环境信息接口
+ */
+export interface SystemInfo {
+  python_version: string;
+  python_full_version: string;
+  platform: string;
+  system: string;
+  release: string;
+  version: string;
+  machine: string;
+  processor: string;
+  architecture: string;
+  hostname: string;
+  network?: {
+    interfaces?: Array<{
+      interface: string;
+      ip: string;
+      netmask: string;
+      type: string;
+    }>;
+    bytes_sent?: number;
+    bytes_recv?: number;
+    packets_sent?: number;
+    packets_recv?: number;
+    errin?: number;
+    errout?: number;
+    dropin?: number;
+    dropout?: number;
+    error?: string;
+  };
+  process?: {
+    pid: number;
+    name: string;
+    status: string;
+    create_time: string;
+    num_threads: number;
+    memory_info_mb: {
+      rss: number;
+      vms: number;
+    };
+    error?: string;
+  };
+  updated_at: string;
+}
+
+/**
+ * 获取系统环境信息
+ * 
+ * @returns 系统环境信息
+ */
+export async function getSystemInfo(): Promise<SystemInfo> {
+  return apiRequest<SystemInfo>('/superadmin/monitoring/system/info', {
     method: 'GET',
   });
 }

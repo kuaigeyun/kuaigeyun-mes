@@ -4,7 +4,7 @@
  * 使用 ProLayout 实现现代化页面布局，集成状态管理和权限控制
  */
 
-import { ProLayout } from '@ant-design/pro-components';
+import { ProLayout, SettingDrawer } from '@ant-design/pro-components';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState, useMemo } from 'react';
 import type { MenuDataItem } from '@ant-design/pro-components';
@@ -16,6 +16,7 @@ import {
   CrownOutlined,
   LogoutOutlined,
   UserSwitchOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { Avatar, Dropdown, Space, message } from 'antd';
 import type { MenuProps } from 'antd';
@@ -86,6 +87,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [settings, setSettings] = useState<Partial<any>>({
+    layout: 'mix',
+    navTheme: 'light',
+    primaryColor: '#1890ff',
+    contentWidth: 'Fluid',
+    fixedHeader: true,
+    fixSiderbar: true,
+    colorWeak: false,
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { currentUser, logout } = useGlobalStore();
 
   // 根据用户权限过滤菜单
@@ -120,13 +131,68 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <ProLayout
-      title="RiverEdge SaaS"
-      logo="/logo.png"
-      layout="mix"
-      collapsed={collapsed}
-      onCollapse={setCollapsed}
-      location={location}
+    <>
+      <ProLayout
+        title="RiverEdge SaaS"
+        logo="/logo.png"
+        layout={settings.layout}
+        navTheme={settings.navTheme}
+        primaryColor={settings.primaryColor}
+        contentWidth={settings.contentWidth}
+        fixedHeader={settings.fixedHeader}
+        fixSiderbar={settings.fixSiderbar}
+        colorWeak={settings.colorWeak}
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        location={location}
+        // 禁用 ProLayout 默认的漂浮设置按钮
+        settings={false}
+        actionsRender={() => {
+          const actions = [];
+          
+          // 添加设置按钮（在用户头像左边），点击打开 SettingDrawer
+          actions.push(
+            <SettingOutlined
+              key="setting"
+              onClick={() => setSettingsOpen(true)}
+              style={{
+                fontSize: 18,
+                cursor: 'pointer',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            />
+          );
+          
+          // 添加用户头像和下拉菜单（在设置按钮右边）
+          if (currentUser) {
+            actions.push(
+              <Dropdown
+                key="user"
+                menu={{
+                  items: getUserMenuItems(logout),
+                  onClick: handleUserMenuClick,
+                }}
+                placement="bottomRight"
+              >
+                <Space style={{ cursor: 'pointer', marginLeft: 8 }}>
+                  <Avatar
+                    size="small"
+                    src={currentUser.avatar}
+                    style={{ backgroundColor: '#1890ff' }}
+                  >
+                    {currentUser.username?.[0]?.toUpperCase()}
+                  </Avatar>
+                  <span>{currentUser.username}</span>
+                </Space>
+              </Dropdown>
+            );
+          }
+          
+          return actions;
+        }}
       menu={{
         request: async () => filteredMenuData,
       }}
@@ -144,30 +210,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         </div>
       )}
       headerContentRender={() => <TenantSelector />}
-      rightContentRender={() => (
-        <Space>
-          {currentUser && (
-            <Dropdown
-              menu={{
-                items: getUserMenuItems(logout),
-                onClick: handleUserMenuClick,
-              }}
-              placement="bottomRight"
-    >
-              <Space style={{ cursor: 'pointer' }}>
-                <Avatar
-                  size="small"
-                  src={currentUser.avatar}
-                  style={{ backgroundColor: '#1890ff' }}
-                >
-                  {currentUser.username?.[0]?.toUpperCase()}
-                </Avatar>
-                <span>{currentUser.username}</span>
-              </Space>
-            </Dropdown>
-          )}
-        </Space>
-      )}
       footerRender={() => (
         <div style={{
           textAlign: 'center',
@@ -181,6 +223,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     >
       {children}
     </ProLayout>
+    <SettingDrawer
+      open={settingsOpen}
+      onClose={() => setSettingsOpen(false)}
+      settings={settings}
+      onSettingChange={(changeSetting) => {
+        setSettings(changeSetting);
+      }}
+    />
+    </>
   );
 }
 

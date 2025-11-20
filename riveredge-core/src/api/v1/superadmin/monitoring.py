@@ -1,7 +1,7 @@
 """
 超级管理员运营监控 API 模块
 
-提供租户运营监控和系统监控相关的 API 接口
+提供组织运营监控和系统监控相关的 API 接口
 """
 
 from typing import Optional
@@ -20,15 +20,15 @@ async def get_tenant_statistics(
     current_admin: User = Depends(get_current_superadmin)
 ):
     """
-    获取租户数量统计
+    获取组织数量统计
     
-    统计所有租户的数量，按状态和套餐分组。
+    统计所有组织的数量，按状态和套餐分组。
     
     Args:
         current_admin: 当前超级管理员（依赖注入）
         
     Returns:
-        Dict[str, Any]: 租户统计信息
+        Dict[str, Any]: 组织统计信息
     """
     service = MonitoringService()
     return await service.get_tenant_statistics()
@@ -36,22 +36,22 @@ async def get_tenant_statistics(
 
 @router.get("/tenants/activity")
 async def get_tenant_activity(
-    tenant_id: Optional[int] = Query(None, description="租户 ID（可选）"),
+    tenant_id: Optional[int] = Query(None, description="组织 ID（可选）"),
     days: int = Query(30, ge=1, le=365, description="统计天数（默认 30 天）"),
     current_admin: User = Depends(get_current_superadmin)
 ):
     """
-    获取租户活跃度监控数据
+    获取组织活跃度监控数据
     
-    统计租户的日活、月活、访问量等数据。
+    统计组织的日活、月活、访问量等数据。
     
     Args:
-        tenant_id: 租户 ID（可选，如果提供则只统计该租户）
+        tenant_id: 组织 ID（可选，如果提供则只统计该组织）
         days: 统计天数（默认 30 天）
         current_admin: 当前超级管理员（依赖注入）
         
     Returns:
-        Dict[str, Any]: 租户活跃度数据
+        Dict[str, Any]: 组织活跃度数据
     """
     service = MonitoringService()
     return await service.get_tenant_activity(tenant_id=tenant_id, days=days)
@@ -59,20 +59,20 @@ async def get_tenant_activity(
 
 @router.get("/tenants/resource-usage")
 async def get_tenant_resource_usage(
-    tenant_id: Optional[int] = Query(None, description="租户 ID（可选）"),
+    tenant_id: Optional[int] = Query(None, description="组织 ID（可选）"),
     current_admin: User = Depends(get_current_superadmin)
 ):
     """
-    获取租户资源使用监控数据
+    获取组织资源使用监控数据
     
-    统计租户的存储空间、API 调用次数、数据量等。
+    统计组织的存储空间、API 调用次数、数据量等。
     
     Args:
-        tenant_id: 租户 ID（可选，如果提供则只统计该租户）
+        tenant_id: 组织 ID（可选，如果提供则只统计该组织）
         current_admin: 当前超级管理员（依赖注入）
         
     Returns:
-        Dict[str, Any]: 租户资源使用数据
+        Dict[str, Any]: 组织资源使用数据
     """
     service = MonitoringService()
     return await service.get_tenant_resource_usage(tenant_id=tenant_id)
@@ -80,20 +80,20 @@ async def get_tenant_resource_usage(
 
 @router.get("/tenants/data-statistics")
 async def get_tenant_data_statistics(
-    tenant_id: Optional[int] = Query(None, description="租户 ID（可选）"),
+    tenant_id: Optional[int] = Query(None, description="组织 ID（可选）"),
     current_admin: User = Depends(get_current_superadmin)
 ):
     """
-    获取租户数据统计
+    获取组织数据统计
     
-    统计租户的用户数、订单数、业务数据量等。
+    统计组织的用户数、订单数、业务数据量等。
     
     Args:
-        tenant_id: 租户 ID（可选，如果提供则只统计该租户）
+        tenant_id: 组织 ID（可选，如果提供则只统计该组织）
         current_admin: 当前超级管理员（依赖注入）
         
     Returns:
-        Dict[str, Any]: 租户数据统计
+        Dict[str, Any]: 组织数据统计
     """
     service = MonitoringService()
     return await service.get_tenant_data_statistics(tenant_id=tenant_id)
@@ -173,6 +173,25 @@ async def get_system_alerts(
     """
     service = MonitoringService()
     return await service.get_system_alerts()
+
+
+@router.get("/system/info")
+async def get_system_info(
+    current_admin: User = Depends(get_current_superadmin)
+):
+    """
+    获取系统环境信息
+    
+    返回系统的环境信息，包括 Python 版本、操作系统、平台信息、网络信息等。
+    
+    Args:
+        current_admin: 当前超级管理员（依赖注入）
+        
+    Returns:
+        Dict[str, Any]: 系统环境信息
+    """
+    service = MonitoringService()
+    return await service.get_system_info()
 
 
 @router.get("/cache/stats")
