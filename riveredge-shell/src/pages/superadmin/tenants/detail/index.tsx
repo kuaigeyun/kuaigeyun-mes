@@ -135,7 +135,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   };
 
   if (!tenant) {
-    return <PageContainer loading={loading}>组织不存在</PageContainer>;
+    return <PageContainer loading={loading} breadcrumb={false}>组织不存在</PageContainer>;
   }
 
   const isInactive = tenant.status === TenantStatus.INACTIVE;
@@ -145,6 +145,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   return (
     <PageContainer
       title="组织详情（超级管理员）"
+      breadcrumb={false}
       extra={
         <Space>
           <Button onClick={() => navigate(-1)}>返回</Button>

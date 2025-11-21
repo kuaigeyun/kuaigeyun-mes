@@ -6,7 +6,7 @@
 
 import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
   DashboardOutlined,
@@ -27,10 +27,18 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   GlobalOutlined,
+  TranslationOutlined,
+  BgColorsOutlined,
+  FullscreenOutlined,
+  FullscreenExitOutlined,
+  LockOutlined,
+  SearchOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
-import { Avatar, Dropdown, Space, message, Button } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
 import TenantSelector from '@/components/TenantSelector';
+import PageTabs from '@/components/PageTabs';
 import { useGlobalStore } from '@/app';
 
 /**
@@ -179,22 +187,6 @@ const menuConfig: MenuDataItem[] = [
 /**
  * 用户菜单项
  */
-const getUserMenuItems = (logout: () => void): MenuProps['items'] => [
-  {
-    key: 'profile',
-    icon: <UserSwitchOutlined />,
-    label: '个人资料',
-  },
-  {
-    type: 'divider',
-  },
-  {
-    key: 'logout',
-    icon: <LogoutOutlined />,
-    label: '退出登录',
-    onClick: logout,
-  },
-];
 
 /**
  * 基础布局组件
@@ -203,7 +195,166 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { currentUser, logout } = useGlobalStore();
+
+  /**
+   * 处理搜索
+   */
+  const handleSearch = (value: string) => {
+    const trimmedValue = value.trim();
+    if (trimmedValue) {
+      // TODO: 实现搜索功能
+      message.info(`搜索: ${trimmedValue}（功能开发中）`);
+    }
+  };
+
+  /**
+   * 键盘快捷键：Ctrl+K / Cmd+K 聚焦搜索框
+   */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        // 聚焦搜索框
+        const searchInput = document.querySelector('.ant-pro-layout-header .ant-input') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  /**
+   * 获取用户菜单项
+   */
+  const getUserMenuItems = (logout: () => void): MenuProps['items'] => [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: '个人资料',
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '退出登录',
+      onClick: logout,
+    },
+  ];
+
+  // 处理用户菜单点击
+  const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+    switch (key) {
+      case 'profile':
+        message.info('个人资料功能开发中');
+        break;
+      case 'logout':
+        logout();
+        break;
+    }
+  };
+
+  /**
+   * 根据当前路径和菜单配置生成面包屑
+   */
+  const generateBreadcrumb = useMemo(() => {
+    const breadcrumbItems: { 
+      title: string; 
+      path?: string; 
+      icon?: React.ReactNode;
+      menu?: { items: Array<{ key: string; label: string; onClick: () => void }> };
+    }[] = [];
+    
+    // 查找当前路径对应的菜单项及其父级菜单
+    const findMenuPath = (items: MenuDataItem[], targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
+      for (const item of items) {
+        const currentPath = [...path, item];
+        
+        // 精确匹配
+        if (item.path === targetPath) {
+          return currentPath;
+        }
+        
+        // 子菜单递归查找
+        if (item.children) {
+          const found = findMenuPath(item.children, targetPath, currentPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    // 查找父级菜单项，用于获取同级菜单
+    const findParentMenu = (items: MenuDataItem[], targetPath: string, parent: MenuDataItem | null = null): { item: MenuDataItem; parent: MenuDataItem | null } | null => {
+      for (const item of items) {
+        if (item.path === targetPath) {
+          return { item, parent };
+        }
+        if (item.children) {
+          const found = findParentMenu(item.children, targetPath, item);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    const menuPath = findMenuPath(menuConfig, location.pathname);
+    
+    if (menuPath) {
+      menuPath.forEach((item, index) => {
+        if (item.name && item.path) {
+          // 检查是否有同级菜单（父级菜单有多个子项）
+          let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+          
+          if (index > 0) {
+            // 获取父级菜单项
+            const parentItem = menuPath[index - 1];
+            if (parentItem.children && parentItem.children.length > 1) {
+              // 有同级菜单，创建下拉菜单
+              menu = {
+                items: parentItem.children
+                  .filter(child => child.name && child.path)
+                  .map(child => ({
+                    key: child.path!,
+                    label: child.name as string,
+                    onClick: () => {
+                      navigate(child.path!);
+                    },
+                  })),
+              };
+            }
+          }
+          
+          breadcrumbItems.push({
+            title: item.name as string,
+            path: item.path,
+            icon: item.icon,
+            menu: menu,
+          });
+        }
+      });
+    } else {
+      // 如果没有找到匹配的菜单项，使用路径作为面包屑
+      const pathSegments = location.pathname.split('/').filter(Boolean);
+      pathSegments.forEach((segment, index) => {
+        const path = '/' + pathSegments.slice(0, index + 1).join('/');
+        breadcrumbItems.push({
+          title: segment,
+          path: path,
+        });
+      });
+    }
+    
+    return breadcrumbItems;
+  }, [location.pathname, menuConfig, navigate]);
 
   /**
    * 根据用户权限过滤菜单
@@ -232,22 +383,55 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return menuItems;
   }, [currentUser]);
 
-  // 处理用户菜单点击
-  const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
-    switch (key) {
-      case 'profile':
-        message.info('个人资料功能开发中');
-        break;
-      case 'logout':
-        logout();
-        break;
+
+  /**
+   * 处理全屏切换
+   */
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      });
     }
+  };
+
+
+  /**
+   * 处理语言切换
+   */
+  const handleLanguageChange = () => {
+    message.info('语言切换功能开发中');
+  };
+
+  /**
+   * 处理主题颜色切换
+   */
+  const handleThemeChange = () => {
+    message.info('主题颜色配置功能开发中');
+  };
+
+  /**
+   * 处理锁定屏幕
+   */
+  const handleLockScreen = () => {
+    message.info('锁定屏幕功能开发中');
   };
 
   return (
     <>
       {/* 自定义分组标题样式 */}
       <style>{`
+        /* 全局禁用 PageContainer 的默认面包屑 */
+        .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb {
+          display: none !important;
+        }
+        .ant-pro-page-container .ant-breadcrumb {
+          display: none !important;
+        }
         /* 分组标题样式：小字体、灰色、不可点击 */
         .ant-menu-item-group-title {
           font-size: 12px !important;
@@ -290,6 +474,250 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .menu-collapse-button:active {
           background-color: rgba(0, 0, 0, 0.1) !important;
         }
+        /* 隐藏左侧菜单栏滚动条，但保持滚轮滚动功能 */
+        /* 使用通用选择器覆盖所有可能的滚动容器 */
+        .ant-pro-layout .ant-pro-sider *,
+        .ant-pro-layout .ant-layout-sider * {
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE 10+ */
+        }
+        .ant-pro-layout .ant-pro-sider *::-webkit-scrollbar,
+        .ant-pro-layout .ant-layout-sider *::-webkit-scrollbar {
+          display: none !important; /* Chrome, Safari, Edge */
+          width: 0 !important;
+          height: 0 !important;
+        }
+        /* 去掉 ant-pro-sider-footer 的底部间距 */
+        .ant-pro-sider-footer {
+          margin-bottom: 10px !important;
+          padding-bottom: 0 !important;
+        }
+        /* 加深顶部分割线颜色 */
+        .ant-pro-sider-footer {
+          border-top-color: #d9d9d9 !important;
+        }
+        /* 统一顶部和标签栏的透明度和 backdrop-filter */
+        .ant-pro-layout .ant-pro-layout-header,
+        .ant-pro-layout .ant-layout-header {
+          background: rgba(255, 255, 255, 0.85) !important;
+          backdrop-filter: blur(8px) !important;
+          -webkit-backdrop-filter: blur(8px) !important;
+        }
+        /* 内容区背景颜色与 PageContainer 一致 */
+        .ant-pro-layout-bg-list {
+          background: #f0f2f5 !important;
+        }
+        /* 左侧菜单区单独设置背景色，与总体背景色区分开 */
+        .ant-pro-layout .ant-pro-sider,
+        .ant-pro-layout .ant-layout-sider,
+        .ant-pro-layout .ant-pro-sider-menu {
+          background: #fff !important;
+        }
+        /* 菜单栏增加与顶部间距 */
+        .ant-pro-layout .ant-pro-sider-menu {
+          padding-top: 8px !important;
+        }
+        /* 一级菜单激活状态 - 只有文字颜色，无背景色 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
+          background-color: transparent !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a {
+          color: #1890ff !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
+          border-right-color: #1890ff !important;
+        }
+        /* 一级子菜单标题激活状态 - 只有文字颜色，无背景色 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
+          background-color: transparent !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content {
+          color: #1890ff !important;
+        }
+        /* 二级及以下菜单激活状态 - 有蓝色背景 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected {
+          background-color: #1890ff !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content > a {
+          color: #fff !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected::after,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected::after {
+          border-right-color: #1890ff !important;
+        }
+        /* 二级及以下子菜单标题激活状态 - 有蓝色背景 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title {
+          background-color: #1890ff !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content {
+          color: #fff !important;
+        }
+        /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
+        .ant-pro-layout .ant-pro-layout-header .ant-space {
+          gap: 8px !important;
+        }
+        /* 统一按钮样式 - 深灰色图标，圆形淡灰色背景 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50% !important;
+          background-color: rgba(0, 0, 0, 0.04) !important;
+          border: none !important;
+          transition: none !important;
+          color: #595959 !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn .anticon {
+          color: #595959 !important;
+        }
+        /* 禁用顶栏按钮的 hover 效果 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover {
+          background-color: rgba(0, 0, 0, 0.04) !important;
+          color: #595959 !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon {
+          color: #595959 !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:active {
+          background-color: rgba(0, 0, 0, 0.04) !important;
+          color: #595959 !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon {
+          color: #595959 !important;
+        }
+        /* Badge 内按钮样式 - 确保按钮样式一致，完全禁用 hover */
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn {
+          width: 32px !important;
+          height: 32px !important;
+          padding: 0 !important;
+          border-radius: 50% !important;
+          background-color: rgba(0, 0, 0, 0.04) !important;
+          transition: none !important;
+        }
+        /* 完全禁用 Badge 内按钮的 hover 效果 */
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover,
+        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn {
+          background-color: rgba(0, 0, 0, 0.04) !important;
+          color: #595959 !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
+          transform: none !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover .anticon {
+          color: #595959 !important;
+        }
+        /* 确保 Badge 本身无任何 hover 效果 */
+        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover {
+          background-color: transparent !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
+        }
+        /* 用户头像按钮样式 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar {
+          border: none;
+        }
+        /* 租户选择器样式 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper {
+          padding: 4px 8px;
+          border-radius: 4px;
+          transition: none !important;
+        }
+        /* 禁用租户选择器的 hover 效果 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
+          background-color: transparent !important;
+        }
+        /* 搜索框样式 */
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper {
+          border: none !important;
+          box-shadow: none !important;
+          background-color: rgba(0, 0, 0, 0.04) !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover,
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper-focused {
+          border: none !important;
+          box-shadow: none !important;
+          background-color: rgba(0, 0, 0, 0.04) !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-input {
+          background-color: transparent !important;
+          border: none !important;
+        }
+        /* LOGO 样式 - 设置 min-width */
+        .ant-pro-global-header-logo {
+          min-width: 167px !important;
+        }
+        /* 面包屑样式 - 顶栏左侧，在 ant-pro-layout-container 内 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
+          margin-left: 16px;
+          padding-left: 30px;
+          font-size: 14px;
+          display: flex !important;
+          align-items: center;
+          height: 100%;
+          position: relative;
+          white-space: nowrap !important;
+          overflow: hidden;
+          flex: 1;
+          min-width: 0;
+          max-width: calc(100% - 400px);
+        }
+        /* 面包屑内部容器防止换行 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb ul {
+          display: flex !important;
+          flex-wrap: nowrap !important;
+          white-space: nowrap !important;
+          overflow: hidden;
+        }
+        /* 面包屑项防止换行 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item {
+          white-space: nowrap !important;
+          flex-shrink: 0 !important;
+          display: inline-flex !important;
+        }
+        /* 面包屑分隔符防止换行 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-separator {
+          white-space: nowrap !important;
+          flex-shrink: 0 !important;
+          display: inline-flex !important;
+        }
+        /* 面包屑内部文本防止换行 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb span,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb a {
+          white-space: nowrap !important;
+          display: inline-flex !important;
+        }
+        /* 面包屑前面的小竖线 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 1px;
+          height: 16px;
+          background-color: #d9d9d9;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb a {
+          color: #595959;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a:hover,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb a:hover {
+          color: #1890ff;
+        }
       `}</style>
       <ProLayout
         title="RiverEdge SaaS"
@@ -303,10 +731,145 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         collapsed={collapsed}
         onCollapse={setCollapsed}
         location={location}
+        contentStyle={{
+          padding: 0,
+          background: '#f0f2f5',
+        }}
+        headerContentRender={() => (
+          <Breadcrumb
+            style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              height: '100%',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+            }}
+            items={generateBreadcrumb.map((item, index) => ({
+              title: (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {item.icon && (
+                    <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>
+                      {item.icon}
+                    </span>
+                  )}
+                  {index === generateBreadcrumb.length - 1 ? (
+                    <span style={{ color: '#262626', fontWeight: 500 }}>{item.title}</span>
+                  ) : (
+                    <a 
+                      onClick={() => {
+                        if (item.path) {
+                          navigate(item.path);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {item.title}
+                    </a>
+                  )}
+                </span>
+              ),
+              menu: item.menu,
+            }))}
+          />
+        )}
         actionsRender={() => {
           const actions = [];
           
-          // 添加用户头像和下拉菜单
+          // 搜索框（始终展开）
+          actions.push(
+            <Input
+              key="search"
+              placeholder="搜索菜单、功能..."
+              prefix={<SearchOutlined style={{ fontSize: 16, color: '#595959' }} />}
+              size="small"
+              onPressEnter={(e) => {
+                const value = (e.target as HTMLInputElement).value;
+                handleSearch(value);
+              }}
+              style={{
+                width: 280,
+                height: 32,
+                borderRadius: '16px',
+                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+              }}
+              allowClear
+            />
+          );
+
+          // 消息提醒（带数量徽标）
+          actions.push(
+            <Tooltip key="notifications" title="消息通知">
+              <Badge count={5} size="small" offset={[-8,8]}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<BellOutlined style={{ fontSize: 16 }} />}
+                  onClick={() => message.info('消息通知功能开发中')}
+                />
+              </Badge>
+            </Tooltip>
+          );
+          
+          // 语言切换
+          actions.push(
+            <Tooltip key="language" title="语言切换">
+              <Button
+                type="text"
+                size="small"
+                icon={<TranslationOutlined style={{ fontSize: 16 }} />}
+                onClick={handleLanguageChange}
+              />
+            </Tooltip>
+          );
+
+          // 颜色配置
+          actions.push(
+            <Tooltip key="theme" title="主题颜色">
+              <Button
+                type="text"
+                size="small"
+                icon={<BgColorsOutlined style={{ fontSize: 16 }} />}
+                onClick={handleThemeChange}
+              />
+            </Tooltip>
+          );
+
+          // 全屏按钮
+          actions.push(
+            <Tooltip key="fullscreen" title={isFullscreen ? '退出全屏' : '全屏'}>
+              <Button
+                type="text"
+                size="small"
+                icon={
+                  isFullscreen ? (
+                    <FullscreenExitOutlined style={{ fontSize: 16 }} />
+                  ) : (
+                    <FullscreenOutlined style={{ fontSize: 16 }} />
+                  )
+                }
+                onClick={handleFullscreen}
+              />
+            </Tooltip>
+          );
+
+          // 租户切换选择框 - 优化样式，不显示图标
+          if (currentUser) {
+            actions.push(
+              <div
+                key="tenant"
+                className="tenant-selector-wrapper"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginLeft: 4,
+                }}
+              >
+                <TenantSelector />
+              </div>
+            );
+          }
+          
+          // 用户头像和下拉菜单
           if (currentUser) {
             actions.push(
               <Dropdown
@@ -317,19 +880,60 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 }}
                 placement="bottomRight"
               >
-                <Space style={{ cursor: 'pointer' }}>
+                <Space
+                  size={8}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '0 8px 0 4px',
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '16px',
+                    background: 'rgba(0, 0, 0, 0.04)',
+                  }}
+                >
                   <Avatar
-                    size="small"
-                    src={currentUser.avatar}
-                    style={{ backgroundColor: '#1890ff' }}
+                    size={24}
+                    src={(currentUser as any)?.avatar}
+                    style={{ 
+                      backgroundColor: '#595959', 
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
                     {currentUser.username?.[0]?.toUpperCase()}
                   </Avatar>
-                  <span>{currentUser.username}</span>
+                  <span 
+                    style={{ 
+                      fontSize: 14, 
+                      color: '#262626', 
+                      lineHeight: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {currentUser.username}
+                  </span>
                 </Space>
               </Dropdown>
             );
           }
+
+          // 锁定屏幕按钮 - 移到最后一个防止误点
+          actions.push(
+            <Tooltip key="lock" title="锁定屏幕">
+              <Button
+                type="text"
+                size="small"
+                icon={<LockOutlined style={{ fontSize: 16 }} />}
+                onClick={handleLockScreen}
+              />
+            </Tooltip>
+          );
           
           return actions;
         }}
@@ -370,11 +974,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           </div>
         );
       }}
-      headerContentRender={() => <TenantSelector />}
       menuFooterRender={() => (
         <div style={{
           padding: '8px 4px',
-          borderTop: '1px solid #f0f0f0',
+          paddingBottom: 0,
+          marginBottom: 0,
+          borderTop: '1px solid #d9d9d9',
           textAlign: 'center',
         }}>
           <Button
@@ -394,7 +999,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         </div>
       )}
     >
-      {children}
+      <PageTabs menuConfig={menuConfig}>{children}</PageTabs>
     </ProLayout>
     </>
   );

@@ -247,6 +247,7 @@ export default function SystemMonitoringPage() {
       title="系统状态监控"
       subTitle="平台系统运行状态和资源使用情况"
       loading={loading}
+      breadcrumb={{}}
       extra={[
         <Space key="actions">
           <Text type="secondary">

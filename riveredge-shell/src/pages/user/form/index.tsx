@@ -104,12 +104,6 @@ const UserForm: React.FC = () => {
     <PageContainer
       title={isEdit ? '编辑用户' : '创建用户'}
       onBack={() => navigate('/users')}
-      breadcrumb={{
-        items: [
-          { title: '用户管理', path: '/users' },
-          { title: isEdit ? '编辑用户' : '创建用户' },
-        ],
-      }}
     >
       <Card loading={isLoading}>
         <ProForm

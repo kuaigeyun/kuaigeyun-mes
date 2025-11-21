@@ -54,6 +54,7 @@ export default function OperationsDashboard() {
       title="运营看板"
       subTitle="平台级运营数据概览"
       loading={loading}
+      breadcrumb={false}
     >
       <Spin spinning={loading}>
         {/* 核心指标卡片 */}

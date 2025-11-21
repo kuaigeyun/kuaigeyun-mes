@@ -29,6 +29,7 @@ export default function PluginPlaceholderPage() {
     <PageContainer
       title={`${moduleName.toUpperCase()} - ${subModule || '首页'}`}
       subTitle="插件占位页面（用于预览菜单效果）"
+      breadcrumb={false}
     >
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <Card>

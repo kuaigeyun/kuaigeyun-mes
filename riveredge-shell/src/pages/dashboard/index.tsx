@@ -187,7 +187,6 @@ export default function DashboardPage() {
   return (
     <PageContainer
       title="工作台"
-      breadcrumb={{}}
     >
       {/* 欢迎区域 */}
       <Card style={{ marginBottom: 24 }}>

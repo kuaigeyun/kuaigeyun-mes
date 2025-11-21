@@ -108,6 +108,7 @@ export default function PackagesPage() {
       title="套餐管理"
       subTitle="平台套餐配置和限制管理"
       loading={isLoading}
+      breadcrumb={false}
     >
       <Alert
         message="套餐配置说明"

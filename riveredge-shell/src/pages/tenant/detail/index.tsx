@@ -142,6 +142,7 @@ const TenantDetail: React.FC = () => {
     <PageContainer
       title="组织详情"
       loading={loading}
+      breadcrumb={false}
       extra={[
         <Button key="edit" onClick={() => navigate(`/tenant/form?id=${tenant.id}`)}>
           编辑
