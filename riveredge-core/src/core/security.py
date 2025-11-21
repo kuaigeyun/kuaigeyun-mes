@@ -28,7 +28,7 @@ def create_access_token(
     """
     创建 JWT 访问令牌
     
-    生成包含用户信息和租户信息的 JWT Token。
+    生成包含用户信息和组织信息的 JWT Token。
     
     Args:
         data: 要编码到 Token 中的数据（必须包含 sub 和 tenant_id）
@@ -140,22 +140,22 @@ def create_token_for_user(
     user_id: int,
     username: str,
     tenant_id: Optional[int],
-    is_superuser: bool = False,
+    is_platform_admin: bool = False,
     is_tenant_admin: bool = False,
     expires_delta: Optional[timedelta] = None
 ) -> str:
     """
     为用户创建 JWT Token
     
-    生成包含用户信息和租户信息的 JWT Token。
+    生成包含用户信息和组织信息的 JWT Token。
     系统级超级管理员的 tenant_id 可以为 None。
     
     Args:
         user_id: 用户 ID
         username: 用户名
-        tenant_id: 租户 ID（关键：用于多租户隔离，系统级超级管理员可为 None）
-        is_superuser: 是否为超级用户（租户内超级用户或系统级超级管理员）
-        is_tenant_admin: 是否为租户管理员
+        tenant_id: 组织 ID（关键：用于多组织隔离，系统级超级管理员可为 None）
+        is_platform_admin: 是否为平台管理员（系统级超级管理员）
+        is_tenant_admin: 是否为组织管理员
         expires_delta: 过期时间增量（可选）
         
     Returns:
@@ -166,7 +166,7 @@ def create_token_for_user(
         ...     user_id=1,
         ...     username="testuser",
         ...     tenant_id=1,
-        ...     is_superuser=False,
+        ...     is_platform_admin=False,
         ...     is_tenant_admin=True
         ... )
         >>> len(token) > 0
@@ -175,8 +175,8 @@ def create_token_for_user(
     data = {
         "sub": str(user_id),  # 用户 ID（标准 JWT 字段）
         "username": username,
-        "tenant_id": tenant_id,  # ⭐ 关键：租户 ID，用于多租户隔离（系统级超级管理员可为 None）
-        "is_superuser": is_superuser,
+        "tenant_id": tenant_id,  # ⭐ 关键：组织 ID，用于多组织隔离（平台管理员可为 None）
+        "is_platform_admin": is_platform_admin,
         "is_tenant_admin": is_tenant_admin,
     }
     
@@ -196,9 +196,9 @@ def get_token_payload(token: str) -> Optional[Dict[str, Any]]:
         Optional[Dict[str, Any]]: Token 载荷数据，包含：
             - sub: 用户 ID
             - username: 用户名
-            - tenant_id: 租户 ID
-            - is_superuser: 是否为超级用户
-            - is_tenant_admin: 是否为租户管理员
+            - tenant_id: 组织 ID
+            - is_platform_admin: 是否为平台管理员
+            - is_tenant_admin: 是否为组织管理员
             - exp: 过期时间
             - iat: 签发时间
         如果验证失败则返回 None

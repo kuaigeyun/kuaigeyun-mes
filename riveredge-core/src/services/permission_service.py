@@ -19,7 +19,7 @@ class PermissionService:
     权限检查服务类
     
     提供权限验证相关的业务逻辑处理。
-    所有权限查询自动过滤租户。
+    所有权限查询自动过滤组织。
     """
     
     async def get_user_permissions(
@@ -31,14 +31,14 @@ class PermissionService:
         获取用户权限列表
         
         查询用户的所有权限（通过角色关联）。
-        自动过滤租户：只返回当前租户内的权限。
+        自动过滤组织：只返回当前组织内的权限。
         
         Args:
             user: 用户对象
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
-            List[Permission]: 用户权限列表（已过滤租户）
+            List[Permission]: 用户权限列表（已过滤组织）
             
         Example:
             >>> service = PermissionService()
@@ -49,11 +49,15 @@ class PermissionService:
         if tenant_id is None:
             tenant_id = get_current_tenant_id()
         
-        # 如果用户是超级用户（租户内），返回所有权限（当前租户）
-        if user.is_superuser:
+        # 平台管理员可以访问所有组织的权限（但这里只返回当前组织的权限）
+        if user.is_platform_admin_user():
             return await Permission.filter(tenant_id=tenant_id).all()
         
-        # 获取用户的所有角色（自动过滤租户）
+        # 组织管理员返回当前组织的所有权限
+        if user.is_organization_admin():
+            return await Permission.filter(tenant_id=tenant_id).all()
+        
+        # 获取用户的所有角色（自动过滤组织）
         roles = await user.roles.filter(tenant_id=tenant_id).all()
         
         # 获取所有角色的权限（去重）
@@ -79,12 +83,12 @@ class PermissionService:
         检查用户是否具有指定权限
         
         验证用户是否具有指定的权限代码。
-        自动过滤租户：只检查当前租户内的权限。
+        自动过滤组织：只检查当前组织内的权限。
         
         Args:
             user: 用户对象
             permission_code: 权限代码（格式：resource:action）
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
             bool: 如果用户具有权限返回 True，否则返回 False
@@ -101,8 +105,8 @@ class PermissionService:
         if tenant_id is None:
             tenant_id = get_current_tenant_id()
         
-        # 如果用户是超级用户（租户内），直接返回 True
-        if user.is_superuser:
+        # 平台管理员和组织管理员拥有所有权限
+        if user.is_platform_admin_user() or user.is_organization_admin():
             return True
         
         # 获取用户权限
@@ -125,12 +129,12 @@ class PermissionService:
         要求用户具有指定权限（否则抛出异常）
         
         验证用户是否具有指定的权限代码，如果没有则抛出 403 错误。
-        自动过滤租户：只检查当前租户内的权限。
+        自动过滤组织：只检查当前组织内的权限。
         
         Args:
             user: 用户对象
             permission_code: 权限代码（格式：resource:action）
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Raises:
             HTTPException: 当用户不具有指定权限时抛出 403 错误
@@ -157,14 +161,14 @@ class PermissionService:
         获取角色权限列表
         
         查询角色的所有权限。
-        自动过滤租户：只返回当前租户内的权限。
+        自动过滤组织：只返回当前组织内的权限。
         
         Args:
             role: 角色对象
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
-            List[Permission]: 角色权限列表（已过滤租户）
+            List[Permission]: 角色权限列表（已过滤组织）
             
         Example:
             >>> service = PermissionService()
@@ -175,7 +179,7 @@ class PermissionService:
         if tenant_id is None:
             tenant_id = get_current_tenant_id()
         
-        # 获取角色的权限（自动过滤租户）
+        # 获取角色的权限（自动过滤组织）
         return await role.permissions.filter(tenant_id=tenant_id).all()
     
     async def check_user_role(
@@ -188,12 +192,12 @@ class PermissionService:
         检查用户是否具有指定角色
         
         验证用户是否具有指定的角色代码。
-        自动过滤租户：只检查当前租户内的角色。
+        自动过滤组织：只检查当前组织内的角色。
         
         Args:
             user: 用户对象
             role_code: 角色代码
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
             bool: 如果用户具有角色返回 True，否则返回 False
@@ -207,7 +211,7 @@ class PermissionService:
         if tenant_id is None:
             tenant_id = get_current_tenant_id()
         
-        # 获取用户的所有角色（自动过滤租户）
+        # 获取用户的所有角色（自动过滤组织）
         roles = await user.roles.filter(tenant_id=tenant_id).all()
         
         # 检查是否具有指定角色
@@ -217,29 +221,58 @@ class PermissionService:
         
         return False
     
-    async def is_super_admin(
+    async def is_platform_admin(
         self,
         user: User
     ) -> bool:
         """
-        检查用户是否为超级管理员（可跨租户）
+        检查用户是否为平台管理员（系统级超级管理员，可跨组织）
         
-        验证用户是否为系统级超级管理员。
-        注意：此方法不检查租户，因为超级管理员可以跨租户访问。
+        验证用户是否为平台管理员（系统级超级管理员）。
+        注意：此方法不检查组织，因为平台管理员可以跨组织访问。
         
         Args:
             user: 用户对象
             
         Returns:
-            bool: 如果用户是超级管理员返回 True，否则返回 False
-            
-        Note:
-            超级管理员功能将在后续实现（独立于租户系统）。
-            当前实现中，超级管理员通过 is_superuser 字段标识（租户内）。
+            bool: 如果用户是平台管理员返回 True，否则返回 False
         """
-        # TODO: 实现系统级超级管理员检查
-        # 当前实现：检查 is_superuser 字段（租户内超级用户）
-        return user.is_superuser
+        return user.is_platform_admin_user()
+    
+    async def is_organization_admin(
+        self,
+        user: User
+    ) -> bool:
+        """
+        检查用户是否为组织管理员
+        
+        验证用户是否为组织管理员。
+        
+        Args:
+            user: 用户对象
+            
+        Returns:
+            bool: 如果用户是组织管理员返回 True，否则返回 False
+        """
+        return user.is_organization_admin()
+    
+    async def is_super_admin(
+        self,
+        user: User
+    ) -> bool:
+        """
+        检查用户是否为超级管理员（可跨组织）
+        
+        已废弃：请使用 is_platform_admin() 方法。
+        此方法保留用于向后兼容。
+        
+        Args:
+            user: 用户对象
+            
+        Returns:
+            bool: 如果用户是平台管理员返回 True，否则返回 False
+        """
+        return user.is_platform_admin_user()
     
     async def can_access_tenant(
         self,
@@ -247,14 +280,14 @@ class PermissionService:
         target_tenant_id: int
     ) -> bool:
         """
-        检查用户是否可以访问指定租户
+        检查用户是否可以访问指定组织
         
-        验证用户是否可以访问指定的租户。
-        普通用户只能访问自己的租户，超级管理员可以访问所有租户。
+        验证用户是否可以访问指定的组织。
+        普通用户只能访问自己的组织，超级管理员可以访问所有组织。
         
         Args:
             user: 用户对象
-            target_tenant_id: 目标租户 ID
+            target_tenant_id: 目标组织 ID
             
         Returns:
             bool: 如果用户可以访问返回 True，否则返回 False
@@ -265,10 +298,10 @@ class PermissionService:
             >>> isinstance(can_access, bool)
             True
         """
-        # 如果用户是超级管理员，可以访问所有租户
-        if await self.is_super_admin(user):
+        # 平台管理员可以访问所有组织
+        if user.is_platform_admin_user():
             return True
         
-        # 普通用户只能访问自己的租户
+        # 组织管理员和普通用户只能访问自己的组织
         return user.tenant_id == target_tenant_id
 

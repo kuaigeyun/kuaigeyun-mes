@@ -37,21 +37,21 @@ async def test_auth_service():
     logger.success("✅ 数据库连接初始化成功")
     
     try:
-        # 1. 创建测试租户
-        logger.info("\n1. 创建测试租户")
+        # 1. 创建测试组织
+        logger.info("\n1. 创建测试组织")
         tenant = await Tenant.get_or_none(domain="auth-test-tenant")
         if not tenant:
             tenant = await Tenant.create(
-                name="认证测试租户",
+                name="认证测试组织",
                 domain="auth-test-tenant",
                 status=TenantStatus.ACTIVE,
                 plan=TenantPlan.BASIC,
                 max_users=100,
                 max_storage=2048,
             )
-            logger.success(f"✅ 租户创建成功: ID={tenant.id}, Domain={tenant.domain}")
+            logger.success(f"✅ 组织创建成功: ID={tenant.id}, Domain={tenant.domain}")
         else:
-            logger.info(f"✅ 使用现有租户: ID={tenant.id}, Domain={tenant.domain}")
+            logger.info(f"✅ 使用现有组织: ID={tenant.id}, Domain={tenant.domain}")
         
         tenant_id = tenant.id
         
@@ -79,7 +79,7 @@ async def test_auth_service():
             user = await auth_service.register(register_data)
             logger.success(f"✅ 用户注册成功: ID={user.id}, Username={user.username}")
             logger.info(f"   邮箱: {user.email}")
-            logger.info(f"   租户 ID: {user.tenant_id}")
+            logger.info(f"   组织 ID: {user.tenant_id}")
             logger.info(f"   是否激活: {user.is_active}")
         except Exception as e:
             logger.error(f"❌ 用户注册失败: {e}")
@@ -113,7 +113,7 @@ async def test_auth_service():
             logger.info(f"   用户 ID: {current_user.id}")
             logger.info(f"   用户名: {current_user.username}")
             logger.info(f"   邮箱: {current_user.email}")
-            logger.info(f"   租户 ID: {current_user.tenant_id}")
+            logger.info(f"   组织 ID: {current_user.tenant_id}")
         except Exception as e:
             logger.error(f"❌ 获取当前用户失败: {e}")
         

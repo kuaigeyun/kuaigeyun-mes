@@ -79,9 +79,13 @@ check_system_requirements() {
     fi
     log_success "Python 版本检查通过: $PYTHON_VERSION"
 
-    # 检查虚拟环境
-    if [ ! -d "venv311" ]; then
-        log_error "虚拟环境不存在，请先运行: python3 -m venv venv311"
+    # 检查虚拟环境（优先使用根目录的 venv311）
+    if [ -d "../venv311" ]; then
+        log_success "使用根目录虚拟环境: ../venv311"
+    elif [ -d "venv311" ]; then
+        log_success "使用本地虚拟环境: venv311"
+    else
+        log_error "虚拟环境未找到，请先运行: python3 -m venv venv311（在根目录或当前目录）"
         exit 1
     fi
     log_success "虚拟环境检查通过"
@@ -94,13 +98,22 @@ check_system_requirements() {
     log_success "依赖文件检查通过"
 }
 
-# 激活虚拟环境
+# 激活虚拟环境（优先使用根目录的 venv311）
 activate_venv() {
     log_info "激活虚拟环境..."
-    source venv311/bin/activate 2>/dev/null || source venv311/Scripts/activate 2>/dev/null || {
-        log_error "无法激活虚拟环境"
+    # 优先尝试根目录的 venv311
+    if [ -f "../venv311/bin/activate" ]; then
+        source ../venv311/bin/activate
+    elif [ -f "../venv311/Scripts/activate" ]; then
+        source ../venv311/Scripts/activate
+    elif [ -f "venv311/bin/activate" ]; then
+        source venv311/bin/activate
+    elif [ -f "venv311/Scripts/activate" ]; then
+        source venv311/Scripts/activate
+    else
+        log_error "无法激活虚拟环境，请检查 venv311 目录"
         exit 1
-    }
+    fi
     log_success "虚拟环境已激活"
 }
 

@@ -1,7 +1,7 @@
 /**
- * RiverEdge SaaS 多租户框架 - 全局样式
+ * RiverEdge SaaS 多组织框架 - 全局样式
  *
- * 定义现代化UI设计和响应式布局
+ * 只保留必要的全局样式，尽量使用 Ant Design 原生样式
  */
 
 * {
@@ -52,71 +52,5 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .ant-layout-sider {
-    width: 200px !important;
-    min-width: 200px !important;
-    max-width: 200px !important;
-  }
-}
-
-/* 页面容器样式 */
-.page-container {
-  background: #fff;
-  border-radius: 8px;
-  padding: 24px;
-  margin: 16px;
-  min-height: calc(100vh - 100px);
-}
-
-@media (max-width: 576px) {
-  .page-container {
-    margin: 8px;
-    padding: 16px;
-  }
-}
-
-/* 表单样式优化 */
-.ant-form-item-label > label {
-  font-weight: 500;
-}
-
-/* 表格样式优化 */
-.ant-table-tbody > tr:hover > td {
-  background: rgba(24, 144, 255, 0.02);
-}
-
-/* 按钮样式优化 */
-.ant-btn {
-  border-radius: 6px;
-  font-weight: 500;
-}
-
-/* 输入框样式优化 */
-.ant-input, .ant-input-password, .ant-select-selector {
-  border-radius: 6px;
-}
-
-/* 卡片样式优化 */
-.ant-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-/* 标签页样式优化 */
-.ant-tabs-tab {
-  border-radius: 6px 6px 0 0;
-}
-
-/* 模态框样式优化 */
-.ant-modal-content {
-  border-radius: 8px;
-}
-
-.ant-modal-header {
-  border-radius: 8px 8px 0 0;
 }
 

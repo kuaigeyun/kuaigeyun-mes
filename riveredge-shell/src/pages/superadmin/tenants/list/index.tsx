@@ -1,8 +1,8 @@
 /**
- * 超级管理员租户列表页面
+ * 超级管理员组织列表页面
  * 
- * 用于超级管理员查看和管理所有租户。
- * 支持租户注册审核、启用/禁用等功能。
+ * 用于超级管理员查看和管理所有组织。
+ * 支持组织注册审核、启用/禁用等功能。
  */
 
 import React, { useRef } from 'react';
@@ -24,7 +24,7 @@ import {
 import { apiRequest } from '@/services/api';
 
 /**
- * 租户状态标签映射
+ * 组织状态标签映射
  */
 const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
   [TenantStatus.ACTIVE]: { color: 'success', text: '激活' },
@@ -34,18 +34,19 @@ const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
 };
 
 /**
- * 租户套餐标签映射
+ * 组织套餐标签映射
  */
 const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
+  [TenantPlan.TRIAL]: { color: 'default', text: '体验套餐' },
   [TenantPlan.BASIC]: { color: 'blue', text: '基础版' },
   [TenantPlan.PROFESSIONAL]: { color: 'purple', text: '专业版' },
   [TenantPlan.ENTERPRISE]: { color: 'gold', text: '企业版' },
 };
 
 /**
- * 审核通过租户注册
+ * 审核通过组织注册
  * 
- * @param tenantId - 租户 ID
+ * @param tenantId - 组织 ID
  */
 const approveTenant = async (tenantId: number) => {
   try {
@@ -61,9 +62,9 @@ const approveTenant = async (tenantId: number) => {
 };
 
 /**
- * 审核拒绝租户注册
+ * 审核拒绝组织注册
  * 
- * @param tenantId - 租户 ID
+ * @param tenantId - 组织 ID
  * @param reason - 拒绝原因
  */
 const rejectTenant = async (tenantId: number, reason?: string) => {
@@ -81,7 +82,7 @@ const rejectTenant = async (tenantId: number, reason?: string) => {
 };
 
 /**
- * 超级管理员租户列表页面组件
+ * 超级管理员组织列表页面组件
  */
 const SuperAdminTenantList: React.FC = () => {
   const navigate = useNavigate();
@@ -98,7 +99,7 @@ const SuperAdminTenantList: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: '租户名称',
+      title: '组织名称',
       dataIndex: 'name',
       ellipsis: true,
     },
@@ -127,6 +128,7 @@ const SuperAdminTenantList: React.FC = () => {
       dataIndex: 'plan',
       valueType: 'select',
       valueEnum: {
+        [TenantPlan.TRIAL]: { text: '体验套餐' },
         [TenantPlan.BASIC]: { text: '基础版' },
         [TenantPlan.PROFESSIONAL]: { text: '专业版' },
         [TenantPlan.ENTERPRISE]: { text: '企业版' },
@@ -171,14 +173,14 @@ const SuperAdminTenantList: React.FC = () => {
               type="link"
               size="small"
               onClick={() => {
-                navigate(`/superadmin/tenants/detail?id=${record.id}`);
+                navigate(`/operations/tenants/detail?id=${record.id}`);
               }}
             >
               详情
             </Button>
             {isInactive && (
               <Popconfirm
-                title="确定要审核通过此租户吗？"
+                title="确定要审核通过此组织吗？"
                 onConfirm={async () => {
                   const success = await approveTenant(record.id);
                   if (success) {
@@ -193,7 +195,7 @@ const SuperAdminTenantList: React.FC = () => {
             )}
             {isInactive && (
               <Popconfirm
-                title="确定要拒绝此租户注册吗？"
+                title="确定要拒绝此组织注册吗？"
                 onConfirm={async () => {
                   const success = await rejectTenant(record.id);
                   if (success) {
@@ -208,7 +210,7 @@ const SuperAdminTenantList: React.FC = () => {
             )}
             {isSuspended && (
               <Popconfirm
-                title="确定要激活此租户吗？"
+                title="确定要激活此组织吗？"
                 onConfirm={async () => {
                   const success = await activateTenant(record.id);
                   if (success) {
@@ -223,7 +225,7 @@ const SuperAdminTenantList: React.FC = () => {
             )}
             {isActive && (
               <Popconfirm
-                title="确定要停用此租户吗？"
+                title="确定要停用此组织吗？"
                 onConfirm={async () => {
                   const success = await deactivateTenant(record.id);
                   if (success) {
@@ -244,7 +246,7 @@ const SuperAdminTenantList: React.FC = () => {
 
   return (
     <ProTable<Tenant>
-      headerTitle="租户列表（超级管理员）"
+      headerTitle="组织列表（超级管理员）"
       actionRef={actionRef}
       rowKey="id"
       search={{

@@ -25,24 +25,24 @@ export default function access(initialState: { currentUser?: CurrentUser } | und
     canAccess: !!currentUser,
     
     /**
-     * 是否为超级管理员
+     * 是否为平台管理员
      */
-    isSuperAdmin: currentUser?.is_superuser === true,
+    isSuperAdmin: currentUser?.is_platform_admin === true,
     
     /**
-     * 是否为租户管理员
+     * 是否为组织管理员
      */
     isTenantAdmin: currentUser?.is_tenant_admin === true,
     
     /**
      * 是否拥有用户管理权限
      */
-    canManageUsers: currentUser?.is_superuser === true || currentUser?.is_tenant_admin === true,
+    canManageUsers: currentUser?.is_platform_admin === true || currentUser?.is_tenant_admin === true,
     
     /**
      * 是否拥有角色管理权限
      */
-    canManageRoles: currentUser?.is_superuser === true || currentUser?.is_tenant_admin === true,
+    canManageRoles: currentUser?.is_platform_admin === true || currentUser?.is_tenant_admin === true,
   };
 }
 

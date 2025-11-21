@@ -85,7 +85,7 @@ class BusinessLogicError(RiverEdgeException):
 
 
 class TenantError(RiverEdgeException):
-    """租户相关错误"""
+    """组织相关错误"""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(message, "TENANT_ERROR", 400, details)
@@ -136,8 +136,8 @@ def user_not_found(user_id: Optional[int] = None) -> NotFoundError:
 
 
 def tenant_not_found(tenant_id: Optional[int] = None) -> NotFoundError:
-    """租户不存在异常"""
-    return NotFoundError("租户", str(tenant_id) if tenant_id else None)
+    """组织不存在异常"""
+    return NotFoundError("组织", str(tenant_id) if tenant_id else None)
 
 
 def role_not_found(role_id: Optional[int] = None) -> NotFoundError:
@@ -161,7 +161,7 @@ def username_already_exists(username: str) -> ConflictError:
 
 
 def tenant_domain_already_exists(domain: str) -> ConflictError:
-    """租户域名已存在异常"""
+    """组织域名已存在异常"""
     return ConflictError(f"域名 '{domain}' 已被使用", {"domain": domain})
 
 
@@ -184,8 +184,8 @@ def insufficient_permissions(required_permissions: list = None) -> Authorization
 
 
 def tenant_context_missing() -> TenantError:
-    """租户上下文缺失异常"""
-    return TenantError("租户上下文未设置，无法执行多租户操作")
+    """组织上下文缺失异常"""
+    return TenantError("组织上下文未设置，无法执行多组织操作")
 
 
 def database_connection_error(details: Optional[Dict[str, Any]] = None) -> DatabaseError:

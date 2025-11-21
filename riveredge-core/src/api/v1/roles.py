@@ -30,8 +30,8 @@ async def create_role(
     """
     创建角色接口
     
-    创建新角色并自动设置租户 ID。
-    需要租户管理员或超级用户权限。
+    创建新角色并自动设置组织 ID。
+    需要组织管理员或超级用户权限。
     
     Args:
         data: 角色创建数据（tenant_id 将从当前用户上下文自动获取，请求中的 tenant_id 将被忽略）
@@ -41,7 +41,7 @@ async def create_role(
         RoleResponse: 创建的角色对象
         
     Raises:
-        HTTPException: 当租户内角色名称或代码已存在时抛出
+        HTTPException: 当组织内角色名称或代码已存在时抛出
         
     Example:
         ```json
@@ -55,13 +55,13 @@ async def create_role(
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动设置）⭐ 关键
+    # 从当前用户获取组织 ID（自动设置）⭐ 关键
     tenant_id = current_user.tenant_id
     
     # 创建角色数据副本，自动设置 tenant_id（忽略请求中的 tenant_id）
     role_data = RoleCreate(
         **data.model_dump(exclude={"tenant_id"}),
-        tenant_id=tenant_id  # ⭐ 关键：自动设置当前用户的租户 ID
+        tenant_id=tenant_id  # ⭐ 关键：自动设置当前用户的组织 ID
     )
     
     role = await service.create_role(role_data, tenant_id)
@@ -79,7 +79,7 @@ async def list_roles(
     获取角色列表接口
     
     获取角色列表，支持分页和关键词搜索。
-    自动过滤租户：只返回当前租户的角色。
+    自动过滤组织：只返回当前组织的角色。
     
     Args:
         page: 页码（默认 1）
@@ -97,7 +97,7 @@ async def list_roles(
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动过滤）⭐ 关键
+    # 从当前用户获取组织 ID（自动过滤）⭐ 关键
     tenant_id = current_user.tenant_id
     
     result = await service.list_roles(
@@ -118,7 +118,7 @@ async def get_role(
     """
     获取角色详情接口
     
-    获取指定 ID 的角色信息，自动验证租户权限。
+    获取指定 ID 的角色信息，自动验证组织权限。
     
     Args:
         role_id: 角色 ID
@@ -128,11 +128,11 @@ async def get_role(
         RoleResponse: 角色详情
         
     Raises:
-        HTTPException: 当角色不存在或不属于当前租户时抛出 404 错误
+        HTTPException: 当角色不存在或不属于当前组织时抛出 404 错误
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     role = await service.get_role_by_id(role_id, tenant_id)
@@ -154,7 +154,7 @@ async def update_role(
     """
     更新角色接口
     
-    更新角色信息，自动验证租户权限。
+    更新角色信息，自动验证组织权限。
     系统角色不可修改。
     
     Args:
@@ -166,11 +166,11 @@ async def update_role(
         RoleResponse: 更新后的角色对象
         
     Raises:
-        HTTPException: 当角色不存在、不属于当前租户、是系统角色或数据冲突时抛出
+        HTTPException: 当角色不存在、不属于当前组织、是系统角色或数据冲突时抛出
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     role = await service.update_role(role_id, data, tenant_id)
@@ -191,7 +191,7 @@ async def delete_role(
     """
     删除角色接口
     
-    删除角色，自动验证租户权限。
+    删除角色，自动验证组织权限。
     系统角色不可删除。
     
     Args:
@@ -202,11 +202,11 @@ async def delete_role(
         None: 删除成功返回 204 状态码
         
     Raises:
-        HTTPException: 当角色不存在、不属于当前租户或是系统角色时抛出
+        HTTPException: 当角色不存在、不属于当前组织或是系统角色时抛出
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     success = await service.delete_role(role_id, tenant_id)
@@ -228,7 +228,7 @@ async def assign_permissions(
     """
     分配权限给角色接口
     
-    为角色分配权限列表，自动验证租户权限。
+    为角色分配权限列表，自动验证组织权限。
     
     Args:
         role_id: 角色 ID
@@ -239,7 +239,7 @@ async def assign_permissions(
         RoleResponse: 更新后的角色对象
         
     Raises:
-        HTTPException: 当角色不存在或权限不属于当前租户时抛出
+        HTTPException: 当角色不存在或权限不属于当前组织时抛出
         
     Example:
         ```json
@@ -250,7 +250,7 @@ async def assign_permissions(
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     role = await service.assign_permissions(role_id, permission_ids, tenant_id)
@@ -265,21 +265,21 @@ async def get_role_permissions(
     """
     获取角色权限列表接口
     
-    获取角色的所有权限，自动过滤租户。
+    获取角色的所有权限，自动过滤组织。
     
     Args:
         role_id: 角色 ID
         current_user: 当前用户（依赖注入，自动从 Token 解析）
         
     Returns:
-        List[PermissionResponse]: 权限列表（已过滤租户）
+        List[PermissionResponse]: 权限列表（已过滤组织）
         
     Raises:
         HTTPException: 当角色不存在时抛出
     """
     service = RoleService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     permissions = await service.get_role_permissions(role_id, tenant_id)

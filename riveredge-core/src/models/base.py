@@ -1,7 +1,7 @@
 """
 基础数据模型模块
 
-定义所有数据模型的基类，包含通用字段和租户隔离字段
+定义所有数据模型的基类，包含通用字段和组织隔离字段
 """
 
 from datetime import datetime
@@ -17,20 +17,20 @@ class BaseModel(Model):
 
     所有数据模型都继承此类，自动获得以下字段：
     - id: 主键
-    - tenant_id: 租户 ID（多租户隔离，关键字段）
+    - tenant_id: 组织 ID（多组织隔离，关键字段）
     - created_at: 创建时间
     - updated_at: 更新时间
 
     Attributes:
         id: 主键 ID
-        tenant_id: 租户 ID（用于多租户数据隔离）
+        tenant_id: 组织 ID（用于多组织数据隔离）
         created_at: 创建时间
         updated_at: 更新时间
     """
 
     # 注意：不在基类中定义 id 字段，避免 Tortoise ORM 兼容性问题
     # 每个模型类需要自己定义 id = fields.IntField(primary_key=True)
-    tenant_id = fields.IntField(null=True, db_index=True, description="租户 ID（用于多租户数据隔离）")
+    tenant_id = fields.IntField(null=True, db_index=True, description="组织 ID（用于多组织数据隔离）")
     created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
     updated_at = fields.DatetimeField(auto_now=True, description="更新时间")
 

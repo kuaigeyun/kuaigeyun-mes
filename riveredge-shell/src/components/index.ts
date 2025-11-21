@@ -4,5 +4,6 @@
  * 统一导出所有公共组件
  */
 
-// 后续添加组件时在此导出
-
+export { default as TenantSelector } from './TenantSelector';
+export { default as TenantSelectionModal } from './TenantSelectionModal';
+export { default as TermsModal } from './TermsModal';

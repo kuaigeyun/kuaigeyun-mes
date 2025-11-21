@@ -83,7 +83,7 @@ async def check_users():
                 for user in users:
                     user_type = "超级管理员" if user['is_superuser'] else "普通用户"
                     status = "激活" if user['is_active'] else "未激活"
-                    tenant_info = f"租户ID: {user['tenant_id']}" if user['tenant_id'] else "无租户"
+                    tenant_info = f"组织ID: {user['tenant_id']}" if user['tenant_id'] else "无组织"
                     print(f"   [{user['id']}] {user['username']} ({user_type}, {status}, {tenant_info})")
                 
                 # 检查是否有超级管理员

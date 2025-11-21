@@ -2,7 +2,7 @@
  * 角色权限分配页面
  * 
  * 用于为角色分配权限。
- * 自动过滤当前租户的权限。
+ * 自动过滤当前组织的权限。
  */
 
 import React, { useEffect, useState } from 'react';

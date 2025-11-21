@@ -28,7 +28,7 @@ async def get_current_user(
     获取当前用户依赖
     
     从请求头中提取 JWT Token，验证并返回当前用户对象。
-    自动设置租户上下文。
+    自动设置组织上下文。
     
     Args:
         token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
@@ -55,11 +55,11 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 获取用户 ID 和租户 ID
+    # 获取用户 ID 和组织 ID
     user_id = int(payload.get("sub"))
-    tenant_id = payload.get("tenant_id")  # ⭐ 关键：从 Token 中获取租户 ID
+    tenant_id = payload.get("tenant_id")  # ⭐ 关键：从 Token 中获取组织 ID
     
-    # 设置租户上下文 ⭐ 关键：自动设置租户上下文
+    # 设置组织上下文 ⭐ 关键：自动设置组织上下文
     if tenant_id:
         set_current_tenant_id(tenant_id)
     
@@ -116,19 +116,23 @@ async def get_current_superadmin(
     token: str = Depends(superadmin_oauth2_scheme)
 ) -> User:
     """
-    获取当前系统级超级管理员依赖
+    获取当前平台管理员依赖
     
-    从请求头中提取系统级超级管理员 JWT Token，验证并返回当前系统级超级管理员用户对象。
-    注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）。
+    从请求头中提取平台管理员 JWT Token，验证并返回当前平台管理员用户对象。
+    注意：平台管理员使用 User 模型（is_platform_admin=True 且 tenant_id=None）。
+    
+    支持两种 Token 格式：
+    1. 平台管理员专用 Token（包含 is_superadmin: True）
+    2. 普通 Token（如果用户是平台管理员，即 is_platform_admin=True 且 tenant_id=None）
     
     Args:
         token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
         
     Returns:
-        User: 当前系统级超级管理员用户对象（is_superuser=True 且 tenant_id=None）
+        User: 当前平台管理员用户对象（is_platform_admin=True 且 tenant_id=None）
         
     Raises:
-        HTTPException: 当 Token 无效、用户不存在、不是系统级超级管理员或未激活时抛出
+        HTTPException: 当 Token 无效、用户不存在、不是平台管理员或未激活时抛出
         
     Example:
         ```python
@@ -139,35 +143,41 @@ async def get_current_superadmin(
             return {"admin_id": current_admin.id}
         ```
     """
-    # 验证系统级超级管理员 Token
+    # 首先尝试验证平台管理员专用 Token（包含 is_superadmin: True）
     payload = get_superadmin_token_payload(token)
+    
+    # 如果不是平台管理员专用 Token，尝试验证普通 Token
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的 Token 或不是系统级超级管理员 Token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        # 尝试使用普通 Token 验证
+        from core.security import get_token_payload
+        payload = get_token_payload(token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的 Token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     
     # 获取用户 ID
     user_id = int(payload.get("sub"))
     
-    # 获取系统级超级管理员（is_superuser=True 且 tenant_id=None）
+    # 获取平台管理员（is_platform_admin=True 且 tenant_id=None）
     user = await User.get_or_none(
         id=user_id,
-        is_superuser=True,
+        is_platform_admin=True,
         tenant_id__isnull=True
     )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="系统级超级管理员不存在",
+            detail="无效的 Token 或不是平台管理员 Token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="系统级超级管理员未激活",
+            detail="平台管理员未激活",
         )
     
     return user
@@ -178,7 +188,7 @@ def require_permissions(*permission_codes: str):
     权限验证装饰器（占位）
     
     用于验证用户是否具有指定的权限。
-    带租户过滤：只检查当前租户内的权限。
+    带组织过滤：只检查当前组织内的权限。
     
     Args:
         *permission_codes: 权限代码列表（格式：resource:action）
@@ -198,8 +208,8 @@ def require_permissions(*permission_codes: str):
         ```
     """
     # TODO: 实现权限验证逻辑
-    # 1. 从 Token 中获取用户和租户信息
-    # 2. 查询用户的角色和权限（自动过滤租户）
+    # 1. 从 Token 中获取用户和组织信息
+    # 2. 查询用户的角色和权限（自动过滤组织）
     # 3. 检查是否具有指定权限
     # 4. 如果没有权限，抛出 403 错误
     

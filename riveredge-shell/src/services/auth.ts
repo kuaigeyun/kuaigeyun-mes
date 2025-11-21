@@ -12,6 +12,7 @@ import { apiRequest } from './api';
 export interface LoginRequest {
   username: string;
   password: string;
+  tenant_id?: number; // 可选，用于多组织登录选择
 }
 
 /**
@@ -22,9 +23,9 @@ export interface LoginRequest {
  * - token_type: 令牌类型（通常为 "bearer"）
  * - expires_in: 令牌过期时间（秒）
  * - user: 用户信息
- * - tenants: 用户可访问的租户列表（可选）
- * - default_tenant_id: 默认租户 ID（可选）
- * - requires_tenant_selection: 是否需要选择租户（当用户有多个租户时）
+ * - tenants: 用户可访问的组织列表（可选）
+ * - default_tenant_id: 默认组织 ID（可选）
+ * - requires_tenant_selection: 是否需要选择组织（当用户有多个组织时）
  */
 export interface LoginResponse {
   access_token: string;
@@ -36,7 +37,7 @@ export interface LoginResponse {
     email?: string;
     full_name?: string;
     tenant_id?: number;
-    is_superuser?: boolean;
+    is_platform_admin?: boolean;
     is_tenant_admin?: boolean;
   };
   tenants?: Array<{
@@ -56,7 +57,7 @@ export interface CurrentUser {
   id: number;
   username: string;
   email?: string;
-  is_superuser?: boolean;
+  is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
   tenant_id?: number;
 }
@@ -96,6 +97,20 @@ export async function refreshToken(refreshToken: string): Promise<{ token: strin
   return apiRequest<{ token: string }>('/auth/refresh', {
     method: 'POST',
     data: { refresh_token: refreshToken },
+  });
+}
+
+/**
+ * 免注册体验登录
+ * 
+ * 获取或创建默认组织和预设的体验账户，直接返回登录响应。
+ * 体验账户只有浏览权限（只读权限），无新建、编辑、删除权限。
+ * 
+ * @returns 登录响应数据
+ */
+export async function guestLogin(): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/guest-login', {
+    method: 'POST',
   });
 }
 

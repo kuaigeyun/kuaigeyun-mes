@@ -1,7 +1,7 @@
 {
     "name": "riveredge-shell",
     "version": "1.0.0",
-    "description": "RiverEdge SaaS 多租户框架 - 前端框架（壳）",
+    "description": "RiverEdge SaaS 多组织框架 - 前端框架（壳）",
     "description_en": "RiverEdge SaaS Multi-tenant Framework - Frontend Shell (Node.js 20.17.0 + npm 10.8.2)",
     "private": true,
     "scripts": {

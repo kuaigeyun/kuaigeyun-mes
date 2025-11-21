@@ -1,265 +1,395 @@
 /**
- * RiverEdge SaaS 多租户框架 - 仪表盘页面
+ * RiverEdge SaaS 多组织框架 - 工作台页面
  *
- * 系统首页，展示系统概览信息和统计数据
+ * 用户工作台，提供快捷入口、消息通知、待办事项等功能
+ * 参考 Ant Design Pro 工作台最佳实践
  */
 
 import { PageContainer } from '@ant-design/pro-components';
-import { Card, Row, Col, Statistic, Progress, List, Avatar, Typography } from 'antd';
+import { 
+  Card, 
+  Row, 
+  Col, 
+  List, 
+  Avatar, 
+  Typography, 
+  Space, 
+  Tag,
+  Button,
+  Badge,
+  Empty
+} from 'antd';
 import {
   UserOutlined,
   TeamOutlined,
-  DatabaseOutlined,
-  AppstoreOutlined,
-  RiseOutlined,
-  FallOutlined,
+  FileTextOutlined,
+  SettingOutlined,
+  BellOutlined,
+  ThunderboltOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
-  CheckCircleOutlined
+  RightOutlined,
+  ShopOutlined,
+  ExperimentOutlined,
+  DatabaseOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '@/app';
+import dayjs from 'dayjs';
+
+const { Title, Text } = Typography;
 
 // 模拟数据API（实际项目中替换为真实API调用）
-const fetchDashboardStats = async () => {
-  // 模拟API调用延迟
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  return {
-    totalUsers: 128,
-    totalTenants: 12,
-    totalDataRecords: 15420,
-    installedPlugins: 8,
-    userGrowth: 12.5,
-    tenantGrowth: 8.3,
-    activeUsers: 89,
-    systemHealth: 98.5,
-  };
-};
-
-const fetchRecentActivities = async () => {
+const fetchNotifications = async () => {
   await new Promise(resolve => setTimeout(resolve, 800));
-
   return [
     {
       id: 1,
-      type: 'user_created',
-      message: '新用户注册：张三',
+      type: 'system',
+      title: '系统维护通知',
+      content: '系统将于今晚 22:00-24:00 进行维护升级',
       time: '2025-11-19 14:30:00',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=张三',
+      read: false,
     },
     {
       id: 2,
-      type: 'tenant_created',
-      message: '新租户注册：ABC科技有限公司',
+      type: 'task',
+      title: '生产计划审核',
+      content: '您有 3 个生产计划待审核',
       time: '2025-11-19 13:45:00',
-      avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=ABC',
+      read: false,
     },
     {
       id: 3,
-      type: 'plugin_installed',
-      message: '插件安装：MES生产管理插件',
+      type: 'message',
+      title: '新消息',
+      content: '张三给您发送了一条消息',
       time: '2025-11-19 12:20:00',
-      avatar: 'https://api.dicebear.com/7.x/icons/svg?seed=plugin',
+      read: true,
     },
   ];
 };
 
+const fetchTodos = async () => {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  return [
+    {
+      id: 1,
+      title: '审核生产计划 #20251119001',
+      priority: 'high',
+      dueDate: '2025-11-20',
+      status: 'pending',
+    },
+    {
+      id: 2,
+      title: '完成质量检验报告',
+      priority: 'medium',
+      dueDate: '2025-11-21',
+      status: 'pending',
+    },
+    {
+      id: 3,
+      title: '更新库存盘点数据',
+      priority: 'low',
+      dueDate: '2025-11-22',
+      status: 'pending',
+    },
+  ];
+};
+
+// 快捷操作配置
+const quickActions = [
+  {
+    key: 'production',
+    title: '生产管理',
+    icon: <ShopOutlined />,
+    path: '/mes/production',
+    description: '生产计划、工单管理',
+  },
+  {
+    key: 'quality',
+    title: '质量管理',
+    icon: <ExperimentOutlined />,
+    path: '/mes/quality',
+    description: '质检单、不良品管理',
+  },
+  {
+    key: 'inventory',
+    title: '库存管理',
+    icon: <DatabaseOutlined />,
+    path: '/mes/inventory',
+    description: '原材料、成品库',
+  },
+  {
+    key: 'users',
+    title: '用户管理',
+    icon: <UserOutlined />,
+    path: '/users',
+    description: '用户列表、权限管理',
+  },
+  {
+    key: 'roles',
+    title: '角色管理',
+    icon: <TeamOutlined />,
+    path: '/roles',
+    description: '角色配置、权限分配',
+  },
+  {
+    key: 'system',
+    title: '系统配置',
+    icon: <SettingOutlined />,
+    path: '/system',
+    description: '系统参数设置',
+  },
+];
+
+
 /**
- * 仪表盘页面组件
+ * 工作台页面组件
  */
 export default function DashboardPage() {
   const { currentUser } = useGlobalStore();
-  const { Title, Text } = Typography;
+  const navigate = useNavigate();
 
-  // 获取统计数据
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboardStats'],
-    queryFn: fetchDashboardStats,
-    refetchInterval: 30000, // 30秒刷新一次
+  // 获取通知
+  const { data: notifications, isLoading: notificationsLoading } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: fetchNotifications,
+    refetchInterval: 60000,
   });
 
-  // 获取最近活动
-  const { data: activities, isLoading: activitiesLoading } = useQuery({
-    queryKey: ['recentActivities'],
-    queryFn: fetchRecentActivities,
-    refetchInterval: 60000, // 1分钟刷新一次
+  // 获取待办事项
+  const { data: todos, isLoading: todosLoading } = useQuery({
+    queryKey: ['todos'],
+    queryFn: fetchTodos,
+    refetchInterval: 30000,
   });
+
+  // 未读通知数量
+  const unreadCount = notifications?.filter(n => !n.read).length || 0;
+
+  // 优先级颜色映射
+  const priorityColorMap: Record<string, string> = {
+    high: 'error',
+    medium: 'warning',
+    low: 'default',
+  };
+
+  // 优先级文本映射
+  const priorityTextMap: Record<string, string> = {
+    high: '高',
+    medium: '中',
+    low: '低',
+  };
 
   return (
     <PageContainer
-      title="仪表盘"
-      subTitle={`欢迎回来，${currentUser?.username || '用户'}`}
+      title="工作台"
       breadcrumb={{}}
-      extra={[
-        <Text key="last-update" type="secondary">
-          <ClockCircleOutlined style={{ marginRight: 4 }} />
-          数据更新时间：{new Date().toLocaleString()}
-        </Text>
-      ]}
     >
-      {/* 统计卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card loading={statsLoading}>
-            <Statistic
-              title="总用户数"
-              value={stats?.totalUsers || 0}
-              prefix={<UserOutlined style={{ color: '#1890ff' }} />}
-              suffix={
-                stats?.userGrowth ? (
-                  <span style={{ color: '#52c41a', fontSize: '14px' }}>
-                    <RiseOutlined /> +{stats.userGrowth}%
-                  </span>
-                ) : null
-              }
-            />
-          </Card>
-        </Col>
+      {/* 欢迎区域 */}
+      <Card style={{ marginBottom: 24 }}>
+        <Space size="large">
+          <Avatar size={64} style={{ backgroundColor: '#1890ff' }}>
+            {currentUser?.username?.[0]?.toUpperCase() || 'U'}
+          </Avatar>
+          <div>
+            <Title level={4} style={{ margin: 0, marginBottom: 8 }}>
+              欢迎回来，{currentUser?.username || '用户'}
+            </Title>
+            <Text type="secondary">
+              今天是 {dayjs().format('YYYY年MM月DD日 dddd')}
+            </Text>
+          </div>
+        </Space>
+      </Card>
 
-        <Col xs={24} sm={12} lg={6}>
-          <Card loading={statsLoading}>
-            <Statistic
-              title="总租户数"
-              value={stats?.totalTenants || 0}
-              prefix={<TeamOutlined style={{ color: '#722ed1' }} />}
-              suffix={
-                stats?.tenantGrowth ? (
-                  <span style={{ color: '#52c41a', fontSize: '14px' }}>
-                    <RiseOutlined /> +{stats.tenantGrowth}%
-                  </span>
-                ) : null
-              }
-            />
-          </Card>
-        </Col>
+      {/* 快捷操作 */}
+      <Card
+        title={
+          <Space>
+            <ThunderboltOutlined />
+            <span>快捷操作</span>
+          </Space>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        <Row gutter={[12, 12]}>
+          {quickActions.map((action) => (
+            <Col xs={12} sm={6} lg={3} key={action.key}>
+              <Card
+                hoverable
+                onClick={() => navigate(action.path)}
+                style={{
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                }}
+                bodyStyle={{ padding: '16px 8px' }}
+              >
+                <div
+                  style={{
+                    fontSize: '24px',
+                    marginBottom: 8,
+                    color: '#1890ff',
+                  }}
+                >
+                  {action.icon}
+                </div>
+                <Text strong style={{ fontSize: '14px' }}>
+                  {action.title}
+                </Text>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </Card>
 
-        <Col xs={24} sm={12} lg={6}>
-          <Card loading={statsLoading}>
-            <Statistic
-              title="数据总量"
-              value={stats?.totalDataRecords || 0}
-              prefix={<DatabaseOutlined style={{ color: '#fa8c16' }} />}
-              suffix="条"
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} lg={6}>
-          <Card loading={statsLoading}>
-            <Statistic
-              title="已安装插件"
-              value={stats?.installedPlugins || 0}
-              prefix={<AppstoreOutlined style={{ color: '#52c41a' }} />}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* 系统状态和活动 */}
+      {/* 消息通知和待办事项 */}
       <Row gutter={[16, 16]}>
-        {/* 系统健康状态 */}
+        {/* 消息通知 */}
         <Col xs={24} lg={12}>
           <Card
-            title="系统健康状态"
-            loading={statsLoading}
-            extra={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+            title={
+              <Space>
+                <BellOutlined />
+                <span>消息通知</span>
+                {unreadCount > 0 && (
+                  <Badge count={unreadCount} />
+                )}
+              </Space>
+            }
+            loading={notificationsLoading}
+            extra={
+              <Button type="link" size="small" onClick={() => navigate('/notifications')}>
+                查看全部 <RightOutlined />
+              </Button>
+            }
+            style={{ height: '100%' }}
           >
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <div style={{ textAlign: 'center' }}>
-                  <Progress
-                    type="circle"
-                    percent={stats?.systemHealth || 0}
-                    strokeColor="#52c41a"
-                    size={80}
-                  />
-                  <div style={{ marginTop: 8 }}>
-                    <Text strong>系统健康度</Text>
-                  </div>
-                </div>
-              </Col>
-              <Col span={12}>
-                <div style={{ textAlign: 'center' }}>
-                  <Progress
-                    type="circle"
-                    percent={((stats?.activeUsers || 0) / (stats?.totalUsers || 1)) * 100}
-                    strokeColor="#1890ff"
-                    size={80}
-                  />
-                  <div style={{ marginTop: 8 }}>
-                    <Text strong>活跃用户率</Text>
-                    <br />
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                      {stats?.activeUsers || 0} / {stats?.totalUsers || 0}
-                    </Text>
-                  </div>
-                </div>
-              </Col>
-            </Row>
+            {notifications && notifications.length > 0 ? (
+              <List
+                dataSource={notifications}
+                renderItem={(item) => (
+                  <List.Item
+                    style={{
+                      padding: '12px 0',
+                      borderBottom: '1px solid #f0f0f0',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      // TODO: 处理点击通知
+                    }}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <Avatar
+                          style={{
+                            backgroundColor: item.read ? '#f0f0f0' : '#1890ff',
+                          }}
+                        >
+                          <BellOutlined />
+                        </Avatar>
+                      }
+                      title={
+                        <Space>
+                          <Text strong={!item.read}>{item.title}</Text>
+                          {!item.read && <Badge dot />}
+                        </Space>
+                      }
+                      description={
+                        <div>
+                          <div style={{ marginBottom: 4 }}>{item.content}</div>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            <ClockCircleOutlined style={{ marginRight: 4 }} />
+                            {dayjs(item.time).format('YYYY-MM-DD HH:mm')}
+                          </Text>
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty description="暂无消息" />
+            )}
           </Card>
         </Col>
 
-        {/* 最近活动 */}
+        {/* 待办事项 */}
         <Col xs={24} lg={12}>
           <Card
-            title="最近活动"
-            loading={activitiesLoading}
-            extra={<ClockCircleOutlined />}
+            title={
+              <Space>
+                <CheckCircleOutlined />
+                <span>待办事项</span>
+                {todos && todos.length > 0 && (
+                  <Badge count={todos.length} />
+                )}
+              </Space>
+            }
+            loading={todosLoading}
+            extra={
+              <Button type="link" size="small" onClick={() => navigate('/todos')}>
+                查看全部 <RightOutlined />
+              </Button>
+            }
+            style={{ height: '100%' }}
           >
-            <List
-              dataSource={activities || []}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={<Avatar src={item.avatar} size="small" />}
-                    title={<Text strong>{item.message}</Text>}
-                    description={
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {item.time}
-                      </Text>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
+            {todos && todos.length > 0 ? (
+              <List
+                dataSource={todos}
+                renderItem={(item) => (
+                  <List.Item
+                    style={{
+                      padding: '12px 0',
+                      borderBottom: '1px solid #f0f0f0',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      // TODO: 处理点击待办
+                    }}
+                    actions={[
+                      <Tag
+                        key="priority"
+                        color={priorityColorMap[item.priority]}
+                      >
+                        {priorityTextMap[item.priority]}优先级
+                      </Tag>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <Avatar
+                          style={{
+                            backgroundColor: '#f0f0f0',
+                          }}
+                        >
+                          <ClockCircleOutlined />
+                        </Avatar>
+                      }
+                      title={
+                        <Space>
+                          <Text>{item.title}</Text>
+                        </Space>
+                      }
+                      description={
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          截止日期：{dayjs(item.dueDate).format('YYYY-MM-DD')}
+                        </Text>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty description="暂无待办事项" />
+            )}
           </Card>
         </Col>
       </Row>
 
-      {/* 快速操作区域 */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col span={24}>
-          <Card title="快速操作">
-            <Row gutter={[16, 16]}>
-              <Col xs={12} sm={8} lg={6}>
-                <Card size="small" hoverable style={{ textAlign: 'center' }}>
-                  <UserOutlined style={{ fontSize: '24px', color: '#1890ff', marginBottom: 8 }} />
-                  <div>添加用户</div>
-                </Card>
-              </Col>
-              <Col xs={12} sm={8} lg={6}>
-                <Card size="small" hoverable style={{ textAlign: 'center' }}>
-                  <TeamOutlined style={{ fontSize: '24px', color: '#722ed1', marginBottom: 8 }} />
-                  <div>创建租户</div>
-                </Card>
-              </Col>
-              <Col xs={12} sm={8} lg={6}>
-                <Card size="small" hoverable style={{ textAlign: 'center' }}>
-                  <AppstoreOutlined style={{ fontSize: '24px', color: '#52c41a', marginBottom: 8 }} />
-                  <div>安装插件</div>
-                </Card>
-              </Col>
-              <Col xs={12} sm={8} lg={6}>
-                <Card size="small" hoverable style={{ textAlign: 'center' }}>
-                  <DatabaseOutlined style={{ fontSize: '24px', color: '#fa8c16', marginBottom: 8 }} />
-                  <div>数据备份</div>
-                </Card>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
     </PageContainer>
   );
 }
-

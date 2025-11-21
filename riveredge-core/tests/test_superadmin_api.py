@@ -1,7 +1,7 @@
 """
 超级管理员 API 测试
 
-测试超级管理员认证和租户管理功能
+测试超级管理员认证和组织管理功能
 """
 
 import pytest
@@ -25,7 +25,7 @@ async def setup_test_data():
     """
     测试数据准备
     
-    创建测试用的超级管理员和租户
+    创建测试用的超级管理员和组织
     """
     # 初始化数据库连接
     await Tortoise.init(config=TORTOISE_ORM)
@@ -58,25 +58,25 @@ async def setup_test_data():
             raise e
         logger.info(f"使用现有超级管理员: {admin.username} (ID: {admin.id})")
     
-    # 创建测试租户（用于审核测试）
+    # 创建测试组织（用于审核测试）
     from services.tenant_service import TenantService
     from schemas.tenant import TenantCreate
     tenant_service = TenantService()
     try:
         tenant = await tenant_service.create_tenant(
             TenantCreate(
-                name="测试租户（待审核）",
+                name="测试组织（待审核）",
                 domain="test-tenant-pending",
                 status=TenantStatus.INACTIVE,
             )
         )
-        logger.info(f"创建测试租户: {tenant.name} (ID: {tenant.id})")
+        logger.info(f"创建测试组织: {tenant.name} (ID: {tenant.id})")
     except Exception as e:
         # 如果已存在，则获取
         tenant = await Tenant.get_or_none(domain="test-tenant-pending")
         if not tenant:
             raise e
-        logger.info(f"使用现有租户: {tenant.name} (ID: {tenant.id})")
+        logger.info(f"使用现有组织: {tenant.name} (ID: {tenant.id})")
     
     yield {
         "admin": admin,
@@ -169,7 +169,7 @@ async def test_get_current_superadmin(setup_test_data):
 @pytest.mark.asyncio
 async def test_list_tenants_for_superadmin(setup_test_data):
     """
-    测试超级管理员获取租户列表
+    测试超级管理员获取组织列表
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 先登录获取 Token
@@ -183,7 +183,7 @@ async def test_list_tenants_for_superadmin(setup_test_data):
         assert login_response.status_code == 200
         token = login_response.json()["token"]
         
-        # 获取租户列表
+        # 获取组织列表
         response = await client.get(
             "/api/v1/superadmin/tenants",
             headers={"Authorization": f"Bearer {token}"},
@@ -198,13 +198,13 @@ async def test_list_tenants_for_superadmin(setup_test_data):
         assert "page_size" in data
         assert isinstance(data["items"], list)
         
-        logger.info(f"✅ 超级管理员获取租户列表测试通过（共 {data['total']} 个租户）")
+        logger.info(f"✅ 超级管理员获取组织列表测试通过（共 {data['total']} 个组织）")
 
 
 @pytest.mark.asyncio
 async def test_approve_tenant_registration(setup_test_data):
     """
-    测试审核通过租户注册
+    测试审核通过组织注册
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 先登录获取 Token
@@ -218,16 +218,16 @@ async def test_approve_tenant_registration(setup_test_data):
         assert login_response.status_code == 200
         token = login_response.json()["token"]
         
-        # 获取测试租户
+        # 获取测试组织
         test_data = setup_test_data
         tenant_id = test_data["tenant"].id
         
-        # 确保租户状态为 INACTIVE
+        # 确保组织状态为 INACTIVE
         tenant = await Tenant.get(id=tenant_id)
         tenant.status = TenantStatus.INACTIVE
         await tenant.save()
         
-        # 审核通过租户注册
+        # 审核通过组织注册
         response = await client.post(
             f"/api/v1/superadmin/tenants/{tenant_id}/approve",
             headers={"Authorization": f"Bearer {token}"}
@@ -237,17 +237,17 @@ async def test_approve_tenant_registration(setup_test_data):
         data = response.json()
         assert data["status"] == TenantStatus.ACTIVE.value
         
-        # 验证租户状态已更新
+        # 验证组织状态已更新
         tenant = await Tenant.get(id=tenant_id)
         assert tenant.status == TenantStatus.ACTIVE
         
-        logger.info(f"✅ 审核通过租户注册测试通过（租户 ID: {tenant_id}）")
+        logger.info(f"✅ 审核通过组织注册测试通过（组织 ID: {tenant_id}）")
 
 
 @pytest.mark.asyncio
 async def test_reject_tenant_registration(setup_test_data):
     """
-    测试审核拒绝租户注册
+    测试审核拒绝组织注册
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 先登录获取 Token
@@ -261,25 +261,25 @@ async def test_reject_tenant_registration(setup_test_data):
         assert login_response.status_code == 200
         token = login_response.json()["token"]
         
-        # 创建新的测试租户用于拒绝测试
+        # 创建新的测试组织用于拒绝测试
         from services.tenant_service import TenantService
         from schemas.tenant import TenantCreate
         tenant_service = TenantService()
         
-        # 先删除可能存在的测试租户
+        # 先删除可能存在的测试组织
         existing_tenant = await Tenant.get_or_none(domain="test-tenant-reject")
         if existing_tenant:
             await existing_tenant.delete()
         
         test_tenant = await tenant_service.create_tenant(
             TenantCreate(
-                name="测试租户（待拒绝）",
+                name="测试组织（待拒绝）",
                 domain="test-tenant-reject",
                 status=TenantStatus.INACTIVE,
             )
         )
         
-        # 审核拒绝租户注册
+        # 审核拒绝组织注册
         response = await client.post(
             f"/api/v1/superadmin/tenants/{test_tenant.id}/reject",
             headers={"Authorization": f"Bearer {token}"},
@@ -290,17 +290,17 @@ async def test_reject_tenant_registration(setup_test_data):
         data = response.json()
         assert data["status"] == TenantStatus.SUSPENDED.value
         
-        # 验证租户状态已更新
+        # 验证组织状态已更新
         tenant = await Tenant.get(id=test_tenant.id)
         assert tenant.status == TenantStatus.SUSPENDED
         
-        logger.info(f"✅ 审核拒绝租户注册测试通过（租户 ID: {test_tenant.id}）")
+        logger.info(f"✅ 审核拒绝组织注册测试通过（组织 ID: {test_tenant.id}）")
 
 
 @pytest.mark.asyncio
 async def test_get_tenant_statistics(setup_test_data):
     """
-    测试获取租户统计信息
+    测试获取组织统计信息
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 先登录获取 Token
@@ -314,7 +314,7 @@ async def test_get_tenant_statistics(setup_test_data):
         assert login_response.status_code == 200
         token = login_response.json()["token"]
         
-        # 获取租户统计信息
+        # 获取组织统计信息
         response = await client.get(
             "/api/v1/superadmin/monitoring/tenants/statistics",
             headers={"Authorization": f"Bearer {token}"}
@@ -330,7 +330,7 @@ async def test_get_tenant_statistics(setup_test_data):
         assert isinstance(data["by_status"], dict)
         assert isinstance(data["by_plan"], dict)
         
-        logger.info(f"✅ 获取租户统计信息测试通过（总租户数: {data['total']}）")
+        logger.info(f"✅ 获取组织统计信息测试通过（总组织数: {data['total']}）")
 
 
 @pytest.mark.asyncio
@@ -369,9 +369,9 @@ async def test_get_system_status(setup_test_data):
 @pytest.mark.asyncio
 async def test_superadmin_cross_tenant_access(setup_test_data):
     """
-    测试超级管理员跨租户访问能力
+    测试超级管理员跨组织访问能力
     
-    验证超级管理员可以访问所有租户的数据，不受 tenant_id 限制
+    验证超级管理员可以访问所有组织的数据，不受 tenant_id 限制
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 先登录获取 Token
@@ -385,7 +385,7 @@ async def test_superadmin_cross_tenant_access(setup_test_data):
         assert login_response.status_code == 200
         token = login_response.json()["token"]
         
-        # 获取所有租户列表（应该能看到所有租户，不受 tenant_id 限制）
+        # 获取所有组织列表（应该能看到所有组织，不受 tenant_id 限制）
         response = await client.get(
             "/api/v1/superadmin/tenants",
             headers={"Authorization": f"Bearer {token}"},
@@ -395,7 +395,7 @@ async def test_superadmin_cross_tenant_access(setup_test_data):
         assert response.status_code == 200
         data = response.json()
         
-        # 验证可以访问多个租户（如果有多个租户）
+        # 验证可以访问多个组织（如果有多个组织）
         assert len(data["items"]) >= 1
         
         # 验证 Token 中不包含 tenant_id（超级管理员 Token 特性）
@@ -407,13 +407,13 @@ async def test_superadmin_cross_tenant_access(setup_test_data):
         # ⭐ 关键：超级管理员 Token 不包含 tenant_id
         assert "tenant_id" not in payload or payload.get("tenant_id") is None
         
-        logger.info("✅ 超级管理员跨租户访问测试通过")
+        logger.info("✅ 超级管理员跨组织访问测试通过")
 
 
 @pytest.mark.asyncio
 async def test_activate_deactivate_tenant(setup_test_data):
     """
-    测试激活和停用租户
+    测试激活和停用组织
     """
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 先登录获取 Token
@@ -427,25 +427,25 @@ async def test_activate_deactivate_tenant(setup_test_data):
         assert login_response.status_code == 200
         token = login_response.json()["token"]
         
-        # 创建测试租户
+        # 创建测试组织
         from services.tenant_service import TenantService
         from schemas.tenant import TenantCreate
         tenant_service = TenantService()
         
-        # 先删除可能存在的测试租户
+        # 先删除可能存在的测试组织
         existing_tenant = await Tenant.get_or_none(domain="test-tenant-activate")
         if existing_tenant:
             await existing_tenant.delete()
         
         test_tenant = await tenant_service.create_tenant(
             TenantCreate(
-                name="测试租户（激活停用）",
+                name="测试组织（激活停用）",
                 domain="test-tenant-activate",
                 status=TenantStatus.INACTIVE,
             )
         )
         
-        # 激活租户
+        # 激活组织
         response = await client.post(
             f"/api/v1/superadmin/tenants/{test_tenant.id}/activate",
             headers={"Authorization": f"Bearer {token}"}
@@ -454,11 +454,11 @@ async def test_activate_deactivate_tenant(setup_test_data):
         data = response.json()
         assert data["status"] == TenantStatus.ACTIVE.value
         
-        # 验证租户状态
+        # 验证组织状态
         tenant = await Tenant.get(id=test_tenant.id)
         assert tenant.status == TenantStatus.ACTIVE
         
-        # 停用租户
+        # 停用组织
         response = await client.post(
             f"/api/v1/superadmin/tenants/{test_tenant.id}/deactivate",
             headers={"Authorization": f"Bearer {token}"}
@@ -467,9 +467,9 @@ async def test_activate_deactivate_tenant(setup_test_data):
         data = response.json()
         assert data["status"] == TenantStatus.INACTIVE.value
         
-        # 验证租户状态
+        # 验证组织状态
         tenant = await Tenant.get(id=test_tenant.id)
         assert tenant.status == TenantStatus.INACTIVE
         
-        logger.info(f"✅ 激活和停用租户测试通过（租户 ID: {test_tenant.id}）")
+        logger.info(f"✅ 激活和停用组织测试通过（组织 ID: {test_tenant.id}）")
 

@@ -8,7 +8,7 @@ export default {
   'menu.dashboard': '仪表盘',
   'menu.user': '用户管理',
   'menu.role': '角色管理',
-  'menu.tenant': '租户管理',
+  'menu.tenant': '组织管理',
   'menu.system': '系统设置',
   
   'pages.login.title': '登录',
@@ -20,7 +20,7 @@ export default {
   
   'pages.dashboard.title': '仪表盘',
   'pages.dashboard.totalUsers': '总用户数',
-  'pages.dashboard.totalTenants': '总租户数',
+  'pages.dashboard.totalTenants': '总组织数',
   'pages.dashboard.totalData': '数据总量',
   'pages.dashboard.installedPlugins': '已安装插件',
 };

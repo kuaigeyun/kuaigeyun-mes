@@ -26,8 +26,10 @@ from schemas.role import (
 from schemas.auth import (
     LoginRequest,
     LoginResponse,
-    RegisterRequest,
+    PersonalRegisterRequest,
+    OrganizationRegisterRequest,
     RegisterResponse,
+    TenantJoinRequest,
     TokenRefreshRequest,
     TokenRefreshResponse,
     CurrentUserResponse,
@@ -62,8 +64,10 @@ __all__ = [
     # Auth Schemas
     "LoginRequest",
     "LoginResponse",
-    "RegisterRequest",
+    "PersonalRegisterRequest",
+    "OrganizationRegisterRequest",
     "RegisterResponse",
+    "TenantJoinRequest",
     "TokenRefreshRequest",
     "TokenRefreshResponse",
     "CurrentUserResponse",

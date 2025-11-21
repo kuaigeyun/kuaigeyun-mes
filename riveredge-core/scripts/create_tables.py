@@ -38,7 +38,7 @@ async def create_tables():
         
         try:
             tenant_count = await Tenant.all().count()
-            print(f"✓ core_tenants 表存在，当前租户数: {tenant_count}")
+            print(f"✓ core_tenants 表存在，当前组织数: {tenant_count}")
         except Exception as e:
             print(f"✗ core_tenants 表查询失败: {e}")
         

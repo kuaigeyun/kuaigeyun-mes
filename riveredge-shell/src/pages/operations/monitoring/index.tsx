@@ -5,7 +5,7 @@
  * 仅超级管理员可见。
  */
 
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
 import {
   Card,
@@ -13,12 +13,10 @@ import {
   Col,
   Typography,
   Spin,
-  message,
   Tag,
   Progress,
   Alert,
   Space,
-  Tooltip,
   Divider,
 } from 'antd';
 import {
@@ -35,15 +33,14 @@ import {
   type SystemInfo,
 } from '@/services/superadmin';
 import { useQuery } from '@tanstack/react-query';
-// import { Gauge } from '@ant-design/charts';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /**
  * 系统状态监控页面组件
  */
 export default function SystemMonitoringPage() {
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const autoRefresh = true; // 自动刷新开关
   const refreshInterval = 30000; // 30秒刷新一次
 
   /**
@@ -100,7 +97,6 @@ export default function SystemMonitoringPage() {
   const {
     data: systemStatus,
     isLoading: statusLoading,
-    refetch: refetchStatus,
   } = useQuery<SystemStatus>({
     queryKey: ['systemStatus'],
     queryFn: getSystemStatus,
@@ -113,7 +109,6 @@ export default function SystemMonitoringPage() {
   const {
     data: systemResources,
     isLoading: resourcesLoading,
-    refetch: refetchResources,
   } = useQuery<SystemResources>({
     queryKey: ['systemResources'],
     queryFn: getSystemResources,
@@ -126,22 +121,11 @@ export default function SystemMonitoringPage() {
   const {
     data: systemInfo,
     isLoading: infoLoading,
-    refetch: refetchInfo,
   } = useQuery<SystemInfo>({
     queryKey: ['systemInfo'],
     queryFn: getSystemInfo,
     refetchInterval: autoRefresh ? refreshInterval * 2 : false, // 系统信息变化不频繁，刷新间隔更长
   });
-
-  /**
-   * 手动刷新所有数据
-   */
-  const handleRefresh = () => {
-    refetchStatus();
-    refetchResources();
-    refetchInfo();
-    message.success('数据已刷新');
-  };
 
   /**
    * 获取状态标签
@@ -205,6 +189,13 @@ export default function SystemMonitoringPage() {
       return defaultValue;
     }
     return Math.max(0, value);
+  };
+
+  /**
+   * 根据百分比获取颜色
+   */
+  const getPercentColor = (percent: number): string => {
+    return percent >= 80 ? '#ff4d4f' : percent >= 60 ? '#faad14' : '#52c41a';
   };
 
   /**
@@ -299,37 +290,6 @@ export default function SystemMonitoringPage() {
                       </Text>
                     </div>
                   )}
-                  {systemStatus.cpu_count !== undefined && (
-                    <div>
-                      <Text strong>CPU核心：</Text>
-                      <Text>
-                        {systemStatus.cpu_count}
-                        {systemStatus.cpu_count_logical && systemStatus.cpu_count_logical !== systemStatus.cpu_count
-                          ? ` (${systemStatus.cpu_count_logical} 逻辑)`
-                          : ''}
-                      </Text>
-                    </div>
-                  )}
-                  {systemStatus.timezone && (
-                    <div>
-                      <Text strong>时区：</Text>
-                      <Text code>{systemStatus.timezone}</Text>
-                    </div>
-                  )}
-                  {systemStatus.app_version && (
-                    <div>
-                      <Text strong>应用版本：</Text>
-                      <Text code>{systemStatus.app_version}</Text>
-                    </div>
-                  )}
-                  {systemStatus.environment && (
-                    <div>
-                      <Text strong>运行环境：</Text>
-                      <Tag color={systemStatus.environment === 'production' ? 'red' : systemStatus.environment === 'staging' ? 'orange' : 'blue'}>
-                        {systemStatus.environment}
-                      </Tag>
-                    </div>
-                  )}
                   {systemStatus.updated_at && (
                     <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px solid #f0f0f0' }}>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -346,72 +306,70 @@ export default function SystemMonitoringPage() {
           <Col xs={24} lg={16}>
             <Card title="系统资源使用情况" loading={resourcesLoading} style={{ height: '100%' }}>
               {systemResources &&
-               !systemResources.error &&
                typeof systemResources.cpu_percent === 'number' &&
                typeof systemResources.memory_percent === 'number' &&
                typeof systemResources.disk_percent === 'number' ? (
-                <Row gutter={[16, 16]}>
-                  <Col xs={24} sm={8}>
-                    <div style={{ textAlign: 'center' }}>
-                      {(() => {
-                        const cpuPercent = validatePercent(systemResources.cpu_percent);
-                        const color = cpuPercent >= 80 ? '#ff4d4f' : cpuPercent >= 60 ? '#faad14' : '#52c41a';
-                        return <ResourceGauge percent={cpuPercent} title="CPU" color={color} />;
-                      })()}
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={8}>
-                    <div style={{ textAlign: 'center' }}>
-                      {(() => {
-                        const memoryPercent = validatePercent(systemResources.memory_percent);
-                        const memoryUsed = validateSize(systemResources.memory_used_mb);
-                        const memoryTotal = validateSize(systemResources.memory_total_mb);
-                        const color = memoryPercent >= 80 ? '#ff4d4f' : memoryPercent >= 60 ? '#faad14' : '#52c41a';
-                        return (
-                          <ResourceGauge
-                            percent={memoryPercent}
-                            title="内存"
-                            color={color}
-                            used={memoryUsed}
-                            total={memoryTotal}
-                          />
-                        );
-                      })()}
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={8}>
-                    <div style={{ textAlign: 'center' }}>
-                      {(() => {
-                        const diskPercent = validatePercent(systemResources.disk_percent);
-                        const diskUsed = validateSize(systemResources.disk_used_mb);
-                        const diskTotal = validateSize(systemResources.disk_total_mb);
-                        const color = diskPercent >= 80 ? '#ff4d4f' : diskPercent >= 60 ? '#faad14' : '#52c41a';
-                        return (
-                          <ResourceGauge
-                            percent={diskPercent}
-                            title="磁盘"
-                            color={color}
-                            used={diskUsed}
-                            total={diskTotal}
-                          />
-                        );
-                      })()}
-                    </div>
-                  </Col>
-                </Row>
+                <>
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24} sm={8}>
+                      <div style={{ textAlign: 'center' }}>
+                        {(() => {
+                          const cpuPercent = validatePercent(systemResources.cpu_percent);
+                          return <ResourceGauge percent={cpuPercent} title="CPU" color={getPercentColor(cpuPercent)} />;
+                        })()}
+                        {systemStatus?.cpu_count !== undefined && (
+                          <div style={{ fontSize: 12, color: '#666', marginTop: -16 }}>
+                            {systemStatus.cpu_count}
+                            {systemStatus.cpu_count_logical && systemStatus.cpu_count_logical !== systemStatus.cpu_count
+                              ? ` (${systemStatus.cpu_count_logical} 逻辑)`
+                              : ''}
+                          </div>
+                        )}
+                      </div>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <div style={{ textAlign: 'center' }}>
+                        {(() => {
+                          const memoryPercent = validatePercent(systemResources.memory_percent);
+                          const memoryUsed = validateSize(systemResources.memory_used_mb);
+                          const memoryTotal = validateSize(systemResources.memory_total_mb);
+                          return (
+                            <ResourceGauge
+                              percent={memoryPercent}
+                              title="内存"
+                              color={getPercentColor(memoryPercent)}
+                              used={memoryUsed}
+                              total={memoryTotal}
+                            />
+                          );
+                        })()}
+                      </div>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <div style={{ textAlign: 'center' }}>
+                        {(() => {
+                          const diskPercent = validatePercent(systemResources.disk_percent);
+                          const diskUsed = validateSize(systemResources.disk_used_mb);
+                          const diskTotal = validateSize(systemResources.disk_total_mb);
+                          return (
+                            <ResourceGauge
+                              percent={diskPercent}
+                              title="磁盘"
+                              color={getPercentColor(diskPercent)}
+                              used={diskUsed}
+                              total={diskTotal}
+                            />
+                          );
+                        })()}
+                      </div>
+                    </Col>
+                  </Row>
+                </>
               ) : (
                 <Alert
                   message="无法获取系统资源数据"
                   description="系统资源监控数据暂时不可用，请稍后刷新页面重试。"
                   type="warning"
-                  showIcon
-                />
-              )}
-              {systemResources?.error && (
-                <Alert
-                  message="获取系统资源失败"
-                  description={systemResources.error}
-                  type="error"
                   showIcon
                 />
               )}
@@ -521,25 +479,25 @@ export default function SystemMonitoringPage() {
                             {systemInfo.network.errin !== undefined && systemInfo.network.errin > 0 && (
                               <div>
                                 <Text type="secondary">接收错误：</Text>
-                                <Tag color="error" size="small">{systemInfo.network.errin.toLocaleString()}</Tag>
+                                <Tag color="error">{systemInfo.network.errin.toLocaleString()}</Tag>
                               </div>
                             )}
                             {systemInfo.network.errout !== undefined && systemInfo.network.errout > 0 && (
                               <div>
                                 <Text type="secondary">发送错误：</Text>
-                                <Tag color="error" size="small">{systemInfo.network.errout.toLocaleString()}</Tag>
+                                <Tag color="error">{systemInfo.network.errout.toLocaleString()}</Tag>
                               </div>
                             )}
                             {systemInfo.network.dropin !== undefined && systemInfo.network.dropin > 0 && (
                               <div>
                                 <Text type="secondary">接收丢包：</Text>
-                                <Tag color="warning" size="small">{systemInfo.network.dropin.toLocaleString()}</Tag>
+                                <Tag color="warning">{systemInfo.network.dropin.toLocaleString()}</Tag>
                               </div>
                             )}
                             {systemInfo.network.dropout !== undefined && systemInfo.network.dropout > 0 && (
                               <div>
                                 <Text type="secondary">发送丢包：</Text>
-                                <Tag color="warning" size="small">{systemInfo.network.dropout.toLocaleString()}</Tag>
+                                <Tag color="warning">{systemInfo.network.dropout.toLocaleString()}</Tag>
                               </div>
                             )}
                             {(systemInfo.network.errin === 0 && systemInfo.network.errout === 0 && 
@@ -557,7 +515,6 @@ export default function SystemMonitoringPage() {
                         description={systemInfo.network?.error || '网络信息暂时不可用'}
                         type="warning"
                         showIcon
-                        size="small"
                       />
                     )}
                   </div>
@@ -596,11 +553,11 @@ export default function SystemMonitoringPage() {
                       </div>
                       <div>
                         <Text type="secondary">Cookie：</Text>
-                        <Tag color={browserInfo.cookieEnabled === '是' ? 'success' : 'error'} size="small">
+                        <Tag color={browserInfo.cookieEnabled === '是' ? 'success' : 'error'}>
                           {browserInfo.cookieEnabled}
                         </Tag>
                         <Text type="secondary" style={{ marginLeft: 8 }}>网络：</Text>
-                        <Tag color={browserInfo.onLine === '在线' ? 'success' : 'error'} size="small">
+                        <Tag color={browserInfo.onLine === '在线' ? 'success' : 'error'}>
                           {browserInfo.onLine}
                         </Tag>
                       </div>

@@ -24,18 +24,18 @@ CREATE INDEX IF NOT EXISTS "idx_core_tenant_domain_22c064" ON "core_tenants" ("d
 CREATE INDEX IF NOT EXISTS "idx_core_tenant_status_195cc5" ON "core_tenants" ("status");
 CREATE INDEX IF NOT EXISTS "idx_core_tenant_plan_fda057" ON "core_tenants" ("plan");
 COMMENT ON COLUMN "core_tenants"."id" IS '主键 ID';
-COMMENT ON COLUMN "core_tenants"."tenant_id" IS '租户 ID（用于多租户数据隔离）';
+COMMENT ON COLUMN "core_tenants"."tenant_id" IS '组织 ID（用于多组织数据隔离）';
 COMMENT ON COLUMN "core_tenants"."created_at" IS '创建时间';
 COMMENT ON COLUMN "core_tenants"."updated_at" IS '更新时间';
-COMMENT ON COLUMN "core_tenants"."name" IS '租户名称';
-COMMENT ON COLUMN "core_tenants"."domain" IS '租户域名（用于子域名访问）';
-COMMENT ON COLUMN "core_tenants"."status" IS '租户状态';
-COMMENT ON COLUMN "core_tenants"."plan" IS '租户套餐';
-COMMENT ON COLUMN "core_tenants"."settings" IS '租户配置（JSONB 存储）';
+COMMENT ON COLUMN "core_tenants"."name" IS '组织名称';
+COMMENT ON COLUMN "core_tenants"."domain" IS '组织域名（用于子域名访问）';
+COMMENT ON COLUMN "core_tenants"."status" IS '组织状态';
+COMMENT ON COLUMN "core_tenants"."plan" IS '组织套餐';
+COMMENT ON COLUMN "core_tenants"."settings" IS '组织配置（JSONB 存储）';
 COMMENT ON COLUMN "core_tenants"."max_users" IS '最大用户数限制';
 COMMENT ON COLUMN "core_tenants"."max_storage" IS '最大存储空间限制（MB）';
 COMMENT ON COLUMN "core_tenants"."expires_at" IS '过期时间（可选）';
-COMMENT ON TABLE "core_tenants" IS '租户模型';
+COMMENT ON TABLE "core_tenants" IS '组织模型';
         CREATE TABLE IF NOT EXISTS "core_tenant_configs" (
     "id" SERIAL NOT NULL PRIMARY KEY,
     "tenant_id" INT NOT NULL,
@@ -50,13 +50,13 @@ CREATE INDEX IF NOT EXISTS "idx_core_tenant_tenant__993185" ON "core_tenant_conf
 CREATE INDEX IF NOT EXISTS "idx_core_tenant_config__3f2216" ON "core_tenant_configs" ("config_key");
 CREATE INDEX IF NOT EXISTS "idx_core_tenant_tenant__622b22" ON "core_tenant_configs" ("tenant_id", "config_key");
 COMMENT ON COLUMN "core_tenant_configs"."id" IS '主键 ID';
-COMMENT ON COLUMN "core_tenant_configs"."tenant_id" IS '租户 ID（外键，关联到 core_tenants 表）';
+COMMENT ON COLUMN "core_tenant_configs"."tenant_id" IS '组织 ID（外键，关联到 core_tenants 表）';
 COMMENT ON COLUMN "core_tenant_configs"."created_at" IS '创建时间';
 COMMENT ON COLUMN "core_tenant_configs"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "core_tenant_configs"."config_key" IS '配置键（唯一标识配置项）';
 COMMENT ON COLUMN "core_tenant_configs"."config_value" IS '配置值（JSONB 存储）';
 COMMENT ON COLUMN "core_tenant_configs"."description" IS '配置描述（可选）';
-COMMENT ON TABLE "core_tenant_configs" IS '租户配置模型';"""
+COMMENT ON TABLE "core_tenant_configs" IS '组织配置模型';"""
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:

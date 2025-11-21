@@ -15,7 +15,7 @@ const TOKEN_KEY = 'token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 
 /**
- * 租户 ID 存储键名
+ * 组织 ID 存储键名
  */
 const TENANT_ID_KEY = 'tenant_id';
 
@@ -75,18 +75,18 @@ export function removeRefreshToken(): void {
 }
 
 /**
- * 设置租户 ID
+ * 设置组织 ID
  * 
- * @param tenantId - 租户 ID
+ * @param tenantId - 组织 ID
  */
 export function setTenantId(tenantId: number | string): void {
   localStorage.setItem(TENANT_ID_KEY, String(tenantId));
 }
 
 /**
- * 获取租户 ID
+ * 获取组织 ID
  * 
- * @returns 租户 ID
+ * @returns 组织 ID
  */
 export function getTenantId(): number | null {
   const tenantId = localStorage.getItem(TENANT_ID_KEY);
@@ -94,7 +94,7 @@ export function getTenantId(): number | null {
 }
 
 /**
- * 移除租户 ID
+ * 移除组织 ID
  */
 export function removeTenantId(): void {
   localStorage.removeItem(TENANT_ID_KEY);

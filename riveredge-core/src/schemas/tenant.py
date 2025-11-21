@@ -1,7 +1,7 @@
 """
-租户 Schema 模块
+组织 Schema 模块
 
-定义租户相关的 Pydantic Schema，用于 API 请求和响应的数据验证
+定义组织相关的 Pydantic Schema，用于 API 请求和响应的数据验证
 """
 
 from datetime import datetime
@@ -14,43 +14,43 @@ from models.tenant import TenantStatus, TenantPlan
 
 class TenantBase(BaseModel):
     """
-    租户基础 Schema
+    组织基础 Schema
     
-    包含租户的通用字段定义
+    包含组织的通用字段定义
     
     Attributes:
-        name: 租户名称
-        domain: 租户域名
-        status: 租户状态
-        plan: 租户套餐
-        settings: 租户配置
+        name: 组织名称
+        domain: 组织域名
+        status: 组织状态
+        plan: 组织套餐
+        settings: 组织配置
         max_users: 最大用户数限制
         max_storage: 最大存储空间限制（MB）
         expires_at: 过期时间（可选）
     """
     
-    name: str = Field(..., min_length=1, max_length=100, description="租户名称")
-    domain: str = Field(..., min_length=1, max_length=100, description="租户域名（用于子域名访问）")
-    status: TenantStatus = Field(default=TenantStatus.INACTIVE, description="租户状态")
-    plan: TenantPlan = Field(default=TenantPlan.BASIC, description="租户套餐")
-    settings: Dict[str, Any] = Field(default_factory=dict, description="租户配置（JSONB 存储）")
-    max_users: int = Field(default=10, ge=1, description="最大用户数限制")
-    max_storage: int = Field(default=1024, ge=0, description="最大存储空间限制（MB）")
+    name: str = Field(..., min_length=1, max_length=100, description="组织名称")
+    domain: str = Field(..., min_length=1, max_length=100, description="组织域名（用于子域名访问）")
+    status: TenantStatus = Field(default=TenantStatus.INACTIVE, description="组织状态")
+    plan: TenantPlan = Field(default=TenantPlan.TRIAL, description="组织套餐（默认体验套餐）")
+    settings: Dict[str, Any] = Field(default_factory=dict, description="组织配置（JSONB 存储）")
+    max_users: Optional[int] = Field(default=None, ge=1, description="最大用户数限制（可选，根据套餐自动设置）")
+    max_storage: Optional[int] = Field(default=None, ge=0, description="最大存储空间限制（可选，根据套餐自动设置，单位：MB）")
     expires_at: Optional[datetime] = Field(default=None, description="过期时间（可选）")
 
 
 class TenantCreate(TenantBase):
     """
-    租户创建 Schema
+    组织创建 Schema
     
-    用于创建新租户时的数据验证
+    用于创建新组织时的数据验证
     
     Attributes:
-        name: 租户名称（必填）
-        domain: 租户域名（必填，全局唯一）
-        status: 租户状态（可选，默认 inactive）
-        plan: 租户套餐（可选，默认 basic）
-        settings: 租户配置（可选，默认空字典）
+        name: 组织名称（必填）
+        domain: 组织域名（必填，全局唯一）
+        status: 组织状态（可选，默认 inactive）
+        plan: 组织套餐（可选，默认 basic）
+        settings: 组织配置（可选，默认空字典）
         max_users: 最大用户数限制（可选，默认 10）
         max_storage: 最大存储空间限制（可选，默认 1024 MB）
         expires_at: 过期时间（可选）
@@ -60,27 +60,27 @@ class TenantCreate(TenantBase):
 
 class TenantUpdate(BaseModel):
     """
-    租户更新 Schema
+    组织更新 Schema
     
-    用于更新租户信息时的数据验证。
+    用于更新组织信息时的数据验证。
     所有字段都是可选的，只更新提供的字段。
     
     Attributes:
-        name: 租户名称（可选）
-        domain: 租户域名（可选）
-        status: 租户状态（可选）
-        plan: 租户套餐（可选）
-        settings: 租户配置（可选）
+        name: 组织名称（可选）
+        domain: 组织域名（可选）
+        status: 组织状态（可选）
+        plan: 组织套餐（可选）
+        settings: 组织配置（可选）
         max_users: 最大用户数限制（可选）
         max_storage: 最大存储空间限制（可选）
         expires_at: 过期时间（可选）
     """
     
-    name: Optional[str] = Field(None, min_length=1, max_length=100, description="租户名称")
-    domain: Optional[str] = Field(None, min_length=1, max_length=100, description="租户域名")
-    status: Optional[TenantStatus] = Field(None, description="租户状态")
-    plan: Optional[TenantPlan] = Field(None, description="租户套餐")
-    settings: Optional[Dict[str, Any]] = Field(None, description="租户配置")
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="组织名称")
+    domain: Optional[str] = Field(None, min_length=1, max_length=100, description="组织域名")
+    status: Optional[TenantStatus] = Field(None, description="组织状态")
+    plan: Optional[TenantPlan] = Field(None, description="组织套餐")
+    settings: Optional[Dict[str, Any]] = Field(None, description="组织配置")
     max_users: Optional[int] = Field(None, ge=1, description="最大用户数限制")
     max_storage: Optional[int] = Field(None, ge=0, description="最大存储空间限制（MB）")
     expires_at: Optional[datetime] = Field(None, description="过期时间")
@@ -88,17 +88,17 @@ class TenantUpdate(BaseModel):
 
 class TenantResponse(TenantBase):
     """
-    租户响应 Schema
+    组织响应 Schema
     
     用于 API 响应时的数据序列化
     
     Attributes:
-        id: 租户 ID
-        name: 租户名称
-        domain: 租户域名
-        status: 租户状态
-        plan: 租户套餐
-        settings: 租户配置
+        id: 组织 ID
+        name: 组织名称
+        domain: 组织域名
+        status: 组织状态
+        plan: 组织套餐
+        settings: 组织配置
         max_users: 最大用户数限制
         max_storage: 最大存储空间限制（MB）
         expires_at: 过期时间（可选）
@@ -106,7 +106,7 @@ class TenantResponse(TenantBase):
         updated_at: 更新时间
     """
     
-    id: int = Field(..., description="租户 ID")
+    id: int = Field(..., description="组织 ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     
@@ -115,18 +115,90 @@ class TenantResponse(TenantBase):
 
 class TenantListResponse(BaseModel):
     """
-    租户列表响应 Schema
+    组织列表响应 Schema
     
     用于分页列表响应
     
     Attributes:
-        items: 租户列表
+        items: 组织列表
         total: 总数量
         page: 当前页码
         page_size: 每页数量
     """
     
-    items: list[TenantResponse] = Field(..., description="租户列表")
+    items: list[TenantResponse] = Field(..., description="组织列表")
+    total: int = Field(..., description="总数量")
+    page: int = Field(..., description="当前页码")
+    page_size: int = Field(..., description="每页数量")
+
+
+class TenantUsageResponse(BaseModel):
+    """
+    组织使用量统计响应 Schema
+    
+    用于返回组织的实际使用量统计信息
+    
+    Attributes:
+        tenant_id: 组织 ID
+        user_count: 当前用户数
+        max_users: 最大用户数限制
+        storage_used_mb: 当前存储空间使用量（MB）
+        max_storage_mb: 最大存储空间限制（MB）
+        user_usage_percent: 用户数使用百分比
+        storage_usage_percent: 存储空间使用百分比
+    """
+    
+    tenant_id: int = Field(..., description="组织 ID")
+    user_count: int = Field(..., description="当前用户数")
+    max_users: int = Field(..., description="最大用户数限制")
+    storage_used_mb: int = Field(..., description="当前存储空间使用量（MB）")
+    max_storage_mb: int = Field(..., description="最大存储空间限制（MB）")
+    user_usage_percent: float = Field(..., description="用户数使用百分比")
+    storage_usage_percent: float = Field(..., description="存储空间使用百分比")
+    warnings: list[str] = Field(default_factory=list, description="配额预警信息列表")
+
+
+class TenantActivityLogResponse(BaseModel):
+    """
+    组织活动日志响应 Schema
+    
+    用于返回组织活动日志信息
+    
+    Attributes:
+        id: 日志 ID
+        tenant_id: 组织 ID
+        action: 操作类型
+        description: 操作描述
+        operator_id: 操作人 ID（可选）
+        operator_name: 操作人名称（可选）
+        created_at: 操作时间
+    """
+    
+    id: int = Field(..., description="日志 ID")
+    tenant_id: int = Field(..., description="组织 ID")
+    action: str = Field(..., description="操作类型")
+    description: str = Field(..., description="操作描述")
+    operator_id: Optional[int] = Field(None, description="操作人 ID（可选）")
+    operator_name: Optional[str] = Field(None, description="操作人名称（可选）")
+    created_at: datetime = Field(..., description="操作时间")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TenantActivityLogListResponse(BaseModel):
+    """
+    组织活动日志列表响应 Schema
+    
+    用于分页列表响应
+    
+    Attributes:
+        items: 日志列表
+        total: 总数量
+        page: 当前页码
+        page_size: 每页数量
+    """
+    
+    items: list[TenantActivityLogResponse] = Field(..., description="日志列表")
     total: int = Field(..., description="总数量")
     page: int = Field(..., description="当前页码")
     page_size: int = Field(..., description="每页数量")

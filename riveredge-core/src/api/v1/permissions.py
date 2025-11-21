@@ -28,7 +28,7 @@ async def list_permissions(
     获取权限列表接口
     
     获取权限列表，支持分页和关键词搜索。
-    自动过滤租户：只返回当前租户的权限。
+    自动过滤组织：只返回当前组织的权限。
     
     Args:
         page: 页码（默认 1）
@@ -44,10 +44,10 @@ async def list_permissions(
         GET /api/v1/permissions?page=1&page_size=100&keyword=user
         ```
     """
-    # 从当前用户获取租户 ID（自动过滤）⭐ 关键
+    # 从当前用户获取组织 ID（自动过滤）⭐ 关键
     tenant_id = current_user.tenant_id
     
-    # 构建查询（自动过滤租户）⭐ 关键
+    # 构建查询（自动过滤组织）⭐ 关键
     query = Permission.filter(tenant_id=tenant_id)
     
     # 关键词搜索

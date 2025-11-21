@@ -80,11 +80,18 @@ def start_backend():
         project_root = Path(__file__).parent.parent
         os.chdir(project_root)
         
-        # 激活虚拟环境并启动服务
+        # 激活虚拟环境并启动服务（优先使用根目录的 venv311）
+        root_venv = project_root.parent / "venv311"
+        local_venv = project_root / "venv311"
+        
         if sys.platform == 'win32':
-            venv_python = project_root / "venv311" / "Scripts" / "python.exe"
+            venv_python = root_venv / "Scripts" / "python.exe"
+            if not venv_python.exists():
+                venv_python = local_venv / "Scripts" / "python.exe"
         else:
-            venv_python = project_root / "venv311" / "bin" / "python"
+            venv_python = root_venv / "bin" / "python"
+            if not venv_python.exists():
+                venv_python = local_venv / "bin" / "python"
         
         if not venv_python.exists():
             print(f"❌ 虚拟环境未找到: {venv_python}")

@@ -1,5 +1,5 @@
 /**
- * RiverEdge SaaS 多租户框架 - 前端应用入口
+ * RiverEdge SaaS 多组织框架 - 前端应用入口
  * 
  * 使用现代化 React 生态技术栈：
  * - React 18.2.0 + TypeScript 5.5.4
@@ -18,6 +18,8 @@ import { persist } from 'zustand/middleware';
 import IndexPage from '@/pages';
 import LoginPage from '@/pages/login';
 import RegisterPage from '@/pages/register';
+import PersonalRegisterPage from '@/pages/register/experience';
+import OrganizationRegisterPage from '@/pages/register/trial';
 import DashboardPage from '@/pages/dashboard';
 import UserListPage from '@/pages/user/list';
 import UserFormPage from '@/pages/user/form';
@@ -29,6 +31,10 @@ import TenantDetailPage from '@/pages/tenant/detail';
 import TenantFormPage from '@/pages/tenant/form';
 import SuperAdminTenantListPage from '@/pages/superadmin/tenants/list';
 import SuperAdminTenantDetailPage from '@/pages/superadmin/tenants/detail';
+import OperationsDashboardPage from '@/pages/operations/dashboard';
+import SystemMonitoringPage from '@/pages/operations/monitoring';
+import PackagesPage from '@/pages/operations/packages';
+import PluginPlaceholderPage from '@/pages/plugin-placeholder';
 import NotFoundPage from '@/pages/404';
 import BasicLayout from '@/layouts/BasicLayout';
 import { getCurrentUser } from '@/services/auth';
@@ -88,8 +94,8 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [isLoading, setLoading]);
 
   // 公开页面
-  const publicPaths = ['/login', '/register'];
-  const isPublicPath = publicPaths.includes(location.pathname);
+  const publicPaths = ['/login', '/register', '/register/personal', '/register/organization'];
+  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path));
 
   // 如果正在加载，显示加载状态
   if (loading) {
@@ -128,6 +134,8 @@ const AppRoutes: React.FC = () => {
       {/* 公开页面 */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/register/personal" element={<PersonalRegisterPage />} />
+      <Route path="/register/organization" element={<OrganizationRegisterPage />} />
 
       {/* 需要认证的页面 */}
       <Route
@@ -215,7 +223,7 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* 租户管理 */}
+      {/* 组织管理 */}
       <Route
         path="/tenants"
         element={
@@ -247,9 +255,19 @@ const AppRoutes: React.FC = () => {
         }
       />
 
-      {/* 超级管理员 */}
+      {/* 运营中心（仅超级管理员可见） */}
       <Route
-        path="/superadmin/tenants"
+        path="/operations/dashboard"
+        element={
+          <AuthGuard>
+            <BasicLayout>
+              <OperationsDashboardPage />
+            </BasicLayout>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/operations/tenants"
         element={
           <AuthGuard>
             <BasicLayout>
@@ -259,11 +277,43 @@ const AppRoutes: React.FC = () => {
         }
       />
       <Route
-        path="/superadmin/tenants/:id"
+        path="/operations/tenants/:id"
         element={
           <AuthGuard>
             <BasicLayout>
               <SuperAdminTenantDetailPage />
+            </BasicLayout>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/operations/monitoring"
+        element={
+          <AuthGuard>
+            <BasicLayout>
+              <SystemMonitoringPage />
+            </BasicLayout>
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/operations/packages"
+        element={
+          <AuthGuard>
+            <BasicLayout>
+              <PackagesPage />
+            </BasicLayout>
+          </AuthGuard>
+        }
+      />
+
+      {/* MES 插件占位页面（用于预览菜单效果） */}
+      <Route
+        path="/mes/*"
+        element={
+          <AuthGuard>
+            <BasicLayout>
+              <PluginPlaceholderPage />
             </BasicLayout>
           </AuthGuard>
         }

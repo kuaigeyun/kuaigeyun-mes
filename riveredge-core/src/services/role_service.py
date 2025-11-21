@@ -19,7 +19,7 @@ class RoleService:
     角色服务类
     
     提供角色的 CRUD 操作和业务逻辑处理。
-    所有查询自动过滤租户，所有创建操作自动设置 tenant_id。
+    所有查询自动过滤组织，所有创建操作自动设置 tenant_id。
     """
     
     async def create_role(
@@ -30,17 +30,17 @@ class RoleService:
         """
         创建角色
         
-        创建新角色并自动设置租户 ID。
+        创建新角色并自动设置组织 ID。
         
         Args:
             data: 角色创建数据
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
             Role: 创建的角色对象
             
         Raises:
-            HTTPException: 当租户内角色名称或代码已存在时抛出
+            HTTPException: 当组织内角色名称或代码已存在时抛出
             
         Example:
             >>> service = RoleService()
@@ -52,11 +52,11 @@ class RoleService:
             ...     )
             ... )
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 检查租户内角色名称是否已存在
+        # 检查组织内角色名称是否已存在
         existing_name = await Role.get_or_none(
             tenant_id=tenant_id,
             name=data.name
@@ -64,10 +64,10 @@ class RoleService:
         if existing_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="该租户下角色名称已被使用"
+                detail="该组织下角色名称已被使用"
             )
         
-        # 检查租户内角色代码是否已存在
+        # 检查组织内角色代码是否已存在
         existing_code = await Role.get_or_none(
             tenant_id=tenant_id,
             code=data.code
@@ -75,12 +75,12 @@ class RoleService:
         if existing_code:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="该租户下角色代码已被使用"
+                detail="该组织下角色代码已被使用"
             )
         
         # 创建角色（自动设置 tenant_id）⭐ 关键
         role = await Role.create(
-            tenant_id=tenant_id,  # ⭐ 关键：自动设置租户 ID
+            tenant_id=tenant_id,  # ⭐ 关键：自动设置组织 ID
             name=data.name,
             code=data.code,
             description=data.description,
@@ -97,14 +97,14 @@ class RoleService:
         """
         根据 ID 获取角色
         
-        获取指定 ID 的角色，自动过滤租户。
+        获取指定 ID 的角色，自动过滤组织。
         
         Args:
             role_id: 角色 ID
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
-            Optional[Role]: 角色对象，如果不存在或不属于当前租户则返回 None
+            Optional[Role]: 角色对象，如果不存在或不属于当前组织则返回 None
             
         Example:
             >>> service = RoleService()
@@ -112,14 +112,14 @@ class RoleService:
             >>> if role:
             ...     print(role.name)
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 查询角色（自动过滤租户）⭐ 关键
+        # 查询角色（自动过滤组织）⭐ 关键
         role = await Role.get_or_none(
             id=role_id,
-            tenant_id=tenant_id  # ⭐ 关键：自动过滤租户
+            tenant_id=tenant_id  # ⭐ 关键：自动过滤组织
         )
         
         return role
@@ -135,13 +135,13 @@ class RoleService:
         获取角色列表
         
         获取角色列表，支持分页和关键词搜索。
-        自动过滤租户：只返回当前租户的角色。
+        自动过滤组织：只返回当前组织的角色。
         
         Args:
             page: 页码（默认 1）
             page_size: 每页数量（默认 10）
             keyword: 关键词搜索（可选，搜索角色名称、代码、描述）
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
             Dict[str, Any]: 包含 items、total、page、page_size 的字典
@@ -156,11 +156,11 @@ class RoleService:
             >>> len(result["items"]) >= 0
             True
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 构建查询（自动过滤租户）⭐ 关键
+        # 构建查询（自动过滤组织）⭐ 关键
         query = Role.filter(tenant_id=tenant_id)
         
         # 关键词搜索
@@ -195,15 +195,15 @@ class RoleService:
         """
         更新角色
         
-        更新角色信息，自动验证租户权限。
+        更新角色信息，自动验证组织权限。
         
         Args:
             role_id: 角色 ID
             data: 角色更新数据
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
-            Optional[Role]: 更新后的角色对象，如果不存在或不属于当前租户则返回 None
+            Optional[Role]: 更新后的角色对象，如果不存在或不属于当前组织则返回 None
             
         Raises:
             HTTPException: 当角色名称或代码冲突时抛出
@@ -215,11 +215,11 @@ class RoleService:
             ...     RoleUpdate(description="新描述")
             ... )
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 获取角色（自动验证租户权限）⭐ 关键
+        # 获取角色（自动验证组织权限）⭐ 关键
         role = await self.get_role_by_id(role_id, tenant_id)
         if not role:
             return None
@@ -240,7 +240,7 @@ class RoleService:
             if existing_name:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="该租户下角色名称已被使用"
+                    detail="该组织下角色名称已被使用"
                 )
         
         # 检查角色代码是否冲突（如果更新代码）
@@ -252,7 +252,7 @@ class RoleService:
             if existing_code:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="该租户下角色代码已被使用"
+                    detail="该组织下角色代码已被使用"
                 )
         
         # 更新角色信息
@@ -274,12 +274,12 @@ class RoleService:
         """
         删除角色
         
-        删除角色，自动验证租户权限。
+        删除角色，自动验证组织权限。
         系统角色不可删除。
         
         Args:
             role_id: 角色 ID
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
             bool: 删除成功返回 True，否则返回 False
@@ -293,11 +293,11 @@ class RoleService:
             >>> success
             True
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 获取角色（自动验证租户权限）⭐ 关键
+        # 获取角色（自动验证组织权限）⭐ 关键
         role = await self.get_role_by_id(role_id, tenant_id)
         if not role:
             return False
@@ -323,28 +323,28 @@ class RoleService:
         """
         分配权限给角色
         
-        为角色分配权限列表，自动验证租户权限。
+        为角色分配权限列表，自动验证组织权限。
         
         Args:
             role_id: 角色 ID
             permission_ids: 权限 ID 列表
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
             Role: 更新后的角色对象
             
         Raises:
-            HTTPException: 当角色不存在或权限不属于当前租户时抛出
+            HTTPException: 当角色不存在或权限不属于当前组织时抛出
             
         Example:
             >>> service = RoleService()
             >>> role = await service.assign_permissions(1, [1, 2, 3])
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 获取角色（自动验证租户权限）⭐ 关键
+        # 获取角色（自动验证组织权限）⭐ 关键
         role = await self.get_role_by_id(role_id, tenant_id)
         if not role:
             raise HTTPException(
@@ -352,17 +352,17 @@ class RoleService:
                 detail="角色不存在"
             )
         
-        # 获取权限（自动过滤租户）⭐ 关键
+        # 获取权限（自动过滤组织）⭐ 关键
         permissions = await Permission.filter(
             id__in=permission_ids,
-            tenant_id=tenant_id  # ⭐ 关键：自动过滤租户
+            tenant_id=tenant_id  # ⭐ 关键：自动过滤组织
         ).all()
         
-        # 验证权限数量是否匹配（防止跨租户权限分配）
+        # 验证权限数量是否匹配（防止跨组织权限分配）
         if len(permissions) != len(permission_ids):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="部分权限不存在或不属于当前租户"
+                detail="部分权限不存在或不属于当前组织"
             )
         
         # 分配权限（替换现有权限）
@@ -382,23 +382,23 @@ class RoleService:
         """
         获取角色权限列表
         
-        获取角色的所有权限，自动过滤租户。
+        获取角色的所有权限，自动过滤组织。
         
         Args:
             role_id: 角色 ID
-            tenant_id: 租户 ID（可选，默认从上下文获取）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
-            List[Permission]: 权限列表（已过滤租户）
+            List[Permission]: 权限列表（已过滤组织）
             
         Raises:
             HTTPException: 当角色不存在时抛出
         """
-        # 获取租户 ID（从参数或上下文）
+        # 获取组织 ID（从参数或上下文）
         if tenant_id is None:
             tenant_id = await require_tenant_context()
         
-        # 获取角色（自动验证租户权限）⭐ 关键
+        # 获取角色（自动验证组织权限）⭐ 关键
         role = await self.get_role_by_id(role_id, tenant_id)
         if not role:
             raise HTTPException(
@@ -406,7 +406,7 @@ class RoleService:
                 detail="角色不存在"
             )
         
-        # 获取角色的权限（自动过滤租户）⭐ 关键
+        # 获取角色的权限（自动过滤组织）⭐ 关键
         permissions = await role.permissions.filter(tenant_id=tenant_id).all()
         
         return permissions

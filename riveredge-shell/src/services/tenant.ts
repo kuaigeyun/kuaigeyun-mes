@@ -1,8 +1,8 @@
 /**
- * 租户 API 服务
+ * 组织 API 服务
  * 
- * 提供租户管理相关的 API 接口
- * 注意：租户管理通常需要超级管理员权限
+ * 提供组织管理相关的 API 接口
+ * 注意：组织管理通常需要超级管理员权限
  */
 
 // 使用 apiRequest 统一处理 HTTP 请求
@@ -11,7 +11,7 @@
 import { apiRequest } from './api';
 
 /**
- * 租户状态枚举
+ * 组织状态枚举
  */
 export enum TenantStatus {
   ACTIVE = 'active',
@@ -21,16 +21,35 @@ export enum TenantStatus {
 }
 
 /**
- * 租户套餐枚举
+ * 组织套餐枚举
  */
 export enum TenantPlan {
-  BASIC = 'basic',
-  PROFESSIONAL = 'professional',
-  ENTERPRISE = 'enterprise',
+  TRIAL = 'trial',           // 体验套餐
+  BASIC = 'basic',           // 基础版
+  PROFESSIONAL = 'professional',  // 专业版
+  ENTERPRISE = 'enterprise',  // 企业版
 }
 
 /**
- * 租户信息接口
+ * 套餐配置接口
+ */
+export interface PackageConfig {
+  name: string;
+  max_users: number;
+  max_storage_mb: number;
+  allow_pro_apps: boolean;
+  description: string;
+}
+
+/**
+ * 所有套餐配置
+ */
+export interface AllPackageConfigs {
+  [key: string]: PackageConfig;
+}
+
+/**
+ * 组织信息接口
  */
 export interface Tenant {
   id: number;
@@ -47,7 +66,7 @@ export interface Tenant {
 }
 
 /**
- * 租户列表查询参数
+ * 组织列表查询参数
  */
 export interface TenantListParams {
   page?: number;
@@ -58,7 +77,7 @@ export interface TenantListParams {
 }
 
 /**
- * 租户列表响应数据
+ * 组织列表响应数据
  */
 export interface TenantListResponse {
   items: Tenant[];
@@ -68,7 +87,7 @@ export interface TenantListResponse {
 }
 
 /**
- * 创建租户数据
+ * 创建组织数据
  */
 export interface CreateTenantData {
   name: string;
@@ -82,7 +101,7 @@ export interface CreateTenantData {
 }
 
 /**
- * 更新租户数据
+ * 更新组织数据
  */
 export interface UpdateTenantData {
   name?: string;
@@ -96,10 +115,10 @@ export interface UpdateTenantData {
 }
 
 /**
- * 获取租户列表
+ * 获取组织列表
  * 
  * @param params - 查询参数
- * @returns 租户列表响应数据
+ * @returns 组织列表响应数据
  */
 export async function getTenantList(params: TenantListParams): Promise<TenantListResponse> {
   return apiRequest<TenantListResponse>('/tenants', {
@@ -109,10 +128,10 @@ export async function getTenantList(params: TenantListParams): Promise<TenantLis
 }
 
 /**
- * 获取租户详情
+ * 获取组织详情
  * 
- * @param tenantId - 租户 ID
- * @returns 租户详情
+ * @param tenantId - 组织 ID
+ * @returns 组织详情
  */
 export async function getTenantById(tenantId: number): Promise<Tenant> {
   return apiRequest<Tenant>(`/tenants/${tenantId}`, {
@@ -121,10 +140,10 @@ export async function getTenantById(tenantId: number): Promise<Tenant> {
 }
 
 /**
- * 创建租户
+ * 创建组织
  * 
- * @param data - 租户创建数据
- * @returns 创建的租户
+ * @param data - 组织创建数据
+ * @returns 创建的组织
  */
 export async function createTenant(data: CreateTenantData): Promise<Tenant> {
   return apiRequest<Tenant>('/tenants', {
@@ -134,11 +153,11 @@ export async function createTenant(data: CreateTenantData): Promise<Tenant> {
 }
 
 /**
- * 更新租户
+ * 更新组织
  * 
- * @param tenantId - 租户 ID
- * @param data - 租户更新数据
- * @returns 更新后的租户
+ * @param tenantId - 组织 ID
+ * @param data - 组织更新数据
+ * @returns 更新后的组织
  */
 export async function updateTenant(tenantId: number, data: UpdateTenantData): Promise<Tenant> {
   return apiRequest<Tenant>(`/tenants/${tenantId}`, {
@@ -148,9 +167,9 @@ export async function updateTenant(tenantId: number, data: UpdateTenantData): Pr
 }
 
 /**
- * 删除租户（软删除）
+ * 删除组织（软删除）
  * 
- * @param tenantId - 租户 ID
+ * @param tenantId - 组织 ID
  */
 export async function deleteTenant(tenantId: number): Promise<void> {
   return apiRequest<void>(`/tenants/${tenantId}`, {
@@ -159,10 +178,10 @@ export async function deleteTenant(tenantId: number): Promise<void> {
 }
 
 /**
- * 激活租户
+ * 激活组织
  * 
- * @param tenantId - 租户 ID
- * @returns 更新后的租户
+ * @param tenantId - 组织 ID
+ * @returns 更新后的组织
  */
 export async function activateTenant(tenantId: number): Promise<Tenant> {
   return apiRequest<Tenant>(`/tenants/${tenantId}/activate`, {
@@ -171,14 +190,112 @@ export async function activateTenant(tenantId: number): Promise<Tenant> {
 }
 
 /**
- * 停用租户
+ * 停用组织
  * 
- * @param tenantId - 租户 ID
- * @returns 更新后的租户
+ * @param tenantId - 组织 ID
+ * @returns 更新后的组织
  */
 export async function deactivateTenant(tenantId: number): Promise<Tenant> {
   return apiRequest<Tenant>(`/tenants/${tenantId}/deactivate`, {
     method: 'POST',
+  });
+}
+
+/**
+ * 获取所有套餐配置
+ * 
+ * @returns 所有套餐配置
+ */
+export async function getPackageConfigs(): Promise<AllPackageConfigs> {
+  return apiRequest<AllPackageConfigs>('/tenants/packages/config', {
+    method: 'GET',
+  });
+}
+
+/**
+ * 获取指定套餐配置
+ * 
+ * @param plan - 套餐类型
+ * @returns 套餐配置
+ */
+export async function getPackageConfig(plan: TenantPlan): Promise<PackageConfig> {
+  return apiRequest<PackageConfig>(`/tenants/packages/${plan}/config`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 组织使用量统计接口
+ */
+export interface TenantUsage {
+  tenant_id: number;
+  user_count: number;
+  max_users: number;
+  storage_used_mb: number;
+  max_storage_mb: number;
+  user_usage_percent: number;
+  storage_usage_percent: number;
+  warnings: string[];
+}
+
+/**
+ * 获取组织使用量统计
+ * 
+ * @param tenantId - 组织 ID
+ * @returns 组织使用量统计
+ */
+export async function getTenantUsage(tenantId: number): Promise<TenantUsage> {
+  return apiRequest<TenantUsage>(`/tenants/${tenantId}/usage`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 组织活动日志接口
+ */
+export interface TenantActivityLog {
+  id: number;
+  tenant_id: number;
+  action: string;
+  description: string;
+  operator_id?: number;
+  operator_name?: string;
+  created_at: string;
+}
+
+/**
+ * 组织活动日志列表查询参数
+ */
+export interface TenantActivityLogListParams {
+  page?: number;
+  page_size?: number;
+  action?: string;
+}
+
+/**
+ * 组织活动日志列表响应数据
+ */
+export interface TenantActivityLogListResponse {
+  items: TenantActivityLog[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/**
+ * 获取组织活动日志列表
+ * 
+ * @param tenantId - 组织 ID
+ * @param params - 查询参数
+ * @returns 组织活动日志列表响应数据
+ */
+export async function getTenantActivityLogs(
+  tenantId: number,
+  params: TenantActivityLogListParams = {}
+): Promise<TenantActivityLogListResponse> {
+  return apiRequest<TenantActivityLogListResponse>(`/tenants/${tenantId}/activity-logs`, {
+    method: 'GET',
+    params,
   });
 }
 

@@ -38,7 +38,7 @@ export interface CurrentUser {
   id: number;
   username: string;
   email?: string;
-  is_superuser?: boolean;
+  is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
   tenant_id?: number;
 }

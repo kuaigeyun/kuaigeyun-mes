@@ -2,7 +2,7 @@
  * 角色 API 服务
  * 
  * 提供角色管理相关的 API 接口
- * 注意：所有 API 自动过滤当前租户的角色
+ * 注意：所有 API 自动过滤当前组织的角色
  */
 
 // 使用 apiRequest 统一处理 HTTP 请求
@@ -84,7 +84,7 @@ export interface UpdateRoleData {
 /**
  * 获取角色列表
  * 
- * 自动过滤当前租户的角色。
+ * 自动过滤当前组织的角色。
  * 
  * @param params - 查询参数
  * @returns 角色列表响应数据
@@ -98,7 +98,7 @@ export async function getRoleList(params: RoleListParams): Promise<RoleListRespo
 /**
  * 获取角色详情
  * 
- * 自动验证租户权限：只能获取当前租户的角色。
+ * 自动验证组织权限：只能获取当前组织的角色。
  * 
  * @param roleId - 角色 ID
  * @returns 角色信息
@@ -110,7 +110,7 @@ export async function getRoleById(roleId: number): Promise<Role> {
 /**
  * 创建角色
  * 
- * 自动设置当前租户的 tenant_id。
+ * 自动设置当前组织的 tenant_id。
  * 
  * @param data - 角色创建数据（tenant_id 将从当前用户上下文自动获取）
  * @returns 创建的角色信息
@@ -125,7 +125,7 @@ export async function createRole(data: CreateRoleData): Promise<Role> {
 /**
  * 更新角色
  * 
- * 自动验证租户权限：只能更新当前租户的角色。
+ * 自动验证组织权限：只能更新当前组织的角色。
  * 
  * @param roleId - 角色 ID
  * @param data - 角色更新数据
@@ -141,7 +141,7 @@ export async function updateRole(roleId: number, data: UpdateRoleData): Promise<
 /**
  * 删除角色
  * 
- * 自动验证租户权限：只能删除当前租户的角色。
+ * 自动验证组织权限：只能删除当前组织的角色。
  * 系统角色不可删除。
  * 
  * @param roleId - 角色 ID
@@ -155,7 +155,7 @@ export async function deleteRole(roleId: number): Promise<void> {
 /**
  * 分配权限给角色
  * 
- * 为角色分配权限列表，自动验证租户权限。
+ * 为角色分配权限列表，自动验证组织权限。
  * 
  * @param roleId - 角色 ID
  * @param permissionIds - 权限 ID 列表
@@ -171,7 +171,7 @@ export async function assignPermissions(roleId: number, permissionIds: number[])
 /**
  * 获取角色权限列表
  * 
- * 获取角色的所有权限，自动过滤租户。
+ * 获取角色的所有权限，自动过滤组织。
  * 
  * @param roleId - 角色 ID
  * @returns 权限列表
@@ -183,7 +183,7 @@ export async function getRolePermissions(roleId: number): Promise<Permission[]> 
 /**
  * 获取所有权限列表
  * 
- * 获取当前租户的所有权限，用于权限分配。
+ * 获取当前组织的所有权限，用于权限分配。
  * 
  * @param params - 查询参数
  * @returns 权限列表响应数据

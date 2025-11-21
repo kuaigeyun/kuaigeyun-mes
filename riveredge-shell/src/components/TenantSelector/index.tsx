@@ -1,7 +1,7 @@
 /**
- * 租户选择器组件
+ * 组织选择器组件
  * 
- * 用于显示当前租户信息，并支持租户切换（如果用户有多个租户权限）。
+ * 用于显示当前组织信息，并支持组织切换（如果用户有多个组织权限）。
  * 集成到顶部导航栏。
  */
 
@@ -13,7 +13,7 @@ import { getTenantId, setTenantId, getToken } from '@/utils/auth';
 import { getCurrentUser, CurrentUser } from '@/services/auth';
 
 /**
- * 租户选择器组件
+ * 组织选择器组件
  */
 const TenantSelector: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser | undefined>(undefined);
@@ -39,7 +39,7 @@ const TenantSelector: React.FC = () => {
   }, []);
 
   /**
-   * 加载当前租户信息
+   * 加载当前组织信息
    */
   useEffect(() => {
     const loadCurrentTenant = async () => {
@@ -50,7 +50,7 @@ const TenantSelector: React.FC = () => {
           const tenant = await getTenantById(tenantId);
           setCurrentTenant(tenant);
         } catch (error: any) {
-          console.error('加载租户信息失败:', error);
+          console.error('加载组织信息失败:', error);
         } finally {
           setLoading(false);
         }
@@ -63,25 +63,25 @@ const TenantSelector: React.FC = () => {
   }, [currentUser]);
 
   /**
-   * 处理租户切换
+   * 处理组织切换
    * 
-   * @param tenantId - 租户 ID
+   * @param tenantId - 组织 ID
    */
   const handleTenantChange = async (tenantId: number) => {
     try {
-      // 更新本地存储的租户 ID
+      // 更新本地存储的组织 ID
       setTenantId(tenantId);
       
-      // 重新加载租户信息
+      // 重新加载组织信息
       const tenant = await getTenantById(tenantId);
       setCurrentTenant(tenant);
       
-      message.success(`已切换到租户: ${tenant.name}`);
+      message.success(`已切换到组织: ${tenant.name}`);
       
-      // 刷新页面以更新所有数据（因为租户切换会影响所有查询）
+      // 刷新页面以更新所有数据（因为组织切换会影响所有查询）
       window.location.reload();
     } catch (error: any) {
-      message.error(error.message || '切换租户失败');
+      message.error(error.message || '切换组织失败');
     }
   };
 
@@ -89,8 +89,8 @@ const TenantSelector: React.FC = () => {
     return null;
   }
 
-  // 目前只显示当前租户信息
-  // 未来如果支持多租户权限，可以添加下拉选择
+  // 目前只显示当前组织信息
+  // 未来如果支持多组织权限，可以添加下拉选择
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <ApartmentOutlined />

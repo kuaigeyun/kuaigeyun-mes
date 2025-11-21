@@ -4,8 +4,8 @@
 清空所有数据表并重新初始化：
 1. 清空所有数据表
 2. 重新运行迁移
-3. 创建默认租户
-4. 创建初始用户（超级用户、租户管理员、普通用户）
+3. 创建默认组织
+4. 创建初始用户（超级用户、组织管理员、普通用户）
 """
 
 import asyncio
@@ -42,11 +42,11 @@ async def truncate_all_tables() -> None:
         
         # 按照依赖关系顺序清空表（从依赖表到被依赖表）
         tables_to_truncate = [
-            "core_users",  # 用户表（依赖租户）
-            "core_roles",  # 角色表（依赖租户）
-            "core_permissions",  # 权限表（依赖租户）
-            "core_tenant_configs",  # 租户配置表（依赖租户）
-            "core_tenants",  # 租户表
+            "core_users",  # 用户表（依赖组织）
+            "core_roles",  # 角色表（依赖组织）
+            "core_permissions",  # 权限表（依赖组织）
+            "core_tenant_configs",  # 组织配置表（依赖组织）
+            "core_tenants",  # 组织表
         ]
         
         for table in tables_to_truncate:
@@ -72,10 +72,10 @@ async def truncate_all_tables() -> None:
 
 async def init_default_tenant() -> None:
     """
-    初始化默认租户
+    初始化默认组织
     """
     logger.info("\n" + "=" * 60)
-    logger.info("初始化默认租户")
+    logger.info("初始化默认组织")
     logger.info("=" * 60)
     
     try:
@@ -83,20 +83,20 @@ async def init_default_tenant() -> None:
         
         from models.tenant import TenantStatus, TenantPlan
         
-        # 检查是否已存在默认租户
+        # 检查是否已存在默认组织
         existing_tenant = await Tenant.get_or_none(domain="default")
         if existing_tenant:
-            logger.info(f"默认租户已存在: {existing_tenant.name} (ID: {existing_tenant.id})")
+            logger.info(f"默认组织已存在: {existing_tenant.name} (ID: {existing_tenant.id})")
             return existing_tenant
         
-        # 创建默认租户
+        # 创建默认组织
         default_tenant = await Tenant.create(
-            name="默认租户",
+            name="默认组织",
             domain="default",
             status=TenantStatus.ACTIVE,
             plan=TenantPlan.ENTERPRISE,
             settings={
-                "description": "系统默认租户，用于系统级数据和配置",
+                "description": "系统默认组织，用于系统级数据和配置",
                 "is_default": True,
             },
             max_users=1000,
@@ -104,11 +104,11 @@ async def init_default_tenant() -> None:
             expires_at=None,
         )
         
-        logger.success(f"✅ 默认租户创建成功: {default_tenant.name} (ID: {default_tenant.id})")
+        logger.success(f"✅ 默认组织创建成功: {default_tenant.name} (ID: {default_tenant.id})")
         return default_tenant
         
     except Exception as e:
-        logger.error(f"初始化默认租户时出错: {e}")
+        logger.error(f"初始化默认组织时出错: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise
@@ -121,7 +121,7 @@ async def init_users(default_tenant: Tenant) -> None:
     初始化用户数据
     
     Args:
-        default_tenant: 默认租户对象
+        default_tenant: 默认组织对象
     """
     logger.info("\n" + "=" * 60)
     logger.info("初始化用户数据")
@@ -130,7 +130,7 @@ async def init_users(default_tenant: Tenant) -> None:
     try:
         await Tortoise.init(config=TORTOISE_ORM)
         
-        # 1. 创建系统级超级管理员（tenant_id=None，可以跨租户访问）
+        # 1. 创建系统级超级管理员（tenant_id=None，可以跨组织访问）
         logger.info("\n1. 创建系统级超级管理员")
         superuser_username = "superadmin"
         superuser_email = "superadmin@riveredge.local"
@@ -148,7 +148,7 @@ async def init_users(default_tenant: Tenant) -> None:
             existing_superuser.password_hash = hash_password(superuser_password)
             existing_superuser.is_active = True
             existing_superuser.is_superuser = True
-            existing_superuser.is_tenant_admin = False  # 系统级超级管理员不是租户管理员
+            existing_superuser.is_tenant_admin = False  # 系统级超级管理员不是组织管理员
             await existing_superuser.save()
             logger.success(f"✅ 系统级超级管理员密码已更新")
         else:
@@ -160,7 +160,7 @@ async def init_users(default_tenant: Tenant) -> None:
                 full_name="系统级超级管理员",
                 is_active=True,
                 is_superuser=True,  # 系统级超级用户
-                is_tenant_admin=False,  # 系统级超级管理员不是租户管理员
+                is_tenant_admin=False,  # 系统级超级管理员不是组织管理员
             )
             logger.success(f"✅ 系统级超级管理员创建成功")
         
@@ -168,8 +168,8 @@ async def init_users(default_tenant: Tenant) -> None:
         logger.info(f"   密码: {superuser_password} ⭐")
         logger.info(f"   邮箱: {superuser_email}")
         
-        # 2. 创建租户管理员
-        logger.info("\n2. 创建租户管理员")
+        # 2. 创建组织管理员
+        logger.info("\n2. 创建组织管理员")
         admin_username = "admin"
         admin_email = "admin@riveredge.local"
         admin_password = "Admin@2024"
@@ -180,23 +180,23 @@ async def init_users(default_tenant: Tenant) -> None:
         )
         
         if existing_admin:
-            logger.info(f"租户管理员已存在，更新密码...")
+            logger.info(f"组织管理员已存在，更新密码...")
             existing_admin.password_hash = hash_password(admin_password)
             existing_admin.is_active = True
             await existing_admin.save()
-            logger.success(f"✅ 租户管理员密码已更新")
+            logger.success(f"✅ 组织管理员密码已更新")
         else:
             admin = await User.create(
                 tenant_id=default_tenant.id,
                 username=admin_username,
                 email=admin_email,
                 password_hash=hash_password(admin_password),
-                full_name="租户管理员",
+                full_name="组织管理员",
                 is_active=True,
                 is_superuser=False,
                 is_tenant_admin=True,
             )
-            logger.success(f"✅ 租户管理员创建成功")
+            logger.success(f"✅ 组织管理员创建成功")
         
         logger.info(f"   用户名: {admin_username}")
         logger.info(f"   密码: {admin_password}")
@@ -244,7 +244,7 @@ async def init_users(default_tenant: Tenant) -> None:
         logger.info(f"  用户名: {superuser_username}")
         logger.info(f"  密码: {superuser_password}")
         logger.info(f"  邮箱: {superuser_email}")
-        logger.info("\n租户管理员:")
+        logger.info("\n组织管理员:")
         logger.info(f"  用户名: {admin_username}")
         logger.info(f"  密码: {admin_password}")
         logger.info(f"  邮箱: {admin_email}")
@@ -269,14 +269,14 @@ async def main() -> None:
     主函数：重置数据库并重新初始化
     """
     logger.info("=" * 60)
-    logger.info("RiverEdge SaaS 多租户框架 - 数据库重置和初始化脚本")
+    logger.info("RiverEdge SaaS 多组织框架 - 数据库重置和初始化脚本")
     logger.info("=" * 60)
     
     try:
         # 1. 清空所有数据表
         await truncate_all_tables()
         
-        # 2. 初始化默认租户
+        # 2. 初始化默认组织
         default_tenant = await init_default_tenant()
         
         # 3. 初始化用户数据

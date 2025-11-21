@@ -2,7 +2,7 @@
  * 用户 API 服务
  *
  * 提供用户管理相关的 API 接口
- * 注意：所有 API 自动过滤当前租户的用户
+ * 注意：所有 API 自动过滤当前组织的用户
  */
 
 // 使用 apiRequest 统一处理 HTTP 请求
@@ -17,7 +17,7 @@ export interface User {
   email: string;
   full_name?: string;
   is_active: boolean;
-  is_superuser: boolean;
+  is_platform_admin: boolean;
   is_tenant_admin: boolean;
   tenant_id: number;
   last_login?: string;
@@ -56,7 +56,7 @@ export interface CreateUserData {
   password: string;
   full_name?: string;
   is_active?: boolean;
-  is_superuser?: boolean;
+  is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
 }
 
@@ -69,14 +69,14 @@ export interface UpdateUserData {
   password?: string;
   full_name?: string;
   is_active?: boolean;
-  is_superuser?: boolean;
+  is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
 }
 
 /**
  * 获取用户列表
  *
- * 自动过滤当前租户的用户。
+ * 自动过滤当前组织的用户。
  *
  * @param params - 查询参数
  * @returns 用户列表响应数据
@@ -90,7 +90,7 @@ export async function getUserList(params: UserListParams): Promise<UserListRespo
 /**
  * 获取用户详情
  *
- * 自动验证租户权限：只能获取当前租户的用户。
+ * 自动验证组织权限：只能获取当前组织的用户。
  *
  * @param userId - 用户 ID
  * @returns 用户信息
@@ -102,7 +102,7 @@ export async function getUserById(userId: number): Promise<User> {
 /**
  * 创建用户
  *
- * 自动设置当前租户的 tenant_id。
+ * 自动设置当前组织的 tenant_id。
  *
  * @param data - 用户创建数据（tenant_id 将从当前用户上下文自动获取）
  * @returns 创建的用户信息
@@ -117,7 +117,7 @@ export async function createUser(data: CreateUserData): Promise<User> {
 /**
  * 更新用户
  *
- * 自动验证租户权限：只能更新当前租户的用户。
+ * 自动验证组织权限：只能更新当前组织的用户。
  *
  * @param userId - 用户 ID
  * @param data - 用户更新数据
@@ -133,7 +133,7 @@ export async function updateUser(userId: number, data: UpdateUserData): Promise<
 /**
  * 删除用户
  *
- * 自动验证租户权限：只能删除当前租户的用户。
+ * 自动验证组织权限：只能删除当前组织的用户。
  *
  * @param userId - 用户 ID
  */

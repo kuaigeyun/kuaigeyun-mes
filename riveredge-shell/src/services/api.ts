@@ -12,6 +12,15 @@
 export const API_BASE_URL = '/api/v1';
 
 /**
+ * 获取认证 Token
+ * 
+ * @returns JWT Token 或 null
+ */
+function getAuthToken(): string | null {
+  return localStorage.getItem('token');
+}
+
+/**
  * 通用 API 响应接口
  */
 export interface ApiResponse<T = any> {
@@ -70,11 +79,16 @@ export async function apiRequest<T = any>(
     }
   }
 
+  // 获取认证 Token
+  const token = getAuthToken();
+  
   // 构建请求配置
   const fetchOptions: RequestInit = {
     method: options?.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
+      // 如果存在 Token，添加到请求头
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   };

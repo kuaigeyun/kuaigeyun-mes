@@ -1,8 +1,8 @@
 """
-系统级超级管理员服务模块
+平台管理员服务模块
 
-提供系统级超级管理员的 CRUD 操作和业务逻辑处理
-注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）
+提供平台管理员的 CRUD 操作和业务逻辑处理
+注意：平台管理员使用 User 模型（is_platform_admin=True 且 tenant_id=None）
 """
 
 from typing import Optional, Dict, Any
@@ -18,23 +18,23 @@ from core.security import hash_password, verify_password
 
 class SuperAdminService:
     """
-    系统级超级管理员服务类
+    平台管理员服务类
     
-    提供系统级超级管理员的 CRUD 操作和业务逻辑处理。
-    注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）。
+    提供平台管理员的 CRUD 操作和业务逻辑处理。
+    注意：平台管理员使用 User 模型（is_platform_admin=True 且 tenant_id=None）。
     """
     
     async def create_superadmin(self, data: SuperAdminCreate) -> User:
         """
-        创建系统级超级管理员
+        创建平台管理员
         
-        创建新系统级超级管理员并保存到数据库。如果用户名已存在，则抛出异常。
+        创建新平台管理员并保存到数据库。如果用户名已存在，则抛出异常。
         
         Args:
-            data: 系统级超级管理员创建数据
+            data: 平台管理员创建数据
             
         Returns:
-            User: 创建的系统级超级管理员用户对象（is_superuser=True 且 tenant_id=None）
+            User: 创建的平台管理员用户对象（is_platform_admin=True 且 tenant_id=None）
             
         Raises:
             HTTPException: 当用户名已存在时抛出
@@ -49,11 +49,11 @@ class SuperAdminService:
             ...     )
             ... )
         """
-        # 检查用户名是否已存在（系统级超级管理员用户名全局唯一）
+        # 检查用户名是否已存在（平台管理员用户名全局唯一）
         existing_admin = await User.get_or_none(
             username=data.username,
             tenant_id__isnull=True,
-            is_superuser=True
+            is_platform_admin=True
         )
         if existing_admin:
             raise HTTPException(
@@ -61,51 +61,51 @@ class SuperAdminService:
                 detail=f"用户名 {data.username} 已被使用"
             )
         
-        # 创建系统级超级管理员（tenant_id=None 且 is_superuser=True）⭐ 关键
+        # 创建平台管理员（tenant_id=None 且 is_platform_admin=True）⭐ 关键
         password_hash = hash_password(data.password)
         admin = await User.create(
             username=data.username,
-            tenant_id=None,  # ⭐ 关键：系统级超级管理员 tenant_id 为 None
+            tenant_id=None,  # ⭐ 关键：平台管理员 tenant_id 为 None
             email=data.email if data.email else None,  # 邮箱可选
             password_hash=password_hash,
             full_name=data.full_name,
             is_active=data.is_active,
-            is_superuser=True,  # ⭐ 关键：系统级超级管理员
-            is_tenant_admin=False,  # 系统级超级管理员不是租户管理员
+            is_platform_admin=True,  # ⭐ 关键：平台管理员
+            is_tenant_admin=False,  # 平台管理员不是组织管理员
         )
         
-        logger.info(f"系统级超级管理员创建成功: {admin.username} (ID: {admin.id})")
+        logger.info(f"平台管理员创建成功: {admin.username} (ID: {admin.id})")
         return admin
     
     async def get_superadmin_by_id(self, admin_id: int) -> Optional[User]:
         """
-        根据 ID 获取系统级超级管理员
+        根据 ID 获取平台管理员
         
         Args:
-            admin_id: 系统级超级管理员 ID
+            admin_id: 平台管理员 ID
             
         Returns:
-            Optional[User]: 系统级超级管理员用户对象，如果不存在则返回 None
+            Optional[User]: 平台管理员用户对象，如果不存在则返回 None
         """
         return await User.get_or_none(
             id=admin_id,
-            is_superuser=True,
+            is_platform_admin=True,
             tenant_id__isnull=True
         )
     
     async def get_superadmin_by_username(self, username: str) -> Optional[User]:
         """
-        根据用户名获取系统级超级管理员
+        根据用户名获取平台管理员
         
         Args:
             username: 用户名
             
         Returns:
-            Optional[User]: 系统级超级管理员用户对象，如果不存在则返回 None
+            Optional[User]: 平台管理员用户对象，如果不存在则返回 None
         """
         return await User.get_or_none(
             username=username,
-            is_superuser=True,
+            is_platform_admin=True,
             tenant_id__isnull=True
         )
     
@@ -130,8 +130,8 @@ class SuperAdminService:
         Returns:
             Dict[str, Any]: 包含 items、total、page、page_size 的字典
         """
-        # 构建查询（系统级超级管理员：is_superuser=True 且 tenant_id=None）
-        query = User.filter(is_superuser=True, tenant_id__isnull=True)
+        # 构建查询（平台管理员：is_platform_admin=True 且 tenant_id=None）
+        query = User.filter(is_platform_admin=True, tenant_id__isnull=True)
         
         # 关键词搜索
         if keyword:
@@ -166,20 +166,20 @@ class SuperAdminService:
         data: SuperAdminUpdate
     ) -> Optional[User]:
         """
-        更新系统级超级管理员信息
+        更新平台管理员信息
         
-        更新系统级超级管理员的详细信息。只更新提供的字段。
+        更新平台管理员的详细信息。只更新提供的字段。
         
         Args:
-            admin_id: 系统级超级管理员 ID
-            data: 系统级超级管理员更新数据
+            admin_id: 平台管理员 ID
+            data: 平台管理员更新数据
             
         Returns:
-            Optional[User]: 更新后的系统级超级管理员用户对象，如果不存在则返回 None
+            Optional[User]: 更新后的平台管理员用户对象，如果不存在则返回 None
         """
         admin = await User.get_or_none(
             id=admin_id,
-            is_superuser=True,
+            is_platform_admin=True,
             tenant_id__isnull=True
         )
         if not admin:
@@ -198,24 +198,24 @@ class SuperAdminService:
         
         await admin.save()
         
-        logger.info(f"系统级超级管理员更新成功: {admin.username} (ID: {admin.id})")
+        logger.info(f"平台管理员更新成功: {admin.username} (ID: {admin.id})")
         return admin
     
     async def delete_superadmin(self, admin_id: int) -> bool:
         """
-        删除系统级超级管理员（软删除）
+        删除平台管理员（软删除）
         
-        将系统级超级管理员状态设置为非激活，而不是真正删除数据。
+        将平台管理员状态设置为非激活，而不是真正删除数据。
         
         Args:
-            admin_id: 系统级超级管理员 ID
+            admin_id: 平台管理员 ID
             
         Returns:
             bool: 是否删除成功
         """
         admin = await User.get_or_none(
             id=admin_id,
-            is_superuser=True,
+            is_platform_admin=True,
             tenant_id__isnull=True
         )
         if not admin:
@@ -225,7 +225,7 @@ class SuperAdminService:
         admin.is_active = False
         await admin.save()
         
-        logger.info(f"系统级超级管理员删除成功: {admin.username} (ID: {admin.id})")
+        logger.info(f"平台管理员删除成功: {admin.username} (ID: {admin.id})")
         return True
     
     async def verify_superadmin_credentials(
@@ -234,7 +234,7 @@ class SuperAdminService:
         password: str
     ) -> Optional[User]:
         """
-        验证系统级超级管理员凭据
+        验证平台管理员凭据
         
         验证用户名和密码是否匹配。
         
@@ -243,11 +243,11 @@ class SuperAdminService:
             password: 密码
             
         Returns:
-            Optional[User]: 系统级超级管理员用户对象，如果验证失败则返回 None
+            Optional[User]: 平台管理员用户对象，如果验证失败则返回 None
         """
         admin = await User.get_or_none(
             username=username,
-            is_superuser=True,
+            is_platform_admin=True,
             tenant_id__isnull=True
         )
         if not admin:

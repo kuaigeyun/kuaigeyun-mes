@@ -5,16 +5,19 @@
 """
 
 from fastapi import HTTPException, status
+from loguru import logger
 
 from models.user import User
-from models.tenant import Tenant, TenantStatus
+from models.tenant import Tenant, TenantStatus, TenantPlan
 from schemas.auth import LoginRequest, UserRegisterRequest
+from schemas.tenant import TenantCreate
 from core.security import (
     create_token_for_user,
     verify_password,
     hash_password,
 )
 from core.tenant_context import set_current_tenant_id
+from services.tenant_service import TenantService
 
 
 class AuthService:
@@ -31,7 +34,7 @@ class AuthService:
         """
         用户注册
         
-        在已有租户中创建新用户并自动设置租户 ID。
+        在已有组织中创建新用户并自动设置组织 ID。
         
         Args:
             data: 用户注册请求数据（包含 tenant_id）
@@ -40,7 +43,7 @@ class AuthService:
             User: 创建的用户对象
             
         Raises:
-            HTTPException: 当租户不存在或用户名已存在时抛出
+            HTTPException: 当组织不存在或用户名已存在时抛出
             
         Example:
             >>> service = AuthService()
@@ -53,22 +56,22 @@ class AuthService:
             ...     )
             ... )
         """
-        # 检查租户是否存在
+        # 检查组织是否存在
         tenant = await Tenant.get_or_none(id=data.tenant_id)
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="租户不存在"
+                detail="组织不存在"
             )
         
-        # 检查租户是否激活
+        # 检查组织是否激活
         if tenant.status != TenantStatus.ACTIVE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="租户未激活，无法注册"
+                detail="组织未激活，无法注册"
             )
         
-        # 检查租户内用户名是否已存在
+        # 检查组织内用户名是否已存在
         existing_username = await User.get_or_none(
             tenant_id=data.tenant_id,
             username=data.username
@@ -76,19 +79,19 @@ class AuthService:
         if existing_username:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="该租户下用户名已被使用"
+                detail="该组织下用户名已被使用"
             )
         
         # 创建用户（自动设置 tenant_id）
         password_hash = hash_password(data.password)
         user = await User.create(
-            tenant_id=data.tenant_id,  # ⭐ 关键：自动设置租户 ID
+            tenant_id=data.tenant_id,  # ⭐ 关键：自动设置组织 ID
             username=data.username,
             email=data.email if data.email else None,  # 邮箱可选
             password_hash=password_hash,
             full_name=data.full_name,
             is_active=True,
-            is_superuser=False,
+            is_platform_admin=False,
             is_tenant_admin=False,
         )
         
@@ -102,7 +105,7 @@ class AuthService:
         用户登录
         
         验证用户凭据并返回 JWT Token（包含 tenant_id）。
-        登录成功后自动设置租户上下文。
+        登录成功后自动设置组织上下文。
         
         Args:
             data: 登录请求数据（username, password, tenant_id 可选）
@@ -126,28 +129,28 @@ class AuthService:
             True
         """
         # 查找用户（仅支持用户名登录，符合中国用户使用习惯）
-        # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
-        # 如果提供了 tenant_id，同时过滤租户，避免多租户用户名冲突
+        # 优先查找平台管理员（tenant_id=None 且 is_platform_admin=True）
+        # 如果提供了 tenant_id，同时过滤组织，避免多组织用户名冲突
         # 注意：使用 register_tortoise 后，连接池会自动管理，直接使用 Tortoise ORM 原生查询
         
-        # 优先查找系统级超级管理员（tenant_id=None 且 is_superuser=True）
-        # 系统级超级管理员不需要 tenant_id，可以跨租户访问
+        # 优先查找平台管理员（tenant_id=None 且 is_platform_admin=True）
+        # 平台管理员不需要 tenant_id，可以跨组织访问
         user = await User.get_or_none(
             username=data.username,
             tenant_id__isnull=True,
-            is_superuser=True
+            is_platform_admin=True
         )
         
         # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
         if not user:
             if data.tenant_id is not None:
-                # 提供了 tenant_id，查找该租户内的用户
+                # 提供了 tenant_id，查找该组织内的用户
                 user = await User.get_or_none(
                     username=data.username,
                     tenant_id=data.tenant_id
                 )
             else:
-                # 没有提供 tenant_id，查找任意租户的用户（可能多个租户有相同用户名）
+                # 没有提供 tenant_id，查找任意组织的用户（可能多个组织有相同用户名）
                 user = await User.get_or_none(username=data.username)
         
         if not user:
@@ -170,28 +173,28 @@ class AuthService:
                 detail="用户未激活"
             )
         
-        # 判断是否为系统级超级管理员
-        is_system_superuser = user.is_superuser and user.tenant_id is None
+        # 判断是否为平台管理员（系统级超级管理员）
+        is_platform_admin = user.is_platform_admin
         
-        # 如果提供了 tenant_id，验证用户是否属于该租户（双重验证）
-        # 系统级超级管理员可以访问任何租户，不需要验证
-        if data.tenant_id is not None and not is_system_superuser:
+        # 如果提供了 tenant_id，验证用户是否属于该组织（双重验证）
+        # 平台管理员可以访问任何组织，不需要验证
+        if data.tenant_id is not None and not is_platform_admin:
             if user.tenant_id != data.tenant_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="用户不属于指定的租户"
+                    detail="用户不属于指定的组织"
                 )
         
-        # 确定要使用的租户 ID（用于生成 Token）
-        # 系统级超级管理员：如果提供了 tenant_id，使用提供的；否则使用 None
-        # 普通用户：如果提供了 tenant_id，使用提供的；否则使用用户的租户
-        if is_system_superuser:
+        # 确定要使用的组织 ID（用于生成 Token）
+        # 平台管理员：如果提供了 tenant_id，使用提供的；否则使用 None
+        # 组织管理员和普通用户：如果提供了 tenant_id，使用提供的；否则使用用户的组织
+        if is_platform_admin:
             final_tenant_id = data.tenant_id if data.tenant_id is not None else None
         else:
             final_tenant_id = data.tenant_id if data.tenant_id is not None else user.tenant_id
         
-        # 设置租户上下文（在查询租户列表之前设置，确保后续查询使用正确的租户上下文）
-        # 系统级超级管理员可以不设置租户上下文（允许跨租户访问）
+        # 设置组织上下文（在查询组织列表之前设置，确保后续查询使用正确的组织上下文）
+        # 平台管理员可以不设置组织上下文（允许跨组织访问）
         if final_tenant_id is not None:
             set_current_tenant_id(final_tenant_id)
         
@@ -200,8 +203,8 @@ class AuthService:
         access_token = create_token_for_user(
             user_id=user.id,
             username=user.username,
-            tenant_id=final_tenant_id,  # ⭐ 关键：包含租户 ID
-            is_superuser=user.is_superuser,
+            tenant_id=final_tenant_id,  # ⭐ 关键：包含组织 ID
+            is_platform_admin=user.is_platform_admin,
             is_tenant_admin=user.is_tenant_admin,
         )
         
@@ -209,11 +212,38 @@ class AuthService:
         from app.config import settings
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         
-        # 暂时简化：不查询租户列表，不更新最后登录时间，只返回基本登录信息
-        # 这些操作可以通过单独的接口或后台任务完成，避免影响登录流程
-        tenants = None
+        # 查询用户所属的所有组织列表（用于多组织登录选择）
+        # 查询所有具有相同 username 的用户（不同组织），获取他们的 tenant_id
+        user_tenants_list = []
+        if not is_platform_admin:
+            # 组织管理员和普通用户：查询所有具有相同 username 的用户（不同组织）
+            from models.tenant import Tenant
+            users_with_same_username = await User.filter(
+                username=user.username,
+                is_active=True
+            ).all()
+            
+            # 获取所有有效的组织 ID（排除 None）
+            tenant_ids = [u.tenant_id for u in users_with_same_username if u.tenant_id is not None]
+            
+            # 查询组织信息
+            if tenant_ids:
+                tenants_queryset = await Tenant.filter(id__in=tenant_ids).all()
+                user_tenants_list = [
+                    {
+                        "id": tenant.id,
+                        "name": tenant.name,
+                        "domain": tenant.domain,
+                        "status": tenant.status.value,
+                    }
+                    for tenant in tenants_queryset
+                ]
+        
+        # 判断是否需要组织选择
+        requires_tenant_selection = len(user_tenants_list) > 1
+        
+        # 如果没有组织列表，使用当前组织作为默认组织
         default_tenant_id = final_tenant_id
-        requires_tenant_selection = False
         
         return {
             "access_token": access_token,
@@ -225,10 +255,10 @@ class AuthService:
                 "email": user.email,
                 "full_name": user.full_name,
                 "tenant_id": final_tenant_id,
-                "is_superuser": user.is_superuser,
+                "is_platform_admin": user.is_platform_admin,
                 "is_tenant_admin": user.is_tenant_admin,
             },
-            "tenants": tenants if tenants else None,
+            "tenants": user_tenants_list if user_tenants_list else None,
             "default_tenant_id": default_tenant_id,
             "requires_tenant_selection": requires_tenant_selection,
         }
@@ -274,8 +304,8 @@ class AuthService:
         access_token = create_token_for_user(
             user_id=user.id,
             username=user.username,
-            tenant_id=user.tenant_id,  # ⭐ 关键：包含租户 ID
-            is_superuser=user.is_superuser,
+            tenant_id=user.tenant_id,  # ⭐ 关键：包含组织 ID
+            is_platform_admin=user.is_platform_admin,
             is_tenant_admin=user.is_tenant_admin,
         )
         
@@ -289,6 +319,115 @@ class AuthService:
             "expires_in": expires_in,
         }
     
+    async def guest_login(self) -> dict:
+        """
+        免注册体验登录
+        
+        获取或创建默认组织和预设的体验账户，直接返回登录响应。
+        体验账户只有浏览权限（只读权限），无新建、编辑、删除权限。
+        
+        Returns:
+            dict: 包含 access_token、token_type、expires_in 和 user 信息的字典
+            
+        Raises:
+            HTTPException: 当创建体验账户失败时抛出
+        """
+        from schemas.tenant import TenantCreate
+        from schemas.user import UserCreate
+        
+        tenant_service = TenantService()
+        user_service = UserService()
+        
+        try:
+            # 1. 获取或创建默认组织（domain="default"）
+            default_tenant = await tenant_service.get_tenant_by_domain(
+                "default",
+                skip_tenant_filter=True
+            )
+            
+            if not default_tenant:
+                # 如果默认组织不存在，创建它
+                default_tenant_data = TenantCreate(
+                    name="默认组织",
+                    domain="default",
+                    status=TenantStatus.ACTIVE,  # 默认组织直接激活
+                    plan=TenantPlan.BASIC,
+                    settings={
+                        "description": "系统默认组织，用于免注册体验",
+                        "is_default": True,
+                    },
+                    max_users=1000,  # 默认组织允许更多用户
+                    max_storage=10240,  # 默认组织允许更多存储空间（10GB）
+                    expires_at=None,  # 默认组织永不过期
+                )
+                default_tenant = await tenant_service.create_tenant(default_tenant_data)
+                await tenant_service.initialize_tenant_data(default_tenant.id)
+            
+            # 2. 获取或创建预设的体验账户（username="guest"）
+            guest_username = "guest"
+            guest_password = "guest123"  # 预设密码，体验账户使用固定密码
+            
+            guest_user = await User.get_or_none(
+                username=guest_username,
+                tenant_id=default_tenant.id
+            )
+            
+            if not guest_user:
+                # 如果体验账户不存在，创建它
+                user_data = UserCreate(
+                    username=guest_username,
+                    email=None,
+                    password=guest_password,
+                    full_name="体验用户",
+                    tenant_id=default_tenant.id,
+                    is_active=True,  # 体验账户直接激活
+                    is_platform_admin=False,
+                    is_tenant_admin=False,  # 体验账户不是组织管理员
+                )
+                guest_user = await user_service.create_user(user_data, tenant_id=default_tenant.id)
+            
+            # 3. 生成 Token（包含 tenant_id）
+            access_token = create_token_for_user(
+                user_id=guest_user.id,
+                username=guest_user.username,
+                tenant_id=default_tenant.id,  # ⭐ 关键：包含组织 ID
+                is_platform_admin=guest_user.is_platform_admin,
+                is_tenant_admin=guest_user.is_tenant_admin,
+            )
+            
+            # 计算过期时间（秒）
+            from app.config import settings
+            expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            
+            # 4. 返回登录响应
+            return {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "expires_in": expires_in,
+                "user": {
+                    "id": guest_user.id,
+                    "username": guest_user.username,
+                    "email": guest_user.email,
+                    "full_name": guest_user.full_name,
+                    "tenant_id": default_tenant.id,
+                    "is_platform_admin": guest_user.is_platform_admin,
+                    "is_tenant_admin": guest_user.is_tenant_admin,
+                },
+                "tenants": None,  # 体验账户只有一个组织，不需要选择
+                "default_tenant_id": default_tenant.id,
+                "requires_tenant_selection": False,
+            }
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"免注册体验登录失败: {e}")
+            logger.error(f"错误堆栈:\n{error_trace}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"免注册体验登录失败: {str(e)}"
+            )
+    
     async def get_current_user(
         self,
         token: str
@@ -297,7 +436,7 @@ class AuthService:
         获取当前用户
         
         从 Token 中解析用户信息并返回用户对象。
-        自动设置租户上下文。
+        自动设置组织上下文。
         
         Args:
             token: JWT Token
@@ -320,9 +459,9 @@ class AuthService:
         
         # 获取用户 ID
         user_id = int(payload.get("sub"))
-        tenant_id = payload.get("tenant_id")  # ⭐ 关键：从 Token 中获取租户 ID
+        tenant_id = payload.get("tenant_id")  # ⭐ 关键：从 Token 中获取组织 ID
         
-        # 设置租户上下文
+        # 设置组织上下文
         if tenant_id:
             set_current_tenant_id(tenant_id)
         

@@ -2,7 +2,7 @@
 系统级超级管理员认证服务模块
 
 提供系统级超级管理员认证相关的业务逻辑，包括登录、Token 刷新等功能
-注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）
+注意：平台管理员使用 User 模型（is_platform_admin=True 且 tenant_id=None）
 """
 
 from typing import Optional, Dict, Any
@@ -21,7 +21,7 @@ class SuperAdminAuthService:
     系统级超级管理员认证服务类
     
     提供系统级超级管理员认证相关的业务逻辑处理。
-    注意：系统级超级管理员使用 User 模型（is_superuser=True 且 tenant_id=None）。
+    注意：平台管理员使用 User 模型（is_platform_admin=True 且 tenant_id=None）。
     """
     
     async def login(
@@ -103,7 +103,7 @@ class SuperAdminAuthService:
         user_id = int(payload.get("sub"))
         user = await User.get_or_none(
             id=user_id,
-            is_superuser=True,
+            is_platform_admin=True,
             tenant_id__isnull=True
         )
         

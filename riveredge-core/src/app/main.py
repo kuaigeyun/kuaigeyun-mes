@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="RiverEdge SaaS 多租户框架 - 后端核心系统",
+    description="RiverEdge SaaS 多组织框架 - 后端核心系统",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -273,7 +273,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.add_middleware(APIMonitoringMiddleware)  # API 监控（最外层）
 app.add_middleware(RateLimitMiddleware)      # 请求限流
 app.add_middleware(APIVersionMiddleware)     # API 版本控制
-app.add_middleware(TenantContextMiddleware)  # 租户上下文（最内层）
+app.add_middleware(TenantContextMiddleware)  # 组织上下文（最内层）
 
 # 注册 Tortoise ORM（使用官方推荐的 register_tortoise，自动管理连接池）
 register_db(app)
@@ -316,7 +316,7 @@ async def root():
         dict: 欢迎信息
     """
     return {
-        "message": "欢迎使用 RiverEdge SaaS 多租户框架",
+        "message": "欢迎使用 RiverEdge SaaS 多组织框架",
         "version": settings.APP_VERSION,
         "docs": "/docs",
     }

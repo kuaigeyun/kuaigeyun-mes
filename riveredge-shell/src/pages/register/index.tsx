@@ -1,241 +1,158 @@
 /**
- * 租户注册页面
+ * 注册入口页面
  * 
- * 用于新租户注册，包含租户信息和管理员信息。
- * 注册成功后，租户状态为未激活，需要超级管理员审核。
+ * 遵循 Ant Design Pro 登录页面规范，采用左右分栏布局
+ * 左侧：品牌展示区
+ * 右侧：注册方式选择区
  */
 
-import { ProForm, ProFormText } from '@ant-design/pro-components';
-import { message } from 'antd';
+import { Card, Button, Typography, Space } from 'antd';
+import { 
+  UserAddOutlined, 
+  ApartmentOutlined, 
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { registerTenant } from '@/services/register';
 import './index.less';
 
-/**
- * 租户注册表单数据接口
- */
-interface RegisterFormData {
-  tenant_name: string;
-  tenant_domain: string;
-  username: string;
-  email?: string;
-  password: string;
-  confirm_password: string;
-  full_name?: string;
-}
+const { Title, Text, Paragraph } = Typography;
 
 /**
- * 租户注册页面组件
+ * 注册入口页面组件
  */
 export default function RegisterPage() {
   const navigate = useNavigate();
-  
-  /**
-   * 处理注册提交
-   * 
-   * @param values - 表单数据
-   */
-  const handleSubmit = async (values: RegisterFormData) => {
-    try {
-      // 验证密码确认
-      if (values.password !== values.confirm_password) {
-        message.error('两次输入的密码不一致');
-        return;
-      }
-      
-      // 提交注册
-      const response = await registerTenant({
-        tenant_name: values.tenant_name,
-        tenant_domain: values.tenant_domain,
-        username: values.username,
-        email: values.email,
-        password: values.password,
-        full_name: values.full_name,
-      });
-      
-      if (response) {
-        message.success(response.message || '注册成功，等待管理员审核');
-        // 跳转到登录页
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
-      }
-    } catch (error: any) {
-      message.error(error.message || '注册失败，请稍后重试');
-    }
-  };
-  
+
   return (
-    <div className="register-container">
-      <div className="register-box">
-        <div className="register-header">
-          <h1>RiverEdge SaaS</h1>
-          <p>租户注册</p>
+    <div className="login-container">
+      {/* LOGO 和框架名称（手机端显示在顶部） */}
+      <div className="logo-header">
+        <img src="/logo.png" alt="RiverEdge Logo" className="logo-img" />
+        <Title level={2} className="logo-title">RiverEdge SaaS</Title>
+      </div>
+
+      {/* 左侧品牌展示区（桌面端显示，手机端隐藏） */}
+      <div className="login-left">
+        {/* LOGO 和框架名称放在左上角（桌面端） */}
+        <div className="logo-top-left">
+          <img src="/logo.png" alt="RiverEdge Logo" className="logo-img" />
+          <Title level={2} className="logo-title">RiverEdge SaaS</Title>
         </div>
         
-        <ProForm<RegisterFormData>
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: '注册',
-            },
-            submitButtonProps: {
-              size: 'large',
-              style: {
-                width: '100%',
-              },
-            },
-          }}
+        <div className="login-left-content">
+          {/* 装饰图片显示在左侧上方 */}
+          <img src="/login.png" alt="Register Decoration" className="login-decoration-img" />
+          
+          {/* 框架简介显示在图片下方 */}
+          <div className="login-description">
+            <Title level={3} className="description-title">
+              多组织管理框架
+            </Title>
+            <Text className="description-text">
+              为企业提供安全、高效、可扩展的 SaaS 解决方案
+            </Text>
+          </div>
+        </div>
+      </div>
+
+      {/* 右侧注册方式选择区 */}
+      <div className="login-right">
+        <div 
+          className="login-form-wrapper register-form-wrapper"
+          style={{ maxWidth: '600px' }}
         >
-          <div className="form-section">
-            <h3>租户信息</h3>
-            <ProFormText
-              name="tenant_name"
-              label="租户名称"
-              placeholder="请输入租户名称"
-              rules={[
-                {
-                  required: true,
-                  message: '请输入租户名称',
-                },
-                {
-                  min: 1,
-                  max: 100,
-                  message: '租户名称长度为 1-100 字符',
-                },
-              ]}
-              fieldProps={{
-                size: 'large',
-              }}
-            />
-            <ProFormText
-              name="tenant_domain"
-              label="租户域名"
-              placeholder="请输入租户域名（用于子域名访问）"
-              rules={[
-                {
-                  required: true,
-                  message: '请输入租户域名',
-                },
-                {
-                  min: 1,
-                  max: 100,
-                  message: '租户域名长度为 1-100 字符',
-                },
-                {
-                  pattern: /^[a-z0-9-]+$/,
-                  message: '域名只能包含小写字母、数字和连字符',
-                },
-              ]}
-              fieldProps={{
-                size: 'large',
-              }}
-              extra="域名将用于子域名访问，例如：your-domain.riveredge.com"
-            />
+          <div className="login-form-header">
+            <Title level={2} className="form-title">欢迎注册</Title>
+            <Text className="form-subtitle">选择注册方式</Text>
           </div>
-          
-          <div className="form-section">
-            <h3>管理员信息</h3>
-            <ProFormText
-              name="username"
-              label="管理员用户名"
-              placeholder="请输入管理员用户名"
-              rules={[
-                {
-                  required: true,
-                  message: '请输入管理员用户名',
-                },
-                {
-                  min: 3,
-                  max: 50,
-                  message: '用户名长度为 3-50 字符',
-                },
-              ]}
-              fieldProps={{
-                size: 'large',
-              }}
-            />
-            <ProFormText
-              name="email"
-              label="管理员邮箱（可选）"
-              placeholder="请输入管理员邮箱（可选）"
-              rules={[
-                {
-                  type: 'email',
-                  message: '请输入有效的邮箱地址',
-                },
-              ]}
-              fieldProps={{
-                size: 'large',
-              }}
-            />
-            <ProFormText
-              name="password"
-              label="管理员密码"
-              placeholder="请输入管理员密码"
-              fieldProps={{
-                type: 'password',
-                size: 'large',
-              }}
-              rules={[
-                {
-                  required: true,
-                  message: '请输入管理员密码',
-                },
-                {
-                  min: 8,
-                  message: '密码长度至少 8 字符',
-                },
-              ]}
-            />
-            <ProFormText
-              name="confirm_password"
-              label="确认密码"
-              placeholder="请再次输入密码"
-              fieldProps={{
-                type: 'password',
-                size: 'large',
-              }}
-              rules={[
-                {
-                  required: true,
-                  message: '请再次输入密码',
-                },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('password') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('两次输入的密码不一致'));
-                  },
-                }),
-              ]}
-            />
-            <ProFormText
-              name="full_name"
-              label="管理员全名（可选）"
-              placeholder="请输入管理员全名（可选）"
-              fieldProps={{
-                size: 'large',
-              }}
-            />
+
+          <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+            <Card
+              hoverable
+              style={{ flex: 1, cursor: 'pointer' }}
+              onClick={() => navigate('/register/personal')}
+            >
+              <div style={{ textAlign: 'center' }}>
+                <div className="register-icon-wrapper register-icon-personal">
+                  <UserAddOutlined style={{ fontSize: 40, color: '#fff' }} />
+                </div>
+                <Title level={4} style={{ marginBottom: 8 }}>个人注册</Title>
+                <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                  注册后立即生效
+                  <br />
+                  无需等待审核
+                </Paragraph>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, justifyContent: 'center' }}>
+                    <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2, flexShrink: 0 }} />
+                    <span style={{ textAlign: 'left', flex: 1 }}>注册成功后立即可以使用</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, justifyContent: 'center' }}>
+                    <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2, flexShrink: 0 }} />
+                    <span style={{ textAlign: 'left', flex: 1 }}>拥有所有功能权限，使用全部功能</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, justifyContent: 'center' }}>
+                    <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2, flexShrink: 0 }} />
+                    <span style={{ textAlign: 'left', flex: 1 }}>可加入现有组织或预览默认组织</span>
+                  </div>
+                </div>
+                <Button type="primary" size="large" block>
+                  个人注册
+                </Button>
+              </div>
+            </Card>
+
+            <Card
+              hoverable
+              style={{ flex: 1, cursor: 'pointer' }}
+              onClick={() => navigate('/register/organization')}
+            >
+              <div style={{ textAlign: 'center' }}>
+                <div className="register-icon-wrapper register-icon-organization">
+                  <ApartmentOutlined style={{ fontSize: 40, color: '#fff' }} />
+                </div>
+                <Title level={4} style={{ marginBottom: 8 }}>组织注册</Title>
+                <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                  创建独立组织
+                  <br />
+                  需审核后生效
+                </Paragraph>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, justifyContent: 'center' }}>
+                    <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2, flexShrink: 0 }} />
+                    <span style={{ textAlign: 'left', flex: 1 }}>创建独立的组织空间</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, justifyContent: 'center' }}>
+                    <CheckCircleOutlined style={{ color: '#52c41a', marginTop: 2, flexShrink: 0 }} />
+                    <span style={{ textAlign: 'left', flex: 1 }}>审核通过后拥有所有功能权限</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, justifyContent: 'center' }}>
+                    <ClockCircleOutlined style={{ color: '#faad14', marginTop: 2, flexShrink: 0 }} />
+                    <span style={{ textAlign: 'left', flex: 1 }}>提交注册后需等待平台管理员审核</span>
+                  </div>
+                </div>
+                <Button type="primary" size="large" block>
+                  组织注册
+                </Button>
+              </div>
+            </Card>
           </div>
-          
-          <div className="register-tips">
-            <p>注册说明：</p>
-            <ul>
-              <li>注册成功后，租户状态为未激活，需要超级管理员审核后才能使用</li>
-              <li>请妥善保管管理员账号和密码</li>
-              <li>租户域名一旦注册，无法修改</li>
-            </ul>
+
+          <div className="login-form-footer">
+            <Space>
+              <Button
+                type="link"
+                icon={<ArrowLeftOutlined />}
+                onClick={() => navigate('/login')}
+              >
+                返回登录
+              </Button>
+            </Space>
           </div>
-        </ProForm>
-        
-        <div className="register-footer">
-          <a onClick={() => navigate('/login')}>已有账号？立即登录</a>
         </div>
       </div>
     </div>
   );
 }
-

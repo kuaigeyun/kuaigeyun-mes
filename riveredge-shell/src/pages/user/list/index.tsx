@@ -2,7 +2,7 @@
  * 用户列表页面
  * 
  * 用于展示用户列表，支持搜索、筛选、分页等功能。
- * 自动显示当前租户的用户（后端已过滤）。
+ * 自动显示当前组织的用户（后端已过滤）。
  */
 
 import React, { useRef } from 'react';
@@ -87,8 +87,8 @@ const UserList: React.FC = () => {
       ),
     },
     {
-      title: '超级用户',
-      dataIndex: 'is_superuser',
+      title: '平台管理员',
+      dataIndex: 'is_platform_admin',
       width: 100,
       hideInSearch: true,
       valueType: 'select',
@@ -98,7 +98,7 @@ const UserList: React.FC = () => {
       },
     },
     {
-      title: '租户管理员',
+      title: '组织管理员',
       dataIndex: 'is_tenant_admin',
       width: 120,
       hideInSearch: true,

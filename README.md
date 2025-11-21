@@ -1,6 +1,6 @@
-# RiverEdge SaaS 多租户框架
+# RiverEdge SaaS 多组织框架
 
-**RiverEdge SaaS Multi-tenant Framework** - 一个现代化的 SaaS 多租户框架，支持插件化架构和动态功能扩展。
+**RiverEdge SaaS Multi-tenant Framework** - 一个现代化的 SaaS 多组织框架，支持插件化架构和动态功能扩展。
 
 ## ⚠️ 重要锁定声明
 
@@ -9,7 +9,7 @@
 
 ## 📋 项目概述
 
-RiverEdge 是一个基于自然/植物生态哲学的 SaaS 多租户框架，采用模块化设计，支持动态插件加载和功能扩展。
+RiverEdge 是一个基于自然/植物生态哲学的 SaaS 多组织框架，采用模块化设计，支持动态插件加载和功能扩展。
 
 ### 框架模块
 

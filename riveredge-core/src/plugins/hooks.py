@@ -138,7 +138,7 @@ class HookNames:
     BEFORE_DB_COMMIT = "before_db_commit"
     AFTER_DB_COMMIT = "after_db_commit"
 
-    # 租户操作钩子
+    # 组织操作钩子
     TENANT_CREATED = "tenant_created"
     TENANT_UPDATED = "tenant_updated"
     TENANT_DELETED = "tenant_deleted"

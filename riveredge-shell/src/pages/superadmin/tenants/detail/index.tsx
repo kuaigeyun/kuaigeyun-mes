@@ -1,7 +1,7 @@
 /**
- * 超级管理员租户详情页面
+ * 超级管理员组织详情页面
  * 
- * 用于超级管理员查看租户详细信息。
+ * 用于超级管理员查看组织详细信息。
  */
 
 import React, { useEffect, useState } from 'react';
@@ -23,7 +23,7 @@ import {
 import { apiRequest } from '@/services/api';
 
 /**
- * 租户状态标签映射
+ * 组织状态标签映射
  */
 const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
   [TenantStatus.ACTIVE]: { color: 'success', text: '激活' },
@@ -33,16 +33,17 @@ const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
 };
 
 /**
- * 租户套餐标签映射
+ * 组织套餐标签映射
  */
 const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
+  [TenantPlan.TRIAL]: { color: 'default', text: '体验套餐' },
   [TenantPlan.BASIC]: { color: 'blue', text: '基础版' },
   [TenantPlan.PROFESSIONAL]: { color: 'purple', text: '专业版' },
   [TenantPlan.ENTERPRISE]: { color: 'gold', text: '企业版' },
 };
 
 /**
- * 超级管理员租户详情页面组件
+ * 超级管理员组织详情页面组件
  */
 const SuperAdminTenantDetail: React.FC = () => {
   const navigate = useNavigate();
@@ -52,7 +53,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   const [tenant, setTenant] = useState<Tenant | null>(null);
 
   /**
-   * 加载租户数据
+   * 加载组织数据
    */
   useEffect(() => {
     if (tenantId) {
@@ -67,14 +68,14 @@ const SuperAdminTenantDetail: React.FC = () => {
       const data = await getTenantById(Number(tenantId));
       setTenant(data);
     } catch (error: any) {
-      message.error(error.message || '加载租户信息失败');
+      message.error(error.message || '加载组织信息失败');
     } finally {
       setLoading(false);
     }
   };
 
   /**
-   * 审核通过租户注册
+   * 审核通过组织注册
    */
   const handleApprove = async () => {
     if (!tenantId) return;
@@ -90,7 +91,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   };
 
   /**
-   * 审核拒绝租户注册
+   * 审核拒绝组织注册
    */
   const handleReject = async () => {
     if (!tenantId) return;
@@ -106,7 +107,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   };
 
   /**
-   * 激活租户
+   * 激活组织
    */
   const handleActivate = async () => {
     if (!tenantId) return;
@@ -120,7 +121,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   };
 
   /**
-   * 停用租户
+   * 停用组织
    */
   const handleDeactivate = async () => {
     if (!tenantId) return;
@@ -134,7 +135,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   };
 
   if (!tenant) {
-    return <PageContainer loading={loading}>租户不存在</PageContainer>;
+    return <PageContainer loading={loading}>组织不存在</PageContainer>;
   }
 
   const isInactive = tenant.status === TenantStatus.INACTIVE;
@@ -143,7 +144,7 @@ const SuperAdminTenantDetail: React.FC = () => {
 
   return (
     <PageContainer
-      title="租户详情（超级管理员）"
+      title="组织详情（超级管理员）"
       extra={
         <Space>
           <Button onClick={() => navigate(-1)}>返回</Button>
@@ -176,11 +177,11 @@ const SuperAdminTenantDetail: React.FC = () => {
         column={2}
         columns={[
           {
-            title: '租户 ID',
+            title: '组织 ID',
             dataIndex: 'id',
           },
           {
-            title: '租户名称',
+            title: '组织名称',
             dataIndex: 'name',
           },
           {

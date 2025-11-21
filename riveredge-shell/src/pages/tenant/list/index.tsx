@@ -1,7 +1,7 @@
 /**
- * 租户列表页面
+ * 组织列表页面
  * 
- * 用于展示租户列表，支持搜索、筛选、分页等功能。
+ * 用于展示组织列表，支持搜索、筛选、分页等功能。
  * 注意：此页面通常需要超级管理员权限。
  */
 
@@ -21,7 +21,7 @@ import {
 } from '@/services/tenant';
 
 /**
- * 租户状态标签映射
+ * 组织状态标签映射
  */
 const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
   [TenantStatus.ACTIVE]: { color: 'success', text: '激活' },
@@ -31,23 +31,24 @@ const statusTagMap: Record<TenantStatus, { color: string; text: string }> = {
 };
 
 /**
- * 租户套餐标签映射
+ * 组织套餐标签映射
  */
 const planTagMap: Record<TenantPlan, { color: string; text: string }> = {
+  [TenantPlan.TRIAL]: { color: 'default', text: '体验套餐' },
   [TenantPlan.BASIC]: { color: 'default', text: '基础版' },
   [TenantPlan.PROFESSIONAL]: { color: 'processing', text: '专业版' },
   [TenantPlan.ENTERPRISE]: { color: 'success', text: '企业版' },
 };
 
 /**
- * 租户列表页面组件
+ * 组织列表页面组件
  */
 const TenantList: React.FC = () => {
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>();
 
   /**
-   * 处理删除租户
+   * 处理删除组织
    */
   const handleDelete = async (tenantId: number) => {
     try {
@@ -60,7 +61,7 @@ const TenantList: React.FC = () => {
   };
 
   /**
-   * 处理激活租户
+   * 处理激活组织
    */
   const handleActivate = async (tenantId: number) => {
     try {
@@ -73,7 +74,7 @@ const TenantList: React.FC = () => {
   };
 
   /**
-   * 处理停用租户
+   * 处理停用组织
    */
   const handleDeactivate = async (tenantId: number) => {
     try {
@@ -96,7 +97,7 @@ const TenantList: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: '租户名称',
+      title: '组织名称',
       dataIndex: 'name',
       width: 200,
     },
@@ -127,6 +128,7 @@ const TenantList: React.FC = () => {
       width: 120,
       valueType: 'select',
       valueEnum: {
+        [TenantPlan.TRIAL]: { text: '体验套餐' },
         [TenantPlan.BASIC]: { text: '基础版' },
         [TenantPlan.PROFESSIONAL]: { text: '专业版' },
         [TenantPlan.ENTERPRISE]: { text: '企业版' },
@@ -187,7 +189,7 @@ const TenantList: React.FC = () => {
         record.status === TenantStatus.ACTIVE ? (
           <Popconfirm
             key="deactivate"
-            title="确定要停用此租户吗？"
+            title="确定要停用此组织吗？"
             onConfirm={() => handleDeactivate(record.id)}
           >
             <Button type="link" size="small" danger>
@@ -206,7 +208,7 @@ const TenantList: React.FC = () => {
         ),
         <Popconfirm
           key="delete"
-          title="确定要删除此租户吗？删除后无法恢复。"
+          title="确定要删除此组织吗？删除后无法恢复。"
           onConfirm={() => handleDelete(record.id)}
         >
           <Button type="link" size="small" danger>
@@ -219,7 +221,7 @@ const TenantList: React.FC = () => {
 
   return (
     <ProTable<Tenant>
-      headerTitle="租户列表"
+      headerTitle="组织列表"
       actionRef={actionRef}
       columns={columns}
       request={async (params) => {
@@ -252,7 +254,7 @@ const TenantList: React.FC = () => {
           icon={<PlusOutlined />}
           onClick={() => navigate('/tenant/form')}
         >
-          新建租户
+          新建组织
         </Button>,
       ]}
     />

@@ -12,6 +12,42 @@
   min-height: 100vh;
   background: #f0f2f5;
   position: relative;
+  overflow-x: hidden; // 防止横向滚动条
+  width: 100%;
+}
+
+/* 右上角工具栏 */
+.login-toolbar {
+  position: fixed !important;
+  top: 24px !important;
+  right: 24px !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  
+  // 桌面端显示
+  @media (min-width: 769px) {
+    display: flex !important;
+  }
+  
+  // 手机端也显示（暂时用于调试）
+  @media (max-width: 768px) {
+    display: flex !important;
+    top: 16px !important;
+    right: 16px !important;
+  }
+  
+  :global {
+    .ant-btn {
+      min-width: 40px !important;
+      height: 40px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 18px !important;
+    }
+  }
 }
 
 /* LOGO 和框架名称（手机端显示在顶部） */
@@ -29,6 +65,12 @@
     width: 40px;
     height: 40px;
     object-fit: contain;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    padding: 6px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.3);
+    box-sizing: border-box;
   }
 
   .logo-title {
@@ -66,6 +108,12 @@
   width: 48px;
   height: 48px;
   object-fit: contain;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  padding: 8px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.3);
+  box-sizing: border-box;
 }
 
 .logo-title {
@@ -220,6 +268,25 @@
   }
 }
 
+/* 底部链接区域 */
+.login-footer-links {
+  margin-top: 32px;
+  padding-top: 16px;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+
+  :global {
+    .ant-btn-link {
+      color: #8c8c8c !important;
+      transition: color 0.3s;
+
+      &:hover {
+        color: #1890ff !important;
+      }
+    }
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .login-container {
@@ -257,6 +324,12 @@
     .logo-img {
       width: 36px;
       height: 36px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 50%;
+      padding: 5px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.3);
+      box-sizing: border-box;
     }
 
     .logo-title {

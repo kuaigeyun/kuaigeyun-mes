@@ -28,7 +28,7 @@ COMMENT ON COLUMN "core_superadmins"."full_name" IS '用户全名（可选）';
 COMMENT ON COLUMN "core_superadmins"."is_active" IS '是否激活';
 COMMENT ON COLUMN "core_superadmins"."last_login" IS '最后登录时间（可选）';
 COMMENT ON COLUMN "core_superadmins"."device_fingerprint" IS '设备指纹（可选，用于设备绑定）';
-COMMENT ON TABLE "core_superadmins" IS '超级管理员模型（独立于租户系统，不包含 tenant_id）';"""
+COMMENT ON TABLE "core_superadmins" IS '超级管理员模型（独立于组织系统，不包含 tenant_id）';"""
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:

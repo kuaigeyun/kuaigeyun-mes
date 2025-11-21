@@ -2,7 +2,7 @@
  * 角色表单页面
  * 
  * 用于新增和编辑角色信息。
- * 自动关联当前租户（后端自动设置 tenant_id）。
+ * 自动关联当前组织（后端自动设置 tenant_id）。
  */
 
 import React, { useEffect, useState } from 'react';

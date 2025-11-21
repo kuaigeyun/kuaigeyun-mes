@@ -49,7 +49,7 @@ async def test_login():
             print(f"   - 邮箱: {user.email}")
             print(f"   - 是否激活: {user.is_active}")
             print(f"   - 是否超级用户: {user.is_superuser}")
-            print(f"   - 租户ID: {user.tenant_id}")
+            print(f"   - 组织ID: {user.tenant_id}")
             print(f"   - 密码哈希: {user.password_hash[:30]}...")
         else:
             print("   ❌ 未找到超级管理员用户")

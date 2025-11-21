@@ -33,15 +33,15 @@ class PermissionCreate(PermissionBase):
     
     Attributes:
         name: 权限名称（必填，1-50 字符）
-        code: 权限代码（必填，1-100 字符，租户内唯一）
+        code: 权限代码（必填，1-100 字符，组织内唯一）
         description: 权限描述（可选）
         resource: 资源名称（必填）
         action: 操作类型（必填）
-        tenant_id: 租户 ID（必填，用于多租户隔离）
+        tenant_id: 组织 ID（必填，用于多组织隔离）
         is_system: 是否为系统权限（默认 False）
     """
     
-    tenant_id: int = Field(..., description="租户 ID（用于多租户隔离）")
+    tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
 
 
 class PermissionUpdate(BaseModel):
@@ -75,7 +75,7 @@ class PermissionResponse(PermissionBase):
     
     Attributes:
         id: 权限 ID
-        tenant_id: 租户 ID
+        tenant_id: 组织 ID
         name: 权限名称
         code: 权限代码
         description: 权限描述
@@ -87,7 +87,7 @@ class PermissionResponse(PermissionBase):
     """
     
     id: int = Field(..., description="权限 ID")
-    tenant_id: int = Field(..., description="租户 ID")
+    tenant_id: int = Field(..., description="组织 ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     

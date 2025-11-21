@@ -1,5 +1,5 @@
 /**
- * RiverEdge SaaS 多租户框架 - 用户表单页面
+ * RiverEdge SaaS 多组织框架 - 用户表单页面
  *
  * 用于新增和编辑用户信息，使用现代化React生态技术栈
  */
@@ -75,7 +75,7 @@ const UserForm: React.FC = () => {
         password: values.password || undefined,
         full_name: values.full_name,
         is_active: values.is_active,
-        is_superuser: values.is_superuser,
+        is_platform_admin: values.is_platform_admin,
         is_tenant_admin: values.is_tenant_admin,
       };
       // 如果密码为空，不更新密码
@@ -91,7 +91,7 @@ const UserForm: React.FC = () => {
         password: values.password,
         full_name: values.full_name,
         is_active: values.is_active ?? true,
-        is_superuser: values.is_superuser ?? false,
+        is_platform_admin: values.is_platform_admin ?? false,
         is_tenant_admin: values.is_tenant_admin ?? false,
       };
       createMutation.mutate(createData);
@@ -116,7 +116,7 @@ const UserForm: React.FC = () => {
           initialValues={{
             ...userDetail,
             is_active: userDetail?.is_active ?? true,
-            is_superuser: userDetail?.is_superuser ?? false,
+            is_platform_admin: userDetail?.is_platform_admin ?? false,
             is_tenant_admin: userDetail?.is_tenant_admin ?? false,
           }}
           onFinish={handleSubmit}
@@ -174,17 +174,17 @@ const UserForm: React.FC = () => {
             label="账户状态"
             tooltip="控制用户是否可以登录系统"
           />
-          {currentUser?.is_superuser && (
+          {currentUser?.is_platform_admin && (
             <>
               <ProFormSwitch
-                name="is_superuser"
-                label="超级用户"
-                tooltip="系统级别的超级管理员，具有最高权限"
+                name="is_platform_admin"
+                label="平台管理员"
+                tooltip="平台级别的管理员，具有最高权限"
               />
               <ProFormSwitch
                 name="is_tenant_admin"
-                label="租户管理员"
-                tooltip="租户级别的管理员，可以管理租户内的用户和权限"
+                label="组织管理员"
+                tooltip="组织级别的管理员，可以管理组织内的用户和权限"
               />
             </>
           )}

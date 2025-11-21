@@ -79,7 +79,7 @@ def authenticate_user(username: str, password: str, tenant_id: Optional[int] = N
     Args:
         username: 用户名
         password: 密码
-        tenant_id: 租户 ID（可选）
+        tenant_id: 组织 ID（可选）
 
     Returns:
         用户信息字典或 None
@@ -98,15 +98,15 @@ def authenticate_user(username: str, password: str, tenant_id: Optional[int] = N
                 # 优先查找超级管理员
                 if username == "superadmin":
                     cur.execute("""
-                        SELECT id, username, email, password_hash::text, is_superuser, is_active, tenant_id
+                        SELECT id, username, email, password_hash::text, is_platform_admin, is_active, tenant_id
                         FROM core_users
-                        WHERE username = %s AND tenant_id IS NULL AND is_superuser = true
+                        WHERE username = %s AND tenant_id IS NULL AND is_platform_admin = true
                     """, (username,))
 
                 else:
                     # 查找普通用户
                     cur.execute("""
-                        SELECT id, username, email, password_hash::text, is_superuser, is_active, tenant_id, is_tenant_admin
+                        SELECT id, username, email, password_hash::text, is_platform_admin, is_active, tenant_id, is_tenant_admin
                         FROM core_users
                         WHERE username = %s AND tenant_id = %s
                     """, (username, tenant_id or 1))

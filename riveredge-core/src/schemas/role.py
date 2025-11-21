@@ -31,13 +31,13 @@ class RoleCreate(RoleBase):
     
     Attributes:
         name: 角色名称（必填，1-50 字符）
-        code: 角色代码（必填，1-50 字符，租户内唯一）
+        code: 角色代码（必填，1-50 字符，组织内唯一）
         description: 角色描述（可选）
-        tenant_id: 租户 ID（必填，用于多租户隔离）
+        tenant_id: 组织 ID（必填，用于多组织隔离）
         is_system: 是否为系统角色（默认 False）
     """
     
-    tenant_id: int = Field(..., description="租户 ID（用于多租户隔离）")
+    tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
 
 
 class RoleUpdate(BaseModel):
@@ -67,7 +67,7 @@ class RoleResponse(RoleBase):
     
     Attributes:
         id: 角色 ID
-        tenant_id: 租户 ID
+        tenant_id: 组织 ID
         name: 角色名称
         code: 角色代码
         description: 角色描述
@@ -77,7 +77,7 @@ class RoleResponse(RoleBase):
     """
     
     id: int = Field(..., description="角色 ID")
-    tenant_id: int = Field(..., description="租户 ID")
+    tenant_id: int = Field(..., description="组织 ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     

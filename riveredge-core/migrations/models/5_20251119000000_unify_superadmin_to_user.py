@@ -58,7 +58,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             sa."full_name",
             sa."is_active",
             True as "is_superuser",  -- 系统级超级管理员
-            False as "is_tenant_admin",  -- 系统级超级管理员不是租户管理员
+            False as "is_tenant_admin",  -- 系统级超级管理员不是组织管理员
             sa."last_login",
             sa."created_at",
             sa."updated_at"

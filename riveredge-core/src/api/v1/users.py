@@ -30,8 +30,8 @@ async def create_user(
     """
     创建用户接口
     
-    创建新用户并自动设置租户 ID。
-    需要租户管理员或超级用户权限。
+    创建新用户并自动设置组织 ID。
+    需要组织管理员或超级用户权限。
     
     Args:
         data: 用户创建数据（tenant_id 将从当前用户上下文自动获取，请求中的 tenant_id 将被忽略）
@@ -41,7 +41,7 @@ async def create_user(
         UserResponse: 创建的用户对象
         
     Raises:
-        HTTPException: 当邮箱已存在或租户内用户名已存在时抛出
+        HTTPException: 当邮箱已存在或组织内用户名已存在时抛出
         
     Example:
         ```json
@@ -51,21 +51,21 @@ async def create_user(
             "password": "password123",
             "full_name": "新用户",
             "is_active": true,
-            "is_superuser": false,
+            "is_platform_admin": false,
             "is_tenant_admin": false
         }
         ```
     """
     service = UserService()
     
-    # 从当前用户获取租户 ID（自动设置）⭐ 关键
+    # 从当前用户获取组织 ID（自动设置）⭐ 关键
     tenant_id = current_user.tenant_id
     
     # 创建用户数据副本，自动设置 tenant_id（忽略请求中的 tenant_id）
     from schemas.user import UserBase
     user_data = UserCreate(
         **data.model_dump(exclude={"tenant_id"}),
-        tenant_id=tenant_id  # ⭐ 关键：自动设置当前用户的租户 ID
+        tenant_id=tenant_id  # ⭐ 关键：自动设置当前用户的组织 ID
     )
     
     user = await service.create_user(user_data, tenant_id)
@@ -84,7 +84,7 @@ async def list_users(
     获取用户列表接口
     
     获取用户列表，支持分页、关键词搜索和状态筛选。
-    自动过滤租户：只返回当前租户的用户。
+    自动过滤组织：只返回当前组织的用户。
     
     Args:
         page: 页码（默认 1）
@@ -103,7 +103,7 @@ async def list_users(
     """
     service = UserService()
     
-    # 从当前用户获取租户 ID（自动过滤）⭐ 关键
+    # 从当前用户获取组织 ID（自动过滤）⭐ 关键
     tenant_id = current_user.tenant_id
     
     result = await service.list_users(
@@ -125,7 +125,7 @@ async def get_user(
     """
     获取用户详情接口
     
-    获取指定 ID 的用户信息，自动验证租户权限。
+    获取指定 ID 的用户信息，自动验证组织权限。
     
     Args:
         user_id: 用户 ID
@@ -135,11 +135,11 @@ async def get_user(
         UserResponse: 用户详情
         
     Raises:
-        HTTPException: 当用户不存在或不属于当前租户时抛出 404 错误
+        HTTPException: 当用户不存在或不属于当前组织时抛出 404 错误
     """
     service = UserService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     user = await service.get_user_by_id(user_id, tenant_id)
@@ -161,7 +161,7 @@ async def update_user(
     """
     更新用户接口
     
-    更新用户信息，自动验证租户权限。
+    更新用户信息，自动验证组织权限。
     
     Args:
         user_id: 用户 ID
@@ -172,11 +172,11 @@ async def update_user(
         UserResponse: 更新后的用户对象
         
     Raises:
-        HTTPException: 当用户不存在、不属于当前租户或数据冲突时抛出
+        HTTPException: 当用户不存在、不属于当前组织或数据冲突时抛出
     """
     service = UserService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     user = await service.update_user(user_id, data, tenant_id)
@@ -197,7 +197,7 @@ async def delete_user(
     """
     删除用户接口
     
-    删除用户（软删除），自动验证租户权限。
+    删除用户（软删除），自动验证组织权限。
     
     Args:
         user_id: 用户 ID
@@ -207,11 +207,11 @@ async def delete_user(
         None: 删除成功返回 204 状态码
         
     Raises:
-        HTTPException: 当用户不存在或不属于当前租户时抛出 404 错误
+        HTTPException: 当用户不存在或不属于当前组织时抛出 404 错误
     """
     service = UserService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     success = await service.delete_user(user_id, tenant_id)
@@ -232,7 +232,7 @@ async def toggle_user_status(
     """
     切换用户状态接口
     
-    切换用户的激活状态（激活/停用），自动验证租户权限。
+    切换用户的激活状态（激活/停用），自动验证组织权限。
     
     Args:
         user_id: 用户 ID
@@ -242,11 +242,11 @@ async def toggle_user_status(
         UserResponse: 更新后的用户对象
         
     Raises:
-        HTTPException: 当用户不存在或不属于当前租户时抛出 404 错误
+        HTTPException: 当用户不存在或不属于当前组织时抛出 404 错误
     """
     service = UserService()
     
-    # 从当前用户获取租户 ID（自动验证租户权限）⭐ 关键
+    # 从当前用户获取组织 ID（自动验证组织权限）⭐ 关键
     tenant_id = current_user.tenant_id
     
     user = await service.toggle_user_status(user_id, tenant_id)

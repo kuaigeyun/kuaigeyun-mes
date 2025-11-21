@@ -30,10 +30,10 @@ async def test_auth_api():
         logger.info("开始测试认证 API")
         logger.info("=" * 60)
         
-        # 首先需要创建一个租户（用于测试）
-        logger.info("\n0. 创建测试租户")
+        # 首先需要创建一个组织（用于测试）
+        logger.info("\n0. 创建测试组织")
         tenant_data = {
-            "name": "认证测试租户",
+            "name": "认证测试组织",
             "domain": "auth-test-tenant",
             "status": "active",
             "plan": "basic",
@@ -49,25 +49,25 @@ async def test_auth_api():
             if response.status_code == 201:
                 tenant_result = response.json()
                 tenant_id = tenant_result["id"]
-                logger.success(f"✅ 租户创建成功: ID={tenant_id}")
+                logger.success(f"✅ 组织创建成功: ID={tenant_id}")
             elif response.status_code == 400 and "已存在" in response.json().get("detail", ""):
-                # 租户已存在，尝试获取
-                logger.info("租户已存在，尝试获取...")
+                # 组织已存在，尝试获取
+                logger.info("组织已存在，尝试获取...")
                 response = await client.get(f"{API_PREFIX}/tenants?domain={tenant_data['domain']}")
                 if response.status_code == 200:
                     result = response.json()
                     if result.get("items") and len(result["items"]) > 0:
                         tenant_id = result["items"][0]["id"]
-                        logger.info(f"✅ 获取到现有租户: ID={tenant_id}")
+                        logger.info(f"✅ 获取到现有组织: ID={tenant_id}")
             else:
-                logger.error(f"❌ 创建租户失败: {response.status_code} - {response.json()}")
+                logger.error(f"❌ 创建组织失败: {response.status_code} - {response.json()}")
                 return
         except Exception as e:
-            logger.error(f"❌ 创建租户时出错: {e}")
+            logger.error(f"❌ 创建组织时出错: {e}")
             return
         
         if not tenant_id:
-            logger.error("❌ 无法获取租户 ID，测试终止")
+            logger.error("❌ 无法获取组织 ID，测试终止")
             return
         
         # 1. 测试用户注册
@@ -146,7 +146,7 @@ async def test_auth_api():
                 logger.info(f"   用户 ID: {result.get('id')}")
                 logger.info(f"   用户名: {result.get('username')}")
                 logger.info(f"   邮箱: {result.get('email')}")
-                logger.info(f"   租户 ID: {result.get('tenant_id')}")
+                logger.info(f"   组织 ID: {result.get('tenant_id')}")
                 logger.info(f"   是否激活: {result.get('is_active')}")
             else:
                 logger.error(f"❌ 获取当前用户信息失败: {response.status_code} - {result}")

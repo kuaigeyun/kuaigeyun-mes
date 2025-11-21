@@ -31,6 +31,7 @@ TORTOISE_ORM = {
                 "models.base",
                 "models.tenant",
                 "models.tenant_config",
+                "models.tenant_activity_log",
                 "models.user",
                 "models.role",
                 "models.permission",

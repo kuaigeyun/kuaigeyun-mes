@@ -28,11 +28,11 @@ async def check_database():
         except Exception as e:
             print(f"✗ core_users 表不存在或查询失败: {e}")
         
-        # 检查租户表
+        # 检查组织表
         from models.tenant import Tenant
         try:
             count = await Tenant.all().count()
-            print(f"✓ core_tenants 表存在，当前租户数: {count}")
+            print(f"✓ core_tenants 表存在，当前组织数: {count}")
         except Exception as e:
             print(f"✗ core_tenants 表不存在或查询失败: {e}")
         

@@ -8,11 +8,15 @@ echo "=========================================="
 # 进入后端目录
 cd "$(dirname "$0")"
 
-# 激活虚拟环境
-if [ -f "venv/Scripts/activate" ]; then
-  source venv/Scripts/activate
-elif [ -f "venv/bin/activate" ]; then
-  source venv/bin/activate
+# 激活虚拟环境（使用根目录的 venv311）
+if [ -f "../venv311/Scripts/activate" ]; then
+  source ../venv311/Scripts/activate
+elif [ -f "../venv311/bin/activate" ]; then
+  source ../venv311/bin/activate
+elif [ -f "venv311/Scripts/activate" ]; then
+  source venv311/Scripts/activate
+elif [ -f "venv311/bin/activate" ]; then
+  source venv311/bin/activate
 fi
 
 # 启动服务
