@@ -4,9 +4,10 @@
  * 提供多标签页管理功能，支持标签的添加、切换、关闭等操作
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tabs } from 'antd';
+import { Tabs, Button, Dropdown, MenuProps } from 'antd';
+import { CaretLeftFilled, CaretRightFilled } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 
 /**
@@ -64,6 +65,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
   const location = useLocation();
   const [tabs, setTabs] = useState<TabItem[]>([]);
   const [activeKey, setActiveKey] = useState<string>('');
+  const tabsNavRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   /**
    * 根据路径获取标签标题
@@ -205,7 +209,199 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
     removeTab(targetKey);
   };
 
+  /**
+   * 关闭右侧标签
+   */
+  const handleCloseRight = (targetKey: string) => {
+    const targetIndex = tabs.findIndex((tab) => tab.key === targetKey);
+    if (targetIndex === -1) return;
 
+    // 保留目标标签及其左侧的所有标签
+    const newTabs = tabs.slice(0, targetIndex + 1);
+    setTabs(newTabs);
+
+    // 如果当前激活的标签被关闭，切换到目标标签
+    if (!newTabs.find((tab) => tab.key === activeKey)) {
+      setActiveKey(targetKey);
+      navigate(targetKey);
+    }
+  };
+
+  /**
+   * 关闭其他标签
+   */
+  const handleCloseOthers = (targetKey: string) => {
+    // 保留目标标签和仪表盘标签（如果存在）
+    const dashboardTab = tabs.find((tab) => tab.key === '/dashboard');
+    const targetTab = tabs.find((tab) => tab.key === targetKey);
+    const newTabs: TabItem[] = [];
+    
+    // 先添加仪表盘标签（如果存在且不是目标标签）
+    if (dashboardTab && dashboardTab.key !== targetKey) {
+      newTabs.push(dashboardTab);
+    }
+    
+    // 添加目标标签（如果存在且不是仪表盘）
+    if (targetTab) {
+      newTabs.push(targetTab);
+    }
+
+    setTabs(newTabs);
+    setActiveKey(targetKey);
+    navigate(targetKey);
+  };
+
+  /**
+   * 全部关闭
+   */
+  const handleCloseAll = () => {
+    // 只保留仪表盘标签
+    const dashboardTab = tabs.find((tab) => tab.key === '/dashboard');
+    if (dashboardTab) {
+      setTabs([dashboardTab]);
+      setActiveKey('/dashboard');
+      navigate('/dashboard');
+    } else {
+      setTabs([]);
+      navigate('/dashboard');
+    }
+  };
+
+  /**
+   * 获取标签右键菜单
+   */
+  const getTabContextMenu = (tabKey: string): MenuProps => {
+    const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
+    const isDashboard = tabKey === '/dashboard';
+    const hasRightTabs = targetIndex < tabs.length - 1;
+    const hasOtherTabs = tabs.length > 1;
+
+    const menuItems: MenuProps['items'] = [
+      {
+        key: 'close',
+        label: '关闭',
+        disabled: isDashboard, // 仪表盘标签不可关闭
+      },
+      {
+        key: 'closeRight',
+        label: '关闭右侧',
+        disabled: !hasRightTabs || isDashboard,
+      },
+      {
+        key: 'closeOthers',
+        label: '关闭其他',
+        disabled: !hasOtherTabs || isDashboard,
+      },
+      {
+        key: 'closeAll',
+        label: '全部关闭',
+        disabled: tabs.length <= 1 || (tabs.length === 1 && isDashboard),
+      },
+    ];
+
+    return {
+      items: menuItems,
+      onClick: ({ key }) => {
+        switch (key) {
+          case 'close':
+            handleTabClose(tabKey);
+            break;
+          case 'closeRight':
+            handleCloseRight(tabKey);
+            break;
+          case 'closeOthers':
+            handleCloseOthers(tabKey);
+            break;
+          case 'closeAll':
+            handleCloseAll();
+            break;
+        }
+      },
+    };
+  };
+
+  /**
+   * 检查是否可以滚动
+   */
+  const checkScrollability = useCallback(() => {
+    if (!tabsNavRef.current) return;
+    
+    // Ant Design Tabs 的滚动容器是 .ant-tabs-nav-wrap，而不是 .ant-tabs-nav-list
+    const navWrapElement = tabsNavRef.current.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
+    if (!navWrapElement) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = navWrapElement;
+    
+    // 允许1px的误差，避免浮点数精度问题
+    // 可以向左滚动：当前滚动位置大于0
+    const canScrollLeftValue = scrollLeft > 1;
+    
+    // 可以向右滚动：内容宽度大于容器宽度，且当前滚动位置未到达最右边
+    // 当标签占满时，scrollWidth <= clientWidth，此时 canScrollRight 为 false
+    const canScrollRightValue = scrollWidth > clientWidth + 1 && (scrollLeft + clientWidth) < scrollWidth - 1;
+    
+    setCanScrollLeft(canScrollLeftValue);
+    setCanScrollRight(canScrollRightValue);
+  }, []);
+
+  /**
+   * 滚动标签栏
+   */
+  const scrollTabs = useCallback((direction: 'left' | 'right') => {
+    if (!tabsNavRef.current) return;
+    
+    // Ant Design Tabs 的滚动容器是 .ant-tabs-nav-wrap
+    const navWrapElement = tabsNavRef.current.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
+    if (!navWrapElement) return;
+
+    const scrollAmount = 200; // 每次滚动200px
+    const newScrollLeft = direction === 'left' 
+      ? navWrapElement.scrollLeft - scrollAmount
+      : navWrapElement.scrollLeft + scrollAmount;
+    
+    navWrapElement.scrollTo({
+      left: newScrollLeft,
+      behavior: 'smooth',
+    });
+    
+    // 滚动后重新检查状态
+    setTimeout(() => {
+      checkScrollability();
+    }, 100);
+  }, [checkScrollability]);
+
+  /**
+   * 监听标签变化和窗口大小变化，检查滚动状态
+   */
+  useEffect(() => {
+    // 使用多个延迟检查，确保DOM完全渲染后再检查
+    checkScrollability();
+    const timer1 = setTimeout(checkScrollability, 50);
+    const timer2 = setTimeout(checkScrollability, 100);
+    const timer3 = setTimeout(checkScrollability, 200);
+    
+    const handleResize = () => {
+      checkScrollability();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    // 监听滚动事件 - 使用 .ant-tabs-nav-wrap 作为滚动容器
+    const navWrapElement = tabsNavRef.current?.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
+    if (navWrapElement) {
+      navWrapElement.addEventListener('scroll', checkScrollability);
+    }
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      window.removeEventListener('resize', handleResize);
+      if (navWrapElement) {
+        navWrapElement.removeEventListener('scroll', checkScrollability);
+      }
+    };
+  }, [tabs, checkScrollability]);
 
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
@@ -218,10 +414,13 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         /* 标签栏样式优化 */
         .page-tabs-container .ant-tabs {
           margin: 0;
+          border: none !important;
+          box-shadow: none !important;
+          outline: none !important;
         }
         .page-tabs-container .ant-tabs-nav {
           margin: 0;
-          padding: 0 16px;
+          padding: 0;
         }
         .page-tabs-container .ant-tabs-tab {
           margin: 0 !important;
@@ -256,10 +455,13 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-tab-active {
           background: #f0f2f5 !important;
           border-bottom: none !important;
-          margin-left: -1px !important;
-          padding-left: 17px !important;
           border-top-left-radius: 4px !important;
           border-top-right-radius: 4px !important;
+        }
+        /* 激活标签向左偏移1px，但排除第一个标签 */
+        .page-tabs-container .ant-tabs-tab-active:not(:first-child) {
+          margin-left: -1px !important;
+          padding-left: 17px !important;
         }
         .page-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
           color: #1890ff;
@@ -293,27 +495,167 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           position: relative;
           background: #f0f2f5;
         }
+        /* 标签栏头部包装器 - 包含滚动按钮 */
+        .page-tabs-header-wrapper {
+          display: flex;
+          align-items: center;
+          position: relative;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+          z-index: 1;
+          pointer-events: none;
+        }
+        /* 允许按钮和标签栏接收点击事件 */
+        .page-tabs-header-wrapper .page-tabs-scroll-button,
+        .page-tabs-header-wrapper .page-tabs-container {
+          pointer-events: auto;
+        }
+        /* 滚动按钮样式 */
+        .page-tabs-scroll-button {
+          width: 24px;
+          height: 30px;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          border: none !important;
+          border-bottom: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: #bfbfbf;
+          cursor: default;
+          pointer-events: none;
+          position: relative;
+          z-index: 2;
+          margin-bottom: 0 !important;
+          line-height: 1 !important;
+        }
+        /* 去掉按钮的所有伪元素和边框 */
+        .page-tabs-scroll-button::before,
+        .page-tabs-scroll-button::after {
+          display: none !important;
+        }
+        .page-tabs-scroll-button:disabled {
+          color: #bfbfbf !important;
+          background: transparent !important;
+          cursor: not-allowed !important;
+        }
+        .page-tabs-scroll-button:not(:disabled) {
+          color: #1890ff !important;
+          cursor: pointer !important;
+        }
+        .page-tabs-scroll-button:not(:disabled):hover {
+          color: #40a9ff;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        /* 按钮容器样式 - 底部边框和高度与 ant-tabs 一致 */
+        .page-tabs-scroll-button-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 38px;
+          border-bottom: 1px solid #f0f0f0;
+        }
+        .page-tabs-scroll-button-left {
+          margin-right: 4px;
+          position: relative;
+          z-index: 2;
+        }
+        .page-tabs-scroll-button-right {
+          margin-left: 4px;
+          position: relative;
+          z-index: 2;
+        }
+        /* 标签栏容器 - 允许横向滚动 */
+        .page-tabs-container {
+          flex: 1;
+          overflow: hidden;
+          position: relative;
+          z-index: 1;
+        }
+        .page-tabs-container .ant-tabs-nav {
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+        .page-tabs-container .ant-tabs-nav::-webkit-scrollbar {
+          display: none;
+        }
+        .page-tabs-container .ant-tabs-nav {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+          .ant-tabs-nav-more{
+            padding: 8px 4px 8px 8px!important;
+          }
       `}</style>
       <div className="page-tabs-wrapper">
         <div className="page-tabs-header">
-          <Tabs
-            activeKey={activeKey}
-            onChange={handleTabChange}
-            type="editable-card"
-            hideAdd
-            onEdit={(targetKey, action) => {
-              if (action === 'remove') {
-                handleTabClose(targetKey as string);
-              }
-            }}
-            items={tabs.map((tab) => ({
-              key: tab.key,
-              label: tab.label,
-              closable: tab.closable,
-            }))}
-            size="small"
-            className="page-tabs-container"
-          />
+          <div className="page-tabs-header-wrapper" ref={tabsNavRef}>
+            {/* 左侧滚动箭头 */}
+            <div className="page-tabs-scroll-button-wrapper">
+              <Button
+                type="text"
+                size="small"
+                icon={<CaretLeftFilled />}
+                onClick={() => scrollTabs('left')}
+                disabled={!canScrollLeft}
+                className="page-tabs-scroll-button page-tabs-scroll-button-left"
+              />
+            </div>
+            <Tabs
+              activeKey={activeKey}
+              onChange={handleTabChange}
+              type="editable-card"
+              hideAdd
+              onEdit={(targetKey, action) => {
+                if (action === 'remove') {
+                  handleTabClose(targetKey as string);
+                }
+              }}
+              items={tabs.map((tab) => ({
+                key: tab.key,
+                label: (
+                  <Dropdown
+                    menu={getTabContextMenu(tab.key)}
+                    trigger={['contextMenu']}
+                  >
+                    <span
+                      onDoubleClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // 仪表盘标签不可双击关闭
+                        if (tab.key !== '/dashboard' && tab.closable) {
+                          handleTabClose(tab.key);
+                        }
+                      }}
+                      style={{ userSelect: 'none' }}
+                    >
+                      {tab.label}
+                    </span>
+                  </Dropdown>
+                ),
+                closable: tab.closable,
+              }))}
+              size="small"
+              className="page-tabs-container"
+            />
+            {/* 右侧滚动箭头 */}
+            <div className="page-tabs-scroll-button-wrapper">
+              <Button
+                type="text"
+                size="small"
+                icon={<CaretRightFilled />}
+                onClick={() => scrollTabs('right')}
+                disabled={!canScrollRight}
+                className="page-tabs-scroll-button page-tabs-scroll-button-right"
+              />
+            </div>
+          </div>
         </div>
         <div className="page-tabs-content">
           {children}

@@ -432,6 +432,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-page-container .ant-breadcrumb {
           display: none !important;
         }
+        /* 隐藏整个页面的滚动条（但保持滚轮滚动功能） */
+        .ant-pro-layout-container,
+        .ant-pro-layout-container *,
+        .ant-pro-page-container,
+        .ant-pro-page-container * {
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE 10+ */
+        }
+        .ant-pro-layout-container *::-webkit-scrollbar,
+        .ant-pro-layout-container::-webkit-scrollbar,
+        .ant-pro-page-container *::-webkit-scrollbar,
+        .ant-pro-page-container::-webkit-scrollbar {
+          display: none !important; /* Chrome, Safari, Edge */
+          width: 0 !important;
+          height: 0 !important;
+        }
         /* 分组标题样式：小字体、灰色、不可点击 */
         .ant-menu-item-group-title {
           font-size: 12px !important;
