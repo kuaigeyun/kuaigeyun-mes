@@ -1,6 +1,6 @@
-# RiverEdge Core - 后端核心系统
+# RiverEdge Root - 系统级后端
 
-**RiverEdge SaaS 多组织框架**的后端核心系统，提供 API 服务、用户认证、权限管理、插件系统等核心功能。
+**RiverEdge SaaS 多组织框架**的系统级后端（根），提供 API 服务、数据持久化、认证授权、核心基础设施等系统级功能。
 
 ## 📋 技术栈
 

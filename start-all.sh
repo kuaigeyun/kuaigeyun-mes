@@ -301,7 +301,7 @@ start_backend() {
     fi
 
     # 进入后端目录并启动
-    cd riveredge-core
+    cd riveredge-root
 
     # 激活虚拟环境
     if [ -f "../venv311/bin/activate" ]; then
@@ -522,7 +522,7 @@ start_frontend() {
     fi
 
     # 检查前端依赖
-    cd riveredge-shell
+    cd riveredge-stem
     if [ ! -d "node_modules" ]; then
         log_info "安装前端依赖..."
         npm install --legacy-peer-deps || {
@@ -566,7 +566,7 @@ start_frontend() {
     cd ..
 
     # 进入前端目录并启动
-    cd riveredge-shell
+    cd riveredge-stem
 
     # 清理旧的PID文件
     rm -f ../logs/frontend.pid
@@ -769,9 +769,9 @@ main() {
     check_command awk
 
     # 检查项目结构
-    if [ ! -d "riveredge-core" ] || [ ! -d "riveredge-shell" ]; then
+    if [ ! -d "riveredge-root" ] || [ ! -d "riveredge-stem" ]; then
         log_error "项目结构不完整，请确保在项目根目录运行"
-        log_error "需要: riveredge-core/ 和 riveredge-shell/ 目录"
+        log_error "需要: riveredge-root/ 和 riveredge-stem/ 目录"
         exit 1
     fi
 
@@ -786,7 +786,7 @@ main() {
 
         # 激活虚拟环境并安装依赖
         log_info "安装后端依赖..."
-        source venv311/Scripts/activate && cd riveredge-core && pip install -r requirements.txt || {
+        source venv311/Scripts/activate && cd riveredge-root && pip install -r requirements.txt || {
             log_error "安装后端依赖失败"
         exit 1
         }
