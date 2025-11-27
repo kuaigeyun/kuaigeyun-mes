@@ -28,7 +28,7 @@ log_error() {
 }
 
 # 配置变量
-APP_NAME="riveredge-core"
+APP_NAME="riveredge-root"
 APP_PORT=${APP_PORT:-8000}
 HEALTH_CHECK_URL="http://localhost:${APP_PORT}/health/detailed"
 MAX_WAIT_TIME=300  # 最大等待时间（秒）

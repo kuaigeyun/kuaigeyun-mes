@@ -37,7 +37,7 @@ npm run dev
 ## 📁 项目结构
 
 ```
-riveredge-shell/
+riveredge-stem/
 ├── src/
 │   ├── pages/              # 页面目录
 │   ├── components/         # 公共组件
