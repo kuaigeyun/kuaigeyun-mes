@@ -14,6 +14,35 @@
 
 ## 🚀 快速开始
 
+### 启动方式
+
+#### 方式一：使用 uvicorn 启动（推荐）⭐
+
+```bash
+# 使用 Python 脚本启动（推荐）
+cd riveredge-root
+python scripts/start_uvicorn.py
+
+# 或使用 Shell 脚本启动
+./start-uvicorn.sh
+
+# 或直接使用 uvicorn 命令
+cd src
+uvicorn app.main:app --host 0.0.0.0 --port 9001 --reload
+```
+
+**优势**：
+- ✅ 支持自动重载（开发模式）
+- ✅ 更灵活的配置选项
+- ✅ 更好的性能监控
+
+#### 方式二：使用原有启动脚本
+
+```bash
+cd riveredge-root
+python scripts/start_backend.py
+```
+
 ### 1. 安装依赖
 
 ```bash
