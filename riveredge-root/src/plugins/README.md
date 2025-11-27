@@ -5,7 +5,7 @@ RiverEdge SaaS 多组织框架的后端插件系统，支持系统功能插件�
 ## 📁 目录结构
 
 ```
-riveredge-core/src/plugins/
+riveredge-root/src/plugins/
 ├── __init__.py          # 插件系统入口
 ├── base.py              # 插件基类和元数据定义
 ├── registry.py          # 插件注册器
@@ -19,7 +19,7 @@ riveredge-core/src/plugins/
 
 ## 🔧 插件类型区分
 
-### 系统功能插件（位于 `riveredge-core/src/plugins/`）
+### 系统功能插件（位于 `riveredge-root/src/plugins/`）
 - **自制插件**: 放在 `builtin/` 目录下
 - **第三方插件**: 放在 `thirdparty/` 目录下
 
@@ -70,8 +70,8 @@ plugin_name/
 
 ```bash
 # 在 builtin 目录下创建插件
-mkdir -p riveredge-core/src/plugins/builtin/my_plugin
-cd riveredge-core/src/plugins/builtin/my_plugin
+mkdir -p riveredge-root/src/plugins/builtin/my_plugin
+cd riveredge-root/src/plugins/builtin/my_plugin
 
 # 创建配置文件
 cat > plugin.json << EOF
@@ -105,7 +105,7 @@ EOF
 
 ```bash
 # 在 thirdparty 目录下安装第三方插件
-cd riveredge-core/src/plugins/thirdparty/
+cd riveredge-root/src/plugins/thirdparty/
 
 # 方式1：直接复制插件目录
 cp -r /path/to/vendor_plugin ./
