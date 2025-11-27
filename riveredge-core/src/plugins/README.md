@@ -23,7 +23,7 @@ riveredge-core/src/plugins/
 - **自制插件**: 放在 `builtin/` 目录下
 - **第三方插件**: 放在 `thirdparty/` 目录下
 
-### 业务应用插件（位于 `riveredge-seeds/`）
+### 业务应用插件（位于 `riveredge-seed/`）
 - ERP、MES、CRM 等业务模块
 - 保持原有架构不变
 
