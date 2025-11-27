@@ -13,8 +13,8 @@ RiverEdge 是一个基于自然/植物生态哲学的 SaaS 多组织框架，采
 
 ### 框架模块
 
-- **riveredge-core** (根) - 后端核心系统，提供基础支撑
-- **riveredge-shell** (壳) - 前端框架，承载应用
+- **riveredge-root** (根) - 系统级后端，提供基础支撑
+- **riveredge-stem** (茎) - 系统级前端框架，承载应用
 - **riveredge-seed** (种子) - 应用插件，可生长的功能模块
 - **riveredge-land** (土地) - 着陆页/官网，展示和生长的土壤
 - **riveredge-leaf** (叶子) - 移动端应用，轻量灵活的终端
@@ -25,7 +25,7 @@ RiverEdge 是一个基于自然/植物生态哲学的 SaaS 多组织框架，采
 
 #### 智能部署（推荐）
 ```bash
-cd riveredge-core
+cd riveredge-root
 # 完整部署（包含环境检查、依赖安装、数据库迁移、服务启动）
 ./scripts/deploy.sh --deploy
 
@@ -38,7 +38,7 @@ python scripts/start_backend.py
 
 #### 服务管理
 ```bash
-cd riveredge-core
+cd riveredge-root
 ./scripts/deploy.sh --start   # 启动服务
 ./scripts/deploy.sh --stop    # 停止服务
 ./scripts/deploy.sh --check   # 健康检查
@@ -49,7 +49,7 @@ cd riveredge-core
 ### 前端开发
 
 ```bash
-cd riveredge-shell
+cd riveredge-stem
 npm install --legacy-peer-deps
 npm run dev
 ```
@@ -71,7 +71,7 @@ curl http://localhost:8000/health/detailed
 
 #### 系统监控
 ```bash
-cd riveredge-core
+cd riveredge-root
 python scripts/monitor_system.py --json  # JSON格式输出
 python scripts/monitor_system.py --output report.json  # 保存报告
 ```
