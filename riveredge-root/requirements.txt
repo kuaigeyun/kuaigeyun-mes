@@ -36,3 +36,11 @@ psutil==5.9.8  # 跨平台系统资源监控库（CPU、内存、磁盘、网络
 # 测试框架
 pytest==7.4.3
 pytest-asyncio==0.21.1
+
+# 环境变量管理（必需，用于加载 .env 文件）
+python-dotenv>=1.0.0
+
+# 可选依赖（按需安装）
+# inngest>=0.0.0  # 工作流引擎（可选）
+# typer[all]>=0.9.0  # CLI 工具（可选，FastAPI 作者开发）
+# aiofiles>=23.0.0  # 异步文件操作（可选，FastAPI 官方推荐）
