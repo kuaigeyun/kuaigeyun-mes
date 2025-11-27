@@ -26,9 +26,6 @@ import UserFormPage from '@/pages/user/form';
 import RoleListPage from '@/pages/role/list';
 import RoleFormPage from '@/pages/role/form';
 import RolePermissionsPage from '@/pages/role/permissions';
-import TenantListPage from '@/pages/tenant/list';
-import TenantDetailPage from '@/pages/tenant/detail';
-import TenantFormPage from '@/pages/tenant/form';
 import SuperAdminTenantListPage from '@/pages/superadmin/tenants/list';
 import SuperAdminTenantDetailPage from '@/pages/superadmin/tenants/detail';
 import OperationsDashboardPage from '@/pages/operations/dashboard';
@@ -218,38 +215,6 @@ const AppRoutes: React.FC = () => {
           <AuthGuard>
             <BasicLayout>
               <RolePermissionsPage />
-            </BasicLayout>
-          </AuthGuard>
-        }
-      />
-
-      {/* 组织管理 */}
-      <Route
-        path="/tenants"
-        element={
-          <AuthGuard>
-            <BasicLayout>
-              <TenantListPage />
-            </BasicLayout>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/tenants/create"
-        element={
-          <AuthGuard>
-            <BasicLayout>
-              <TenantFormPage />
-            </BasicLayout>
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/tenants/:id"
-        element={
-          <AuthGuard>
-            <BasicLayout>
-              <TenantDetailPage />
             </BasicLayout>
           </AuthGuard>
         }

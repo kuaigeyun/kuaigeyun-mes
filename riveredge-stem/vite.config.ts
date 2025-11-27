@@ -20,6 +20,10 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+    dedupe: ['react', 'react-dom', 'rc-field-form'],
+  },
+  optimizeDeps: {
+    include: ['rc-field-form'],
   },
   build: {
     outDir: 'dist',

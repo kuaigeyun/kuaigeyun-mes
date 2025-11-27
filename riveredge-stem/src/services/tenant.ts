@@ -73,7 +73,9 @@ export interface TenantListParams {
   page_size?: number;
   status?: TenantStatus;
   plan?: TenantPlan;
-  keyword?: string;
+  keyword?: string;  // 关键词搜索（组织名称、域名，使用 OR 逻辑）
+  name?: string;  // 组织名称搜索（精确搜索）
+  domain?: string;  // 域名搜索（精确搜索）
   sort?: string;  // 排序字段（如 'name', 'created_at'）
   order?: 'asc' | 'desc';  // 排序方向
 }
@@ -120,10 +122,15 @@ export interface UpdateTenantData {
  * 获取组织列表
  * 
  * @param params - 查询参数
+ * @param isSuperAdmin - 是否为超级管理员接口（默认 false，使用 /tenants；true 时使用 /superadmin/tenants）
  * @returns 组织列表响应数据
  */
-export async function getTenantList(params: TenantListParams): Promise<TenantListResponse> {
-  return apiRequest<TenantListResponse>('/tenants', {
+export async function getTenantList(
+  params: TenantListParams,
+  isSuperAdmin: boolean = false
+): Promise<TenantListResponse> {
+  const endpoint = isSuperAdmin ? '/superadmin/tenants' : '/tenants';
+  return apiRequest<TenantListResponse>(endpoint, {
     method: 'GET',
     params,
   });

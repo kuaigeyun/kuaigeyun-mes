@@ -119,39 +119,73 @@ class SuperAdminService:
         """
         获取超级管理员列表
         
-        获取超级管理员列表，支持分页、关键词搜索和状态筛选。
+        获取超级管理员列表，支持分页、关键词搜索（支持拼音首字母搜索）和状态筛选。
         
         Args:
             page: 页码（默认 1）
             page_size: 每页数量（默认 10）
-            keyword: 关键词搜索（可选，搜索用户名、邮箱、全名）
+            keyword: 关键词搜索（可选，搜索用户名、邮箱、全名，支持拼音首字母搜索）
             is_active: 是否激活筛选（可选）
             
         Returns:
             Dict[str, Any]: 包含 items、total、page、page_size 的字典
         """
+        from core.search_utils import list_with_search
+        from tortoise.expressions import Q
+        
         # 构建查询（平台管理员：is_platform_admin=True 且 tenant_id=None）
-        query = User.filter(is_platform_admin=True, tenant_id__isnull=True)
+        base_query = User.filter(is_platform_admin=True, tenant_id__isnull=True)
         
-        # 关键词搜索
-        if keyword:
-            from tortoise import Q
-            query = query.filter(
-                Q(username__icontains=keyword) |
-                Q(email__icontains=keyword) |
-                Q(full_name__icontains=keyword)
-            )
-        
-        # 状态筛选
+        # 构建精确匹配条件
+        exact_filters = {}
         if is_active is not None:
-            query = query.filter(is_active=is_active)
+            exact_filters['is_active'] = is_active
+        
+        # 使用通用搜索工具（自动支持拼音首字母搜索）
+        # 注意：这里需要先应用基础过滤条件，然后使用 list_with_search
+        # 由于 list_with_search 使用 get_tenant_queryset，我们需要特殊处理
+        from core.query_filter import get_tenant_queryset
+        
+        # 获取查询集（跳过组织过滤，因为超级管理员没有组织）
+        queryset = base_query
+        
+        # 应用精确匹配条件
+        if exact_filters:
+            queryset = queryset.filter(**exact_filters)
+        
+        # 应用关键词搜索（使用通用搜索工具的逻辑）
+        from core.search_utils import build_keyword_filter
+        if keyword:
+            keyword_filter = await build_keyword_filter(keyword, ['username', 'email', 'full_name'], enable_pinyin_search=True)
+            if keyword_filter:
+                queryset = queryset.filter(keyword_filter)
         
         # 获取总数
-        total = await query.count()
+        total = await queryset.count()
         
         # 分页查询
         offset = (page - 1) * page_size
-        items = await query.offset(offset).limit(page_size).all()
+        items = await queryset.offset(offset).limit(page_size).all()
+        
+        # 如果启用了拼音搜索且关键词可能是拼音首字母，进行二次过滤
+        from core.pinyin_utils import PYINYIN_AVAILABLE, is_pinyin_keyword, match_pinyin_initials
+        if (keyword and PYINYIN_AVAILABLE and is_pinyin_keyword(keyword) and items):
+            keyword_upper = keyword.upper()
+            filtered_items = []
+            
+            for item in items:
+                matched = False
+                for field in ['username', 'email', 'full_name']:
+                    field_value = getattr(item, field, None)
+                    if field_value and match_pinyin_initials(str(field_value), keyword_upper):
+                        matched = True
+                        break
+                
+                if matched:
+                    filtered_items.append(item)
+            
+            items = filtered_items
+            total = len(filtered_items)
         
         return {
             "items": items,

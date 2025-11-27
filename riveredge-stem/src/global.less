@@ -54,3 +54,89 @@ code {
   background: #a8a8a8;
 }
 
+/* 高级搜索 Modal 动画统一 */
+.query-search-modal-wrap {
+  /* 确保 Modal 动画方向一致：始终从上向下弹出 */
+  .ant-modal {
+    animation-duration: 0.3s;
+    animation-timing-function: cubic-bezier(0.08, 0.82, 0.17, 1);
+  }
+  
+  /* 打开动画：从上向下 */
+  &.ant-modal-enter .ant-modal {
+    animation-name: antModalSlideDown;
+  }
+  
+  /* 关闭动画：从下向上 */
+  &.ant-modal-leave .ant-modal {
+    animation-name: antModalSlideUp;
+  }
+}
+
+/* Modal 从上向下弹出动画 */
+@keyframes antModalSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal 从下向上收起动画 */
+@keyframes antModalSlideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+/* 高级搜索 Modal 动画统一 */
+.query-search-modal-wrap {
+  /* 确保 Modal 动画方向一致：始终从上向下弹出 */
+  .ant-modal {
+    animation-duration: 0.3s;
+    animation-timing-function: cubic-bezier(0.08, 0.82, 0.17, 1);
+  }
+  
+  /* 打开动画：从上向下 */
+  .ant-modal-enter {
+    animation-name: antModalSlideDown;
+  }
+  
+  /* 关闭动画：从下向上 */
+  .ant-modal-leave {
+    animation-name: antModalSlideUp;
+  }
+}
+
+/* Modal 从上向下弹出动画 */
+@keyframes antModalSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal 从下向上收起动画 */
+@keyframes antModalSlideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+

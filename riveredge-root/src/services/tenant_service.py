@@ -139,49 +139,74 @@ class TenantService:
         page_size: int = 10,
         status: Optional[TenantStatus] = None,
         plan: Optional[TenantPlan] = None,
+        keyword: Optional[str] = None,
+        name: Optional[str] = None,
+        domain: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: Optional[str] = None,
         skip_tenant_filter: bool = True  # 组织列表需要跨组织访问
     ) -> Dict[str, Any]:
         """
         获取组织列表
         
-        支持分页、状态筛选、套餐筛选。
+        支持分页、状态筛选、套餐筛选、关键词搜索、排序。
         
         Args:
             page: 页码（默认 1）
             page_size: 每页数量（默认 10）
             status: 组织状态筛选（可选）
             plan: 组织套餐筛选（可选）
+            keyword: 关键词搜索（可选，搜索组织名称、域名，使用 OR 逻辑）
+            name: 组织名称搜索（可选，精确搜索组织名称）
+            domain: 域名搜索（可选，精确搜索域名）
+            sort: 排序字段（可选，如：name、status、created_at）
+            order: 排序顺序（可选，asc 或 desc）
             skip_tenant_filter: 是否跳过组织过滤（默认为 True）
             
         Returns:
             dict: 包含 items、total、page、page_size 的字典
         """
-        queryset = get_tenant_queryset(
-            Tenant,
+        from core.search_utils import list_with_search
+        
+        # 构建精确匹配条件
+        exact_filters = {}
+        if status is not None:
+            exact_filters['status'] = status
+        if plan is not None:
+            exact_filters['plan'] = plan
+        
+        # 搜索字段处理（优先级：name/domain > keyword）
+        # 如果指定了 name 或 domain，使用精确搜索；否则使用 keyword 模糊搜索
+        search_keyword = None
+        search_fields = []
+        
+        if name:
+            # 如果指定了 name，使用 name 作为搜索关键词（支持拼音首字母搜索）
+            search_keyword = name
+            search_fields = ['name']
+        elif domain:
+            # 如果指定了 domain，使用 domain 作为搜索关键词（支持拼音首字母搜索）
+            search_keyword = domain
+            search_fields = ['domain']
+        elif keyword:
+            # 如果指定了 keyword，在 name 和 domain 中搜索（支持拼音首字母搜索）
+            search_keyword = keyword
+            search_fields = ['name', 'domain']
+        
+        # 使用通用搜索工具（自动支持拼音首字母搜索）
+        return await list_with_search(
+            model=Tenant,
+            page=page,
+            page_size=page_size,
+            keyword=search_keyword,
+            search_fields=search_fields if search_fields else None,
+            exact_filters=exact_filters if exact_filters else None,
+            sort=sort,
+            order=order,
+            allowed_sort_fields=['id', 'name', 'domain', 'status', 'plan', 'max_users', 'max_storage', 'created_at', 'updated_at'],
+            default_sort='-created_at',
             skip_tenant_filter=skip_tenant_filter
         )
-        
-        # 添加筛选条件
-        filters = {}
-        if status is not None:
-            filters["status"] = status
-        if plan is not None:
-            filters["plan"] = plan
-        
-        query = queryset.filter(**filters) if filters else queryset.all()
-        
-        # 计算总数
-        total = await query.count()
-        
-        # 分页查询
-        items = await query.offset((page - 1) * page_size).limit(page_size).all()
-        
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
     
     async def update_tenant(
         self,

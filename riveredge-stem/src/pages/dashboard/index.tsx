@@ -225,7 +225,7 @@ export default function DashboardPage() {
                   textAlign: 'center',
                   cursor: 'pointer',
                 }}
-                bodyStyle={{ padding: '16px 8px' }}
+                styles={{ body: { padding: '16px 8px' } }}
               >
                 <div
                   style={{
