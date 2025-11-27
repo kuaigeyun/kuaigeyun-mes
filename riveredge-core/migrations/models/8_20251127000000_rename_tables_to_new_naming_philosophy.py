@@ -116,6 +116,24 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         ALTER TABLE IF EXISTS "core_roles_core_permissions" RENAME TO "root_roles_root_permissions";
         COMMENT ON TABLE "root_roles_root_permissions" IS '角色权限（多对多关系）';
         
+        -- 更新多对多关系表的外键列名（如果需要）
+        -- 注意：PostgreSQL 会自动更新外键约束，但列名可能需要手动更新
+        DO $$
+        BEGIN
+            -- 更新 root_users_root_roles 表的列名
+            IF EXISTS (SELECT 1 FROM information_schema.columns 
+                      WHERE table_name = 'root_users_root_roles' 
+                      AND column_name = 'core_users_id') THEN
+                ALTER TABLE "root_users_root_roles" RENAME COLUMN "core_users_id" TO "root_users_id";
+            END IF;
+            
+            IF EXISTS (SELECT 1 FROM information_schema.columns 
+                      WHERE table_name = 'root_roles_root_permissions' 
+                      AND column_name = 'core_roles_id') THEN
+                ALTER TABLE "root_roles_root_permissions" RENAME COLUMN "core_roles_id" TO "root_roles_id";
+            END IF;
+        END $$;
+        
         -- ============================================
         -- 更新外键约束（PostgreSQL 会自动更新，但需要更新引用）
         -- ============================================
