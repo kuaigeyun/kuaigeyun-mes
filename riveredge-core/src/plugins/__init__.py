@@ -6,7 +6,7 @@ RiverEdge 后端插件系统，提供系统功能插件的注册、加载和管�
 
 插件类型：
 - 系统功能插件：位于 riveredge-core/src/plugins/
-- 业务应用插件：位于 riveredge-seeds/（保持原有架构）
+- 业务应用插件：位于 riveredge-seed/（保持原有架构）
 
 插件功能：
 - API 路由扩展

@@ -15,7 +15,7 @@ RiverEdge 是一个基于自然/植物生态哲学的 SaaS 多组织框架，采
 
 - **riveredge-core** (根) - 后端核心系统，提供基础支撑
 - **riveredge-shell** (壳) - 前端框架，承载应用
-- **riveredge-seeds** (种子) - 应用插件，可生长的功能模块
+- **riveredge-seed** (种子) - 应用插件，可生长的功能模块
 - **riveredge-land** (土地) - 着陆页/官网，展示和生长的土壤
 - **riveredge-leaf** (叶子) - 移动端应用，轻量灵活的终端
 
