@@ -46,7 +46,7 @@ async def check_users():
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
-            AND table_name LIKE 'core_%'
+            AND (table_name LIKE 'root_%' OR table_name LIKE 'tree_%' OR table_name LIKE 'core_%')
             ORDER BY table_name
         """)
         
@@ -64,7 +64,7 @@ async def check_users():
         # 检查用户表
         print("检查用户表...")
         try:
-            user_count = await conn.fetchval("SELECT COUNT(*) FROM core_users")
+            user_count = await conn.fetchval("SELECT COUNT(*) FROM root_users")
             print(f"✅ 用户表存在，共有 {user_count} 个用户")
             print()
             
@@ -75,13 +75,13 @@ async def check_users():
                 # 列出所有用户
                 print("用户列表:")
                 users = await conn.fetch("""
-                    SELECT id, username, email, is_superuser, is_active, tenant_id
-                    FROM core_users
+                    SELECT id, username, email, is_platform_admin, is_active, tenant_id
+                    FROM root_users
                     ORDER BY id
                 """)
                 
                 for user in users:
-                    user_type = "超级管理员" if user['is_superuser'] else "普通用户"
+                    user_type = "平台管理员" if user.get('is_platform_admin') else "普通用户"
                     status = "激活" if user['is_active'] else "未激活"
                     tenant_info = f"组织ID: {user['tenant_id']}" if user['tenant_id'] else "无组织"
                     print(f"   [{user['id']}] {user['username']} ({user_type}, {status}, {tenant_info})")
@@ -89,8 +89,8 @@ async def check_users():
                 # 检查是否有超级管理员
                 superadmin = await conn.fetchrow("""
                     SELECT id, username, is_active
-                    FROM core_users
-                    WHERE username = 'superadmin' AND is_superuser = true AND tenant_id IS NULL
+                    FROM root_users
+                    WHERE username = 'superadmin' AND is_platform_admin = true AND tenant_id IS NULL
                 """)
                 
                 if superadmin:

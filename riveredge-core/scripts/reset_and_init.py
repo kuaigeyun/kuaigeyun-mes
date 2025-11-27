@@ -42,11 +42,11 @@ async def truncate_all_tables() -> None:
         
         # 按照依赖关系顺序清空表（从依赖表到被依赖表）
         tables_to_truncate = [
-            "core_users",  # 用户表（依赖组织）
-            "core_roles",  # 角色表（依赖组织）
-            "core_permissions",  # 权限表（依赖组织）
-            "core_tenant_configs",  # 组织配置表（依赖组织）
-            "core_tenants",  # 组织表
+            "root_users",  # 用户表（系统级，依赖组织）
+            "root_roles",  # 角色表（系统级，依赖组织）
+            "root_permissions",  # 权限表（系统级，依赖组织）
+            "tree_tenant_configs",  # 组织配置表（租户管理，依赖组织）
+            "tree_tenants",  # 组织表（租户管理）
         ]
         
         for table in tables_to_truncate:

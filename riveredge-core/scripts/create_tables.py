@@ -32,15 +32,15 @@ async def create_tables():
         
         try:
             user_count = await User.all().count()
-            print(f"✓ core_users 表存在，当前用户数: {user_count}")
+            print(f"✓ root_users 表存在，当前用户数: {user_count}")
         except Exception as e:
-            print(f"✗ core_users 表查询失败: {e}")
+            print(f"✗ root_users 表查询失败: {e}")
         
         try:
             tenant_count = await Tenant.all().count()
-            print(f"✓ core_tenants 表存在，当前组织数: {tenant_count}")
+            print(f"✓ tree_tenants 表存在，当前组织数: {tenant_count}")
         except Exception as e:
-            print(f"✗ core_tenants 表查询失败: {e}")
+            print(f"✗ tree_tenants 表查询失败: {e}")
         
         # 关闭连接
         await Tortoise.close_connections()

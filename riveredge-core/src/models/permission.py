@@ -33,7 +33,7 @@ class Permission(BaseModel):
     """
 
     id = fields.IntField(primary_key=True, description="权限 ID（主键）")
-    tenant_id = fields.IntField(description="组织 ID（外键，关联到 core_tenants 表）")
+        tenant_id = fields.IntField(description="组织 ID（外键，关联到 tree_tenants 表）")
     name = fields.CharField(max_length=50, description="权限名称（组织内唯一）")
     code = fields.CharField(max_length=100, description="权限代码（组织内唯一，格式：resource:action）")
     description = fields.TextField(null=True, description="权限描述（可选）")
@@ -45,7 +45,7 @@ class Permission(BaseModel):
         """
         模型元数据
         """
-        table = "core_permissions"  # 表名必须包含模块前缀（core_）
+        table = "root_permissions"  # 表名必须包含模块前缀（root_ - 系统级后端）
         indexes = [
             ("tenant_id",),           # 组织 ID 索引
             ("name",),                # 权限名称索引

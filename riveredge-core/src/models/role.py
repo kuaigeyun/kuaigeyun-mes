@@ -31,7 +31,7 @@ class Role(BaseModel):
     """
 
     id = fields.IntField(primary_key=True, description="角色 ID（主键）")
-    tenant_id = fields.IntField(description="组织 ID（外键，关联到 core_tenants 表）")
+        tenant_id = fields.IntField(description="组织 ID（外键，关联到 tree_tenants 表）")
     name = fields.CharField(max_length=50, description="角色名称（组织内唯一）")
     code = fields.CharField(max_length=50, description="角色代码（组织内唯一，用于程序识别）")
     description = fields.TextField(null=True, description="角色描述（可选）")
@@ -48,7 +48,7 @@ class Role(BaseModel):
         """
         模型元数据
         """
-        table = "core_roles"  # 表名必须包含模块前缀（core_）
+        table = "root_roles"  # 表名必须包含模块前缀（root_ - 系统级后端）
         indexes = [
             ("tenant_id",),           # 组织 ID 索引
             ("name",),                # 角色名称索引

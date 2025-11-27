@@ -80,7 +80,7 @@ class Tenant(BaseModel):
         """
         模型元数据
         """
-        table = "core_tenants"  # 表名必须包含模块前缀（core_）
+        table = "tree_tenants"  # 表名必须包含模块前缀（tree_ - 租户管理）
         indexes = [
             ("domain",),  # 域名索引
             ("status",),  # 状态索引
