@@ -38,7 +38,7 @@ class TenantActivityLog(BaseModel):
         """
         模型元数据
         """
-        table = "core_tenant_activity_logs"  # 表名必须包含模块前缀（core_）
+        table = "tree_tenant_activity_logs"  # 表名必须包含模块前缀（tree_ - 租户管理）
         indexes = [
             ("tenant_id",),  # 组织 ID 索引
             ("created_at",),  # 创建时间索引

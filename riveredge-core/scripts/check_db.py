@@ -24,17 +24,17 @@ async def check_database():
         from models.user import User
         try:
             count = await User.all().count()
-            print(f"✓ core_users 表存在，当前用户数: {count}")
+            print(f"✓ root_users 表存在，当前用户数: {count}")
         except Exception as e:
-            print(f"✗ core_users 表不存在或查询失败: {e}")
+            print(f"✗ root_users 表不存在或查询失败: {e}")
         
         # 检查组织表
         from models.tenant import Tenant
         try:
             count = await Tenant.all().count()
-            print(f"✓ core_tenants 表存在，当前组织数: {count}")
+            print(f"✓ tree_tenants 表存在，当前组织数: {count}")
         except Exception as e:
-            print(f"✗ core_tenants 表不存在或查询失败: {e}")
+            print(f"✗ tree_tenants 表不存在或查询失败: {e}")
         
         # 关闭连接
         await Tortoise.close_connections()
