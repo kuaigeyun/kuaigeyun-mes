@@ -10,27 +10,34 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
     "fastapi==0.104.1",
-    "uvicorn[standard]>=0.30.0",
-    "pydantic==2.5.0",
-    "pydantic-settings>=2.5.0",
+    "uvicorn[standard]==0.30.0",
+    "pydantic==2.8.0",
+    "pydantic-settings==2.5.0",
     "tortoise-orm==0.20.1",  # 使用稳定版本 0.20.1（与FastAPI 0.104.1完美兼容）
     "aerich==0.7.1",
     "asyncpg==0.29.0",  # 使用稳定版本 0.29.0（Python 3.12 支持预编译包）
-    "redis>=5.0.0",  # redis-p, 使用 redis.asyncio 异步接口
-    "python-jose[cryptography]>=3.3.0",
-    "passlib[bcrypt]>=1.7.4",
-    "httpx>=0.27.0",
-    "loguru>=0.7.0",
+    "redis[hiredis]==5.0.1",  # redis-py，使用 redis.asyncio 异步接口，支持 hiredis
+    "python-jose[cryptography]==3.3.0",
+    "passlib[bcrypt]==1.7.4",
+    "python-multipart==0.0.6",  # 表单数据处理
+    "httpx==0.25.2",
+    "loguru==0.7.2",
+    "psutil==5.9.8",  # 系统资源监控
+    "python-dotenv>=1.0.0",  # 环境变量管理（.env 文件支持）
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
+# 可选依赖（按需安装）
+# inngest>=0.0.0  # 工作流引擎（可选）
+# typer[all]>=0.9.0  # CLI 工具（可选，FastAPI 作者开发）
+# aiofiles>=23.0.0  # 异步文件操作（可选，FastAPI 官方推荐）
 
 [tool.black]
 line-length = 100
