@@ -13,15 +13,15 @@ BEGIN;
 -- ============================================
 
 -- 用户表
-ALTER TABLE core_users RENAME TO root_users;
+ALTER TABLE IF EXISTS core_users RENAME TO root_users;
 COMMENT ON TABLE root_users IS '系统级用户表（root - 系统级后端）';
 
 -- 角色表
-ALTER TABLE core_roles RENAME TO root_roles;
+ALTER TABLE IF EXISTS core_roles RENAME TO root_roles;
 COMMENT ON TABLE root_roles IS '系统级角色表（root - 系统级后端）';
 
 -- 权限表
-ALTER TABLE core_permissions RENAME TO root_permissions;
+ALTER TABLE IF EXISTS core_permissions RENAME TO root_permissions;
 COMMENT ON TABLE root_permissions IS '系统级权限表（root - 系统级后端）';
 
 -- ============================================
@@ -29,16 +29,16 @@ COMMENT ON TABLE root_permissions IS '系统级权限表（root - 系统级后�
 -- ============================================
 
 -- 租户表
-ALTER TABLE core_tenants RENAME TO tree_tenants;
+ALTER TABLE IF EXISTS core_tenants RENAME TO tree_tenants;
 COMMENT ON TABLE tree_tenants IS '租户表（tree - 每个租户单独管理）';
 
 -- 租户配置表
-ALTER TABLE core_tenant_configs RENAME TO tree_tenant_configs;
+ALTER TABLE IF EXISTS core_tenant_configs RENAME TO tree_tenant_configs;
 COMMENT ON TABLE tree_tenant_configs IS '租户配置表（tree - 每个租户单独管理）';
 
--- 租户活动日志表
-ALTER TABLE core_tenant_activity_logs RENAME TO tree_tenant_activity_logs;
-COMMENT ON TABLE tree_tenant_activity_logs IS '租户活动日志表（tree - 每个租户单独管理）';
+-- 租户活动日志表（如果存在）
+ALTER TABLE IF EXISTS core_tenant_activity_logs RENAME TO tree_tenant_activity_logs;
+COMMENT ON TABLE IF EXISTS tree_tenant_activity_logs IS '租户活动日志表（tree - 每个租户单独管理）';
 
 -- ============================================
 -- 3. 重命名索引
