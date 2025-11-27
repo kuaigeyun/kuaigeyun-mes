@@ -74,6 +74,8 @@ export interface TenantListParams {
   status?: TenantStatus;
   plan?: TenantPlan;
   keyword?: string;
+  sort?: string;  // 排序字段（如 'name', 'created_at'）
+  order?: 'asc' | 'desc';  // 排序方向
 }
 
 /**

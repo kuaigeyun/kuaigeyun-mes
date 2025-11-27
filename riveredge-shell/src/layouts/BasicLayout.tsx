@@ -432,18 +432,57 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-page-container .ant-breadcrumb {
           display: none !important;
         }
-        /* 隐藏整个页面的滚动条（但保持滚轮滚动功能） */
+        /* 统一设置表格列表页面的内边距 - ProTable 直接渲染的情况 */
+        .page-tabs-content .ant-pro-table {
+          padding: 24px !important;
+        }
+        /* ProTable 按钮容器统一样式 */
+        .pro-table-button-container {
+          margin-bottom: 16px;
+          padding: 0 0px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        /* 统一设置 PageContainer 的内边距 */
+        .ant-pro-page-container {
+          
+        }
+        .ant-pro-page-container .ant-pro-page-container-children-content {
+          padding: 0 !important;
+        }
+        /* 隐藏整个页面的垂直滚动条（但保持滚轮滚动功能） */
+        .ant-pro-layout,
+        .ant-pro-layout *,
         .ant-pro-layout-container,
         .ant-pro-layout-container *,
         .ant-pro-page-container,
-        .ant-pro-page-container * {
+        .ant-pro-page-container *,
+        .ant-pro-layout-content,
+        .ant-pro-layout-content *,
+        .ant-layout,
+        .ant-layout *,
+        .ant-layout-content,
+        .ant-layout-content *,
+        body,
+        html {
           scrollbar-width: none !important; /* Firefox */
           -ms-overflow-style: none !important; /* IE 10+ */
         }
+        .ant-pro-layout *::-webkit-scrollbar,
+        .ant-pro-layout::-webkit-scrollbar,
         .ant-pro-layout-container *::-webkit-scrollbar,
         .ant-pro-layout-container::-webkit-scrollbar,
         .ant-pro-page-container *::-webkit-scrollbar,
-        .ant-pro-page-container::-webkit-scrollbar {
+        .ant-pro-page-container::-webkit-scrollbar,
+        .ant-pro-layout-content *::-webkit-scrollbar,
+        .ant-pro-layout-content::-webkit-scrollbar,
+        .ant-layout *::-webkit-scrollbar,
+        .ant-layout::-webkit-scrollbar,
+        .ant-layout-content *::-webkit-scrollbar,
+        .ant-layout-content::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        html::-webkit-scrollbar {
           display: none !important; /* Chrome, Safari, Edge */
           width: 0 !important;
           height: 0 !important;
@@ -740,7 +779,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         logo="/logo.png"
         layout="mix"
         navTheme="light"
-        primaryColor="#1890ff"
         contentWidth="Fluid"
         fixedHeader
         fixSiderbar

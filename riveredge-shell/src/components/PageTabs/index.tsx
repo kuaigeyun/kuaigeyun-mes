@@ -494,6 +494,14 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           overflow: auto;
           position: relative;
           background: #f0f2f5;
+          /* 隐藏垂直滚动条但保留滚动功能 */
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE 10+ */
+        }
+        .page-tabs-content::-webkit-scrollbar {
+          display: none !important; /* Chrome, Safari, Edge */
+          width: 0 !important;
+          height: 0 !important;
         }
         /* 标签栏头部包装器 - 包含滚动按钮 */
         .page-tabs-header-wrapper {

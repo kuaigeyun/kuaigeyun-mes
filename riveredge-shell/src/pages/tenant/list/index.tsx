@@ -6,7 +6,7 @@
  */
 
 import React, { useRef } from 'react';
-import { ProTable, ActionType, ProColumns } from '@ant-design/pro-components';
+import { ProColumns, ActionType } from '@ant-design/pro-components';
 import { message, Popconfirm, Button, Tag } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -15,10 +15,12 @@ import {
   deleteTenant,
   activateTenant,
   deactivateTenant,
+  updateTenant,
   Tenant,
   TenantStatus,
   TenantPlan,
 } from '@/services/tenant';
+import { UnifiedProTable } from '@/components/UnifiedProTable';
 
 /**
  * 组织状态标签映射
@@ -86,6 +88,7 @@ const TenantList: React.FC = () => {
     }
   };
 
+
   /**
    * 表格列定义
    */
@@ -100,17 +103,22 @@ const TenantList: React.FC = () => {
       title: '组织名称',
       dataIndex: 'name',
       width: 200,
+      sorter: true,
+      responsive: ['md'],
     },
     {
       title: '域名',
       dataIndex: 'domain',
       width: 150,
+      sorter: true,
+      responsive: ['md'],
     },
     {
       title: '状态',
       dataIndex: 'status',
       width: 120,
       valueType: 'select',
+      sorter: true,
       valueEnum: {
         [TenantStatus.ACTIVE]: { text: '激活', status: 'Success' },
         [TenantStatus.INACTIVE]: { text: '未激活', status: 'Default' },
@@ -127,6 +135,7 @@ const TenantList: React.FC = () => {
       dataIndex: 'plan',
       width: 120,
       valueType: 'select',
+      sorter: true,
       valueEnum: {
         [TenantPlan.TRIAL]: { text: '体验套餐' },
         [TenantPlan.BASIC]: { text: '基础版' },
@@ -143,12 +152,16 @@ const TenantList: React.FC = () => {
       dataIndex: 'max_users',
       width: 120,
       hideInSearch: true,
+      sorter: true,
+      responsive: ['lg'],
     },
     {
       title: '最大存储（MB）',
       dataIndex: 'max_storage',
       width: 150,
       hideInSearch: true,
+      sorter: true,
+      responsive: ['lg'],
     },
     {
       title: '过期时间',
@@ -156,6 +169,8 @@ const TenantList: React.FC = () => {
       width: 180,
       hideInSearch: true,
       valueType: 'dateTime',
+      sorter: true,
+      responsive: ['xl'],
     },
     {
       title: '创建时间',
@@ -163,6 +178,8 @@ const TenantList: React.FC = () => {
       width: 180,
       hideInSearch: true,
       valueType: 'dateTime',
+      sorter: true,
+      responsive: ['xl'],
     },
     {
       title: '操作',
@@ -220,17 +237,30 @@ const TenantList: React.FC = () => {
   ];
 
   return (
-    <ProTable<Tenant>
+    <UnifiedProTable<Tenant>
       headerTitle="组织列表"
       actionRef={actionRef}
       columns={columns}
-      request={async (params) => {
+      request={async (params, sort, _filter) => {
+        // 处理排序参数（UnifiedProTable 已自动处理，这里只需要转换格式）
+        let sortField: string | undefined;
+        let sortOrder: 'asc' | 'desc' | undefined;
+
+        if (sort && Object.keys(sort).length > 0) {
+          const firstSortKey = Object.keys(sort)[0];
+          const firstSortValue = sort[firstSortKey];
+          sortField = firstSortKey;
+          sortOrder = firstSortValue === 'ascend' ? 'asc' : 'desc';
+        }
+
         const result = await getTenantList({
           page: params.current || 1,
           page_size: params.pageSize || 10,
           status: params.status as TenantStatus,
           plan: params.plan as TenantPlan,
           keyword: params.keyword as string,
+          sort: sortField,
+          order: sortOrder,
         });
         return {
           data: result.items,
@@ -238,28 +268,40 @@ const TenantList: React.FC = () => {
           total: result.total,
         };
       }}
-      rowKey="id"
-      search={{
-        labelWidth: 'auto',
-      }}
-      pagination={{
-        defaultPageSize: 10,
-        showSizeChanger: true,
-        showQuickJumper: true,
-      }}
-      toolBarRender={() => [
+      afterSearchButtons={
         <Button
-          key="add"
           type="primary"
+          key="add"
           icon={<PlusOutlined />}
           onClick={() => navigate('/tenant/form')}
         >
           新建组织
-        </Button>,
-      ]}
+        </Button>
+      }
+      enableRowSelection={true}
+      onRowSelectionChange={(selectedKeys) => {
+        // 可以在这里处理行选择变化
+        console.log('选中的行:', selectedKeys);
+      }}
+      enableRowEdit={true}
+      onRowEditSave={async (_key, row) => {
+        try {
+          await updateTenant(row.id, row);
+          message.success('保存成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          message.error(error.message || '保存失败');
+        }
+      }}
+      showExportButton={true}
+      onExport={(selectedKeys) => {
+        const selectedRows = selectedKeys.length > 0 
+          ? selectedKeys.join(',')
+          : 'all';
+        message.info(`导出功能开发中，将导出：${selectedRows}`);
+      }}
     />
   );
 };
 
 export default TenantList;
-
