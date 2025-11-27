@@ -25,20 +25,28 @@ async def list_tenants_for_superadmin(
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     status: Optional[TenantStatus] = Query(None, description="组织状态筛选"),
     plan: Optional[TenantPlan] = Query(None, description="组织套餐筛选"),
-    keyword: Optional[str] = Query(None, description="关键词搜索（组织名称、域名）"),
+    keyword: Optional[str] = Query(None, description="关键词搜索（组织名称、域名，使用 OR 逻辑）"),
+    name: Optional[str] = Query(None, description="组织名称搜索（精确搜索）"),
+    domain: Optional[str] = Query(None, description="域名搜索（精确搜索）"),
+    sort: Optional[str] = Query(None, description="排序字段（如：name、status、created_at）"),
+    order: Optional[str] = Query(None, description="排序顺序（asc 或 desc）"),
     current_admin: User = Depends(get_current_superadmin)
 ):
     """
     获取组织列表（超级管理员）
     
-    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、关键词搜索。
+    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、关键词搜索、排序。
     
     Args:
         page: 页码（默认 1）
         page_size: 每页数量（默认 10，最大 100）
         status: 组织状态筛选（可选）
         plan: 组织套餐筛选（可选）
-        keyword: 关键词搜索（可选，搜索组织名称、域名）
+        keyword: 关键词搜索（可选，搜索组织名称、域名，使用 OR 逻辑）
+        name: 组织名称搜索（可选，精确搜索组织名称）
+        domain: 域名搜索（可选，精确搜索域名）
+        sort: 排序字段（可选，如：name、status、created_at）
+        order: 排序顺序（可选，asc 或 desc）
         current_admin: 当前超级管理员（依赖注入）
         
     Returns:
@@ -52,36 +60,13 @@ async def list_tenants_for_superadmin(
         page_size=page_size,
         status=status,
         plan=plan,
+        keyword=keyword,
+        name=name,
+        domain=domain,
+        sort=sort,
+        order=order,
         skip_tenant_filter=True  # ⭐ 关键：跳过组织过滤
     )
-    
-    # 关键词搜索（如果提供）
-    if keyword:
-        from tortoise import Q
-        from models.tenant import Tenant
-        
-        # 重新查询并添加关键词过滤
-        query = Tenant.all()
-        query = query.filter(
-            Q(name__icontains=keyword) | Q(domain__icontains=keyword)
-        )
-        
-        # 添加状态和套餐筛选
-        if status:
-            query = query.filter(status=status)
-        if plan:
-            query = query.filter(plan=plan)
-        
-        total = await query.count()
-        offset = (page - 1) * page_size
-        items = await query.offset(offset).limit(page_size).all()
-        
-        result = {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
     
     return TenantListResponse(**result)
 

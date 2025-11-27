@@ -1,0 +1,6 @@
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting pypinyin
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/b9/7b/4cabc76fcc21c3c7d5c671d8783984d30ac9d3bb387c4ba784fca3cdfa3a/pypinyin-0.55.0-py2.py3-none-any.whl (840 kB)
+     ---------------------------------------- 840.2/840.2 kB 3.4 MB/s  0:00:01
+Installing collected packages: pypinyin
+Successfully installed pypinyin-0.55.0

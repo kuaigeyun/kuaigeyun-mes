@@ -35,6 +35,7 @@ TORTOISE_ORM = {
                 "models.user",
                 "models.role",
                 "models.permission",
+                "models.saved_search",
                 "aerich.models",
             ],
             "default_connection": "default",

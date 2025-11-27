@@ -121,6 +121,23 @@ export async function apiRequest<T = any>(
 
     // 检查响应状态
     if (!response.ok) {
+      // 处理 401 未授权错误：清除 Token 并跳转到登录页
+      if (response.status === 401) {
+        // 动态导入 clearAuth 函数（避免循环依赖）
+        import('@/utils/auth').then(({ clearAuth }) => {
+          clearAuth();
+          
+          // 跳转到登录页（如果不是在登录页）
+          if (!window.location.pathname.startsWith('/login')) {
+            window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+          }
+        });
+        
+        const error = new Error('登录已过期，请重新登录') as any;
+        error.response = { data, status: response.status };
+        throw error;
+      }
+      
       // 尝试从响应体中提取错误信息
       if (data && typeof data === 'object') {
         // 如果是统一错误格式 { success: false, error: ... }

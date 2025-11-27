@@ -5,13 +5,12 @@
  * 支持组织注册审核、启用/禁用等功能。
  */
 
-import React, { useRef, useLayoutEffect, useState } from 'react';
-import { ProTable, ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
+import React, { useRef, useState } from 'react';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { message, Popconfirm, Button, Tag, Space } from 'antd';
-import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, DownloadOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { QuerySearchButton } from '@/components/riveredge-query';
-import { ColumnHeaderSearch } from '@/components/ColumnHeaderSearch';
+import { UnifiedProTable } from '@/components/UnifiedProTable';
 import {
   getTenantList,
   Tenant,
@@ -88,41 +87,75 @@ const rejectTenant = async (tenantId: number, reason?: string) => {
  */
 const SuperAdminTenantList: React.FC = () => {
   const navigate = useNavigate();
-  const actionRef = useRef<ActionType>();
-  const formRef = useRef<ProFormInstance>();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonContainerRef = useRef<HTMLDivElement>(null);
+  const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string | number>>({});
 
   /**
-   * 将按钮容器移动到 ant-pro-table 内部
+   * 处理导入数据
    */
-  useLayoutEffect(() => {
-    if (containerRef.current && buttonContainerRef.current) {
-      const proTable = containerRef.current.querySelector('.ant-pro-table');
-      if (proTable && buttonContainerRef.current.parentElement !== proTable) {
-        proTable.insertBefore(buttonContainerRef.current, proTable.firstChild);
-      }
-    }
-  }, []);
+  const handleImport = (data: any[][]) => {
+    console.log('导入的数据:', data);
+    message.info(`导入功能开发中，共 ${data.length} 行数据`);
+    // TODO: 实现导入功能
+    // 例如：调用后端 API 批量创建组织
+    // await batchCreateTenants(data);
+  };
 
   /**
    * 处理导出数据
    */
-  const handleExport = () => {
-    const selectedRows = selectedRowKeys.length > 0 
-      ? selectedRowKeys.join(',')
-      : 'all';
-    message.info(`导出功能开发中，将导出：${selectedRows}`);
+  const handleExport = (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: Tenant[]
+  ) => {
+    let exportInfo = '';
+    switch (type) {
+      case 'selected':
+        exportInfo = `选中的 ${selectedRowKeys?.length || 0} 条数据`;
+        break;
+      case 'currentPage':
+        exportInfo = `当前页的 ${currentPageData?.length || 0} 条数据`;
+        break;
+      case 'all':
+        exportInfo = '全部数据';
+        break;
+    }
+    message.info(`导出功能开发中，将导出：${exportInfo}`);
     // TODO: 实现导出功能
+    // 根据 type 调用不同的导出逻辑
+    // - selected: 导出 selectedRowKeys 对应的数据
+    // - currentPage: 导出 currentPageData
+    // - all: 调用 API 获取全部数据并导出
   };
 
   /**
-   * 处理行选择变化
+   * 处理新建
    */
-  const handleRowSelectionChange = (selectedKeys: React.Key[]) => {
-    setSelectedRowKeys(selectedKeys);
+  const handleCreate = () => {
+    navigate('/superadmin/tenants/create');
+  };
+
+  /**
+   * 处理修改
+   */
+  const handleEdit = (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      navigate(`/superadmin/tenants/${keys[0]}`);
+    }
+  };
+
+  /**
+   * 处理删除
+   */
+  const handleDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      message.warning('请先选择要删除的组织');
+      return;
+    }
+    message.info(`删除功能开发中，将删除 ${keys.length} 个组织`);
+    // TODO: 实现删除功能
+    // await batchDeleteTenants(keys);
   };
 
   /**
@@ -136,97 +169,81 @@ const SuperAdminTenantList: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: (_, type, sortOrder) => (
-        <ColumnHeaderSearch
-          title="组织名称"
-          value={columnFilters.name}
-          sortOrder={sortOrder}
-          onChange={(value) => setColumnFilters({ ...columnFilters, name: value as string })}
-          onConfirm={(value) => {
-            setColumnFilters({ ...columnFilters, name: value as string });
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ name: value });
-            }
-            actionRef.current?.reload();
-          }}
-          onReset={() => {
-            const newFilters = { ...columnFilters };
-            delete newFilters.name;
-            setColumnFilters(newFilters);
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ name: undefined });
-            }
-            actionRef.current?.reload();
-          }}
-        />
-      ),
+      title: '关键词',
+      dataIndex: 'keyword',
+      hideInTable: true, // 在表格中隐藏，只在搜索中显示
+      tooltip: '支持搜索组织名称和域名，支持拼音首字母搜索（如：ZS 可匹配"张三"）',
+    },
+    {
+      title: '组织名称',
       dataIndex: 'name',
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
+      fieldProps: {
+        // 自动完成功能：从后端获取组织名称选项
+        autoCompleteApi: async (keyword: string) => {
+          // 至少输入 2 个字符才开始搜索
+          if (!keyword || keyword.length < 2) {
+            return [];
+          }
+          try {
+            const result = await getTenantList(
+              {
+                page: 1,
+                page_size: 20,
+                keyword: keyword,
+              },
+              true // 超级管理员接口
+            );
+            // 返回选项数组，显示组织名称和域名
+            return result.items.map((tenant) => ({
+              label: `${tenant.name} (${tenant.domain})`,
+              value: tenant.name,
+            }));
+          } catch (error) {
+            console.error('获取组织名称选项失败:', error);
+            return [];
+          }
+        },
+      },
     },
     {
-      title: (_, type, sortOrder) => (
-        <ColumnHeaderSearch
-          title="域名"
-          value={columnFilters.domain}
-          sortOrder={sortOrder}
-          onChange={(value) => setColumnFilters({ ...columnFilters, domain: value as string })}
-          onConfirm={(value) => {
-            setColumnFilters({ ...columnFilters, domain: value as string });
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ domain: value });
-            }
-            actionRef.current?.reload();
-          }}
-          onReset={() => {
-            const newFilters = { ...columnFilters };
-            delete newFilters.domain;
-            setColumnFilters(newFilters);
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ domain: undefined });
-            }
-            actionRef.current?.reload();
-          }}
-        />
-      ),
+      title: '域名',
       dataIndex: 'domain',
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
+      fieldProps: {
+        // 自动完成功能：从后端获取域名选项
+        autoCompleteApi: async (keyword: string) => {
+          // 至少输入 2 个字符才开始搜索
+          if (!keyword || keyword.length < 2) {
+            return [];
+          }
+          try {
+            const result = await getTenantList(
+              {
+                page: 1,
+                page_size: 20,
+                keyword: keyword,
+              },
+              true // 超级管理员接口
+            );
+            // 返回选项数组，显示域名和组织名称
+            return result.items.map((tenant) => ({
+              label: `${tenant.domain} (${tenant.name})`,
+              value: tenant.domain,
+            }));
+          } catch (error) {
+            console.error('获取域名选项失败:', error);
+            return [];
+          }
+        },
+      },
     },
     {
-      title: (_, type, sortOrder) => (
-        <ColumnHeaderSearch
-          title="状态"
-          value={columnFilters.status}
-          sortOrder={sortOrder}
-          searchType="select"
-          options={[
-            { label: '激活', value: TenantStatus.ACTIVE },
-            { label: '未激活', value: TenantStatus.INACTIVE },
-            { label: '已过期', value: TenantStatus.EXPIRED },
-            { label: '已暂停', value: TenantStatus.SUSPENDED },
-          ]}
-          onChange={(value) => setColumnFilters({ ...columnFilters, status: value as string })}
-          onConfirm={(value) => {
-            setColumnFilters({ ...columnFilters, status: value as string });
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ status: value });
-            }
-            actionRef.current?.reload();
-          }}
-          onReset={() => {
-            const newFilters = { ...columnFilters };
-            delete newFilters.status;
-            setColumnFilters(newFilters);
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ status: undefined });
-            }
-            actionRef.current?.reload();
-          }}
-        />
-      ),
+      title: '状态',
       dataIndex: 'status',
       valueType: 'select',
       sorter: true,
@@ -242,37 +259,7 @@ const SuperAdminTenantList: React.FC = () => {
       },
     },
     {
-      title: (_, type, sortOrder) => (
-        <ColumnHeaderSearch
-          title="套餐"
-          value={columnFilters.plan}
-          sortOrder={sortOrder}
-          searchType="select"
-          options={[
-            { label: '体验套餐', value: TenantPlan.TRIAL },
-            { label: '基础版', value: TenantPlan.BASIC },
-            { label: '专业版', value: TenantPlan.PROFESSIONAL },
-            { label: '企业版', value: TenantPlan.ENTERPRISE },
-          ]}
-          onChange={(value) => setColumnFilters({ ...columnFilters, plan: value as string })}
-          onConfirm={(value) => {
-            setColumnFilters({ ...columnFilters, plan: value as string });
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ plan: value });
-            }
-            actionRef.current?.reload();
-          }}
-          onReset={() => {
-            const newFilters = { ...columnFilters };
-            delete newFilters.plan;
-            setColumnFilters(newFilters);
-            if (formRef.current) {
-              formRef.current.setFieldsValue({ plan: undefined });
-            }
-            actionRef.current?.reload();
-          }}
-        />
-      ),
+      title: '套餐',
       dataIndex: 'plan',
       valueType: 'select',
       sorter: true,
@@ -296,7 +283,7 @@ const SuperAdminTenantList: React.FC = () => {
       responsive: ['lg'],
     },
     {
-      title: '最大存储空间 (MB)',
+      title: '存储空间 (MB)',
       dataIndex: 'max_storage',
       width: 150,
       hideInSearch: true,
@@ -400,81 +387,84 @@ const SuperAdminTenantList: React.FC = () => {
   ];
 
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <div 
-        ref={buttonContainerRef} 
-        className="pro-table-button-container"
-      >
-        <QuerySearchButton
-          columns={columns}
-          formRef={formRef}
-          actionRef={actionRef}
-        />
-      </div>
-      <ProTable<Tenant>
-        headerTitle="组织列表（超级管理员）"
-        actionRef={actionRef}
-        formRef={formRef}
-        rowKey="id"
-        search={false}
-        request={async (params, sort, filter) => {
-          // 处理排序参数
-          let sortField: string | undefined;
-          let sortOrder: 'asc' | 'desc' | undefined;
-          
-          if (sort && Object.keys(sort).length > 0) {
-            // 获取第一个排序字段
-            const firstSortKey = Object.keys(sort)[0];
-            const firstSortValue = sort[firstSortKey];
-            sortField = firstSortKey;
-            sortOrder = firstSortValue === 'ascend' ? 'asc' : 'desc';
-          }
+    <UnifiedProTable<Tenant>
+      actionRef={actionRef}
+      columns={columns}
+      rowKey="id"
+      enableRowSelection={true}
+      onRowSelectionChange={(keys) => {
+        setSelectedRowKeys(keys);
+      }}
+      showCreateButton={true}
+      onCreate={handleCreate}
+      showEditButton={true}
+      onEdit={handleEdit}
+      showDeleteButton={true}
+      onDelete={handleDelete}
+      showImportButton={true}
+      onImport={handleImport}
+      showExportButton={true}
+      onExport={handleExport}
+      viewTypes={['table', 'card', 'kanban', 'stats']}
+      defaultViewType="table"
+      request={async (params, sort, _filter, searchFormValues) => {
+        // 处理排序参数
+        let sortField: string | undefined;
+        let sortOrder: 'asc' | 'desc' | undefined;
+        
+        if (sort && Object.keys(sort).length > 0) {
+          // 获取第一个排序字段
+          const firstSortKey = Object.keys(sort)[0];
+          const firstSortValue = sort[firstSortKey];
+          sortField = firstSortKey;
+          sortOrder = firstSortValue === 'ascend' ? 'asc' : 'desc';
+        }
 
-          const result = await getTenantList({
-            page: params.current || 1,
-            page_size: params.pageSize || 10,
-            status: params.status as TenantStatus,
-            plan: params.plan as TenantPlan,
-            keyword: params.keyword,
-            sort: sortField,
-            order: sortOrder,
-          });
-          return {
-            data: result.items,
-            success: true,
-            total: result.total,
-          };
-        }}
-        columns={columns}
-        rowSelection={{
-          type: 'checkbox',
-          selectedRowKeys,
-          onChange: handleRowSelectionChange,
-        }}
-        editable={{
-          type: 'multiple',
-          onSave: async (_key, _row) => {
-            message.info('可编辑功能开发中');
-            // TODO: 实现编辑功能
-          },
-        }}
-        toolBarRender={(_action, { selectedRowKeys: keys }) => [
-          <Button
-            key="export"
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-            disabled={keys && keys.length === 0}
-          >
-            导出
-          </Button>,
-        ]}
-        pagination={{
-          defaultPageSize: 10,
-          showSizeChanger: true,
-        }}
-        scroll={{ x: 1200 }}
-      />
-    </div>
+        // 处理搜索参数
+        // 搜索优先级：name/domain（精确搜索）> keyword（模糊搜索，支持拼音首字母）
+        const apiParams: any = {
+          page: params.current || 1,
+          page_size: params.pageSize || 10,
+          sort: sortField,
+          order: sortOrder,
+        };
+        
+        // 状态和套餐筛选
+        if (searchFormValues?.status) {
+          apiParams.status = searchFormValues.status as TenantStatus;
+        }
+        if (searchFormValues?.plan) {
+          apiParams.plan = searchFormValues.plan as TenantPlan;
+        }
+        
+        // 搜索条件处理（优先级：name/domain > keyword）
+        // 如果用户在高级搜索中输入了 name 或 domain，使用精确搜索
+        // 否则使用 keyword 进行模糊搜索（支持拼音首字母搜索）
+        if (searchFormValues?.name) {
+          apiParams.name = searchFormValues.name as string;
+        }
+        if (searchFormValues?.domain) {
+          apiParams.domain = searchFormValues.domain as string;
+        }
+        
+        // 如果指定了 name 或 domain，不使用 keyword；否则使用 keyword（支持拼音首字母搜索）
+        if (!searchFormValues?.name && !searchFormValues?.domain && searchFormValues?.keyword) {
+          apiParams.keyword = searchFormValues.keyword as string;
+        }
+
+        const result = await getTenantList(
+          apiParams,
+          true  // 超级管理员接口
+        );
+
+        return {
+          data: result.items,
+          success: true,
+          total: result.total,
+        };
+      }}
+      scroll={{ x: 1200 }}
+    />
   );
 };
 

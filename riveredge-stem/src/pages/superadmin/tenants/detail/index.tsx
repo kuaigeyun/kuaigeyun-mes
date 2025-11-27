@@ -210,7 +210,7 @@ const SuperAdminTenantDetail: React.FC = () => {
             dataIndex: 'max_users',
           },
           {
-            title: '最大存储空间 (MB)',
+            title: '存储空间 (MB)',
             dataIndex: 'max_storage',
           },
           {

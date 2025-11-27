@@ -134,13 +134,13 @@ class RoleService:
         """
         获取角色列表
         
-        获取角色列表，支持分页和关键词搜索。
+        获取角色列表，支持分页和关键词搜索（支持拼音首字母搜索）。
         自动过滤组织：只返回当前组织的角色。
         
         Args:
             page: 页码（默认 1）
             page_size: 每页数量（默认 10）
-            keyword: 关键词搜索（可选，搜索角色名称、代码、描述）
+            keyword: 关键词搜索（可选，搜索角色名称、代码、描述，支持拼音首字母搜索）
             tenant_id: 组织 ID（可选，默认从上下文获取）
             
         Returns:
@@ -156,35 +156,20 @@ class RoleService:
             >>> len(result["items"]) >= 0
             True
         """
-        # 获取组织 ID（从参数或上下文）
-        if tenant_id is None:
-            tenant_id = await require_tenant_context()
+        from core.search_utils import list_with_search
         
-        # 构建查询（自动过滤组织）⭐ 关键
-        query = Role.filter(tenant_id=tenant_id)
-        
-        # 关键词搜索
-        if keyword:
-            from tortoise import Q
-            query = query.filter(
-                Q(name__icontains=keyword) |
-                Q(code__icontains=keyword) |
-                Q(description__icontains=keyword)
-            )
-        
-        # 获取总数
-        total = await query.count()
-        
-        # 分页查询
-        offset = (page - 1) * page_size
-        items = await query.offset(offset).limit(page_size).all()
-        
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size
-        }
+        # 使用通用搜索工具（自动支持拼音首字母搜索）
+        return await list_with_search(
+            model=Role,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            search_fields=['name', 'code', 'description'],
+            allowed_sort_fields=['name', 'code', 'created_at', 'updated_at'],
+            default_sort='-created_at',
+            tenant_id=tenant_id,
+            skip_tenant_filter=False
+        )
     
     async def update_role(
         self,

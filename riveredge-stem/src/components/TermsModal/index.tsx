@@ -299,7 +299,7 @@ export default function TermsModal({ open, type, onClose }: TermsModalProps) {
       footer={null}
       width={800}
       style={{ top: 20 }}
-      bodyStyle={{ padding: '24px' }}
+      styles={{ body: { padding: '24px' } }}
     >
       {content}
     </Modal>

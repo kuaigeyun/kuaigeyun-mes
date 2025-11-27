@@ -7,6 +7,45 @@ import zhCN from 'antd/locale/zh_CN'
 import App from './app'
 import './global.less'
 
+// 抑制 findDOMNode 警告（Ant Design 在 React 18 StrictMode 下的已知问题）
+// 这是 Ant Design 组件库的问题，不影响功能，等待官方修复
+if (process.env.NODE_ENV === 'development') {
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  
+  // 检查是否包含 findDOMNode 相关警告
+  const isFindDOMNodeWarning = (message: any): boolean => {
+    if (typeof message !== 'string') {
+      return false;
+    }
+    const lowerMessage = message.toLowerCase();
+    return (
+      lowerMessage.includes('finddomnode') ||
+      lowerMessage.includes('finddomnode is deprecated') ||
+      lowerMessage.includes('warning: finddomnode') ||
+      lowerMessage.includes('finddomnode was passed')
+    );
+  };
+  
+  console.error = (...args: any[]) => {
+    // 检查所有参数中是否包含 findDOMNode 警告
+    const hasFindDOMNodeWarning = args.some(arg => isFindDOMNodeWarning(arg));
+    if (hasFindDOMNodeWarning) {
+      return; // 忽略 findDOMNode 警告
+    }
+    originalError.apply(console, args);
+  };
+  
+  console.warn = (...args: any[]) => {
+    // 检查所有参数中是否包含 findDOMNode 警告
+    const hasFindDOMNodeWarning = args.some(arg => isFindDOMNodeWarning(arg));
+    if (hasFindDOMNodeWarning) {
+      return; // 忽略 findDOMNode 警告
+    }
+    originalWarn.apply(console, args);
+  };
+}
+
 // 创建 Query Client
 const queryClient = new QueryClient({
   defaultOptions: {

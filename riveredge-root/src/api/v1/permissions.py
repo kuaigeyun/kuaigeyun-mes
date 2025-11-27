@@ -52,7 +52,7 @@ async def list_permissions(
     
     # 关键词搜索
     if keyword:
-        from tortoise import Q
+        from tortoise.expressions import Q
         query = query.filter(
             Q(name__icontains=keyword) |
             Q(code__icontains=keyword) |

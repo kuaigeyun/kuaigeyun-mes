@@ -9,6 +9,7 @@ from models.tenant_activity_log import TenantActivityLog
 from models.user import User
 from models.role import Role
 from models.permission import Permission
+from models.saved_search import SavedSearch
 
 __all__ = [
     "BaseModel",
@@ -20,4 +21,5 @@ __all__ = [
     "User",
     "Role",
     "Permission",
+    "SavedSearch",
 ]
