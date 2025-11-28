@@ -41,11 +41,15 @@ if __name__ == "__main__":
     host = settings.HOST
     port = int(os.getenv('PORT', settings.PORT))
     
+    # 判断是否启用热重载（开发模式下启用）
+    enable_reload = os.getenv('RELOAD', 'false').lower() == 'true' or settings.DEBUG or settings.ENVIRONMENT == 'development'
+    
     print(f"启动后端服务...")
     print(f"主机: {host}")
     print(f"端口: {port}")
     print(f"环境: {settings.ENVIRONMENT}")
     print(f"调试模式: {settings.DEBUG}")
+    print(f"热重载: {'启用' if enable_reload else '禁用'}")
     print("-" * 50)
     
     # 使用 uvicorn 启动
@@ -55,7 +59,7 @@ if __name__ == "__main__":
         host=host,
         port=port,
         log_level="info" if not settings.DEBUG else "debug",
-        reload=settings.DEBUG,  # 开发模式下启用自动重载
+        reload=enable_reload,  # 开发模式下启用自动重载
         loop="asyncio",  # 强制使用 asyncio 循环（Windows 兼容）
         timeout_keep_alive=30,
         limit_concurrency=100,

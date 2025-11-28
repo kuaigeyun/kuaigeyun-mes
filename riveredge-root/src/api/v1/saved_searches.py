@@ -40,7 +40,8 @@ async def create_saved_search(
         page_path=data.page_path,
         name=data.name,
         search_params=data.search_params,
-        is_shared=data.is_shared
+        is_shared=data.is_shared,
+        is_pinned=data.is_pinned
     )
     return saved_search
 
@@ -100,6 +101,7 @@ async def update_saved_search(
         search_id=search_id,
         name=data.name,
         is_shared=data.is_shared,
+        is_pinned=data.is_pinned,
         search_params=data.search_params
     )
     return saved_search

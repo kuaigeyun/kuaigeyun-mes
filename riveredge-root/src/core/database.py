@@ -20,6 +20,7 @@ db_host = "127.0.0.1" if settings.DB_HOST == "localhost" else settings.DB_HOST
 
 # Tortoise ORM 配置字典
 # 使用官方推荐的方式配置连接池
+# 时区配置统一从 Settings 中读取，确保整个项目配置一致
 TORTOISE_ORM = {
     "connections": {
         # 使用数据库连接字符串
@@ -41,6 +42,9 @@ TORTOISE_ORM = {
             "default_connection": "default",
         },
     },
+    # 时区配置统一从 Settings 中读取（不硬编码）
+    "use_tz": settings.USE_TZ,
+    "timezone": settings.TIMEZONE,
 }
 
 # 全局数据库连接参数
@@ -68,13 +72,24 @@ def register_db(app) -> None:
     Args:
         app: FastAPI 应用实例
     """
+    # 设置 Tortoise ORM 时区环境变量（统一格式）
+    from app.config import setup_tortoise_timezone_env
+    setup_tortoise_timezone_env()
+    
+    # 确保配置字典中的时区设置与 Settings 一致（动态更新，支持运行时配置变更）
+    TORTOISE_ORM["use_tz"] = settings.USE_TZ
+    TORTOISE_ORM["timezone"] = settings.TIMEZONE
+    
     register_tortoise(
         app,
         config=TORTOISE_ORM,
         generate_schemas=False,  # 不自动生成模式，使用 Aerich 管理迁移
         add_exception_handlers=True,  # 添加异常处理器
     )
-    logger.info("Tortoise ORM 已注册到 FastAPI 应用，连接池将自动管理")
+    logger.info(
+        f"Tortoise ORM 已注册到 FastAPI 应用，连接池将自动管理 "
+        f"(use_tz={settings.USE_TZ}, timezone={settings.TIMEZONE})"
+    )
 
 
 async def get_db_connection():

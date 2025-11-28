@@ -16,6 +16,7 @@ export interface SavedSearch {
   page_path: string;
   name: string;
   is_shared: boolean;
+  is_pinned: boolean;
   search_params: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -28,6 +29,7 @@ export interface CreateSavedSearchParams {
   page_path: string;
   name: string;
   is_shared: boolean;
+  is_pinned?: boolean;
   search_params: Record<string, any>;
 }
 
@@ -37,6 +39,7 @@ export interface CreateSavedSearchParams {
 export interface UpdateSavedSearchParams {
   name?: string;
   is_shared?: boolean;
+  is_pinned?: boolean;
   search_params?: Record<string, any>;
 }
 

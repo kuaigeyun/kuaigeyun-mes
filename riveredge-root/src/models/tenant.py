@@ -114,6 +114,14 @@ class Tenant(BaseModel):
         """
         if self.expires_at is None:
             return False
-        from datetime import datetime
-        return datetime.now() > self.expires_at
+        from core.timezone_utils import now
+        # 比较时区感知的 datetime（统一使用 Settings 中配置的默认时区）
+        current_time = now()
+        # 如果 expires_at 是 naive，转换为 aware
+        if self.expires_at.tzinfo is None:
+            from core.timezone_utils import make_aware
+            expires_at = make_aware(self.expires_at)
+        else:
+            expires_at = self.expires_at
+        return current_time > expires_at
 

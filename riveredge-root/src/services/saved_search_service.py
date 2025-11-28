@@ -5,7 +5,6 @@
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
 
 from fastapi import HTTPException, status
 
@@ -27,7 +26,8 @@ class SavedSearchService:
         page_path: str,
         name: str,
         search_params: Dict[str, Any],
-        is_shared: bool = False
+        is_shared: bool = False,
+        is_pinned: bool = False
     ) -> SavedSearch:
         """
         创建保存搜索条件
@@ -69,6 +69,7 @@ class SavedSearchService:
             page_path=page_path,
             name=name,
             is_shared=is_shared,
+            is_pinned=is_pinned,
             search_params=search_params
         )
         
@@ -110,8 +111,8 @@ class SavedSearchService:
             # 只包含个人搜索条件
             query = query & Q(user_id=user.id)
         
-        # 查询并排序（按更新时间倒序）
-        saved_searches = await SavedSearch.filter(query).order_by("-updated_at").all()
+        # 查询并排序（钉住的在前，然后按更新时间倒序）
+        saved_searches = await SavedSearch.filter(query).order_by("-is_pinned", "-updated_at").all()
         
         return saved_searches
 
@@ -161,6 +162,7 @@ class SavedSearchService:
         search_id: int,
         name: Optional[str] = None,
         is_shared: Optional[bool] = None,
+        is_pinned: Optional[bool] = None,
         search_params: Optional[Dict[str, Any]] = None
     ) -> SavedSearch:
         """
@@ -209,6 +211,8 @@ class SavedSearchService:
             saved_search.name = name
         if is_shared is not None:
             saved_search.is_shared = is_shared
+        if is_pinned is not None:
+            saved_search.is_pinned = is_pinned
         if search_params is not None:
             saved_search.search_params = search_params
         

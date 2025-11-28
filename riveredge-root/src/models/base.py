@@ -24,13 +24,14 @@ class BaseModel(Model):
     Attributes:
         id: 主键 ID
         tenant_id: 组织 ID（用于多组织数据隔离）
-        created_at: 创建时间
-        updated_at: 更新时间
+        created_at: 创建时间（时区感知的 datetime）
+        updated_at: 更新时间（时区感知的 datetime）
     """
 
     # 注意：不在基类中定义 id 字段，避免 Tortoise ORM 兼容性问题
     # 每个模型类需要自己定义 id = fields.IntField(primary_key=True)
     tenant_id = fields.IntField(null=True, db_index=True, description="组织 ID（用于多组织数据隔离）")
+    # 使用 Tortoise ORM 官方的 DatetimeField，自动处理时区（use_tz=True 时返回时区感知的 datetime）
     created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
     updated_at = fields.DatetimeField(auto_now=True, description="更新时间")
 

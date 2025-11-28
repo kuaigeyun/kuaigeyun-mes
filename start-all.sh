@@ -316,6 +316,12 @@ start_backend() {
 
     # 设置端口环境变量
     export PORT=$port
+    
+    # 确保启用热重载（开发环境默认启用）
+    # 可以通过设置 RELOAD=false 来禁用
+    if [ -z "$RELOAD" ]; then
+        export RELOAD=true  # 默认启用热重载
+    fi
 
     # 清理旧的PID文件
     rm -f ../logs/backend.pid
