@@ -87,7 +87,23 @@ class Settings(BaseSettings):
     # 日志配置
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")
     LOG_FILE: str = Field(default="logs/riveredge.log", description="日志文件路径")
+    
+    # 时区配置
+    USE_TZ: bool = Field(default=True, description="是否启用时区支持（Tortoise ORM）")
+    TIMEZONE: str = Field(default="Asia/Shanghai", description="默认时区（Tortoise ORM）")
 
 
 # 创建全局配置实例
 settings = Settings()
+
+
+def setup_tortoise_timezone_env():
+    """
+    设置 Tortoise ORM 时区环境变量
+    
+    统一管理 Tortoise ORM 的时区配置，确保环境变量格式一致。
+    Tortoise ORM 的 get_timezone() 和 get_use_tz() 从环境变量读取。
+    """
+    import os
+    os.environ["USE_TZ"] = str(settings.USE_TZ)
+    os.environ["TIMEZONE"] = settings.TIMEZONE

@@ -139,7 +139,6 @@ class TenantService:
         page_size: int = 10,
         status: Optional[TenantStatus] = None,
         plan: Optional[TenantPlan] = None,
-        keyword: Optional[str] = None,
         name: Optional[str] = None,
         domain: Optional[str] = None,
         sort: Optional[str] = None,
@@ -149,16 +148,16 @@ class TenantService:
         """
         获取组织列表
         
-        支持分页、状态筛选、套餐筛选、关键词搜索、排序。
+        支持分页、状态筛选、套餐筛选、文本字段模糊搜索、排序。
+        使用 ProTable 原生搜索逻辑，简单可靠。
         
         Args:
             page: 页码（默认 1）
             page_size: 每页数量（默认 10）
-            status: 组织状态筛选（可选）
-            plan: 组织套餐筛选（可选）
-            keyword: 关键词搜索（可选，搜索组织名称、域名，使用 OR 逻辑）
-            name: 组织名称搜索（可选，精确搜索组织名称）
-            domain: 域名搜索（可选，精确搜索域名）
+            status: 组织状态筛选（可选，精确匹配）
+            plan: 组织套餐筛选（可选，精确匹配）
+            name: 组织名称搜索（可选，模糊搜索）
+            domain: 域名搜索（可选，模糊搜索）
             sort: 排序字段（可选，如：name、status、created_at）
             order: 排序顺序（可选，asc 或 desc）
             skip_tenant_filter: 是否跳过组织过滤（默认为 True）
@@ -166,47 +165,56 @@ class TenantService:
         Returns:
             dict: 包含 items、total、page、page_size 的字典
         """
-        from core.search_utils import list_with_search
+        # ⭐ 恢复为 ProTable 原生搜索逻辑：简单的字段过滤
+        # 不使用复杂的搜索工具，直接使用 Tortoise ORM 的简单查询
         
-        # 构建精确匹配条件
-        exact_filters = {}
+        # 获取查询集
+        query = Tenant.all()
+        if not skip_tenant_filter:
+            # 如果不需要跳过组织过滤，这里可以添加组织过滤逻辑
+            # 但对于超级管理员，通常 skip_tenant_filter=True
+            pass
+        
+        # 应用精确匹配条件（status、plan）
         if status is not None:
-            exact_filters['status'] = status
+            query = query.filter(status=status)
         if plan is not None:
-            exact_filters['plan'] = plan
+            query = query.filter(plan=plan)
         
-        # 搜索字段处理（优先级：name/domain > keyword）
-        # 如果指定了 name 或 domain，使用精确搜索；否则使用 keyword 模糊搜索
-        search_keyword = None
-        search_fields = []
-        
+        # 应用文本字段的模糊搜索（name、domain）
+        # ProTable 默认对文本字段使用模糊搜索
         if name:
-            # 如果指定了 name，使用 name 作为搜索关键词（支持拼音首字母搜索）
-            search_keyword = name
-            search_fields = ['name']
-        elif domain:
-            # 如果指定了 domain，使用 domain 作为搜索关键词（支持拼音首字母搜索）
-            search_keyword = domain
-            search_fields = ['domain']
-        elif keyword:
-            # 如果指定了 keyword，在 name 和 domain 中搜索（支持拼音首字母搜索）
-            search_keyword = keyword
-            search_fields = ['name', 'domain']
+            query = query.filter(name__icontains=name.strip())
+        if domain:
+            query = query.filter(domain__icontains=domain.strip())
         
-        # 使用通用搜索工具（自动支持拼音首字母搜索）
-        return await list_with_search(
-            model=Tenant,
-            page=page,
-            page_size=page_size,
-            keyword=search_keyword,
-            search_fields=search_fields if search_fields else None,
-            exact_filters=exact_filters if exact_filters else None,
-            sort=sort,
-            order=order,
-            allowed_sort_fields=['id', 'name', 'domain', 'status', 'plan', 'max_users', 'max_storage', 'created_at', 'updated_at'],
-            default_sort='-created_at',
-            skip_tenant_filter=skip_tenant_filter
-        )
+        # 应用排序
+        if sort:
+            # 验证排序字段是否允许
+            allowed_sort_fields = ['id', 'name', 'domain', 'status', 'plan', 'max_users', 'max_storage', 'created_at', 'updated_at']
+            if sort in allowed_sort_fields:
+                if order == 'desc':
+                    query = query.order_by(f'-{sort}')
+                else:
+                    query = query.order_by(sort)
+            else:
+                # 默认排序
+                query = query.order_by('-created_at')
+        else:
+            # 默认排序
+            query = query.order_by('-created_at')
+        
+        # 分页查询
+        total = await query.count()
+        offset = (page - 1) * page_size
+        items = await query.offset(offset).limit(page_size).all()
+        
+        return {
+            'items': items,
+            'total': total,
+            'page': page,
+            'page_size': page_size
+        }
     
     async def update_tenant(
         self,

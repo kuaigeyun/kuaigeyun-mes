@@ -7,13 +7,62 @@
 import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, forwardRef } from 'react';
 import type { ActionType, ProFormInstance, ProColumns } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDateRangePicker } from '@ant-design/pro-components';
-import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography } from 'antd';
-import { SaveOutlined, DeleteOutlined, ShareAltOutlined, UserOutlined, DownOutlined } from '@ant-design/icons';
+import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, MenuProps, theme } from 'antd';
+import { SaveOutlined, DeleteOutlined, DownOutlined, EditOutlined, PushpinOutlined, PushpinFilled, MoreOutlined, ReloadOutlined, SearchOutlined, ShareAltOutlined, HolderOutlined } from '@ant-design/icons';
 import type { AutoCompleteProps } from 'antd';
 import { filterByPinyinInitials } from '@/utils/pinyin';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getSavedSearchList, createSavedSearch, deleteSavedSearch, SavedSearch } from '@/services/savedSearch';
+import { getSavedSearchList, createSavedSearch, deleteSavedSearch, updateSavedSearch, SavedSearch } from '@/services/savedSearch';
+import { useGlobalStore } from '@/app';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+/**
+ * 可拖拽的列表项组件
+ */
+interface SortableListItemProps {
+  id: number;
+  children: (listeners: any) => React.ReactNode;
+}
+
+const SortableListItem: React.FC<SortableListItemProps> = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      {children(listeners)}
+    </div>
+  );
+};
 
 /**
  * 自动完成输入框组件属性
@@ -67,20 +116,27 @@ const AutoCompleteInput = forwardRef<any, AutoCompleteInputProps>(({
   value: propValue, // ⭐ 关键：从 props 中获取 value（Form.Item 注入）
   onChange: propOnChange, // ⭐ 关键：从 props 中获取 onChange（Form.Item 注入）
 }, ref) => {
+  // ⭐ 最佳实践：统一状态管理
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>(
     autoCompleteOptions || []
   );
   const [loading, setLoading] = useState(false);
-  const searchKeywordRef = useRef<string>(''); // 使用 ref 避免闭包问题
+  
+  // ⭐ 最佳实践：使用 AbortController 处理请求取消
+  const abortControllerRef = useRef<AbortController | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastApiCallRef = useRef<string>('');
+  const currentSearchIdRef = useRef<number>(0);
 
   /**
    * 实时过滤静态选项（同步，立即响应）
    */
   const filterStaticOptions = useCallback((keyword: string) => {
-    if (!autoCompleteOptions || !keyword) {
-      return autoCompleteOptions || [];
+    if (!autoCompleteOptions) {
+      return [];
+    }
+    
+    if (!keyword || keyword.trim() === '') {
+      return autoCompleteOptions;
     }
 
     try {
@@ -88,92 +144,109 @@ const AutoCompleteInput = forwardRef<any, AutoCompleteInputProps>(({
       return filterByPinyinInitials(autoCompleteOptions, keyword);
     } catch (error) {
       // 如果拼音库不可用，使用普通过滤
+      const lowerKeyword = keyword.toLowerCase();
       return autoCompleteOptions.filter(
         (option) =>
-          option.label.toLowerCase().includes(keyword.toLowerCase()) ||
-          option.value.toLowerCase().includes(keyword.toLowerCase())
+          option.label.toLowerCase().includes(lowerKeyword) ||
+          option.value.toLowerCase().includes(lowerKeyword)
       );
     }
   }, [autoCompleteOptions]);
 
   /**
-   * 处理搜索（优化：静态选项立即响应，API 调用防抖）
+   * 处理搜索（最佳实践：使用 AbortController + 防抖 + 请求ID）
    */
   const handleSearch = useCallback(
     (keyword: string) => {
-      const currentKeyword = keyword || '';
-      searchKeywordRef.current = currentKeyword; // 更新 ref
+      const trimmedKeyword = (keyword || '').trim();
+      
+      // ⭐ 最佳实践：取消之前的请求
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
+      // 清除之前的防抖定时器
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
 
       // 1. 静态选项：立即过滤（同步，实时响应）
       if (autoCompleteOptions && !autoCompleteApi) {
-        const filtered = filterStaticOptions(currentKeyword);
+        const filtered = filterStaticOptions(trimmedKeyword);
         setOptions(filtered);
+        setLoading(false);
         return;
       }
 
       // 2. API 调用：防抖处理（避免频繁请求）
       if (autoCompleteApi) {
-        // 清除之前的定时器
-        if (searchTimeoutRef.current) {
-          clearTimeout(searchTimeoutRef.current);
-          searchTimeoutRef.current = null;
-        }
-
         // 如果关键词为空，立即清空选项
-        if (!currentKeyword) {
-          setOptions([]);
-          setLoading(false);
-          lastApiCallRef.current = '';
-          return;
-        }
-
-        // 如果关键词太短（少于2个字符），不发起请求，但显示空选项
-        if (currentKeyword.length < 2) {
+        if (!trimmedKeyword) {
           setOptions([]);
           setLoading(false);
           return;
         }
 
-        // 如果关键词与上次相同，不重复请求
-        if (lastApiCallRef.current === currentKeyword) {
-          return;
-        }
-
+        // ⭐ 最佳实践：生成新的搜索ID，用于防止竞态条件
+        const searchId = ++currentSearchIdRef.current;
+        
         // 设置加载状态（立即显示，提升用户体验）
         setLoading(true);
 
-        // 防抖：100ms 后执行 API 调用（缩短防抖时间，提升实时性）
+        // ⭐ 最佳实践：防抖处理，200ms 后执行 API 调用
         searchTimeoutRef.current = setTimeout(async () => {
-          const keywordAtCallTime = searchKeywordRef.current; // 使用 ref 获取最新值
-          
-          // 再次检查关键词是否仍然匹配（防止竞态条件）
-          if (keywordAtCallTime !== currentKeyword) {
-            return; // 关键词已变化，忽略此次请求
+          // 检查搜索ID是否仍然有效（防止竞态条件）
+          if (searchId !== currentSearchIdRef.current) {
+            setLoading(false);
+            return;
           }
 
+          // ⭐ 最佳实践：创建新的 AbortController
+          const abortController = new AbortController();
+          abortControllerRef.current = abortController;
+
           try {
-            lastApiCallRef.current = currentKeyword;
-            const apiOptions = await autoCompleteApi(currentKeyword);
+            const apiOptions = await autoCompleteApi(trimmedKeyword);
             
-            // 确保返回的是最新的搜索结果（防止竞态条件）
-            if (searchKeywordRef.current === currentKeyword) {
-              setOptions(apiOptions);
+            // ⭐ 最佳实践：检查请求是否被取消，以及搜索ID是否仍然有效
+            if (abortController.signal.aborted || searchId !== currentSearchIdRef.current) {
+              return;
             }
-          } catch (error) {
-            // 确保错误时也更新状态（防止竞态条件）
-            if (searchKeywordRef.current === currentKeyword) {
-              setOptions([]);
+            
+            // ⭐ 最佳实践：确保返回的是数组
+            setOptions(Array.isArray(apiOptions) ? apiOptions : []);
+          } catch (error: any) {
+            // ⭐ 最佳实践：忽略被取消的请求错误
+            if (error?.name === 'AbortError' || abortController.signal.aborted) {
+              return;
             }
+            
+            // ⭐ 最佳实践：检查搜索ID是否仍然有效
+            if (searchId !== currentSearchIdRef.current) {
+              return;
+            }
+            
+            // 其他错误：清空选项
+            setOptions([]);
+            console.error('AutoComplete API 调用失败:', error);
           } finally {
-            // 确保加载状态正确更新（防止竞态条件）
-            if (searchKeywordRef.current === currentKeyword) {
+            // ⭐ 最佳实践：只有在搜索ID仍然有效时才更新加载状态
+            if (searchId === currentSearchIdRef.current && !abortController.signal.aborted) {
               setLoading(false);
             }
+            
+            // 清理 AbortController
+            if (abortControllerRef.current === abortController) {
+              abortControllerRef.current = null;
+            }
           }
-        }, 100); // 缩短防抖时间到 100ms，提升实时性
-      } else if (!currentKeyword) {
-        // 清空关键词时，清空选项
+        }, 200); // 防抖时间：200ms，平衡实时性和性能
+      } else {
+        // 没有配置自动完成，清空选项
         setOptions([]);
+        setLoading(false);
       }
     },
     [autoCompleteApi, autoCompleteOptions, filterStaticOptions]
@@ -185,18 +258,33 @@ const AutoCompleteInput = forwardRef<any, AutoCompleteInputProps>(({
    */
   useEffect(() => {
     if (autoCompleteOptions && !autoCompleteApi) {
+      // ⭐ 修复：初始化时显示所有选项，提升用户体验
       setOptions(autoCompleteOptions);
+    } else if (!autoCompleteApi && !autoCompleteOptions) {
+      // ⭐ 修复：如果没有配置，清空选项
+      setOptions([]);
     }
   }, [autoCompleteOptions, autoCompleteApi]);
 
   /**
-   * 清理定时器
+   * 清理资源（最佳实践：清理定时器和取消请求）
    */
   useEffect(() => {
     return () => {
+      // 清理防抖定时器
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
       }
+      
+      // 取消进行中的请求
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
+      // 更新搜索ID，使所有进行中的请求失效
+      currentSearchIdRef.current = 0;
     };
   }, []);
 
@@ -256,7 +344,7 @@ const AutoCompleteInput = forwardRef<any, AutoCompleteInputProps>(({
   
   const mergedConfig: AutoCompleteProps = {
     placeholder,
-    options,
+    options: options || [], // ⭐ 修复：确保 options 始终是数组
     value, // ⭐ 关键：传递表单值
     onChange: handleChange, // ⭐ 关键：处理输入/选择时更新表单值
     onSearch: handleSearch, // 输入时实时触发，用于搜索选项（不影响表单值）
@@ -264,6 +352,7 @@ const AutoCompleteInput = forwardRef<any, AutoCompleteInputProps>(({
     allowClear: true,
     defaultActiveFirstOption: true, // 默认激活第一个选项，提升体验
     filterOption: filterOption, // 实时过滤（仅静态选项，进一步提升实时性）
+    // ⭐ 修复：不手动控制 open，让 AutoComplete 自动管理下拉框显示
     ...otherRestFieldProps, // fieldProps 中的其他属性（已过滤自定义属性和 value/onChange）
     ...autoCompleteConfig, // 用户自定义配置优先级最高（但 value 和 onChange 不会被覆盖）
   };
@@ -325,14 +414,23 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
+  const { currentUser } = useGlobalStore();
+  const { token } = theme.useToken();
   
   // 获取当前页面路径
   const pagePath = location.pathname;
+  
+  // 判断是否是自己的搜索条件
+  const isOwnSearch = (search: SavedSearch) => {
+    return currentUser && search.user_id === currentUser.id;
+  };
   
   // 保存搜索条件弹窗状态
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveIsShared, setSaveIsShared] = useState(false);
+  const [saveIsPinned, setSaveIsPinned] = useState(false);
+  const [editingSearch, setEditingSearch] = useState<SavedSearch | null>(null);
   
   // 获取已保存的搜索条件列表
   const { data: savedSearchesData } = useQuery({
@@ -344,8 +442,99 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   const savedSearches = savedSearchesData?.items || [];
   
   // 分离个人和共享搜索条件
-  const personalSearches = savedSearches.filter((item) => !item.is_shared);
-  const sharedSearches = savedSearches.filter((item) => item.is_shared);
+  const [personalSearches, setPersonalSearches] = useState<SavedSearch[]>([]);
+  const [sharedSearches, setSharedSearches] = useState<SavedSearch[]>([]);
+  
+  // 初始化排序后的列表
+  useEffect(() => {
+    const personal = savedSearches.filter((item) => !item.is_shared);
+    const shared = savedSearches.filter((item) => item.is_shared);
+    
+    // 从 localStorage 恢复排序（如果有）
+    const personalOrderKey = `saved_search_order_personal_${pagePath}`;
+    const sharedOrderKey = `saved_search_order_shared_${pagePath}`;
+    
+    const personalOrder = localStorage.getItem(personalOrderKey);
+    const sharedOrder = localStorage.getItem(sharedOrderKey);
+    
+    if (personalOrder) {
+      try {
+        const order = JSON.parse(personalOrder) as number[];
+        const ordered = order
+          .map((id) => personal.find((item) => item.id === id))
+          .filter((item): item is SavedSearch => item !== undefined);
+        const unordered = personal.filter((item) => !order.includes(item.id));
+        setPersonalSearches([...ordered, ...unordered]);
+      } catch {
+        setPersonalSearches(personal);
+      }
+    } else {
+      setPersonalSearches(personal);
+    }
+    
+    if (sharedOrder) {
+      try {
+        const order = JSON.parse(sharedOrder) as number[];
+        const ordered = order
+          .map((id) => shared.find((item) => item.id === id))
+          .filter((item): item is SavedSearch => item !== undefined);
+        const unordered = shared.filter((item) => !order.includes(item.id));
+        setSharedSearches([...ordered, ...unordered]);
+      } catch {
+        setSharedSearches(shared);
+      }
+    } else {
+      setSharedSearches(shared);
+    }
+  }, [savedSearches, pagePath]);
+  
+  // 拖拽传感器配置
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+  
+  // 处理共享搜索条件拖拽结束
+  const handleSharedDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      setSharedSearches((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        
+        // 保存排序到 localStorage
+        const orderKey = `saved_search_order_shared_${pagePath}`;
+        const order = newItems.map((item) => item.id);
+        localStorage.setItem(orderKey, JSON.stringify(order));
+        
+        return newItems;
+      });
+    }
+  }, [pagePath]);
+  
+  // 处理个人搜索条件拖拽结束
+  const handlePersonalDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      setPersonalSearches((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        
+        // 保存排序到 localStorage
+        const orderKey = `saved_search_order_personal_${pagePath}`;
+        const order = newItems.map((item) => item.id);
+        localStorage.setItem(orderKey, JSON.stringify(order));
+        
+        return newItems;
+      });
+    }
+  }, [pagePath]);
   
   // 创建保存搜索条件 mutation
   const createSavedSearchMutation = useMutation({
@@ -371,6 +560,23 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     },
     onError: (error: any) => {
       messageApi.error(error?.message || '删除失败');
+    },
+  });
+  
+  // 更新保存搜索条件 mutation
+  const updateSavedSearchMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => updateSavedSearch(id, data),
+    onSuccess: () => {
+      messageApi.success('搜索条件已更新');
+      setSaveModalVisible(false);
+      setSaveName('');
+      setSaveIsShared(false);
+      setSaveIsPinned(false);
+      setEditingSearch(null);
+      queryClient.invalidateQueries({ queryKey: ['savedSearches', pagePath] });
+    },
+    onError: (error: any) => {
+      messageApi.error(error?.message || '更新失败');
     },
   });
 
@@ -515,34 +721,43 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   };
 
   /**
-   * 处理搜索
+   * 统一过滤空值的工具函数（最佳实践）
    */
-  const handleSearch = async () => {
+  const filterEmptyValues = useCallback((values: Record<string, any>): Record<string, any> => {
+    const filtered: Record<string, any> = {};
+    Object.keys(values).forEach((key) => {
+      const value = values[key];
+      // ⭐ 最佳实践：统一过滤逻辑，排除空值
+      if (
+        value !== undefined && 
+        value !== null && 
+        value !== '' &&
+        !(Array.isArray(value) && value.length === 0)
+      ) {
+        filtered[key] = value;
+      }
+    });
+    return filtered;
+  }, []);
+
+  /**
+   * 处理搜索（最佳实践：统一参数传递，优化时序处理）
+   */
+  const handleSearch = useCallback(async () => {
     try {
-      // ⭐ 修复：使用 getFieldsValue() 获取所有字段值，而不是 validateFields()
-      // validateFields() 只会返回通过验证的字段，如果字段为空或未填写，可能返回 undefined
-      // getFieldsValue() 会返回所有字段的值（包括空值）
+      // ⭐ 最佳实践：使用 getFieldsValue() 获取所有字段值
       const values = searchFormRef.current?.getFieldsValue() || {};
       
-      // 过滤掉空值（undefined、null、空字符串），只保留有值的字段
-      const filteredValues: Record<string, any> = {};
-      Object.keys(values).forEach((key) => {
-        const value = values[key];
-        // 保留非空值（包括 0、false 等有效值）
-        if (value !== undefined && value !== null && value !== '') {
-          filteredValues[key] = value;
-        }
-      });
+      // ⭐ 最佳实践：使用统一的过滤函数
+      const filteredValues = filterEmptyValues(values);
       
-      // ⭐ 关键修复：同时使用两种方式确保搜索参数传递
-      // 方式1：设置到 ProTable 的表单（用于表单值读取）
+      // ⭐ 最佳实践：统一设置搜索参数到所有需要的地方
+      // 1. 设置到 ProTable 的表单（用于表单值读取）
       if (formRef.current) {
-        // 直接设置搜索值，不清空（避免清空导致值丢失）
-        // 只设置有值的字段，保留其他字段的现有值
         formRef.current.setFieldsValue(filteredValues);
       }
       
-      // 方式2：存储到 searchParamsRef（用于直接传递搜索参数，避免表单值更新时机问题）
+      // 2. 存储到 searchParamsRef（用于直接传递搜索参数）
       if (searchParamsRef) {
         searchParamsRef.current = filteredValues;
       }
@@ -550,109 +765,298 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // 关闭弹窗
       onClose();
       
-      // ⭐ 关键修复：使用 requestAnimationFrame + setTimeout 确保表单值已更新后再触发 reload
-      // setFieldsValue 是异步的，需要等待表单值更新完成
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          // 触发 ProTable 重新查询（使用 resetPageIndex: false 保持当前页码）
-          actionRef.current?.reload(false);
-        }, 150); // 等待 150ms 确保表单值已更新
+      // ⭐ 最佳实践：使用 Promise 确保表单值已更新后再触发 reload
+      await new Promise<void>((resolve) => {
+        // 使用 requestAnimationFrame 确保 DOM 更新完成
+        requestAnimationFrame(() => {
+          // 使用 setTimeout 确保表单值已更新
+          setTimeout(() => {
+            resolve();
+          }, 100); // 减少等待时间到 100ms
+        });
       });
+      
+      // ⭐ 最佳实践：触发 ProTable 重新查询
+      if (actionRef.current) {
+        actionRef.current.reload(false);
+      }
     } catch (error) {
-      // 静默处理错误，避免影响用户体验
+      // ⭐ 最佳实践：错误处理
+      console.error('搜索处理失败:', error);
+      messageApi.error('搜索失败，请稍后重试');
     }
-  };
+  }, [formRef, searchParamsRef, actionRef, onClose, filterEmptyValues, messageApi]);
 
   /**
-   * 处理重置
+   * 处理重置（最佳实践：统一清空所有搜索相关状态）
    */
-  const handleReset = () => {
-    searchFormRef.current?.resetFields();
-    if (formRef.current) {
-      formRef.current.resetFields();
-    }
-    // ⭐ 关键修复：清空 searchParamsRef
-    if (searchParamsRef) {
-      searchParamsRef.current = undefined;
-    }
-    actionRef.current?.reload();
-  };
-  
-  /**
-   * 处理保存搜索条件
-   */
-  const handleSaveSearch = () => {
-    const values = searchFormRef.current?.getFieldsValue() || {};
-    const filteredValues: Record<string, any> = {};
-    Object.keys(values).forEach((key) => {
-      const value = values[key];
-      if (value !== undefined && value !== null && value !== '') {
-        filteredValues[key] = value;
+  const handleReset = useCallback(async () => {
+    try {
+      // ⭐ 最佳实践：清空搜索表单
+      searchFormRef.current?.resetFields();
+      
+      // ⭐ 最佳实践：清空 ProTable 表单
+      if (formRef.current) {
+        formRef.current.resetFields();
       }
-    });
+      
+      // ⭐ 最佳实践：清空 searchParamsRef
+      if (searchParamsRef) {
+        searchParamsRef.current = undefined;
+      }
+      
+      // ⭐ 最佳实践：等待表单重置完成后再触发 reload
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resolve();
+          }, 50);
+        });
+      });
+      
+      // ⭐ 最佳实践：触发 ProTable 重新查询
+      if (actionRef.current) {
+        actionRef.current.reload();
+      }
+    } catch (error) {
+      console.error('重置失败:', error);
+    }
+  }, [formRef, searchParamsRef, actionRef]);
+
+  /**
+   * 处理保存搜索条件（最佳实践：统一空值过滤）
+   */
+  const handleSaveSearch = useCallback(() => {
+    const values = searchFormRef.current?.getFieldsValue() || {};
+    const filteredValues = filterEmptyValues(values);
     
     if (Object.keys(filteredValues).length === 0) {
       messageApi.warning('请先设置搜索条件');
       return;
     }
     
+    // 打开保存弹窗
     setSaveModalVisible(true);
-  };
+  }, [filterEmptyValues, messageApi]);
   
   /**
-   * 确认保存搜索条件
+   * 确认保存搜索条件（最佳实践：统一空值过滤）
    */
-  const handleConfirmSave = () => {
+  const handleConfirmSave = useCallback(() => {
     if (!saveName.trim()) {
       messageApi.warning('请输入搜索条件名称');
       return;
     }
     
     const values = searchFormRef.current?.getFieldsValue() || {};
-    const filteredValues: Record<string, any> = {};
-    Object.keys(values).forEach((key) => {
-      const value = values[key];
-      if (value !== undefined && value !== null && value !== '') {
-        filteredValues[key] = value;
-      }
-    });
+    const filteredValues = filterEmptyValues(values);
     
-    createSavedSearchMutation.mutate({
-      page_path: pagePath,
-      name: saveName.trim(),
-      is_shared: saveIsShared,
-      search_params: filteredValues,
-    });
-  };
+    if (editingSearch) {
+      // 更新现有搜索条件
+      updateSavedSearchMutation.mutate({
+        id: editingSearch.id,
+        data: {
+          name: saveName.trim(),
+          is_shared: saveIsShared,
+          is_pinned: saveIsPinned,
+          search_params: filteredValues,
+        },
+      });
+    } else {
+      // 创建新搜索条件
+      createSavedSearchMutation.mutate({
+        page_path: pagePath,
+        name: saveName.trim(),
+        is_shared: saveIsShared,
+        is_pinned: saveIsPinned,
+        search_params: filteredValues,
+      });
+    }
+  }, [saveName, saveIsShared, saveIsPinned, editingSearch, pagePath, filterEmptyValues, messageApi, updateSavedSearchMutation, createSavedSearchMutation]);
   
   /**
    * 加载已保存的搜索条件
    */
-  const handleLoadSavedSearch = (savedSearch: SavedSearch) => {
-    // 设置搜索表单值
-    searchFormRef.current?.setFieldsValue(savedSearch.search_params);
-    
-    // 同时设置到 ProTable 表单和 searchParamsRef
-    if (formRef.current) {
-      formRef.current.setFieldsValue(savedSearch.search_params);
+  /**
+   * 加载搜索条件到表单（最佳实践：统一清空和设置逻辑，不执行搜索，用于编辑）
+   */
+  const handleLoadSavedSearchToForm = useCallback(async (savedSearch: SavedSearch) => {
+    try {
+      // ⭐ 最佳实践：获取所有可搜索的列
+      const searchableColumns = getSearchableColumns();
+      const allFieldNames = searchableColumns
+        .map((col) => col.dataIndex)
+        .filter((name): name is string => typeof name === 'string');
+      
+      // ⭐ 最佳实践：创建空值对象，清空所有字段
+      const emptyValues: Record<string, any> = {};
+      allFieldNames.forEach((name) => {
+        emptyValues[name] = undefined;
+      });
+      
+      // ⭐ 最佳实践：统一清空所有表单
+      searchFormRef.current?.setFieldsValue(emptyValues);
+      if (formRef.current) {
+        formRef.current.setFieldsValue(emptyValues);
+      }
+      if (searchParamsRef) {
+        searchParamsRef.current = undefined;
+      }
+      
+      // ⭐ 最佳实践：等待清空完成
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resolve();
+          }, 50);
+        });
+      });
+      
+      // ⭐ 最佳实践：使用统一的过滤函数
+      const filteredParams = filterEmptyValues(savedSearch.search_params);
+      
+      // ⭐ 最佳实践：设置到搜索表单和 ProTable 表单（不设置 searchParamsRef，不触发搜索）
+      searchFormRef.current?.setFieldsValue(filteredParams);
+      if (formRef.current) {
+        formRef.current.setFieldsValue(filteredParams);
+      }
+      
+      // 不关闭弹窗，让用户可以看到已加载的条件并可以修改
+    } catch (error) {
+      console.error('加载搜索条件失败:', error);
+      messageApi.error('加载搜索条件失败，请稍后重试');
     }
-    if (searchParamsRef) {
-      searchParamsRef.current = savedSearch.search_params;
+  }, [getSearchableColumns, formRef, searchParamsRef, filterEmptyValues, messageApi]);
+
+  /**
+   * 应用搜索条件并执行搜索（最佳实践：统一清空和设置逻辑）
+   */
+  const handleApplySavedSearch = useCallback(async (savedSearch: SavedSearch) => {
+    try {
+      // ⭐ 最佳实践：获取所有可搜索的列
+      const searchableColumns = getSearchableColumns();
+      const allFieldNames = searchableColumns
+        .map((col) => col.dataIndex)
+        .filter((name): name is string => typeof name === 'string');
+      
+      // ⭐ 最佳实践：创建空值对象，清空所有字段
+      const emptyValues: Record<string, any> = {};
+      allFieldNames.forEach((name) => {
+        emptyValues[name] = undefined;
+      });
+      
+      // ⭐ 最佳实践：统一清空所有表单
+      searchFormRef.current?.setFieldsValue(emptyValues);
+      if (formRef.current) {
+        formRef.current.setFieldsValue(emptyValues);
+      }
+      if (searchParamsRef) {
+        searchParamsRef.current = undefined;
+      }
+      
+      // ⭐ 最佳实践：等待清空完成
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resolve();
+          }, 50);
+        });
+      });
+      
+      // ⭐ 最佳实践：使用统一的过滤函数
+      const filteredParams = filterEmptyValues(savedSearch.search_params);
+      
+      // ⭐ 最佳实践：设置到所有需要的地方
+      searchFormRef.current?.setFieldsValue(filteredParams);
+      if (formRef.current) {
+        formRef.current.setFieldsValue(filteredParams);
+      }
+      if (searchParamsRef) {
+        searchParamsRef.current = filteredParams;
+      }
+      
+      // ⭐ 最佳实践：等待表单值更新后再触发搜索
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resolve();
+          }, 100);
+        });
+      });
+      
+      // ⭐ 关闭弹窗，让用户看到搜索结果
+      onClose();
+      
+      // ⭐ 最佳实践：触发 ProTable 重新查询
+      if (actionRef.current) {
+        actionRef.current.reload(false);
+      }
+    } catch (error) {
+      console.error('应用搜索条件失败:', error);
+      messageApi.error('应用搜索条件失败，请稍后重试');
     }
-    
-    // 不关闭弹窗，让用户可以看到已加载的条件
-  };
+  }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues, messageApi, onClose]);
   
   /**
    * 删除已保存的搜索条件
    */
-  const handleDeleteSavedSearch = (e: React.MouseEvent, searchId: number) => {
-    e.stopPropagation(); // 阻止事件冒泡
+  const handleDeleteSavedSearch = (e: React.MouseEvent | React.KeyboardEvent, search: SavedSearch) => {
+    if ('stopPropagation' in e) {
+      e.stopPropagation(); // 阻止事件冒泡
+    }
+    
+    // 检查是否是自己的条件
+    if (!isOwnSearch(search)) {
+      messageApi.warning('只能删除自己创建的搜索条件');
+      return;
+    }
+    
     Modal.confirm({
       title: '确认删除',
       content: '确定要删除这个搜索条件吗？',
       onOk: () => {
-        deleteSavedSearchMutation.mutate(searchId);
+        deleteSavedSearchMutation.mutate(search.id);
+      },
+    });
+  };
+  
+  /**
+   * 编辑已保存的搜索条件
+   */
+  const handleEditSavedSearch = (e: React.MouseEvent | React.KeyboardEvent, search: SavedSearch) => {
+    if ('stopPropagation' in e) {
+      e.stopPropagation(); // 阻止事件冒泡
+    }
+    // 设置编辑状态
+    setEditingSearch(search);
+    setSaveName(search.name);
+    setSaveIsShared(search.is_shared);
+    setSaveIsPinned(search.is_pinned);
+    // 加载搜索条件到左侧表单（不打开保存弹窗）
+    handleLoadSavedSearchToForm(search);
+  };
+
+  /**
+   * 取消编辑
+   */
+  const handleCancelEdit = () => {
+    setEditingSearch(null);
+    setSaveName('');
+    setSaveIsShared(false);
+    setSaveIsPinned(false);
+    // 清空表单
+    handleReset();
+  };
+  
+  /**
+   * 切换钉住状态
+   */
+  const handleTogglePin = (e: React.MouseEvent, search: SavedSearch) => {
+    e.stopPropagation(); // 阻止事件冒泡
+    updateSavedSearchMutation.mutate({
+      id: search.id,
+      data: {
+        is_pinned: !search.is_pinned,
       },
     });
   };
@@ -671,24 +1075,60 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           searchButtonRef.current.focus();
         }
       }, 100);
+    } else if (!visible) {
+      // 弹窗关闭时，清除编辑状态
+      setEditingSearch(null);
+      setSaveName('');
+      setSaveIsShared(false);
+      setSaveIsPinned(false);
     }
   }, [visible, formRef]);
 
   const searchableColumns = getSearchableColumns();
 
   return (
-    <Modal
-      title="搜索条件"
-      open={visible}
-      onCancel={onClose}
-      width={1200}
-      centered={false}
-      style={style}
-      getContainer={() => document.body}
-      mask={true}
-      wrapClassName="query-search-modal-wrap"
-      footer={null}
-    >
+    <>
+      <style>{`
+        .query-search-modal-wrap .ant-list-item-meta-title {
+          margin-bottom: 0 !important;
+        }
+        .query-search-modal-wrap .ant-list-item-action > li {
+          padding: 0 2px !important;
+        }
+        .ant-list-item {
+          border-radius: 6px !important;
+        }
+        .ant-list-item-meta-avatar {
+          margin-right: 4px !important;
+        }
+        .ant-list-item-meta {
+          width: 100% !important;
+          flex: 1 !important;
+          min-width: 0 !important;
+        }
+        .ant-list-item-meta-title {
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          width: 100% !important;
+        }
+        .ant-list-item-action {
+          margin-left: 0 !important;
+          flex-shrink: 0 !important;
+        }
+      `}</style>
+      <Modal
+        title="搜索条件"
+        open={visible}
+        onCancel={onClose}
+        width={1200}
+        centered={false}
+        style={style}
+        getContainer={() => document.body}
+        mask={true}
+        wrapClassName="query-search-modal-wrap"
+        footer={null}
+      >
       <div style={{ display: 'flex', minHeight: 400 }}>
         {/* 左侧：搜索表单 */}
         <div 
@@ -713,6 +1153,32 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             }
           }}
         >
+          {/* 编辑状态提示 */}
+          {editingSearch && (
+            <div style={{ 
+              marginBottom: 16, 
+              padding: '8px 12px', 
+              backgroundColor: '#e6f7ff', 
+              border: '1px solid #91d5ff',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <span style={{ color: '#1890ff', fontWeight: 500 }}>
+                正在编辑：{editingSearch.name}
+              </span>
+              <Button 
+                type="text" 
+                size="small"
+                onClick={handleCancelEdit}
+                style={{ color: '#1890ff' }}
+              >
+                取消编辑
+              </Button>
+            </div>
+          )}
+          
           <ProForm
             formRef={searchFormRef}
             submitter={false}
@@ -728,8 +1194,12 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           
           {/* 搜索相关按钮（底部对齐） */}
           <div style={{ marginTop: 'auto', paddingTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button icon={<SaveOutlined />} onClick={handleSaveSearch}>
-              保存搜索条件
+            <Button 
+              icon={<SaveOutlined />} 
+              onClick={handleSaveSearch}
+              type={editingSearch ? 'primary' : 'default'}
+            >
+              {editingSearch ? '更新搜索条件' : '保存搜索条件'}
             </Button>
             <Button onClick={handleReset}>
               重置
@@ -748,44 +1218,179 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         </div>
         
         {/* 中间：共享搜索条件 */}
-        <div style={{ flex: '1', paddingLeft: 16, paddingRight: 16, borderRight: '1px solid #f0f0f0' }}>
+        <div style={{ flex: '1', paddingLeft: 16, paddingRight: 16, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
-            <ShareAltOutlined style={{ marginRight: 8 }} />
             共享搜索条件
           </Typography.Title>
           {sharedSearches.length > 0 ? (
-            <List
-              size="small"
-              dataSource={sharedSearches}
-              renderItem={(item) => (
-                <List.Item
-                  style={{ cursor: 'pointer', padding: '8px 12px' }}
-                  onClick={() => handleLoadSavedSearch(item)}
+            <div style={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              maxHeight: '400px',
+              paddingRight: 4,
+            }}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleSharedDragEnd}
+              >
+                <SortableContext
+                  items={sharedSearches.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <List
+                    size="small"
+                    dataSource={sharedSearches}
+                    renderItem={(item) => (
+                      <SortableListItem id={item.id}>
+                        {(listeners) => (
+                        <List.Item
+                  style={{ 
+                    padding: '8px 12px',
+                    border: `1px solid ${token.colorSuccessBorder}`,
+                    borderRadius: '4px',
+                    marginBottom: 8,
+                    backgroundColor: token.colorSuccessBg,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = token.colorSuccess;
+                    e.currentTarget.style.backgroundColor = token.colorSuccessBgHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = token.colorSuccessBorder;
+                    e.currentTarget.style.backgroundColor = token.colorSuccessBg;
+                  }}
                   actions={[
                     <Button
-                      key="delete"
+                      key="search"
                       type="text"
                       size="small"
-                      danger
-                      icon={<DeleteOutlined />}
+                      icon={<SearchOutlined />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteSavedSearch(e, item.id);
+                        handleApplySavedSearch(item);
                       }}
+                      title="应用搜索"
+                      style={{ marginRight: 0 }}
                     />,
+                    <Button
+                      key="pin"
+                      type="text"
+                      size="small"
+                      icon={item.is_pinned ? <PushpinFilled /> : <PushpinOutlined />}
+                      onClick={(e) => handleTogglePin(e, item)}
+                      title={item.is_pinned ? '取消钉住' : '钉住'}
+                      style={{ marginRight: 0 }}
+                    />,
+                    <Dropdown
+                      key="more"
+                      menu={{
+                        items: [
+                          {
+                            key: 'edit',
+                            label: '编辑',
+                            icon: <EditOutlined />,
+                            onClick: (e) => {
+                              e.domEvent.stopPropagation();
+                              handleEditSavedSearch(e.domEvent, item);
+                            },
+                          },
+                          // 如果是自己的公共条件，显示"转为个人"选项
+                          ...(item.is_shared && isOwnSearch(item) ? [{
+                            key: 'convert-to-personal',
+                            label: '转为个人',
+                            icon: <EditOutlined />,
+                            onClick: (e: any) => {
+                              e.domEvent.stopPropagation();
+                              updateSavedSearchMutation.mutate({
+                                id: item.id,
+                                data: {
+                                  is_shared: false,
+                                },
+                              });
+                            },
+                          }] : []),
+                          // 只有自己的条件才能删除
+                          ...(isOwnSearch(item) ? [{
+                            key: 'delete',
+                            label: '删除',
+                            icon: <DeleteOutlined />,
+                            danger: true,
+                            onClick: (e: any) => {
+                              e.domEvent.stopPropagation();
+                              handleDeleteSavedSearch(e.domEvent, item);
+                            },
+                          }] : []),
+                        ],
+                      }}
+                      trigger={['click']}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<MoreOutlined />}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ marginRight: 0 }}
+                      />
+                    </Dropdown>,
                   ]}
                 >
                   <List.Item.Meta
-                    title={item.name}
-                    description={
-                      <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-                        {new Date(item.updated_at).toLocaleDateString()}
-                      </Typography.Text>
+                    avatar={
+                      <HolderOutlined 
+                        style={{ 
+                          cursor: 'grab',
+                          color: '#999',
+                          fontSize: '16px',
+                        }}
+                        {...listeners}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
                     }
+                    title={
+                      <div 
+                        style={{ 
+                          margin: 0,
+                          padding: 0,
+                          lineHeight: '1.5',
+                          display: 'flex',
+                          alignItems: 'center',
+                          height: '100%',
+                          cursor: 'pointer',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoadSavedSearchToForm(item);
+                        }}
+                        title={item.name}
+                      >
+                        {item.name}
+                      </div>
+                    }
+                    style={{ 
+                      margin: 0,
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      height: '100%',
+                    }}
                   />
-                </List.Item>
-              )}
-            />
+                        </List.Item>
+                        )}
+                      </SortableListItem>
+                    )}
+                  />
+                </SortableContext>
+              </DndContext>
+            </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
               暂无共享搜索条件
@@ -794,44 +1399,194 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         </div>
         
         {/* 右侧：个人搜索条件 */}
-        <div style={{ flex: '1', paddingLeft: 16 }}>
+        <div style={{ flex: '1', paddingLeft: 16, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
-            <UserOutlined style={{ marginRight: 8 }} />
             个人搜索条件
           </Typography.Title>
           {personalSearches.length > 0 ? (
-            <List
-              size="small"
-              dataSource={personalSearches}
-              renderItem={(item) => (
-                <List.Item
-                  style={{ cursor: 'pointer', padding: '8px 12px' }}
-                  onClick={() => handleLoadSavedSearch(item)}
+            <div style={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              maxHeight: '400px',
+              paddingRight: 4,
+            }}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handlePersonalDragEnd}
+              >
+                <SortableContext
+                  items={personalSearches.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <List
+                    size="small"
+                    dataSource={personalSearches}
+                    renderItem={(item) => (
+                      <SortableListItem id={item.id}>
+                        {(listeners) => (
+                        <List.Item
+                  style={{ 
+                    padding: '8px 12px',
+                    border: `1px solid ${token.colorInfoBorder}`,
+                    borderRadius: '4px',
+                    marginBottom: 8,
+                    backgroundColor: token.colorInfoBg,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = token.colorInfo;
+                    e.currentTarget.style.backgroundColor = token.colorInfoBgHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = token.colorInfoBorder;
+                    e.currentTarget.style.backgroundColor = token.colorInfoBg;
+                  }}
                   actions={[
                     <Button
-                      key="delete"
+                      key="search"
                       type="text"
                       size="small"
-                      danger
-                      icon={<DeleteOutlined />}
+                      icon={<SearchOutlined />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeleteSavedSearch(e, item.id);
+                        handleApplySavedSearch(item);
                       }}
+                      title="应用搜索"
+                      style={{ marginRight: 0 }}
                     />,
+                    <Button
+                      key="pin"
+                      type="text"
+                      size="small"
+                      icon={item.is_pinned ? <PushpinFilled /> : <PushpinOutlined />}
+                      onClick={(e) => handleTogglePin(e, item)}
+                      title={item.is_pinned ? '取消钉住' : '钉住'}
+                      style={{ marginRight: 0 }}
+                    />,
+                    <Dropdown
+                      key="more"
+                      menu={{
+                        items: [
+                          {
+                            key: 'edit',
+                            label: '编辑',
+                            icon: <EditOutlined />,
+                            onClick: (e) => {
+                              e.domEvent.stopPropagation();
+                              handleEditSavedSearch(e.domEvent, item);
+                            },
+                          },
+                          // 如果是个人条件，显示"设为公共"选项
+                          ...(!item.is_shared && isOwnSearch(item) ? [{
+                            key: 'set-to-shared',
+                            label: '设为公共',
+                            icon: <ShareAltOutlined />,
+                            onClick: (e: any) => {
+                              e.domEvent.stopPropagation();
+                              updateSavedSearchMutation.mutate({
+                                id: item.id,
+                                data: {
+                                  is_shared: true,
+                                },
+                              });
+                            },
+                          }] : []),
+                          // 如果是自己的公共条件，显示"转为个人"选项
+                          ...(item.is_shared && isOwnSearch(item) ? [{
+                            key: 'convert-to-personal',
+                            label: '转为个人',
+                            icon: <EditOutlined />,
+                            onClick: (e: any) => {
+                              e.domEvent.stopPropagation();
+                              updateSavedSearchMutation.mutate({
+                                id: item.id,
+                                data: {
+                                  is_shared: false,
+                                },
+                              });
+                            },
+                          }] : []),
+                          // 只有自己的条件才能删除
+                          ...(isOwnSearch(item) ? [{
+                            key: 'delete',
+                            label: '删除',
+                            icon: <DeleteOutlined />,
+                            danger: true,
+                            onClick: (e: any) => {
+                              e.domEvent.stopPropagation();
+                              handleDeleteSavedSearch(e.domEvent, item);
+                            },
+                          }] : []),
+                        ],
+                      }}
+                      trigger={['click']}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<MoreOutlined />}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ marginRight: 0 }}
+                      />
+                    </Dropdown>,
                   ]}
                 >
                   <List.Item.Meta
-                    title={item.name}
-                    description={
-                      <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-                        {new Date(item.updated_at).toLocaleDateString()}
-                      </Typography.Text>
+                    avatar={
+                      <HolderOutlined 
+                        style={{ 
+                          cursor: 'grab',
+                          color: '#999',
+                          fontSize: '16px',
+                        }}
+                        {...listeners}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
                     }
+                    title={
+                      <div 
+                        style={{ 
+                          margin: 0,
+                          padding: 0,
+                          lineHeight: '1.5',
+                          display: 'flex',
+                          alignItems: 'center',
+                          height: '100%',
+                          cursor: 'pointer',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoadSavedSearchToForm(item);
+                        }}
+                        title={item.name}
+                      >
+                        {item.name}
+                      </div>
+                    }
+                    style={{ 
+                      margin: 0,
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      height: '100%',
+                    }}
                   />
-                </List.Item>
-              )}
-            />
+                        </List.Item>
+                        )}
+                      </SortableListItem>
+                    )}
+                  />
+                </SortableContext>
+              </DndContext>
+            </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
               暂无个人搜索条件
@@ -839,18 +1594,21 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           )}
         </div>
       </div>
+      </Modal>
       
       {/* 保存搜索条件弹窗 */}
       <Modal
-        title="保存搜索条件"
+        title={editingSearch ? '编辑搜索条件' : '保存搜索条件'}
         open={saveModalVisible}
         onCancel={() => {
           setSaveModalVisible(false);
           setSaveName('');
           setSaveIsShared(false);
+          setSaveIsPinned(false);
+          setEditingSearch(null);
         }}
         onOk={handleConfirmSave}
-        confirmLoading={createSavedSearchMutation.isPending}
+        confirmLoading={createSavedSearchMutation.isPending || updateSavedSearchMutation.isPending}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
@@ -873,9 +1631,20 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
               共享给其他用户
             </label>
           </div>
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={saveIsPinned}
+                onChange={(e) => setSaveIsPinned(e.target.checked)}
+                style={{ marginRight: 8 }}
+              />
+              钉住（显示在高级搜索按钮后面）
+            </label>
+          </div>
         </Space>
       </Modal>
-    </Modal>
+    </>
   );
 };
 
@@ -910,9 +1679,255 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   actionRef,
   searchParamsRef,
 }) => {
+  const location = useLocation();
+  const { token } = theme.useToken();
+  
+  // 获取当前页面路径
+  const pagePath = location.pathname;
+  
+  // 获取已保存的搜索条件列表（只获取钉住的）
+  const { data: savedSearchesData } = useQuery({
+    queryKey: ['savedSearches', pagePath],
+    queryFn: () => getSavedSearchList(pagePath, true),
+    // 始终获取数据，不只在弹窗打开时
+    enabled: true,
+  });
+  
+  // ⭐ 获取钉住的条件，并按照拖拽后的排序显示
+  const allPinnedSearches = (savedSearchesData?.items || []).filter((item) => item.is_pinned);
+  
+  // 从 localStorage 恢复排序（合并共享和个人条件的排序）
+  const [pinnedSearches, setPinnedSearches] = useState<SavedSearch[]>([]);
+  
+  useEffect(() => {
+    if (allPinnedSearches.length === 0) {
+      setPinnedSearches([]);
+      return;
+    }
+    
+    // 分离共享和个人钉住条件
+    const sharedPinned = allPinnedSearches.filter((item) => item.is_shared);
+    const personalPinned = allPinnedSearches.filter((item) => !item.is_shared);
+    
+    // 从 localStorage 获取排序
+    const sharedOrderKey = `saved_search_order_shared_${pagePath}`;
+    const personalOrderKey = `saved_search_order_personal_${pagePath}`;
+    
+    const sharedOrder = localStorage.getItem(sharedOrderKey);
+    const personalOrder = localStorage.getItem(personalOrderKey);
+    
+    // 排序共享钉住条件
+    let orderedShared: SavedSearch[] = [];
+    if (sharedOrder) {
+      try {
+        const order = JSON.parse(sharedOrder) as number[];
+        const ordered = order
+          .map((id) => sharedPinned.find((item) => item.id === id))
+          .filter((item): item is SavedSearch => item !== undefined);
+        const unordered = sharedPinned.filter((item) => !order.includes(item.id));
+        orderedShared = [...ordered, ...unordered];
+      } catch {
+        orderedShared = sharedPinned;
+      }
+    } else {
+      orderedShared = sharedPinned;
+    }
+    
+    // 排序个人钉住条件
+    let orderedPersonal: SavedSearch[] = [];
+    if (personalOrder) {
+      try {
+        const order = JSON.parse(personalOrder) as number[];
+        const ordered = order
+          .map((id) => personalPinned.find((item) => item.id === id))
+          .filter((item): item is SavedSearch => item !== undefined);
+        const unordered = personalPinned.filter((item) => !order.includes(item.id));
+        orderedPersonal = [...ordered, ...unordered];
+      } catch {
+        orderedPersonal = personalPinned;
+      }
+    } else {
+      orderedPersonal = personalPinned;
+    }
+    
+    // 合并排序后的钉住条件（共享在前，个人在后）
+    setPinnedSearches([...orderedShared, ...orderedPersonal]);
+  }, [allPinnedSearches, pagePath]);
+  
+  // ⭐ 限制显示的钉住条件数量，避免影响后面的视图组件
+  const MAX_VISIBLE_PINNED = 5; // 最多显示 5 个钉住的条件
+  const visiblePinnedSearches = pinnedSearches.slice(0, MAX_VISIBLE_PINNED);
+  const morePinnedSearches = pinnedSearches.slice(MAX_VISIBLE_PINNED);
+  
+  // 获取所有可搜索的列
+  const getSearchableColumns = () => {
+    return columns.filter((col) => {
+      // 排除隐藏搜索的列
+      if (col.hideInSearch) {
+        return false;
+      }
+      // 排除操作列
+      if (col.valueType === 'option') {
+        return false;
+      }
+      return true;
+    });
+  };
+  
+  /**
+   * 统一过滤空值的工具函数（最佳实践）
+   */
+  const filterEmptyValues = useCallback((values: Record<string, any>): Record<string, any> => {
+    const filtered: Record<string, any> = {};
+    Object.keys(values).forEach((key) => {
+      const value = values[key];
+      // ⭐ 最佳实践：统一过滤逻辑，排除空值
+      if (
+        value !== undefined && 
+        value !== null && 
+        value !== '' &&
+        !(Array.isArray(value) && value.length === 0)
+      ) {
+        filtered[key] = value;
+      }
+    });
+    return filtered;
+  }, []);
+
+  /**
+   * 加载钉住的搜索条件（最佳实践：统一清空和设置逻辑）
+   */
+  const handleLoadPinnedSearch = useCallback(async (search: SavedSearch) => {
+    try {
+      // ⭐ 最佳实践：获取所有可搜索的列
+      const searchableColumns = getSearchableColumns();
+      const allFieldNames = searchableColumns
+        .map((col) => col.dataIndex)
+        .filter((name): name is string => typeof name === 'string');
+      
+      // ⭐ 最佳实践：创建空值对象，清空所有字段
+      const emptyValues: Record<string, any> = {};
+      allFieldNames.forEach((name) => {
+        emptyValues[name] = undefined;
+      });
+      
+      // ⭐ 最佳实践：统一清空所有表单
+      if (formRef.current) {
+        formRef.current.setFieldsValue(emptyValues);
+      }
+      if (searchParamsRef) {
+        searchParamsRef.current = undefined;
+      }
+      
+      // ⭐ 最佳实践：等待清空完成
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resolve();
+          }, 50);
+        });
+      });
+      
+      // ⭐ 最佳实践：使用统一的过滤函数
+      const filteredParams = filterEmptyValues(search.search_params);
+      
+      // ⭐ 最佳实践：设置到所有需要的地方
+      if (formRef.current) {
+        formRef.current.setFieldsValue(filteredParams);
+      }
+      if (searchParamsRef) {
+        searchParamsRef.current = filteredParams;
+      }
+      
+      // ⭐ 最佳实践：等待表单值更新后再触发搜索
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            resolve();
+          }, 100);
+        });
+      });
+      
+      // ⭐ 最佳实践：触发 ProTable 重新查询
+      if (actionRef.current) {
+        actionRef.current.reload(false);
+      }
+    } catch (error) {
+      console.error('加载钉住的搜索条件失败:', error);
+    }
+  }, [getSearchableColumns, formRef, searchParamsRef, actionRef, filterEmptyValues]);
+
+  /**
+   * 重置所有筛选条件
+   */
+  const handleReset = () => {
+    // 清空表单所有字段
+    if (formRef.current) {
+      formRef.current.resetFields();
+    }
+    // 清空搜索参数 ref
+    if (searchParamsRef) {
+      searchParamsRef.current = undefined;
+    }
+    // 重新加载表格数据
+    if (actionRef.current) {
+      actionRef.current.reload();
+    }
+  };
+
   const [visible, setVisible] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [modalStyle, setModalStyle] = useState<React.CSSProperties>({});
+  const [currentSearchParams, setCurrentSearchParams] = useState<Record<string, any> | undefined>(undefined);
+
+  /**
+   * 判断搜索条件是否匹配（用于显示激活状态）
+   */
+  const isSearchActive = useCallback((savedSearch: SavedSearch): boolean => {
+    const currentParams = searchParamsRef?.current || currentSearchParams;
+    if (!currentParams) {
+      return false;
+    }
+    const savedParams = savedSearch.search_params || {};
+    
+    // 比较所有搜索参数
+    const savedKeys = Object.keys(savedParams);
+    if (savedKeys.length === 0) {
+      return false;
+    }
+    
+    // 检查所有保存的参数是否都在当前搜索参数中，且值匹配
+    for (const key of savedKeys) {
+      const savedValue = savedParams[key];
+      const currentValue = currentParams[key];
+      
+      // 处理数组类型的值（如多选）
+      if (Array.isArray(savedValue) && Array.isArray(currentValue)) {
+        if (savedValue.length !== currentValue.length) {
+          return false;
+        }
+        const sortedSaved = [...savedValue].sort();
+        const sortedCurrent = [...currentValue].sort();
+        if (JSON.stringify(sortedSaved) !== JSON.stringify(sortedCurrent)) {
+          return false;
+        }
+      } else if (savedValue !== currentValue) {
+        return false;
+      }
+    }
+    
+    return true;
+  }, [searchParamsRef, currentSearchParams]);
+
+  // 监听 searchParamsRef 的变化，更新 currentSearchParams 以触发重新渲染
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (searchParamsRef?.current !== currentSearchParams) {
+        setCurrentSearchParams(searchParamsRef?.current);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [searchParamsRef, currentSearchParams]);
 
   /**
    * 计算 Modal 位置，使其在按钮下方弹出，并与按钮左对齐
@@ -981,15 +1996,144 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
 
   return (
     <>
-      <Button
-        ref={buttonRef}
-        onClick={handleOpen}
-        type="primary"
-        ghost
-      >
-        高级搜索
-        <DownOutlined style={{ marginLeft: 4 }} />
-      </Button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Button
+          ref={buttonRef}
+          onClick={handleOpen}
+          type="primary"
+          ghost
+          style={{
+            backgroundColor: token.colorBgContainer,
+          }}
+        >
+          高级搜索
+          <DownOutlined style={{ marginLeft: 4 }} />
+        </Button>
+        <Button
+          onClick={handleReset}
+          icon={<ReloadOutlined />}
+          style={{
+            borderColor: token.colorBorder,
+            color: token.colorTextSecondary,
+            backgroundColor: token.colorBgContainer,
+            boxShadow: 'none',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = token.colorPrimary;
+            e.currentTarget.style.color = token.colorPrimary;
+            e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = token.colorBorder;
+            e.currentTarget.style.color = token.colorTextSecondary;
+            e.currentTarget.style.backgroundColor = token.colorBgContainer;
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          重置
+        </Button>
+        {/* 显示钉住的搜索条件 - 使用 TAB 样式，与前面按钮大小一致 */}
+        {pinnedSearches.length > 0 && (
+          <div 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 0, 
+              marginLeft: 8,
+              borderRadius: '6px',
+              border: `1px solid ${token.colorBorder}`,
+              overflow: 'hidden',
+              backgroundColor: token.colorBgContainer,
+            }}
+          >
+            {/* 显示前 N 个钉住的条件 - 使用 Button TAB 样式 */}
+            {visiblePinnedSearches.map((search, index) => {
+              const isActive = isSearchActive(search);
+              return (
+                <Button
+                  key={search.id}
+                  onClick={() => handleLoadPinnedSearch(search)}
+                  type="text"
+                  style={{ 
+                    borderRadius: 0,
+                    border: 'none',
+                    borderRight: index < visiblePinnedSearches.length - 1 || morePinnedSearches.length > 0 ? `1px solid ${token.colorBorder}` : 'none',
+                    height: '32px',
+                    padding: '4px 15px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    maxWidth: '150px',
+                    backgroundColor: isActive ? token.colorPrimaryBg : token.colorBgContainer,
+                    color: isActive ? token.colorPrimary : token.colorText,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+                      e.currentTarget.style.color = token.colorPrimary;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.backgroundColor = token.colorBgContainer;
+                      e.currentTarget.style.color = token.colorText;
+                    } else {
+                      e.currentTarget.style.backgroundColor = token.colorPrimaryBg;
+                      e.currentTarget.style.color = token.colorPrimary;
+                    }
+                  }}
+                  title={search.name}
+                >
+                  {search.name}
+                </Button>
+              );
+            })}
+            {/* 如果还有更多钉住的条件，显示"更多条件"下拉菜单 - 使用 Button TAB 样式 */}
+            {morePinnedSearches.length > 0 && (
+              <Dropdown
+                menu={{
+                  items: morePinnedSearches.map((search) => ({
+                    key: search.id,
+                    label: search.name,
+                    onClick: () => handleLoadPinnedSearch(search),
+                  })),
+                }}
+                trigger={['click']}
+              >
+                <Button
+                  type="text"
+                  icon={<DownOutlined />}
+                  style={{ 
+                    borderRadius: 0,
+                    border: 'none',
+                    height: '32px',
+                    padding: '4px 15px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: token.colorBgContainer,
+                    color: token.colorText,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+                    e.currentTarget.style.color = token.colorPrimary;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = token.colorBgContainer;
+                    e.currentTarget.style.color = token.colorText;
+                  }}
+                >
+                  更多 ({morePinnedSearches.length})
+                </Button>
+              </Dropdown>
+            )}
+          </div>
+        )}
+      </div>
       <QuerySearchModal
         columns={columns}
         formRef={formRef}

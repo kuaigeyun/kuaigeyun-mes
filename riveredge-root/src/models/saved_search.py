@@ -37,6 +37,7 @@ class SavedSearch(BaseModel):
     page_path = fields.CharField(max_length=255, description="页面路径（用于区分不同页面的搜索条件）")
     name = fields.CharField(max_length=100, description="搜索条件名称")
     is_shared = fields.BooleanField(default=False, description="是否共享（True：共享，False：个人）")
+    is_pinned = fields.BooleanField(default=False, description="是否钉住（True：钉住，显示在高级搜索按钮后面）")
     search_params = fields.JSONField(description="搜索参数（JSON 格式）")
     
     class Meta:
@@ -54,18 +55,4 @@ class SavedSearch(BaseModel):
         
         # 唯一约束：同一用户在同一页面不能有重名的搜索条件
         unique_together = [("user_id", "page_path", "name")]
-    
-    async def save(self, *args, **kwargs):
-        """
-        重写 save 方法，确保 datetime 字段是时区无关的
-        
-        解决 Tortoise ORM 与 PostgreSQL TIMESTAMP 字段的时区兼容性问题
-        """
-        # 如果 created_at 或 updated_at 是时区感知的，移除时区信息
-        if self.created_at and self.created_at.tzinfo is not None:
-            self.created_at = self.created_at.replace(tzinfo=None)
-        if self.updated_at and self.updated_at.tzinfo is not None:
-            self.updated_at = self.updated_at.replace(tzinfo=None)
-        
-        return await super().save(*args, **kwargs)
 

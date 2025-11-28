@@ -64,7 +64,9 @@ async def build_keyword_filter(
     keyword_is_pinyin = is_pinyin_keyword(keyword) if enable_pinyin_search and PYINYIN_AVAILABLE else False
     
     for field in search_fields:
-        # 1. 普通文本匹配（始终包含）
+        # ⭐ 最佳实践：使用 icontains 进行不区分大小写的模糊搜索
+        # PostgreSQL 的 ILIKE 操作符支持 UTF-8 编码的中文字符
+        # Tortoise ORM 的 icontains 会转换为 PostgreSQL 的 ILIKE '%keyword%'
         field_filter = Q(**{f"{field}__icontains": keyword})
         
         # 2. 如果关键词可能是拼音首字母，添加拼音首字母匹配
@@ -262,6 +264,9 @@ async def list_with_search(
     if keyword and search_fields:
         keyword_filter = await build_keyword_filter(keyword, search_fields, enable_pinyin_search=True)
         if keyword_filter:
+            # ⭐ 最佳实践：添加调试日志，记录搜索参数
+            from loguru import logger
+            logger.debug(f"搜索关键词: {keyword}, 搜索字段: {search_fields}, 过滤器: {keyword_filter}")
             query = query.filter(keyword_filter)
     
     # 应用排序

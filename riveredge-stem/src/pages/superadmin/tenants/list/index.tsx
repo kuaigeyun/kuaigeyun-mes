@@ -169,43 +169,35 @@ const SuperAdminTenantList: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: '关键词',
-      dataIndex: 'keyword',
-      hideInTable: true, // 在表格中隐藏，只在搜索中显示
-      tooltip: '支持搜索组织名称和域名，支持拼音首字母搜索（如：ZS 可匹配"张三"）',
-    },
-    {
       title: '组织名称',
       dataIndex: 'name',
       ellipsis: true,
       sorter: true,
       responsive: ['md'],
       fieldProps: {
-        // 自动完成功能：从后端获取组织名称选项
-        autoCompleteApi: async (keyword: string) => {
-          // 至少输入 2 个字符才开始搜索
-          if (!keyword || keyword.length < 2) {
-            return [];
-          }
-          try {
-            const result = await getTenantList(
-              {
-                page: 1,
-                page_size: 20,
-                keyword: keyword,
-              },
-              true // 超级管理员接口
-            );
-            // 返回选项数组，显示组织名称和域名
-            return result.items.map((tenant) => ({
-              label: `${tenant.name} (${tenant.domain})`,
-              value: tenant.name,
-            }));
-          } catch (error) {
-            console.error('获取组织名称选项失败:', error);
-            return [];
-          }
-        },
+        // 自动完成功能：从后端获取组织名称选项（暂时移除，先完成基础功能）
+        // autoCompleteApi: async (keyword: string) => {
+        //   if (!keyword || keyword.length < 1) {
+        //     return [];
+        //   }
+        //   try {
+        //     const result = await getTenantList(
+        //       {
+        //         page: 1,
+        //         page_size: 20,
+        //         name: keyword,
+        //       },
+        //       true // 超级管理员接口
+        //     );
+        //     return result.items.map((tenant) => ({
+        //       label: `${tenant.name} (${tenant.domain})`,
+        //       value: tenant.name,
+        //     }));
+        //   } catch (error) {
+        //     console.error('获取组织名称选项失败:', error);
+        //     return [];
+        //   }
+        // },
       },
     },
     {
@@ -215,31 +207,29 @@ const SuperAdminTenantList: React.FC = () => {
       sorter: true,
       responsive: ['md'],
       fieldProps: {
-        // 自动完成功能：从后端获取域名选项
-        autoCompleteApi: async (keyword: string) => {
-          // 至少输入 2 个字符才开始搜索
-          if (!keyword || keyword.length < 2) {
-            return [];
-          }
-          try {
-            const result = await getTenantList(
-              {
-                page: 1,
-                page_size: 20,
-                keyword: keyword,
-              },
-              true // 超级管理员接口
-            );
-            // 返回选项数组，显示域名和组织名称
-            return result.items.map((tenant) => ({
-              label: `${tenant.domain} (${tenant.name})`,
-              value: tenant.domain,
-            }));
-          } catch (error) {
-            console.error('获取域名选项失败:', error);
-            return [];
-          }
-        },
+        // 自动完成功能：从后端获取域名选项（暂时移除，先完成基础功能）
+        // autoCompleteApi: async (keyword: string) => {
+        //   if (!keyword || keyword.length < 1) {
+        //     return [];
+        //   }
+        //   try {
+        //     const result = await getTenantList(
+        //       {
+        //         page: 1,
+        //         page_size: 20,
+        //         domain: keyword,
+        //       },
+        //       true // 超级管理员接口
+        //     );
+        //     return result.items.map((tenant) => ({
+        //       label: `${tenant.domain} (${tenant.name})`,
+        //       value: tenant.domain,
+        //     }));
+        //   } catch (error) {
+        //     console.error('获取域名选项失败:', error);
+        //     return [];
+        //   }
+        // },
       },
     },
     {
@@ -421,7 +411,6 @@ const SuperAdminTenantList: React.FC = () => {
         }
 
         // 处理搜索参数
-        // 搜索优先级：name/domain（精确搜索）> keyword（模糊搜索，支持拼音首字母）
         const apiParams: any = {
           page: params.current || 1,
           page_size: params.pageSize || 10,
@@ -430,26 +419,20 @@ const SuperAdminTenantList: React.FC = () => {
         };
         
         // 状态和套餐筛选
-        if (searchFormValues?.status) {
+        // ⭐ 修复：确保只有明确选择的状态才会被传递，避免意外过滤
+        if (searchFormValues?.status && searchFormValues.status !== '' && searchFormValues.status !== undefined && searchFormValues.status !== null) {
           apiParams.status = searchFormValues.status as TenantStatus;
         }
-        if (searchFormValues?.plan) {
+        if (searchFormValues?.plan && searchFormValues.plan !== '' && searchFormValues.plan !== undefined && searchFormValues.plan !== null) {
           apiParams.plan = searchFormValues.plan as TenantPlan;
         }
         
-        // 搜索条件处理（优先级：name/domain > keyword）
-        // 如果用户在高级搜索中输入了 name 或 domain，使用精确搜索
-        // 否则使用 keyword 进行模糊搜索（支持拼音首字母搜索）
+        // 搜索条件处理：name 和 domain 使用模糊搜索
         if (searchFormValues?.name) {
           apiParams.name = searchFormValues.name as string;
         }
         if (searchFormValues?.domain) {
           apiParams.domain = searchFormValues.domain as string;
-        }
-        
-        // 如果指定了 name 或 domain，不使用 keyword；否则使用 keyword（支持拼音首字母搜索）
-        if (!searchFormValues?.name && !searchFormValues?.domain && searchFormValues?.keyword) {
-          apiParams.keyword = searchFormValues.keyword as string;
         }
 
         const result = await getTenantList(

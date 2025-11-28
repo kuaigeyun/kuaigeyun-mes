@@ -14,6 +14,7 @@ from services.tenant_service import TenantService
 from models.tenant import TenantStatus, TenantPlan
 from api.deps import get_current_superadmin
 from models.user import User
+from core.timezone_utils import now
 
 # 创建路由
 router = APIRouter(prefix="/superadmin/tenants", tags=["SuperAdmin Tenants"])
@@ -25,9 +26,8 @@ async def list_tenants_for_superadmin(
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     status: Optional[TenantStatus] = Query(None, description="组织状态筛选"),
     plan: Optional[TenantPlan] = Query(None, description="组织套餐筛选"),
-    keyword: Optional[str] = Query(None, description="关键词搜索（组织名称、域名，使用 OR 逻辑）"),
-    name: Optional[str] = Query(None, description="组织名称搜索（精确搜索）"),
-    domain: Optional[str] = Query(None, description="域名搜索（精确搜索）"),
+    name: Optional[str] = Query(None, description="组织名称搜索（模糊搜索）"),
+    domain: Optional[str] = Query(None, description="域名搜索（模糊搜索）"),
     sort: Optional[str] = Query(None, description="排序字段（如：name、status、created_at）"),
     order: Optional[str] = Query(None, description="排序顺序（asc 或 desc）"),
     current_admin: User = Depends(get_current_superadmin)
@@ -35,16 +35,16 @@ async def list_tenants_for_superadmin(
     """
     获取组织列表（超级管理员）
     
-    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、关键词搜索、排序。
+    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、文本字段模糊搜索、排序。
+    使用 ProTable 原生搜索逻辑，简单可靠。
     
     Args:
         page: 页码（默认 1）
         page_size: 每页数量（默认 10，最大 100）
-        status: 组织状态筛选（可选）
-        plan: 组织套餐筛选（可选）
-        keyword: 关键词搜索（可选，搜索组织名称、域名，使用 OR 逻辑）
-        name: 组织名称搜索（可选，精确搜索组织名称）
-        domain: 域名搜索（可选，精确搜索域名）
+        status: 组织状态筛选（可选，精确匹配）
+        plan: 组织套餐筛选（可选，精确匹配）
+        name: 组织名称搜索（可选，模糊搜索）
+        domain: 域名搜索（可选，模糊搜索）
         sort: 排序字段（可选，如：name、status、created_at）
         order: 排序顺序（可选，asc 或 desc）
         current_admin: 当前超级管理员（依赖注入）
@@ -60,7 +60,6 @@ async def list_tenants_for_superadmin(
         page_size=page_size,
         status=status,
         plan=plan,
-        keyword=keyword,
         name=name,
         domain=domain,
         sort=sort,
@@ -156,7 +155,7 @@ async def reject_tenant_registration(
                 **tenant.settings,
                 "rejection_reason": reason or "审核未通过",
                 "rejected_by": current_admin.username,
-                "rejected_at": str(datetime.utcnow()),
+                "rejected_at": str(now()),
             }
         ),
         skip_tenant_filter=True

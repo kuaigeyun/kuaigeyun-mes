@@ -13,6 +13,7 @@ from loguru import logger
 from models.tenant import Tenant, TenantStatus
 from models.user import User
 from core.cache import cache
+from core.timezone_utils import now
 
 
 class MonitoringService:
@@ -63,7 +64,7 @@ class MonitoringService:
                 "professional": professional_tenants,
                 "enterprise": enterprise_tenants,
             },
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 缓存 5 分钟
@@ -108,7 +109,7 @@ class MonitoringService:
             "monthly_active_users": 0,  # 月活用户数
             "total_visits": 0,  # 总访问量
             "api_calls": 0,  # API 调用次数
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 缓存 1 分钟
@@ -151,7 +152,7 @@ class MonitoringService:
             "api_calls_month": 0,  # 本月 API 调用次数
             "user_count": 0,  # 用户数
             "data_count": 0,  # 业务数据量
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 如果指定了组织，查询实际数据
@@ -207,7 +208,7 @@ class MonitoringService:
             "user_count": user_count,
             "order_count": 0,  # 订单数（占位）
             "business_data_count": 0,  # 业务数据量（占位）
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 缓存 5 分钟
@@ -258,7 +259,7 @@ class MonitoringService:
             current_process = psutil.Process(os.getpid())
             # 获取进程启动时间
             start_time = current_process.create_time()
-            uptime_seconds = int(datetime.now().timestamp() - start_time)
+            uptime_seconds = int(now().timestamp() - start_time)
             start_time_iso = datetime.fromtimestamp(start_time).isoformat()
             # 获取CPU核心数
             cpu_count = psutil.cpu_count(logical=False)  # 物理核心数
@@ -301,7 +302,7 @@ class MonitoringService:
             "timezone": timezone_str,
             "app_version": app_version,
             "environment": environment,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 缓存 30 秒
@@ -357,7 +358,7 @@ class MonitoringService:
                 "disk_total_mb": disk_total_mb,
                 "disk_used_mb": disk_used_mb,
                 "disk_percent": disk_percent,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": now().isoformat(),
             }
             
             # 缓存 30 秒
@@ -375,7 +376,7 @@ class MonitoringService:
                 "disk_total_mb": 0,
                 "disk_used_mb": 0,
                 "disk_percent": 0.0,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": now().isoformat(),
                 "error": "psutil 未安装，请运行: pip install psutil",
             }
             return resource_data
@@ -391,7 +392,7 @@ class MonitoringService:
                 "disk_total_mb": 0,
                 "disk_used_mb": 0,
                 "disk_percent": 0.0,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": now().isoformat(),
                 "error": f"获取系统资源失败: {str(e)}",
             }
             return resource_data
@@ -422,7 +423,7 @@ class MonitoringService:
             "requests_per_second": 0.0,  # 每秒请求数（QPS）
             "error_rate": 0.0,  # 错误率（%）
             "total_requests_today": 0,  # 今日总请求数
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 缓存 1 分钟
@@ -450,21 +451,21 @@ class MonitoringService:
                         "id": "cpu_high",
                         "type": "warning",
                         "message": f"CPU 使用率过高: {resources.get('cpu_percent', 0):.1f}%",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": now().isoformat(),
                     })
                 if resources.get("memory_percent", 0) >= 90:
                     alerts.append({
                         "id": "memory_high",
                         "type": "warning",
                         "message": f"内存使用率过高: {resources.get('memory_percent', 0):.1f}%",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": now().isoformat(),
                     })
                 if resources.get("disk_percent", 0) >= 90:
                     alerts.append({
                         "id": "disk_high",
                         "type": "error",
                         "message": f"磁盘使用率过高: {resources.get('disk_percent', 0):.1f}%",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": now().isoformat(),
                     })
             
             # 2. 检查数据库和Redis连接状态
@@ -518,7 +519,7 @@ class MonitoringService:
             "processor": platform.processor(),
             "architecture": platform.architecture()[0],
             "hostname": platform.node(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now().isoformat(),
         }
         
         # 获取网络信息
