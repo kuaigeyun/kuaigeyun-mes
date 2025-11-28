@@ -28,7 +28,7 @@ class TenantConfig(BaseModel):
         updated_at: 更新时间
     """
 
-    id = fields.IntField(primary_key=True, description="配置 ID（主键）")
+    id = fields.IntField(pk=True, description="配置 ID（主键）")
     tenant_id = fields.IntField(description="组织 ID（外键，关联到 tree_tenants 表）")
     config_key = fields.CharField(max_length=100, description="配置键（唯一标识配置项）")
     config_value = fields.JSONField(default=dict, description="配置值（JSONB 存储）")

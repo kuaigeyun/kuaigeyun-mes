@@ -32,7 +32,7 @@ class Permission(BaseModel):
         updated_at: 更新时间
     """
 
-    id = fields.IntField(primary_key=True, description="权限 ID（主键）")
+    id = fields.IntField(pk=True, description="权限 ID（主键）")
     tenant_id = fields.IntField(description="组织 ID（外键，关联到 tree_tenants 表）")
     name = fields.CharField(max_length=50, description="权限名称（组织内唯一）")
     code = fields.CharField(max_length=100, description="权限代码（组织内唯一，格式：resource:action）")

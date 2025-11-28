@@ -58,7 +58,7 @@ class Tenant(BaseModel):
         updated_at: 更新时间
     """
 
-    id = fields.IntField(primary_key=True, description="组织 ID（主键）")
+    id = fields.IntField(pk=True, description="组织 ID（主键）")
     name = fields.CharField(max_length=100, description="组织名称")
     domain = fields.CharField(max_length=100, unique=True, description="组织域名（用于子域名访问）")
     status = fields.CharEnumField(

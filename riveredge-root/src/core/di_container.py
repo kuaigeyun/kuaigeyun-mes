@@ -222,7 +222,7 @@ async def init_services():
     from services.user_service import UserService
     from services.tenant_service import TenantService
     from services.auth_service import AuthService
-    from core.cache_manager import cache_manager
+    from core.cache.cache_manager import cache_manager
 
     # 注册服务
     container.register_instance(UserService, UserService())

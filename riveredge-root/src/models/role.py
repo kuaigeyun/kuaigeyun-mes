@@ -30,7 +30,7 @@ class Role(BaseModel):
         updated_at: 更新时间
     """
 
-    id = fields.IntField(primary_key=True, description="角色 ID（主键）")
+    id = fields.IntField(pk=True, description="角色 ID（主键）")
     tenant_id = fields.IntField(description="组织 ID（外键，关联到 tree_tenants 表）")
     name = fields.CharField(max_length=50, description="角色名称（组织内唯一）")
     code = fields.CharField(max_length=50, description="角色代码（组织内唯一，用于程序识别）")

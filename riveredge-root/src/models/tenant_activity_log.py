@@ -27,7 +27,7 @@ class TenantActivityLog(BaseModel):
         updated_at: 更新时间
     """
     
-    id = fields.IntField(primary_key=True, description="日志 ID（主键）")
+    id = fields.IntField(pk=True, description="日志 ID（主键）")
     tenant_id = fields.IntField(description="组织 ID（用于多组织数据隔离）")
     action = fields.CharField(max_length=50, description="操作类型（如：create, activate, deactivate, update_plan 等）")
     description = fields.TextField(description="操作描述（详细说明）")

@@ -45,7 +45,7 @@ class User(BaseModel):
         updated_at: 更新时间
     """
 
-    id = fields.IntField(primary_key=True, description="用户 ID（主键）")
+    id = fields.IntField(pk=True, description="用户 ID（主键）")
     tenant_id = fields.IntField(null=True, description="组织 ID（外键，关联到 tree_tenants 表，可为空用于平台管理员）")
     username = fields.CharField(max_length=50, description="用户名（组织内唯一，平台管理员全局唯一）")
     email = fields.CharField(max_length=255, null=True, description="用户邮箱（可选，符合中国用户使用习惯）")

@@ -76,7 +76,6 @@ export function getPinyinInitials(text: string): string {
     const initials = pinyin.pinyin(text, { pattern: 'first', toneType: 'none' });
     return initials.replace(/\s+/g, '').toUpperCase();
   } catch (error) {
-    console.warn('获取拼音首字母失败:', error);
     return "";
   }
 }

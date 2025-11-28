@@ -68,26 +68,27 @@ async def list_saved_searches(
     }
 
 
-@router.get("/{search_id}", response_model=SavedSearchResponse)
+@router.get("/{search_uuid}", response_model=SavedSearchResponse)
 async def get_saved_search(
-    search_id: int,
+    search_uuid: str,
     current_user: User = Depends(get_current_user)
 ):
     """
     获取单个保存的搜索条件
     
-    获取指定 ID 的搜索条件，只能获取自己的或共享的。
+    获取指定 UUID 的搜索条件，只能获取自己的或共享的。
+    使用 UUID 作为路径参数，保证安全性和全局唯一性。
     """
-    saved_search = await saved_search_service.get_saved_search(
+    saved_search = await saved_search_service.get_saved_search_by_uuid(
         user=current_user,
-        search_id=search_id
+        search_uuid=search_uuid
     )
     return saved_search
 
 
-@router.put("/{search_id}", response_model=SavedSearchResponse)
+@router.put("/{search_uuid}", response_model=SavedSearchResponse)
 async def update_saved_search(
-    search_id: int,
+    search_uuid: str,
     data: SavedSearchUpdate,
     current_user: User = Depends(get_current_user)
 ):
@@ -95,10 +96,11 @@ async def update_saved_search(
     更新保存的搜索条件
     
     只能更新自己创建的搜索条件。
+    使用 UUID 作为路径参数，保证安全性和全局唯一性。
     """
-    saved_search = await saved_search_service.update_saved_search(
+    saved_search = await saved_search_service.update_saved_search_by_uuid(
         user=current_user,
-        search_id=search_id,
+        search_uuid=search_uuid,
         name=data.name,
         is_shared=data.is_shared,
         is_pinned=data.is_pinned,
@@ -107,19 +109,20 @@ async def update_saved_search(
     return saved_search
 
 
-@router.delete("/{search_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{search_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_saved_search(
-    search_id: int,
+    search_uuid: str,
     current_user: User = Depends(get_current_user)
 ):
     """
     删除保存的搜索条件
     
     只能删除自己创建的搜索条件。
+    使用 UUID 作为路径参数，保证安全性和全局唯一性。
     """
-    await saved_search_service.delete_saved_search(
+    await saved_search_service.delete_saved_search_by_uuid(
         user=current_user,
-        search_id=search_id
+        search_uuid=search_uuid
     )
     return None
 
