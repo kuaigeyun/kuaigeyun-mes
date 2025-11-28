@@ -35,7 +35,8 @@ class SavedSearchResponse(BaseModel):
     """
     保存搜索条件响应 Schema
     """
-    id: int = Field(..., description="搜索条件 ID")
+    id: int = Field(..., description="搜索条件 ID（内部使用，自增ID）")
+    uuid: str = Field(..., description="业务ID（UUID，对外暴露，安全且唯一）")
     tenant_id: Optional[int] = Field(None, description="组织 ID")
     user_id: int = Field(..., description="创建者用户 ID")
     page_path: str = Field(..., description="页面路径")

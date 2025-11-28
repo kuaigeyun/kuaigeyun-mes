@@ -31,7 +31,7 @@ class SavedSearch(BaseModel):
         updated_at: 更新时间
     """
 
-    id = fields.IntField(primary_key=True, description="搜索条件 ID（主键）")
+    id = fields.IntField(pk=True, description="搜索条件 ID（主键）")
     tenant_id = fields.IntField(null=True, description="组织 ID（外键，关联到 tree_tenants 表）")
     user_id = fields.IntField(description="创建者用户 ID（外键，关联到 root_users 表）")
     page_path = fields.CharField(max_length=255, description="页面路径（用于区分不同页面的搜索条件）")

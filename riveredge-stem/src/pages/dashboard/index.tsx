@@ -17,7 +17,8 @@ import {
   Tag,
   Button,
   Badge,
-  Empty
+  Empty,
+  App
 } from 'antd';
 import {
   UserOutlined,
@@ -36,7 +37,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { useGlobalStore } from '@/app';
+import { useGlobalStore } from '@/stores';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -140,8 +141,8 @@ const quickActions = [
     key: 'system',
     title: '系统配置',
     icon: <SettingOutlined />,
-    path: '/system',
-    description: '系统参数设置',
+    path: '/users',
+    description: '用户管理、角色管理',
   },
 ];
 
@@ -150,6 +151,7 @@ const quickActions = [
  * 工作台页面组件
  */
 export default function DashboardPage() {
+  const { message } = App.useApp();
   const { currentUser } = useGlobalStore();
   const navigate = useNavigate();
 
@@ -261,7 +263,13 @@ export default function DashboardPage() {
             }
             loading={notificationsLoading}
             extra={
-              <Button type="link" size="small" onClick={() => navigate('/notifications')}>
+              <Button 
+                type="link" 
+                size="small" 
+                onClick={() => {
+                  message.info('通知中心功能开发中');
+                }}
+              >
                 查看全部 <RightOutlined />
               </Button>
             }
@@ -330,7 +338,13 @@ export default function DashboardPage() {
             }
             loading={todosLoading}
             extra={
-              <Button type="link" size="small" onClick={() => navigate('/todos')}>
+              <Button 
+                type="link" 
+                size="small" 
+                onClick={() => {
+                  message.info('待办事项功能开发中');
+                }}
+              >
                 查看全部 <RightOutlined />
               </Button>
             }

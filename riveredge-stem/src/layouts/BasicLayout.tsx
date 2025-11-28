@@ -37,9 +37,9 @@ import {
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
-import TenantSelector from '@/components/TenantSelector';
-import PageTabs from '@/components/PageTabs';
-import { useGlobalStore } from '@/app';
+import TenantSelector from '@/components/tenant_selector';
+import PageTabs from '@/components/page_tabs';
+import { useGlobalStore } from '@/stores';
 
 /**
  * 菜单配置

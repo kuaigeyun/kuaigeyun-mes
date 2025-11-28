@@ -10,7 +10,8 @@ import { apiRequest } from './api';
  * 保存搜索条件接口
  */
 export interface SavedSearch {
-  id: number;
+  id: number; // 自增ID（内部使用，性能优先）
+  uuid: string; // 业务ID（UUID，对外暴露，安全且唯一）
   tenant_id?: number;
   user_id: number;
   page_path: string;
@@ -97,12 +98,12 @@ export async function createSavedSearch(
 /**
  * 获取单个保存的搜索条件
  * 
- * @param searchId - 搜索条件 ID
+ * @param searchUuid - 搜索条件 UUID（业务ID）
  * @returns 搜索条件
  */
-export async function getSavedSearch(searchId: number): Promise<SavedSearch> {
+export async function getSavedSearch(searchUuid: string): Promise<SavedSearch> {
   const response = await apiRequest<SavedSearch>(
-    `/saved-searches/${searchId}`,
+    `/saved-searches/${searchUuid}`,
     {
       method: 'GET',
     }
@@ -113,16 +114,16 @@ export async function getSavedSearch(searchId: number): Promise<SavedSearch> {
 /**
  * 更新保存的搜索条件
  * 
- * @param searchId - 搜索条件 ID
+ * @param searchUuid - 搜索条件 UUID（业务ID）
  * @param data - 更新参数
  * @returns 更新后的搜索条件
  */
 export async function updateSavedSearch(
-  searchId: number,
+  searchUuid: string,
   data: UpdateSavedSearchParams
 ): Promise<SavedSearch> {
   const response = await apiRequest<SavedSearch>(
-    `/saved-searches/${searchId}`,
+    `/saved-searches/${searchUuid}`,
     {
       method: 'PUT',
       data,
@@ -134,11 +135,11 @@ export async function updateSavedSearch(
 /**
  * 删除保存的搜索条件
  * 
- * @param searchId - 搜索条件 ID
+ * @param searchUuid - 搜索条件 UUID（业务ID）
  */
-export async function deleteSavedSearch(searchId: number): Promise<void> {
+export async function deleteSavedSearch(searchUuid: string): Promise<void> {
   await apiRequest(
-    `/saved-searches/${searchId}`,
+    `/saved-searches/${searchUuid}`,
     {
       method: 'DELETE',
     }

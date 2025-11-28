@@ -13,59 +13,27 @@ import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { App as AntdApp, Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import IndexPage from '@/pages';
 import LoginPage from '@/pages/login';
 import RegisterPage from '@/pages/register';
-import PersonalRegisterPage from '@/pages/register/experience';
-import OrganizationRegisterPage from '@/pages/register/trial';
+import PersonalRegisterPage from '@/pages/register/personal';
+import OrganizationRegisterPage from '@/pages/register/organization';
 import DashboardPage from '@/pages/dashboard';
-import UserListPage from '@/pages/user/list';
-import UserFormPage from '@/pages/user/form';
-import RoleListPage from '@/pages/role/list';
-import RoleFormPage from '@/pages/role/form';
-import RolePermissionsPage from '@/pages/role/permissions';
-import SuperAdminTenantListPage from '@/pages/superadmin/tenants/list';
-import SuperAdminTenantDetailPage from '@/pages/superadmin/tenants/detail';
+import UserListPage from '@/pages/system/user/list';
+import UserFormPage from '@/pages/system/user/form';
+import RoleListPage from '@/pages/system/role/list';
+import RoleFormPage from '@/pages/system/role/form';
+import RolePermissionsPage from '@/pages/system/role/permissions';
+import SuperAdminTenantListPage from '@/pages/operations/tenants/list';
+import SuperAdminTenantDetailPage from '@/pages/operations/tenants/detail';
 import OperationsDashboardPage from '@/pages/operations/dashboard';
 import SystemMonitoringPage from '@/pages/operations/monitoring';
 import PackagesPage from '@/pages/operations/packages';
-import PluginPlaceholderPage from '@/pages/plugin-placeholder';
 import NotFoundPage from '@/pages/404';
 import BasicLayout from '@/layouts/BasicLayout';
 import { getCurrentUser } from '@/services/auth';
-import { CurrentUser } from '@/types/api';
 import { getToken, clearAuth } from '@/utils/auth';
-
-// 全局状态管理
-interface GlobalState {
-  currentUser?: CurrentUser;
-  loading: boolean;
-  setCurrentUser: (user?: CurrentUser) => void;
-  setLoading: (loading: boolean) => void;
-  logout: () => void;
-  }
-
-export const useGlobalStore = create<GlobalState>()(
-  persist(
-    (set, get) => ({
-      currentUser: undefined,
-      loading: false,
-      setCurrentUser: (user) => set({ currentUser: user }),
-      setLoading: (loading) => set({ loading }),
-      logout: () => {
-    clearAuth();
-        set({ currentUser: undefined });
-      window.location.href = '/login';
-      },
-    }),
-    {
-      name: 'riveredge-global-store',
-      partialize: (state) => ({ currentUser: state.currentUser }),
-    }
-  )
-);
+import { useGlobalStore } from '@/stores';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -267,18 +235,6 @@ const AppRoutes: React.FC = () => {
           <AuthGuard>
             <BasicLayout>
               <PackagesPage />
-            </BasicLayout>
-          </AuthGuard>
-        }
-      />
-
-      {/* MES 插件占位页面（用于预览菜单效果） */}
-      <Route
-        path="/mes/*"
-        element={
-          <AuthGuard>
-            <BasicLayout>
-              <PluginPlaceholderPage />
             </BasicLayout>
           </AuthGuard>
         }

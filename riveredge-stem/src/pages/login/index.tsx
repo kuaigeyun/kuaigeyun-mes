@@ -13,7 +13,7 @@ import { UserOutlined, LockOutlined, ThunderboltOutlined, BgColorsOutlined, Glob
 import { useState } from 'react';
 import { login, guestLogin, type LoginResponse } from '@/services/auth';
 import { setToken, setTenantId } from '@/utils/auth';
-import { useGlobalStore } from '@/app';
+import { useGlobalStore } from '@/stores';
 import { TenantSelectionModal, TermsModal } from '@/components';
 import './index.less';
 

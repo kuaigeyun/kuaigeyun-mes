@@ -86,7 +86,7 @@ class Settings(BaseSettings):
 
     # 日志配置
     LOG_LEVEL: str = Field(default="INFO", description="日志级别")
-    LOG_FILE: str = Field(default="logs/riveredge.log", description="日志文件路径")
+    LOG_FILE: str = Field(default="logs/riveredge.log", description="日志文件路径（相对于项目根目录）")
     
     # 时区配置
     USE_TZ: bool = Field(default=True, description="是否启用时区支持（Tortoise ORM）")

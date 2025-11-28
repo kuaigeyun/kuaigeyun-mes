@@ -122,13 +122,13 @@ class SavedSearchService:
         search_id: int
     ) -> SavedSearch:
         """
-        获取单个保存的搜索条件
+        获取单个保存的搜索条件（通过自增ID，内部使用）
         
         获取指定 ID 的搜索条件，只能获取自己的或共享的。
         
         Args:
             user: 当前用户对象
-            search_id: 搜索条件 ID
+            search_id: 搜索条件 ID（自增ID）
             
         Returns:
             SavedSearch: 搜索条件对象
@@ -156,6 +156,46 @@ class SavedSearchService:
         
         return saved_search
 
+    async def get_saved_search_by_uuid(
+        self,
+        user: User,
+        search_uuid: str
+    ) -> SavedSearch:
+        """
+        获取单个保存的搜索条件（通过UUID，对外API使用）
+        
+        获取指定 UUID 的搜索条件，只能获取自己的或共享的。
+        
+        Args:
+            user: 当前用户对象
+            search_uuid: 搜索条件 UUID（业务ID）
+            
+        Returns:
+            SavedSearch: 搜索条件对象
+            
+        Raises:
+            HTTPException: 当搜索条件不存在或无权访问时抛出
+        """
+        tenant_id = get_current_tenant_id() or user.tenant_id
+        
+        saved_search = await SavedSearch.get_or_none(uuid=search_uuid)
+        
+        if not saved_search:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="搜索条件不存在"
+            )
+        
+        # 检查权限：只能访问自己的或共享的搜索条件
+        if saved_search.user_id != user.id:
+            if not saved_search.is_shared or saved_search.tenant_id != tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="无权访问此搜索条件"
+                )
+        
+        return saved_search
+
     async def update_saved_search(
         self,
         user: User,
@@ -166,15 +206,16 @@ class SavedSearchService:
         search_params: Optional[Dict[str, Any]] = None
     ) -> SavedSearch:
         """
-        更新保存的搜索条件
+        更新保存的搜索条件（通过自增ID，内部使用）
         
         只能更新自己创建的搜索条件。
         
         Args:
             user: 当前用户对象
-            search_id: 搜索条件 ID
+            search_id: 搜索条件 ID（自增ID）
             name: 搜索条件名称（可选）
             is_shared: 是否共享（可选）
+            is_pinned: 是否钉住（可选）
             search_params: 搜索参数（可选）
             
         Returns:
@@ -220,24 +261,126 @@ class SavedSearchService:
         
         return saved_search
 
+    async def update_saved_search_by_uuid(
+        self,
+        user: User,
+        search_uuid: str,
+        name: Optional[str] = None,
+        is_shared: Optional[bool] = None,
+        is_pinned: Optional[bool] = None,
+        search_params: Optional[Dict[str, Any]] = None
+    ) -> SavedSearch:
+        """
+        更新保存的搜索条件（通过UUID，对外API使用）
+        
+        只能更新自己创建的搜索条件。
+        
+        Args:
+            user: 当前用户对象
+            search_uuid: 搜索条件 UUID（业务ID）
+            name: 搜索条件名称（可选）
+            is_shared: 是否共享（可选）
+            is_pinned: 是否钉住（可选）
+            search_params: 搜索参数（可选）
+            
+        Returns:
+            SavedSearch: 更新后的搜索条件对象
+            
+        Raises:
+            HTTPException: 当搜索条件不存在、无权访问或名称重复时抛出
+        """
+        saved_search = await self.get_saved_search_by_uuid(user, search_uuid)
+        
+        # 检查权限：只能更新自己创建的搜索条件
+        if saved_search.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能更新自己创建的搜索条件"
+            )
+        
+        # 如果更新名称，检查是否重复
+        if name and name != saved_search.name:
+            existing = await SavedSearch.get_or_none(
+                user_id=user.id,
+                page_path=saved_search.page_path,
+                name=name
+            )
+            
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"搜索条件名称 '{name}' 已存在，请使用其他名称"
+                )
+        
+        # 更新字段
+        if name is not None:
+            saved_search.name = name
+        if is_shared is not None:
+            saved_search.is_shared = is_shared
+        if is_pinned is not None:
+            saved_search.is_pinned = is_pinned
+        if search_params is not None:
+            saved_search.search_params = search_params
+        
+        await saved_search.save()
+        
+        return saved_search
+
     async def delete_saved_search(
         self,
         user: User,
         search_id: int
     ) -> None:
         """
-        删除保存的搜索条件
+        删除保存的搜索条件（通过自增ID，内部使用）
         
         只能删除自己创建的搜索条件。
         
         Args:
             user: 当前用户对象
-            search_id: 搜索条件 ID
+            search_id: 搜索条件 ID（自增ID）
             
         Raises:
             HTTPException: 当搜索条件不存在或无权访问时抛出
         """
         saved_search = await self.get_saved_search(user, search_id)
+        
+        # 检查权限：只能删除自己创建的搜索条件
+        if saved_search.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能删除自己创建的搜索条件"
+            )
+        
+        await saved_search.delete()
+
+    async def delete_saved_search_by_uuid(
+        self,
+        user: User,
+        search_uuid: str
+    ) -> None:
+        """
+        删除保存的搜索条件（通过UUID，对外API使用）
+        
+        只能删除自己创建的搜索条件。
+        
+        Args:
+            user: 当前用户对象
+            search_uuid: 搜索条件 UUID（业务ID）
+            
+        Raises:
+            HTTPException: 当搜索条件不存在或无权访问时抛出
+        """
+        saved_search = await self.get_saved_search_by_uuid(user, search_uuid)
+        
+        # 检查权限：只能删除自己创建的搜索条件
+        if saved_search.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能删除自己创建的搜索条件"
+            )
+        
+        await saved_search.delete()
         
         # 检查权限：只能删除自己创建的搜索条件
         if saved_search.user_id != user.id:

@@ -15,7 +15,7 @@ export function setStorage(key: string, value: any): void {
     const serializedValue = JSON.stringify(value);
     localStorage.setItem(key, serializedValue);
   } catch (error) {
-    console.error('设置本地存储失败:', error);
+    // 静默处理错误
   }
 }
 
@@ -30,7 +30,6 @@ export function getStorage<T = any>(key: string): T | null {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : null;
   } catch (error) {
-    console.error('获取本地存储失败:', error);
     return null;
   }
 }

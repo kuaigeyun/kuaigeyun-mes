@@ -70,6 +70,39 @@ async def list_tenants_for_superadmin(
     return TenantListResponse(**result)
 
 
+@router.get("/{tenant_id}", response_model=TenantResponse)
+async def get_tenant_detail_for_superadmin(
+    tenant_id: int,
+    current_admin: User = Depends(get_current_superadmin)
+):
+    """
+    获取组织详情（超级管理员）
+    
+    超级管理员可以查看任意组织的详细信息。
+    
+    Args:
+        tenant_id: 组织 ID
+        current_admin: 当前超级管理员（依赖注入）
+        
+    Returns:
+        TenantResponse: 组织详情
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    service = TenantService()
+    
+    # 获取组织（跳过组织过滤）
+    tenant = await service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    return tenant
+
+
 @router.post("/{tenant_id}/approve", response_model=TenantResponse)
 async def approve_tenant_registration(
     tenant_id: int,
