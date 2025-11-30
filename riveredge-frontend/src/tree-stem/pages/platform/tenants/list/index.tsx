@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
 import {
@@ -109,12 +109,326 @@ const SuperAdminTenantList: React.FC = () => {
 
   /**
    * 处理导入数据
+   * 
+   * 支持从 Excel 导入组织数据，批量创建组织
+   * 数据格式：第一行为表头，后续行为数据
+   * 表头字段：组织名称、域名、套餐类型、状态、最大用户数、存储空间(MB)、过期时间
    */
-  const handleImport = (data: any[][]) => {
-    message.info(`导入功能开发中，共 ${data.length} 行数据`);
-    // TODO: 实现导入功能
-    // 例如：调用后端 API 批量创建组织
-    // await batchCreateTenants(data);
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      message.warning('导入数据为空');
+      return;
+    }
+
+    // 解析表头和数据
+    const headers = data[0] || [];
+    const rows = data.slice(1);
+
+    if (rows.length === 0) {
+      message.warning('没有可导入的数据行');
+      return;
+    }
+
+    // 表头字段映射（支持中英文，支持带*号的必填项标识）
+    const headerMap: Record<string, string> = {
+      '组织名称': 'name',
+      '*组织名称': 'name',
+      '名称': 'name',
+      '*名称': 'name',
+      'name': 'name',
+      '*name': 'name',
+      '域名': 'domain',
+      '*域名': 'domain',
+      'domain': 'domain',
+      '*domain': 'domain',
+      '套餐类型': 'plan',
+      '套餐': 'plan',
+      'plan': 'plan',
+      '状态': 'status',
+      'status': 'status',
+      '最大用户数': 'max_users',
+      '用户数': 'max_users',
+      'max_users': 'max_users',
+      '存储空间(MB)': 'max_storage',
+      '存储空间': 'max_storage',
+      '存储': 'max_storage',
+      'max_storage': 'max_storage',
+      '过期时间': 'expires_at',
+      '过期': 'expires_at',
+      'expires_at': 'expires_at',
+    };
+
+    // 找到表头索引
+    const headerIndexMap: Record<string, number> = {};
+    headers.forEach((header, index) => {
+      const normalizedHeader = String(header || '').trim();
+      if (headerMap[normalizedHeader]) {
+        headerIndexMap[headerMap[normalizedHeader]] = index;
+      }
+    });
+
+    // 验证必需字段
+    const requiredFields = ['name', 'domain'];
+    const missingFields = requiredFields.filter(field => headerIndexMap[field] === undefined);
+    if (missingFields.length > 0) {
+      message.error(`缺少必需字段：${missingFields.join('、')}。请确保表头包含"组织名称"和"域名"列。`);
+      return;
+    }
+
+    // 解析数据行
+    const importData: Array<{ data: CreateTenantData; rowIndex: number; rawRow: any[] }> = [];
+    const errors: Array<{ rowIndex: number; message: string }> = [];
+
+    rows.forEach((row, index) => {
+      const rowIndex = index + 2; // Excel 行号（从 2 开始，因为第 1 行是表头）
+      const rowData: any = {};
+
+      // 提取字段值
+      Object.keys(headerIndexMap).forEach(field => {
+        const colIndex = headerIndexMap[field];
+        if (colIndex !== undefined && row[colIndex] !== undefined && row[colIndex] !== null && row[colIndex] !== '') {
+          rowData[field] = String(row[colIndex]).trim();
+        }
+      });
+
+      // 验证必需字段
+      if (!rowData.name || !rowData.domain) {
+        errors.push({
+          rowIndex,
+          message: `第 ${rowIndex} 行：缺少必需字段（组织名称或域名）`,
+        });
+        return;
+      }
+
+      // 验证域名格式（只能包含字母、数字、下划线、连字符）
+      const domainRegex = /^[a-zA-Z0-9_-]+$/;
+      if (!domainRegex.test(rowData.domain)) {
+        errors.push({
+          rowIndex,
+          message: `第 ${rowIndex} 行：域名格式不正确（只能包含字母、数字、下划线、连字符）`,
+        });
+        return;
+      }
+
+      // 解析套餐类型
+      let plan: TenantPlan = TenantPlan.TRIAL;
+      if (rowData.plan) {
+        const planMap: Record<string, TenantPlan> = {
+          'trial': TenantPlan.TRIAL,
+          '体验套餐': TenantPlan.TRIAL,
+          '体验': TenantPlan.TRIAL,
+          'basic': TenantPlan.BASIC,
+          '基础版': TenantPlan.BASIC,
+          '基础': TenantPlan.BASIC,
+          'professional': TenantPlan.PROFESSIONAL,
+          '专业版': TenantPlan.PROFESSIONAL,
+          '专业': TenantPlan.PROFESSIONAL,
+          'enterprise': TenantPlan.ENTERPRISE,
+          '企业版': TenantPlan.ENTERPRISE,
+          '企业': TenantPlan.ENTERPRISE,
+        };
+        const normalizedPlan = String(rowData.plan).toLowerCase().trim();
+        if (planMap[normalizedPlan]) {
+          plan = planMap[normalizedPlan];
+        }
+      }
+
+      // 解析状态
+      let status: TenantStatus = TenantStatus.INACTIVE;
+      if (rowData.status) {
+        const statusMap: Record<string, TenantStatus> = {
+          'active': TenantStatus.ACTIVE,
+          '激活': TenantStatus.ACTIVE,
+          'inactive': TenantStatus.INACTIVE,
+          '未激活': TenantStatus.INACTIVE,
+          'expired': TenantStatus.EXPIRED,
+          '已过期': TenantStatus.EXPIRED,
+          'suspended': TenantStatus.SUSPENDED,
+          '已暂停': TenantStatus.SUSPENDED,
+        };
+        const normalizedStatus = String(rowData.status).toLowerCase().trim();
+        if (statusMap[normalizedStatus]) {
+          status = statusMap[normalizedStatus];
+        }
+      }
+
+      // 解析数字字段
+      const maxUsers = rowData.max_users ? parseInt(rowData.max_users, 10) : undefined;
+      const maxStorage = rowData.max_storage ? parseInt(rowData.max_storage, 10) : undefined;
+
+      // 解析过期时间
+      let expiresAt: string | undefined = undefined;
+      if (rowData.expires_at) {
+        try {
+          // 尝试解析日期字符串
+          const date = new Date(rowData.expires_at);
+          if (!isNaN(date.getTime())) {
+            expiresAt = date.toISOString();
+          }
+        } catch (e) {
+          // 日期解析失败，忽略
+        }
+      }
+
+      // 构建创建数据
+      const createData: CreateTenantData = {
+        name: rowData.name,
+        domain: rowData.domain,
+        plan,
+        status,
+        max_users: maxUsers,
+        max_storage: maxStorage,
+        expires_at: expiresAt,
+      };
+
+      importData.push({
+        data: createData,
+        rowIndex,
+        rawRow: row,
+      });
+    });
+
+    // 如果有验证错误，显示错误信息
+    if (errors.length > 0) {
+      Modal.error({
+        title: '数据验证失败',
+        width: 600,
+        content: (
+          <div>
+            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">{item.message}</Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    // 显示导入进度 Modal
+    const progressModal = Modal.info({
+      title: '正在导入组织数据',
+      width: 600,
+      content: (
+        <div>
+          <Progress percent={0} status="active" />
+          <p style={{ marginTop: 16 }}>准备导入 {importData.length} 条组织数据...</p>
+        </div>
+      ),
+      okButtonProps: { style: { display: 'none' } },
+    });
+
+    // 批量创建组织
+    const results: Array<{ success: boolean; rowIndex: number; message: string; data?: Tenant }> = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < importData.length; i++) {
+      const item = importData[i];
+      const percent = Math.round(((i + 1) / importData.length) * 100);
+
+      try {
+        // 使用平台超级管理员接口创建组织
+        const tenant = await apiRequest<Tenant>('/platform/tenants', {
+          method: 'POST',
+          data: item.data,
+        });
+
+        successCount++;
+        results.push({
+          success: true,
+          rowIndex: item.rowIndex,
+          message: `成功创建组织：${item.data.name} (域名: ${item.data.domain})`,
+          data: tenant,
+        });
+
+        // 更新进度
+        progressModal.update({
+          content: (
+            <div>
+              <Progress percent={percent} status="active" />
+              <p style={{ marginTop: 16 }}>
+                正在导入第 {i + 1} / {importData.length} 条数据...
+              </p>
+              <p style={{ marginTop: 8, color: '#52c41a' }}>
+                成功：{successCount} 条 | 失败：{failCount} 条
+              </p>
+            </div>
+          ),
+        });
+      } catch (error: any) {
+        failCount++;
+        const errorMessage = error?.message || error?.detail || '未知错误';
+        results.push({
+          success: false,
+          rowIndex: item.rowIndex,
+          message: `第 ${item.rowIndex} 行创建失败：${errorMessage}`,
+        });
+
+        // 更新进度
+        progressModal.update({
+          content: (
+            <div>
+              <Progress percent={percent} status="active" />
+              <p style={{ marginTop: 16 }}>
+                正在导入第 {i + 1} / {importData.length} 条数据...
+              </p>
+              <p style={{ marginTop: 8, color: '#52c41a' }}>
+                成功：{successCount} 条 | 失败：{failCount} 条
+              </p>
+            </div>
+          ),
+        });
+      }
+    }
+
+    // 关闭进度 Modal，显示结果
+    progressModal.destroy();
+
+    // 显示导入结果
+    const failedResults = results.filter(r => !r.success);
+    if (failedResults.length > 0) {
+      Modal.warning({
+        title: '导入完成（部分失败）',
+        width: 700,
+        content: (
+          <div>
+            <p>
+              <strong>导入结果：</strong>成功 {successCount} 条，失败 {failCount} 条
+            </p>
+            <p style={{ marginTop: 16 }}>失败的记录：</p>
+            <List
+              size="small"
+              dataSource={failedResults}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">{item.message}</Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+        onOk: () => {
+          // 刷新表格
+          actionRef.current?.reload();
+        },
+      });
+    } else {
+      Modal.success({
+        title: '导入成功',
+        content: `成功导入 ${successCount} 条组织数据`,
+        onOk: () => {
+          // 刷新表格
+          actionRef.current?.reload();
+        },
+      });
+    }
   };
 
   /**
@@ -641,6 +955,12 @@ const SuperAdminTenantList: React.FC = () => {
       onDelete={handleDelete}
       showImportButton={true}
       onImport={handleImport}
+      importHeaders={['*组织名称', '*域名', '套餐类型', '状态', '最大用户数', '存储空间(MB)', '过期时间']}
+      importExampleRow={['示例组织', 'example', '体验套餐', '未激活', '10', '1024', '']}
+      importDropdownColumns={{
+        2: ['trial', 'basic', 'professional', 'enterprise', '体验套餐', '基础版', '专业版', '企业版'],
+        3: ['active', 'inactive', 'expired', 'suspended', '激活', '未激活', '已过期', '已暂停'],
+      }}
       showExportButton={true}
       onExport={handleExport}
       viewTypes={['table', 'card', 'kanban', 'stats']}
