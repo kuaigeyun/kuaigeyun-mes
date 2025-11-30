@@ -22,7 +22,7 @@ const useProTableSearch = () => {
     actionRef,
   };
 };
-import { LuckyImport } from '../lucky_import';
+import { UniImport } from '../uni_import';
 
 /**
  * 统一 ProTable 组件属性
@@ -111,6 +111,19 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * @param data - 导入的数据（二维数组格式）
    */
   onImport?: (data: any[][]) => void;
+  /**
+   * 导入表头（可选，如果提供则自动填充第一行）
+   */
+  importHeaders?: string[];
+  /**
+   * 导入示例数据（可选，如果提供则自动填充第二行作为示例）
+   */
+  importExampleRow?: string[];
+  /**
+   * 导入下拉列配置（可选，定义哪些列需要下拉选项）
+   * 格式：{ columnIndex: string[] } - 列索引对应的下拉选项数组
+   */
+  importDropdownColumns?: Record<number, string[]>;
   /**
    * 是否显示导出按钮（默认：false）
    */
@@ -255,6 +268,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   toolBarActions = [],
   showImportButton = false,
   onImport,
+  importHeaders,
+  importExampleRow,
+  importDropdownColumns,
   showExportButton = false,
   onExport,
   showCreateButton = false,
@@ -767,10 +783,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
       {/* 导入弹窗 */}
       {showImportButton && (
-        <LuckyImport
+        <UniImport
           visible={importModalVisible}
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleImportConfirm}
+          headers={importHeaders}
+          exampleRow={importExampleRow}
+          dropdownColumns={importDropdownColumns}
         />
       )}
     </div>

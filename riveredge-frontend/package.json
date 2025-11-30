@@ -15,23 +15,27 @@
         "clean": "rm -rf node_modules"
     },
     "engines": {
-        "node": "20.17.0",
-        "npm": "10.8.2"
+        "node": ">=22.0.0",
+        "npm": ">=10.0.0"
     },
     "dependencies": {
         "@ant-design/charts": "2.1.0",
         "@ant-design/icons": "5.4.0",
         "@ant-design/pro-components": "2.7.10",
         "@tanstack/react-query": "5.51.1",
-        "@types/jquery": "^3.5.33",
+        "@univerjs/core": "^0.12.3",
+        "@univerjs/design": "^0.12.3",
+        "@univerjs/engine-formula": "^0.12.3",
+        "@univerjs/engine-render": "^0.12.3",
+        "@univerjs/presets": "^0.12.3",
+        "@univerjs/sheets": "^0.12.3",
+        "@univerjs/sheets-ui": "^0.12.3",
+        "@univerjs/ui": "^0.12.3",
         "antd": "5.17.0",
         "dayjs": "1.11.13",
         "framer-motion": "11.5.4",
         "i18next": "23.15.2",
-        "jquery": "^3.7.1",
-        "jquery-mousewheel": "^3.2.2",
         "lodash-es": "4.17.21",
-        "luckysheet": "^2.1.13",
         "pinyin-pro": "^3.19.0",
         "rc-field-form": "^1.44.0",
         "react": "18.3.1",
