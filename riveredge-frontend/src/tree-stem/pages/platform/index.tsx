@@ -1,0 +1,197 @@
+/**
+ * 平台超级管理员管理页面
+ *
+ * 用于管理平台超级管理员信息（查看、编辑）
+ * 平台超级管理员是平台唯一的，只能有一个
+ */
+
+import { ProCard, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Space, Modal, message } from 'antd';
+import { EditOutlined, LogoutOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  getPlatformSuperAdmin, 
+  updatePlatformSuperAdmin,
+  type PlatformSuperAdmin,
+  type PlatformSuperAdminUpdateRequest
+} from '../../services/platformAdmin';
+import { clearAuth } from '../../utils/auth';
+import { useNavigate } from 'react-router-dom';
+import { useGlobalStore } from '../../stores';
+// import PlatformSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
+
+/**
+ * 平台超级管理员管理页面组件
+ */
+export default function PlatformSuperAdminPage() {
+  const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { setCurrentUser } = useGlobalStore();
+  // const [editModalVisible, setEditModalVisible] = useState(false);
+  // const [editFormData, setEditFormData] = useState<PlatformSuperAdminUpdateRequest | null>(null);
+
+  // 获取平台超级管理员信息
+  const { data: admin, isLoading } = useQuery({
+    queryKey: ['platformSuperAdmin'],
+    queryFn: getPlatformSuperAdmin,
+  });
+
+  // 更新平台超级管理员信息
+  const updateMutation = useMutation({
+    mutationFn: (data: PlatformSuperAdminUpdateRequest) => updatePlatformSuperAdmin(data),
+    onSuccess: () => {
+      messageApi.success('更新成功');
+      setEditModalVisible(false);
+      setEditFormData(null);
+      queryClient.invalidateQueries({ queryKey: ['platformSuperAdmin'] });
+    },
+    onError: (error: any) => {
+      messageApi.error(error?.message || '更新失败');
+    },
+  });
+
+  /**
+   * 处理编辑 - 暂时注释掉，等待后续实现
+   */
+  // const handleEdit = () => {
+  //   if (admin) {
+  //     setEditFormData({
+  //       email: admin.email,
+  //       full_name: admin.full_name,
+  //       is_active: admin.is_active,
+  //     });
+  //     setEditModalVisible(true);
+  //   }
+  // };
+
+  /**
+   * 处理保存
+   */
+  const handleSave = async (values: PlatformSuperAdminUpdateRequest) => {
+    await updateMutation.mutateAsync(values);
+  };
+
+  /**
+   * 处理退出登录
+   */
+  const handleLogout = () => {
+    Modal.confirm({
+      title: '确认退出',
+      content: '确定要退出登录吗？',
+      onOk: () => {
+        // 清除认证信息
+        clearAuth();
+        // 清除全局状态中的用户信息
+        setCurrentUser(undefined);
+        // 清除查询缓存
+        queryClient.clear();
+        messageApi.success('已退出登录');
+        // 跳转到平台登录页面
+        navigate('/platform/login', { replace: true });
+      },
+    });
+  };
+
+  return (
+    <div style={{ padding: '24px' }}>
+      <ProCard
+        title="平台管理员信息"
+        extra={
+          <Space>
+            {/* <Button
+              type="primary"
+              icon={<EditOutlined />}
+              onClick={handleEdit}
+              loading={isLoading}
+            >
+              编辑
+            </Button> */}
+            <Button
+              icon={<LogoutOutlined />}
+              onClick={handleLogout}
+            >
+              退出登录
+            </Button>
+          </Space>
+        }
+        loading={isLoading}
+      >
+        {admin && (
+          <ProDescriptions<PlatformSuperAdmin>
+            column={2}
+            dataSource={admin}
+            columns={[
+              {
+                title: 'ID',
+                dataIndex: 'id',
+              },
+              {
+                title: '用户名',
+                dataIndex: 'username',
+              },
+              {
+                title: '邮箱',
+                dataIndex: 'email',
+              },
+              {
+                title: '全名',
+                dataIndex: 'full_name',
+              },
+              {
+                title: '状态',
+                dataIndex: 'is_active',
+                valueType: 'switch',
+                valueEnum: {
+                  true: { text: '激活', status: 'Success' },
+                  false: { text: '未激活', status: 'Error' },
+                },
+              },
+              {
+                title: '最后登录时间',
+                dataIndex: 'last_login',
+                valueType: 'dateTime',
+              },
+              {
+                title: '创建时间',
+                dataIndex: 'created_at',
+                valueType: 'dateTime',
+              },
+              {
+                title: '更新时间',
+                dataIndex: 'updated_at',
+                valueType: 'dateTime',
+              },
+            ]}
+          />
+        )}
+      </ProCard>
+
+      {/* 编辑弹窗 - 暂时注释掉，等待后续实现 */}
+      {/* <Modal
+        title="编辑平台超级管理员"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditFormData(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        {editFormData && (
+          <PlatformSuperAdminForm
+            initialValues={editFormData}
+            onSubmit={handleSave}
+            onCancel={() => {
+              setEditModalVisible(false);
+              setEditFormData(null);
+            }}
+            loading={updateMutation.isPending}
+          />
+        )}
+      </Modal> */}
+    </div>
+  );
+}
+

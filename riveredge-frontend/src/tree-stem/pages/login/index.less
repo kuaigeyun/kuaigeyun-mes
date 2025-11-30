@@ -1,0 +1,200 @@
+/* 登录页面样式 */
+.login-container {
+  display: flex;
+  min-height: 100vh;
+  background: #1890ff;
+
+  /* 移动端：垂直布局 */
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+
+  /* LOGO 和框架名称（手机端显示在顶部） */
+  .logo-header {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: #1890ff;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+
+    @media (max-width: 768px) {
+      display: flex;
+    }
+
+    .logo-img {
+      width: 50px;
+      height: 50px;
+      margin-right: 12px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      padding: 8px;
+    }
+
+    .logo-title {
+      margin: 0 !important;
+      color: white !important;
+      font-size: 20px !important;
+    }
+  }
+
+  /* 左侧品牌展示区 */
+  .login-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: #1890ff;
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+
+    @media (max-width: 768px) {
+      display: none;
+    }
+
+    /* LOGO 和框架名称放在左上角（桌面端） */
+    .logo-top-left {
+      position: absolute;
+      top: 40px;
+      left: 40px;
+      display: flex;
+      align-items: center;
+
+      .logo-img {
+        width: 48px;
+        height: 48px;
+        margin-right: 16px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        padding: 5px;
+      }
+
+      .logo-title {
+        margin: 0 !important;
+        color: white !important;
+        font-size: 24px !important;
+        font-weight: 600 !important;
+      }
+    }
+
+    .login-left-content {
+      max-width: 400px;
+      text-align: center;
+
+      /* 装饰图片 */
+      .login-decoration-img {
+        width: 100%;
+        max-width: 600px;
+        height: auto;
+        margin-bottom: 40px;
+        border-radius: 12px;
+        box-shadow: none;
+      }
+
+      /* 框架简介 */
+      .login-description {
+        .description-title {
+          margin-bottom: 16px !important;
+          color: white !important;
+          font-size: 28px !important;
+          font-weight: 600 !important;
+        }
+
+        .description-text {
+          color: rgba(255, 255, 255, 0.8) !important;
+          font-size: 16px !important;
+          line-height: 1.6 !important;
+        }
+      }
+    }
+  }
+
+  /* 右侧登录表单区 */
+  .login-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: white;
+
+    .login-form-wrapper {
+      width: 100%;
+      max-width: 400px;
+
+      .login-form-header {
+        text-align: center;
+        margin-bottom: 32px;
+
+        .form-title {
+          margin-bottom: 8px !important;
+          color: #262626 !important;
+          font-size: 28px !important;
+          font-weight: 600 !important;
+        }
+
+        .form-subtitle {
+          color: #8c8c8c !important;
+          font-size: 16px !important;
+        }
+      }
+
+      .login-form-footer {
+        margin-top: 24px;
+        text-align: center;
+
+        .register-link {
+          color: #1890ff !important;
+          font-size: 14px !important;
+
+          a {
+            color: #1890ff !important;
+            text-decoration: underline !important;
+
+            &:hover {
+              color: #40a9ff !important;
+            }
+          }
+        }
+      }
+
+      .login-footer-links {
+        margin-top: 32px;
+        text-align: center;
+      }
+    }
+  }
+}
+
+/* 工具栏样式 */
+.login-toolbar {
+  .ant-btn {
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .login-container {
+    .login-right {
+      padding: 20px;
+
+      .login-form-wrapper {
+        .login-form-header {
+          .form-title {
+            font-size: 24px !important;
+          }
+        }
+      }
+    }
+  }
+}
+
+/* 登录页面强制使用浅色主题，不跟随系统主题 */
