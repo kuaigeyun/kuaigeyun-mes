@@ -8,4 +8,5 @@ export * from './auth';
 export * from './storage';
 export * from './format';
 export * from './pinyin';
+export * from './import';
 

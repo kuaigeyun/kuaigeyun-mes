@@ -22,6 +22,7 @@ import {
   PackageConfig,
   activateTenant,
   deactivateTenant,
+  deleteTenantBySuperAdmin,
 } from '../../../../services/tenant';
 // 使用 apiRequest 统一处理 HTTP 请求
 
@@ -121,11 +122,14 @@ const SuperAdminTenantList: React.FC = () => {
     }
 
     // 解析表头和数据
+    // 第1行（索引0）：表头
+    // 第2行（索引1）：示例数据（跳过）
+    // 从第3行开始（索引2）：实际数据行
     const headers = data[0] || [];
-    const rows = data.slice(1);
+    const rows = data.slice(2); // 跳过表头和示例数据行，从第3行开始
 
     if (rows.length === 0) {
-      message.warning('没有可导入的数据行');
+      message.warning('没有可导入的数据行（请从第3行开始填写数据）');
       return;
     }
 
@@ -175,12 +179,30 @@ const SuperAdminTenantList: React.FC = () => {
       return;
     }
 
+    // 过滤空行（所有单元格都为空的行）
+    const nonEmptyRows = rows
+      .map((row, index) => ({ row, originalIndex: index }))
+      .filter(({ row }) => {
+        // 检查行中是否有任何非空单元格
+        return row.some(cell => {
+          const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+          return value !== '';
+        });
+      });
+
+    if (nonEmptyRows.length === 0) {
+      message.warning('没有可导入的数据行（所有行都为空）');
+      return;
+    }
+
     // 解析数据行
     const importData: Array<{ data: CreateTenantData; rowIndex: number; rawRow: any[] }> = [];
     const errors: Array<{ rowIndex: number; message: string }> = [];
 
-    rows.forEach((row, index) => {
-      const rowIndex = index + 2; // Excel 行号（从 2 开始，因为第 1 行是表头）
+    nonEmptyRows.forEach(({ row, originalIndex }) => {
+      // Excel 行号：originalIndex 是从第3行开始的索引（0开始），所以实际行号是 originalIndex + 3
+      // 例如：originalIndex=0 对应第3行，originalIndex=1 对应第4行
+      const rowIndex = originalIndex + 3; // Excel 行号（从 3 开始，因为第 1 行是表头，第 2 行是示例数据）
       const rowData: any = {};
 
       // 提取字段值
@@ -718,15 +740,148 @@ const SuperAdminTenantList: React.FC = () => {
 
   /**
    * 处理删除
+   * 
+   * 支持批量删除组织（软删除）
+   * 
+   * @param keys - 要删除的组织 ID 数组
    */
   const handleDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
       message.warning('请先选择要删除的组织');
       return;
     }
-    message.info(`删除功能开发中，将删除 ${keys.length} 个组织`);
-    // TODO: 实现删除功能
-    // await batchDeleteTenants(keys);
+
+    // 确认删除
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除选中的 ${keys.length} 个组织吗？删除后组织将被暂停（软删除），数据不会真正删除。`,
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          // 显示删除进度 Modal
+          const progressModal = Modal.info({
+            title: '正在删除组织',
+            width: 600,
+            content: (
+              <div>
+                <Progress percent={0} status="active" />
+                <p style={{ marginTop: 16 }}>准备删除 {keys.length} 个组织...</p>
+              </div>
+            ),
+            okButtonProps: { style: { display: 'none' } },
+          });
+
+          const tenantIds = keys.map(key => Number(key));
+          const results: Array<{ success: boolean; tenantId: number; message: string }> = [];
+          let successCount = 0;
+          let failCount = 0;
+
+          // 批量删除
+          for (let i = 0; i < tenantIds.length; i++) {
+            const tenantId = tenantIds[i];
+            const percent = Math.round(((i + 1) / tenantIds.length) * 100);
+
+            try {
+              await deleteTenantBySuperAdmin(tenantId);
+              successCount++;
+              results.push({
+                success: true,
+                tenantId,
+                message: `成功删除组织 ID: ${tenantId}`,
+              });
+
+              // 更新进度
+              progressModal.update({
+                content: (
+                  <div>
+                    <Progress percent={percent} status="active" />
+                    <p style={{ marginTop: 16 }}>
+                      正在删除第 {i + 1} / {tenantIds.length} 个组织...
+                    </p>
+                    <p style={{ marginTop: 8, color: '#52c41a' }}>
+                      成功：{successCount} 个 | 失败：{failCount} 个
+                    </p>
+                  </div>
+                ),
+              });
+            } catch (error: any) {
+              failCount++;
+              const errorMessage = error?.message || error?.detail || '未知错误';
+              results.push({
+                success: false,
+                tenantId,
+                message: `删除组织 ID ${tenantId} 失败：${errorMessage}`,
+              });
+
+              // 更新进度
+              progressModal.update({
+                content: (
+                  <div>
+                    <Progress percent={percent} status="active" />
+                    <p style={{ marginTop: 16 }}>
+                      正在删除第 {i + 1} / {tenantIds.length} 个组织...
+                    </p>
+                    <p style={{ marginTop: 8, color: '#52c41a' }}>
+                      成功：{successCount} 个 | 失败：{failCount} 个
+                    </p>
+                  </div>
+                ),
+              });
+            }
+          }
+
+          // 关闭进度 Modal
+          progressModal.destroy();
+
+          // 显示删除结果
+          const failedResults = results.filter(r => !r.success);
+          if (failedResults.length > 0) {
+            Modal.warning({
+              title: '删除完成（部分失败）',
+              width: 700,
+              content: (
+                <div>
+                  <p>
+                    <strong>删除结果：</strong>成功 {successCount} 个，失败 {failCount} 个
+                  </p>
+                  <p style={{ marginTop: 16 }}>失败的记录：</p>
+                  <List
+                    size="small"
+                    dataSource={failedResults}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <Typography.Text type="danger">{item.message}</Typography.Text>
+                      </List.Item>
+                    )}
+                  />
+                </div>
+              ),
+              onOk: () => {
+                // 刷新表格
+                actionRef.current?.reload();
+                // 清空选中项
+                setSelectedRowKeys([]);
+              },
+            });
+          } else {
+            Modal.success({
+              title: '删除成功',
+              content: `成功删除 ${successCount} 个组织`,
+              onOk: () => {
+                // 刷新表格
+                actionRef.current?.reload();
+                // 清空选中项
+                setSelectedRowKeys([]);
+              },
+            });
+          }
+        } catch (error: any) {
+          message.error('删除操作失败：' + (error.message || '未知错误'));
+        }
+      },
+    });
   };
 
   /**
@@ -957,10 +1112,6 @@ const SuperAdminTenantList: React.FC = () => {
       onImport={handleImport}
       importHeaders={['*组织名称', '*域名', '套餐类型', '状态', '最大用户数', '存储空间(MB)', '过期时间']}
       importExampleRow={['示例组织', 'example', '体验套餐', '未激活', '10', '1024', '']}
-      importDropdownColumns={{
-        2: ['trial', 'basic', 'professional', 'enterprise', '体验套餐', '基础版', '专业版', '企业版'],
-        3: ['active', 'inactive', 'expired', 'suspended', '激活', '未激活', '已过期', '已暂停'],
-      }}
       showExportButton={true}
       onExport={handleExport}
       viewTypes={['table', 'card', 'kanban', 'stats']}

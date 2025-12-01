@@ -7,7 +7,7 @@
 
 import React, { useRef, useLayoutEffect, ReactNode, useState } from 'react';
 import { ProTable, ActionType, ProColumns, ProFormInstance, ProTableProps } from '@ant-design/pro-components';
-import { Button, Space, Radio, Dropdown, MenuProps } from 'antd';
+import { Button, Space, Radio, Dropdown, MenuProps, App } from 'antd';
 import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined } from '@ant-design/icons';
 import { QuerySearchButton } from '../riveredge_query';
 // 内联的 useProTableSearch hook（简化实现）
@@ -23,6 +23,141 @@ const useProTableSearch = () => {
   };
 };
 import { UniImport } from '../uni_import';
+
+/**
+ * 从 columns 自动生成导入配置
+ * 
+ * @param columns - 表格列定义
+ * @param options - 配置选项
+ * @returns 导入配置（表头、示例数据、字段映射、验证规则）
+ */
+function generateImportConfigFromColumns<T extends Record<string, any>>(
+  columns: ProColumns<T>[],
+  options?: {
+    excludeFields?: string[]; // 排除的字段（如 id、created_at 等）
+    includeFields?: string[]; // 只包含的字段（如果提供，只包含这些字段）
+    fieldMap?: Record<string, string>; // 自定义字段映射
+    fieldRules?: Record<string, { required?: boolean; validator?: (value: any) => boolean | string }>; // 自定义验证规则
+  }
+) {
+  const {
+    excludeFields = ['id', 'created_at', 'updated_at', 'deleted_at'],
+    includeFields,
+    fieldMap: customFieldMap = {},
+    fieldRules: customFieldRules = {},
+  } = options || {};
+
+  const headers: string[] = [];
+  const exampleRow: string[] = [];
+  const fieldMap: Record<string, string> = { ...customFieldMap };
+  const fieldRules: Record<string, { required?: boolean; validator?: (value: any) => boolean | string }> = { ...customFieldRules };
+
+  // 过滤可导入的列
+  const importableColumns = columns.filter((col) => {
+    const dataIndex = col.dataIndex;
+    if (!dataIndex) return false;
+    
+    const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex);
+    
+    // 排除字段
+    if (excludeFields.includes(fieldName)) return false;
+    
+    // 如果指定了包含字段，只包含这些字段
+    if (includeFields && !includeFields.includes(fieldName)) return false;
+    
+    // 排除隐藏的列（hideInTable）
+    if (col.hideInTable) return false;
+    
+    // 排除操作列（通常没有 dataIndex 或 dataIndex 为 'option'）
+    if (fieldName === 'option' || fieldName === 'action') return false;
+    
+    return true;
+  });
+
+  // 生成表头、示例数据和字段映射
+  importableColumns.forEach((col) => {
+    const dataIndex = col.dataIndex;
+    const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex);
+    const title = col.title as string || fieldName;
+    
+    // 生成表头（支持必填标识）
+    // 检查是否必填：通过 required 属性或 fieldProps.required
+    const isRequired = (col as any).required === true || 
+                      ((col.fieldProps as any)?.required === true);
+    const headerTitle = isRequired ? `*${title}` : title;
+    headers.push(headerTitle);
+    
+    // 生成示例数据
+    let exampleValue = '';
+    if (col.valueType === 'select' || col.valueEnum) {
+      // 枚举类型，使用第一个选项
+      const valueEnum = col.valueEnum as any;
+      if (valueEnum && typeof valueEnum === 'object') {
+        const firstOption = Object.keys(valueEnum)[0];
+        exampleValue = valueEnum[firstOption]?.text || firstOption || '';
+      } else {
+        exampleValue = '示例值';
+      }
+    } else if (col.valueType === 'date' || col.valueType === 'dateTime') {
+      exampleValue = '2024-01-01';
+    } else if (col.valueType === 'digit' || col.valueType === 'number') {
+      exampleValue = '0';
+    } else if (col.valueType === 'switch' || col.valueType === 'checkbox') {
+      exampleValue = '是';
+    } else {
+      exampleValue = `示例${title}`;
+    }
+    exampleRow.push(exampleValue);
+    
+    // 生成字段映射（支持多种表头名称映射到同一个字段）
+    const normalizedTitle = title.trim();
+    const normalizedHeaderTitle = headerTitle.trim();
+    
+    // 支持多种映射方式
+    fieldMap[normalizedTitle] = fieldName;
+    fieldMap[normalizedHeaderTitle] = fieldName;
+    fieldMap[fieldName] = fieldName; // 直接使用字段名也可以
+    
+    // 如果字段名和标题不同，也建立映射
+    if (fieldName !== normalizedTitle) {
+      fieldMap[fieldName] = fieldName;
+    }
+    
+    // 生成验证规则
+    if (!fieldRules[fieldName]) {
+      fieldRules[fieldName] = {};
+    }
+    
+    // 检查是否必填
+    if (isRequired || (col as any).required === true) {
+      fieldRules[fieldName].required = true;
+    }
+    
+    // 添加类型验证
+    if (col.valueType === 'digit' || col.valueType === 'number') {
+      fieldRules[fieldName].validator = (value: any) => {
+        if (value && isNaN(Number(value))) {
+          return `${title}必须是数字`;
+        }
+        return true;
+      };
+    } else if (col.valueType === 'date' || col.valueType === 'dateTime') {
+      fieldRules[fieldName].validator = (value: any) => {
+        if (value && isNaN(new Date(value).getTime())) {
+          return `${title}必须是有效的日期`;
+        }
+        return true;
+      };
+    }
+  });
+
+  return {
+    headers,
+    exampleRow,
+    fieldMap,
+    fieldRules,
+  };
+}
 
 /**
  * 统一 ProTable 组件属性
@@ -103,7 +238,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   toolBarActions?: ReactNode[];
   /**
-   * 是否显示导入按钮（默认：false）
+   * 是否显示导入按钮（默认：true）
    */
   showImportButton?: boolean;
   /**
@@ -113,19 +248,33 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   onImport?: (data: any[][]) => void;
   /**
    * 导入表头（可选，如果提供则自动填充第一行）
+   * 如果不提供，将自动从 columns 中提取可导入的字段生成表头
    */
   importHeaders?: string[];
   /**
    * 导入示例数据（可选，如果提供则自动填充第二行作为示例）
+   * 如果不提供，将自动从 columns 中提取字段生成示例数据
    */
   importExampleRow?: string[];
   /**
-   * 导入下拉列配置（可选，定义哪些列需要下拉选项）
-   * 格式：{ columnIndex: string[] } - 列索引对应的下拉选项数组
+   * 导入字段映射配置（可选）
+   * 用于将表头名称映射到字段名，如果不提供，将自动从 columns 中提取
+   * 格式：{ '表头名称': '字段名' } 或 { '字段名': '表头名称' }
    */
-  importDropdownColumns?: Record<number, string[]>;
+  importFieldMap?: Record<string, string>;
   /**
-   * 是否显示导出按钮（默认：false）
+   * 导入字段验证规则（可选）
+   * 用于定义哪些字段是必填的，以及字段的验证规则
+   * 格式：{ '字段名': { required: true, validator?: (value: any) => boolean } }
+   */
+  importFieldRules?: Record<string, { required?: boolean; validator?: (value: any) => boolean | string }>;
+  /**
+   * 是否自动从 columns 生成导入配置（默认：true）
+   * 如果为 true，将自动从 columns 中提取可导入的字段生成表头、示例数据和字段映射
+   */
+  autoGenerateImportConfig?: boolean;
+  /**
+   * 是否显示导出按钮（默认：true）
    */
   showExportButton?: boolean;
   /**
@@ -178,6 +327,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   /**
    * 视图类型配置
    * 支持：'table' | 'card' | 'kanban' | 'stats'
+   * 默认：['table', 'card', 'kanban', 'stats'] - 支持所有视图类型
    */
   viewTypes?: Array<'table' | 'card' | 'kanban' | 'stats'>;
   /**
@@ -266,12 +416,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onRowEditSave,
   onRowEditDelete,
   toolBarActions = [],
-  showImportButton = false,
+  showImportButton = true,
   onImport,
   importHeaders,
   importExampleRow,
-  importDropdownColumns,
-  showExportButton = false,
+  importFieldMap,
+  importFieldRules,
+  autoGenerateImportConfig = true,
+  showExportButton = true,
   onExport,
   showCreateButton = false,
   onCreate,
@@ -281,7 +433,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onDelete,
   defaultPageSize = 10,
   showQuickJumper = true,
-  viewTypes = ['table'],
+  viewTypes = ['table', 'card', 'kanban', 'stats'],
   defaultViewType = 'table',
   onViewTypeChange,
   cardViewConfig,
@@ -291,8 +443,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   formRef: externalFormRef,
   ...restProps
 }: UniTableProps<T>) {
+  const { message } = App.useApp();
   // 导入弹窗状态
   const [importModalVisible, setImportModalVisible] = useState(false);
+  
+  // 自动生成导入配置（如果启用且未手动提供）
+  const autoImportConfig = React.useMemo(() => {
+    if (!autoGenerateImportConfig || (importHeaders && importExampleRow)) {
+      return null;
+    }
+    return generateImportConfigFromColumns(columns, {
+      fieldMap: importFieldMap,
+      fieldRules: importFieldRules,
+    });
+  }, [columns, autoGenerateImportConfig, importHeaders, importExampleRow, importFieldMap, importFieldRules]);
+  
+  // 使用自动生成的配置或手动提供的配置
+  const finalImportHeaders = importHeaders || autoImportConfig?.headers;
+  const finalImportExampleRow = importExampleRow || autoImportConfig?.exampleRow;
+  const finalImportFieldMap = importFieldMap || autoImportConfig?.fieldMap || {};
+  const finalImportFieldRules = importFieldRules || autoImportConfig?.fieldRules || {};
+  
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats'>(defaultViewType);
   // 表格数据状态（用于其他视图）
@@ -401,7 +572,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
    */
   const handleImportConfirm = (data: any[][]) => {
     if (onImport) {
+      // 如果提供了字段映射和验证规则，在调用 onImport 之前进行数据转换和验证
+      // 注意：这里只是传递原始数据，具体的验证和转换应该在 onImport 回调中处理
+      // 但我们可以将字段映射和验证规则作为额外参数传递（如果需要）
       onImport(data);
+    } else {
+      message.warning('请配置 onImport 回调函数来处理导入数据');
     }
   };
 
@@ -532,7 +708,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
       // 处理导出菜单点击
       const handleExportMenuClick: MenuProps['onClick'] = ({ key }) => {
-        if (!onExport) return;
+        if (!onExport) {
+          message.warning('请配置 onExport 回调函数来处理导出数据');
+          return;
+        }
         
         switch (key) {
           case 'selected':
@@ -566,7 +745,56 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
+    <>
+      <style>{`
+        /* 统一 UniTable 容器样式，确保所有页面间距一致 */
+        .uni-table-container {
+          position: relative;
+          padding: 0;
+          margin: 0;
+          width: 100%;
+        }
+        .uni-table-pro-table {
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table {
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table-list-toolbar {
+          padding: 16px 24px !important;
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table-list-toolbar-container {
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table-list-toolbar-title {
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table-list-toolbar-extra {
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table-list-toolbar-extra-line {
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-table-wrapper {
+          margin: 0 !important;
+        }
+        .uni-table-pro-table .ant-pro-table-list-toolbar-container {
+          padding-bottom: 16px !important;
+        }
+      `}</style>
+      <div 
+        ref={containerRef} 
+        className="uni-table-container"
+        style={{ 
+          position: 'relative',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+        }}
+      >
       {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
       {(showAdvancedSearch || beforeSearchButtons || afterSearchButtons || (viewTypes && viewTypes.length > 1)) && (
         <div
@@ -601,6 +829,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           request={handleRequest}
           rowKey={rowKey}
           search={false}
+          className="uni-table-pro-table"
+          style={{ margin: 0, padding: 0 }}
         rowSelection={
           enableRowSelection
             ? {
@@ -787,14 +1017,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           visible={importModalVisible}
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleImportConfirm}
-          headers={importHeaders}
-          exampleRow={importExampleRow}
-          dropdownColumns={importDropdownColumns}
+          headers={finalImportHeaders}
+          exampleRow={finalImportExampleRow}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
 export default UniTable;
+
+// 导出工具函数，供其他组件使用
+export { generateImportConfigFromColumns };
 

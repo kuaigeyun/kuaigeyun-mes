@@ -1082,6 +1082,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
 
   // ⚠️ 修复：使用 ref 跟踪弹窗状态，避免重复设置导致无限循环
   const prevVisibleRef = useRef(false);
+  const isCleaningUpRef = useRef(false);
   
   /**
    * 弹窗打开/关闭时的处理
@@ -1089,9 +1090,15 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
    * 用户可以在弹窗中手动输入搜索条件，或者从保存的搜索条件中加载
    */
   useEffect(() => {
+    // 防止在清理过程中重复触发
+    if (isCleaningUpRef.current) {
+      return;
+    }
+    
     if (visible && !prevVisibleRef.current) {
       // 弹窗刚打开
       prevVisibleRef.current = true;
+      isCleaningUpRef.current = false;
       
       // 聚焦搜索按钮（延迟执行，确保 DOM 已渲染）
       setTimeout(() => {
@@ -1101,11 +1108,17 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       }, 100);
     } else if (!visible && prevVisibleRef.current) {
       // 弹窗关闭时，清除编辑状态
+      isCleaningUpRef.current = true;
       prevVisibleRef.current = false;
-      setEditingSearch(null);
-      setSaveName('');
-      setSaveIsShared(false);
-      setSaveIsPinned(false);
+      
+      // 使用 setTimeout 延迟状态更新，避免在 useEffect 执行过程中触发新的更新
+      setTimeout(() => {
+        setEditingSearch(null);
+        setSaveName('');
+        setSaveIsShared(false);
+        setSaveIsPinned(false);
+        isCleaningUpRef.current = false;
+      }, 0);
     }
   }, [visible]); // ⚠️ 修复：只依赖 visible，避免其他依赖导致无限循环
 
@@ -1267,9 +1280,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                     size="small"
                     dataSource={sharedSearches}
                     renderItem={(item) => (
-                      <SortableListItem id={item.id}>
+                      <SortableListItem key={item.id} id={item.id}>
                         {(listeners) => (
                         <List.Item
+                          key={item.id}
                   style={{ 
                     padding: '8px 12px',
                     border: `1px solid ${token.colorSuccessBorder}`,
@@ -1448,9 +1462,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                     size="small"
                     dataSource={personalSearches}
                     renderItem={(item) => (
-                      <SortableListItem id={item.id}>
+                      <SortableListItem key={item.id} id={item.id}>
                         {(listeners) => (
                         <List.Item
+                          key={item.id}
                   style={{ 
                     padding: '8px 12px',
                     border: `1px solid ${token.colorInfoBorder}`,
@@ -2013,7 +2028,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: '32px', height: '32px' }}>
       <Button
           ref={buttonRef}
           onClick={handleOpen}
@@ -2062,6 +2077,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
               border: `1px solid ${token.colorBorder}`,
               overflow: 'hidden',
               backgroundColor: token.colorBgContainer,
+              height: '32px', // 与高级搜索按钮高度一致
             }}
           >
             {/* 显示前 N 个钉住的条件 - 使用 Button TAB 样式 */}
