@@ -279,6 +279,7 @@ export default function PackageManagementPage() {
           columns={columns}
           request={handleRequest}
           rowKey="id"
+          showAdvancedSearch={true}
           enableRowSelection={true}
           onRowSelectionChange={handleRowSelectionChange}
           showCreateButton={true}

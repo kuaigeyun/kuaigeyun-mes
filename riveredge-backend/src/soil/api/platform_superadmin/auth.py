@@ -44,6 +44,11 @@ async def platform_superadmin_login(data: PlatformSuperAdminLoginRequest):
         }
         ```
     """
+    from loguru import logger
+    
+    # 记录接收到的登录请求（不输出密码明文，只输出长度）
+    logger.info(f"收到登录请求: username={data.username}, password_length={len(data.password) if data.password else 0}")
+    
     service = PlatformSuperAdminAuthService()
     result = await service.login(data)
     

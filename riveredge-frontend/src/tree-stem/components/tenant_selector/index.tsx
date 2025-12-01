@@ -1,20 +1,86 @@
 /**
- * 组织选择器组件（占位）
- * 
- * 目前为占位显示，直接显示固定组织名称
- * 后续需要后端配合实现租户切换功能
+ * 组织选择器组件
+ *
+ * 允许平台超级管理员选择要管理的组织
+ * 系统级用户显示当前所属组织
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Select, Spin, message } from 'antd';
+import { SwapOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
+import { getTenantList } from '../../services/tenant';
+import { getUserInfo, setTenantId, getTenantId } from '../../utils/auth';
+
+const { Option } = Select;
 
 /**
- * 组织选择器组件（占位）
+ * 组织选择器组件
  */
 const TenantSelector: React.FC = () => {
-  // 占位显示：直接显示固定组织名称
+  const userInfo = getUserInfo();
+  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin';
+  const currentTenantId = getTenantId();
+
+  // 获取组织列表（仅平台超级管理员需要）
+  const { data: tenantData, isLoading } = useQuery({
+    queryKey: ['tenants'],
+    queryFn: () => getTenantList({ page: 1, page_size: 100, status: 'active' }, true), // 传递isSuperAdmin=true
+    enabled: isPlatformSuperAdmin, // 只有平台超级管理员才获取组织列表
+  });
+
+  // 处理组织选择
+  const handleTenantChange = (tenantId: string) => {
+    setTenantId(tenantId);
+    message.success('已切换组织上下文');
+    // 刷新页面以应用新的组织上下文
+    window.location.reload();
+  };
+
+  // 如果是平台超级管理员且没有选择组织，自动选择第一个可用的组织
+  React.useEffect(() => {
+    if (isPlatformSuperAdmin && !currentTenantId && tenantData?.items?.length > 0) {
+      const firstTenant = tenantData.items[0];
+      setTenantId(firstTenant.id);
+      message.info(`已自动选择组织: ${firstTenant.name}`);
+    }
+  }, [isPlatformSuperAdmin, currentTenantId, tenantData]);
+
+  // 如果是平台超级管理员，显示组织选择器
+  if (isPlatformSuperAdmin) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        {isLoading ? (
+          <Spin size="small" />
+        ) : (
+          <Select
+            value={currentTenantId || undefined}
+            placeholder={tenantData?.items?.length ? "请选择组织" : "加载中..."}
+            style={{
+              minWidth: 200,
+              borderRadius: '50%'  // 设置圆角为50%，使其成为圆形
+            }}
+            suffixIcon={<SwapOutlined />}  // 使用切换图标替换默认的下拉箭头
+            onChange={handleTenantChange}
+            allowClear
+            disabled={isLoading}
+          >
+            {tenantData?.items?.map((tenant: any) => (
+              <Option key={tenant.id} value={tenant.id}>
+                {tenant.name}
+              </Option>
+            ))}
+          </Select>
+        )}
+      </div>
+    );
+  }
+
+  // 如果是系统级用户，显示当前组织名称
+  const tenantName = userInfo?.tenant_name || '未知组织';
   return (
     <span style={{ color: '#262626', fontSize: 14, fontWeight: 500 }}>
-      无锡快格信息技术有限公司
+      {tenantName}
     </span>
   );
 };

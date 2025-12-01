@@ -317,7 +317,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onDelete?: (selectedRowKeys: React.Key[]) => void;
   /**
-   * 默认分页大小（默认：10）
+   * 默认分页大小（默认：20）
    */
   defaultPageSize?: number;
   /**
@@ -407,7 +407,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   headerTitle,
   headerActions,
   rowKey = 'id',
-  showAdvancedSearch = true,
+  showAdvancedSearch = false, // 默认不显示高级搜索，使用高级搜索来实现搜索
   beforeSearchButtons,
   afterSearchButtons,
   enableRowSelection = false,
@@ -431,7 +431,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onEdit,
   showDeleteButton = false,
   onDelete,
-  defaultPageSize = 10,
+  defaultPageSize = 20,
   showQuickJumper = true,
   viewTypes = ['table', 'card', 'kanban', 'stats'],
   defaultViewType = 'table',
@@ -587,7 +587,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /**
    * 构建头部操作按钮（显示在原来标题的位置）
    */
-  const buildHeaderActions = () => {
+
+
+  // 构建左侧操作按钮（新建、修改、删除 + 自定义toolBarRender）
+  const buildLeftActions = () => {
     const actions: ReactNode[] = [];
 
     // 如果提供了自定义 headerActions，直接使用
@@ -595,7 +598,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       return headerActions;
     }
 
-    // 否则根据配置自动生成按钮
+    // 处理用户自定义的toolBarRender（当作左侧按钮）
+    if (restProps.toolBarRender) {
+      // 这里需要模拟toolBarRender的参数
+      const mockAction = { reload: actionRef.current?.reload };
+      const mockSelectedRowKeys = selectedRowKeys;
+      const userResult = restProps.toolBarRender(mockAction, { selectedRowKeys: mockSelectedRowKeys });
+
+      if (Array.isArray(userResult)) {
+        actions.push(...userResult);
+      } else if (userResult) {
+        actions.push(userResult);
+      }
+    }
+
     // 新建按钮
     if (showCreateButton && onCreate) {
       actions.push(
@@ -650,42 +666,40 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return actions.length > 0 ? <Space>{actions}</Space> : undefined;
   };
 
-  /**
-   * 处理行选择变化
-   */
-  const handleRowSelectionChange = (keys: React.Key[]) => {
-    setSelectedRowKeys(keys);
-    if (onRowSelectionChange) {
-      onRowSelectionChange(keys);
-    }
-  };
-
-  /**
-   * 构建工具栏按钮（右上角）
-   */
-  const buildToolBarActions = (selectedRowKeys?: React.Key[]) => {
+  // 构建右侧工具栏按钮（导入、导出）
+  const buildRightActions = () => {
     const actions: ReactNode[] = [];
 
-    // 添加自定义工具栏按钮
-    if (toolBarActions && toolBarActions.length > 0) {
-      actions.push(...toolBarActions);
-    }
-
-    // 添加导入按钮（在导出按钮前面）
+    // 导入按钮
     if (showImportButton) {
       actions.push(
         <Button
           key="import"
           icon={<UploadOutlined />}
           onClick={handleImportClick}
+          style={{
+            borderColor: '#217346',
+            color: '#217346',
+            backgroundColor: 'transparent',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#217346';
+            e.currentTarget.style.borderColor = '#217346';
+            e.currentTarget.style.color = '#ffffff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.borderColor = '#217346';
+            e.currentTarget.style.color = '#217346';
+          }}
         >
           导入
         </Button>
       );
     }
 
-    // 添加导出按钮（下拉菜单）
-    if (showExportButton) {
+    // 导出按钮（下拉菜单）
+    if (showExportButton && onExport) {
       // 构建导出菜单项
       const exportMenuItems: MenuProps['items'] = [
         {
@@ -741,7 +755,29 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       );
     }
 
-    return actions.length > 0 ? actions : undefined;
+    return actions.length > 0 ? <Space>{actions}</Space> : undefined;
+  };
+
+  const buildHeaderActions = () => {
+    return buildLeftActions();
+  };
+
+  /**
+   * 处理行选择变化
+   */
+  const handleRowSelectionChange = (keys: React.Key[]) => {
+    setSelectedRowKeys(keys);
+    if (onRowSelectionChange) {
+      onRowSelectionChange(keys);
+    }
+  };
+
+  /**
+   * 构建工具栏按钮（仅自定义按钮，导入导出已移至右侧工具栏）
+   */
+  const buildToolBarActions = (selectedRowKeys?: React.Key[]) => {
+    // 只返回自定义工具栏按钮
+    return toolBarActions && toolBarActions.length > 0 ? toolBarActions : [];
   };
 
   return (
@@ -762,7 +798,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0 !important;
         }
         .uni-table-pro-table .ant-pro-table-list-toolbar {
-          padding: 16px 24px !important;
+          padding: 16px 0 !important;
           margin: 0 !important;
         }
         .uni-table-pro-table .ant-pro-table-list-toolbar-container {
@@ -782,7 +818,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0 !important;
         }
         .uni-table-pro-table .ant-pro-table-list-toolbar-container {
-          padding-bottom: 16px !important;
+          padding-bottom: 0px !important;
         }
       `}</style>
       <div 
@@ -829,8 +865,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           request={handleRequest}
           rowKey={rowKey}
           search={false}
+          size="small"
           className="uni-table-pro-table"
           style={{ margin: 0, padding: 0 }}
+          toolbar={{
+            actions: buildRightActions() ? [buildRightActions()] : [],
+          }}
         rowSelection={
           enableRowSelection
             ? {
@@ -860,14 +900,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               setSelectedRowKeys(newKeys);
             }
           }
-          return buildToolBarActions(toolBarSelectedRowKeys) || [];
+
+          // 只返回系统按钮（导入导出），用户自定义按钮在headerTitle中处理
+          const rightActions = buildRightActions();
+          return rightActions ? [rightActions] : [];
         }}
         pagination={{
           defaultPageSize,
           showSizeChanger: true,
           showQuickJumper,
         }}
-        {...restProps}
+        {...(() => {
+          // 过滤掉toolBarRender，避免重复渲染（已经在左侧处理了）
+          const { toolBarRender, ...otherProps } = restProps;
+          return otherProps;
+        })()}
         />
       )}
 

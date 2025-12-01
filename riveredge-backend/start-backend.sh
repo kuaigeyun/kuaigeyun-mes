@@ -2,9 +2,8 @@
 
 # RiverEdge SaaS 多组织框架 - 后端启动脚本
 #
-# 支持两种运行模式：
-# 1. 单体模式（monolithic）：包含所有功能（系统级 + 平台级）
-# 2. SaaS 模式（saas）：作为平台宿主，运行平台级功能
+# 运行模式：
+# SaaS 模式：作为平台宿主，运行完整的平台级功能（包含系统级和平台级）
 
 echo "🌳 RiverEdge SaaS 多组织框架 - 启动后端服务"
 echo ""
@@ -15,14 +14,15 @@ if [ ! -f "pyproject.toml" ]; then
     exit 1
 fi
 
-# 从环境变量获取运行模式（默认单体模式）
-MODE=${MODE:-monolithic}
+# 从环境变量获取运行模式（默认SaaS模式）
+MODE=${MODE:-saas}
 
 echo "📋 运行模式：$MODE"
-if [ "$MODE" = "monolithic" ] || [ "$MODE" = "mono" ]; then
-    echo "   - 包含所有功能（系统级 + 平台级）"
-elif [ "$MODE" = "saas" ]; then
-    echo "   - 作为平台宿主，运行平台级功能"
+if [ "$MODE" = "saas" ]; then
+    echo "   - 作为平台宿主，运行平台级功能（包含系统级和平台级）"
+else
+    echo "   ⚠️  警告：未知模式 '$MODE'，将使用 SaaS 模式"
+    MODE="saas"
 fi
 echo ""
 

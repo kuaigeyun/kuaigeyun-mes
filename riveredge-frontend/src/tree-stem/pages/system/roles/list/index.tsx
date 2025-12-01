@@ -1,0 +1,482 @@
+/**
+ * 角色管理列表页面
+ * 
+ * 用于系统管理员查看和管理组织内的角色。
+ * 支持角色的 CRUD 操作和权限分配。
+ */
+
+import React, { useRef, useState } from 'react';
+import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Tree, message } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../../components/uni_table';
+import {
+  getRoleList,
+  getRoleByUuid,
+  createRole,
+  updateRole,
+  deleteRole,
+  getRolePermissions,
+  assignPermissions,
+  getAllPermissions,
+  Role,
+  CreateRoleData,
+  UpdateRoleData,
+  Permission,
+} from '../../../../services/role';
+
+/**
+ * 角色管理列表页面组件
+ */
+const RoleListPage: React.FC = () => {
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<ProFormInstance>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  
+  // Modal 相关状态（创建/编辑）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentRoleUuid, setCurrentRoleUuid] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<Role | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  
+  // 权限分配 Modal 状态
+  const [permissionModalVisible, setPermissionModalVisible] = useState(false);
+  const [permissionTreeData, setPermissionTreeData] = useState<any[]>([]);
+  const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
+  const [permissionLoading, setPermissionLoading] = useState(false);
+
+  /**
+   * 处理新建角色
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentRoleUuid(null);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+  };
+
+  // 导入处理函数
+  const handleImport = async (data: any[][]) => {
+    message.info('导入功能开发中...');
+    console.log('导入数据:', data);
+  };
+
+  // 导出处理函数
+  const handleExport = (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: Role[]
+  ) => {
+    message.info('导出功能开发中...');
+    console.log('导出类型:', type, '选中行:', selectedRowKeys, '当前页数据:', currentPageData);
+  };
+
+  /**
+   * 处理编辑角色
+   */
+  const handleEdit = async (record: Role) => {
+    try {
+      setIsEdit(true);
+      setCurrentRoleUuid(record.uuid);
+      setModalVisible(true);
+      
+      // 获取角色详情
+      const detail = await getRoleByUuid(record.uuid);
+      formRef.current?.setFieldsValue({
+        name: detail.name,
+        code: detail.code,
+        description: detail.description,
+        is_system: detail.is_system,
+        is_active: detail.is_active,
+      });
+    } catch (error: any) {
+      messageApi.error(error.message || '获取角色详情失败');
+    }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const handleView = async (record: Role) => {
+    try {
+      setDetailLoading(true);
+      setDrawerVisible(true);
+      const detail = await getRoleByUuid(record.uuid);
+      setDetailData(detail);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取角色详情失败');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  /**
+   * 处理删除角色
+   */
+  const handleDelete = async (record: Role) => {
+    try {
+      await deleteRole(record.uuid);
+      messageApi.success('删除成功');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  /**
+   * 处理提交表单（创建/更新）
+   */
+  const handleSubmit = async () => {
+    try {
+      setFormLoading(true);
+      const values = await formRef.current?.validateFields();
+      
+      if (isEdit && currentRoleUuid) {
+        await updateRole(currentRoleUuid, values as UpdateRoleData);
+        messageApi.success('更新成功');
+      } else {
+        await createRole(values as CreateRoleData);
+        messageApi.success('创建成功');
+      }
+      
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理权限分配
+   */
+  const handleAssignPermissions = async (record: Role) => {
+    try {
+      setPermissionLoading(true);
+      setPermissionModalVisible(true);
+      setCurrentRoleUuid(record.uuid);
+      
+      // 获取所有权限
+      const allPermissions = await getAllPermissions({ page_size: 1000 });
+      
+      // 获取角色已有权限
+      const rolePermissions = await getRolePermissions(record.uuid);
+      const rolePermissionUuids = rolePermissions.map(p => p.uuid);
+      setCheckedKeys(rolePermissionUuids);
+      
+      // 构建树形数据（按资源分组）
+      const resourceMap: Record<string, Permission[]> = {};
+      allPermissions.items.forEach(permission => {
+        if (!resourceMap[permission.resource]) {
+          resourceMap[permission.resource] = [];
+        }
+        resourceMap[permission.resource].push(permission);
+      });
+      
+      const treeData = Object.keys(resourceMap).map(resource => ({
+        title: resource,
+        key: `resource-${resource}`,
+        children: resourceMap[resource].map(permission => ({
+          title: `${permission.name} (${permission.code})`,
+          key: permission.uuid,
+        })),
+      }));
+      
+      setPermissionTreeData(treeData);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取权限列表失败');
+    } finally {
+      setPermissionLoading(false);
+    }
+  };
+
+  /**
+   * 提交权限分配
+   */
+  const handleSubmitPermissions = async () => {
+    try {
+      if (!currentRoleUuid) return;
+      
+      setPermissionLoading(true);
+      const permissionUuids = checkedKeys.filter(key => typeof key === 'string' && !key.startsWith('resource-')) as string[];
+      await assignPermissions(currentRoleUuid, permissionUuids);
+      messageApi.success('权限分配成功');
+      setPermissionModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '权限分配失败');
+    } finally {
+      setPermissionLoading(false);
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns: ProColumns<Role>[] = [
+    {
+      title: '角色名称',
+      dataIndex: 'name',
+      width: 150,
+      fixed: 'left',
+    },
+    {
+      title: '角色代码',
+      dataIndex: 'code',
+      width: 150,
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: '系统角色',
+      dataIndex: 'is_system',
+      width: 100,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: '是', status: 'Default' },
+        false: { text: '否', status: 'Processing' },
+      },
+      render: (_, record) => (
+        <Tag color={record.is_system ? 'default' : 'blue'}>
+          {record.is_system ? '是' : '否'}
+        </Tag>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'is_active',
+      width: 100,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: '启用', status: 'Success' },
+        false: { text: '禁用', status: 'Default' },
+      },
+      render: (_, record) => (
+        <Tag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '权限数',
+      dataIndex: 'permission_count',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '用户数',
+      dataIndex: 'user_count',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 200,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(record)}
+          >
+            查看
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+            disabled={record.is_system}
+          >
+            编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={() => handleAssignPermissions(record)}
+          >
+            权限
+          </Button>
+          <Popconfirm
+            title="确定要删除这个角色吗？"
+            onConfirm={() => handleDelete(record)}
+            disabled={record.is_system}
+          >
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              disabled={record.is_system}
+            >
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <UniTable<Role>
+        actionRef={actionRef}
+        columns={columns}
+        request={async (params, sort, filter, searchFormValues) => {
+          const response = await getRoleList({
+            page: params.current || 1,
+            page_size: params.pageSize || 20,
+            keyword: searchFormValues?.keyword,
+          });
+          return {
+            data: response.items,
+            success: true,
+            total: response.total,
+          };
+        }}
+        rowKey="uuid"
+        showAdvancedSearch={true}
+        pagination={{
+          defaultPageSize: 20,
+        }}
+        toolBarRender={() => [
+          <Button key="create" type="primary" onClick={handleCreate}>
+            新建角色
+          </Button>,
+        ]}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        showImportButton={true}
+        onImport={handleImport}
+        showExportButton={true}
+        onExport={handleExport}
+      />
+
+      {/* 创建/编辑 Modal */}
+      <Modal
+        title={isEdit ? '编辑角色' : '新建角色'}
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        onOk={handleSubmit}
+        confirmLoading={formLoading}
+        width={800}
+      >
+        <ProForm
+          formRef={formRef}
+          submitter={false}
+          layout="vertical"
+        >
+          <ProFormText
+            name="name"
+            label="角色名称"
+            rules={[{ required: true, message: '请输入角色名称' }]}
+            placeholder="请输入角色名称"
+          />
+          <ProFormText
+            name="code"
+            label="角色代码"
+            rules={[
+              { required: true, message: '请输入角色代码' },
+              { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线' },
+            ]}
+            placeholder="请输入角色代码（如：admin、user）"
+            disabled={isEdit}
+          />
+          <ProFormTextArea
+            name="description"
+            label="描述"
+            placeholder="请输入角色描述"
+          />
+          <ProFormSwitch
+            name="is_active"
+            label="是否启用"
+            initialValue={true}
+          />
+        </ProForm>
+      </Modal>
+
+      {/* 详情 Drawer */}
+      <Drawer
+        title="角色详情"
+        open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        width={600}
+        loading={detailLoading}
+      >
+        {detailData && (
+          <ProDescriptions
+            column={2}
+            dataSource={detailData}
+            columns={[
+              { title: '角色名称', dataIndex: 'name' },
+              { title: '角色代码', dataIndex: 'code' },
+              { title: '描述', dataIndex: 'description', span: 2 },
+              {
+                title: '系统角色',
+                dataIndex: 'is_system',
+                render: (value) => (value ? '是' : '否'),
+              },
+              {
+                title: '状态',
+                dataIndex: 'is_active',
+                render: (value) => (value ? '启用' : '禁用'),
+              },
+              { title: '权限数', dataIndex: 'permission_count' },
+              { title: '用户数', dataIndex: 'user_count' },
+              { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+              { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+            ]}
+          />
+        )}
+      </Drawer>
+
+      {/* 权限分配 Modal */}
+      <Modal
+        title="分配权限"
+        open={permissionModalVisible}
+        onCancel={() => setPermissionModalVisible(false)}
+        onOk={handleSubmitPermissions}
+        confirmLoading={permissionLoading}
+        width={600}
+      >
+        <Tree
+          checkable
+          checkedKeys={checkedKeys}
+          onCheck={(checked) => setCheckedKeys(checked as React.Key[])}
+          treeData={permissionTreeData}
+          defaultExpandAll
+        />
+      </Modal>
+    </>
+  );
+};
+
+export default RoleListPage;
+

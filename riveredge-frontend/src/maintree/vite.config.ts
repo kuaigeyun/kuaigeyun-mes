@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
+import { platform } from 'os'
 
 // 主入口配置
 // 统一使用 SaaS 模式
@@ -70,27 +72,44 @@ export default defineConfig({
     cors: true, // 启用CORS
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:9000', // 后端服务地址（可通过环境变量配置）
+        target: 'http://127.0.0.1:9000', // 强制使用IPv4地址，避免IPv6连接问题
         changeOrigin: true,
         secure: false,
       },
     },
     hmr: {
       overlay: true, // 显示错误覆盖层
-      port: 8000, // HMR 端口
+      // 启用 HMR，使用 WebSocket
+      protocol: 'ws',
+      host: 'localhost',
+      // 不指定固定端口，让 Vite 自动选择（避免端口冲突）
+      clientPort: undefined,
     },
     watch: {
-      // 优化文件监听，确保热重载正常工作
+      // 优化文件监听，确保 HMR 正常工作
       ignored: [
         '**/node_modules/**',
         '**/.git/**',
         '**/dist/**',
+        '**/.vite/**',
+        '**/build/**',
+        '**/coverage/**',
         '**/*.log',
+        '**/*.tmp',
+        '**/startlogs/**',
+        '**/logs/**',
+        '**/.DS_Store',
+        '**/Thumbs.db',
+        '**/package-lock.json',
+        '**/yarn.lock',
+        '**/pnpm-lock.yaml',
+        '**/.env.local',
+        '**/.env.*.local',
       ],
-      // 启用轮询模式以确保文件变化能被检测到
-      usePolling: false,
-      // 文件变化检测间隔
-      interval: 100,
+      // Windows 环境下使用轮询模式以确保文件变化能被检测到
+      usePolling: platform() === 'win32',
+      // 文件变化检测间隔（Windows 下使用轮询时）
+      interval: platform() === 'win32' ? 1000 : 100,
     },
   },
   // 构建配置 - 优化性能
@@ -99,7 +118,14 @@ export default defineConfig({
     minify: false, // 开发模式下不压缩，提高构建速度
   },
   plugins: [
-    // 只添加自定义插件，避免重复的React插件
+    // React 插件 - 启用 Fast Refresh 和 HMR
+    react({
+      // 启用 Fast Refresh
+      fastRefresh: true,
+      // 包含所有文件进行 HMR
+      include: '**/*.{jsx,tsx}',
+    }),
+    // 自定义别名插件
     treeStemAliasPlugin(),
   ],
   resolve: {

@@ -33,6 +33,7 @@ export interface LoginResponse {
   expires_in: number;
   user: {
     id: number;
+    uuid: string;
     username: string;
     email?: string;
     full_name?: string;
@@ -42,6 +43,7 @@ export interface LoginResponse {
   };
   tenants?: Array<{
     id: number;
+    uuid: string;
     name: string;
     domain: string;
     status: string;
@@ -55,6 +57,7 @@ export interface LoginResponse {
  */
 export interface CurrentUser {
   id: number;
+  uuid: string;
   username: string;
   email?: string;
   full_name?: string;

@@ -11,7 +11,7 @@ from fastapi.security import OAuth2PasswordBearer
 from soil.models.user import User
 from soil.models.platform_superadmin import PlatformSuperAdmin
 from soil.core.security.security import get_token_payload
-from soil.core.security.superadmin_security import get_superadmin_token_payload
+# 注意：SuperAdmin安全模块已移除
 from soil.core.security.platform_superadmin_security import (
     get_platform_superadmin_token_payload
 )
@@ -21,8 +21,7 @@ from soil.services.auth_service import AuthService
 # OAuth2 密码流（用于从请求头获取 Token）
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
-# 超级管理员 OAuth2 密码流（用于从请求头获取超级管理员 Token）
-superadmin_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/superadmin/auth/login", auto_error=False)
+# 注意：SuperAdmin Auth已移除，使用Platform Admin Auth替代
 
 # 平台超级管理员 OAuth2 密码流（用于从请求头获取平台超级管理员 Token）
 platform_superadmin_oauth2_scheme = OAuth2PasswordBearer(
@@ -56,6 +55,14 @@ async def get_current_user(
             return {"user_id": current_user.id}
         ```
     """
+    # 检查 Token 是否存在
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token缺失",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # 验证 Token
     payload = get_token_payload(token)
     if not payload:
@@ -122,76 +129,7 @@ async def get_current_active_user(
     return current_user
 
 
-async def get_current_superadmin(
-    token: str = Depends(superadmin_oauth2_scheme)
-) -> User:
-    """
-    获取当前平台管理依赖
-    
-    从请求头中提取平台管理 JWT Token，验证并返回当前平台管理用户对象。
-    注意：平台管理使用 User 模型（is_platform_admin=True 且 tenant_id=None）。
-    
-    支持两种 Token 格式：
-    1. 平台管理专用 Token（包含 is_superadmin: True）
-    2. 普通 Token（如果用户是平台管理，即 is_platform_admin=True 且 tenant_id=None）
-    
-    Args:
-        token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
-        
-    Returns:
-        User: 当前平台管理用户对象（is_platform_admin=True 且 tenant_id=None）
-        
-    Raises:
-        HTTPException: 当 Token 无效、用户不存在、不是平台管理或未激活时抛出
-        
-    Example:
-        ```python
-        @router.get("/superadmin/protected")
-        async def protected_route(
-            current_admin: User = Depends(get_current_superadmin)
-        ):
-            return {"admin_id": current_admin.id}
-        ```
-    """
-    # 首先尝试验证平台管理专用 Token（包含 is_superadmin: True）
-    payload = get_superadmin_token_payload(token)
-    
-    # 如果不是平台管理专用 Token，尝试验证普通 Token
-    if not payload:
-        # 尝试使用普通 Token 验证
-        from soil.core.security.security import get_token_payload
-        payload = get_token_payload(token)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的 Token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    
-    # 获取用户 ID
-    user_id = int(payload.get("sub"))
-    
-    # 获取平台管理（is_platform_admin=True 且 tenant_id=None）
-    user = await User.get_or_none(
-        id=user_id,
-        is_platform_admin=True,
-        tenant_id__isnull=True
-    )
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的 Token 或不是平台管理 Token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="平台管理未激活",
-        )
-    
-    return user
-
+# 注意：get_current_superadmin 函数已移除，使用 get_current_platform_superadmin 替代
 
 async def get_current_platform_superadmin(
     token: Optional[str] = Depends(platform_superadmin_oauth2_scheme)

@@ -30,12 +30,16 @@ export interface Permission {
  * 角色信息接口
  */
 export interface Role {
-  id: number;
+  uuid: string;
   name: string;
   code: string;
   description?: string;
   is_system: boolean;
+  is_active: boolean;
   tenant_id: number;
+  permission_count?: number;
+  user_count?: number;
+  permissions?: Permission[];
   created_at: string;
   updated_at: string;
 }
@@ -89,8 +93,8 @@ export interface UpdateRoleData {
  * @param params - 查询参数
  * @returns 角色列表响应数据
  */
-export async function getRoleList(params: RoleListParams): Promise<RoleListResponse> {
-  return apiRequest<RoleListResponse>('/roles', {
+export async function getRoleList(params?: RoleListParams): Promise<RoleListResponse> {
+  return apiRequest<RoleListResponse>('/system/roles', {
     params,
   });
 }
@@ -103,8 +107,8 @@ export async function getRoleList(params: RoleListParams): Promise<RoleListRespo
  * @param roleId - 角色 ID
  * @returns 角色信息
  */
-export async function getRoleById(roleId: number): Promise<Role> {
-  return apiRequest<Role>(`/roles/${roleId}`);
+export async function getRoleByUuid(roleUuid: string): Promise<Role> {
+  return apiRequest<Role>(`/system/roles/${roleUuid}`);
 }
 
 /**
@@ -116,7 +120,7 @@ export async function getRoleById(roleId: number): Promise<Role> {
  * @returns 创建的角色信息
  */
 export async function createRole(data: CreateRoleData): Promise<Role> {
-  return apiRequest<Role>('/roles', {
+  return apiRequest<Role>('/system/roles', {
     method: 'POST',
     data,
   });
@@ -131,8 +135,8 @@ export async function createRole(data: CreateRoleData): Promise<Role> {
  * @param data - 角色更新数据
  * @returns 更新后的角色信息
  */
-export async function updateRole(roleId: number, data: UpdateRoleData): Promise<Role> {
-  return apiRequest<Role>(`/roles/${roleId}`, {
+export async function updateRole(roleUuid: string, data: UpdateRoleData): Promise<Role> {
+  return apiRequest<Role>(`/system/roles/${roleUuid}`, {
     method: 'PUT',
     data,
   });
@@ -146,8 +150,8 @@ export async function updateRole(roleId: number, data: UpdateRoleData): Promise<
  * 
  * @param roleId - 角色 ID
  */
-export async function deleteRole(roleId: number): Promise<void> {
-  return apiRequest<void>(`/roles/${roleId}`, {
+export async function deleteRole(roleUuid: string): Promise<void> {
+  return apiRequest<void>(`/system/roles/${roleUuid}`, {
     method: 'DELETE',
   });
 }
@@ -161,10 +165,10 @@ export async function deleteRole(roleId: number): Promise<void> {
  * @param permissionIds - 权限 ID 列表
  * @returns 更新后的角色信息
  */
-export async function assignPermissions(roleId: number, permissionIds: number[]): Promise<Role> {
-  return apiRequest<Role>(`/roles/${roleId}/permissions`, {
+export async function assignPermissions(roleUuid: string, permissionUuids: string[]): Promise<Role> {
+  return apiRequest<Role>(`/system/roles/${roleUuid}/permissions`, {
     method: 'POST',
-    data: permissionIds, // 后端 Body 接收数组
+    data: permissionUuids, // 后端 Body 接收 UUID 数组
   });
 }
 
@@ -176,8 +180,8 @@ export async function assignPermissions(roleId: number, permissionIds: number[])
  * @param roleId - 角色 ID
  * @returns 权限列表
  */
-export async function getRolePermissions(roleId: number): Promise<Permission[]> {
-  return apiRequest<Permission[]>(`/roles/${roleId}/permissions`);
+export async function getRolePermissions(roleUuid: string): Promise<Permission[]> {
+  return apiRequest<Permission[]>(`/system/roles/${roleUuid}/permissions`);
 }
 
 /**
@@ -189,7 +193,7 @@ export async function getRolePermissions(roleId: number): Promise<Permission[]> 
  * @returns 权限列表响应数据
  */
 export async function getAllPermissions(params?: { page?: number; page_size?: number; keyword?: string }): Promise<PermissionListResponse> {
-  return apiRequest<PermissionListResponse>('/permissions', {
+  return apiRequest<PermissionListResponse>('/system/permissions', {
     params,
   });
 }

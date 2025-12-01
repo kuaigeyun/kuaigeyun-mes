@@ -30,6 +30,15 @@ function getAuthToken(): string | null {
 }
 
 /**
+ * 获取当前选择的组织ID
+ *
+ * @returns 组织ID 或 null
+ */
+function getCurrentTenantId(): string | null {
+  return localStorage.getItem('tenant_id');
+}
+
+/**
  * 通用 API 响应接口
  */
 export interface ApiResponse<T = any> {
@@ -91,18 +100,29 @@ export async function apiRequest<T = any>(
   // 获取认证 Token
   const token = getAuthToken();
   
-  // 检查 Token 是否存在
-  if (!token) {
+  // 检查是否是登录接口（登录接口不应该携带 token）
+  const isAuthEndpoint = url.includes('/auth/login') || url.includes('/login');
+  
+  // 检查 Token 是否存在（登录接口除外）
+  if (!token && !isAuthEndpoint) {
     console.warn(`⚠️ API 请求 ${url} 没有 Token`);
   }
+  
+  // 获取当前选择的组织ID
+  const currentTenantId = getCurrentTenantId();
   
   // 构建请求配置
   const fetchOptions: RequestInit = {
     method: options?.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
-      // 如果存在 Token，添加到请求头
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      // 如果存在 Token 且不是登录接口，添加到请求头
+      // ⚠️ 关键修复：登录接口不应该携带 token，避免过期 token 干扰登录验证
+      ...(token && !isAuthEndpoint ? { 'Authorization': `Bearer ${token}` } : {}),
+      // 如果存在组织ID且不是平台级接口，添加到请求头
+      // ⚠️ 关键修复：系统级API需要组织上下文，平台级API不需要
+      // ⚠️ 重要：对于系统级API，必须要有组织上下文
+      ...(currentTenantId && (url.startsWith('/system/') || url.startsWith('/api/v1/system/')) ? { 'X-Tenant-ID': currentTenantId } : {}),
       ...options?.headers,
     },
   };
@@ -137,23 +157,23 @@ export async function apiRequest<T = any>(
     if (!response.ok) {
       // 处理 401 未授权错误
       if (response.status === 401) {
-        // ⚠️ 关键修复：不要立即清除 Token，避免影响其他请求
-        // 只有在明确是认证失败时才清除（比如登录接口返回 401）
-        // 其他接口的 401 可能是权限问题，不应该清除 Token
+        // ⚠️ 关键修复：区分登录接口和其他接口的错误处理
         const isAuthEndpoint = url.includes('/auth/login') || url.includes('/login');
         if (isAuthEndpoint) {
-          // 登录接口返回 401，说明用户名或密码错误，不需要清除 Token
-          console.warn('⚠️ 登录失败，用户名或密码错误');
+          // 登录接口返回 401，说明用户名或密码错误
+          // 尝试从响应中提取错误信息
+          const errorMessage = data?.detail || data?.message || '用户名或密码错误';
+          const error = new Error(errorMessage) as any;
+          error.response = { data, status: response.status };
+          throw error;
         } else {
           // 其他接口返回 401，可能是 Token 过期或无效
           // 但不要立即清除，让用户看到错误信息
           console.warn('⚠️ API 返回 401，可能是 Token 过期或无效，但不立即清除 Token');
+          const error = new Error('认证已过期，请重新登录') as any;
+          error.response = { data, status: response.status };
+          throw error;
         }
-
-        // 不再自动清除 Token 和跳转，让错误正常抛出，用户可以看到错误信息
-        const error = new Error('认证已过期，请重新登录') as any;
-        error.response = { data, status: response.status };
-        throw error;
       }
       
       // 尝试从响应体中提取错误信息

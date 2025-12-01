@@ -78,7 +78,8 @@ class PlatformSuperAdminResponse(PlatformSuperAdminBase):
     用于 API 响应时的数据序列化
     
     Attributes:
-        id: 平台超级管理员 ID
+        id: 平台超级管理员 ID（内部使用，保留用于兼容）
+        uuid: 平台超级管理员 UUID（对外暴露，业务标识）
         username: 用户名
         email: 用户邮箱（可选）
         full_name: 用户全名（可选）
@@ -88,7 +89,8 @@ class PlatformSuperAdminResponse(PlatformSuperAdminBase):
         updated_at: 更新时间
     """
     
-    id: int = Field(..., description="平台超级管理员 ID")
+    id: int = Field(..., description="平台超级管理员 ID（内部使用）")
+    uuid: str = Field(..., description="平台超级管理员 UUID（对外暴露，业务标识）")
     last_login: Optional[datetime] = Field(None, description="最后登录时间（可选）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
