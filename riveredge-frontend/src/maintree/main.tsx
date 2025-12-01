@@ -9,6 +9,11 @@ import App from './app'
 import '../tree-stem/global.less'
 
 // 抑制 findDOMNode 警告（Ant Design 在 React 18 StrictMode 下的已知问题）
+// 同时抑制 passive 事件监听器警告（第三方库的已知问题）
+// 
+// 注意：浏览器直接显示的 [Violation] 警告（如 passive event listener 警告）
+// 无法通过拦截 console 来抑制，这些是浏览器性能提示，不影响功能。
+// 这些警告主要来自第三方库（如 Univer、Ant Design 等），我们无法直接修改它们的代码。
 if (process.env.NODE_ENV === 'development') {
   const originalError = console.error;
   const originalWarn = console.warn;
@@ -26,9 +31,26 @@ if (process.env.NODE_ENV === 'development') {
     );
   };
   
+  const isPassiveEventListenerWarning = (message: any): boolean => {
+    if (typeof message !== 'string') {
+      return false;
+    }
+    const lowerMessage = message.toLowerCase();
+    return (
+      lowerMessage.includes('non-passive event listener') ||
+      lowerMessage.includes('passive event listener') ||
+      lowerMessage.includes('scroll-blocking') ||
+      lowerMessage.includes('wheel event') ||
+      lowerMessage.includes('touchstart') ||
+      lowerMessage.includes('touchmove') ||
+      lowerMessage.includes('violation')
+    );
+  };
+  
   console.error = (...args: any[]) => {
     const hasFindDOMNodeWarning = args.some(arg => isFindDOMNodeWarning(arg));
-    if (hasFindDOMNodeWarning) {
+    const hasPassiveWarning = args.some(arg => isPassiveEventListenerWarning(arg));
+    if (hasFindDOMNodeWarning || hasPassiveWarning) {
       return;
     }
     originalError.apply(console, args);
@@ -36,7 +58,8 @@ if (process.env.NODE_ENV === 'development') {
   
   console.warn = (...args: any[]) => {
     const hasFindDOMNodeWarning = args.some(arg => isFindDOMNodeWarning(arg));
-    if (hasFindDOMNodeWarning) {
+    const hasPassiveWarning = args.some(arg => isPassiveEventListenerWarning(arg));
+    if (hasFindDOMNodeWarning || hasPassiveWarning) {
       return;
     }
     originalWarn.apply(console, args);

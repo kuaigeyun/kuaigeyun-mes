@@ -382,6 +382,17 @@ export async function deleteTenant(tenantId: number): Promise<void> {
 }
 
 /**
+ * 删除组织（平台超级管理员，软删除）
+ * 
+ * @param tenantId - 组织 ID
+ */
+export async function deleteTenantBySuperAdmin(tenantId: number): Promise<void> {
+  return apiRequest<void>(`/platform/tenants/${tenantId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
  * 激活组织
  * 
  * @param tenantId - 组织 ID

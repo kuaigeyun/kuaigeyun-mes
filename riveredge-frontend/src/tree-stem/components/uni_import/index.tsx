@@ -19,7 +19,6 @@ import '@univerjs/presets/lib/styles/preset-sheets-core.css';
 import { createUniver, defaultTheme, LocaleType, merge } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/presets/preset-sheets-core';
 import UniverPresetSheetsCoreZhCN from '@univerjs/presets/preset-sheets-core/locales/zh-CN';
-import { UniverSheetsPlugin } from '@univerjs/sheets';
 
 /**
  * Univer Import 导入弹窗组件属性
@@ -74,11 +73,6 @@ export interface UniImportProps {
    * 示例数据（可选，如果提供则自动填充第二行作为示例）
    */
   exampleRow?: string[];
-  /**
-   * 下拉列配置（可选，定义哪些列需要下拉选项）
-   * 格式：{ columnIndex: string[] } - 列索引对应的下拉选项数组
-   */
-  dropdownColumns?: Record<number, string[]>;
 }
 
 /**
@@ -97,7 +91,6 @@ export const UniImport: React.FC<UniImportProps> = ({
   cancelText = '取消',
   headers,
   exampleRow,
-  dropdownColumns,
 }) => {
   const { message } = App.useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -258,60 +251,49 @@ export const UniImport: React.FC<UniImportProps> = ({
           // 保存实例引用
           univerInstanceRef.current = { univer, univerAPI };
           
+          // 添加键盘事件监听器，确保 Univer Sheet 的快捷键优先级高于浏览器默认快捷键
+          const handleKeyDown = (e: KeyboardEvent) => {
+            // 检查是否在 Univer 容器内
+            const container = containerRef.current;
+            if (!container) return;
+            
+            // 检查焦点是否在容器内或其子元素内
+            const activeElement = document.activeElement;
+            const isInContainer = container.contains(activeElement) || 
+                                  container === activeElement;
+            
+            if (!isInContainer) return;
+            
+            // 处理 Ctrl+D（或 Cmd+D on Mac）
+            // Ctrl+D 在浏览器中是"添加书签"的快捷键
+            // 如果 Univer Sheet 支持 Ctrl+D（通常用于向下复制单元格内容），需要阻止浏览器默认行为
+            if ((e.ctrlKey || e.metaKey) && e.key === 'd' && !e.shiftKey && !e.altKey) {
+              // 阻止浏览器默认行为（添加书签）
+              e.preventDefault();
+              e.stopPropagation();
+              // 让 Univer Sheet 自己处理这个快捷键（如果它支持的话）
+              // 如果 Univer 不支持，这个事件会被忽略，不会造成问题
+            }
+            
+            // 可以在这里添加其他需要优先处理的快捷键
+            // 例如：Ctrl+S（保存）、Ctrl+Z（撤销）、Ctrl+Y（重做）等
+            // 这些快捷键在浏览器中也有默认行为，但在表格编辑器中应该优先处理
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'z' || e.key === 'y')) {
+              if (!e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }
+          };
+          
+          // 添加事件监听器（使用 capture 阶段，确保优先捕获）
+          document.addEventListener('keydown', handleKeyDown, true);
+          
+          // 保存事件处理器引用，以便清理时移除
+          (univerInstanceRef.current as any)._keyDownHandler = handleKeyDown;
+          
           // 等待渲染完成
           await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // 设置下拉列的数据验证（如果提供了 dropdownColumns）
-          if (dropdownColumns && Object.keys(dropdownColumns).length > 0) {
-            try {
-              // @ts-ignore - Univer API 类型定义可能不完整
-              const sheetsPlugin = univer.getPlugin(UniverSheetsPlugin);
-              if (sheetsPlugin) {
-                // @ts-ignore
-                const workbookModel = sheetsPlugin.getWorkbook();
-                if (workbookModel) {
-                  // @ts-ignore
-                  const sheetModel = workbookModel.getActiveSheet();
-                  if (sheetModel) {
-                    // 为每个下拉列设置数据验证
-                    Object.keys(dropdownColumns).forEach((colIndexStr) => {
-                      const colIndex = parseInt(colIndexStr, 10);
-                      const options = dropdownColumns[colIndex];
-                      if (options && options.length > 0) {
-                        try {
-                          // 设置数据验证为下拉列表
-                          // 注意：Univer Sheet 的数据验证 API 可能不同，这里使用通用方式
-                          // @ts-ignore
-                          if (sheetModel.setDataValidation) {
-                            // @ts-ignore
-                            sheetModel.setDataValidation(colIndex, 1, 100, {
-                              type: 'list',
-                              allowBlank: true,
-                              operator: 'between',
-                              formula1: options.join(','),
-                            });
-                          } else if (sheetModel.addDataValidation) {
-                            // 尝试使用 addDataValidation
-                            // @ts-ignore
-                            sheetModel.addDataValidation({
-                              ranges: [{ startRow: 1, endRow: 100, startColumn: colIndex, endColumn: colIndex }],
-                              type: 'list',
-                              allowBlank: true,
-                              formula1: options.join(','),
-                            });
-                          }
-                        } catch (e) {
-                          console.warn(`设置列 ${colIndex} 的数据验证失败：`, e);
-                        }
-                      }
-                    });
-                  }
-                }
-              }
-            } catch (e) {
-              console.warn('设置下拉列数据验证失败：', e);
-            }
-          }
           
           setLoading(false);
           if (headers && headers.length > 0) {
@@ -334,6 +316,14 @@ export const UniImport: React.FC<UniImportProps> = ({
       // 关闭弹窗时清理
       try {
         if (univerInstanceRef.current) {
+          // 移除键盘事件监听器
+          const keyDownHandler = (univerInstanceRef.current as any)._keyDownHandler;
+          if (keyDownHandler) {
+            document.removeEventListener('keydown', keyDownHandler, true);
+            delete (univerInstanceRef.current as any)._keyDownHandler;
+          }
+          
+          // 销毁 Univer 实例
           univerInstanceRef.current.univer.dispose();
           univerInstanceRef.current = null;
         }
@@ -405,19 +395,183 @@ export const UniImport: React.FC<UniImportProps> = ({
               }
             }
             
-            // 方法3：尝试直接访问 cellData
+            // 方法3：尝试使用 getCellData 获取数据
+            if (data.length === 0) {
+              // @ts-ignore
+              if (typeof worksheet.getCellData === 'function') {
+                // @ts-ignore
+                const cellData = worksheet.getCellData();
+                if (cellData) {
+                  data = convertCellDataToArray(cellData);
+                }
+              }
+            }
+            
+            // 方法4：尝试直接访问 cellData 属性
             if (data.length === 0 && worksheet.cellData) {
               data = convertCellDataToArray(worksheet.cellData);
+            }
+            
+            // 方法5：尝试使用 getRange 方法获取数据
+            if (data.length === 0) {
+              // @ts-ignore
+              if (typeof worksheet.getRange === 'function') {
+                try {
+                  // @ts-ignore
+                  const range = worksheet.getRange(0, 0, 999, 99);
+                  if (range && typeof range.getValues === 'function') {
+                    // @ts-ignore
+                    const values = range.getValues();
+                    if (values && Array.isArray(values)) {
+                      data = values;
+                    }
+                  }
+                } catch (e) {
+                  // 忽略错误，继续尝试其他方法
+                }
+              }
+            }
+            
+            // 方法6：尝试通过遍历单元格获取数据（最后的手段）
+            if (data.length === 0) {
+              try {
+                const result: any[][] = [];
+                let maxRow = -1;
+                let maxCol = -1;
+                let hasData = false;
+                
+                // 尝试获取行数和列数
+                // @ts-ignore
+                const rowCount = worksheet.getRowCount?.() || worksheet.rowCount || 100;
+                // @ts-ignore
+                const columnCount = worksheet.getColumnCount?.() || worksheet.columnCount || 100;
+                
+                // 遍历单元格获取数据（最多1000行，100列）
+                const maxRows = Math.min(rowCount, 1000);
+                const maxCols = Math.min(columnCount, 100);
+                
+                for (let r = 0; r < maxRows; r++) {
+                  const rowData: any[] = [];
+                  let rowHasData = false;
+                  
+                  for (let c = 0; c < maxCols; c++) {
+                    let value = '';
+                    
+                    // 尝试多种方式获取单元格值
+                    try {
+                      // @ts-ignore
+                      if (typeof worksheet.getCellValue === 'function') {
+                        // @ts-ignore
+                        const cell = worksheet.getCellValue(r, c);
+                        if (cell !== null && cell !== undefined) {
+                          if (typeof cell === 'object') {
+                            value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : String(cell));
+                          } else {
+                            value = String(cell);
+                          }
+                        }
+                      }
+                      // @ts-ignore
+                      else if (typeof worksheet.getCell === 'function') {
+                        // @ts-ignore
+                        const cell = worksheet.getCell(r, c);
+                        if (cell) {
+                          // @ts-ignore
+                          if (typeof cell.getValue === 'function') {
+                            // @ts-ignore
+                            const cellValue = cell.getValue();
+                            value = cellValue !== null && cellValue !== undefined ? String(cellValue) : '';
+                          } else {
+                            value = cell.v || cell.m || cell.value || '';
+                          }
+                        }
+                      }
+                      // @ts-ignore
+                      else if (worksheet._cellData) {
+                        // @ts-ignore
+                        const row = worksheet._cellData[r];
+                        if (row) {
+                          const cell = row[c] || (typeof row.get === 'function' ? row.get(c) : null);
+                          if (cell) {
+                            value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
+                          }
+                        }
+                      }
+                      // @ts-ignore
+                      else if (worksheet.cellData) {
+                        // @ts-ignore
+                        const row = worksheet.cellData[r];
+                        if (row) {
+                          const cell = row[c] || (typeof row.get === 'function' ? row.get(c) : null);
+                          if (cell) {
+                            value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
+                          }
+                        }
+                      }
+                    } catch (cellError) {
+                      // 单个单元格获取失败，继续下一个
+                      value = '';
+                    }
+                    
+                    rowData.push(value);
+                    if (value !== '' && value !== null && value !== undefined) {
+                      rowHasData = true;
+                      hasData = true;
+                      if (r > maxRow) maxRow = r;
+                      if (c > maxCol) maxCol = c;
+                    }
+                  }
+                  
+                  // 如果这一行有数据，或者在前10行，都保留
+                  if (rowHasData || r < 10) {
+                    result.push(rowData);
+                  } else if (hasData && r > maxRow + 5) {
+                    // 如果已经有数据了，且连续5行都没有数据，可以停止
+                    break;
+                  }
+                }
+                
+                if (hasData && result.length > 0) {
+                  // 移除末尾的空行
+                  while (result.length > 0) {
+                    const lastRow = result[result.length - 1];
+                    if (lastRow.some(cell => cell !== '' && cell !== null && cell !== undefined)) {
+                      break;
+                    }
+                    result.pop();
+                  }
+                  data = result;
+                }
+              } catch (e) {
+                console.warn('通过遍历单元格获取数据失败：', e);
+              }
             }
           } catch (e) {
             console.warn('从 worksheet 获取数据失败：', e);
           }
         }
         
-        // 如果仍然没有数据，尝试从创建时的 cellData 获取
+        // 如果仍然没有数据，尝试通过 univerAPI 的其他方法获取
+        if (data.length === 0 && univerAPI) {
+          try {
+            // @ts-ignore
+            if (typeof univerAPI.getRangeData === 'function') {
+              // @ts-ignore
+              const rangeData = univerAPI.getRangeData(0, 0, 999, 99);
+              if (rangeData && Array.isArray(rangeData)) {
+                data = rangeData;
+              }
+            }
+          } catch (e) {
+            console.warn('通过 univerAPI.getRangeData 获取数据失败：', e);
+          }
+        }
+        
+        // 如果仍然没有数据，显示错误信息
         if (data.length === 0) {
-          message.warning('无法获取表格数据，请刷新页面重试');
+          message.warning('无法获取表格数据。请确保表格中有数据，或刷新页面重试');
           console.error('无法获取数据，worksheet:', worksheet);
+          console.error('univerAPI:', univerAPI);
           return;
         }
       } catch (error: any) {
@@ -559,13 +713,22 @@ export const UniImport: React.FC<UniImportProps> = ({
         return;
       }
 
-      if (data.length === 0) {
-        message.warning('表格中没有有效数据，请先输入数据');
+      // 过滤空行（所有单元格都为空的行）
+      const filteredData = data.filter(row => {
+        // 检查行中是否有任何非空单元格
+        return row.some(cell => {
+          const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+          return value !== '';
+        });
+      });
+
+      if (filteredData.length === 0) {
+        message.warning('表格中没有有效数据（所有行都为空），请先输入数据');
         return;
       }
 
-      // 调用确认回调
-      onConfirm(data);
+      // 调用确认回调（传递过滤后的数据）
+      onConfirm(filteredData);
       
       // 关闭弹窗
       onCancel();
@@ -650,4 +813,5 @@ export const UniImport: React.FC<UniImportProps> = ({
 };
 
 export default UniImport;
+
 

@@ -8,7 +8,7 @@ export { default as TenantSelector } from './tenant_selector';
 export { default as TenantSelectionModal } from './tenant_selection_modal';
 export { default as TermsModal } from './terms_modal';
 export { QuerySearchButton, QuerySearchModal } from './riveredge_query';
-export { UniTable, default as UniTableDefault } from './uni_table';
+export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni_table';
 export type { UniTableProps } from './uni_table';
 export { default as UniImport } from './uni_import';
 export type { UniImportProps } from './uni_import';
