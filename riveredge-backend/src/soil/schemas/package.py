@@ -72,12 +72,14 @@ class PackageResponse(PackageBase):
     用于 API 响应时的数据序列化
     
     Attributes:
-        id: 套餐 ID
+        id: 套餐 ID（内部使用）
+        uuid: 套餐 UUID（对外暴露，业务标识）
         created_at: 创建时间
         updated_at: 更新时间
     """
     
-    id: int = Field(..., description="套餐 ID")
+    id: int = Field(..., description="套餐 ID（内部使用）")
+    uuid: str = Field(..., description="套餐 UUID（对外暴露，业务标识）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     

@@ -43,7 +43,7 @@ import TenantSelector from '../components/tenant_selector';
 import PageTabs from '../components/page_tabs';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentPlatformSuperAdmin } from '../services/platformAdmin';
-import { getToken, clearAuth, getUserInfo } from '../utils/auth';
+import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 
 // 权限守卫组件
@@ -54,6 +54,17 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 检查用户类型（平台超级管理员还是系统级用户）
   const userInfo = getUserInfo();
   const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin';
+
+  // 检查是否访问系统级页面
+  const isSystemPage = location.pathname.startsWith('/system/');
+  const currentTenantId = getTenantId();
+
+  // 如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
+  if (isPlatformSuperAdmin && isSystemPage && !currentTenantId) {
+    message.warning('请先选择要管理的组织');
+    // 重定向到平台首页，让用户先选择组织
+    return <Navigate to="/platform" replace />;
+  }
   
   // 如果 currentUser 已存在且信息完整，不需要重新获取
   // 只有在以下情况才需要获取用户信息：
@@ -205,18 +216,24 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 /**
  * 菜单配置
- * 
+ *
  * 按照菜单分组架构设计：
  * 【第一组】固定仪表盘 - 平台级、系统级、应用级都可见
  * 【第二组】应用菜单（插件式加载）- 根据用户权限和已安装插件动态加载
- * 【第三组】系统菜单 - 平台级、系统级、应用级可见
+ * 【第三组】系统配置 - 平台级、系统级、应用级可见
+ *   └─ 用户管理（分组标题，不可点击）
+ *      ├─ 角色管理（第1优先级）
+ *      ├─ 权限管理（包含在角色权限管理中）
+ *      ├─ 部门管理（第2优先级）
+ *      ├─ 职位管理（第3优先级）
+ *      └─ 账户管理（第4优先级）
  * 【第四组】运营中心 - 仅平台级管理员可见
  */
 const menuConfig: MenuDataItem[] = [
   // ==================== 【第一组】固定仪表盘 ====================
   // 可见范围：平台级、系统级、应用级 都可见
   {
-    path: '/login/dashboard',
+    path: '/system/dashboard',
     name: '仪表盘',
     icon: <DashboardOutlined />,
   },
@@ -288,28 +305,42 @@ const menuConfig: MenuDataItem[] = [
   // 可见范围：平台级、系统级、应用级 可见
   // 注意：组织管理已移除，组织管理在平台级运营中心进行管理
   {
-    path: '/login/system',
+    path: '/system',
     name: '系统配置',
     icon: <ControlOutlined />,
     children: [
+      // 用户管理分组标题（不可点击的分组标识）
       {
-        path: '/login/system/users',
         name: '用户管理',
+        type: 'group', // 使用 Ant Design 官方的分组类型
+      },
+      // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
+      {
+        path: '/system/roles',
+        name: '角色管理',
+        icon: <CrownOutlined />,
+      },
+      {
+        path: '/system/permissions',
+        name: '权限管理',
+        icon: <LockOutlined />,
+      },
+      {
+        path: '/system/departments',
+        name: '部门管理',
+        icon: <ApartmentOutlined />,
+      },
+      {
+        path: '/system/positions',
+        name: '职位管理',
+        icon: <UserSwitchOutlined />,
+      },
+      {
+        path: '/system/users',
+        name: '账户管理',
         icon: <UserOutlined />,
       },
-      {
-        path: '/login/system/roles',
-        name: '角色管理',
-        icon: <TeamOutlined />,
-      },
-      // 组织管理已移除，移至运营中心
-      // {
-      //   path: '/tenants',
-      //   name: '组织管理',
-      //   icon: <ApartmentOutlined />,
-      // },
-      // TODO: 后续添加
-      // - 权限管理
+      // TODO: 后续添加其他系统配置功能
       // - 系统配置（基础配置、参数配置、字典管理）
       // - 日志管理（操作日志、登录日志、系统日志）
     ],
@@ -664,6 +695,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           cursor: default !important;
           user-select: none !important;
           pointer-events: none !important;
+        }
+        /* 自定义 Ant Design 分组标题样式 */
+        :global(.ant-menu-item-group-title) {
+          font-size: 12px !important;
+          color: #8c8c8c !important;
+          font-weight: 500 !important;
+          padding: 8px 16px !important;
+          margin-top: 8px !important;
         }
         /* 使用自定义样式选择器针对插件分组标题 */
         .menu-group-title-plugin {
@@ -1166,8 +1205,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }}
       onMenuHeaderClick={() => navigate('/system/dashboard')}
       menuItemRender={(item, dom) => {
-        // 如果没有 path 且没有 icon，说明是分组标题，使用自定义样式渲染
-        if (!item.path && !item.icon && item.className === 'menu-group-title-plugin') {
+        // 如果没有 path 且有特定的 className，说明是分组标题，使用自定义样式渲染
+        if (!item.path && item.className === 'menu-group-title-plugin') {
           return (
             <div
               className="menu-group-title-plugin"
@@ -1185,6 +1224,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </div>
           );
         }
+        // 使用 Ant Design 官方的 type: 'group' 处理分组标题，不需要自定义渲染
         return (
           <div
             onClick={() => {

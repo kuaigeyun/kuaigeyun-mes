@@ -460,52 +460,60 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   
   const savedSearches = savedSearchesData?.items || [];
   
-  // 分离个人和共享搜索条件
-  const [personalSearches, setPersonalSearches] = useState<SavedSearch[]>([]);
-  const [sharedSearches, setSharedSearches] = useState<SavedSearch[]>([]);
+  // 拖拽排序状态（用于实时更新UI）
+  const [personalOrder, setPersonalOrder] = useState<number[]>([]);
+  const [sharedOrder, setSharedOrder] = useState<number[]>([]);
   
-  // 初始化排序后的列表
-  useEffect(() => {
+  // 初始化排序后的列表（使用 useMemo 避免状态更新循环）
+  const [personalSearches, sharedSearches] = useMemo(() => {
     const personal = savedSearches.filter((item) => !item.is_shared);
     const shared = savedSearches.filter((item) => item.is_shared);
     
-    // 从 localStorage 恢复排序（如果有）
+    // 从状态或localStorage恢复排序
+    let orderedPersonal = personal;
+    let orderedShared = shared;
+
+    // 使用状态中的排序，如果状态为空则从localStorage读取
+    const currentPersonalOrder = personalOrder.length > 0 ? personalOrder :
+      (() => {
     const personalOrderKey = `saved_search_order_personal_${pagePath}`;
+        const stored = localStorage.getItem(personalOrderKey);
+        return stored ? JSON.parse(stored) as number[] : [];
+      })();
+
+    const currentSharedOrder = sharedOrder.length > 0 ? sharedOrder :
+      (() => {
     const sharedOrderKey = `saved_search_order_shared_${pagePath}`;
+        const stored = localStorage.getItem(sharedOrderKey);
+        return stored ? JSON.parse(stored) as number[] : [];
+      })();
     
-    const personalOrder = localStorage.getItem(personalOrderKey);
-    const sharedOrder = localStorage.getItem(sharedOrderKey);
-    
-    if (personalOrder) {
+    if (currentPersonalOrder.length > 0) {
       try {
-        const order = JSON.parse(personalOrder) as number[];
-        const ordered = order
+        const ordered = currentPersonalOrder
           .map((id) => personal.find((item) => item.id === id))
           .filter((item): item is SavedSearch => item !== undefined);
-        const unordered = personal.filter((item) => !order.includes(item.id));
-        setPersonalSearches([...ordered, ...unordered]);
+        const unordered = personal.filter((item) => !currentPersonalOrder.includes(item.id));
+        orderedPersonal = [...ordered, ...unordered];
       } catch {
-        setPersonalSearches(personal);
+        orderedPersonal = personal;
       }
-    } else {
-      setPersonalSearches(personal);
     }
     
-    if (sharedOrder) {
+    if (currentSharedOrder.length > 0) {
       try {
-        const order = JSON.parse(sharedOrder) as number[];
-        const ordered = order
+        const ordered = currentSharedOrder
           .map((id) => shared.find((item) => item.id === id))
           .filter((item): item is SavedSearch => item !== undefined);
-        const unordered = shared.filter((item) => !order.includes(item.id));
-        setSharedSearches([...ordered, ...unordered]);
+        const unordered = shared.filter((item) => !currentSharedOrder.includes(item.id));
+        orderedShared = [...ordered, ...unordered];
       } catch {
-        setSharedSearches(shared);
+        orderedShared = shared;
       }
-    } else {
-      setSharedSearches(shared);
     }
-  }, [savedSearches, pagePath]);
+
+    return [orderedPersonal, orderedShared];
+  }, [savedSearches, pagePath, personalOrder, sharedOrder]);
   
   // 拖拽传感器配置
   const sensors = useSensors(
@@ -520,40 +528,36 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
-      setSharedSearches((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        const newItems = arrayMove(items, oldIndex, newIndex);
+      const oldIndex = sharedSearches.findIndex((item) => item.id === active.id);
+      const newIndex = sharedSearches.findIndex((item) => item.id === over.id);
+      const newOrder = arrayMove(sharedSearches.map(item => item.id), oldIndex, newIndex);
+
+      // 更新状态（触发重新计算）
+      setSharedOrder(newOrder);
         
         // 保存排序到 localStorage
         const orderKey = `saved_search_order_shared_${pagePath}`;
-        const order = newItems.map((item) => item.id);
-        localStorage.setItem(orderKey, JSON.stringify(order));
-        
-        return newItems;
-      });
+      localStorage.setItem(orderKey, JSON.stringify(newOrder));
     }
-  }, [pagePath]);
+  }, [pagePath, sharedSearches]);
   
   // 处理个人搜索条件拖拽结束
   const handlePersonalDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
-      setPersonalSearches((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        const newItems = arrayMove(items, oldIndex, newIndex);
+      const oldIndex = personalSearches.findIndex((item) => item.id === active.id);
+      const newIndex = personalSearches.findIndex((item) => item.id === over.id);
+      const newOrder = arrayMove(personalSearches.map(item => item.id), oldIndex, newIndex);
+
+      // 更新状态（触发重新计算）
+      setPersonalOrder(newOrder);
         
         // 保存排序到 localStorage
         const orderKey = `saved_search_order_personal_${pagePath}`;
-        const order = newItems.map((item) => item.id);
-        localStorage.setItem(orderKey, JSON.stringify(order));
-        
-        return newItems;
-      });
+      localStorage.setItem(orderKey, JSON.stringify(newOrder));
     }
-  }, [pagePath]);
+  }, [pagePath, personalSearches]);
   
   // 创建保存搜索条件 mutation
   const createSavedSearchMutation = useMutation({
@@ -1733,23 +1737,17 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     enabled: true,
   });
   
-  // ⭐ 获取钉住的条件，并按照拖拽后的排序显示
-  const allPinnedSearches = useMemo(() => {
-    return (savedSearchesData?.items || []).filter((item) => item.is_pinned);
-  }, [savedSearchesData?.items]);
-  
-  // 从 localStorage 恢复排序（合并共享和个人条件的排序）
-  const [pinnedSearches, setPinnedSearches] = useState<SavedSearch[]>([]);
-  
-  useEffect(() => {
-    if (allPinnedSearches.length === 0) {
-      setPinnedSearches([]);
-      return;
+  // ⭐ 获取钉住的条件，并按照拖拽后的排序显示（完全在 useMemo 中处理，避免状态更新循环）
+  const pinnedSearches = useMemo(() => {
+    const allPinned = (savedSearchesData?.items || []).filter((item) => item.is_pinned);
+
+    if (allPinned.length === 0) {
+      return [];
     }
     
     // 分离共享和个人钉住条件
-    const sharedPinned = allPinnedSearches.filter((item) => item.is_shared);
-    const personalPinned = allPinnedSearches.filter((item) => !item.is_shared);
+    const sharedPinned = allPinned.filter((item) => item.is_shared);
+    const personalPinned = allPinned.filter((item) => !item.is_shared);
     
     // 从 localStorage 获取排序
     const sharedOrderKey = `saved_search_order_shared_${pagePath}`;
@@ -1793,13 +1791,93 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     }
     
     // 合并排序后的钉住条件（共享在前，个人在后）
-    setPinnedSearches([...orderedShared, ...orderedPersonal]);
-  }, [allPinnedSearches, pagePath]);
+    return [...orderedShared, ...orderedPersonal];
+  }, [savedSearchesData?.items, pagePath]);
   
   // ⭐ 限制显示的钉住条件数量，避免影响后面的视图组件
   const MAX_VISIBLE_PINNED = 5; // 最多显示 5 个钉住的条件
   const visiblePinnedSearches = pinnedSearches.slice(0, MAX_VISIBLE_PINNED);
   const morePinnedSearches = pinnedSearches.slice(MAX_VISIBLE_PINNED);
+
+  /**
+   * 判断搜索条件是否匹配（用于显示激活状态）
+   * ⚠️ 修复：直接比较当前搜索参数，避免依赖变化导致的无限循环
+   */
+  const isSearchActive = useCallback((savedSearch: SavedSearch): boolean => {
+    const currentParams = searchParamsRef?.current;
+    if (!currentParams) {
+      return false;
+    }
+    const savedParams = savedSearch.search_params || {};
+
+    // 比较所有搜索参数
+    const savedKeys = Object.keys(savedParams);
+    if (savedKeys.length === 0) {
+      return false;
+    }
+
+    // 检查所有保存的参数是否都在当前搜索参数中，且值匹配
+    for (const key of savedKeys) {
+      const savedValue = savedParams[key];
+      const currentValue = currentParams[key];
+
+      // 处理数组类型的值（如多选）
+      if (Array.isArray(savedValue) && Array.isArray(currentValue)) {
+        if (savedValue.length !== currentValue.length) {
+          return false;
+        }
+        const sortedSaved = [...savedValue].sort();
+        const sortedCurrent = [...currentValue].sort();
+        if (JSON.stringify(sortedSaved) !== JSON.stringify(sortedCurrent)) {
+          return false;
+        }
+      } else if (savedValue !== currentValue) {
+        return false;
+      }
+    }
+
+    return true;
+  }, []); // ⚠️ 修复：移除依赖项，通过 useMemo 在外部控制重新计算
+
+  // ⚠️ 修复：创建稳定的激活状态计算函数，避免无限循环
+  const getSearchActiveState = useCallback((search: SavedSearch): boolean => {
+    const currentParams = searchParamsRef?.current;
+    if (!currentParams) {
+      return false;
+    }
+    const savedParams = search.search_params || {};
+    const savedKeys = Object.keys(savedParams);
+    if (savedKeys.length === 0) {
+      return false;
+    }
+
+    // 检查所有保存的参数是否都在当前搜索参数中，且值匹配
+    for (const key of savedKeys) {
+      const savedValue = savedParams[key];
+      const currentValue = currentParams[key];
+
+      // 处理数组类型的值（如多选）
+      if (Array.isArray(savedValue) && Array.isArray(currentValue)) {
+        if (savedValue.length !== currentValue.length) {
+          return false;
+        }
+        const sortedSaved = [...savedValue].sort();
+        const sortedCurrent = [...currentValue].sort();
+        if (JSON.stringify(sortedSaved) !== JSON.stringify(sortedCurrent)) {
+          return false;
+        }
+      } else if (savedValue !== currentValue) {
+        return false;
+      }
+    }
+
+    return true;
+  }, []); // 空依赖数组，确保函数引用稳定
+
+  // ⚠️ 修复：使用稳定的函数计算激活状态
+  const pinnedSearchActiveStates = useMemo(() => {
+    return visiblePinnedSearches.map(search => getSearchActiveState(search));
+  }, [visiblePinnedSearches, getSearchActiveState]);
   
   // 获取所有可搜索的列
   const getSearchableColumns = () => {
@@ -1922,46 +2000,6 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   const [modalStyle, setModalStyle] = useState<React.CSSProperties>({});
 
   /**
-   * 判断搜索条件是否匹配（用于显示激活状态）
-   * ⚠️ 修复：直接使用 searchParamsRef?.current，不依赖状态，避免无限循环
-   */
-  const isSearchActive = useCallback((savedSearch: SavedSearch): boolean => {
-    const currentParams = searchParamsRef?.current;
-    if (!currentParams) {
-      return false;
-    }
-    const savedParams = savedSearch.search_params || {};
-    
-    // 比较所有搜索参数
-    const savedKeys = Object.keys(savedParams);
-    if (savedKeys.length === 0) {
-      return false;
-    }
-    
-    // 检查所有保存的参数是否都在当前搜索参数中，且值匹配
-    for (const key of savedKeys) {
-      const savedValue = savedParams[key];
-      const currentValue = currentParams[key];
-      
-      // 处理数组类型的值（如多选）
-      if (Array.isArray(savedValue) && Array.isArray(currentValue)) {
-        if (savedValue.length !== currentValue.length) {
-          return false;
-        }
-        const sortedSaved = [...savedValue].sort();
-        const sortedCurrent = [...currentValue].sort();
-        if (JSON.stringify(sortedSaved) !== JSON.stringify(sortedCurrent)) {
-          return false;
-        }
-      } else if (savedValue !== currentValue) {
-        return false;
-      }
-    }
-    
-    return true;
-  }, []); // ⚠️ 修复：移除依赖项，直接使用 searchParamsRef?.current，避免无限循环
-
-  /**
    * 计算 Modal 位置，使其在按钮下方弹出，并与按钮左对齐
    */
   const calculateModalPosition = useCallback(() => {
@@ -2082,7 +2120,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
           >
             {/* 显示前 N 个钉住的条件 - 使用 Button TAB 样式 */}
             {visiblePinnedSearches.map((search, index) => {
-              const isActive = isSearchActive(search);
+              const isActive = pinnedSearchActiveStates[index];
               return (
                 <Button
                   key={search.id}

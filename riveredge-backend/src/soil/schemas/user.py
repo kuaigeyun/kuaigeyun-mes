@@ -75,11 +75,13 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     """
     用户响应 Schema
-    
+
     用于返回用户信息的响应数据。
-    
+
+    **注意**: 遵循自增ID+UUID混合方案，只对外暴露UUID。
+
     Attributes:
-        id: 用户 ID
+        uuid: 用户UUID（对外暴露，业务标识）
         tenant_id: 组织 ID
         username: 用户名
         email: 用户邮箱（可选）
@@ -91,8 +93,8 @@ class UserResponse(UserBase):
         created_at: 创建时间
         updated_at: 更新时间
     """
-    
-    id: int = Field(..., description="用户 ID")
+
+    uuid: str = Field(..., description="用户UUID（对外暴露，业务标识）")
     tenant_id: int = Field(..., description="组织 ID")
     last_login: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")

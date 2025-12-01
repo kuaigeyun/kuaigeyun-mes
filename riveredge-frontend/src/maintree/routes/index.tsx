@@ -4,16 +4,21 @@
  * 统一使用 SaaS 模式
  * 单体部署本质上就是只有 maintree，没有新建其他租户 tree
  * 
- * 路由结构（按照思维导图）：
- * - Login 分支：登录后的系统级路由（/login/*）
- *   - /login/dashboard - 仪表盘
- *   - /login/apps/... - 应用菜单
- *   - /login/system/... - 系统功能
- * - platform(maintree) 分支：平台级路由（/platform/*）
- *   - /platform/dashboard - 平台仪表盘
- *   - /platform/apps/... - 平台应用
- *   - /platform/system/... - 平台系统功能
- *   - /platform/platform/organization_manager - 组织管理
+ * 路由结构：
+ * - 公开页面：/login, /register/*
+ * - 系统级路由（/system/*）：用户登录后访问
+ *   - /system/dashboard - 系统仪表盘
+ *   - /system/roles - 角色管理
+ *   - /system/permissions - 权限管理
+ *   - /system/departments - 部门管理
+ *   - /system/positions - 职位管理
+ *   - /system/users - 账户管理
+ * - 平台级路由（/platform/*）：平台超管登录后访问
+ *   - /platform/operation - 平台运营看板
+ *   - /platform/tenants - 租户管理
+ *   - /platform/packages - 套餐管理
+ *   - /platform/monitoring - 监控管理
+ *   - /platform/admin - 平台超级管理员管理
  */
 
 import React from 'react';
@@ -36,6 +41,12 @@ import TenantDetailPage from '../../tree-stem/pages/platform/tenants/detail';
 import PlatformSuperAdminPage from '../../tree-stem/pages/platform';
 import PackageManagementPage from '../../tree-stem/pages/platform/packages';
 import MonitoringPage from '../../tree-stem/pages/platform/monitoring';
+// 系统级功能页面
+import RoleListPage from '../../tree-stem/pages/system/roles/list';
+import PermissionListPage from '../../tree-stem/pages/system/permissions/list';
+import DepartmentListPage from '../../tree-stem/pages/system/departments/list';
+import PositionListPage from '../../tree-stem/pages/system/positions/list';
+import UserListPage from '../../tree-stem/pages/system/users/list';
 
 // 布局包装组件
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -81,7 +92,52 @@ const AppRoutes: React.FC = () => {
           </LayoutWrapper>
         }
       />
-      {/* 系统功能待建设 */}
+      {/* 系统级功能 */}
+      {/* 角色管理 */}
+      <Route
+        path="/system/roles"
+        element={
+          <LayoutWrapper>
+            <RoleListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 权限管理 */}
+      <Route
+        path="/system/permissions"
+        element={
+          <LayoutWrapper>
+            <PermissionListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 部门管理 */}
+      <Route
+        path="/system/departments"
+        element={
+          <LayoutWrapper>
+            <DepartmentListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 职位管理 */}
+      <Route
+        path="/system/positions"
+        element={
+          <LayoutWrapper>
+            <PositionListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 账户管理 */}
+      <Route
+        path="/system/users"
+        element={
+          <LayoutWrapper>
+            <UserListPage />
+          </LayoutWrapper>
+        }
+      />
 
       {/* ==================== 平台级路由（平台超管登录后访问） ==================== */}
       {/* 平台运营看板 */}
@@ -139,9 +195,31 @@ const AppRoutes: React.FC = () => {
       />
 
       {/* ==================== 兼容旧路由（重定向到新路由） ==================== */}
-      {/* 旧的用户登录路由重定向 */}
+      {/* 旧的系统级路由重定向 */}
       <Route path="/login/dashboard" element={<Navigate to="/system/dashboard" replace />} />
-      {/* 旧的平台路由重定向 */}
+      <Route path="/login/system" element={<Navigate to="/system/dashboard" replace />} />
+      <Route path="/login/system/users" element={<Navigate to="/system/users" replace />} />
+      <Route path="/login/system/roles" element={<Navigate to="/system/roles" replace />} />
+      <Route path="/login/system/permissions" element={<Navigate to="/system/permissions" replace />} />
+      <Route path="/login/system/departments" element={<Navigate to="/system/departments" replace />} />
+      <Route path="/login/system/positions" element={<Navigate to="/system/positions" replace />} />
+      {/* 旧的用户管理路由（如果存在） */}
+      <Route path="/users" element={<Navigate to="/system/users" replace />} />
+      <Route path="/system/users/list" element={<Navigate to="/system/users" replace />} />
+      {/* 旧的角色管理路由（如果存在） */}
+      <Route path="/roles" element={<Navigate to="/system/roles" replace />} />
+      <Route path="/system/roles/list" element={<Navigate to="/system/roles" replace />} />
+      {/* 旧的权限管理路由（如果存在） */}
+      <Route path="/permissions" element={<Navigate to="/system/permissions" replace />} />
+      <Route path="/system/permissions/list" element={<Navigate to="/system/permissions" replace />} />
+      {/* 旧的部门管理路由（如果存在） */}
+      <Route path="/departments" element={<Navigate to="/system/departments" replace />} />
+      <Route path="/system/departments/list" element={<Navigate to="/system/departments" replace />} />
+      {/* 旧的职位管理路由（如果存在） */}
+      <Route path="/positions" element={<Navigate to="/system/positions" replace />} />
+      <Route path="/system/positions/list" element={<Navigate to="/system/positions" replace />} />
+      
+      {/* 旧的平台级路由重定向 */}
       <Route path="/platform/dashboard" element={<Navigate to="/platform/operation" replace />} />
       <Route path="/platform/p_dashboard" element={<Navigate to="/platform/operation" replace />} />
       <Route path="/platform/login" element={<Navigate to="/platform" replace />} />

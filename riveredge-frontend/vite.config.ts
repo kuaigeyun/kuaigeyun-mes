@@ -25,7 +25,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET || 'http://127.0.0.1:9000', // 后端服务地址（强制使用IPv4，避免IPv6连接问题）
+        target: 'http://127.0.0.1:9000', // 强制使用IPv4地址，避免IPv6连接问题
         changeOrigin: true,
         secure: false,
       },

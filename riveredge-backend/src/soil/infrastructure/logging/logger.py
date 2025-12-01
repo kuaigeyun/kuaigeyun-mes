@@ -23,7 +23,7 @@ def setup_logger() -> None:
 
     # 控制台输出（开发环境）
     logger.add(
-        sys.stdout,
+        tree_root.stdout,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         level=settings.LOG_LEVEL,
         colorize=True,

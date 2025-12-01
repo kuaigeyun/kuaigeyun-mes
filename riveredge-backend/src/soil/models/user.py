@@ -57,23 +57,38 @@ class User(BaseModel):
     source = fields.CharField(max_length=50, null=True, description="用户来源（invite_code, personal, organization等）")
     last_login = fields.DatetimeField(null=True, description="最后登录时间（可选）")
     
-    # 多对多关系：用户-角色（暂时注释，等待 Role 模型实现）
-    # roles = fields.ManyToManyField(
-    #     "models.Role",
-    #     related_name="users",
-    #     description="用户角色（多对多关系）"
-    # )
+    # 扩展字段（账户管理模块）
+    department_id = fields.IntField(null=True, description="所属部门ID（外键，关联 Department，可选）")
+    position_id = fields.IntField(null=True, description="所属职位ID（外键，关联 Position，可选）")
+    phone = fields.CharField(max_length=20, null=True, description="手机号（可选）")
+    avatar = fields.CharField(max_length=255, null=True, description="头像URL（可选）")
+    remark = fields.TextField(null=True, description="备注（可选）")
+
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    # 多对多关系：用户-角色（通过 sys_user_roles 表）
+    # 注意：使用延迟导入避免循环依赖，在运行时动态解析
+    roles = fields.ManyToManyField(
+        "models.Role",  # Tortoise ORM 会自动解析为 tree_root.models.Role
+        related_name="users",
+        through="models.UserRole",  # Tortoise ORM 会自动解析为 tree_root.models.UserRole
+        description="用户角色（多对多关系）"
+    )
     
     class Meta:
         """
         模型元数据
         """
-        table = "root_users"  # 表名必须包含模块前缀（root_ - 系统级后端）
+        table = "sys_users"  # 表名必须包含模块前缀（sys_ - 系统级后端）
         indexes = [
             ("tenant_id",),           # 组织 ID 索引
             ("username",),            # 用户名索引
             ("tenant_id", "username"),  # 组织 ID + 用户名联合索引（组织内用户名唯一）
             ("is_platform_admin",),       # 平台管理索引
+            ("department_id",),       # 部门 ID 索引（扩展字段）
+            ("position_id",),         # 职位 ID 索引（扩展字段）
+            ("phone",),               # 手机号索引（扩展字段）
         ]
         # 注意：系统级超级管理员（tenant_id=None）用户名全局唯一，由应用层保证
         # 组织内用户名唯一，由 unique_together 保证

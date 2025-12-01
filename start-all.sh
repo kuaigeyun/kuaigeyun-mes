@@ -1062,7 +1062,8 @@ start_frontend() {
     mkdir -p "$project_root/startlogs" 2>/dev/null || true
 
     # 检查前端依赖（静默模式）
-    cd "$project_root/riveredge-frontend/src/tree-stem"
+    # ⚠️ 修复：从 maintree 目录启动，而不是 tree-stem
+    cd "$project_root/riveredge-frontend/src/maintree"
     if [ ! -d "node_modules" ]; then
         if [ "$QUIET" != "true" ]; then
             log_info "安装前端依赖..."
@@ -1120,9 +1121,10 @@ start_frontend() {
     # 清理旧的PID文件
     rm -f "$project_root/startlogs/frontend.pid"
 
-    # 启动前端服务（仍在tree-stem目录中）
-    # 使用 vite 命令，通过 --port 参数动态指定端口
-    nohup npx vite --port $port --host 0.0.0.0 > "$project_root/startlogs/frontend.log" 2>&1 &
+    # 启动前端服务（在 maintree 目录中）
+    # ⚠️ 修复：使用 npm run dev 确保热重载正常工作，而不是直接使用 npx vite
+    # 使用 vite 命令，通过 --port 参数动态指定端口，确保热重载启用
+    nohup npm run dev -- --port $port --host 0.0.0.0 > "$project_root/startlogs/frontend.log" 2>&1 &
     local frontend_pid=$!
     echo $frontend_pid > "$project_root/startlogs/frontend.pid"
 

@@ -98,7 +98,7 @@ def authenticate_user(username: str, password: str, tenant_id: Optional[int] = N
                 if username == "superadmin":
                     cur.execute("""
                         SELECT id, username, email, password_hash::text, is_platform_admin, is_active, tenant_id
-                        FROM root_users
+                        FROM sys_users
                         WHERE username = %s AND tenant_id IS NULL AND is_platform_admin = true
                     """, (username,))
 
@@ -106,7 +106,7 @@ def authenticate_user(username: str, password: str, tenant_id: Optional[int] = N
                     # 查找普通用户
                     cur.execute("""
                         SELECT id, username, email, password_hash::text, is_platform_admin, is_active, tenant_id, is_tenant_admin
-                        FROM root_users
+                        FROM sys_users
                         WHERE username = %s AND tenant_id = %s
                     """, (username, tenant_id or 1))
 

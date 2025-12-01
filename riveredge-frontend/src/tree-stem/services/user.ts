@@ -12,14 +12,32 @@ import { apiRequest } from './api';
  * 用户信息接口
  */
 export interface User {
-  id: number;
+  uuid: string;
   username: string;
-  email: string;
+  email?: string;
   full_name?: string;
+  phone?: string;
   is_active: boolean;
-  is_platform_admin: boolean;
+  is_platform_admin?: boolean;
   is_tenant_admin: boolean;
   tenant_id: number;
+  department_uuid?: string;
+  department?: {
+    uuid: string;
+    name: string;
+    code?: string;
+  };
+  position_uuid?: string;
+  position?: {
+    uuid: string;
+    name: string;
+    code?: string;
+  };
+  roles?: Array<{
+    uuid: string;
+    name: string;
+    code: string;
+  }>;
   last_login?: string;
   created_at: string;
   updated_at: string;
@@ -32,7 +50,10 @@ export interface UserListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  department_uuid?: string;
+  position_uuid?: string;
   is_active?: boolean;
+  is_tenant_admin?: boolean;
 }
 
 /**
@@ -52,11 +73,14 @@ export interface UserListResponse {
  */
 export interface CreateUserData {
   username: string;
-  email: string;
+  email?: string;
   password: string;
   full_name?: string;
+  phone?: string;
+  department_uuid?: string;
+  position_uuid?: string;
+  role_uuids?: string[];
   is_active?: boolean;
-  is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
 }
 
@@ -68,8 +92,11 @@ export interface UpdateUserData {
   email?: string;
   password?: string;
   full_name?: string;
+  phone?: string;
+  department_uuid?: string;
+  position_uuid?: string;
+  role_uuids?: string[];
   is_active?: boolean;
-  is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
 }
 
@@ -81,8 +108,8 @@ export interface UpdateUserData {
  * @param params - 查询参数
  * @returns 用户列表响应数据
  */
-export async function getUserList(params: UserListParams): Promise<UserListResponse> {
-  return apiRequest<UserListResponse>('/users', {
+export async function getUserList(params?: UserListParams): Promise<UserListResponse> {
+  return apiRequest<UserListResponse>('/system/users', {
     params,
   });
 }
@@ -92,11 +119,11 @@ export async function getUserList(params: UserListParams): Promise<UserListRespo
  *
  * 自动验证组织权限：只能获取当前组织的用户。
  *
- * @param userId - 用户 ID
+ * @param userUuid - 用户 UUID
  * @returns 用户信息
  */
-export async function getUserById(userId: number): Promise<User> {
-  return apiRequest<User>(`/users/${userId}`);
+export async function getUserByUuid(userUuid: string): Promise<User> {
+  return apiRequest<User>(`/system/users/${userUuid}`);
 }
 
 /**
@@ -108,7 +135,7 @@ export async function getUserById(userId: number): Promise<User> {
  * @returns 创建的用户信息
  */
 export async function createUser(data: CreateUserData): Promise<User> {
-  return apiRequest<User>('/users', {
+  return apiRequest<User>('/system/users', {
     method: 'POST',
     data,
   });
@@ -119,12 +146,12 @@ export async function createUser(data: CreateUserData): Promise<User> {
  *
  * 自动验证组织权限：只能更新当前组织的用户。
  *
- * @param userId - 用户 ID
+ * @param userUuid - 用户 UUID
  * @param data - 用户更新数据
  * @returns 更新后的用户信息
  */
-export async function updateUser(userId: number, data: UpdateUserData): Promise<User> {
-  return apiRequest<User>(`/users/${userId}`, {
+export async function updateUser(userUuid: string, data: UpdateUserData): Promise<User> {
+  return apiRequest<User>(`/system/users/${userUuid}`, {
     method: 'PUT',
     data,
   });
@@ -134,26 +161,135 @@ export async function updateUser(userId: number, data: UpdateUserData): Promise<
  * 删除用户
  *
  * 自动验证组织权限：只能删除当前组织的用户。
+ * 平台管理员和当前登录用户不可删除。
  *
- * @param userId - 用户 ID
+ * @param userUuid - 用户 UUID
  */
-export async function deleteUser(userId: number): Promise<void> {
-  return apiRequest<void>(`/users/${userId}`, {
+export async function deleteUser(userUuid: string): Promise<void> {
+  return apiRequest<void>(`/system/users/${userUuid}`, {
     method: 'DELETE',
   });
 }
 
 /**
- * 切换用户状态
+ * 重置用户密码
  *
- * 切换用户的激活状态（激活/停用）。
+ * 重置指定用户的密码为默认密码。
  *
- * @param userId - 用户 ID
+ * @param userUuid - 用户 UUID
+ * @param newPassword - 新密码（可选，不提供则使用默认密码）
  * @returns 更新后的用户信息
  */
-export async function toggleUserStatus(userId: number): Promise<User> {
-  return apiRequest<User>(`/users/${userId}/toggle-status`, {
-    method: 'PATCH',
+export async function resetUserPassword(userUuid: string, newPassword?: string): Promise<User> {
+  return apiRequest<User>(`/system/users/${userUuid}/reset-password`, {
+    method: 'POST',
+    data: newPassword ? { password: newPassword } : {},
+  });
+}
+
+/**
+ * 批量导入用户
+ *
+ * 接收 uni_import 组件传递的二维数组数据，批量创建用户。
+ *
+ * @param data - 二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）
+ * @returns 导入结果（成功数、失败数、错误列表）
+ */
+export async function importUsers(data: any[][]): Promise<{
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ row: number; message: string }>;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+    errors: Array<{ row: number; message: string }>;
+  }>('/system/users/import', {
+    method: 'POST',
+    data: { data },
+  });
+}
+
+/**
+ * 导出用户
+ *
+ * 根据筛选条件导出用户列表到 CSV 文件。
+ *
+ * @param params - 导出筛选条件
+ * @returns 文件下载 URL
+ */
+export async function exportUsers(params?: UserListParams): Promise<Blob> {
+  const response = await fetch(
+    `${import.meta.env.VITE_API_TARGET || 'http://localhost:9000'}/api/v1/system/users/export?${new URLSearchParams(
+      Object.entries(params || {}).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null) {
+          acc[key] = String(value);
+        }
+        return acc;
+      }, {} as Record<string, string>)
+    ).toString()}`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      },
+    }
+  );
+  
+  if (!response.ok) {
+    throw new Error('导出失败');
+  }
+  
+  return response.blob();
+}
+
+/**
+ * 批量更新用户状态
+ *
+ * 批量启用或禁用用户。
+ *
+ * @param userUuids - 用户 UUID 列表
+ * @param isActive - 是否激活
+ * @returns 更新结果
+ */
+export async function batchUpdateUsersStatus(userUuids: string[], isActive: boolean): Promise<{
+  success_count: number;
+  failure_count: number;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+  }>('/system/users/batch/status', {
+    method: 'POST',
+    data: {
+      user_uuids: userUuids,
+      is_active: isActive,
+    },
+  });
+}
+
+/**
+ * 批量删除用户
+ *
+ * 批量删除用户（软删除）。
+ *
+ * @param userUuids - 用户 UUID 列表
+ * @returns 删除结果
+ */
+export async function batchDeleteUsers(userUuids: string[]): Promise<{
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ uuid: string; message: string }>;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+    errors: Array<{ uuid: string; message: string }>;
+  }>('/system/users/batch/delete', {
+    method: 'POST',
+    data: {
+      user_uuids: userUuids,
+    },
   });
 }
 

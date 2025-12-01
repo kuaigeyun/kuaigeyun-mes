@@ -1098,6 +1098,7 @@ const SuperAdminTenantList: React.FC = () => {
       actionRef={actionRef}
       columns={columns}
       rowKey="id"
+      showAdvancedSearch={true}
       enableRowSelection={true}
       onRowSelectionChange={(keys) => {
         setSelectedRowKeys(keys);

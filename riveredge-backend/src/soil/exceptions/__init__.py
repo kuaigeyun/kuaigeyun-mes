@@ -4,7 +4,7 @@
 定义所有业务异常类和错误处理机制
 """
 
-from soil.core.exceptions.exceptions import (
+from soil.exceptions.exceptions import (
     RiverEdgeException,
     ValidationError,
     NotFoundError,

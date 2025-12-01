@@ -42,7 +42,8 @@ TORTOISE_ORM = {
                 "max_inactive_connection_lifetime": 300.0,  # 非活跃连接最大生存时间（秒，必须是浮点数）
                 "command_timeout": 60,  # 命令超时（秒）
                 "server_settings": {
-                    "application_name": "riveredge_asyncpg"
+                    "application_name": "riveredge_asyncpg",
+                    "timezone": settings.TIMEZONE  # 使用与Tortoise ORM相同的时区
                 }
             }
         },
@@ -50,6 +51,7 @@ TORTOISE_ORM = {
     "apps": {
         "models": {
             "models": [
+                # 平台级模型（soil）
                 "soil.models.base",
                 "soil.models.tenant",
                 "soil.models.tenant_config",
@@ -58,6 +60,16 @@ TORTOISE_ORM = {
                 "soil.models.platform_superadmin",  # 平台超级管理员模型
                 "soil.models.package",
                 "soil.models.saved_search",  # 保存搜索条件模型
+                # 系统级模型（tree-root）
+                # 注意：由于目录名是 tree-root（带连字符），需要通过特殊方式导入
+                # 在迁移脚本中会处理路径问题
+                "tree_root.models.role",
+                "tree_root.models.permission",
+                "tree_root.models.role_permission",
+                "tree_root.models.user_role",
+                "tree_root.models.department",
+                "tree_root.models.position",
+                # Aerich 模型
                 "aerich.models",
             ],
             "default_connection": "default",
@@ -78,7 +90,8 @@ DB_CONFIG = {
     "ssl": False,  # 禁用 SSL 连接
     "command_timeout": 30,  # 命令超时（秒）
     "server_settings": {
-        'application_name': 'riveredge_asyncpg'
+        'application_name': 'riveredge_asyncpg',
+        'timezone': settings.TIMEZONE  # 使用与Tortoise ORM相同的时区
     }
 }
 

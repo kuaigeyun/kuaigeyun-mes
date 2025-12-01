@@ -93,7 +93,8 @@ class TenantResponse(TenantBase):
     用于 API 响应时的数据序列化
     
     Attributes:
-        id: 组织 ID
+        id: 组织 ID（内部使用）
+        uuid: 组织 UUID（对外暴露，业务标识）
         name: 组织名称
         domain: 组织域名
         status: 组织状态
@@ -106,7 +107,8 @@ class TenantResponse(TenantBase):
         updated_at: 更新时间
     """
     
-    id: int = Field(..., description="组织 ID")
+    id: int = Field(..., description="组织 ID（内部使用）")
+    uuid: str = Field(..., description="组织 UUID（对外暴露，业务标识）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     
@@ -165,7 +167,8 @@ class TenantActivityLogResponse(BaseModel):
     用于返回组织活动日志信息
     
     Attributes:
-        id: 日志 ID
+        id: 日志 ID（内部使用）
+        uuid: 日志 UUID（对外暴露，业务标识）
         tenant_id: 组织 ID
         action: 操作类型
         description: 操作描述
@@ -174,7 +177,8 @@ class TenantActivityLogResponse(BaseModel):
         created_at: 操作时间
     """
     
-    id: int = Field(..., description="日志 ID")
+    id: int = Field(..., description="日志 ID（内部使用）")
+    uuid: str = Field(..., description="日志 UUID（对外暴露，业务标识）")
     tenant_id: int = Field(..., description="组织 ID")
     action: str = Field(..., description="操作类型")
     description: str = Field(..., description="操作描述")

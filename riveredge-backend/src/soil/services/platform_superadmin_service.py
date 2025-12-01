@@ -156,19 +156,34 @@ class PlatformSuperAdminService:
         Returns:
             Optional[PlatformSuperAdmin]: 平台超级管理员对象，如果验证失败则返回 None
         """
+        from loguru import logger
+        
+        logger.info(f"验证平台超级管理员凭据: username={username}, password_length={len(password) if password else 0}")
         admin = await PlatformSuperAdmin.get_or_none(username=username)
         if not admin:
+            logger.warning(f"平台超级管理员不存在: username={username}")
             return None
         
+        logger.info(f"找到平台超级管理员: id={admin.id}, is_active={admin.is_active}")
         if not admin.is_active:
+            logger.warning(f"平台超级管理员未激活: username={username}")
             return None
         
-        if not admin.verify_password(password):
+        # 记录密码哈希的前几个字符用于调试（不输出完整哈希）
+        logger.info(f"数据库密码哈希前缀: {admin.password_hash[:30]}...")
+        
+        password_valid = admin.verify_password(password)
+        logger.info(f"密码验证结果: {password_valid}")
+        if not password_valid:
+            logger.warning(f"密码验证失败: username={username}, password_length={len(password) if password else 0}")
+            # 提示：密码应该从 .env 文件中的 PLATFORM_SUPERADMIN_PASSWORD 读取
+            logger.info(f"提示：请检查 .env 文件中的 PLATFORM_SUPERADMIN_PASSWORD 配置是否正确")
             return None
         
         # 更新最后登录时间
         admin.update_last_login()
         await admin.save()
         
+        logger.info(f"平台超级管理员验证成功: username={username}, id={admin.id}")
         return admin
 

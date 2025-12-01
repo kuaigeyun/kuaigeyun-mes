@@ -12,6 +12,7 @@ import { apiRequest } from './api';
  */
 export interface PlatformSuperAdmin {
   id: number;
+  uuid: string;
   username: string;
   email?: string;
   full_name?: string;

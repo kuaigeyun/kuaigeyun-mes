@@ -33,13 +33,15 @@ class TenantInfo(BaseModel):
     用于返回组织的基本信息。
     
     Attributes:
-        id: 组织 ID
+        id: 组织 ID（内部使用）
+        uuid: 组织 UUID（对外暴露，业务标识）
         name: 组织名称
         domain: 组织域名
         status: 组织状态
     """
     
-    id: int = Field(..., description="组织 ID")
+    id: int = Field(..., description="组织 ID（内部使用）")
+    uuid: str = Field(..., description="组织 UUID（对外暴露，业务标识）")
     name: str = Field(..., description="组织名称")
     domain: str = Field(..., description="组织域名")
     status: str = Field(..., description="组织状态")
@@ -216,7 +218,8 @@ class CurrentUserResponse(BaseModel):
     用于返回当前登录用户的信息。
     
     Attributes:
-        id: 用户 ID
+        id: 用户 ID（内部使用）
+        uuid: 用户 UUID（对外暴露，业务标识）
         username: 用户名
         email: 用户邮箱
         full_name: 用户全名
@@ -226,7 +229,8 @@ class CurrentUserResponse(BaseModel):
         is_tenant_admin: 是否为组织管理员
     """
     
-    id: int = Field(..., description="用户 ID")
+    id: int = Field(..., description="用户 ID（内部使用）")
+    uuid: str = Field(..., description="用户 UUID（对外暴露，业务标识）")
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="用户邮箱（可选）")
     full_name: Optional[str] = Field(None, description="用户全名")

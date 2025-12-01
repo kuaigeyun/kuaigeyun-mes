@@ -55,6 +55,7 @@ class PlatformSuperAdminAuthService:
             True
         """
         # 验证平台超级管理员凭据
+        logger.info(f"平台超级管理员登录尝试: username={data.username}")
         service = PlatformSuperAdminService()
         admin = await service.verify_platform_superadmin_credentials(
             data.username,
@@ -62,6 +63,7 @@ class PlatformSuperAdminAuthService:
         )
         
         if not admin:
+            logger.warning(f"平台超级管理员登录失败: username={data.username}, 原因: 用户名或密码错误")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误",

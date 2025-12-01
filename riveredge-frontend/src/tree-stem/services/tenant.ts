@@ -53,6 +53,7 @@ export interface AllPackageConfigs {
  */
 export interface Package {
   id: number;
+  uuid: string;
   name: string;
   plan: string;
   max_users: number;
@@ -164,6 +165,7 @@ export interface SystemInfo {
  */
 export interface Tenant {
   id: number;
+  uuid: string;
   name: string;
   domain: string;
   status: TenantStatus;
