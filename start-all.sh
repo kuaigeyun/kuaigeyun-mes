@@ -295,14 +295,80 @@ check_port() {
     return 1  # 端口可用
 }
 
+# 无脑清理所有相关进程（全局清理，不考虑端口）
+# 目标：杀死一切可能阻碍启动的进程，直到能够启动为止
+brutal_cleanup_all() {
+    log_warn "执行无脑清理：杀死一切可能阻碍启动的进程..."
+    
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local log_dir="$script_dir/startlogs"
+    mkdir -p "$log_dir" 2>/dev/null || true
+    
+    # Windows 专用：无脑杀死所有相关进程
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
+        log_warn "Windows: 无脑杀死所有 node.exe 进程..."
+        taskkill /IM node.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+        sleep 0.2
+        taskkill /IM node.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
+        
+        log_warn "Windows: 无脑杀死所有 npm.exe 进程..."
+        taskkill /IM npm.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+        sleep 0.2
+        taskkill /IM npm.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
+        
+        log_warn "Windows: 无脑杀死所有 python.exe 进程..."
+        taskkill /IM python.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+        sleep 0.3
+        taskkill /IM python.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
+        
+        log_warn "Windows: 无脑杀死所有 pythonw.exe 进程..."
+        taskkill /IM pythonw.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+        sleep 0.3
+        taskkill /IM pythonw.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
+        
+        # 使用 wmic 彻底清理所有相关进程
+        if command -v wmic &> /dev/null; then
+            log_warn "Windows: 使用 wmic 彻底清理所有 vite 相关进程..."
+            wmic process where "CommandLine like '%vite%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            
+            log_warn "Windows: 使用 wmic 彻底清理所有 uvicorn 相关进程..."
+            wmic process where "CommandLine like '%uvicorn%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            
+            log_warn "Windows: 使用 wmic 彻底清理所有 main:app 相关进程..."
+            wmic process where "CommandLine like '%main:app%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            
+            log_warn "Windows: 使用 wmic 彻底清理所有 fastapi 相关进程..."
+            wmic process where "CommandLine like '%fastapi%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+        fi
+    fi
+    
+    # Linux/Mac: 使用 pkill 无脑杀死所有相关进程
+    if command -v pkill &> /dev/null; then
+        log_warn "Linux/Mac: 无脑杀死所有 vite 相关进程..."
+        pkill -9 -f "vite" 2>/dev/null || true
+        pkill -9 -f "node.*vite" 2>/dev/null || true
+        pkill -9 -f "npm.*vite" 2>/dev/null || true
+        
+        log_warn "Linux/Mac: 无脑杀死所有 uvicorn 相关进程..."
+        pkill -9 -f "uvicorn" 2>/dev/null || true
+        pkill -9 -f "python.*uvicorn" 2>/dev/null || true
+        pkill -9 -f "python.*main:app" 2>/dev/null || true
+    fi
+    
+    # 等待进程完全终止
+    sleep 1
+    
+    log_success "无脑清理完成"
+}
+
 # 强制清理指定端口，直到成功
-# 持续清理直到端口真正释放
+# 持续清理直到端口真正释放（增强版：更激进，重试更多次）
 force_clear_port() {
     local port=$1
-    local max_attempts=5
+    local max_attempts=10  # 增加重试次数
     local attempt=1
     
-    log_info "强制清理端口 $port (最多尝试 $max_attempts 次)..."
+    log_info "强制清理端口 $port (最多尝试 $max_attempts 次，直到成功为止)..."
     
     while [ $attempt -le $max_attempts ]; do
         # 如果端口未被占用，直接返回成功
@@ -313,7 +379,12 @@ force_clear_port() {
         
         log_info "尝试 $attempt/$max_attempts: 清理端口 $port..."
         
-        # 执行清理
+        # 先执行全局无脑清理（每次尝试都清理）
+        if [ $attempt -eq 1 ] || [ $((attempt % 3)) -eq 0 ]; then
+            brutal_cleanup_all
+        fi
+        
+        # 执行端口特定清理
         kill_process_on_port $port || true
         
         # 等待进程完全终止
@@ -328,21 +399,31 @@ force_clear_port() {
         log_warn "端口 $port 仍被占用，继续尝试清理..."
         attempt=$((attempt + 1))
         
-        # 每次尝试之间等待更长时间
+        # 每次尝试之间等待
         if [ $attempt -le $max_attempts ]; then
             sleep 1
         fi
     done
     
-    # 所有尝试都失败
-    log_error "端口 $port 清理失败，已尝试 $max_attempts 次"
+    # 所有尝试都失败，最后一次绝望尝试
+    log_error "端口 $port 清理失败，已尝试 $max_attempts 次，执行最后一次绝望清理..."
+    brutal_cleanup_all
+    kill_process_on_port $port || true
+    sleep 2
     
-    # 最后一次尝试：显示占用端口的进程信息
-    log_warn "显示占用端口 $port 的进程信息:"
-    if command -v netstat &> /dev/null; then
-        netstat -ano 2>/dev/null | grep ":$port " | head -5 || true
+    # 最后一次检查
+    if ! check_port $port; then
+        log_success "端口 $port 在最后一次清理后已释放"
+        return 0
     fi
     
+    # 显示占用端口的进程信息
+    log_warn "显示占用端口 $port 的进程信息:"
+    if command -v netstat &> /dev/null; then
+        netstat -ano 2>/dev/null | grep ":$port " | head -10 || true
+    fi
+    
+    log_error "端口 $port 清理失败，已尝试 $max_attempts 次，请手动检查"
     return 1
 }
 
@@ -729,69 +810,28 @@ start_backend() {
     # 清理旧的PID文件
     rm -f ../startlogs/backend.pid
 
-    # 检查端口，如果占用则强杀，等待释放后再启动
+    # ⚠️ 无脑清理策略：只有在端口被占用时才执行彻底清理
     if check_port $port; then
-        log_warn "端口 $port 被占用，强制清理..."
-        kill_process_on_port $port || true
+        log_warn "端口 $port 被占用，执行无脑清理所有可能阻碍启动的进程..."
+        brutal_cleanup_all
         
-        # Windows 专用：额外清理相关进程（更激进）
-        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-            if [ "$port" == "$BACKEND_PORT" ]; then
-                log_warn "Windows: 额外强制清理所有后端进程（清理）..."
-                taskkill /IM python.exe /T /F 2>/dev/null || true
-                taskkill /IM pythonw.exe /T /F 2>/dev/null || true
-                taskkill /IM python.exe /F 2>/dev/null || true
-                taskkill /IM pythonw.exe /F 2>/dev/null || true
-                # 通过命令行匹配杀死 uvicorn 进程
-                if command -v wmic &> /dev/null; then
-                    for pid in $(wmic process where "CommandLine like '%uvicorn%'" get ProcessId /format:value 2>/dev/null | grep "ProcessId=" | cut -d= -f2); do
-                        if [ ! -z "$pid" ] && [ "$pid" != "0" ]; then
-                            taskkill /PID $pid /T /F 2>/dev/null || true
-                        fi
-                    done
-                fi
-            fi
+        # 强制清理端口，直到成功为止
+        log_warn "强制清理端口 $port 直到成功..."
+        if ! force_clear_port $port; then
+            log_error "端口 $port 清理失败，无法启动后端服务"
+            return 1
         fi
         
-        # 快速等待端口释放（最多等待 3 秒，每 0.2 秒检查一次）
-        if [ "$QUIET" != "true" ]; then
-            log_info "等待端口 $port 释放..."
-        fi
-        local wait_count=0
-        while [ $wait_count -lt 15 ] && check_port $port; do
-            sleep 0.2
-            wait_count=$((wait_count + 1))
-            # 每 1 秒再次强制清理一次
-            if [ $((wait_count % 5)) -eq 0 ]; then
-                kill_process_on_port $port > /dev/null 2>&1 &
-                if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-                    if [ "$port" == "$BACKEND_PORT" ]; then
-                        taskkill /IM python.exe /T /F > /dev/null 2>&1 &
-                        taskkill /IM pythonw.exe /T /F > /dev/null 2>&1 &
-                    fi
-                fi
-                wait
-            fi
-        done
-        
+        # 启动前最后一次验证端口
         if check_port $port; then
-            log_error "端口 $port 仍被占用，无法启动服务"
-            # 最后一次尝试：强制杀死所有相关进程
-            log_warn "最后一次强制清理端口 $port..."
-            if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-                if [ "$port" == "$BACKEND_PORT" ]; then
-                    taskkill /IM python.exe /T /F 2>/dev/null || true
-                    taskkill /IM pythonw.exe /T /F 2>/dev/null || true
-                fi
-            fi
-            # 再次检查
-            sleep 1
+            log_error "端口 $port 在启动前仍被占用，执行最后一次绝望清理..."
+            brutal_cleanup_all
+            sleep 2
             if check_port $port; then
                 log_error "端口 $port 仍被占用，请手动检查并清理占用进程"
                 return 1
             fi
         fi
-        log_success "端口 $port 已释放"
     else
         log_info "端口 $port 未被占用，直接启动"
     fi
@@ -987,69 +1027,28 @@ start_frontend() {
     local backend_port=$2
     log_info "启动前端服务 (端口: $port, 后端: $backend_port)..."
     
-    # 检查端口，如果占用则强杀，等待释放后再启动
+    # ⚠️ 无脑清理策略：只有在端口被占用时才执行彻底清理
     if check_port $port; then
-        log_warn "端口 $port 被占用，强制清理..."
-        kill_process_on_port $port || true
+        log_warn "端口 $port 被占用，执行无脑清理所有可能阻碍启动的进程..."
+        brutal_cleanup_all
         
-        # Windows 专用：额外清理相关进程（更激进）
-        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-            if [ "$port" == "$FRONTEND_PORT" ]; then
-                log_warn "Windows: 额外强制清理所有前端进程（清理）..."
-                taskkill /IM node.exe /T /F 2>/dev/null || true
-                taskkill /IM npm.exe /T /F 2>/dev/null || true
-                taskkill /IM node.exe /F 2>/dev/null || true
-                taskkill /IM npm.exe /F 2>/dev/null || true
-                # 通过命令行匹配杀死 vite 进程
-                if command -v wmic &> /dev/null; then
-                    for pid in $(wmic process where "CommandLine like '%vite%'" get ProcessId /format:value 2>/dev/null | grep "ProcessId=" | cut -d= -f2); do
-                        if [ ! -z "$pid" ] && [ "$pid" != "0" ]; then
-                            taskkill /PID $pid /T /F 2>/dev/null || true
-                        fi
-                    done
-                fi
-            fi
+        # 强制清理端口，直到成功为止
+        log_warn "强制清理端口 $port 直到成功..."
+        if ! force_clear_port $port; then
+            log_error "端口 $port 清理失败，无法启动前端服务"
+            return 1
         fi
         
-        # 快速等待端口释放（最多等待 3 秒，每 0.2 秒检查一次）
-        if [ "$QUIET" != "true" ]; then
-            log_info "等待端口 $port 释放..."
-        fi
-        local wait_count=0
-        while [ $wait_count -lt 15 ] && check_port $port; do
-            sleep 0.2
-            wait_count=$((wait_count + 1))
-            # 每 1 秒再次强制清理一次
-            if [ $((wait_count % 5)) -eq 0 ]; then
-                kill_process_on_port $port > /dev/null 2>&1 &
-                if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-                    if [ "$port" == "$FRONTEND_PORT" ]; then
-                        taskkill /IM node.exe /T /F > /dev/null 2>&1 &
-                        taskkill /IM npm.exe /T /F > /dev/null 2>&1 &
-                    fi
-                fi
-                wait
-            fi
-        done
-        
+        # 启动前最后一次验证端口
         if check_port $port; then
-            log_error "端口 $port 仍被占用，无法启动服务"
-            # 最后一次尝试：强制杀死所有相关进程
-            log_warn "最后一次强制清理端口 $port..."
-            if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-                if [ "$port" == "$FRONTEND_PORT" ]; then
-                    taskkill /IM node.exe /T /F 2>/dev/null || true
-                    taskkill /IM npm.exe /T /F 2>/dev/null || true
-                fi
-            fi
-            # 再次检查
-            sleep 1
+            log_error "端口 $port 在启动前仍被占用，执行最后一次绝望清理..."
+            brutal_cleanup_all
+            sleep 2
             if check_port $port; then
                 log_error "端口 $port 仍被占用，请手动检查并清理占用进程"
                 return 1
             fi
         fi
-        log_success "端口 $port 已释放"
     else
         log_info "端口 $port 未被占用，直接启动"
     fi
@@ -1121,10 +1120,35 @@ start_frontend() {
     # 清理旧的PID文件
     rm -f "$project_root/startlogs/frontend.pid"
 
+    # 启动前最后一次端口检查（Windows 上需要更长的等待时间）
+    if check_port $port; then
+        log_warn "启动前检查：端口 $port 仍被占用，最后一次清理..."
+        kill_process_on_port $port || true
+        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
+            if [ "$port" == "$FRONTEND_PORT" ]; then
+                taskkill /IM node.exe /T /F 2>/dev/null || true
+                taskkill /IM npm.exe /T /F 2>/dev/null || true
+            fi
+        fi
+        # Windows 上需要更长的等待时间，确保端口完全释放
+        sleep 2
+        if check_port $port; then
+            log_error "端口 $port 在启动前仍被占用，无法启动前端服务"
+            log_error "请手动检查并清理占用进程，或稍后重试"
+            return 1
+        fi
+    fi
+
     # 启动前端服务（在 maintree 目录中）
     # ⚠️ 修复：使用 npm run dev 确保热重载正常工作，而不是直接使用 npx vite
     # 使用 vite 命令，通过 --port 参数动态指定端口，确保热重载启用
-    nohup npm run dev -- --port $port --host 0.0.0.0 > "$project_root/startlogs/frontend.log" 2>&1 &
+    # Windows 兼容性：在 Windows 上使用 127.0.0.1 而不是 0.0.0.0 或 localhost，避免 IPv6 权限问题
+    # localhost 在 Windows 上可能解析为 IPv6 的 ::1，导致 EACCES 权限错误
+    local host_bind="0.0.0.0"
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+        host_bind="127.0.0.1"  # 强制使用 IPv4，避免 localhost 解析为 IPv6
+    fi
+    nohup npm run dev -- --port $port --host $host_bind > "$project_root/startlogs/frontend.log" 2>&1 &
     local frontend_pid=$!
     echo $frontend_pid > "$project_root/startlogs/frontend.pid"
 
@@ -1386,62 +1410,54 @@ main() {
     # 停止现有服务
     stop_all
 
-    # 全局强制清理所有可能干扰启动的进程（静默模式）
-    if [ "$QUIET" != "true" ]; then
-        log_warn "全局强制清理所有可能干扰启动的进程..."
+    # ⚠️ 无脑清理策略：只有在端口被占用时才执行彻底清理
+    local need_cleanup=false
+    
+    # 检查端口占用情况
+    if check_port "$FRONTEND_PORT" || check_port "$BACKEND_PORT"; then
+        need_cleanup=true
+        log_warn "检测到端口被占用，执行全局无脑清理：杀死一切可能阻碍启动的进程..."
+        brutal_cleanup_all
+        sleep 1  # 等待进程完全终止
+    else
+        log_info "端口未被占用，跳过全局清理，直接启动"
     fi
 
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-        # 并行静默杀死所有相关进程（提高速度）
-        taskkill /IM node.exe /T /F > /dev/null 2>&1 &
-        taskkill /IM npm.exe /T /F > /dev/null 2>&1 &
-        taskkill /IM python.exe /T /F > /dev/null 2>&1 &
-        taskkill /IM pythonw.exe /T /F > /dev/null 2>&1 &
+    # 强制清理指定端口，直到成功（如果被占用）
+    log_info "检查并清理端口 $FRONTEND_PORT (前端) 和 $BACKEND_PORT (后端)..."
 
-        # 使用 wmic 静默杀死特定进程
-        if command -v wmic &> /dev/null; then
-            wmic process where "CommandLine like '%vite%'" delete > /dev/null 2>&1 &
-            wmic process where "CommandLine like '%uvicorn%'" delete > /dev/null 2>&1 &
-            wmic process where "CommandLine like '%fastapi%'" delete > /dev/null 2>&1 &
+    # 清理前端端口（如果被占用）
+    if check_port "$FRONTEND_PORT"; then
+        if ! force_clear_port "$FRONTEND_PORT"; then
+            log_error "前端端口 $FRONTEND_PORT 清理失败，请手动检查并清理占用进程"
+            log_error ""
+            log_error "手动清理步骤："
+            log_error "1. 检查占用端口的进程: netstat -ano | findstr :$FRONTEND_PORT"
+            log_error "2. 强制杀死进程: taskkill /PID <PID> /F /T"
+            log_error "3. 或者杀死所有 node 进程: taskkill /IM node.exe /F /T"
+            log_error "4. 或者杀死所有 vite 进程: wmic process where \"CommandLine like '%%vite%%'\" delete"
+            log_error ""
+            exit 1
         fi
+    else
+        log_info "前端端口 $FRONTEND_PORT 未被占用，跳过清理"
+    fi
 
-        # 等待所有杀死命令完成
-        wait
-
-        # 短暂等待进程清理完成
-        sleep 0.1
-        if [ "$QUIET" != "true" ]; then
-            log_success "全局清理完成"
+    # 清理后端端口（如果被占用）
+    if check_port "$BACKEND_PORT"; then
+        if ! force_clear_port "$BACKEND_PORT"; then
+            log_error "后端端口 $BACKEND_PORT 清理失败，请手动检查并清理占用进程"
+            log_error ""
+            log_error "手动清理步骤："
+            log_error "1. 检查占用端口的进程: netstat -ano | findstr :$BACKEND_PORT"
+            log_error "2. 强制杀死进程: taskkill /PID <PID> /F /T"
+            log_error "3. 或者杀死所有 python 进程: taskkill /IM python.exe /F /T"
+            log_error "4. 或者杀死所有 uvicorn 进程: wmic process where \"CommandLine like '%%uvicorn%%'\" delete"
+            log_error ""
+            exit 1
         fi
-    fi
-
-    # 强制清理指定端口，直到成功
-    log_info "强制清理端口 $FRONTEND_PORT (前端) 和 $BACKEND_PORT (后端)..."
-
-    # 清理前端端口
-    if ! force_clear_port "$FRONTEND_PORT"; then
-        log_error "前端端口 $FRONTEND_PORT 清理失败，请手动检查并清理占用进程"
-        log_error ""
-        log_error "手动清理步骤："
-        log_error "1. 检查占用端口的进程: netstat -ano | findstr :$FRONTEND_PORT"
-        log_error "2. 强制杀死进程: taskkill /PID <PID> /F /T"
-        log_error "3. 或者杀死所有 node 进程: taskkill /IM node.exe /F /T"
-        log_error "4. 或者杀死所有 vite 进程: wmic process where \"CommandLine like '%%vite%%'\" delete"
-        log_error ""
-        exit 1
-    fi
-
-    # 清理后端端口
-    if ! force_clear_port "$BACKEND_PORT"; then
-        log_error "后端端口 $BACKEND_PORT 清理失败，请手动检查并清理占用进程"
-        log_error ""
-        log_error "手动清理步骤："
-        log_error "1. 检查占用端口的进程: netstat -ano | findstr :$BACKEND_PORT"
-        log_error "2. 强制杀死进程: taskkill /PID <PID> /F /T"
-        log_error "3. 或者杀死所有 python 进程: taskkill /IM python.exe /F /T"
-        log_error "4. 或者杀死所有 uvicorn 进程: wmic process where \"CommandLine like '%%uvicorn%%'\" delete"
-        log_error ""
-        exit 1
+    else
+        log_info "后端端口 $BACKEND_PORT 未被占用，跳过清理"
     fi
     
     local backend_port="$BACKEND_PORT"

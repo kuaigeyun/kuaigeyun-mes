@@ -204,9 +204,8 @@ class UserService:
         
         # 分页查询
         offset = (page - 1) * page_size
-        users = await User.filter(query).prefetch_related(
-            'roles'
-        ).offset(offset).limit(page_size).all()
+        # ⚠️ 修复：不预加载 roles，避免表不存在时出错，改为在循环中单独查询
+        users = await User.filter(query).offset(offset).limit(page_size).all()
         
         # 构建响应数据（遵循自增ID+UUID混合方案，只对外暴露UUID）
         items = []
@@ -273,18 +272,33 @@ class UserService:
                 # 添加角色信息
                 roles_data = []
                 try:
-                    roles = await user.roles.all()
-                    roles_data = [
-                        {
-                            "uuid": role.uuid,
-                            "name": role.name,
-                            "code": role.code
-                        }
-                        for role in roles
-                    ]
+                    # ⚠️ 修复：使用 try-except 捕获所有可能的错误（包括表不存在）
+                    from tortoise.exceptions import OperationalError, DoesNotExist
+                    try:
+                        roles = await user.roles.all()
+                        roles_data = [
+                            {
+                                "uuid": role.uuid,
+                                "name": role.name,
+                                "code": role.code
+                            }
+                            for role in roles
+                        ]
+                    except (OperationalError, DoesNotExist, AttributeError) as e:
+                        # 忽略角色查询错误（表不存在、关系不存在等），继续处理
+                        from loguru import logger
+                        logger.warning(f"⚠️ 查询用户角色失败（用户ID: {user.id}）: {e}")
+                        roles_data = []
+                    except Exception as e:
+                        # 捕获其他所有异常
+                        from loguru import logger
+                        logger.warning(f"⚠️ 查询用户角色时发生未知错误（用户ID: {user.id}）: {e}")
+                        roles_data = []
                 except Exception as e:
-                    # 忽略角色查询错误，继续处理
-                    pass
+                    # 外层异常捕获，确保不会影响整个流程
+                    from loguru import logger
+                    logger.warning(f"⚠️ 处理用户角色时发生错误（用户ID: {user.id}）: {e}")
+                    roles_data = []
 
                 user_dict["roles"] = roles_data
 
@@ -294,8 +308,6 @@ class UserService:
                 # 如果单个用户处理失败，跳过该用户
                 continue
             
-            items.append(user_dict)
-        
         return {
             "items": items,
             "total": total,
@@ -327,7 +339,7 @@ class UserService:
             uuid=user_uuid,
             tenant_id=tenant_id,
             deleted_at__isnull=True
-        ).prefetch_related('roles', 'department', 'position').first()
+        ).first()
         
         if not user:
             raise NotFoundError(f"用户不存在: {user_uuid}")

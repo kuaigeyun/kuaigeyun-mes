@@ -38,6 +38,15 @@ from tree_root.api.roles.roles import router as roles_router
 from tree_root.api.permissions.permissions import router as permissions_router
 from tree_root.api.departments.departments import router as departments_router
 from tree_root.api.positions.positions import router as positions_router
+from tree_root.api.data_dictionaries.data_dictionaries import router as data_dictionaries_router
+from tree_root.api.system_parameters.system_parameters import router as system_parameters_router
+from tree_root.api.code_rules.code_rules import router as code_rules_router
+from tree_root.api.custom_fields.custom_fields import router as custom_fields_router
+from tree_root.api.site_settings.site_settings import router as site_settings_router
+from tree_root.api.invitation_codes.invitation_codes import router as invitation_codes_router
+from tree_root.api.languages.languages import router as languages_router
+from tree_root.api.applications.applications import router as applications_router
+from tree_root.api.integration_configs.integration_configs import router as integration_configs_router
 
 # 获取运行模式 - 默认为SaaS模式
 MODE = os.getenv("MODE", "saas")
@@ -148,6 +157,15 @@ app.include_router(roles_router, prefix="/api/v1/system")
 app.include_router(permissions_router, prefix="/api/v1/system")
 app.include_router(departments_router, prefix="/api/v1/system")
 app.include_router(positions_router, prefix="/api/v1/system")
+app.include_router(data_dictionaries_router, prefix="/api/v1/system")
+app.include_router(system_parameters_router, prefix="/api/v1/system")
+app.include_router(code_rules_router, prefix="/api/v1/system")
+app.include_router(custom_fields_router, prefix="/api/v1/system")
+app.include_router(site_settings_router, prefix="/api/v1/system")
+app.include_router(invitation_codes_router, prefix="/api/v1/system")
+app.include_router(languages_router, prefix="/api/v1/system")
+app.include_router(applications_router, prefix="/api/v1/system")
+app.include_router(integration_configs_router, prefix="/api/v1/system")
 
 if __name__ == "__main__":
     import uvicorn

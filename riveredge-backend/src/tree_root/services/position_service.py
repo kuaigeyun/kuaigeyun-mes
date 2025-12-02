@@ -127,10 +127,11 @@ class PositionService:
         total = await query.count()
         positions = await query.offset((page - 1) * page_size).limit(page_size).all()
         
-        # 获取关联的部门信息
+        # 获取关联的部门信息和用户数量
         result = []
         for position in positions:
             department_info = None
+            department_uuid = None
             if position.department_id:
                 department = await Department.filter(
                     id=position.department_id,
@@ -144,16 +145,26 @@ class PositionService:
                         "name": department.name,
                         "code": department.code,
                     }
+                    department_uuid = department.uuid
+            
+            # 获取关联的用户数量
+            from soil.models.user import User
+            user_count = await User.filter(
+                tenant_id=tenant_id,
+                position_id=position.id,
+                deleted_at__isnull=True
+            ).count()
 
             result.append({
                 "uuid": position.uuid,
                 "name": position.name,
                 "code": position.code,
                 "description": position.description,
-                "department_uuid": department.uuid if department else None,
+                "department_uuid": department_uuid,
                 "department": department_info,
                 "sort_order": position.sort_order,
                 "is_active": position.is_active,
+                "user_count": user_count,
                 "created_at": position.created_at,
             })
         

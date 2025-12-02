@@ -38,6 +38,7 @@ async def get_current_user(
     
     从请求头中提取 JWT Token，验证并返回当前用户对象。
     自动设置组织上下文。
+    ⚠️ 关键修复：支持平台超级管理员 Token（全局生效）
     
     Args:
         token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
@@ -63,7 +64,54 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 验证 Token
+    # ⚠️ 关键修复：先尝试验证平台超级管理员 Token
+    platform_superadmin_payload = get_platform_superadmin_token_payload(token)
+    if platform_superadmin_payload:
+        # 这是平台超级管理员 Token，允许全局访问
+        # 创建一个虚拟的 User 对象，标记为平台超级管理员
+        from loguru import logger
+        logger.info(f"✅ 检测到平台超级管理员 Token，允许全局访问")
+        
+        # 获取平台超级管理员 ID
+        admin_id = int(platform_superadmin_payload.get("sub"))
+        admin = await PlatformSuperAdmin.get_or_none(id=admin_id)
+        if not admin:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="平台超级管理员不存在",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        if not admin.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="平台超级管理员未激活",
+            )
+        
+        # ⚠️ 关键：为平台超级管理员创建一个虚拟 User 对象
+        # 这个 User 对象用于兼容现有代码，但标记为平台超级管理员
+        # 注意：这里不设置 tenant_id，允许全局访问
+        # 使用 User 模型的构造函数创建临时对象（不保存到数据库）
+        virtual_user = User()
+        # 使用 setattr 确保属性正确设置（Tortoise ORM 模型需要）
+        setattr(virtual_user, 'id', admin_id)
+        setattr(virtual_user, 'username', admin.username)
+        setattr(virtual_user, 'email', getattr(admin, 'email', None))
+        setattr(virtual_user, 'is_active', True)
+        setattr(virtual_user, 'tenant_id', None)  # 平台超级管理员不属于任何租户
+        setattr(virtual_user, 'password_hash', "")  # 虚拟用户不需要密码
+        setattr(virtual_user, 'full_name', getattr(admin, 'full_name', admin.username))
+        # 设置一个标记，表示这是平台超级管理员
+        setattr(virtual_user, '_is_platform_superadmin', True)
+        setattr(virtual_user, '_platform_superadmin_id', admin_id)
+        
+        # 确保 id 属性可以直接访问
+        if not hasattr(virtual_user, 'id') or virtual_user.id is None:
+            virtual_user.id = admin_id
+        
+        return virtual_user
+
+    # 验证普通用户 Token
     payload = get_token_payload(token)
     if not payload:
         raise HTTPException(

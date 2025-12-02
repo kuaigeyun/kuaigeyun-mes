@@ -124,10 +124,12 @@ class PlatformSuperAdminLoginResponse(BaseModel):
         token_type: Token 类型（固定为 "bearer"）
         expires_in: Token 过期时间（秒）
         user: 平台超级管理员信息
+        default_tenant_id: 默认租户 ID（可选，用于设置默认组织上下文）
     """
     
     access_token: str = Field(..., description="JWT 访问令牌")
     token_type: str = Field(default="bearer", description="Token 类型")
     expires_in: int = Field(..., description="Token 过期时间（秒）")
     user: PlatformSuperAdminResponse = Field(..., description="平台超级管理员信息")
+    default_tenant_id: Optional[int] = Field(None, description="默认租户 ID（可选，用于设置默认组织上下文）")
 

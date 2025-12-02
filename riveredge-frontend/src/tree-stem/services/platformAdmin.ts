@@ -38,6 +38,7 @@ export interface PlatformSuperAdminLoginResponse {
   token_type: string;
   expires_in: number;
   user: PlatformSuperAdmin;
+  default_tenant_id?: number; // 默认租户 ID（可选，用于设置默认组织上下文）
 }
 
 /**

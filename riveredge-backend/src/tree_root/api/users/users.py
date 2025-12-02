@@ -138,12 +138,88 @@ async def create_user(
 
 
 @router.get("", response_model=UserListResponse)
-async def get_user_list():
+async def get_user_list(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    department_uuid: Optional[str] = Query(None, description="部门UUID筛选"),
+    position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
+    is_active: Optional[bool] = Query(None, description="是否启用筛选"),
+    is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
     """
-    获取用户列表（简化测试版）
+    获取用户列表
+    
+    支持分页、关键词搜索和筛选。
+    
+    Args:
+        page: 页码
+        page_size: 每页数量
+        keyword: 关键词搜索（搜索用户名、邮箱、姓名）
+        department_uuid: 部门UUID筛选
+        position_uuid: 职位UUID筛选
+        is_active: 是否启用筛选
+        is_tenant_admin: 是否组织管理员筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        UserListResponse: 用户列表响应
     """
-    # 返回正确的Schema对象
-    return UserListResponse(items=[], total=0, page=1, page_size=20)
+    # ⚠️ 关键修复：处理平台超级管理员的虚拟User对象
+    current_user_id = None
+    try:
+        if hasattr(current_user, '_is_platform_superadmin') and getattr(current_user, '_is_platform_superadmin', False):
+            # 平台超级管理员使用platform_superadmin_id
+            current_user_id = getattr(current_user, '_platform_superadmin_id', None)
+            if current_user_id is None:
+                current_user_id = getattr(current_user, 'id', None)
+        else:
+            # 普通用户直接使用id
+            current_user_id = getattr(current_user, 'id', None)
+        
+        # 如果仍然无法获取id，记录错误
+        if current_user_id is None:
+            from loguru import logger
+            logger.error(f"❌ 无法获取 current_user_id，current_user 类型: {type(current_user)}, 属性: {dir(current_user)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="无法获取当前用户ID"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        from loguru import logger
+        logger.error(f"❌ 获取 current_user_id 时出错: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取当前用户ID失败: {str(e)}"
+        )
+    
+    result = await UserService.get_user_list(
+        tenant_id=tenant_id,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        department_uuid=department_uuid,
+        position_uuid=position_uuid,
+        is_active=is_active,
+        is_tenant_admin=is_tenant_admin,
+        current_user_id=current_user_id,
+    )
+    
+    # 转换为响应格式
+    from tree_root.schemas.user import UserListItem
+    items = [UserListItem.model_validate(item) for item in result["items"]]
+    
+    return UserListResponse(
+        items=items,
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+    )
 
 
 @router.get("/{user_uuid}", response_model=UserResponse)

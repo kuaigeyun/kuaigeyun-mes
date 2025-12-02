@@ -42,13 +42,47 @@ if (process.env.NODE_ENV === 'development') {
   };
 }
 
-// 创建 Query Client
+// 创建 Query Client（配置智能重试和错误处理）
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // ⚠️ 智能重试策略：针对后端重启等临时错误进行重试
+      retry: (failureCount, error: any) => {
+        // 401 错误不重试（认证问题）
+        if (error?.response?.status === 401) {
+          return false;
+        }
+        // 400 错误不重试（请求参数错误）
+        if (error?.response?.status === 400) {
+          return false;
+        }
+        // 网络错误或后端重启错误（502, 503, 504）最多重试 3 次
+        const isNetworkError = error?.message?.includes('fetch') || 
+                               error?.message?.includes('NetworkError') ||
+                               error?.message?.includes('Failed to fetch');
+        const isServerError = [502, 503, 504].includes(error?.response?.status);
+        
+        if (isNetworkError || isServerError) {
+          return failureCount < 3; // 最多重试 3 次
+        }
+        
+        // 其他错误最多重试 1 次
+        return failureCount < 1;
+      },
+      // 重试延迟（指数退避）
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000, // 5分钟
+      // 全局错误处理（静默处理，避免重复提示）
+      throwOnError: false,
+    },
+    mutations: {
+      // Mutation 错误处理
+      retry: (failureCount, error: any) => {
+        // Mutation 操作不自动重试（避免重复提交）
+        return false;
+      },
+      throwOnError: false,
     },
   },
 })

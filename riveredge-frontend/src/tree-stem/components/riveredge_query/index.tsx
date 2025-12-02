@@ -14,6 +14,7 @@ import { filterByPinyinInitials } from '../../utils/pinyin';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSavedSearchList, createSavedSearch, deleteSavedSearchByUuid, updateSavedSearchByUuid, SavedSearch } from '../../services/savedSearch';
+import { getToken, getUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import {
   DndContext,
@@ -451,11 +452,31 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   const [saveIsPinned, setSaveIsPinned] = useState(false);
   const [editingSearch, setEditingSearch] = useState<SavedSearch | null>(null);
   
+  // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
+  const hasToken = !!getToken();
+  
+  // ⚠️ 修复：检查是否是平台超级管理员（平台超级管理员不支持 saved-searches API）
+  const userInfo = getUserInfo();
+  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin' || userInfo?.is_platform_admin === true;
+  
   // 获取已保存的搜索条件列表
+  // ⚠️ 修复：平台超级管理员不支持 saved-searches API，不调用
   const { data: savedSearchesData } = useQuery({
     queryKey: ['savedSearches', pagePath],
     queryFn: () => getSavedSearchList(pagePath, true),
-    enabled: visible, // 只在弹窗打开时获取
+    // ⚠️ 修复：只在弹窗打开且有 Token 且不是平台超级管理员时才获取数据，避免 401 错误导致退出登录
+    enabled: visible && hasToken && !isPlatformSuperAdmin,
+    // ⚠️ 修复：401 错误时静默失败，不抛出错误，避免触发全局错误处理
+    retry: (failureCount, error: any) => {
+      // 如果是 401 错误，不重试
+      if (error?.response?.status === 401) {
+        return false;
+      }
+      // 其他错误最多重试 1 次
+      return failureCount < 1;
+    },
+    // ⚠️ 修复：401 错误时不抛出错误，静默失败
+    throwOnError: false,
   });
   
   const savedSearches = savedSearchesData?.items || [];
@@ -1729,12 +1750,31 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   // 获取当前页面路径
   const pagePath = location.pathname;
   
+  // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
+  const hasToken = !!getToken();
+  
+  // ⚠️ 修复：检查是否是平台超级管理员（平台超级管理员不支持 saved-searches API）
+  const userInfo = getUserInfo();
+  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin' || userInfo?.is_platform_admin === true;
+  
   // 获取已保存的搜索条件列表（只获取钉住的）
+  // ⚠️ 修复：平台超级管理员不支持 saved-searches API，不调用
   const { data: savedSearchesData } = useQuery({
     queryKey: ['savedSearches', pagePath],
     queryFn: () => getSavedSearchList(pagePath, true),
-    // 始终获取数据，不只在弹窗打开时
-    enabled: true,
+    // ⚠️ 修复：只在有 Token 且不是平台超级管理员时才获取数据，避免 401 错误导致退出登录
+    enabled: hasToken && !isPlatformSuperAdmin,
+    // ⚠️ 修复：401 错误时静默失败，不抛出错误，避免触发全局错误处理
+    retry: (failureCount, error: any) => {
+      // 如果是 401 错误，不重试
+      if (error?.response?.status === 401) {
+        return false;
+      }
+      // 其他错误最多重试 1 次
+      return failureCount < 1;
+    },
+    // ⚠️ 修复：401 错误时不抛出错误，静默失败
+    throwOnError: false,
   });
   
   // ⭐ 获取钉住的条件，并按照拖拽后的排序显示（完全在 useMemo 中处理，避免状态更新循环）

@@ -13,8 +13,13 @@
  */
 
 import React from 'react';
-import { App as AntdApp, ConfigProvider, theme } from 'antd';
+import { App as AntdApp, ConfigProvider, theme, message } from 'antd';
 import AppRoutes from './routes';
+
+// 将 Ant Design message 实例注入到全局，供 api.ts 使用
+if (typeof window !== 'undefined') {
+  window.__ANTD_MESSAGE__ = message;
+}
 
 // 主应用组件
 export default function App() {

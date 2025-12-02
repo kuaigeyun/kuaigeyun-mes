@@ -10,7 +10,7 @@ import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { platformSuperAdminLogin } from '../../services/platformAdmin';
-import { setToken, setUserInfo } from '../../utils/auth';
+import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 
 /**
@@ -42,6 +42,11 @@ export default function PlatformLoginPage() {
         user_type: 'platform_superadmin',
       });
 
+      // 设置默认租户 ID（如果返回了默认租户）
+      if (response.default_tenant_id) {
+        setTenantId(response.default_tenant_id);
+      }
+
       // 设置当前用户信息到全局状态
       setCurrentUser({
         id: response.user.id,
@@ -50,7 +55,7 @@ export default function PlatformLoginPage() {
         full_name: response.user.full_name,
         is_platform_admin: true, // 平台超级管理员始终是平台管理
         is_tenant_admin: false,
-        tenant_id: undefined,
+        tenant_id: response.default_tenant_id, // 使用默认租户 ID
       });
 
       messageApi.success('登录成功');

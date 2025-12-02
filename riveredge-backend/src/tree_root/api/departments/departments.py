@@ -111,17 +111,17 @@ async def get_department_tree(
     def convert_to_tree_item(item: dict) -> DepartmentTreeItem:
         children = [convert_to_tree_item(child) for child in item.get("children", [])]
         return DepartmentTreeItem(
-            id=item["id"],
+            id=item.get("id"),  # ⚠️ 修复：使用 get 方法，避免 KeyError
             uuid=item["uuid"],
             name=item["name"],
             code=item["code"],
-            description=item["description"],
-            parent_id=item["parent_id"],
-            manager_id=item["manager_id"],
-            sort_order=item["sort_order"],
-            is_active=item["is_active"],
-            children_count=item["children_count"],
-            user_count=item["user_count"],
+            description=item.get("description"),
+            parent_id=item.get("parent_id"),  # ⚠️ 修复：使用 get 方法
+            manager_id=item.get("manager_id"),  # ⚠️ 修复：使用 get 方法
+            sort_order=item.get("sort_order", 0),
+            is_active=item.get("is_active", True),
+            children_count=item.get("children_count", 0),
+            user_count=item.get("user_count", 0),
             children=children,
         )
     

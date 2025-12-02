@@ -5,7 +5,7 @@
  * 后续完善时，只需修改此组件，所有表格都会同步更新。
  */
 
-import React, { useRef, useLayoutEffect, ReactNode, useState } from 'react';
+import React, { useRef, useLayoutEffect, ReactNode, useState, useEffect } from 'react';
 import { ProTable, ActionType, ProColumns, ProFormInstance, ProTableProps } from '@ant-design/pro-components';
 import { Button, Space, Radio, Dropdown, MenuProps, App } from 'antd';
 import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined } from '@ant-design/icons';
@@ -493,6 +493,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, []);
 
   /**
+   * 当视图类型是卡片/看板/统计视图时，确保数据已加载
+   * 如果 tableData 为空且 actionRef 可用，主动触发数据加载
+   */
+  useEffect(() => {
+    if (currentViewType !== 'table' && tableData.length === 0 && actionRef?.current) {
+      // 延迟执行，确保组件完全初始化
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 100);
+    }
+  }, [currentViewType, tableData.length]);
+
+  /**
    * 处理排序参数转换和搜索参数获取
    */
   const handleRequest = async (
@@ -855,8 +868,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         </div>
       )}
 
-      {/* 根据视图类型渲染不同视图 */}
-      {currentViewType === 'table' && (
+      {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
+      <div style={{ display: currentViewType === 'table' ? 'block' : 'none' }}>
         <ProTable<T>
           headerTitle={buildHeaderActions() || headerTitle || undefined}
           actionRef={actionRef}
@@ -916,7 +929,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           return otherProps;
         })()}
         />
-      )}
+      </div>
 
       {/* 卡片视图 */}
       {currentViewType === 'card' && viewTypes.includes('card') && (
