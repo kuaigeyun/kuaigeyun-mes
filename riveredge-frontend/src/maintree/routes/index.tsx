@@ -47,6 +47,15 @@ import PermissionListPage from '../../tree-stem/pages/system/permissions/list';
 import DepartmentListPage from '../../tree-stem/pages/system/departments/list';
 import PositionListPage from '../../tree-stem/pages/system/positions/list';
 import UserListPage from '../../tree-stem/pages/system/users/list';
+import DataDictionaryListPage from '../../tree-stem/pages/system/data-dictionaries/list';
+import SystemParameterListPage from '../../tree-stem/pages/system/system-parameters/list';
+import CodeRuleListPage from '../../tree-stem/pages/system/code-rules/list';
+import CustomFieldListPage from '../../tree-stem/pages/system/custom-fields/list';
+import SiteSettingsPage from '../../tree-stem/pages/system/site-settings';
+import InvitationCodeListPage from '../../tree-stem/pages/system/invitation-codes/list';
+import LanguageListPage from '../../tree-stem/pages/system/languages/list';
+import ApplicationListPage from '../../tree-stem/pages/system/applications/list';
+import IntegrationConfigListPage from '../../tree-stem/pages/system/integration-configs/list';
 
 // 布局包装组件
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -135,6 +144,87 @@ const AppRoutes: React.FC = () => {
         element={
           <LayoutWrapper>
             <UserListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 数据字典管理 */}
+      <Route
+        path="/system/data-dictionaries"
+        element={
+          <LayoutWrapper>
+            <DataDictionaryListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 系统参数管理 */}
+      <Route
+        path="/system/system-parameters"
+        element={
+          <LayoutWrapper>
+            <SystemParameterListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 编码规则管理 */}
+      <Route
+        path="/system/code-rules"
+        element={
+          <LayoutWrapper>
+            <CodeRuleListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 自定义字段管理 */}
+      <Route
+        path="/system/custom-fields"
+        element={
+          <LayoutWrapper>
+            <CustomFieldListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 站点设置 */}
+      <Route
+        path="/system/site-settings"
+        element={
+          <LayoutWrapper>
+            <SiteSettingsPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 邀请码管理 */}
+      <Route
+        path="/system/invitation-codes"
+        element={
+          <LayoutWrapper>
+            <InvitationCodeListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 语言管理 */}
+      <Route
+        path="/system/languages"
+        element={
+          <LayoutWrapper>
+            <LanguageListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 应用中心 */}
+      <Route
+        path="/system/applications"
+        element={
+          <LayoutWrapper>
+            <ApplicationListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 集成设置 */}
+      <Route
+        path="/system/integration-configs"
+        element={
+          <LayoutWrapper>
+            <IntegrationConfigListPage />
           </LayoutWrapper>
         }
       />

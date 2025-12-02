@@ -164,7 +164,7 @@ const RoleListPage: React.FC = () => {
       setCurrentRoleUuid(record.uuid);
       
       // 获取所有权限
-      const allPermissions = await getAllPermissions({ page_size: 1000 });
+      const allPermissions = await getAllPermissions({ page_size: 100 });
       
       // 获取角色已有权限
       const rolePermissions = await getRolePermissions(record.uuid);

@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { existsSync } from 'fs'
 import { platform } from 'os'
+import type { ProxyOptions } from 'vite'
 
 // 主入口配置
 // 统一使用 SaaS 模式
@@ -61,21 +62,41 @@ const treeStemAliasPlugin = () => {
 }
 
 export default defineConfig({
+  // ⚠️ 关键修复：明确设置根目录，防止 Vite 监听父目录（包括后端目录）
+  root: __dirname, // 限制 Vite 只监听当前目录（maintree），不监听父目录
   // 指定 public 目录（指向根目录的 public）
   publicDir: publicDir,
   // 服务器配置 - 优化稳定性
   server: {
-    host: '0.0.0.0', // 允许外部访问
+    // Windows 兼容性：在 Windows 上使用 127.0.0.1 而不是 0.0.0.0 或 localhost
+    // localhost 在 Windows 上可能解析为 IPv6 的 ::1，导致 EACCES 权限错误
+    host: platform() === 'win32' ? '127.0.0.1' : '0.0.0.0', // Windows 使用 IPv4，其他系统允许外部访问
     port: 8000, // 主入口端口
     strictPort: false, // 如果端口被占用，自动寻找下一个可用端口
     open: false, // 不自动打开浏览器
     cors: true, // 启用CORS
+    // ⚠️ 稳定性优化：代理配置（关键修复：添加错误处理，防止后端重启导致前端崩溃）
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:9000', // 强制使用IPv4地址，避免IPv6连接问题
         changeOrigin: true,
         secure: false,
+        // ⚠️ 关键修复：增加超时时间，防止后端重启时连接超时
+        timeout: 30000, // 增加超时时间到 30 秒
+        ws: true, // 支持 WebSocket
+        // ⚠️ 关键修复：配置代理错误处理，防止后端重启导致前端服务崩溃
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            // 后端服务不可用时，只记录错误，不导致前端服务崩溃
+            // 这是关键：错误处理不会导致 Vite 服务崩溃
+            console.warn('⚠️ 代理错误（后端可能正在重启）:', err.message);
+          });
+          proxy.on('proxyReq', (proxyReq, _req, _res) => {
+            // 设置更长的超时时间
+            proxyReq.setTimeout(30000);
+          });
       },
+      } as ProxyOptions,
     },
     hmr: {
       overlay: true, // 显示错误覆盖层
@@ -84,6 +105,8 @@ export default defineConfig({
       host: 'localhost',
       // 不指定固定端口，让 Vite 自动选择（避免端口冲突）
       clientPort: undefined,
+      // ⚠️ 稳定性优化：增加 HMR 超时时间
+      timeout: 20000, // 增加超时时间到 20 秒
     },
     watch: {
       // 优化文件监听，确保 HMR 正常工作
@@ -105,11 +128,28 @@ export default defineConfig({
         '**/pnpm-lock.yaml',
         '**/.env.local',
         '**/.env.*.local',
+        // ⚠️ 关键修复：忽略后端目录，防止前端服务监听后端文件变化导致崩溃
+        // 使用绝对路径模式，确保无论从哪个目录启动都能正确忽略
+        '**/riveredge-backend/**',
+        '**/backend/**',
+        '**/src/soil/**',
+        '**/src/tree_root/**',
+        '**/venv*/**',
+        '**/__pycache__/**',
+        '**/*.py',
+        '**/*.pyc',
+        '**/*.pyo',
+        // ⚠️ 额外保护：忽略项目根目录下的后端目录（相对路径和绝对路径）
+        '../../riveredge-backend/**',
+        '../../../riveredge-backend/**',
+        '**/../riveredge-backend/**',
       ],
       // Windows 环境下使用轮询模式以确保文件变化能被检测到
       usePolling: platform() === 'win32',
-      // 文件变化检测间隔（Windows 下使用轮询时）
-      interval: platform() === 'win32' ? 1000 : 100,
+      // ⚠️ 稳定性优化：增加文件变化检测间隔，减少 CPU 占用和重启频率
+      interval: platform() === 'win32' ? 2000 : 100, // Windows 下增加到 2 秒
+      // 优化文件监听性能
+      binaryInterval: platform() === 'win32' ? 3000 : 1000,
     },
   },
   // 构建配置 - 优化性能

@@ -6,11 +6,10 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Drawer, Modal, Tree, message, Empty, Dropdown } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ApartmentOutlined } from '@ant-design/icons';
-import type { DataNode, TreeProps } from 'antd/es/tree';
-import type { MenuProps } from 'antd';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions, PageContainer } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
+import type { DataNode } from 'antd/es/tree';
 import {
   getDepartmentTree,
   getDepartmentByUuid,
@@ -31,8 +30,9 @@ const DepartmentListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [treeData, setTreeData] = useState<DataNode[]>([]);
-  const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Department | null>(null);
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const [autoExpandParent, setAutoExpandParent] = useState(true);
   
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -51,31 +51,34 @@ const DepartmentListPage: React.FC = () => {
    */
   const loadDepartmentTree = async () => {
     try {
-      setLoading(true);
       const response = await getDepartmentTree();
       
       // 转换为 Ant Design Tree 原生数据格式
       const convertToTreeData = (items: DepartmentTreeItem[]): DataNode[] => {
         return items.map(item => {
-          // 构建节点标题（使用原生 title 属性）
+          // 构建节点标题（将图标和文字放在同一行，优化间距）
           const titleContent = (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-              <Space>
-                <span style={{ fontWeight: 500 }}>{item.name}</span>
-                <Tag color={item.is_active ? 'success' : 'default'} size="small">
+            <div className="department-tree-title-content">
+              <div className="department-tree-title-left">
+                {/* 文字（已移除图标） */}
+                <span className="department-tree-text">{item.name}</span>
+                <div className="department-tree-tags">
+                <Tag color={item.is_active ? 'success' : 'default'}>
                   {item.is_active ? '启用' : '禁用'}
                 </Tag>
-                {item.children_count > 0 && (
-                  <Tag color="blue" size="small">
+                {(item.children_count && item.children_count > 0) ? (
+                  <Tag color="blue">
                     {item.children_count} 子部门
                   </Tag>
-                )}
-                {item.user_count > 0 && (
-                  <Tag color="green" size="small">
+                ) : null}
+                {(item.user_count && item.user_count > 0) ? (
+                  <Tag color="green">
                     {item.user_count} 人
                   </Tag>
-                )}
-              </Space>
+                ) : null}
+                </div>
+              </div>
+              <div className="department-tree-actions">
               <Dropdown
                 menu={{
                   items: [
@@ -119,13 +122,14 @@ const DepartmentListPage: React.FC = () => {
                   style={{ opacity: 0.6 }}
                 />
               </Dropdown>
+              </div>
             </div>
           );
 
           return {
             title: titleContent,
             key: item.uuid,
-            icon: <ApartmentOutlined style={{ color: '#1890ff' }} />,
+            // 不再使用 icon 属性，图标已包含在 title 中
             isLeaf: !item.children || item.children.length === 0,
             children: item.children && item.children.length > 0 ? convertToTreeData(item.children) : undefined,
             // 将原始数据存储在 data 属性中，方便后续使用
@@ -134,11 +138,22 @@ const DepartmentListPage: React.FC = () => {
         });
       };
       
-      setTreeData(convertToTreeData(response.items));
+      const convertedData = convertToTreeData(response.items);
+      setTreeData(convertedData);
+      // 初始化时展开所有节点
+      const getAllKeys = (nodes: DataNode[]): React.Key[] => {
+        let keys: React.Key[] = [];
+        nodes.forEach(node => {
+          if (node.children && node.children.length > 0) {
+            keys.push(node.key);
+            keys = keys.concat(getAllKeys(node.children));
+          }
+        });
+        return keys;
+      };
+      setExpandedKeys(getAllKeys(convertedData));
     } catch (error: any) {
       messageApi.error(error.message || '加载部门树失败');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -270,6 +285,45 @@ const DepartmentListPage: React.FC = () => {
   };
 
   /**
+   * 获取所有节点的 key（用于展开/收起）
+   */
+  const getAllNodeKeys = (nodes: DataNode[]): React.Key[] => {
+    let keys: React.Key[] = [];
+    nodes.forEach(node => {
+      keys.push(node.key);
+      if (node.children && node.children.length > 0) {
+        keys = keys.concat(getAllNodeKeys(node.children));
+      }
+    });
+    return keys;
+  };
+
+  /**
+   * 处理展开/收起
+   */
+  const handleExpand = (expandedKeysValue: React.Key[]) => {
+    setExpandedKeys(expandedKeysValue);
+    setAutoExpandParent(false);
+  };
+
+  /**
+   * 一键展开所有
+   */
+  const handleExpandAll = () => {
+    const allKeys = getAllNodeKeys(treeData);
+    setExpandedKeys(allKeys);
+    setAutoExpandParent(true);
+  };
+
+  /**
+   * 一键收起所有
+   */
+  const handleCollapseAll = () => {
+    setExpandedKeys([]);
+    setAutoExpandParent(false);
+  };
+
+  /**
    * 构建部门选项（用于父部门选择）
    */
   const buildDepartmentOptions = (items: DepartmentTreeItem[], excludeUuid?: string, level = 0): Array<{ label: string; value: string }> => {
@@ -290,32 +344,193 @@ const DepartmentListPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 200px)' }}>
+    <div className="department-page-container">
+      <PageContainer>
+      {/* 树形结构样式优化 - 遵循 Ant Design 8px 网格系统和最佳实践 */}
+      <style>{`
+        /* 隐藏 PageContainer 的 ant-page-header */
+        .department-page-container .ant-pro-page-container .ant-page-header {
+          display: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          height: 0 !important;
+        }
+        
+        /* 保留顶部间距 - 通过 paddingTop 实现 */
+        .department-page-container .ant-pro-page-container .ant-pro-page-container-children-content {
+          padding: 24px !important;
+          padding-top: 24px !important;
+        }
+        
+        /* 树形结构容器样式 */
+        .department-tree-container {
+          width: 400px;
+          border-right: 1px solid #f0f0f0;
+          padding: 0;
+          overflow: auto;
+          background: #fff;
+          border-radius: 8px;
+        }
+        
+        /* 树形结构标题区域 */
+        .department-tree-header {
+          margin-bottom: 24px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        
+        /* 树节点样式优化 - 增加间距和内边距 */
+        .department-tree .ant-tree-node-content-wrapper {
+          padding: 8px 12px !important;
+          margin: 4px 0 !important;
+          border-radius: 4px;
+          transition: all 0.2s;
+          min-height: 40px;
+          display: flex;
+          align-items: center;
+        }
+        
+        /* 树节点 hover 效果 */
+        .department-tree .ant-tree-node-content-wrapper:hover {
+          background-color: #f5f5f5;
+        }
+        
+        /* 树节点选中状态 */
+        .department-tree .ant-tree-node-selected .ant-tree-node-content-wrapper {
+          background-color: #e6f7ff !important;
+          border: 1px solid #91d5ff;
+        }
+        
+        /* 树节点标题内容间距优化 */
+        .department-tree .ant-tree-node-content-wrapper .ant-tree-title {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          padding: 0;
+        }
+        
+        /* 树节点标题内部元素间距 */
+        .department-tree-title-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          width: 100%;
+          gap: 8px;
+        }
+        
+        /* 树节点标题左侧内容（图标+文字+标签） */
+        .department-tree-title-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+          min-width: 0;
+        }
+        
+        /* 树节点图标样式 */
+        .department-tree-icon {
+          color: #1890ff;
+          font-size: 16px;
+          flex-shrink: 0;
+        }
+        
+        /* 树节点文字样式 */
+        .department-tree-text {
+          font-weight: 500;
+          font-size: 14px;
+          line-height: 1.5;
+          flex-shrink: 0;
+        }
+        
+        /* 树节点标签间距 */
+        .department-tree-tags {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+        
+        /* 树节点操作按钮 */
+        .department-tree-actions {
+          flex-shrink: 0;
+          margin-left: 8px;
+        }
+        
+        /* 树节点展开/收起图标间距 */
+        .department-tree .ant-tree-switcher {
+          width: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        /* 树节点缩进优化 - 增加层级间距 */
+        .department-tree .ant-tree-child-tree {
+          margin-left: 8px;
+        }
+        
+        /* 树节点连接线样式 */
+        .department-tree .ant-tree-indent-unit {
+          width: 24px;
+        }
+        
+        /* 树节点整体行高优化 */
+        .department-tree .ant-tree-treenode {
+          padding: 2px 0;
+          margin: 0;
+        }
+        
+        /* 树节点列表整体间距 */
+        .department-tree .ant-tree-list {
+          padding: 0;
+        }
+        
+        /* 树节点列表项间距 */
+        .department-tree .ant-tree-list-holder-inner {
+          padding: 0;
+        }
+
+        .ant-pro-page-container-children-container{
+          padding: 24px !important;
+        }
+      `}</style>
+      <div style={{ display: 'flex', height: 'calc(100vh - 144px)', gap: '24px' }}>
       {/* 左侧：树形列表 */}
-      <div style={{ width: '400px', borderRight: '1px solid #f0f0f0', padding: '16px', overflow: 'auto' }}>
-        <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3>部门树</h3>
+        <div className="department-tree-container" style={{ padding: '24px' }}>
+          <div className="department-tree-header">
+            <Space>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>部门列表</h3>
+              <Button
+                type="text"
+                size="small"
+                icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
+                onClick={expandedKeys.length > 0 ? handleCollapseAll : handleExpandAll}
+                title={expandedKeys.length > 0 ? '收起全部' : '展开全部'}
+              />
+            </Space>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => handleCreate()}>
             新建根部门
           </Button>
         </div>
         <Tree
+            className="department-tree"
           treeData={treeData}
           onSelect={handleSelect}
-          defaultExpandAll
-          loading={loading}
-          showIcon
+            expandedKeys={expandedKeys}
+            autoExpandParent={autoExpandParent}
+            onExpand={handleExpand}
           blockNode
           selectedKeys={selectedNode ? [selectedNode.uuid] : []}
         />
       </div>
       
-      {/* 右侧：详情面板 */}
-      <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
+      {/* 右侧：详情面板 - 使用 Card 组件符合 Ant Design 最佳实践 */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
         {selectedNode ? (
-          <div>
-            <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3>{selectedNode.name}</h3>
+          <Card
+            title={selectedNode.name}
+            extra={
               <Space>
                 <Button icon={<EyeOutlined />} onClick={() => handleView(selectedNode)}>
                   查看详情
@@ -338,7 +553,8 @@ const DepartmentListPage: React.FC = () => {
                   添加子部门
                 </Button>
               </Space>
-            </div>
+            }
+          >
             <ProDescriptions
               column={2}
               dataSource={selectedNode}
@@ -355,14 +571,28 @@ const DepartmentListPage: React.FC = () => {
                     </Tag>
                   ),
                 },
-                { title: '排序', dataIndex: 'sort_order' },
-                { title: '子部门数', dataIndex: 'children_count' },
-                { title: '用户数', dataIndex: 'user_count' },
+                {
+                  title: '排序',
+                  dataIndex: 'sort_order',
+                  render: (value: any) => value !== undefined && value !== null ? value : '-',
+                },
+                {
+                  title: '子部门数',
+                  dataIndex: 'children_count',
+                  render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
+                },
+                {
+                  title: '用户数',
+                  dataIndex: 'user_count',
+                  render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
+                },
               ]}
             />
-          </div>
+          </Card>
         ) : (
+          <Card>
           <Empty description="请选择部门" />
+          </Card>
         )}
       </div>
 
@@ -441,15 +671,29 @@ const DepartmentListPage: React.FC = () => {
                 dataIndex: 'is_active',
                 render: (value) => (value ? '启用' : '禁用'),
               },
-              { title: '排序', dataIndex: 'sort_order' },
-              { title: '子部门数', dataIndex: 'children_count' },
-              { title: '用户数', dataIndex: 'user_count' },
+              {
+                title: '排序',
+                dataIndex: 'sort_order',
+                render: (value: any) => value !== undefined && value !== null ? value : '-',
+              },
+              {
+                title: '子部门数',
+                dataIndex: 'children_count',
+                render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
+              },
+              {
+                title: '用户数',
+                dataIndex: 'user_count',
+                render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
+              },
               { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
               { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
             ]}
           />
         )}
       </Drawer>
+      </div>
+      </PageContainer>
     </div>
   );
 };

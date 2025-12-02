@@ -114,6 +114,7 @@ class PositionListItem(BaseModel):
     department: Optional[dict] = Field(None, description="部门信息（如果关联）")
     sort_order: int = Field(..., description="排序顺序")
     is_active: bool = Field(..., description="是否启用")
+    user_count: int = Field(default=0, description="关联用户数量")
     created_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)

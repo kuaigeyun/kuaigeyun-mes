@@ -102,15 +102,15 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           key: path,
           path,
           label: getTabTitle(path),
-          closable: path !== '/dashboard', // 工作台标签不可关闭
+          closable: path !== '/system/dashboard', // 工作台标签不可关闭
         };
 
         let newTabs: TabItem[];
 
         // 如果添加的是仪表盘，确保它在第一个位置
-        if (path === '/dashboard') {
+        if (path === '/system/dashboard') {
           // 检查是否已存在仪表盘标签
-          const dashboardTab = prevTabs.find((tab) => tab.key === '/dashboard');
+          const dashboardTab = prevTabs.find((tab) => tab.key === '/system/dashboard');
           if (dashboardTab) {
             return prevTabs;
           }
@@ -118,7 +118,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           newTabs = [newTab, ...prevTabs];
         } else {
           // 其他标签添加在仪表盘之后
-          const dashboardIndex = prevTabs.findIndex((tab) => tab.key === '/dashboard');
+          const dashboardIndex = prevTabs.findIndex((tab) => tab.key === '/system/dashboard');
           if (dashboardIndex >= 0) {
             // 如果存在仪表盘，插入到仪表盘之后
             const beforeDashboard = prevTabs.slice(0, dashboardIndex + 1);
@@ -127,9 +127,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           } else {
             // 如果没有仪表盘，先添加仪表盘，再添加新标签
             const dashboardTab: TabItem = {
-              key: '/dashboard',
-              path: '/dashboard',
-              label: getTabTitle('/dashboard'),
+              key: '/system/dashboard',
+              path: '/system/dashboard',
+              label: getTabTitle('/system/dashboard'),
               closable: false,
             };
             newTabs = [dashboardTab, newTab];
@@ -169,7 +169,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
   useEffect(() => {
     if (location.pathname) {
       // 确保仪表盘标签始终存在（固定第一个）
-      addTab('/dashboard');
+      addTab('/system/dashboard');
       // 添加当前页面标签
       addTab(location.pathname);
       setActiveKey(location.pathname);
@@ -202,7 +202,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
       } else {
         // 如果没有标签了，跳转到工作台
-        navigate('/login/dashboard');
+        navigate('/system/dashboard');
       }
     }
 
@@ -232,7 +232,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   const handleCloseOthers = (targetKey: string) => {
     // 保留目标标签和仪表盘标签（如果存在）
-    const dashboardTab = tabs.find((tab) => tab.key === '/dashboard');
+    const dashboardTab = tabs.find((tab) => tab.key === '/system/dashboard');
     const targetTab = tabs.find((tab) => tab.key === targetKey);
     const newTabs: TabItem[] = [];
     
@@ -256,14 +256,14 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   const handleCloseAll = () => {
     // 只保留仪表盘标签
-    const dashboardTab = tabs.find((tab) => tab.key === '/dashboard');
+    const dashboardTab = tabs.find((tab) => tab.key === '/system/dashboard');
     if (dashboardTab) {
       setTabs([dashboardTab]);
-      setActiveKey('/dashboard');
-      navigate('/dashboard');
+      setActiveKey('/system/dashboard');
+      navigate('/system/dashboard');
     } else {
       setTabs([]);
-      navigate('/dashboard');
+      navigate('/system/dashboard');
     }
   };
 
@@ -272,7 +272,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   const getTabContextMenu = (tabKey: string): MenuProps => {
     const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
-    const isDashboard = tabKey === '/dashboard';
+    const isDashboard = tabKey === '/system/dashboard';
     const hasRightTabs = targetIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
 
@@ -637,7 +637,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                         e.preventDefault();
                         e.stopPropagation();
                         // 仪表盘标签不可双击关闭
-                        if (tab.key !== '/dashboard' && tab.closable) {
+                        if (tab.key !== '/system/dashboard' && tab.closable) {
                           handleTabClose(tab.key);
                         }
                       }}

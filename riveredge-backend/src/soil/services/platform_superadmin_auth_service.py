@@ -73,12 +73,28 @@ class PlatformSuperAdminAuthService:
         # 生成 Token（不包含 tenant_id）⭐ 关键
         token_info = create_token_for_platform_superadmin(admin)
         
-        logger.info(f"平台超级管理员登录成功: {admin.username} (ID: {admin.id})")
+        # 获取默认租户 ID（domain="default"）
+        default_tenant_id = None
+        try:
+            from soil.services.tenant_service import TenantService
+            tenant_service = TenantService()
+            default_tenant = await tenant_service.get_tenant_by_domain(
+                "default",
+                skip_tenant_filter=True
+            )
+            if default_tenant:
+                default_tenant_id = default_tenant.id
+                logger.info(f"平台超级管理员登录成功: {admin.username} (ID: {admin.id}), 默认租户 ID: {default_tenant_id}")
+            else:
+                logger.warning(f"平台超级管理员登录成功: {admin.username} (ID: {admin.id}), 但未找到默认租户（domain='default'）")
+        except Exception as e:
+            logger.warning(f"获取默认租户失败: {e}")
         
         from soil.schemas.platform_superadmin import PlatformSuperAdminResponse
         
         return {
             **token_info,
-            "user": PlatformSuperAdminResponse.model_validate(admin).model_dump()
+            "user": PlatformSuperAdminResponse.model_validate(admin).model_dump(),
+            "default_tenant_id": default_tenant_id,  # 添加默认租户 ID
         }
 

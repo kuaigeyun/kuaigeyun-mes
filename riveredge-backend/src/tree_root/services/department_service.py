@@ -144,11 +144,14 @@ class DepartmentService:
                 parent_uuid = parent_dept.uuid if parent_dept else None
 
             result.append({
+                "id": dept.id,  # ⚠️ 修复：添加 id 字段，供 API 层使用
                 "uuid": dept.uuid,
                 "name": dept.name,
                 "code": dept.code,
                 "description": dept.description,
+                "parent_id": dept.parent_id,  # ⚠️ 修复：添加 parent_id 字段
                 "parent_uuid": parent_uuid,
+                "manager_id": dept.manager_id,  # ⚠️ 修复：添加 manager_id 字段
                 # 获取管理者UUID（如果有的话）
                 "manager_uuid": None,  # 暂时设为None，避免复杂查询
                 # manager_uuid = None

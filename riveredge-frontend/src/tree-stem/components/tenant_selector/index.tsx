@@ -58,8 +58,10 @@ const TenantSelector: React.FC = () => {
             placeholder={tenantData?.items?.length ? "请选择组织" : "加载中..."}
             style={{
               minWidth: 200,
-              borderRadius: '50%'  // 设置圆角为50%，使其成为圆形
+              height: 32,
             }}
+            size="small"
+            className="tenant-selector-select"
             suffixIcon={<SwapOutlined />}  // 使用切换图标替换默认的下拉箭头
             onChange={handleTenantChange}
             allowClear

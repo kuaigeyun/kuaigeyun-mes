@@ -58,14 +58,34 @@ class User(BaseModel):
     last_login = fields.DatetimeField(null=True, description="最后登录时间（可选）")
     
     # 扩展字段（账户管理模块）
-    department_id = fields.IntField(null=True, description="所属部门ID（外键，关联 Department，可选）")
-    position_id = fields.IntField(null=True, description="所属职位ID（外键，关联 Position，可选）")
     phone = fields.CharField(max_length=20, null=True, description="手机号（可选）")
     avatar = fields.CharField(max_length=255, null=True, description="头像URL（可选）")
     remark = fields.TextField(null=True, description="备注（可选）")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    # 外键关系：部门（ForeignKeyField 会自动创建 department_id 字段）
+    # 注意：使用延迟导入避免循环依赖，在运行时动态解析
+    # Tortoise ORM 会自动创建 department_id 字段并映射到数据库的 department_id 列
+    department = fields.ForeignKeyField(
+        "models.Department",  # Tortoise ORM 会自动解析为 tree_root.models.Department
+        related_name="users",
+        on_delete=fields.SET_NULL,
+        null=True,
+        description="所属部门（外键关系，自动创建 department_id 字段）"
+    )
+    
+    # 外键关系：职位（ForeignKeyField 会自动创建 position_id 字段）
+    # 注意：使用延迟导入避免循环依赖，在运行时动态解析
+    # Tortoise ORM 会自动创建 position_id 字段并映射到数据库的 position_id 列
+    position = fields.ForeignKeyField(
+        "models.Position",  # Tortoise ORM 会自动解析为 tree_root.models.Position
+        related_name="users",
+        on_delete=fields.SET_NULL,
+        null=True,
+        description="所属职位（外键关系，自动创建 position_id 字段）"
+    )
     
     # 多对多关系：用户-角色（通过 sys_user_roles 表）
     # 注意：使用延迟导入避免循环依赖，在运行时动态解析

@@ -77,14 +77,14 @@ const UserListPage: React.FC = () => {
         setDepartmentOptions(buildDeptOptions(deptResponse.items));
 
         // 加载职位选项
-        const posResponse = await getPositionList({ page_size: 1000 });
+        const posResponse = await getPositionList({ page_size: 100 });
         setPositionOptions(posResponse.items.map(pos => ({
           label: pos.name,
           value: pos.uuid,
         })));
 
         // 加载角色选项
-        const roleResponse = await getRoleList({ page_size: 1000 });
+        const roleResponse = await getRoleList({ page_size: 100 });
         setRoleOptions(roleResponse.items.map(role => ({
           label: role.name,
           value: role.uuid,
@@ -357,6 +357,7 @@ const UserListPage: React.FC = () => {
       title: '组织管理员',
       dataIndex: 'is_tenant_admin',
       width: 120,
+      hideInTable: true, // 默认不显示
       render: (_, record) => (
         <Tag color={record.is_tenant_admin ? 'gold' : 'default'}>
           {record.is_tenant_admin ? '是' : '否'}

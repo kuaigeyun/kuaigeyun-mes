@@ -35,6 +35,7 @@ import {
   LockOutlined,
   SearchOutlined,
   BellOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
@@ -200,16 +201,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }
 
-  // ⚠️ 临时禁用：移除自动重定向逻辑，让错误能够正常显示
-  // 如果不是公开页面且未登录，不自动重定向，让错误正常显示
-  // if (!isPublicPath && !currentUser && !getToken()) {
-  //   // 平台级路由重定向到平台登录页
-  //   if (location.pathname.startsWith('/platform')) {
-  //     return <Navigate to="/platform" replace />;
-  //   }
-  //   // 系统级路由重定向到用户登录页
-  //   return <Navigate to="/login" replace />;
-  // }
+  // 如果不是公开页面且未登录，自动重定向到登录页
+  if (!isPublicPath && !currentUser && !getToken()) {
+    // 平台级路由重定向到平台登录页
+    if (location.pathname.startsWith('/platform')) {
+      return <Navigate to="/platform" replace />;
+    }
+    // 系统级路由重定向到用户登录页
+    return <Navigate to="/login" replace />;
+  }
 
   return <>{children}</>;
 };
@@ -309,39 +309,98 @@ const menuConfig: MenuDataItem[] = [
     name: '系统配置',
     icon: <ControlOutlined />,
     children: [
-      // 用户管理分组标题（不可点击的分组标识）
+      // 用户管理分组标题（使用 Ant Design Menu 的 type: 'group'）
       {
-        name: '用户管理',
-        type: 'group', // 使用 Ant Design 官方的分组类型
+        key: 'user-management-group',
+        type: 'group',
+        name: '用户管理',  // ProLayout 使用 name，但 type: 'group' 会传递给 Ant Design Menu 作为 label
+        label: '用户管理',  // 同时提供 label 以确保 Ant Design Menu 能正确显示
+        className: 'riveredge-menu-group-title',  // 自定义 className，用于专门设置样式
+        children: [
+          // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
+          {
+            path: '/system/roles',
+            name: '角色管理',
+            icon: <CrownOutlined />,
+          },
+          {
+            path: '/system/permissions',
+            name: '权限管理',
+            icon: <LockOutlined />,
+          },
+          {
+            path: '/system/departments',
+            name: '部门管理',
+            icon: <ApartmentOutlined />,
+          },
+          {
+            path: '/system/positions',
+            name: '职位管理',
+            icon: <UserSwitchOutlined />,
+          },
+          {
+            path: '/system/users',
+            name: '账户管理',
+            icon: <UserOutlined />,
+          },
+        ],
       },
-      // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
+      // 核心配置分组标题
       {
-        path: '/system/roles',
-        name: '角色管理',
-        icon: <CrownOutlined />,
-      },
-      {
-        path: '/system/permissions',
-        name: '权限管理',
-        icon: <LockOutlined />,
-      },
-      {
-        path: '/system/departments',
-        name: '部门管理',
-        icon: <ApartmentOutlined />,
-      },
-      {
-        path: '/system/positions',
-        name: '职位管理',
-        icon: <UserSwitchOutlined />,
-      },
-      {
-        path: '/system/users',
-        name: '账户管理',
-        icon: <UserOutlined />,
+        key: 'core-config-group',
+        type: 'group',
+        name: '核心配置',
+        label: '核心配置',
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/applications',
+            name: '应用中心',
+            icon: <AppstoreOutlined />,
+          },
+          {
+            path: '/system/site-settings',
+            name: '站点设置',
+            icon: <SettingOutlined />,
+          },
+          {
+            path: '/system/system-parameters',
+            name: '参数设置',
+            icon: <SettingOutlined />,
+          },
+          {
+            path: '/system/data-dictionaries',
+            name: '数据字典',
+            icon: <DatabaseOutlined />,
+          },
+          {
+            path: '/system/code-rules',
+            name: '编码规则',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/integration-configs',
+            name: '集成设置',
+            icon: <ApiOutlined />,
+          },
+          {
+            path: '/system/languages',
+            name: '语言管理',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/custom-fields',
+            name: '自定义字段',
+            icon: <AppstoreOutlined />,
+          },
+          {
+            path: '/system/invitation-codes',
+            name: '邀请码管理',
+            icon: <TeamOutlined />,
+          },
+        ],
       },
       // TODO: 后续添加其他系统配置功能
-      // - 系统配置（基础配置、参数配置、字典管理）
       // - 日志管理（操作日志、登录日志、系统日志）
     ],
   },
@@ -427,6 +486,44 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  /**
+   * 为分组标题动态添加自定义 className
+   * 因为 ProLayout 不会将 className 传递给 type: 'group' 的项
+   */
+  useEffect(() => {
+    const addGroupTitleClassName = () => {
+      // 查找所有分组标题元素
+      const groupTitles = document.querySelectorAll('.ant-menu-item-group-title');
+      groupTitles.forEach((title) => {
+        // 检查是否已经添加了 className
+        if (!title.classList.contains('riveredge-menu-group-title')) {
+          title.classList.add('riveredge-menu-group-title');
+        }
+      });
+    };
+
+    // 初始添加
+    addGroupTitleClassName();
+
+    // 使用 MutationObserver 监听 DOM 变化，确保新增的分组标题也能添加 className
+    const observer = new MutationObserver(() => {
+      addGroupTitleClassName();
+    });
+
+    // 观察菜单容器
+    const menuContainer = document.querySelector('.ant-pro-sider-menu');
+    if (menuContainer) {
+      observer.observe(menuContainer, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [currentUser]); // 当用户或菜单数据变化时重新添加 className
 
 
   /**
@@ -624,31 +721,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     <>
       {/* 自定义分组标题样式 */}
       <style>{`
-        /* 全局禁用 PageContainer 的默认面包屑 */
-        .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb {
-          display: none !important;
-        }
+        /* ==================== PageContainer 相关 ==================== */
+        .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,
         .ant-pro-page-container .ant-breadcrumb {
           display: none !important;
         }
-        /* 统一设置表格列表页面的内边距 - ProTable 直接渲染的情况 */
+        .ant-pro-page-container .ant-pro-page-container-children-content {
+          padding: 0 !important;
+        }
         .page-tabs-content .ant-pro-table {
           padding: 24px !important;
         }
-        /* ProTable 按钮容器统一样式 */
         .pro-table-button-container {
           margin-bottom: 16px;
-          padding: 0 0px;
+          padding: 0;
           display: flex;
           justify-content: space-between;
           align-items: center;
-        }
-        /* 统一设置 PageContainer 的内边距 */
-        .ant-pro-page-container {
-          
-        }
-        .ant-pro-page-container .ant-pro-page-container-children-content {
-          padding: 0 !important;
         }
         /* 隐藏整个页面的垂直滚动条（但保持滚轮滚动功能） */
         .ant-pro-layout,
@@ -686,23 +775,78 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           width: 0 !important;
           height: 0 !important;
         }
-        /* 分组标题样式：小字体、灰色、不可点击 */
-        .ant-menu-item-group-title {
-          font-size: 12px !important;
-          color: #8c8c8c !important;
-          font-weight: 500 !important;
-          padding: 8px 16px !important;
+        /* ==================== 菜单分组标题样式 ==================== */
+        /* 参考：https://ant-design.antgroup.com/components/menu-cn
+         * groupTitleColor: rgba(0,0,0,0.45), groupTitleFontSize: 14, groupTitleLineHeight: 1.5714285714285714
+         */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
+          font-size: 14px !important;
+          color: rgba(0, 0, 0, 0.45) !important;
+          line-height: 1.5714285714285714 !important;
+          font-weight: normal !important;
+          padding: 12px 16px 12px 0 !important;
+          margin: 0 0 8px 0 !important;
+          border-bottom: 1px solid #f0f0f0 !important;
+          background: transparent !important;
           cursor: default !important;
           user-select: none !important;
           pointer-events: none !important;
+          text-transform: none !important;
+          letter-spacing: 0 !important;
         }
-        /* 自定义 Ant Design 分组标题样式 */
-        :global(.ant-menu-item-group-title) {
-          font-size: 12px !important;
-          color: #8c8c8c !important;
-          font-weight: 500 !important;
-          padding: 8px 16px !important;
-          margin-top: 8px !important;
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:active,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:focus,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:active,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title:focus,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:active,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:focus {
+          background: transparent !important;
+          color: rgba(0, 0, 0, 0.45) !important;
+        }
+        /* ==================== 一级菜单项 - 确保使用默认对齐 ==================== */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item {
+          padding-left: 16px !important;
+        }
+        /* ==================== 分组菜单下的子菜单项 ==================== */
+        /* 使用最高优先级的选择器覆盖内联样式 - 必须匹配所有可能的组合 */
+        /* 注意：CSS 的 !important 可以覆盖内联样式，但需要选择器足够具体 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child.ant-pro-base-menu-inline-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child.ant-pro-base-menu-inline-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected.ant-menu-item-only-child,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item-group .ant-menu-item {
+          padding-left: 24px !important;
+        }
+        /* 子菜单标题样式（ant-menu-submenu-title）- 独立设置，不影响普通菜单项 */
+        .ant-menu-submenu-title {
+          /* 子菜单标题的独立样式，与普通菜单项区分开 */
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+          padding-right: 16px !important;
+          height: 40px !important;
+          line-height: 40px !important;
+          color: rgba(0, 0, 0, 0.88) !important;
+          font-size: 14px !important;
+          font-weight: normal !important;
+        }
+        /* 子菜单标题悬浮状态 */
+        .ant-menu-submenu-title:hover {
+          background-color: rgba(0, 0, 0, 0.06) !important;
+          color: rgba(0, 0, 0, 0.88) !important;
+        }
+        /* 子菜单标题激活状态 */
+        .ant-menu-submenu-selected > .ant-menu-submenu-title {
+          color: #1677ff !important;
         }
         /* 使用自定义样式选择器针对插件分组标题 */
         .menu-group-title-plugin {
@@ -713,6 +857,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           cursor: default !important;
           user-select: none !important;
           pointer-events: none !important;
+        }
+        /* 系统菜单分组标题样式 */
+        .menu-group-title-system {
+          font-size: 12px !important;
+          color: #8c8c8c !important;
+          font-weight: 500 !important;
+          padding: 8px 16px !important;
+          cursor: default !important;
+          user-select: none !important;
+          pointer-events: none !important;
+          margin-top: 8px !important;
         }
         /* 隐藏默认的收起按钮（在侧边栏顶部） */
         .ant-pro-layout .ant-pro-sider-collapsed-button {
@@ -749,13 +904,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           width: 0 !important;
           height: 0 !important;
         }
-        /* 去掉 ant-pro-sider-footer 的底部间距 */
+        /* ==================== 菜单底部 ==================== */
         .ant-pro-sider-footer {
           margin-bottom: 10px !important;
           padding-bottom: 0 !important;
-        }
-        /* 加深顶部分割线颜色 */
-        .ant-pro-sider-footer {
           border-top-color: #d9d9d9 !important;
         }
         /* 统一顶部和标签栏的透明度和 backdrop-filter */
@@ -797,6 +949,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content {
           color: #1890ff !important;
         }
+        
         /* 二级及以下菜单激活状态 - 有蓝色背景 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected {
@@ -812,14 +965,45 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected::after {
           border-right-color: #1890ff !important;
         }
-        /* 二级及以下子菜单标题激活状态 - 有蓝色背景 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title {
-          background-color: #1890ff !important;
+        /* 二级及以下子菜单标题固定样式 - 无论是否有子菜单被选中，都保持相同样式（排除分组标题） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) {
+          background-color: transparent !important;
+          background: transparent !important;
+          color: rgba(0, 0, 0, 0.45) !important;
+          border-bottom: 1px solid #f0f0f0 !important;
+          
+          padding-top: 4px !important;
+          padding-bottom: 4px !important;
+          padding-left: 28px !important;
+          padding-right: 16px !important;
+          border-radius: 0 !important;
+          box-sizing: border-box !important;
+          min-height: 32px !important;
+          height: auto !important;
+          line-height: 1.5 !important;
+          transition: none !important;
         }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content {
-          color: #fff !important;
+        /* 二级子菜单标题 hover 和 content 样式 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title):hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content {
+          background: transparent !important;
+          color: rgba(0, 0, 0, 0.45) !important;
+        }
+        /* 确保分组标题不受子菜单激活状态影响 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
+          background: transparent !important;
+          color: rgba(0, 0, 0, 0.45) !important;
         }
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
         .ant-pro-layout .ant-pro-layout-header .ant-space {
@@ -842,18 +1026,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .ant-btn .anticon {
           color: #595959 !important;
         }
-        /* 禁用顶栏按钮的 hover 效果 */
-        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover {
-          background-color: rgba(0, 0, 0, 0.04) !important;
-          color: #595959 !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon {
-          color: #595959 !important;
-        }
+        /* 禁用顶栏按钮的 hover/active 效果 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover,
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active {
           background-color: rgba(0, 0, 0, 0.04) !important;
           color: #595959 !important;
         }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon,
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon {
           color: #595959 !important;
         }
@@ -888,13 +1067,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .ant-btn .ant-avatar {
           border: none;
         }
-        /* 租户选择器样式 */
+        /* 租户选择器样式 - 胶囊型，与搜索框一致 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper {
-          padding: 4px 8px;
-          border-radius: 4px;
+          padding: 0;
           transition: none !important;
         }
-        /* 禁用租户选择器的 hover 效果 */
+        /* 租户选择器内的选择框样式 - 胶囊型（与搜索框完全一致，使用相同的颜色值 #F5F5F5） */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector {
+          border-radius: 16px !important; /* 胶囊型圆角 */
+          border: none !important;
+          box-shadow: none !important;
+          background-color: #F5F5F5 !important;
+          background: #F5F5F5 !important;
+          height: 32px !important;
+        }
+        /* 租户选择器所有状态 - 确保颜色与搜索框完全一致（#F5F5F5） */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+          border: none !important;
+          box-shadow: none !important;
+          background: #F5F5F5 !important;
+        }
+        /* 租户选择器内部输入框样式 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
+          background: transparent !important;
+        }
+        /* 禁用租户选择器 wrapper 的 hover 效果 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
           background-color: transparent !important;
         }
@@ -918,7 +1121,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-global-header-logo {
           min-width: 167px !important;
         }
-        /* 面包屑样式 - 顶栏左侧，在 ant-pro-layout-container 内 */
+        /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
           margin-left: 16px;
@@ -961,8 +1164,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           display: inline-flex !important;
         }
         /* 面包屑前面的小竖线 */
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before,
-        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb::before {
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before {
           content: '';
           position: absolute;
           left: 0;
@@ -972,12 +1174,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 16px;
           background-color: #d9d9d9;
         }
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a,
-        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb a {
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
           color: #595959;
         }
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a:hover,
-        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb a:hover {
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a:hover {
           color: #1890ff;
         }
       `}</style>
@@ -1203,13 +1403,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menu={{
         request: async () => filteredMenuData,
       }}
+      menuProps={{
+        mode: 'inline',
+      }}
       onMenuHeaderClick={() => navigate('/system/dashboard')}
       menuItemRender={(item, dom) => {
         // 如果没有 path 且有特定的 className，说明是分组标题，使用自定义样式渲染
-        if (!item.path && item.className === 'menu-group-title-plugin') {
+        if (!item.path && (item.className === 'menu-group-title-plugin' || item.className === 'menu-group-title-system')) {
           return (
             <div
-              className="menu-group-title-plugin"
+              className={item.className}
               style={{
                 fontSize: '12px',
                 color: '#8c8c8c',
@@ -1218,13 +1421,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 cursor: 'default',
                 userSelect: 'none',
                 pointerEvents: 'none',
+                marginTop: item.className === 'menu-group-title-system' ? '8px' : '0',
               }}
             >
               {item.name}
             </div>
           );
         }
-        // 使用 Ant Design 官方的 type: 'group' 处理分组标题，不需要自定义渲染
+        // 普通菜单项正常渲染
+        // 如果是分组菜单下的子菜单项，通过 ref 设置正确的 padding-left
         return (
           <div
             onClick={() => {
@@ -1233,6 +1438,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }}
             style={{ cursor: item.path ? 'pointer' : 'default' }}
+            ref={(el) => {
+              if (el) {
+                // 使用 setTimeout 确保 DOM 已渲染
+                setTimeout(() => {
+                  // 查找内部的 li 元素（Ant Design Menu 渲染的）
+                  const liElement = el.querySelector('li.ant-menu-item') as HTMLElement;
+                  if (liElement) {
+                    // 检查是否在分组菜单下（通过查找父元素中的 .ant-menu-item-group）
+                    const menuGroup = el.closest('.ant-menu-item-group');
+                    if (menuGroup && liElement.style.paddingLeft === '48px') {
+                      // 设置正确的 padding-left，覆盖内联样式
+                      liElement.style.paddingLeft = '24px';
+                    }
+                  }
+                }, 0);
+              }
+            }}
           >
             {dom}
           </div>

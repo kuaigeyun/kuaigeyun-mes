@@ -24,10 +24,12 @@ class UserCreate(SoilUserCreate):
         department_uuid: 所属部门UUID（可选）
         position_uuid: 所属职位UUID（可选）
         role_uuids: 角色UUID列表（可选）
+        phone: 手机号（可选）
     """
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选）")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号（可选）")
 
 
 class UserUpdate(SoilUserUpdate):
@@ -88,6 +90,7 @@ class UserListItem(BaseModel):
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（用于显示）")
     position: Optional[dict] = Field(None, description="职位信息（如果关联）")
     roles: Optional[List[dict]] = Field(None, description="角色列表（如果关联）")
+    last_login: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)

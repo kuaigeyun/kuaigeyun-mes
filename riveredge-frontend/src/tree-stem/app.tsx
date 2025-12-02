@@ -9,18 +9,46 @@
 
 import React, { useEffect } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
-import { App as AntdApp, Spin, ConfigProvider, theme } from 'antd';
+import { App as AntdApp, Spin, ConfigProvider, theme, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
-import { getToken, clearAuth } from './utils/auth';
+import { getToken, clearAuth, getUserInfo } from './utils/auth';
 import { useGlobalStore } from './stores';
 // 使用 maintree 中的路由配置
 import AppRoutes from '../maintree/routes';
+
+// 将 Ant Design message 实例注入到全局，供 api.ts 使用
+if (typeof window !== 'undefined') {
+  window.__ANTD_MESSAGE__ = message;
+}
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
+
+  // 初始化时，如果有 token 但没有 currentUser，尝试从 localStorage 恢复用户信息
+  React.useEffect(() => {
+    const token = getToken();
+    const savedUserInfo = getUserInfo();
+    
+    // 如果有 token 或保存的用户信息，但 currentUser 为空，尝试恢复
+    if ((token || savedUserInfo) && !currentUser) {
+      if (savedUserInfo) {
+        // 从 localStorage 恢复用户信息
+        const restoredUser = {
+          id: savedUserInfo.id || 1,
+          username: savedUserInfo.username || 'admin',
+          email: savedUserInfo.email,
+          full_name: savedUserInfo.full_name,
+          is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
+          is_tenant_admin: savedUserInfo.is_tenant_admin || false,
+          tenant_id: savedUserInfo.tenant_id,
+        };
+        setCurrentUser(restoredUser);
+      }
+    }
+  }, []); // 只在组件挂载时执行一次
 
   const { data: userData, isLoading } = useQuery({
     queryKey: ['currentUser'],
@@ -31,10 +59,25 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setCurrentUser(data);
     },
     onError: (error) => {
-      // 临时：后端未对接时，不清理认证信息，允许继续访问
-      console.warn('⚠️ 获取用户信息失败（后端未对接）:', error);
-      // 如果有 token，使用模拟用户数据
-      if (getToken()) {
+      // 如果有 token，尝试从 localStorage 恢复用户信息
+      const token = getToken();
+      const savedUserInfo = getUserInfo();
+      
+      if (token && savedUserInfo) {
+        // 从 localStorage 恢复用户信息，允许继续访问
+        const restoredUser = {
+          id: savedUserInfo.id || 1,
+          username: savedUserInfo.username || 'admin',
+          email: savedUserInfo.email,
+          full_name: savedUserInfo.full_name,
+          is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
+          is_tenant_admin: savedUserInfo.is_tenant_admin || false,
+          tenant_id: savedUserInfo.tenant_id,
+        };
+        setCurrentUser(restoredUser);
+        console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
+      } else if (token) {
+        // 有 token 但没有保存的用户信息，使用默认值
         setCurrentUser({
           id: 1,
           username: 'admin',
@@ -43,7 +86,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           is_tenant_admin: true,
           tenant_id: 1,
         });
+        console.warn('⚠️ 获取用户信息失败，使用默认值:', error);
       } else {
+        // 没有 token，清理认证信息
         clearAuth();
         setCurrentUser(undefined);
       }
@@ -60,23 +105,12 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
 
+  // 检查是否有 token（这是判断是否登录的唯一标准）
+  const token = getToken();
+  const hasToken = !!token;
+
   // 如果正在加载，显示加载状态
   if (loading || isLoading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
-      }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
-  // ⚠️ 关键修复：如果有 token 但 currentUser 不存在，且正在获取用户信息，等待加载完成
-  // 避免在数据加载过程中误判为未登录
-  if (getToken() && !currentUser) {
     return (
       <div style={{
         display: 'flex',
@@ -101,16 +135,16 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }
 
-  // ⚠️ 临时禁用：移除自动重定向逻辑，让错误能够正常显示
-  // 如果不是公开页面且未登录，不自动重定向，让错误正常显示
-  // if (!isPublicPath && !currentUser && !getToken()) {
-  //   // 平台级路由重定向到平台登录页
-  //   if (location.pathname.startsWith('/platform')) {
-  //     return <Navigate to="/platform" replace />;
-  //   }
-  //   // 系统级路由重定向到用户登录页
-  //   return <Navigate to="/login" replace />;
-  // }
+  // ⚠️ 核心逻辑：只有没有 token 时才跳转到登录页
+  // 有 token = 已登录，允许访问所有页面（包括功能菜单）
+  if (!isPublicPath && !hasToken) {
+    // 平台级路由重定向到平台登录页
+    if (location.pathname.startsWith('/platform')) {
+      return <Navigate to="/platform" replace />;
+    }
+    // 系统级路由重定向到用户登录页
+    return <Navigate to="/login" replace />;
+  }
 
   return <>{children}</>;
 };
