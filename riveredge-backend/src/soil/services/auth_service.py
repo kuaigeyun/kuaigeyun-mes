@@ -6,6 +6,9 @@
 
 from fastapi import HTTPException, status
 from loguru import logger
+from starlette.requests import Request
+from typing import Optional
+import asyncio
 
 from soil.models.user import User
 from soil.models.tenant import Tenant, TenantStatus, TenantPlan
@@ -99,7 +102,8 @@ class AuthService:
     
     async def login(
         self,
-        data: LoginRequest
+        data: LoginRequest,
+        request: Request = None
     ) -> dict:
         """
         用户登录
@@ -154,6 +158,16 @@ class AuthService:
                 user = await User.get_or_none(username=data.username)
         
         if not user:
+            # 记录登录失败日志（用户不存在）
+            if request:
+                asyncio.create_task(self._log_login_attempt(
+                    tenant_id=None,
+                    user_id=None,
+                    username=data.username,
+                    login_status="failed",
+                    failure_reason="用户名或密码错误",
+                    request=request
+                ))
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
@@ -161,6 +175,16 @@ class AuthService:
         
         # 验证密码
         if not verify_password(data.password, user.password_hash):
+            # 记录登录失败日志（密码错误）
+            if request:
+                asyncio.create_task(self._log_login_attempt(
+                    tenant_id=user.tenant_id,
+                    user_id=user.id,
+                    username=data.username,
+                    login_status="failed",
+                    failure_reason="用户名或密码错误",
+                    request=request
+                ))
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误"
@@ -168,6 +192,16 @@ class AuthService:
         
         # 检查用户是否激活
         if not user.is_active:
+            # 记录登录失败日志（用户未激活）
+            if request:
+                asyncio.create_task(self._log_login_attempt(
+                    tenant_id=user.tenant_id,
+                    user_id=user.id,
+                    username=data.username,
+                    login_status="failed",
+                    failure_reason="用户未激活",
+                    request=request
+                ))
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="用户未激活"
@@ -180,6 +214,16 @@ class AuthService:
         # 平台管理可以访问任何组织，不需要验证
         if data.tenant_id is not None and not is_platform_admin:
             if user.tenant_id != data.tenant_id:
+                # 记录登录失败日志（用户不属于指定组织）
+                if request:
+                    asyncio.create_task(self._log_login_attempt(
+                        tenant_id=user.tenant_id,
+                        user_id=user.id,
+                        username=data.username,
+                        login_status="failed",
+                        failure_reason="用户不属于指定的组织",
+                        request=request
+                    ))
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="用户不属于指定的组织"
@@ -232,6 +276,7 @@ class AuthService:
                 user_tenants_list = [
                     {
                         "id": tenant.id,
+                        "uuid": str(tenant.uuid),
                         "name": tenant.name,
                         "domain": tenant.domain,
                         "status": tenant.status.value,
@@ -245,12 +290,13 @@ class AuthService:
         # 如果没有组织列表，使用当前组织作为默认组织
         default_tenant_id = final_tenant_id
         
-        return {
+        result = {
             "access_token": access_token,
             "token_type": "bearer",
             "expires_in": expires_in,
             "user": {
                 "id": user.id,
+                "uuid": str(user.uuid),
                 "username": user.username,
                 "email": user.email,
                 "full_name": user.full_name,
@@ -262,6 +308,36 @@ class AuthService:
             "default_tenant_id": default_tenant_id,
             "requires_tenant_selection": requires_tenant_selection,
         }
+        
+        # 记录登录成功日志（异步执行，不阻塞响应）
+        if request:
+            asyncio.create_task(self._log_login_attempt(
+                tenant_id=final_tenant_id,
+                user_id=user.id,
+                username=data.username,
+                login_status="success",
+                failure_reason=None,
+                request=request
+            ))
+            
+            # 更新用户活动时间（记录登录时间和登录IP）
+            try:
+                from tree_root.services.online_user_service import OnlineUserService
+                from datetime import datetime
+                login_ip = request.client.host if request.client else None
+                asyncio.create_task(
+                    OnlineUserService.update_user_activity(
+                        tenant_id=final_tenant_id,
+                        user_id=user.id,
+                        login_ip=login_ip,
+                        login_time=datetime.now(),
+                    )
+                )
+            except Exception:
+                # 更新活动时间失败不影响登录，静默处理
+                pass
+        
+        return result
     
     async def refresh_token(
         self,
@@ -407,6 +483,7 @@ class AuthService:
                 "expires_in": expires_in,
                 "user": {
                     "id": guest_user.id,
+                    "uuid": str(guest_user.uuid),
                     "username": guest_user.username,
                     "email": guest_user.email,
                     "full_name": guest_user.full_name,

@@ -36,6 +36,12 @@ import {
   SearchOutlined,
   BellOutlined,
   ApiOutlined,
+  CheckCircleOutlined,
+  CodeOutlined,
+  PrinterOutlined,
+  HistoryOutlined,
+  LoginOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
@@ -359,6 +365,11 @@ const menuConfig: MenuDataItem[] = [
             icon: <AppstoreOutlined />,
           },
           {
+            path: '/system/menus',
+            name: '菜单管理',
+            icon: <UnorderedListOutlined />,
+          },
+          {
             path: '/system/site-settings',
             name: '站点设置',
             icon: <SettingOutlined />,
@@ -400,8 +411,153 @@ const menuConfig: MenuDataItem[] = [
           },
         ],
       },
-      // TODO: 后续添加其他系统配置功能
-      // - 日志管理（操作日志、登录日志、系统日志）
+      // 数据中心分组标题
+      {
+        key: 'data-center-group',
+        type: 'group',
+        name: '数据中心',
+        label: '数据中心',
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/files',
+            name: '文件管理',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/apis',
+            name: '接口管理',
+            icon: <ApiOutlined />,
+          },
+          {
+            path: '/system/data-sources',
+            name: '数据源管理',
+            icon: <DatabaseOutlined />,
+          },
+          {
+            path: '/system/datasets',
+            name: '数据集管理',
+            icon: <DatabaseOutlined />,
+          },
+        ],
+      },
+      // 流程管理分组标题
+      {
+        key: 'process-management-group',
+        type: 'group',
+        name: '流程管理',
+        label: '流程管理',
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/inngest',
+            name: 'Inngest服务',
+            icon: <MonitorOutlined />,
+          },
+          {
+            path: '/system/messages/config',
+            name: '消息配置',
+            icon: <BellOutlined />,
+          },
+          {
+            path: '/system/messages/template',
+            name: '消息模板',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/scheduled-tasks',
+            name: '定时任务',
+            icon: <ControlOutlined />,
+          },
+          {
+            path: '/system/approval-processes',
+            name: '审批流程',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/approval-instances',
+            name: '审批实例',
+            icon: <CheckCircleOutlined />,
+          },
+          {
+            path: '/system/electronic-records',
+            name: '电子记录',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/scripts',
+            name: '脚本管理',
+            icon: <CodeOutlined />,
+          },
+          {
+            path: '/system/print-templates',
+            name: '打印模板',
+            icon: <FileTextOutlined />,
+          },
+          {
+            path: '/system/print-devices',
+            name: '打印设备',
+            icon: <PrinterOutlined />,
+          },
+        ],
+      },
+      {
+        path: '/personal',
+        name: '个人中心',
+        icon: <UserOutlined />,
+        children: [
+          {
+            path: '/personal/profile',
+            name: '个人资料',
+            icon: <UserOutlined />,
+          },
+          {
+            path: '/personal/preferences',
+            name: '偏好设置',
+            icon: <SettingOutlined />,
+          },
+          {
+            path: '/personal/messages',
+            name: '我的消息',
+            icon: <BellOutlined />,
+          },
+          {
+            path: '/personal/tasks',
+            name: '我的任务',
+            icon: <FileTextOutlined />,
+          },
+        ],
+      },
+      // 监控运维分组标题
+      {
+        key: 'monitoring-ops-group',
+        type: 'group',
+        name: '监控运维',
+        label: '监控运维',
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/operation-logs',
+            name: '操作日志',
+            icon: <HistoryOutlined />,
+          },
+          {
+            path: '/system/login-logs',
+            name: '登录日志',
+            icon: <LoginOutlined />,
+          },
+          {
+            path: '/system/online-users',
+            name: '在线用户',
+            icon: <TeamOutlined />,
+          },
+          {
+            path: '/system/data-backups',
+            name: '数据备份',
+            icon: <DatabaseOutlined />,
+          },
+        ],
+      },
     ],
   },
 
@@ -729,8 +885,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-page-container .ant-pro-page-container-children-content {
           padding: 0 !important;
         }
+        /* 全局页面边距：24px */
         .page-tabs-content .ant-pro-table {
           padding: 24px !important;
+        }
+        /* 文件管理页面无边距（覆盖全局规则） */
+        .page-tabs-content .file-management-page .ant-pro-table {
+          padding: 0 !important;
         }
         .pro-table-button-container {
           margin-bottom: 16px;
@@ -1408,6 +1569,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }}
       onMenuHeaderClick={() => navigate('/system/dashboard')}
       menuItemRender={(item, dom) => {
+        // 处理外部链接
+        if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
+          return (
+            <a href={item.path} target={item.target || '_blank'} rel="noopener noreferrer">
+              {dom}
+            </a>
+          );
+        }
         // 如果没有 path 且有特定的 className，说明是分组标题，使用自定义样式渲染
         if (!item.path && (item.className === 'menu-group-title-plugin' || item.className === 'menu-group-title-system')) {
           return (

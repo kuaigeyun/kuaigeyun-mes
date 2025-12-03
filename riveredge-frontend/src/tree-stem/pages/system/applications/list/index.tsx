@@ -803,7 +803,7 @@ const ApplicationListPage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px 24px 0 24px' }}>
+    <div>
       <UniTable<Application>
         actionRef={actionRef}
         columns={columns}

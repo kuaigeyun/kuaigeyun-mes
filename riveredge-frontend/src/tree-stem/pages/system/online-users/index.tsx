@@ -1,0 +1,313 @@
+/**
+ * 在线用户页面
+ * 
+ * 用于查看和管理系统在线用户。
+ * 支持查看在线用户列表、统计、强制下线等功能。
+ */
+
+import React, { useState, useEffect } from 'react';
+import { ProTable, ProColumns } from '@ant-design/pro-components';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button } from 'antd';
+import { EyeOutlined, BarChartOutlined, LogoutOutlined } from '@ant-design/icons';
+import {
+  getOnlineUsers,
+  getOnlineUserStats,
+  forceLogout,
+  OnlineUser,
+  OnlineUserListResponse,
+  OnlineUserStats,
+} from '../../../services/onlineUser';
+import { useGlobalStore } from '../../../stores';
+import dayjs from 'dayjs';
+
+/**
+ * 在线用户页面组件
+ */
+const OnlineUsersPage: React.FC = () => {
+  const { message: messageApi } = App.useApp();
+  const { currentUser } = useGlobalStore();
+  const [stats, setStats] = useState<OnlineUserStats | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [currentUserInfo, setCurrentUserInfo] = useState<OnlineUser | null>(null);
+
+  /**
+   * 加载统计信息
+   */
+  const loadStats = React.useCallback(async () => {
+    // 检查 currentUser，确保在调用 API 前用户已登录
+    if (!currentUser) {
+      return;
+    }
+    
+    try {
+      const data = await getOnlineUserStats();
+      setStats(data);
+    } catch (error: any) {
+      // 如果是 401 错误，不显示错误消息（可能是用户未登录）
+      if (error?.response?.status !== 401) {
+        messageApi.error(error.message || '加载统计信息失败');
+      }
+    }
+  }, [currentUser, messageApi]);
+
+  useEffect(() => {
+    // 只有在用户已登录（currentUser 存在）时才加载统计数据
+    if (currentUser) {
+      loadStats();
+    }
+  }, [currentUser, loadStats]);
+
+  /**
+   * 查看用户详情
+   */
+  const handleViewDetail = (record: OnlineUser) => {
+    setCurrentUserInfo(record);
+    setDetailModalVisible(true);
+  };
+
+  /**
+   * 强制用户下线
+   */
+  const handleForceLogout = async (record: OnlineUser) => {
+    try {
+      await forceLogout(record.user_id);
+      messageApi.success('强制下线成功');
+      // 刷新列表和统计
+      loadStats();
+      // 触发表格刷新（通过 key 或手动刷新）
+      window.location.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '强制下线失败');
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns: ProColumns<OnlineUser>[] = [
+    {
+      title: '用户名',
+      dataIndex: 'username',
+      key: 'username',
+      ellipsis: true,
+      width: 150,
+    },
+    {
+      title: '用户全名',
+      dataIndex: 'full_name',
+      key: 'full_name',
+      ellipsis: true,
+      search: false,
+      width: 150,
+    },
+    {
+      title: '邮箱',
+      dataIndex: 'email',
+      key: 'email',
+      ellipsis: true,
+      search: false,
+      width: 200,
+    },
+    {
+      title: '登录IP',
+      dataIndex: 'login_ip',
+      key: 'login_ip',
+      ellipsis: true,
+      width: 120,
+    },
+    {
+      title: '登录时间',
+      dataIndex: 'login_time',
+      key: 'login_time',
+      valueType: 'dateTime',
+      sorter: true,
+      search: false,
+      render: (_: any, record: OnlineUser) =>
+        record.login_time ? dayjs(record.login_time).format('YYYY-MM-DD HH:mm:ss') : '-',
+      width: 180,
+    },
+    {
+      title: '最后活动时间',
+      dataIndex: 'last_activity_time',
+      key: 'last_activity_time',
+      valueType: 'dateTime',
+      sorter: true,
+      search: false,
+      render: (_: any, record: OnlineUser) =>
+        record.last_activity_time ? dayjs(record.last_activity_time).format('YYYY-MM-DD HH:mm:ss') : '-',
+      width: 180,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      hideInSearch: true,
+      width: 150,
+      render: (_: any, record: OnlineUser) => (
+        <Space>
+          <a onClick={() => handleViewDetail(record)}>
+            <EyeOutlined /> 查看
+          </a>
+          <Popconfirm
+            title="确定要强制该用户下线吗？"
+            onConfirm={() => handleForceLogout(record)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <a style={{ color: '#ff4d4f' }}>
+              <LogoutOutlined /> 强制下线
+            </a>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ padding: '24px' }}>
+      {/* 统计卡片 */}
+      {stats && (
+        <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
+          <Card style={{ flex: 1 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
+                {stats.total}
+              </div>
+              <div style={{ color: '#666', marginTop: '8px' }}>总在线用户数</div>
+            </div>
+          </Card>
+          <Card style={{ flex: 1 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
+                {stats.active}
+              </div>
+              <div style={{ color: '#666', marginTop: '8px' }}>活跃用户数（最近5分钟）</div>
+            </div>
+          </Card>
+          {Object.keys(stats.by_tenant).length > 0 && (
+            <Card style={{ flex: 1 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#faad14', marginBottom: '8px' }}>
+                  按组织统计
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                  {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
+                    <Tag key={tenantId} color="blue">
+                      组织 {tenantId}: {count}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* 在线用户列表 */}
+      <Card>
+        <ProTable<OnlineUser>
+          columns={columns}
+          manualRequest={!currentUser}
+          request={async (params, sorter, filter) => {
+            // 检查 currentUser，如果用户未登录则直接返回空数据
+            if (!currentUser) {
+              return {
+                data: [],
+                success: true,
+                total: 0,
+              };
+            }
+            
+            try {
+              const response = await getOnlineUsers();
+              return {
+                data: response.items,
+                success: true,
+                total: response.total,
+              };
+            } catch (error: any) {
+              // 如果是 401 错误，返回空数据而不是抛出错误
+              if (error?.response?.status === 401) {
+                return {
+                  data: [],
+                  success: true,
+                  total: 0,
+                };
+              }
+              messageApi.error(error.message || '加载在线用户列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="user_id"
+          search={{
+            labelWidth: 'auto',
+            defaultCollapsed: false,
+            filterType: 'query',
+          }}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+          }}
+          toolBarRender={() => [
+            <Button key="refresh" onClick={loadStats}>
+              <BarChartOutlined /> 刷新统计
+            </Button>,
+          ]}
+          headerTitle="在线用户"
+        />
+      </Card>
+
+      {/* 用户详情 Modal */}
+      <Modal
+        title="在线用户详情"
+        open={detailModalVisible}
+        onCancel={() => {
+          setDetailModalVisible(false);
+          setCurrentUserInfo(null);
+        }}
+        footer={null}
+        width={800}
+      >
+        {currentUserInfo && (
+          <Descriptions column={1} bordered>
+            <Descriptions.Item label="用户ID">
+              {currentUserInfo.user_id}
+            </Descriptions.Item>
+            <Descriptions.Item label="用户名">
+              {currentUserInfo.username}
+            </Descriptions.Item>
+            <Descriptions.Item label="用户全名">
+              {currentUserInfo.full_name || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="邮箱">
+              {currentUserInfo.email || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="组织ID">
+              {currentUserInfo.tenant_id}
+            </Descriptions.Item>
+            <Descriptions.Item label="登录IP">
+              {currentUserInfo.login_ip || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="登录时间">
+              {currentUserInfo.login_time
+                ? dayjs(currentUserInfo.login_time).format('YYYY-MM-DD HH:mm:ss')
+                : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="最后活动时间">
+              {currentUserInfo.last_activity_time
+                ? dayjs(currentUserInfo.last_activity_time).format('YYYY-MM-DD HH:mm:ss')
+                : '-'}
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default OnlineUsersPage;
+

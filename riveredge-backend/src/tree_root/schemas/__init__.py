@@ -72,12 +72,190 @@ from .application import (
     ApplicationResponse,
 )
 
+# 菜单管理 Schema
+from .menu import (
+    MenuCreate,
+    MenuUpdate,
+    MenuResponse,
+    MenuTreeResponse,
+    MenuListResponse,
+)
+
 # 集成设置 Schema
 from .integration_config import (
     IntegrationConfigCreate,
     IntegrationConfigUpdate,
     IntegrationConfigResponse,
     TestConnectionResponse,
+)
+
+# 文件管理 Schema
+from .file import (
+    FileCreate,
+    FileUpdate,
+    FileResponse,
+    FileListResponse,
+    FilePreviewResponse,
+    FileUploadResponse,
+)
+
+# 接口管理 Schema
+from .api import (
+    APICreate,
+    APIUpdate,
+    APIResponse,
+    APITestRequest,
+    APITestResponse,
+)
+
+# 数据源管理 Schema
+from .data_source import (
+    DataSourceCreate,
+    DataSourceUpdate,
+    DataSourceResponse,
+    TestConnectionResponse,
+)
+
+# 数据集管理 Schema
+from .dataset import (
+    DatasetCreate,
+    DatasetUpdate,
+    DatasetResponse,
+    ExecuteQueryRequest,
+    ExecuteQueryResponse,
+)
+
+# 消息管理 Schema
+from .message_config import (
+    MessageConfigCreate,
+    MessageConfigUpdate,
+    MessageConfigResponse,
+)
+from .message_template import (
+    MessageTemplateCreate,
+    MessageTemplateUpdate,
+    MessageTemplateResponse,
+    SendMessageRequest,
+    SendMessageResponse,
+)
+from .message_log import MessageLogResponse
+
+# 定时任务 Schema
+from .scheduled_task import (
+    ScheduledTaskCreate,
+    ScheduledTaskUpdate,
+    ScheduledTaskResponse,
+)
+
+# 审批流程 Schema
+from .approval_process import (
+    ApprovalProcessCreate,
+    ApprovalProcessUpdate,
+    ApprovalProcessResponse,
+)
+from .approval_instance import (
+    ApprovalInstanceCreate,
+    ApprovalInstanceUpdate,
+    ApprovalInstanceAction,
+    ApprovalInstanceResponse,
+)
+
+# 电子记录 Schema
+from .electronic_record import (
+    ElectronicRecordCreate,
+    ElectronicRecordUpdate,
+    ElectronicRecordSignRequest,
+    ElectronicRecordArchiveRequest,
+    ElectronicRecordResponse,
+)
+
+# 脚本管理 Schema
+from .script import (
+    ScriptCreate,
+    ScriptUpdate,
+    ScriptExecuteRequest,
+    ScriptResponse,
+    ScriptExecuteResponse,
+)
+
+# 打印模板 Schema
+from .print_template import (
+    PrintTemplateCreate,
+    PrintTemplateUpdate,
+    PrintTemplateRenderRequest,
+    PrintTemplateResponse,
+    PrintTemplateRenderResponse,
+)
+
+# 打印设备 Schema
+from .print_device import (
+    PrintDeviceCreate,
+    PrintDeviceUpdate,
+    PrintDeviceTestRequest,
+    PrintDevicePrintRequest,
+    PrintDeviceResponse,
+    PrintDeviceTestResponse,
+    PrintDevicePrintResponse,
+)
+
+# 个人资料 Schema
+from .user_profile import (
+    UserProfileUpdate,
+    UserProfileResponse,
+)
+
+# 用户偏好 Schema
+from .user_preference import (
+    UserPreferenceUpdate,
+    UserPreferenceResponse,
+)
+
+# 用户消息 Schema
+from .user_message import (
+    UserMessageResponse,
+    UserMessageListResponse,
+    UserMessageStatsResponse,
+    UserMessageMarkReadRequest,
+)
+
+# 用户任务 Schema
+from .user_task import (
+    UserTaskResponse,
+    UserTaskListResponse,
+    UserTaskStatsResponse,
+    UserTaskActionRequest,
+)
+
+# 操作日志 Schema
+from .operation_log import (
+    OperationLogResponse,
+    OperationLogListResponse,
+    OperationLogStatsResponse,
+)
+
+# 登录日志 Schema
+from .login_log import (
+    LoginLogResponse,
+    LoginLogListResponse,
+    LoginLogStatsResponse,
+    LoginLogCreate,
+)
+
+# 在线用户 Schema
+from .online_user import (
+    OnlineUserResponse,
+    OnlineUserListResponse,
+    OnlineUserStatisticsResponse,
+)
+
+# 数据备份 Schema
+from .data_backup import (
+    DataBackupCreate,
+    DataBackupUpdate,
+    DataBackupResponse,
+    DataBackupListResponse,
+    DataBackupRestoreRequest,
+    DataBackupRestoreResponse,
 )
 
 __all__ = [
@@ -147,10 +325,124 @@ __all__ = [
     "ApplicationCreate",
     "ApplicationUpdate",
     "ApplicationResponse",
+    # 菜单管理 Schema
+    "MenuCreate",
+    "MenuUpdate",
+    "MenuResponse",
+    "MenuTreeResponse",
+    "MenuListResponse",
     # 集成设置 Schema
     "IntegrationConfigCreate",
     "IntegrationConfigUpdate",
     "IntegrationConfigResponse",
     "TestConnectionResponse",
+    # 文件管理 Schema
+    "FileCreate",
+    "FileUpdate",
+    "FileResponse",
+    "FileListResponse",
+    "FilePreviewResponse",
+    "FileUploadResponse",
+    # 接口管理 Schema
+    "APICreate",
+    "APIUpdate",
+    "APIResponse",
+    "APITestRequest",
+    "APITestResponse",
+    # 数据源管理 Schema
+    "DataSourceCreate",
+    "DataSourceUpdate",
+    "DataSourceResponse",
+    "TestConnectionResponse",
+    # 数据集管理 Schema
+    "DatasetCreate",
+    "DatasetUpdate",
+    "DatasetResponse",
+    "ExecuteQueryRequest",
+    "ExecuteQueryResponse",
+    # 消息管理 Schema
+    "MessageConfigCreate",
+    "MessageConfigUpdate",
+    "MessageConfigResponse",
+    "MessageTemplateCreate",
+    "MessageTemplateUpdate",
+    "MessageTemplateResponse",
+    "SendMessageRequest",
+    "SendMessageResponse",
+    "MessageLogResponse",
+    # 定时任务 Schema
+    "ScheduledTaskCreate",
+    "ScheduledTaskUpdate",
+    "ScheduledTaskResponse",
+    # 审批流程 Schema
+    "ApprovalProcessCreate",
+    "ApprovalProcessUpdate",
+    "ApprovalProcessResponse",
+    "ApprovalInstanceCreate",
+    "ApprovalInstanceUpdate",
+    "ApprovalInstanceAction",
+    "ApprovalInstanceResponse",
+    # 电子记录 Schema
+    "ElectronicRecordCreate",
+    "ElectronicRecordUpdate",
+    "ElectronicRecordSignRequest",
+    "ElectronicRecordArchiveRequest",
+    "ElectronicRecordResponse",
+    # 脚本管理 Schema
+    "ScriptCreate",
+    "ScriptUpdate",
+    "ScriptExecuteRequest",
+    "ScriptResponse",
+    "ScriptExecuteResponse",
+    # 打印模板 Schema
+    "PrintTemplateCreate",
+    "PrintTemplateUpdate",
+    "PrintTemplateRenderRequest",
+    "PrintTemplateResponse",
+    "PrintTemplateRenderResponse",
+    # 打印设备 Schema
+    "PrintDeviceCreate",
+    "PrintDeviceUpdate",
+    "PrintDeviceTestRequest",
+    "PrintDevicePrintRequest",
+    "PrintDeviceResponse",
+    "PrintDeviceTestResponse",
+    "PrintDevicePrintResponse",
+    # 个人资料 Schema
+    "UserProfileUpdate",
+    "UserProfileResponse",
+    # 用户偏好 Schema
+    "UserPreferenceUpdate",
+    "UserPreferenceResponse",
+    # 用户消息 Schema
+    "UserMessageResponse",
+    "UserMessageListResponse",
+    "UserMessageStatsResponse",
+    "UserMessageMarkReadRequest",
+    # 用户任务 Schema
+    "UserTaskResponse",
+    "UserTaskListResponse",
+    "UserTaskStatsResponse",
+    "UserTaskActionRequest",
+    # 操作日志 Schema
+    "OperationLogResponse",
+    "OperationLogListResponse",
+    "OperationLogStatsResponse",
+    # 登录日志 Schema
+    "LoginLogResponse",
+    "LoginLogListResponse",
+    "LoginLogStatsResponse",
+    "LoginLogCreate",
+    # 在线用户 Schema
+    "OnlineUserResponse",
+    "OnlineUserListResponse",
+    "OnlineUserStatisticsResponse",
+    # 数据备份 Schema
+    "DataBackupCreate",
+    "DataBackupUpdate",
+    "DataBackupResponse",
+    "DataBackupListResponse",
+    "DataBackupRestoreRequest",
+    "DataBackupRestoreResponse",
 ]
 
