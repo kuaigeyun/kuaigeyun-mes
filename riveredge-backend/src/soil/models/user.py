@@ -59,8 +59,12 @@ class User(BaseModel):
     
     # 扩展字段（账户管理模块）
     phone = fields.CharField(max_length=20, null=True, description="手机号（可选）")
-    avatar = fields.CharField(max_length=255, null=True, description="头像URL（可选）")
+    avatar = fields.CharField(max_length=36, null=True, description="头像文件UUID（关联文件管理，可选）")
     remark = fields.TextField(null=True, description="备注（可选）")
+    
+    # 个人资料字段（个人中心模块）
+    bio = fields.TextField(null=True, description="个人简介（可选）")
+    contact_info = fields.JSONField(null=True, description="联系方式（JSON格式，可选）")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

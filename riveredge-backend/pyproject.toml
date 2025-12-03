@@ -26,6 +26,7 @@ dependencies = [
     "psutil==5.9.8",  # 保持当前版本，需要谨慎升级
     "python-dotenv>=1.0.0",
     "pypinyin>=0.51.0",
+    "aiofiles>=23.2.1",  # 第三阶段：文件管理 - 异步文件操作库
 ]
 
 [project.optional-dependencies]

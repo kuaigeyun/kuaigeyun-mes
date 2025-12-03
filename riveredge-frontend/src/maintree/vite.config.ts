@@ -71,7 +71,7 @@ export default defineConfig({
     // Windows 兼容性：在 Windows 上使用 127.0.0.1 而不是 0.0.0.0 或 localhost
     // localhost 在 Windows 上可能解析为 IPv6 的 ::1，导致 EACCES 权限错误
     host: platform() === 'win32' ? '127.0.0.1' : '0.0.0.0', // Windows 使用 IPv4，其他系统允许外部访问
-    port: 8000, // 主入口端口
+    port: 3000, // 主入口端口（8000 在 Windows 保留端口范围内，改用 3000）
     strictPort: false, // 如果端口被占用，自动寻找下一个可用端口
     open: false, // 不自动打开浏览器
     cors: true, // 启用CORS

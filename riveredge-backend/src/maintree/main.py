@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from datetime import datetime
 
 # 添加src目录到Python路径
 src_path = Path(__file__).parent.parent
@@ -26,6 +27,7 @@ from src.soil.api.packages.packages_config import router as packages_config_rout
 from src.soil.api.packages.packages import router as packages_router
 from src.soil.api.platform_superadmin.platform_superadmin import router as platform_superadmin_router
 from src.soil.api.platform_superadmin.auth import router as platform_superadmin_auth_router
+from src.soil.api.auth.auth import router as auth_router
 from src.soil.api.monitoring.statistics import router as monitoring_statistics_router
 from src.soil.api.saved_searches.saved_searches import router as saved_searches_router
 
@@ -46,7 +48,33 @@ from tree_root.api.site_settings.site_settings import router as site_settings_ro
 from tree_root.api.invitation_codes.invitation_codes import router as invitation_codes_router
 from tree_root.api.languages.languages import router as languages_router
 from tree_root.api.applications.applications import router as applications_router
+from tree_root.api.menus.menus import router as menus_router
 from tree_root.api.integration_configs.integration_configs import router as integration_configs_router
+from tree_root.api.files.files import router as files_router
+from tree_root.api.apis.apis import router as apis_router
+from tree_root.api.data_sources.data_sources import router as data_sources_router
+from tree_root.api.datasets.datasets import router as datasets_router
+from tree_root.api.messages.message_configs import router as message_configs_router
+from tree_root.api.messages.message_templates import router as message_templates_router
+from tree_root.api.messages.messages import router as messages_router
+from tree_root.api.scheduled_tasks.scheduled_tasks import router as scheduled_tasks_router
+from tree_root.api.approval_processes import approval_processes_router, approval_instances_router
+from tree_root.api.electronic_records.electronic_records import router as electronic_records_router
+from tree_root.api.scripts.scripts import router as scripts_router
+from tree_root.api.print_templates.print_templates import router as print_templates_router
+from tree_root.api.print_devices.print_devices import router as print_devices_router
+from tree_root.api.user_profile.user_profile import router as user_profile_router
+from tree_root.api.user_preferences.user_preferences import router as user_preferences_router
+from tree_root.api.user_messages.user_messages import router as user_messages_router
+from tree_root.api.user_tasks.user_tasks import router as user_tasks_router
+from tree_root.api.operation_logs.operation_logs import router as operation_logs_router
+from tree_root.api.login_logs.login_logs import router as login_logs_router
+from tree_root.api.online_users.online_users import router as online_users_router
+from tree_root.api.data_backups.data_backups import router as data_backups_router
+
+# Inngest 集成
+from tree_root.inngest.client import inngest_client
+from inngest.fast_api import serve as inngest_serve
 
 # 获取运行模式 - 默认为SaaS模式
 MODE = os.getenv("MODE", "saas")
@@ -90,8 +118,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 注册操作日志中间件
+from tree_root.middleware.operation_log_middleware import OperationLogMiddleware
+app.add_middleware(OperationLogMiddleware)
+
 # 挂载静态文件目录
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
+
+# 注册 Inngest 服务
+# 导入 Inngest 函数（确保函数被注册）
+from tree_root.inngest.functions.test_function import test_integration_function
+
+# 挂载 Inngest 服务端点
+# serve() 函数需要 app, client, 和 functions 参数
+inngest_serve(
+    app,
+    inngest_client,
+    [test_integration_function]
+)
 
 # 健康检查端点
 @app.get("/health")
@@ -141,6 +185,9 @@ const ui = SwaggerUIBundle({
 
 # 注册API路由
 
+# 用户认证路由 (User Authentication APIs)
+app.include_router(auth_router, prefix="/api/v1")
+
 # 平台级功能路由 (Platform Level APIs)
 app.include_router(packages_config_router, prefix="/api/v1/platform")
 app.include_router(packages_router, prefix="/api/v1/platform")
@@ -165,7 +212,64 @@ app.include_router(site_settings_router, prefix="/api/v1/system")
 app.include_router(invitation_codes_router, prefix="/api/v1/system")
 app.include_router(languages_router, prefix="/api/v1/system")
 app.include_router(applications_router, prefix="/api/v1/system")
+app.include_router(menus_router, prefix="/api/v1/system")
 app.include_router(integration_configs_router, prefix="/api/v1/system")
+app.include_router(files_router, prefix="/api/v1/system")
+app.include_router(apis_router, prefix="/api/v1/system")
+app.include_router(data_sources_router, prefix="/api/v1/system")
+app.include_router(datasets_router, prefix="/api/v1/system")
+app.include_router(message_configs_router, prefix="/api/v1/system")
+app.include_router(message_templates_router, prefix="/api/v1/system")
+app.include_router(messages_router, prefix="/api/v1/system")
+app.include_router(scheduled_tasks_router, prefix="/api/v1/system")
+app.include_router(approval_processes_router, prefix="/api/v1/system")
+app.include_router(approval_instances_router, prefix="/api/v1/system")
+app.include_router(electronic_records_router, prefix="/api/v1/system")
+app.include_router(scripts_router, prefix="/api/v1/system")
+app.include_router(print_templates_router, prefix="/api/v1/system")
+app.include_router(print_devices_router, prefix="/api/v1/system")
+app.include_router(user_profile_router, prefix="/api/v1/personal")
+app.include_router(user_preferences_router, prefix="/api/v1/personal")
+app.include_router(user_messages_router, prefix="/api/v1/personal")
+app.include_router(user_tasks_router, prefix="/api/v1/personal")
+app.include_router(operation_logs_router, prefix="/api/v1/system")
+app.include_router(login_logs_router, prefix="/api/v1/system")
+app.include_router(online_users_router, prefix="/api/v1/system")
+app.include_router(data_backups_router, prefix="/api/v1/system")
+
+# Inngest 测试端点
+@app.post("/api/v1/test/inngest")
+async def test_inngest_integration(message: str = "Hello from RiverEdge!"):
+    """
+    测试 Inngest 集成
+    
+    发送测试事件到 Inngest，验证集成是否正常工作。
+    """
+    from inngest import Event
+    
+    try:
+        # 发送测试事件
+        result = await inngest_client.send_event(
+            event=Event(
+                name="test/integration",
+                data={
+                    "message": message,
+                    "timestamp": str(datetime.now()),
+                }
+            )
+        )
+        
+        return {
+            "success": True,
+            "message": "事件已发送到 Inngest",
+            "event_ids": result.ids if hasattr(result, "ids") else None,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "发送事件到 Inngest 失败",
+        }
 
 if __name__ == "__main__":
     import uvicorn

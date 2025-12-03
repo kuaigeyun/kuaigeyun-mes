@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 
 from loguru import logger
 
-from soil.core.cache.cache import Cache, cache
-from soil.core.exceptions.exceptions import CacheError
+from soil.infrastructure.cache.cache import Cache, cache
+from soil.exceptions.exceptions import CacheError  # Fixed import path
 
 
 @dataclass

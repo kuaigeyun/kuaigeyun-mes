@@ -5,6 +5,7 @@
  */
 
 // 使用 Fetch API 进行 HTTP 请求
+import { clearAuth } from '../utils/auth';
 
 /**
  * API 基础 URL
@@ -168,8 +169,17 @@ export async function apiRequest<T = any>(
           throw error;
         } else {
           // 其他接口返回 401，可能是 Token 过期或无效
-          // 但不要立即清除，让用户看到错误信息
-          console.warn('⚠️ API 返回 401，可能是 Token 过期或无效，但不立即清除 Token');
+          // 清除过期的 Token 并重定向到登录页
+          console.warn('⚠️ API 返回 401，Token 已过期或无效，清除 Token');
+          clearAuth();
+          
+          // 延迟重定向，避免在请求处理过程中重定向
+          setTimeout(() => {
+            if (window.location.pathname !== '/login' && !window.location.pathname.startsWith('/platform')) {
+              window.location.href = '/login';
+            }
+          }, 100);
+          
           const error = new Error('认证已过期，请重新登录') as any;
           error.response = { data, status: response.status };
           throw error;

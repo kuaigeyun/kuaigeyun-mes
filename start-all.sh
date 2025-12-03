@@ -16,7 +16,8 @@ set -e  # 遇到错误立即退出
 
 # 服务端口配置
 BACKEND_PORT="${BACKEND_PORT:-9000}"
-FRONTEND_PORT="${FRONTEND_PORT:-8001}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+INNGEST_PORT="${INNGEST_PORT:-8288}"
 
 # 启动超时配置（秒）- 已缩短
 BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
@@ -1021,6 +1022,122 @@ cleanup_vite_windows() {
     return 0
 }
 
+# 启动 Inngest 服务
+start_inngest() {
+    local port=$1
+    log_info "启动 Inngest 服务 (端口: $port)..."
+    
+    # 检查 Inngest 可执行文件
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local inngest_exe=""
+    
+    # 查找 Inngest 可执行文件
+    if [ -f "$script_dir/bin/inngest.exe" ]; then
+        inngest_exe="$script_dir/bin/inngest.exe"
+    elif [ -f "$script_dir/bin/inngest" ]; then
+        inngest_exe="$script_dir/bin/inngest"
+    elif [ -f "$script_dir/bin/inngest-windows-amd64.exe" ]; then
+        inngest_exe="$script_dir/bin/inngest-windows-amd64.exe"
+    else
+        log_warn "未找到 Inngest 可执行文件，跳过 Inngest 服务启动"
+        log_warn "请确保 Inngest 可执行文件位于以下位置之一："
+        log_warn "  - $script_dir/bin/inngest.exe"
+        log_warn "  - $script_dir/bin/inngest"
+        log_warn "  - $script_dir/bin/inngest-windows-amd64.exe"
+        return 0  # 不阻止其他服务启动
+    fi
+    
+    # 检查配置文件
+    local config_file="$script_dir/bin/inngest.config.json"
+    if [ ! -f "$config_file" ]; then
+        log_warn "未找到 Inngest 配置文件: $config_file，跳过 Inngest 服务启动"
+        return 0  # 不阻止其他服务启动
+    fi
+    
+    # 检查端口是否被占用
+    if check_port $port; then
+        log_warn "端口 $port 被占用，清理 Inngest 相关进程..."
+        kill_process_on_port $port || true
+        sleep 1
+        if check_port $port; then
+            log_warn "端口 $port 仍被占用，跳过 Inngest 服务启动"
+            return 0  # 不阻止其他服务启动
+        fi
+    fi
+    
+    # 清理旧的PID文件
+    rm -f "$script_dir/startlogs/inngest.pid"
+    
+    # 启动 Inngest 服务
+    cd "$script_dir"
+    # 确保日志目录存在
+    mkdir -p "$script_dir/startlogs" 2>/dev/null || true
+    
+    # 创建日志文件（确保存在）
+    touch "$script_dir/startlogs/inngest.log" 2>/dev/null || true
+    
+    # Windows Git Bash 兼容：使用不同的启动方式
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+        # Windows: 直接后台启动，重定向输出
+        ("$inngest_exe" dev --config "$config_file" >> "$script_dir/startlogs/inngest.log" 2>&1) &
+        local inngest_pid=$!
+    else
+        # Linux/Mac: 使用 nohup
+        nohup "$inngest_exe" dev --config "$config_file" >> "$script_dir/startlogs/inngest.log" 2>&1 &
+        local inngest_pid=$!
+    fi
+    
+    # 等待一下确保进程启动
+    sleep 2
+    
+    # 验证进程是否真的在运行（通过检查端口或进程）
+    local process_running=false
+    
+    # 方法1: 检查进程是否存在
+    if kill -0 $inngest_pid 2>/dev/null; then
+        process_running=true
+    fi
+    
+    # 方法2: 检查端口是否监听（更可靠）
+    if check_port $port; then
+        process_running=true
+        # 如果进程ID不匹配，尝试从端口获取正确的PID
+        local port_pid=$(get_pid_by_port $port)
+        if [ ! -z "$port_pid" ] && [ "$port_pid" != "0" ] && [ "$port_pid" != "-" ]; then
+            inngest_pid=$port_pid
+        fi
+    fi
+    
+    if [ "$process_running" = false ]; then
+        log_warn "Inngest 进程启动失败，检查日志: $script_dir/startlogs/inngest.log"
+        if [ -f "$script_dir/startlogs/inngest.log" ] && [ -s "$script_dir/startlogs/inngest.log" ]; then
+            log_warn "Inngest 启动错误:"
+            tail -10 "$script_dir/startlogs/inngest.log" | while read line; do
+                log_warn "  $line"
+            done
+        else
+            log_warn "日志文件为空或不存在，可能进程立即退出了"
+        fi
+        return 0  # 不阻止其他服务启动
+    fi
+    
+    echo $inngest_pid > "$script_dir/startlogs/inngest.pid"
+    
+    log_success "Inngest 服务启动中 (PID: $inngest_pid, 端口: $port)"
+    
+    # 等待 Inngest 服务启动
+    if ! wait_for_service "http://localhost:$port" "Inngest 服务" 15; then
+        log_warn "Inngest 服务启动失败，请检查 $script_dir/startlogs/inngest.log"
+        if [ -f "$script_dir/startlogs/inngest.pid" ]; then
+            kill $inngest_pid 2>/dev/null || true
+            rm -f "$script_dir/startlogs/inngest.pid"
+        fi
+        return 0  # 不阻止其他服务启动
+    fi
+    
+    log_success "Inngest Dashboard: http://localhost:$port/_dashboard"
+}
+
 # 启动前端服务
 start_frontend() {
     local port=$1
@@ -1235,11 +1352,41 @@ stop_all() {
         rm -f startlogs/frontend.pid
     fi
 
+    # 停止 Inngest（通过PID文件）
+    if [ -f "startlogs/inngest.pid" ]; then
+        local inngest_pid=$(cat startlogs/inngest.pid 2>/dev/null)
+        if [ ! -z "$inngest_pid" ] && [ "$inngest_pid" != "0" ]; then
+            if kill -0 $inngest_pid 2>/dev/null; then
+                log_info "停止 Inngest 服务 (PID: $inngest_pid)"
+                kill -TERM $inngest_pid 2>/dev/null || true
+                # Windows环境下也尝试taskkill
+                if command -v taskkill &> /dev/null; then
+                    taskkill /PID $inngest_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
+                fi
+                # 等待进程结束
+                local count=0
+                while [ $count -lt 5 ] && kill -0 $inngest_pid 2>/dev/null; do
+                    sleep 0.5
+                    count=$((count + 1))
+                done
+                # 如果还在运行，强制杀死
+                if kill -0 $inngest_pid 2>/dev/null; then
+                    log_warn "强制停止 Inngest 服务 (PID: $inngest_pid)"
+                    kill -KILL $inngest_pid 2>/dev/null || true
+                    if command -v taskkill &> /dev/null; then
+                        taskkill /PID $inngest_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
+                    fi
+                fi
+            fi
+        fi
+        rm -f startlogs/inngest.pid
+    fi
+
     # 清理可能残留的进程（简化版，避免卡住）
     log_info "清理残留进程..."
     
     # 只清理关键端口，避免遍历所有端口导致卡住
-    for port in $FRONTEND_PORT $BACKEND_PORT; do
+    for port in $FRONTEND_PORT $BACKEND_PORT $INNGEST_PORT; do
         if check_port $port; then
             local pid=$(get_pid_by_port $port)
             if [ ! -z "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "-" ]; then
@@ -1264,7 +1411,7 @@ stop_all() {
 
     # 最终验证：检查关键端口是否已释放
     local ports_still_occupied=0
-    for port in $FRONTEND_PORT $BACKEND_PORT; do
+    for port in $FRONTEND_PORT $BACKEND_PORT $INNGEST_PORT; do
         if check_port $port; then
             log_warn "警告：端口 $port 仍被占用"
             ports_still_occupied=$((ports_still_occupied + 1))
@@ -1304,6 +1451,17 @@ show_status() {
         log_warn "前端服务未运行"
     fi
 
+    if [ -f "startlogs/inngest.pid" ]; then
+        local inngest_pid=$(cat startlogs/inngest.pid)
+        if kill -0 $inngest_pid 2>/dev/null; then
+            log_success "Inngest 服务运行中 (PID: $inngest_pid)"
+        else
+            log_warn "Inngest 服务PID文件存在但进程未运行"
+        fi
+    else
+        log_warn "Inngest 服务未运行"
+    fi
+
     # 检查端口占用情况（只检查使用的端口）
     echo
     log_info "端口占用情况:"
@@ -1318,6 +1476,12 @@ show_status() {
         log_warn "后端端口 $BACKEND_PORT 被占用"
     else
         log_success "后端端口 $BACKEND_PORT 可用"
+    fi
+    
+    if check_port $INNGEST_PORT; then
+        log_warn "Inngest 端口 $INNGEST_PORT 被占用"
+    else
+        log_success "Inngest 端口 $INNGEST_PORT 可用"
     fi
 }
 
@@ -1356,6 +1520,7 @@ main() {
     log_info "启动配置:"
     log_info "   后端端口: $BACKEND_PORT"
     log_info "   前端端口: $FRONTEND_PORT"
+    log_info "   Inngest 端口: $INNGEST_PORT"
     log_info "   调试模式: $DEBUG"
     echo
 
@@ -1424,7 +1589,7 @@ main() {
     fi
 
     # 强制清理指定端口，直到成功（如果被占用）
-    log_info "检查并清理端口 $FRONTEND_PORT (前端) 和 $BACKEND_PORT (后端)..."
+    log_info "检查并清理端口 $FRONTEND_PORT (前端)、$BACKEND_PORT (后端) 和 $INNGEST_PORT (Inngest)..."
 
     # 清理前端端口（如果被占用）
     if check_port "$FRONTEND_PORT"; then
@@ -1459,11 +1624,21 @@ main() {
     else
         log_info "后端端口 $BACKEND_PORT 未被占用，跳过清理"
     fi
+
+    # 清理 Inngest 端口（如果被占用）
+    if check_port "$INNGEST_PORT"; then
+        if ! force_clear_port "$INNGEST_PORT"; then
+            log_warn "Inngest 端口 $INNGEST_PORT 清理失败，继续启动（Inngest 服务可选）"
+        fi
+    else
+        log_info "Inngest 端口 $INNGEST_PORT 未被占用，跳过清理"
+    fi
     
     local backend_port="$BACKEND_PORT"
     local frontend_port="$FRONTEND_PORT"
+    local inngest_port="$INNGEST_PORT"
     
-    log_success "端口清理完成 - 后端: $backend_port, 前端: $frontend_port"
+    log_success "端口清理完成 - 后端: $backend_port, 前端: $frontend_port, Inngest: $inngest_port"
 
     # 启动后端
     start_backend "$backend_port"
@@ -1479,6 +1654,9 @@ main() {
         stop_all
         exit 1
     fi
+
+    # 启动 Inngest（可选服务，失败不阻止其他服务）
+    start_inngest "$inngest_port"
 
     log_success "所有服务启动成功！"
     echo
@@ -1503,6 +1681,8 @@ main() {
         echo "  平台登录:    http://localhost:$FRONTEND_PORT/platform"
         echo "  后端 API:    http://localhost:$BACKEND_PORT"
         echo "  API 文档:    http://localhost:$BACKEND_PORT/docs"
+        echo "  Inngest:     http://localhost:$INNGEST_PORT"
+        echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
         echo
         echo "管理命令:"
         echo "  查看状态:    ./start-all.sh status"
@@ -1513,6 +1693,7 @@ main() {
         echo "日志文件:"
         echo "  后端日志:    startlogs/backend.log"
         echo "  前端日志:    startlogs/frontend.log"
+        echo "  Inngest 日志: startlogs/inngest.log"
         echo "  清理日志:    startlogs/taskkill.log"
         echo
         echo "提示:"
@@ -1522,7 +1703,7 @@ main() {
         echo
         echo "=================================================================================="
     else
-        log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT"
+        log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT Inngest: http://localhost:$INNGEST_PORT"
     fi
     echo
 
@@ -1558,6 +1739,7 @@ RiverEdge SaaS 框架一键启动脚本
 环境变量配置:
     BACKEND_PORT=$BACKEND_PORT          后端服务端口
     FRONTEND_PORT=$FRONTEND_PORT        前端服务端口
+    INNGEST_PORT=$INNGEST_PORT          Inngest 服务端口
     DEBUG=$DEBUG                       调试模式
     QUIET=$QUIET                       静默模式 (减少输出)
 
@@ -1573,6 +1755,7 @@ RiverEdge SaaS 框架一键启动脚本
 日志文件:
     startlogs/backend.log         后端日志
     startlogs/frontend.log        前端日志
+    startlogs/inngest.log         Inngest 日志
     startlogs/taskkill.log        进程清理日志
 
 EOF

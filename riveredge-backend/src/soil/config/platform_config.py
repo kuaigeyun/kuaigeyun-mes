@@ -109,6 +109,22 @@ class PlatformSettings(BaseSettings):
         default="平台超级管理员",
         description="平台超级管理员全名"
     )
+    
+    # 文件管理配置（第三阶段）
+    FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")
+    MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
+    BASE_URL: str = Field(default="http://localhost:9000", description="基础URL（用于生成文件下载链接）")
+    KKFILEVIEW_URL: str = Field(default="http://localhost:8012", description="kkFileView 服务地址")
+    
+    @property
+    def SECRET_KEY(self) -> str:
+        """
+        获取密钥（兼容性属性，返回 JWT_SECRET_KEY）
+        
+        Returns:
+            str: JWT 密钥
+        """
+        return self.JWT_SECRET_KEY
 
 
 # 创建全局配置实例

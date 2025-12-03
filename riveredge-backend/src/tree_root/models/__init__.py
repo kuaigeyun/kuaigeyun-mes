@@ -42,8 +42,57 @@ from .language import Language
 # 应用中心模型
 from .application import Application
 
+# 菜单管理模型
+from .menu import Menu
+
 # 集成设置模型
 from .integration_config import IntegrationConfig
+
+# 文件管理模型
+from .file import File
+
+# 接口管理模型
+from .api import API
+
+# 数据源管理模型
+from .data_source import DataSource
+
+# 数据集管理模型
+from .dataset import Dataset
+
+# 消息管理模型
+from .message_config import MessageConfig
+from .message_template import MessageTemplate
+from .message_log import MessageLog
+
+# 定时任务模型
+from .scheduled_task import ScheduledTask
+
+# 审批流程模型
+from .approval_process import ApprovalProcess
+from .approval_instance import ApprovalInstance
+
+# 电子记录模型
+from .electronic_record import ElectronicRecord
+
+# 脚本管理模型
+from .script import Script
+
+# 打印模板模型
+from .print_template import PrintTemplate
+
+# 打印设备模型
+from .print_device import PrintDevice
+from .user_preference import UserPreference
+
+# 操作日志模型
+from .operation_log import OperationLog
+
+# 登录日志模型
+from .login_log import LoginLog
+
+# 数据备份模型
+from .data_backup import DataBackup
 
 __all__ = [
     # 基础模型
@@ -77,5 +126,39 @@ __all__ = [
     "Application",
     # 集成设置模型
     "IntegrationConfig",
+    # 文件管理模型
+    "File",
+    # 接口管理模型
+    "API",
+    # 数据源管理模型
+    "DataSource",
+    # 数据集管理模型
+    "Dataset",
+    # 消息管理模型
+    "MessageConfig",
+    "MessageTemplate",
+    "MessageLog",
+    # 定时任务模型
+    "ScheduledTask",
+    # 审批流程模型
+    "ApprovalProcess",
+    "ApprovalInstance",
+    # 电子记录模型
+    "ElectronicRecord",
+    # 脚本管理模型
+    "Script",
+    # 打印模板模型
+    "PrintTemplate",
+    # 打印设备模型
+    "PrintDevice",
+    "UserPreference",
+    # 操作日志模型
+    "OperationLog",
+    # 登录日志模型
+    "LoginLog",
+    # 数据备份模型
+    "DataBackup",
+    # 菜单管理模型
+    "Menu",
 ]
 

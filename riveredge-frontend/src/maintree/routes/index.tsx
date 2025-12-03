@@ -55,7 +55,31 @@ import SiteSettingsPage from '../../tree-stem/pages/system/site-settings';
 import InvitationCodeListPage from '../../tree-stem/pages/system/invitation-codes/list';
 import LanguageListPage from '../../tree-stem/pages/system/languages/list';
 import ApplicationListPage from '../../tree-stem/pages/system/applications/list';
+import MenuListPage from '../../tree-stem/pages/system/menus';
 import IntegrationConfigListPage from '../../tree-stem/pages/system/integration-configs/list';
+import FileListPage from '../../tree-stem/pages/system/files/list';
+import APIListPage from '../../tree-stem/pages/system/apis/list';
+import DataSourceListPage from '../../tree-stem/pages/system/data-sources/list';
+import DatasetListPage from '../../tree-stem/pages/system/datasets/list';
+import MessageConfigListPage from '../../tree-stem/pages/system/messages/config';
+import MessageTemplateListPage from '../../tree-stem/pages/system/messages/template';
+import ScheduledTaskListPage from '../../tree-stem/pages/system/scheduled-tasks/list';
+import ApprovalProcessListPage from '../../tree-stem/pages/system/approval-processes/list';
+import ApprovalInstanceListPage from '../../tree-stem/pages/system/approval-processes/instances';
+import ApprovalProcessDesignerPage from '../../tree-stem/pages/system/approval-processes/designer';
+import ElectronicRecordListPage from '../../tree-stem/pages/system/electronic-records/list';
+import ScriptListPage from '../../tree-stem/pages/system/scripts/list';
+import PrintTemplateListPage from '../../tree-stem/pages/system/print-templates/list';
+import PrintDeviceListPage from '../../tree-stem/pages/system/print-devices/list';
+import UserProfilePage from '../../tree-stem/pages/personal/profile';
+import UserPreferencesPage from '../../tree-stem/pages/personal/preferences';
+import UserMessagesPage from '../../tree-stem/pages/personal/messages';
+import UserTasksPage from '../../tree-stem/pages/personal/tasks';
+import InngestDashboardPage from '../../tree-stem/pages/system/inngest';
+import OperationLogsPage from '../../tree-stem/pages/system/operation-logs';
+import LoginLogsPage from '../../tree-stem/pages/system/login-logs';
+import OnlineUsersPage from '../../tree-stem/pages/system/online-users';
+import DataBackupsPage from '../../tree-stem/pages/system/data-backups';
 
 // 布局包装组件
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -219,12 +243,217 @@ const AppRoutes: React.FC = () => {
           </LayoutWrapper>
         }
       />
+      {/* 菜单管理 */}
+      <Route
+        path="/system/menus"
+        element={
+          <LayoutWrapper>
+            <MenuListPage />
+          </LayoutWrapper>
+        }
+      />
       {/* 集成设置 */}
       <Route
         path="/system/integration-configs"
         element={
           <LayoutWrapper>
             <IntegrationConfigListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 文件管理 */}
+      <Route
+        path="/system/files"
+        element={
+          <LayoutWrapper>
+            <FileListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 接口管理 */}
+      <Route
+        path="/system/apis"
+        element={
+          <LayoutWrapper>
+            <APIListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 数据源管理 */}
+      <Route
+        path="/system/data-sources"
+        element={
+          <LayoutWrapper>
+            <DataSourceListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 数据集管理 */}
+      <Route
+        path="/system/datasets"
+        element={
+          <LayoutWrapper>
+            <DatasetListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 消息配置管理 */}
+      <Route
+        path="/system/messages/config"
+        element={
+          <LayoutWrapper>
+            <MessageConfigListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 消息模板管理 */}
+      <Route
+        path="/system/messages/template"
+        element={
+          <LayoutWrapper>
+            <MessageTemplateListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 定时任务管理 */}
+      <Route
+        path="/system/scheduled-tasks"
+        element={
+          <LayoutWrapper>
+            <ScheduledTaskListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/approval-processes"
+        element={
+          <LayoutWrapper>
+            <ApprovalProcessListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/approval-processes/designer"
+        element={
+          <LayoutWrapper>
+            <ApprovalProcessDesignerPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/approval-instances"
+        element={
+          <LayoutWrapper>
+            <ApprovalInstanceListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/electronic-records"
+        element={
+          <LayoutWrapper>
+            <ElectronicRecordListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/scripts"
+        element={
+          <LayoutWrapper>
+            <ScriptListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/print-templates"
+        element={
+          <LayoutWrapper>
+            <PrintTemplateListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/system/print-devices"
+        element={
+          <LayoutWrapper>
+            <PrintDeviceListPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/personal/profile"
+        element={
+          <LayoutWrapper>
+            <UserProfilePage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/personal/preferences"
+        element={
+          <LayoutWrapper>
+            <UserPreferencesPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/personal/messages"
+        element={
+          <LayoutWrapper>
+            <UserMessagesPage />
+          </LayoutWrapper>
+        }
+      />
+      <Route
+        path="/personal/tasks"
+        element={
+          <LayoutWrapper>
+            <UserTasksPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* Inngest Dashboard */}
+      <Route
+        path="/system/inngest"
+        element={
+          <LayoutWrapper>
+            <InngestDashboardPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 操作日志 */}
+      <Route
+        path="/system/operation-logs"
+        element={
+          <LayoutWrapper>
+            <OperationLogsPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 登录日志 */}
+      <Route
+        path="/system/login-logs"
+        element={
+          <LayoutWrapper>
+            <LoginLogsPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 在线用户 */}
+      <Route
+        path="/system/online-users"
+        element={
+          <LayoutWrapper>
+            <OnlineUsersPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 数据备份 */}
+      <Route
+        path="/system/data-backups"
+        element={
+          <LayoutWrapper>
+            <DataBackupsPage />
           </LayoutWrapper>
         }
       />

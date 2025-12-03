@@ -331,7 +331,7 @@ const IntegrationConfigListPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '24px 24px 0 24px' }}>
+    <div>
       <UniTable<IntegrationConfig>
         actionRef={actionRef}
         columns={columns}

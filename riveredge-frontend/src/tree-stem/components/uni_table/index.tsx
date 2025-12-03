@@ -924,8 +924,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           showQuickJumper,
         }}
         {...(() => {
-          // 过滤掉toolBarRender，避免重复渲染（已经在左侧处理了）
-          const { toolBarRender, ...otherProps } = restProps;
+          // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
+          // toolBarRender 已经在左侧处理了
+          // search 中的 showAdvancedSearch 会传递到DOM，导致React警告
+          const { toolBarRender, search, ...otherProps } = restProps;
           return otherProps;
         })()}
         />
