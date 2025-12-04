@@ -15,14 +15,14 @@ print(f"USE_TZ env: {os.environ.get('USE_TZ')}")
 print(f"TIMEZONE env: {os.environ.get('TIMEZONE')}")
 
 # 导入配置
-from soil.config.platform_config import platform_settings, setup_tortoise_timezone_env
+from platform.config.platform_config import platform_settings, setup_tortoise_timezone_env
 
 print("\n=== 平台配置（直接从类读取）===")
 print(f"USE_TZ: {platform_settings.USE_TZ}")
 print(f"TIMEZONE: {platform_settings.TIMEZONE}")
 
 # 重新创建实例
-from soil.config.platform_config import PlatformSettings
+from platform.config.platform_config import PlatformSettings
 fresh_settings = PlatformSettings()
 print("\n=== 重新创建的配置实例 ===")
 print(f"USE_TZ: {fresh_settings.USE_TZ}")
@@ -43,7 +43,7 @@ print(f"get_use_tz(): {tz.get_use_tz()}")
 print(f"get_timezone(): {tz.get_timezone()}")
 
 # 导入TORTOISE_ORM配置
-from soil.infrastructure.database.database import TORTOISE_ORM
+from platform.infrastructure.database.database import TORTOISE_ORM
 
 print("\n=== TORTOISE_ORM配置 ===")
 print(f"use_tz: {TORTOISE_ORM.get('use_tz')}")

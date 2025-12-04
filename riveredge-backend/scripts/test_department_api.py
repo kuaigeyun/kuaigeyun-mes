@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from soil.config.platform_config import platform_settings
-from soil.infrastructure.database.database import get_db_connection, TORTOISE_ORM
+from platform.config.platform_config import platform_settings
+from platform.infrastructure.database.database import get_db_connection, TORTOISE_ORM
 from tortoise import Tortoise
 
 # 手动实现JWT编码（避免依赖外部库）
@@ -66,7 +66,7 @@ async def test_department_api():
     """测试部门API"""
     # 初始化数据库连接
     print("初始化数据库连接...")
-    from soil.infrastructure.database.database import TORTOISE_ORM
+    from platform.infrastructure.database.database import TORTOISE_ORM
     await Tortoise.init(config=TORTOISE_ORM)
 
     # 生成JWT Token
@@ -74,7 +74,7 @@ async def test_department_api():
     print(f"生成的JWT Token: {token[:50]}...")
 
     # 直接调用后端服务
-    from tree_root.services.department_service import DepartmentService
+    from core.services.department_service import DepartmentService
 
     try:
         print("\n=== 测试部门服务 ===")
@@ -93,9 +93,9 @@ async def test_department_api():
     # 测试API路由（如果需要认证）
     print("\n=== 测试API路由 ===")
     try:
-        from tree_root.api.departments.departments import get_department_tree
-        from soil.api.deps.deps import get_current_user
-        from tree_root.api.deps.deps import get_current_tenant
+        from core.api.departments.departments import get_department_tree
+        from platform.api.deps.deps import get_current_user
+        from core.api.deps.deps import get_current_tenant
         from fastapi import Depends
 
         # 这里无法直接测试依赖注入，需要模拟

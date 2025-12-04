@@ -15,13 +15,13 @@ sys.path.insert(0, str(src_path))
 os.environ['USE_TZ'] = 'True'
 os.environ['TIMEZONE'] = 'Asia/Shanghai'
 
-from soil.config.platform_config import setup_tortoise_timezone_env, platform_settings
+from platform.config.platform_config import setup_tortoise_timezone_env, platform_settings
 setup_tortoise_timezone_env()
 
 from tortoise import Tortoise
 from tortoise import timezone as tortoise_timezone
-from soil.infrastructure.database.database import TORTOISE_ORM
-from tree_root.models.department import Department
+from platform.infrastructure.database.database import TORTOISE_ORM
+from core.models.department import Department
 
 async def test_datetime_field():
     """测试 DatetimeField 的 to_db_value 方法"""
@@ -105,6 +105,7 @@ async def test_datetime_field():
 
 if __name__ == "__main__":
     asyncio.run(test_datetime_field())
+
 
 
 

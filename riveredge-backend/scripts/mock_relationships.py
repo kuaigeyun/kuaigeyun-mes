@@ -27,19 +27,19 @@ sys.path.insert(0, str(src_path))
 os.environ['USE_TZ'] = 'True'
 os.environ['TIMEZONE'] = 'Asia/Shanghai'
 
-from soil.config.platform_config import setup_tortoise_timezone_env, platform_settings
+from platform.config.platform_config import setup_tortoise_timezone_env, platform_settings
 setup_tortoise_timezone_env()
 
 import uuid
 from tortoise import Tortoise
-from soil.models.user import User
-from tree_root.models.role import Role
-from tree_root.models.permission import Permission
-from tree_root.models.user_role import UserRole
-from tree_root.models.role_permission import RolePermission
-from tree_root.models.department import Department
-from tree_root.models.position import Position
-from soil.infrastructure.database.database import TORTOISE_ORM
+from platform.models.user import User
+from core.models.role import Role
+from core.models.permission import Permission
+from core.models.user_role import UserRole
+from core.models.role_permission import RolePermission
+from core.models.department import Department
+from core.models.position import Position
+from platform.infrastructure.database.database import TORTOISE_ORM
 
 
 async def mock_relationships(tenant_id: int = 1):
@@ -58,7 +58,7 @@ async def mock_relationships(tenant_id: int = 1):
     
     try:
         # 验证租户是否存在
-        from soil.models.tenant import Tenant
+        from platform.models.tenant import Tenant
         tenant = await Tenant.filter(id=tenant_id).first()
         if not tenant:
             print(f"❌ 错误：租户 ID {tenant_id} 不存在")

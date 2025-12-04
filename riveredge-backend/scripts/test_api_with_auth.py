@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from soil.config.platform_config import platform_settings
+from platform.config.platform_config import platform_settings
 
 def generate_test_token(user_id: int = 1, tenant_id: int = 1) -> str:
     """生成测试JWT Token"""

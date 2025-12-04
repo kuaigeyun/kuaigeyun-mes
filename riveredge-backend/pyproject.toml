@@ -99,6 +99,6 @@ asyncio_mode = "auto"
 addopts = "-v --strict-markers --tb=short"
 
 [tool.aerich]
-tortoise_orm = "soil.infrastructure.database.database.TORTOISE_ORM"
+tortoise_orm = "aerich_config.TORTOISE_ORM"
 location = "./migrations"
-src_folder = "./."
+src_folder = "./src"

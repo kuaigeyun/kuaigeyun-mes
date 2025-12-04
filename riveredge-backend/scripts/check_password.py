@@ -13,8 +13,8 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from tortoise import Tortoise
-from soil.models.platform_superadmin import PlatformSuperAdmin
-from soil.infrastructure.database.database import TORTOISE_ORM
+from platform.models.platform_superadmin import PlatformSuperAdmin
+from platform.infrastructure.database.database import TORTOISE_ORM
 
 
 async def check_password():
@@ -39,7 +39,7 @@ async def check_password():
     print()
     
     # 从配置读取密码进行测试
-    from soil.config.platform_config import platform_settings
+    from platform.config.platform_config import platform_settings
     config_password = platform_settings.PLATFORM_SUPERADMIN_PASSWORD
     
     if config_password:

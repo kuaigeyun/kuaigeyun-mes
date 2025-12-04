@@ -30,18 +30,18 @@ except ImportError:
 os.environ['USE_TZ'] = 'True'
 os.environ['TIMEZONE'] = 'Asia/Shanghai'
 
-from soil.config.platform_config import setup_tortoise_timezone_env, platform_settings
+from platform.config.platform_config import setup_tortoise_timezone_env, platform_settings
 setup_tortoise_timezone_env()
 
 from datetime import datetime
 from tortoise import Tortoise
-from soil.models.user import User
-from tree_root.models.department import Department
-from tree_root.models.position import Position
-from tree_root.services.department_service import DepartmentService
-from tree_root.services.user_service import UserService
-from tree_root.schemas.user import UserCreate
-from soil.infrastructure.database.database import TORTOISE_ORM
+from platform.models.user import User
+from core.models.department import Department
+from core.models.position import Position
+from core.services.department_service import DepartmentService
+from core.services.user_service import UserService
+from core.schemas.user import UserCreate
+from platform.infrastructure.database.database import TORTOISE_ORM
 
 
 # 常见中文姓氏
@@ -172,7 +172,7 @@ async def mock_users_for_departments(tenant_id: int = 1, users_per_dept: int = 3
     
     try:
         # 验证租户是否存在
-        from soil.models.tenant import Tenant
+        from platform.models.tenant import Tenant
         tenant = await Tenant.filter(id=tenant_id).first()
         if not tenant:
             print(f"❌ 错误：租户 ID {tenant_id} 不存在")

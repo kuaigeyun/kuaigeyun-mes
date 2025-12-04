@@ -15,8 +15,8 @@ src_path = project_root / "src"
 sys.path.insert(0, str(src_path))
 
 from tortoise import Tortoise
-from soil.infrastructure.database.database import TORTOISE_ORM
-from tree_root.models.approval_process import ApprovalProcess
+from platform.infrastructure.database.database import TORTOISE_ORM
+from core.models.approval_process import ApprovalProcess
 from datetime import datetime
 
 
