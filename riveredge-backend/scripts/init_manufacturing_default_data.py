@@ -27,7 +27,7 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 # 设置时区环境变量（必须在导入 Tortoise 之前）
-from soil.config.platform_config import platform_settings, setup_tortoise_timezone_env
+from platform.config.platform_config import platform_settings, setup_tortoise_timezone_env
 
 # 确保环境变量在导入 Tortoise 之前就已经设置
 os.environ["USE_TZ"] = str(platform_settings.USE_TZ)
@@ -36,12 +36,12 @@ setup_tortoise_timezone_env()
 
 from tortoise import Tortoise
 from tortoise.exceptions import IntegrityError
-from soil.infrastructure.database.database import TORTOISE_ORM
-from tree_root.models.department import Department
-from tree_root.models.position import Position
-from tree_root.models.role import Role
-from tree_root.models.permission import Permission
-from tree_root.models.role_permission import RolePermission
+from platform.infrastructure.database.database import TORTOISE_ORM
+from core.models.department import Department
+from core.models.position import Position
+from core.models.role import Role
+from core.models.permission import Permission
+from core.models.role_permission import RolePermission
 
 
 # ==================== 默认数据定义 ====================

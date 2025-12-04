@@ -10,7 +10,7 @@ from pathlib import Path
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from soil.infrastructure.database.database import get_db_connection
+from platform.infrastructure.database.database import get_db_connection
 
 # 手动实现JWT编码（避免依赖外部库）
 import base64
@@ -48,7 +48,7 @@ def create_jwt_payload(user_id: int, tenant_id: int):
 
 def create_jwt_signature(header: str, payload: str):
     """创建JWT签名"""
-    from soil.config.platform_config import platform_settings
+    from platform.config.platform_config import platform_settings
     message = f"{header}.{payload}"
     secret = platform_settings.JWT_SECRET_KEY.encode('utf-8')
     signature = hmac.new(secret, message.encode('utf-8'), hashlib.sha256).digest()

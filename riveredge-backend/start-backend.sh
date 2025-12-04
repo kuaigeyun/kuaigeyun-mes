@@ -38,6 +38,6 @@ echo ""
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 
 # 启动服务（启用热重载，监控 src 目录）
-PYTHONPATH="${PYTHONPATH}:$(pwd)/src" python -m uvicorn src.maintree.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir src
+PYTHONPATH="${PYTHONPATH}:$(pwd)/src" python -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir src
 
 

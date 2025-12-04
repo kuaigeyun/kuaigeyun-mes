@@ -269,7 +269,7 @@
 
 ## 🔧 技术选型（必须严格遵循）
 
-### 后端技术栈 (riveredge-core)
+### 后端技术栈 (riveredge-backend)
 
 **必须使用以下技术，不得替换或添加其他技术**：
 
@@ -287,7 +287,7 @@
 - **配置管理**: pydantic-settings（**不得使用其他配置库**）
 - **测试框架**: pytest + pytest-asyncio（**不得使用 unittest 等**）
 
-### 前端技术栈 (riveredge-shell)
+### 前端技术栈 (riveredge-frontend)
 
 **必须使用以下技术，不得替换或添加其他技术**：
 
@@ -364,9 +364,9 @@
 
 ### 模块命名哲学
 
-**框架模块命名**（遵循自然/植物生态哲学）：
-- ✅ `riveredge-core` - 核心系统（根）
-- ✅ `riveredge-shell` - 前端框架（壳）
+**框架模块命名**（遵循常规 B 端项目命名）：
+- ✅ `riveredge-backend` - 后端系统
+- ✅ `riveredge-frontend` - 前端应用
 - ✅ `riveredge-seed` - 应用插件（种子，单数形式）
 - ✅ `riveredge-land` - 着陆页/官网（土地）
 - ✅ `riveredge-leaf` - 移动端应用（叶子）
@@ -450,26 +450,26 @@
 ### 数据库命名规范
 
 **表命名**：使用 `snake_case`，复数形式，**必须包含模块前缀** ⭐ **重要**
-- ✅ `root_users` - 系统级用户表（`root_` 前缀，系统级后端）
-- ✅ `tree_tenants` - 租户管理表（`tree_` 前缀，租户管理）
-- ✅ `seed_mes_orders` - MES 应用插件订单表（`seed_mes_` 前缀，符合框架哲学：seed = 种子）
+- ✅ `platform_tenants` - 平台级租户表（`platform_` 前缀，平台级后端）
+- ✅ `core_users` - 系统级用户表（`core_` 前缀，系统级后端）
+- ✅ `seed_mes_orders` - MES 应用插件订单表（`seed_mes_` 前缀，应用插件）
 - ✅ `seed_mes_order_items` - MES 应用插件订单明细表
 - ✅ `seed_payment_records` - 支付插件记录表（`seed_payment_` 前缀）
-- ✅ `sys_users` - 兼容别名（推荐使用 `root_users`）
+- ✅ `sys_users` - 兼容别名（推荐使用 `core_users`）
 - ❌ `users` - 错误：缺少模块前缀
 - ❌ `mes_orders` - 错误：缺少 `seed_` 前缀
 - ❌ `user`、`User`、`user_table` - 错误
 
-**模块前缀规则**（结合框架命名哲学）：
-- **系统级后端模块（root/根）**：`root_` 前缀 ⭐ **符合框架哲学**
-  - 如 `root_users`、`root_roles`、`root_permissions`
-  - 属于系统级后端（根系统）
-  - **命名哲学**：如同植物的根系，提供基础支撑和养分
-  - `sys_` 前缀作为兼容别名，推荐使用 `root_`
-- **租户管理模块（tree/树）**：`tree_` 前缀 ⭐ **符合框架哲学**
-  - 如 `tree_tenants`、`tree_tenant_configs`、`tree_tenant_activity_logs`
-  - 每个租户单独管理
-  - **命名哲学**：如同植物的树，每个租户是一棵树
+**模块前缀规则**（遵循常规 B 端项目命名）：
+- **平台级后端模块（platform/平台）**：`platform_` 前缀 ⭐ **符合常规 B 端命名**
+  - 如 `platform_tenants`、`platform_packages`、`platform_monitoring_statistics`
+  - 属于平台级后端
+  - **命名规范**：平台级功能，包括租户管理、套餐管理等
+- **系统级后端模块（core/核心）**：`core_` 前缀 ⭐ **符合常规 B 端命名**
+  - 如 `core_users`、`core_roles`、`core_permissions`
+  - 属于系统级后端
+  - **命名规范**：系统级功能，提供基础支撑
+  - `sys_` 前缀作为兼容别名，推荐使用 `core_`
 - **应用插件模块（seed/种子）**：`seed_插件名_` 前缀 ⭐ **符合框架哲学**
   - 所有业务模块（MES、ERP、CRM 等）都属于 `riveredge-seed`（应用插件集合，单数形式）
   - MES 系统：`seed_mes_` 前缀（如 `seed_mes_orders`）
@@ -493,11 +493,11 @@
 - 📖 详细规范请参考：[2.字段命名规范.md](./2.字段命名规范.md) - 避免数据库关键字章节
 
 **索引命名**：索引名中的表名必须包含模块前缀
-- ✅ `idx_root_users_tenant_id` - 系统级表索引（root_ 前缀，符合框架哲学）
-- ✅ `idx_tree_tenants_domain` - 租户管理表索引（tree_ 前缀，符合框架哲学）
-- ✅ `idx_seed_mes_orders_status` - 应用插件表索引（seed_ 前缀，符合框架哲学）
-- ✅ `uk_root_users_email` - 唯一索引（uk_ 前缀）
-- ✅ `idx_sys_users_tenant_id` - 兼容别名（推荐使用 `idx_root_users_tenant_id`）
+- ✅ `idx_platform_tenants_domain` - 平台级表索引（platform_ 前缀，符合常规 B 端命名）
+- ✅ `idx_core_users_tenant_id` - 系统级表索引（core_ 前缀，符合常规 B 端命名）
+- ✅ `idx_seed_mes_orders_status` - 应用插件表索引（seed_ 前缀，应用插件）
+- ✅ `uk_core_users_email` - 唯一索引（uk_ 前缀）
+- ✅ `idx_sys_users_tenant_id` - 兼容别名（推荐使用 `idx_core_users_tenant_id`）
 - ❌ `idx_users_tenant_id` - 错误：表名缺少模块前缀
 - ❌ `idx_mes_orders_status` - 错误：缺少 `seed_` 前缀
 - ❌ `users_tenant_id_idx`、`unique_users_email` - 错误
@@ -716,12 +716,12 @@ CREATE TABLE {module_prefix}_{table_name} (
     INDEX idx_{module_prefix}_{table_name}_created_at (created_at)
 );
 
--- 示例：核心系统表（core_ 前缀，符合框架哲学：core = 根）
-CREATE TABLE root_users (
+-- 示例：系统级表（core_ 前缀，符合常规 B 端命名）
+CREATE TABLE core_users (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
     -- ...
-    INDEX idx_root_users_tenant_id (tenant_id)
+    INDEX idx_core_users_tenant_id (tenant_id)
 );
 
 -- 示例：应用插件表
@@ -1249,8 +1249,8 @@ export async function create{ModelName}(data: {ModelName}Create): Promise<{Model
 ### 测试文件位置检查
 
 - [ ] **测试文件是否放在正确的 `tests/` 目录？** ⭐ **重要**
-  - [ ] 后端测试文件是否在 `riveredge-core/tests/` 目录？
-  - [ ] 前端测试文件是否在 `riveredge-shell/tests/` 目录？
+  - [ ] 后端测试文件是否在 `riveredge-backend/tests/` 目录？
+  - [ ] 前端测试文件是否在 `riveredge-frontend/tests/` 目录？
   - [ ] 是否避免了在 `scripts/` 目录创建测试文件？
   - [ ] 是否避免了在 `src/` 目录下新建 `tests/` 文件夹？
 
@@ -1359,17 +1359,17 @@ try {
 
 **所有测试文件必须放在各自端的 `tests/` 文件夹中，禁止在其他位置创建测试文件**：
 
-- ✅ **后端测试文件**：必须放在 `riveredge-core/tests/` 目录下
-  - ✅ `riveredge-core/tests/test_user_service.py`
-  - ✅ `riveredge-core/tests/test_tenant_api.py`
-  - ✅ `riveredge-core/tests/test_tenant_isolation.py`
-  - ❌ `riveredge-core/scripts/test_*.py` - 错误：禁止在 scripts 目录创建测试文件
-  - ❌ `riveredge-core/src/tests/` - 错误：禁止在 src 目录下新建 tests 文件夹
+- ✅ **后端测试文件**：必须放在 `riveredge-backend/tests/` 目录下
+  - ✅ `riveredge-backend/tests/test_user_service.py`
+  - ✅ `riveredge-backend/tests/test_tenant_api.py`
+  - ✅ `riveredge-backend/tests/test_tenant_isolation.py`
+  - ❌ `riveredge-backend/scripts/test_*.py` - 错误：禁止在 scripts 目录创建测试文件
+  - ❌ `riveredge-backend/src/tests/` - 错误：禁止在 src 目录下新建 tests 文件夹
 
-- ✅ **前端测试文件**：必须放在 `riveredge-shell/tests/` 目录下（如果存在）
-  - ✅ `riveredge-shell/tests/UserList.test.tsx`
-  - ✅ `riveredge-shell/tests/userUtils.test.ts`
-  - ❌ `riveredge-shell/src/tests/` - 错误：禁止在 src 目录下新建 tests 文件夹
+- ✅ **前端测试文件**：必须放在 `riveredge-frontend/tests/` 目录下（如果存在）
+  - ✅ `riveredge-frontend/tests/UserList.test.tsx`
+  - ✅ `riveredge-frontend/tests/userUtils.test.ts`
+  - ❌ `riveredge-frontend/src/tests/` - 错误：禁止在 src 目录下新建 tests 文件夹
 
 **规则**：
 - ❌ **禁止在 `scripts/` 目录创建测试文件**
@@ -1381,7 +1381,7 @@ try {
 
 **测试框架**：pytest + pytest-asyncio
 
-**测试文件位置**：`riveredge-core/tests/` ⭐ **必须**
+**测试文件位置**：`riveredge-backend/tests/` ⭐ **必须**
 
 **测试文件命名**：`test_*.py` 或 `*_test.py`
 
@@ -1389,9 +1389,9 @@ try {
 
 ```python
 # ✅ 正确：测试文件位置和命名
-riveredge-core/tests/test_user_service.py
-riveredge-core/tests/test_auth_api.py
-riveredge-core/tests/test_tenant_isolation.py
+riveredge-backend/tests/test_user_service.py
+riveredge-backend/tests/test_auth_api.py
+riveredge-backend/tests/test_tenant_isolation.py
 
 # ✅ 正确：测试函数命名
 async def test_create_user_success():
@@ -1403,8 +1403,8 @@ async def test_create_user_with_duplicate_email():
     pass
 
 # ❌ 错误：测试文件位置错误
-riveredge-core/scripts/test_user_service.py  # 错误：禁止在 scripts 目录
-riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录下新建 tests 文件夹
+riveredge-backend/scripts/test_user_service.py  # 错误：禁止在 scripts 目录
+riveredge-backend/src/tests/test_user_service.py  # 错误：禁止在 src 目录下新建 tests 文件夹
 ```
 
 **测试覆盖率要求**：
@@ -1416,7 +1416,7 @@ riveredge-core/src/tests/test_user_service.py  # 错误：禁止在 src 目录�
 
 **测试框架**：Jest + React Testing Library
 
-**测试文件位置**：`riveredge-shell/tests/` ⭐ **必须**（如果存在）
+**测试文件位置**：`riveredge-frontend/tests/` ⭐ **必须**（如果存在）
 
 **测试文件命名**：`*.test.tsx` 或 `*.spec.tsx`
 
@@ -1527,9 +1527,9 @@ AI 助手在协助开发 **RiverEdge SaaS 多组织框架 (RiverEdge SaaS Multi-
 - ✅ 避免TypeScript关键字：✅ 未使用任何关键字
 
 **数据库命名**：
-- ✅ 表名包含模块前缀：root_users, tree_tenants, seed_mes_orders
+- ✅ 表名包含模块前缀：platform_tenants, core_users, seed_mes_orders
 - ✅ 字段名使用snake_case
-- ✅ 索引名包含模块前缀：idx_root_users_tenant_id, idx_tree_tenants_domain
+- ✅ 索引名包含模块前缀：idx_platform_tenants_domain, idx_core_users_tenant_id
 
 ### ✅ 注释规范检查（已通过）
 
@@ -1586,8 +1586,8 @@ AI 助手在协助开发 **RiverEdge SaaS 多组织框架 (RiverEdge SaaS Multi-
 ### ✅ 测试覆盖检查（已通过）
 
 **测试文件结构**：
-- ✅ 后端测试位于riveredge-core/tests/
-- ✅ 前端测试位于riveredge-shell/tests/
+- ✅ 后端测试位于riveredge-backend/tests/
+- ✅ 前端测试位于riveredge-frontend/tests/
 - ✅ 测试文件命名符合规范
 
 **测试内容**：

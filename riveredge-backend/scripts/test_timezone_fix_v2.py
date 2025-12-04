@@ -14,7 +14,7 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 # 设置时区环境变量（必须在导入 Tortoise 之前）
-from soil.config.platform_config import platform_settings, setup_tortoise_timezone_env
+from platform.config.platform_config import platform_settings, setup_tortoise_timezone_env
 
 # 确保环境变量在导入 Tortoise 之前就已经设置
 os.environ["USE_TZ"] = str(platform_settings.USE_TZ)
@@ -28,7 +28,7 @@ print(f"Platform settings - TIMEZONE: {platform_settings.TIMEZONE}")
 
 from tortoise import Tortoise
 from tortoise import timezone as tortoise_timezone
-from soil.infrastructure.database.database import TORTOISE_ORM
+from platform.infrastructure.database.database import TORTOISE_ORM
 
 async def test_timezone_fix():
     """测试修复后的时区配置"""
@@ -41,7 +41,7 @@ async def test_timezone_fix():
         print(f"Tortoise timezone: {tortoise_timezone.get_timezone()}")
 
         # 测试创建一个部门（使用Tortoise ORM）
-        from tree_root.models.department import Department
+        from core.models.department import Department
         print("\n创建测试部门...")
 
         department = await Department.create(
@@ -67,7 +67,7 @@ async def test_timezone_fix():
 
         # 测试原始初始化脚本的部分功能
         print("\n测试部门初始化（少量数据）...")
-        from tree_root.models.position import Position
+        from core.models.position import Position
 
         position = await Position.create(
             tenant_id=1,

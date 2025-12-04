@@ -9,9 +9,9 @@ src_path = Path(__file__).parent.parent / 'src'
 sys.path.insert(0, str(src_path))
 
 from tortoise import Tortoise
-from soil.models.platform_superadmin import PlatformSuperAdmin
-from soil.infrastructure.database.database import TORTOISE_ORM
-from soil.schemas.platform_superadmin import PlatformSuperAdminResponse
+from platform.models.platform_superadmin import PlatformSuperAdmin
+from platform.infrastructure.database.database import TORTOISE_ORM
+from platform.schemas.platform_superadmin import PlatformSuperAdminResponse
 
 async def test_serialization():
     await Tortoise.init(config=TORTOISE_ORM)

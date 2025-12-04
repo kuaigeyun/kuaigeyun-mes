@@ -12,7 +12,7 @@ from pathlib import Path
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from soil.infrastructure.database.database import get_db_connection
+from platform.infrastructure.database.database import get_db_connection
 
 # 默认部门数据
 DEPARTMENTS_SQL = [

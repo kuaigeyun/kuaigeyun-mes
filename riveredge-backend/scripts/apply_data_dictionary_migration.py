@@ -22,7 +22,7 @@ sys.path.insert(0, str(src_path))
 from aerich import Command
 from aerich.migrate import Migrate
 from tortoise import Tortoise
-from soil.infrastructure.database.database import TORTOISE_ORM
+from platform.infrastructure.database.database import TORTOISE_ORM
 
 
 async def apply_migration():

@@ -19,7 +19,7 @@ if env_path.exists():
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from soil.config.platform_config import PlatformSettings
+from platform.config.platform_config import PlatformSettings
 
 settings = PlatformSettings()
 
@@ -70,7 +70,7 @@ async def register_migration():
         # 应用迁移
         print("\n3. 应用迁移...")
         from tortoise import Tortoise
-        from soil.infrastructure.database.database import TORTOISE_ORM
+        from platform.infrastructure.database.database import TORTOISE_ORM
         
         await Tortoise.init(config=TORTOISE_ORM)
         from aerich import Command

@@ -18,7 +18,7 @@ os.environ['TIMEZONE'] = 'Asia/Shanghai'
 from tortoise import timezone
 import pytz
 import asyncpg
-from soil.config.platform_config import platform_settings
+from platform.config.platform_config import platform_settings
 
 async def test_asyncpg_datetime():
     """测试 asyncpg 是否能正确处理 datetime"""
@@ -67,6 +67,7 @@ async def test_asyncpg_datetime():
 
 if __name__ == "__main__":
     asyncio.run(test_asyncpg_datetime())
+
 
 
 

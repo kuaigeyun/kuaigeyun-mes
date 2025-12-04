@@ -9,9 +9,9 @@ src_path = Path(__file__).parent.parent / 'src'
 sys.path.insert(0, str(src_path))
 
 from tortoise import Tortoise
-from soil.infrastructure.database.database import TORTOISE_ORM
-from soil.services.platform_superadmin_auth_service import PlatformSuperAdminAuthService
-from soil.schemas.platform_superadmin import PlatformSuperAdminLoginRequest, PlatformSuperAdminLoginResponse
+from platform.infrastructure.database.database import TORTOISE_ORM
+from platform.services.platform_superadmin_auth_service import PlatformSuperAdminAuthService
+from platform.schemas.platform_superadmin import PlatformSuperAdminLoginRequest, PlatformSuperAdminLoginResponse
 
 async def test_login_full():
     await Tortoise.init(config=TORTOISE_ORM)

@@ -17,12 +17,12 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 # 设置时区环境变量（必须在导入 Tortoise 之前）
-from soil.config.platform_config import platform_settings, setup_tortoise_timezone_env
+from platform.config.platform_config import platform_settings, setup_tortoise_timezone_env
 setup_tortoise_timezone_env()
 
 from tortoise import Tortoise
-from soil.infrastructure.database.database import TORTOISE_ORM
-from soil.models.tenant import Tenant
+from platform.infrastructure.database.database import TORTOISE_ORM
+from platform.models.tenant import Tenant
 
 # 导入初始化函数（使用相对导入）
 import importlib.util

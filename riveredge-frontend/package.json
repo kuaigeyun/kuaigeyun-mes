@@ -5,12 +5,12 @@
     "description_en": "RiverEdge SaaS Multi-tenant Framework - Frontend Monorepo",
     "private": true,
     "scripts": {
-        "dev": "cd src/maintree && npm run dev",
-        "dev:monolithic": "cd src/maintree && npm run dev:monolithic",
-        "dev:saas": "cd src/maintree && npm run dev:saas",
-        "build": "cd src/maintree && npm run build",
-        "build:monolithic": "cd src/maintree && npm run build:monolithic",
-        "build:saas": "cd src/maintree && npm run build:saas",
+        "dev": "cd src && npm run dev",
+        "dev:monolithic": "cd src && npm run dev:monolithic",
+        "dev:saas": "cd src && npm run dev:saas",
+        "build": "cd src && npm run build",
+        "build:monolithic": "cd src && npm run build:monolithic",
+        "build:saas": "cd src && npm run build:saas",
         "install:all": "npm install",
         "clean": "rm -rf node_modules"
     },

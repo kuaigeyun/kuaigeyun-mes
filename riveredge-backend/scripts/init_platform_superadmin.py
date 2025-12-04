@@ -17,10 +17,10 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from tortoise import Tortoise
-from soil.models.platform_superadmin import PlatformSuperAdmin
-from soil.core.security.security import hash_password
-from soil.infrastructure.database.database import TORTOISE_ORM
-from soil.config.platform_config import platform_settings
+from platform.models.platform_superadmin import PlatformSuperAdmin
+from platform.core.security.security import hash_password
+from platform.infrastructure.database.database import TORTOISE_ORM
+from platform.config.platform_config import platform_settings
 
 
 async def init_platform_superadmin():
