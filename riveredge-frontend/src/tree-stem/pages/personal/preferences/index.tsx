@@ -14,6 +14,9 @@ import {
   UserPreference,
   UpdateUserPreferenceData,
 } from '../../../services/userPreference';
+import { getLanguageList, Language } from '../../../services/language';
+import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
+import i18n from '../../../config/i18n';
 
 /**
  * 偏好设置页面组件
@@ -23,13 +26,29 @@ const UserPreferencesPage: React.FC = () => {
   const formRef = React.useRef<ProFormInstance>();
   const [loading, setLoading] = useState(false);
   const [preferenceData, setPreferenceData] = useState<UserPreference | null>(null);
+  const [languages, setLanguages] = useState<Language[]>([]);
 
   /**
-   * 加载偏好设置
+   * 加载偏好设置和语言列表
    */
   useEffect(() => {
+    loadLanguages();
     loadPreferences();
   }, []);
+
+  /**
+   * 加载可用语言列表
+   */
+  const loadLanguages = async () => {
+    try {
+      const response = await getLanguageList({ is_active: true });
+      setLanguages(response.items || []);
+    } catch (error: any) {
+      console.warn('Failed to load languages:', error);
+      // 如果加载失败，使用默认语言列表
+      setLanguages([]);
+    }
+  };
 
   const loadPreferences = async () => {
     try {
@@ -88,6 +107,20 @@ const UserPreferencesPage: React.FC = () => {
       await updateUserPreference(data);
       messageApi.success('偏好设置更新成功');
       
+      // 如果语言变更，重新加载用户语言和翻译内容
+      if (values.language && values.language !== i18n.language) {
+        await loadUserLanguage();
+        await refreshTranslations();
+      }
+      
+      // 如果主题变更，通知应用重新加载偏好设置（触发主题更新）
+      if (values.theme) {
+        // 通过触发 window 事件通知应用组件重新加载偏好设置
+        window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
+          detail: { preferences: preferences }
+        }));
+      }
+      
       // 重新加载偏好设置
       await loadPreferences();
     } catch (error: any) {
@@ -127,12 +160,19 @@ const UserPreferencesPage: React.FC = () => {
             <ProFormSelect
               name="language"
               label="语言"
-              valueEnum={{
-                'zh-CN': '简体中文',
-                'zh-TW': '繁体中文',
-                'en-US': 'English',
-                'ja-JP': '日本語',
-              }}
+              valueEnum={
+                languages.length > 0
+                  ? languages.reduce((acc, lang) => {
+                      acc[lang.code] = lang.native_name || lang.name;
+                      return acc;
+                    }, {} as Record<string, string>)
+                  : {
+                      'zh-CN': '简体中文',
+                      'zh-TW': '繁体中文',
+                      'en-US': 'English',
+                      'ja-JP': '日本語',
+                    }
+              }
               placeholder="请选择语言"
             />
           </ProFormGroup>

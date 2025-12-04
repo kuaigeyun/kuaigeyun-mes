@@ -51,14 +51,60 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // 优化构建性能
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          antd: ['antd', '@ant-design/icons', '@ant-design/pro-components'],
-          router: ['react-router-dom'],
-          query: ['@tanstack/react-query'],
-          utils: ['lodash-es', 'dayjs'],
+        // 优化代码分割：按功能模块分组
+        manualChunks: (id) => {
+          // 核心依赖
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('antd') || id.includes('@ant-design')) {
+              return 'vendor-antd';
+            }
+            if (id.includes('react-router')) {
+              return 'vendor-router';
+            }
+            if (id.includes('@tanstack/react-query')) {
+              return 'vendor-query';
+            }
+            if (id.includes('lodash') || id.includes('dayjs')) {
+              return 'vendor-utils';
+            }
+            // 其他 node_modules 依赖
+            return 'vendor-other';
+          }
+          // 按功能模块分割页面代码
+          if (id.includes('pages/system/roles') || id.includes('pages/system/permissions')) {
+            return 'module-permission';
+          }
+          if (id.includes('pages/system/departments') || id.includes('pages/system/positions') || id.includes('pages/system/users')) {
+            return 'module-organization';
+          }
+          if (id.includes('pages/system/data-dictionaries') || id.includes('pages/system/system-parameters') || id.includes('pages/system/code-rules') || id.includes('pages/system/custom-fields') || id.includes('pages/system/languages')) {
+            return 'module-config';
+          }
+          if (id.includes('pages/system/applications') || id.includes('pages/system/menus') || id.includes('pages/system/invitation-codes')) {
+            return 'module-application';
+          }
+          if (id.includes('pages/system/files') || id.includes('pages/system/apis') || id.includes('pages/system/data-sources') || id.includes('pages/system/datasets')) {
+            return 'module-datacenter';
+          }
+          if (id.includes('pages/system/messages') || id.includes('pages/system/scheduled-tasks') || id.includes('pages/system/approval-processes') || id.includes('pages/system/electronic-records') || id.includes('pages/system/scripts') || id.includes('pages/system/print')) {
+            return 'module-process';
+          }
+          if (id.includes('pages/personal')) {
+            return 'module-personal';
+          }
+          if (id.includes('pages/system/operation-logs') || id.includes('pages/system/login-logs') || id.includes('pages/system/online-users') || id.includes('pages/system/data-backups') || id.includes('pages/system/inngest')) {
+            return 'module-monitoring';
+          }
+          if (id.includes('pages/platform')) {
+            return 'module-platform';
+          }
         },
       },
     },

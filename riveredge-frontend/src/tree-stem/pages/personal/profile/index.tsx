@@ -18,7 +18,7 @@ import {
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
-import { uploadFile, FileUploadResponse } from '../../../services/file';
+import { uploadFile, getFileByUuid, getFilePreview, getFileDownloadUrl, FileUploadResponse, File } from '../../../services/file';
 
 /**
  * 个人资料页面组件
@@ -30,6 +30,7 @@ const UserProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [avatarFileList, setAvatarFileList] = useState<UploadFile[]>([]);
   const [contactInfoJson, setContactInfoJson] = useState<string>('{}');
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
 
   /**
    * 加载个人资料
@@ -60,10 +61,40 @@ const UserProfilePage: React.FC = () => {
         setContactInfoJson('{}');
       }
       
-      // 设置头像文件列表
+      // 设置头像文件列表和预览 URL
       if (data.avatar) {
-        // TODO: 根据 avatar UUID 获取文件信息，设置文件列表
-        // 这里暂时不设置，用户需要重新上传
+        try {
+          // 获取文件信息
+          const fileInfo = await getFileByUuid(data.avatar);
+          
+          // 如果是图片，获取预览 URL
+          let previewUrl: string | undefined = undefined;
+          if (fileInfo.file_type?.startsWith('image/')) {
+            const previewInfo = await getFilePreview(data.avatar);
+            previewUrl = previewInfo.preview_url;
+            setAvatarUrl(previewUrl);
+          } else {
+            // 非图片文件，使用下载 URL
+            previewUrl = getFileDownloadUrl(data.avatar);
+            setAvatarUrl(previewUrl);
+          }
+          
+          // 设置文件列表
+          setAvatarFileList([{
+            uid: fileInfo.uuid,
+            name: fileInfo.name,
+            status: 'done',
+            url: previewUrl,
+          }]);
+        } catch (error) {
+          console.warn('Failed to load avatar file:', error);
+          // 如果加载失败，清空头像 URL
+          setAvatarUrl(undefined);
+          setAvatarFileList([]);
+        }
+      } else {
+        setAvatarUrl(undefined);
+        setAvatarFileList([]);
       }
     } catch (error: any) {
       messageApi.error(error.message || '加载个人资料失败');
@@ -89,12 +120,24 @@ const UserProfilePage: React.FC = () => {
           avatar: response.uuid,
         });
         
+        // 获取预览 URL（如果是图片）
+        let previewUrl: string | undefined = undefined;
+        if (response.file_type?.startsWith('image/')) {
+          try {
+            const previewInfo = await getFilePreview(response.uuid);
+            previewUrl = previewInfo.preview_url;
+            setAvatarUrl(previewUrl);
+          } catch (error) {
+            console.warn('Failed to get preview URL:', error);
+          }
+        }
+        
         // 更新头像文件列表
         setAvatarFileList([{
           uid: response.uuid,
           name: response.original_name,
           status: 'done',
-          url: undefined, // TODO: 根据文件 UUID 获取预览 URL
+          url: previewUrl,
         }]);
         
         onSuccess?.(response);
@@ -160,7 +203,7 @@ const UserProfilePage: React.FC = () => {
             <Space direction="vertical" align="center">
               <Avatar
                 size={100}
-                src={profileData?.avatar ? undefined : undefined}  // TODO: 根据 avatar UUID 获取头像 URL
+                src={avatarUrl}
                 icon={<UserOutlined />}
               />
               <Upload

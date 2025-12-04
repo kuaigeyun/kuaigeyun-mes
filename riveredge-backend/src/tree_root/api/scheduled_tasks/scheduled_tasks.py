@@ -254,3 +254,82 @@ async def stop_scheduled_task(
             detail=str(e)
         )
 
+
+@router.post("/{uuid}/mark-running", response_model=ScheduledTaskResponse)
+async def mark_task_running(
+    uuid: str,
+    inngest_run_id: Optional[str] = Query(None, description="Inngest 运行ID（可选）"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    标记定时任务开始执行（供 Inngest 函数调用）
+    
+    当定时任务开始执行时，Inngest 函数会调用此端点标记任务为运行中。
+    
+    Args:
+        uuid: 定时任务UUID
+        inngest_run_id: Inngest 运行ID（可选）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        ScheduledTaskResponse: 更新后的定时任务对象
+        
+    Raises:
+        HTTPException: 当定时任务不存在时抛出
+    """
+    try:
+        scheduled_task = await ScheduledTaskService.mark_task_running(
+            tenant_id=tenant_id,
+            task_uuid=uuid,
+            inngest_run_id=inngest_run_id
+        )
+        return ScheduledTaskResponse.model_validate(scheduled_task)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.post("/{uuid}/execution-result", response_model=ScheduledTaskResponse)
+async def update_task_execution_result(
+    uuid: str,
+    status: str = Query(..., description="执行状态（success、failed）"),
+    error: Optional[str] = Query(None, description="错误信息（可选）"),
+    inngest_run_id: Optional[str] = Query(None, description="Inngest 运行ID（可选）"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新定时任务执行结果（供 Inngest 函数调用）
+    
+    当定时任务执行完成时，Inngest 函数会调用此端点更新执行结果。
+    此端点会自动发送消息通知给组织管理员。
+    
+    Args:
+        uuid: 定时任务UUID
+        status: 执行状态（success、failed）
+        error: 错误信息（可选）
+        inngest_run_id: Inngest 运行ID（可选）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        ScheduledTaskResponse: 更新后的定时任务对象
+        
+    Raises:
+        HTTPException: 当定时任务不存在时抛出
+    """
+    try:
+        scheduled_task = await ScheduledTaskService.update_task_execution_result(
+            tenant_id=tenant_id,
+            task_uuid=uuid,
+            status=status,
+            error=error,
+            inngest_run_id=inngest_run_id
+        )
+        return ScheduledTaskResponse.model_validate(scheduled_task)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+

@@ -4,8 +4,8 @@
 提供部门的 CRUD 操作和树形结构管理。
 """
 
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 
 from tree_root.models.department import Department
 from tree_root.schemas.department import (
@@ -292,6 +292,41 @@ async def delete_department(
     except AuthorizationError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.put("/sort", status_code=status.HTTP_200_OK)
+async def update_department_order(
+    department_orders: List[Dict[str, Any]] = Body(..., description="部门排序列表"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量更新部门排序
+    
+    用于前端拖拽排序后批量更新多个部门的排序顺序。
+    
+    Args:
+        department_orders: 部门排序列表，格式：[{"uuid": "...", "sort_order": 1}, ...]
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 成功响应
+        
+    Raises:
+        HTTPException: 当数据验证失败时抛出
+    """
+    try:
+        await DepartmentService.update_department_order(
+            tenant_id=tenant_id,
+            department_orders=department_orders
+        )
+        return {"success": True, "message": "排序更新成功"}
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from tree_root.schemas.user_profile import UserProfileUpdate, UserProfileResponse
 from tree_root.services.user_profile_service import UserProfileService
+from tree_root.api.deps.deps import get_current_tenant
 from soil.api.deps.deps import get_current_user
 from soil.models.user import User
 from soil.exceptions.exceptions import NotFoundError
@@ -41,12 +42,14 @@ async def get_user_profile(
 async def update_user_profile(
     data: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """
     更新当前用户个人资料
     
     Args:
         data: 个人资料更新数据
+        tenant_id: 当前组织ID（依赖注入）
         
     Returns:
         UserProfileResponse: 更新后的个人资料对象
@@ -57,7 +60,8 @@ async def update_user_profile(
     try:
         return await UserProfileService.update_user_profile(
             str(current_user.uuid),
-            data
+            data,
+            tenant_id=tenant_id
         )
     except NotFoundError as e:
         raise HTTPException(

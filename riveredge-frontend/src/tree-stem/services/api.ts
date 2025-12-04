@@ -6,6 +6,7 @@
 
 // 使用 Fetch API 进行 HTTP 请求
 import { clearAuth } from '../utils/auth';
+import { handleNetworkError, handleServerError } from '../utils/errorRecovery';
 
 /**
  * API 基础 URL
@@ -156,6 +157,19 @@ export async function apiRequest<T = any>(
 
     // 检查响应状态
     if (!response.ok) {
+      // 处理网络错误
+      if (!response.ok && response.status === 0) {
+        handleNetworkError(new Error('网络连接失败'));
+        const error = new Error('网络连接失败') as any;
+        error.response = { data, status: response.status };
+        throw error;
+      }
+      
+      // 处理服务器错误
+      if (response.status >= 500 && response.status < 600) {
+        handleServerError({ response: { status: response.status, data } });
+      }
+      
       // 处理 401 未授权错误
       if (response.status === 401) {
         // ⚠️ 关键修复：区分登录接口和其他接口的错误处理

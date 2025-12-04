@@ -7,12 +7,14 @@
 from typing import List, Optional
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
+import json
 
 from tree_root.models.data_dictionary import DataDictionary
 from tree_root.models.dictionary_item import DictionaryItem
 from tree_root.schemas.data_dictionary import DataDictionaryCreate, DataDictionaryUpdate
 from tree_root.schemas.dictionary_item import DictionaryItemCreate, DictionaryItemUpdate
 from soil.exceptions.exceptions import NotFoundError, ValidationError
+from soil.infrastructure.cache.cache_manager import cache_manager
 
 
 class DataDictionaryService:
@@ -45,6 +47,8 @@ class DataDictionaryService:
                 tenant_id=tenant_id,
                 **data.model_dump()
             )
+            # 清除列表缓存
+            await DataDictionaryService._clear_dictionary_cache(tenant_id)
             return dictionary
         except IntegrityError:
             raise ValidationError(f"字典代码 {data.code} 已存在")
@@ -52,7 +56,8 @@ class DataDictionaryService:
     @staticmethod
     async def get_dictionary_by_uuid(
         tenant_id: int,
-        uuid: str
+        uuid: str,
+        use_cache: bool = True
     ) -> DataDictionary:
         """
         根据UUID获取字典
@@ -60,6 +65,7 @@ class DataDictionaryService:
         Args:
             tenant_id: 组织ID
             uuid: 字典UUID
+            use_cache: 是否使用缓存（默认True）
             
         Returns:
             DataDictionary: 字典对象
@@ -67,6 +73,21 @@ class DataDictionaryService:
         Raises:
             NotFoundError: 当字典不存在时抛出
         """
+        cache_key = DataDictionaryService._get_cache_key(tenant_id, "uuid", uuid)
+        
+        # 尝试从缓存获取
+        if use_cache:
+            try:
+                cached = await cache_manager.get("data_dictionary", cache_key)
+                if cached:
+                    # 从缓存数据重建字典对象
+                    dictionary = await DataDictionary.get(id=cached["id"])
+                    return dictionary
+            except Exception:
+                # 缓存失败不影响主流程
+                pass
+        
+        # 从数据库获取
         dictionary = await DataDictionary.filter(
             tenant_id=tenant_id,
             uuid=uuid,
@@ -76,12 +97,64 @@ class DataDictionaryService:
         if not dictionary:
             raise NotFoundError("字典不存在")
         
+        # 缓存结果
+        if use_cache:
+            try:
+                await cache_manager.set(
+                    "data_dictionary",
+                    cache_key,
+                    {"id": dictionary.id, "uuid": str(dictionary.uuid), "code": dictionary.code},
+                    ttl=3600  # 缓存1小时
+                )
+            except Exception:
+                # 缓存失败不影响主流程
+                pass
+        
         return dictionary
+    
+    @staticmethod
+    def _get_cache_key(tenant_id: int, key_type: str, key_value: str) -> str:
+        """
+        生成缓存键
+        
+        Args:
+            tenant_id: 组织ID
+            key_type: 键类型（code、uuid、list）
+            key_value: 键值
+            
+        Returns:
+            str: 缓存键
+        """
+        return f"{tenant_id}:{key_type}:{key_value}"
+    
+    @staticmethod
+    async def _clear_dictionary_cache(tenant_id: int, dictionary_code: Optional[str] = None, dictionary_uuid: Optional[str] = None) -> None:
+        """
+        清除字典缓存
+        
+        Args:
+            tenant_id: 组织ID
+            dictionary_code: 字典代码（可选）
+            dictionary_uuid: 字典UUID（可选）
+        """
+        try:
+            if dictionary_code:
+                cache_key = DataDictionaryService._get_cache_key(tenant_id, "code", dictionary_code)
+                await cache_manager.delete("data_dictionary", cache_key)
+            if dictionary_uuid:
+                cache_key = DataDictionaryService._get_cache_key(tenant_id, "uuid", dictionary_uuid)
+                await cache_manager.delete("data_dictionary", cache_key)
+            # 清除列表缓存（使用通配符）
+            await cache_manager.delete("data_dictionary", f"{tenant_id}:list:*")
+        except Exception:
+            # 缓存清除失败不影响主流程
+            pass
     
     @staticmethod
     async def get_dictionary_by_code(
         tenant_id: int,
-        code: str
+        code: str,
+        use_cache: bool = True
     ) -> Optional[DataDictionary]:
         """
         根据代码获取字典
@@ -89,16 +162,47 @@ class DataDictionaryService:
         Args:
             tenant_id: 组织ID
             code: 字典代码
+            use_cache: 是否使用缓存（默认True）
             
         Returns:
             DataDictionary: 字典对象，如果不存在返回 None
         """
-        return await DataDictionary.filter(
+        cache_key = DataDictionaryService._get_cache_key(tenant_id, "code", code)
+        
+        # 尝试从缓存获取
+        if use_cache:
+            try:
+                cached = await cache_manager.get("data_dictionary", cache_key)
+                if cached:
+                    # 从缓存数据重建字典对象
+                    dictionary = await DataDictionary.get(id=cached["id"])
+                    return dictionary
+            except Exception:
+                # 缓存失败不影响主流程
+                pass
+        
+        # 从数据库获取
+        dictionary = await DataDictionary.filter(
             tenant_id=tenant_id,
             code=code,
             deleted_at__isnull=True,
             is_active=True
         ).first()
+        
+        # 缓存结果
+        if dictionary and use_cache:
+            try:
+                await cache_manager.set(
+                    "data_dictionary",
+                    cache_key,
+                    {"id": dictionary.id, "uuid": str(dictionary.uuid), "code": dictionary.code},
+                    ttl=3600  # 缓存1小时
+                )
+            except Exception:
+                # 缓存失败不影响主流程
+                pass
+        
+        return dictionary
     
     @staticmethod
     async def list_dictionaries(
@@ -159,10 +263,34 @@ class DataDictionaryService:
             raise ValidationError("系统字典的代码不可修改")
         
         update_data = data.model_dump(exclude_unset=True)
+        
+        # 如果字典被禁用，自动更新关联的自定义字段
+        if "is_active" in update_data and not update_data["is_active"]:
+            import asyncio
+            from tree_root.services.custom_field_service import CustomFieldService
+            
+            # 异步更新关联的自定义字段（不阻塞主流程）
+            asyncio.create_task(
+                CustomFieldService.update_fields_by_dictionary_code(
+                    tenant_id=tenant_id,
+                    dictionary_code=dictionary.code,
+                    is_active=False
+                )
+            )
+        
         if update_data:
             try:
+                old_code = dictionary.code
+                old_uuid = str(dictionary.uuid)
                 await dictionary.update_from_dict(update_data)
                 await dictionary.save()
+                # 清除相关缓存
+                await DataDictionaryService._clear_dictionary_cache(tenant_id, dictionary_code=old_code, dictionary_uuid=old_uuid)
+                # 如果代码或UUID变更，也清除新的缓存键
+                if "code" in update_data and update_data["code"] != old_code:
+                    await DataDictionaryService._clear_dictionary_cache(tenant_id, dictionary_code=update_data["code"])
+                if "uuid" in update_data and str(update_data["uuid"]) != old_uuid:
+                    await DataDictionaryService._clear_dictionary_cache(tenant_id, dictionary_uuid=str(update_data["uuid"]))
             except IntegrityError:
                 raise ValidationError("字典代码已存在")
         
@@ -191,10 +319,38 @@ class DataDictionaryService:
         if dictionary.is_system:
             raise ValidationError("系统字典不可删除")
         
+        # 自动更新关联的自定义字段（禁用或清空 dictionary_code）
+        from tree_root.models.custom_field import CustomField
+        import json
+        
+        # 查找所有使用该字典的自定义字段
+        custom_fields = await CustomField.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            field_type="select"
+        ).all()
+        
+        for field in custom_fields:
+            config = field.get_config()
+            if config and config.get("dictionary_code") == dictionary.code:
+                # 清空 dictionary_code 并禁用字段
+                config.pop("dictionary_code", None)
+                config.pop("options", None)
+                field.set_config(config)
+                field.is_active = False
+                await field.save()
+        
+        # 记录字典代码和UUID，用于清除缓存
+        dictionary_code = dictionary.code
+        dictionary_uuid = str(dictionary.uuid)
+        
         # 软删除
         from datetime import datetime
         dictionary.deleted_at = datetime.utcnow()
         await dictionary.save()
+        
+        # 清除相关缓存
+        await DataDictionaryService._clear_dictionary_cache(tenant_id, dictionary_code=dictionary_code, dictionary_uuid=dictionary_uuid)
     
     # 字典项相关方法
     @staticmethod

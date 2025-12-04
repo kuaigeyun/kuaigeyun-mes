@@ -71,6 +71,7 @@ from tree_root.api.operation_logs.operation_logs import router as operation_logs
 from tree_root.api.login_logs.login_logs import router as login_logs_router
 from tree_root.api.online_users.online_users import router as online_users_router
 from tree_root.api.data_backups.data_backups import router as data_backups_router
+from tree_root.api.help_documents.help_documents import router as help_documents_router
 
 # Inngest 集成
 from tree_root.inngest.client import inngest_client
@@ -117,6 +118,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 注册统一异常处理中间件（应该在其他中间件之前注册）
+from tree_root.middleware.exception_handler_middleware import ExceptionHandlerMiddleware
+app.add_middleware(ExceptionHandlerMiddleware)
 
 # 注册操作日志中间件
 from tree_root.middleware.operation_log_middleware import OperationLogMiddleware
@@ -236,6 +241,7 @@ app.include_router(operation_logs_router, prefix="/api/v1/system")
 app.include_router(login_logs_router, prefix="/api/v1/system")
 app.include_router(online_users_router, prefix="/api/v1/system")
 app.include_router(data_backups_router, prefix="/api/v1/system")
+app.include_router(help_documents_router, prefix="/api/v1/system")
 
 # Inngest 测试端点
 @app.post("/api/v1/test/inngest")

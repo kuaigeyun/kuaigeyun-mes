@@ -7,8 +7,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input } from 'antd';
-import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Tabs } from 'antd';
+import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import KanbanView from './kanban-view';
 import { UniTable } from '../../../../components/uni_table';
 import {
   getApprovalInstanceList,
@@ -33,6 +34,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   
   // Modal 相关状态（提交审批）
   const [submitModalVisible, setSubmitModalVisible] = useState(false);
@@ -269,44 +271,69 @@ const ApprovalInstanceListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<ApprovalInstance>
-        headerTitle="审批实例管理"
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, ...rest } = params;
-          const skip = (current - 1) * pageSize;
-          const limit = pageSize;
-          
-          const listParams: any = {
-            skip,
-            limit,
-            ...searchFormValues,
-          };
-          
-          const data = await getApprovalInstanceList(listParams);
-          return {
-            data,
-            success: true,
-            total: data.length,
-          };
-        }}
-        rowKey="uuid"
-        toolBarRender={() => [
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
           <Button
-            key="submit"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleSubmit}
+            type={viewMode === 'kanban' ? 'primary' : 'default'}
+            icon={<AppstoreOutlined />}
+            onClick={() => setViewMode('kanban')}
+            style={{ marginRight: 8 }}
           >
-            提交审批
-          </Button>,
-        ]}
-        search={{
-          labelWidth: 'auto',
-          showAdvancedSearch: true,
-        }}
-      />
+            看板视图
+          </Button>
+          <Button
+            type={viewMode === 'list' ? 'primary' : 'default'}
+            icon={<UnorderedListOutlined />}
+            onClick={() => setViewMode('list')}
+          >
+            列表视图
+          </Button>
+        </div>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleSubmit}
+        >
+          提交审批
+        </Button>
+      </div>
+
+      {/* 看板视图 */}
+      {viewMode === 'kanban' && <KanbanView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <UniTable<ApprovalInstance>
+          headerTitle="审批实例管理"
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20, ...rest } = params;
+            const skip = (current - 1) * pageSize;
+            const limit = pageSize;
+            
+            const listParams: any = {
+              skip,
+              limit,
+              ...searchFormValues,
+            };
+            
+            const data = await getApprovalInstanceList(listParams);
+            return {
+              data,
+              success: true,
+              total: data.length,
+            };
+          }}
+          rowKey="uuid"
+          toolBarRender={() => []}
+          search={{
+            labelWidth: 'auto',
+            showAdvancedSearch: true,
+          }}
+        />
+      )}
 
       {/* 提交审批 Modal */}
       <Modal

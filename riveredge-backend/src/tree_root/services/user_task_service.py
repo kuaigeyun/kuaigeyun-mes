@@ -13,6 +13,8 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
 from tree_root.models.approval_instance import ApprovalInstance
+from tree_root.services.approval_instance_service import ApprovalInstanceService
+from tree_root.schemas.approval_instance import ApprovalInstanceAction
 from tree_root.schemas.user_task import (
     UserTaskResponse,
     UserTaskListResponse,
@@ -79,10 +81,14 @@ class UserTaskService:
         if status:
             query &= Q(status=status)
         
-        # 查询总数
+        # 优化分页查询：先查询总数，再查询数据
         total = await ApprovalInstance.filter(query).count()
         
-        # 查询列表（按创建时间倒序）
+        # 限制分页大小，避免过大查询
+        if page_size > 100:
+            page_size = 100
+        
+        # 查询列表（按创建时间倒序，预加载关联数据）
         offset = (page - 1) * page_size
         tasks = await ApprovalInstance.filter(query).prefetch_related("process").order_by("-created_at").offset(offset).limit(page_size)
         
@@ -200,60 +206,40 @@ class UserTaskService:
         except DoesNotExist:
             raise NotFoundError("任务不存在")
         
-        # 检查权限：必须是当前审批人
-        if task.current_approver_id != user_id:
-            raise ValidationError("您不是当前审批人，无法处理此任务")
+        # 调用审批流程服务来处理审批操作，确保逻辑一致并触发消息通知
+        approval_action = ApprovalInstanceAction(
+            action=data.action,
+            comment=data.comment,
+            transfer_to_user_id=None  # 用户任务暂不支持转交
+        )
         
-        # 检查状态：必须是待处理状态
-        if task.status != "pending":
-            raise ValidationError("任务状态不允许此操作")
+        # 调用审批流程服务执行审批操作（会自动触发消息通知）
+        updated_task = await ApprovalInstanceService.perform_approval_action(
+            tenant_id=tenant_id,
+            uuid=task_uuid,
+            user_id=user_id,
+            action=approval_action
+        )
         
-        # 处理任务
-        if data.action == "approve":
-            # 审批通过
-            # TODO: 这里应该调用审批流程服务来处理审批逻辑
-            # 暂时简单处理：更新状态为 approved
-            task.status = "approved"
-            task.completed_at = datetime.now()
-        elif data.action == "reject":
-            # 审批拒绝
-            task.status = "rejected"
-            task.completed_at = datetime.now()
-        else:
-            raise ValidationError(f"不支持的操作类型: {data.action}")
-        
-        # 更新审批历史（存储到 data 字段中）
-        if not task.data:
-            task.data = {}
-        
-        if "approval_history" not in task.data:
-            task.data["approval_history"] = []
-        
-        task.data["approval_history"].append({
-            "approver_id": user_id,
-            "action": data.action,
-            "comment": data.comment,
-            "timestamp": datetime.now().isoformat(),
-        })
-        
-        await task.save()
+        # 重新获取任务以获取最新状态
+        await updated_task.fetch_related("process")
         
         # 转换为响应格式
         task_dict = {
-            "uuid": task.uuid,
-            "tenant_id": task.tenant_id,
-            "process_uuid": task.process.uuid if task.process else None,
-            "title": task.title,
-            "content": task.content,
-            "data": task.data,
-            "submitter_id": task.submitter_id,
-            "current_approver_id": task.current_approver_id,
-            "status": task.status,
-            "current_node": task.current_node,
-            "submitted_at": task.submitted_at,
-            "completed_at": task.completed_at,
-            "created_at": task.created_at,
-            "updated_at": task.updated_at,
+            "uuid": updated_task.uuid,
+            "tenant_id": updated_task.tenant_id,
+            "process_uuid": updated_task.process.uuid if updated_task.process else None,
+            "title": updated_task.title,
+            "content": updated_task.content,
+            "data": updated_task.data,
+            "submitter_id": updated_task.submitter_id,
+            "current_approver_id": updated_task.current_approver_id,
+            "status": updated_task.status,
+            "current_node": updated_task.current_node,
+            "submitted_at": updated_task.submitted_at,
+            "completed_at": updated_task.completed_at,
+            "created_at": updated_task.created_at,
+            "updated_at": updated_task.updated_at,
         }
         return UserTaskResponse.model_validate(task_dict)
     

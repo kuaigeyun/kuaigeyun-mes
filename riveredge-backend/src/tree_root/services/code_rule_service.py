@@ -166,11 +166,33 @@ class CodeRuleService:
                 rule.expression = original_expression
                 raise ValidationError("编码规则表达式无效")
         
+        # 记录变更前的规则代码和状态（用于通知业务模块）
+        old_code = rule.code
+        old_is_active = rule.is_active
+        
         # 更新其他字段
         for key, value in update_data.items():
             setattr(rule, key, value)
         
         await rule.save()
+        
+        # 如果规则代码或状态变更，通知业务模块（异步，不阻塞主流程）
+        code_changed = old_code != rule.code
+        status_changed = old_is_active != rule.is_active
+        
+        if code_changed or status_changed or 'expression' in update_data:
+            import asyncio
+            # 异步通知业务模块编码规则变更
+            asyncio.create_task(
+                CodeRuleService._notify_business_modules(
+                    tenant_id=tenant_id,
+                    rule_code=old_code if code_changed else rule.code,
+                    new_rule_code=rule.code if code_changed else None,
+                    is_active=rule.is_active,
+                    expression_changed='expression' in update_data
+                )
+            )
+        
         return rule
     
     @staticmethod
@@ -194,8 +216,53 @@ class CodeRuleService:
         if rule.is_system:
             raise ValidationError("系统规则不可删除")
         
+        # 通知业务模块编码规则将被删除（异步，不阻塞主流程）
+        import asyncio
+        asyncio.create_task(
+            CodeRuleService._notify_business_modules(
+                tenant_id=tenant_id,
+                rule_code=rule.code,
+                is_active=False,
+                is_deleted=True
+            )
+        )
+        
         # 软删除
         from datetime import datetime
         rule.deleted_at = datetime.now()
         await rule.save()
+    
+    @staticmethod
+    async def _notify_business_modules(
+        tenant_id: int,
+        rule_code: str,
+        new_rule_code: Optional[str] = None,
+        is_active: bool = True,
+        expression_changed: bool = False,
+        is_deleted: bool = False
+    ) -> None:
+        """
+        通知业务模块编码规则变更
+        
+        这是一个预留方法，用于将来实现业务模块的编码规则变更通知。
+        目前只是记录变更，不执行具体操作。
+        
+        Args:
+            tenant_id: 组织ID
+            rule_code: 规则代码
+            new_rule_code: 新规则代码（如果规则代码变更）
+            is_active: 是否启用
+            expression_changed: 表达式是否变更
+            is_deleted: 是否删除
+        """
+        # TODO: 如果将来需要业务模块自动更新编码，可以在这里实现
+        # 例如：
+        # 1. 查找所有使用该编码规则的业务记录
+        # 2. 根据新的编码规则重新生成编码
+        # 3. 更新业务记录的编码字段
+        
+        # 注意：编码规则变更通常不应该自动更新已生成的编码
+        # 因为已生成的编码可能已经被使用，更改会导致数据不一致
+        # 只有在特殊情况下（如编码规则错误修复）才需要重新生成编码
+        pass
 

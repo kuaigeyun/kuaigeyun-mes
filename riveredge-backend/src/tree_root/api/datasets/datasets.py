@@ -15,6 +15,8 @@ from tree_root.schemas.dataset import (
     ExecuteQueryRequest,
     ExecuteQueryResponse,
 )
+from tree_root.schemas.api import APITestResponse
+from tree_root.schemas.data_source import TestConnectionResponse
 from tree_root.services.dataset_service import DatasetService
 from tree_root.api.deps.deps import get_current_tenant
 from soil.api.deps.deps import get_current_user as soil_get_current_user
@@ -343,5 +345,161 @@ async def execute_dataset_query(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"执行数据集查询失败: {str(e)}"
+        )
+
+
+@router.post("/{dataset_uuid}/test-api", response_model=APITestResponse)
+async def test_api_for_dataset(
+    dataset_uuid: UUID,
+    test_parameters: Optional[dict] = None,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    使用接口管理的测试功能测试数据集关联的 API
+    
+    仅当数据集的 query_type 为 'api' 且 query_config 中包含 api_uuid 或 api_code 时可用。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        test_parameters: 测试参数（可选，覆盖数据集定义的参数）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        APITestResponse: 测试结果
+        {
+            "status_code": 200,
+            "headers": {...},
+            "body": {...},
+            "elapsed_time": 0.123
+        }
+        
+    Raises:
+        HTTPException: 当测试失败时抛出
+    """
+    try:
+        result = await DatasetService().test_api_for_dataset(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+            test_parameters=test_parameters,
+        )
+        
+        return APITestResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"测试数据集 API 失败: {str(e)}"
+        )
+
+
+@router.post("/{dataset_uuid}/test-data-source", response_model=TestConnectionResponse)
+async def test_data_source_for_dataset(
+    dataset_uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    使用数据源管理的测试功能测试数据集关联的数据源连接
+    
+    测试数据集关联的数据源连接，并返回测试结果。
+    
+    Args:
+        dataset_uuid: 数据集UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        TestConnectionResponse: 测试结果
+        {
+            "success": true,
+            "message": "连接成功",
+            "elapsed_time": 0.123
+        }
+        
+    Raises:
+        HTTPException: 当测试失败时抛出
+    """
+    try:
+        result = await DatasetService().test_data_source_for_dataset(
+            tenant_id=tenant_id,
+            dataset_uuid=dataset_uuid,
+        )
+        
+        return TestConnectionResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"测试数据集数据源连接失败: {str(e)}"
+        )
+
+
+@router.post("/code/{dataset_code}/query", response_model=ExecuteQueryResponse)
+async def query_dataset_by_code(
+    dataset_code: str,
+    execute_request: ExecuteQueryRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    通过数据集代码查询数据集数据（供业务模块使用）
+    
+    这是一个便捷端点，供业务模块通过数据集代码快速获取数据。
+    仅返回已启用且未删除的数据集数据。
+    
+    Args:
+        dataset_code: 数据集代码
+        execute_request: 执行查询请求
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        ExecuteQueryResponse: 查询结果
+        {
+            "success": true,
+            "data": [...],
+            "total": 100,
+            "columns": ["col1", "col2"],
+            "elapsed_time": 0.123,
+            "error": null
+        }
+        
+    Raises:
+        HTTPException: 当查询失败时抛出
+    """
+    try:
+        result = await DatasetService.query_dataset_by_code(
+            tenant_id=tenant_id,
+            dataset_code=dataset_code,
+            parameters=execute_request.parameters,
+            limit=execute_request.limit or 100,
+            offset=execute_request.offset or 0,
+        )
+        
+        return result
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"查询数据集失败: {str(e)}"
         )
 

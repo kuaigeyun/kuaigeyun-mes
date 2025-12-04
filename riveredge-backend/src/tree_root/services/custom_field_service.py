@@ -10,7 +10,10 @@ from tortoise.exceptions import IntegrityError
 
 from tree_root.models.custom_field import CustomField
 from tree_root.models.custom_field_value import CustomFieldValue
+from tree_root.models.data_dictionary import DataDictionary
+from tree_root.models.dictionary_item import DictionaryItem
 from tree_root.schemas.custom_field import CustomFieldCreate, CustomFieldUpdate
+from tree_root.services.data_dictionary_service import DataDictionaryService
 from soil.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -39,10 +42,45 @@ class CustomFieldService:
         Raises:
             ValidationError: 当字段代码已存在时抛出
         """
+        # 如果字段类型为 select 且配置中包含 dictionary_code，验证数据字典并自动填充选项
+        field_data = data.model_dump()
+        config = field_data.get("config", {}) or {}
+        
+        if data.field_type == "select" and config.get("dictionary_code"):
+            dictionary_code = config["dictionary_code"]
+            # 验证数据字典是否存在
+            dictionary = await DataDictionaryService.get_dictionary_by_code(
+                tenant_id=tenant_id,
+                code=dictionary_code
+            )
+            
+            if not dictionary:
+                raise ValidationError(f"数据字典 {dictionary_code} 不存在或不属于当前组织")
+            
+            # 获取字典项并自动填充选项
+            items = await DataDictionaryService.get_items_by_dictionary(
+                tenant_id=tenant_id,
+                dictionary_uuid=str(dictionary.uuid),
+                is_active=True
+            )
+            
+            # 将字典项转换为选项格式
+            options = [
+                {
+                    "label": item.label,
+                    "value": item.value,
+                    "color": item.color,
+                    "icon": item.icon
+                }
+                for item in items
+            ]
+            config["options"] = options
+            field_data["config"] = config
+        
         try:
             field = CustomField(
                 tenant_id=tenant_id,
-                **data.model_dump()
+                **field_data
             )
             await field.save()
             return field
@@ -163,6 +201,43 @@ class CustomFieldService:
         field = await CustomFieldService.get_field_by_uuid(tenant_id, uuid)
         
         update_data = data.model_dump(exclude_unset=True)
+        
+        # 如果字段类型为 select 且配置中包含 dictionary_code，验证数据字典并自动填充选项
+        if "field_type" in update_data or "config" in update_data:
+            field_type = update_data.get("field_type", field.field_type)
+            config = update_data.get("config", field.get_config()) or {}
+            
+            if field_type == "select" and config.get("dictionary_code"):
+                dictionary_code = config["dictionary_code"]
+                # 验证数据字典是否存在
+                dictionary = await DataDictionaryService.get_dictionary_by_code(
+                    tenant_id=tenant_id,
+                    code=dictionary_code
+                )
+                
+                if not dictionary:
+                    raise ValidationError(f"数据字典 {dictionary_code} 不存在或不属于当前组织")
+                
+                # 获取字典项并自动填充选项
+                items = await DataDictionaryService.get_items_by_dictionary(
+                    tenant_id=tenant_id,
+                    dictionary_uuid=str(dictionary.uuid),
+                    is_active=True
+                )
+                
+                # 将字典项转换为选项格式
+                options = [
+                    {
+                        "label": item.label,
+                        "value": item.value,
+                        "color": item.color,
+                        "icon": item.icon
+                    }
+                    for item in items
+                ]
+                config["options"] = options
+                update_data["config"] = config
+        
         for key, value in update_data.items():
             setattr(field, key, value)
         
@@ -308,4 +383,68 @@ class CustomFieldService:
             )
         
         return {"success": True, "count": len(values)}
+    
+    @staticmethod
+    async def update_fields_by_dictionary_code(
+        tenant_id: int,
+        dictionary_code: str,
+        is_active: Optional[bool] = None
+    ) -> int:
+        """
+        根据数据字典代码更新关联的自定义字段
+        
+        当数据字典被删除或禁用时，自动更新关联的自定义字段。
+        
+        Args:
+            tenant_id: 组织ID
+            dictionary_code: 数据字典代码
+            is_active: 是否启用（None 表示禁用）
+            
+        Returns:
+            int: 更新的字段数量
+        """
+        # 查找所有使用该字典的自定义字段
+        custom_fields = await CustomField.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            field_type="select"
+        ).all()
+        
+        updated_count = 0
+        for field in custom_fields:
+            config = field.get_config()
+            if config and config.get("dictionary_code") == dictionary_code:
+                if is_active is False:
+                    # 禁用字段
+                    field.is_active = False
+                    updated_count += 1
+                elif is_active is True:
+                    # 重新启用字段并更新选项
+                    field.is_active = True
+                    # 重新获取字典项并更新选项
+                    dictionary = await DataDictionaryService.get_dictionary_by_code(
+                        tenant_id=tenant_id,
+                        code=dictionary_code
+                    )
+                    if dictionary:
+                        items = await DataDictionaryService.get_items_by_dictionary(
+                            tenant_id=tenant_id,
+                            dictionary_uuid=str(dictionary.uuid),
+                            is_active=True
+                        )
+                        options = [
+                            {
+                                "label": item.label,
+                                "value": item.value,
+                                "color": item.color,
+                                "icon": item.icon
+                            }
+                            for item in items
+                        ]
+                        config["options"] = options
+                        field.set_config(config)
+                        updated_count += 1
+                await field.save()
+        
+        return updated_count
 

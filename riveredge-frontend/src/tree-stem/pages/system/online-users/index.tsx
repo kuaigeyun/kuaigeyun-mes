@@ -7,8 +7,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button } from 'antd';
-import { EyeOutlined, BarChartOutlined, LogoutOutlined } from '@ant-design/icons';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Tabs } from 'antd';
+import { EyeOutlined, BarChartOutlined, LogoutOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import CardView from './card-view';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -26,6 +27,7 @@ import dayjs from 'dayjs';
 const OnlineUsersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { currentUser } = useGlobalStore();
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [currentUserInfo, setCurrentUserInfo] = useState<OnlineUser | null>(null);
@@ -164,46 +166,64 @@ const OnlineUsersPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      {/* 统计卡片 */}
-      {stats && (
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                {stats.total}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>总在线用户数</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
-                {stats.active}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>活跃用户数（最近5分钟）</div>
-            </div>
-          </Card>
-          {Object.keys(stats.by_tenant).length > 0 && (
-            <Card style={{ flex: 1 }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#faad14', marginBottom: '8px' }}>
-                  按组织统计
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                  {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
-                    <Tag key={tenantId} color="blue">
-                      组织 {tenantId}: {count}
-                    </Tag>
-                  ))}
-                </div>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs
+          activeKey={viewMode}
+          onChange={(key) => setViewMode(key as 'card' | 'list')}
+          items={[
+            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
+            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
+          ]}
+        />
+      </div>
 
-      {/* 在线用户列表 */}
-      <Card>
+      {/* 卡片视图 */}
+      {viewMode === 'card' && <CardView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <>
+          {/* 统计卡片 */}
+          {stats && (
+            <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
+              <Card style={{ flex: 1 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
+                    {stats.total}
+                  </div>
+                  <div style={{ color: '#666', marginTop: '8px' }}>总在线用户数</div>
+                </div>
+              </Card>
+              <Card style={{ flex: 1 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
+                    {stats.active}
+                  </div>
+                  <div style={{ color: '#666', marginTop: '8px' }}>活跃用户数（最近5分钟）</div>
+                </div>
+              </Card>
+              {Object.keys(stats.by_tenant).length > 0 && (
+                <Card style={{ flex: 1 }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#faad14', marginBottom: '8px' }}>
+                      按组织统计
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                      {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
+                        <Tag key={tenantId} color="blue">
+                          组织 {tenantId}: {count}
+                        </Tag>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* 在线用户列表 */}
+          <Card>
         <ProTable<OnlineUser>
           columns={columns}
           manualRequest={!currentUser}
@@ -259,7 +279,9 @@ const OnlineUsersPage: React.FC = () => {
           ]}
           headerTitle="在线用户"
         />
-      </Card>
+          </Card>
+        </>
+      )}
 
       {/* 用户详情 Modal */}
       <Modal

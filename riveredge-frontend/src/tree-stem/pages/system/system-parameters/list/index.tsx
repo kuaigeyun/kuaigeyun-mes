@@ -7,8 +7,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Tabs } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import GroupedFormView from '../grouped-form-view';
 import { UniTable } from '../../../../components/uni_table';
 import {
   getSystemParameterList,
@@ -29,6 +30,7 @@ const SystemParameterListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'form'>('form');
   
   // Modal 相关状态（创建/编辑参数）
   const [modalVisible, setModalVisible] = useState(false);
@@ -368,69 +370,87 @@ const SystemParameterListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<SystemParameter>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-          };
-          
-          // 状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          // 类型筛选
-          if (searchFormValues?.type) {
-            apiParams.type = searchFormValues.type;
-          }
-          
-          // 搜索条件处理：key 使用模糊搜索
-          if (searchFormValues?.key) {
-            apiParams.key = searchFormValues.key as string;
-          }
-          
-          try {
-            const response = await getSystemParameterList(apiParams);
-            return {
-              data: response.items,
-              success: true,
-              total: response.total,
-            };
-          } catch (error: any) {
-            console.error('获取系统参数列表失败:', error);
-            messageApi.error(error?.message || '获取系统参数列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
-        toolBarRender={() => [
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs
+          activeKey={viewMode}
+          onChange={(key) => setViewMode(key as 'list' | 'form')}
+          items={[
+            { key: 'form', label: '分组表单视图', icon: <AppstoreOutlined /> },
+            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
+          ]}
+        />
+        {viewMode === 'list' && (
           <Button
-            key="create"
             type="primary"
             icon={<PlusOutlined />}
             onClick={handleCreate}
           >
             新建参数
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-      />
+          </Button>
+        )}
+      </div>
+
+      {/* 分组表单视图 */}
+      {viewMode === 'form' && <GroupedFormView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <UniTable<SystemParameter>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数
+            const apiParams: any = {
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
+            };
+            
+            // 状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
+            
+            // 类型筛选
+            if (searchFormValues?.type) {
+              apiParams.type = searchFormValues.type;
+            }
+            
+            // 搜索条件处理：key 使用模糊搜索
+            if (searchFormValues?.key) {
+              apiParams.key = searchFormValues.key as string;
+            }
+            
+            try {
+              const response = await getSystemParameterList(apiParams);
+              return {
+                data: response.items,
+                success: true,
+                total: response.total,
+              };
+            } catch (error: any) {
+              console.error('获取系统参数列表失败:', error);
+              messageApi.error(error?.message || '获取系统参数列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          toolBarRender={() => []}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+        />
+      )}
 
       {/* 创建/编辑参数 Modal */}
       <Modal

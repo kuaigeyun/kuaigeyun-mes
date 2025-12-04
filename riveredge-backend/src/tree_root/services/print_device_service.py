@@ -12,6 +12,7 @@ import socket
 from tortoise.exceptions import IntegrityError
 
 from tree_root.models.print_device import PrintDevice
+from tree_root.models.print_template import PrintTemplate
 from tree_root.schemas.print_device import (
     PrintDeviceCreate,
     PrintDeviceUpdate,
@@ -145,11 +146,26 @@ class PrintDeviceService:
         """
         print_device = await PrintDeviceService.get_print_device_by_uuid(tenant_id, uuid)
         
+        old_is_active = print_device.is_active
+        old_is_online = print_device.is_online
+        
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(print_device, key, value)
         
         await print_device.save()
+        
+        # 如果设备状态变更，异步通知关联的打印模板
+        if (data.is_active is not None and old_is_active != print_device.is_active) or \
+           (old_is_online != print_device.is_online):
+            import asyncio
+            asyncio.create_task(
+                PrintDeviceService._notify_templates_of_device_change(
+                    tenant_id=tenant_id,
+                    device_uuid=uuid
+                )
+            )
+        
         return print_device
     
     @staticmethod
@@ -170,6 +186,16 @@ class PrintDeviceService:
         print_device = await PrintDeviceService.get_print_device_by_uuid(tenant_id, uuid)
         print_device.deleted_at = datetime.now()
         await print_device.save()
+        
+        # 异步通知关联的打印模板，清除设备关联
+        import asyncio
+        asyncio.create_task(
+            PrintDeviceService._notify_templates_of_device_change(
+                tenant_id=tenant_id,
+                device_uuid=uuid,
+                is_deleted=True
+            )
+        )
     
     @staticmethod
     async def test_print_device(
@@ -299,10 +325,37 @@ class PrintDeviceService:
             raise ValidationError("异步执行功能待实现")
         
         # 同步执行打印
-        # TODO: 实现实际的打印逻辑
         # 1. 获取打印模板
-        # 2. 渲染模板
-        # 3. 发送到打印设备
+        from tree_root.services.print_template_service import PrintTemplateService
+        print_template = await PrintTemplateService.get_print_template_by_uuid(
+            tenant_id=tenant_id,
+            uuid=data.template_uuid
+        )
+        
+        # 2. 验证模板是否关联了当前打印设备（如果模板配置了设备）
+        if print_template.config and print_template.config.get("device_uuid"):
+            template_device_uuid = print_template.config.get("device_uuid")
+            if template_device_uuid != uuid:
+                # 模板关联了其他设备，但用户指定了不同的设备
+                # 可以选择使用模板关联的设备，或者使用用户指定的设备
+                # 这里使用用户指定的设备（因为用户明确指定了）
+                pass
+        
+        # 3. 渲染模板
+        from tree_root.schemas.print_template import PrintTemplateRenderRequest
+        render_request = PrintTemplateRenderRequest(
+            data=data.data,
+            output_format="pdf",  # 默认 PDF
+            async_execution=False
+        )
+        render_result = await PrintTemplateService.render_print_template(
+            tenant_id=tenant_id,
+            uuid=data.template_uuid,
+            data=render_request
+        )
+        
+        # 4. 发送到打印设备（TODO: 实现实际的打印逻辑）
+        # 这里只是示例，实际需要根据设备类型调用相应的打印接口
         
         # 更新使用统计
         print_device.usage_count += 1
@@ -313,4 +366,54 @@ class PrintDeviceService:
             "success": True,
             "message": "打印任务已提交"
         }
+    
+    @staticmethod
+    async def _notify_templates_of_device_change(
+        tenant_id: int,
+        device_uuid: str,
+        is_deleted: bool = False
+    ) -> None:
+        """
+        通知打印模板打印设备变更（预留接口）
+        
+        此方法用于在打印设备变更或删除时，触发后续的业务逻辑，
+        例如更新关联打印模板的状态、清除设备关联等。
+        
+        Args:
+            tenant_id: 组织ID
+            device_uuid: 打印设备UUID
+            is_deleted: 是否已删除
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # 查找所有关联此设备的打印模板
+            # 注意：Tortoise ORM 不支持直接查询 JSON 字段，需要先获取所有模板，然后过滤
+            all_templates = await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            
+            templates = [
+                template for template in all_templates
+                if template.config and template.config.get("device_uuid") == device_uuid
+            ]
+            
+            if is_deleted:
+                # 如果设备已删除，清除所有关联模板的设备关联
+                for template in templates:
+                    if template.config and template.config.get("device_uuid") == device_uuid:
+                        template.config.pop("device_uuid", None)
+                        await template.save()
+                        logger.info(f"打印模板 {template.name} (UUID: {template.uuid}) 的设备关联已清除")
+            else:
+                # 如果设备状态变更，可以在这里更新模板状态（如果需要）
+                # 例如：如果设备离线，可以禁用关联的模板
+                device = await PrintDeviceService.get_print_device_by_uuid(tenant_id, device_uuid)
+                if not device.is_active or not device.is_online:
+                    # 设备不可用，可以在这里处理（例如记录日志）
+                    logger.info(f"打印设备 {device.name} (UUID: {device_uuid}) 状态变更，关联模板数量: {len(templates)}")
+        except Exception as e:
+            logger.error(f"通知打印模板设备变更失败: {str(e)}")
 

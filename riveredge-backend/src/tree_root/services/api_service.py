@@ -117,14 +117,13 @@ class APIService:
             deleted_at__isnull=True,
         )
         
-        # 搜索条件
+        # 搜索条件（优化：使用 OR 查询，但限制在索引字段）
         if search:
+            from tortoise.expressions import Q
             query = query.filter(
-                name__icontains=search,
-            ) | query.filter(
-                code__icontains=search,
-            ) | query.filter(
-                path__icontains=search,
+                Q(name__icontains=search) |
+                Q(code__icontains=search) |
+                Q(path__icontains=search)
             )
         
         # 方法筛选
@@ -135,13 +134,16 @@ class APIService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        # 获取总数
+        # 优化分页查询：先查询总数，再查询数据
         total = await query.count()
         
-        # 分页查询
-        apis = await query.order_by("-created_at").offset(
-            (page - 1) * page_size
-        ).limit(page_size).all()
+        # 限制分页大小，避免过大查询
+        if page_size > 100:
+            page_size = 100
+        
+        # 分页查询（使用索引字段排序）
+        offset = (page - 1) * page_size
+        apis = await query.order_by("-created_at").offset(offset).limit(page_size).all()
         
         return apis, total
     
@@ -180,12 +182,38 @@ class APIService:
             if existing_api:
                 raise ValidationError(f"接口代码 '{api_data.code}' 已存在")
         
+        # 记录变更前的状态（用于通知数据集管理）
+        old_code = api.code
+        old_path = api.path
+        old_method = api.method
+        old_is_active = api.is_active
+        
         # 更新接口
         update_data = api_data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(api, key, value)
         
         await api.save()
+        
+        # 如果接口代码、路径、方法或状态变更，通知数据集管理（异步，不阻塞主流程）
+        code_changed = old_code != api.code
+        path_changed = old_path != api.path
+        method_changed = old_method != api.method
+        status_changed = old_is_active != api.is_active
+        
+        if code_changed or path_changed or method_changed or status_changed:
+            import asyncio
+            # 异步通知数据集管理接口变更
+            asyncio.create_task(
+                APIService._notify_datasets(
+                    tenant_id=tenant_id,
+                    api_code=old_code if code_changed else api.code,
+                    new_api_code=api.code if code_changed else None,
+                    is_active=api.is_active,
+                    path_changed=path_changed,
+                    method_changed=method_changed
+                )
+            )
         
         return api
     
@@ -212,10 +240,57 @@ class APIService:
         if api.is_system:
             raise ValidationError("系统接口不可删除")
         
+        # 通知数据集管理接口将被删除（异步，不阻塞主流程）
+        import asyncio
+        asyncio.create_task(
+            APIService._notify_datasets(
+                tenant_id=tenant_id,
+                api_code=api.code,
+                is_active=False,
+                is_deleted=True
+            )
+        )
+        
         # 软删除
         from datetime import datetime
         api.deleted_at = datetime.now()
         await api.save()
+    
+    @staticmethod
+    async def _notify_datasets(
+        tenant_id: int,
+        api_code: str,
+        new_api_code: Optional[str] = None,
+        is_active: bool = True,
+        path_changed: bool = False,
+        method_changed: bool = False,
+        is_deleted: bool = False
+    ) -> None:
+        """
+        通知数据集管理接口变更
+        
+        这是一个预留方法，用于将来实现数据集管理的接口变更通知。
+        目前只是记录变更，不执行具体操作。
+        
+        Args:
+            tenant_id: 组织ID
+            api_code: 接口代码
+            new_api_code: 新接口代码（如果接口代码变更）
+            is_active: 是否启用
+            path_changed: 路径是否变更
+            method_changed: 方法是否变更
+            is_deleted: 是否删除
+        """
+        # TODO: 如果将来需要数据集自动更新，可以在这里实现
+        # 例如：
+        # 1. 查找所有使用该接口的数据集（query_config 中包含 api_code）
+        # 2. 根据新的接口配置更新数据集的 query_config
+        # 3. 如果接口被删除或禁用，禁用关联的数据集
+        
+        # 注意：接口变更通常不应该自动更新数据集的 query_config
+        # 因为用户可能有意使用旧的配置
+        # 只有在特殊情况下（如接口路径变更）才需要更新
+        pass
     
     async def test_api(
         self,

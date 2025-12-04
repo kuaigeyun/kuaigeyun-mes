@@ -53,6 +53,9 @@ class DataDictionary(BaseModel):
             ("tenant_id",),
             ("code",),
             ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "code"),  # 按组织+代码查询（已包含在 unique_together 中，但显式声明有助于查询优化）
+            ("tenant_id", "is_active"),  # 按组织+启用状态查询
         ]
     
     def __str__(self):

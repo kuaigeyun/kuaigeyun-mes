@@ -162,3 +162,23 @@ export async function executeDatasetQuery(
   });
 }
 
+/**
+ * 通过数据集代码查询数据集数据（供业务模块使用）
+ * 
+ * 这是一个便捷方法，供业务模块通过数据集代码快速获取数据。
+ * 仅返回已启用且未删除的数据集数据。
+ * 
+ * @param datasetCode - 数据集代码
+ * @param executeRequest - 执行查询请求
+ * @returns 查询结果
+ */
+export async function queryDatasetByCode(
+  datasetCode: string,
+  executeRequest: ExecuteQueryRequest
+): Promise<ExecuteQueryResponse> {
+  return apiRequest<ExecuteQueryResponse>(`/system/datasets/code/${datasetCode}/query`, {
+    method: 'POST',
+    data: executeRequest,
+  });
+}
+

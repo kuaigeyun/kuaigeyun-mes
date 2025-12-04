@@ -64,6 +64,11 @@ class ApprovalInstance(BaseModel):
             ("submitter_id",),
             ("inngest_run_id",),
             ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "status"),  # 按组织+状态查询
+            ("tenant_id", "current_approver_id", "status"),  # 按组织+审批人+状态查询（待处理任务）
+            ("tenant_id", "submitter_id"),  # 按组织+提交人查询（我提交的任务）
+            ("tenant_id", "created_at"),  # 按组织+创建时间查询（时间范围查询）
         ]
     
     def __str__(self):

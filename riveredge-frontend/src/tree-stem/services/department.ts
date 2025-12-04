@@ -135,3 +135,19 @@ export async function deleteDepartment(departmentUuid: string): Promise<void> {
   });
 }
 
+/**
+ * 批量更新部门排序
+ * 
+ * 用于前端拖拽排序后批量更新多个部门的排序顺序。
+ * 
+ * @param departmentOrders - 部门排序列表，格式：[{"uuid": "...", "sort_order": 1}, ...]
+ */
+export async function updateDepartmentOrder(
+  departmentOrders: Array<{ uuid: string; sort_order: number }>
+): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>('/system/departments/sort', {
+    method: 'PUT',
+    data: departmentOrders,
+  });
+}
+

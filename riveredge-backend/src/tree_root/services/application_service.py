@@ -154,12 +154,44 @@ class ApplicationService:
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
         
+        # 记录旧的菜单配置和应用状态
+        old_menu_config = application.menu_config
+        old_is_active = application.is_active
+        
         update_data = data.model_dump(exclude_unset=True)
         
         for key, value in update_data.items():
             setattr(application, key, value)
         
         await application.save()
+        
+        # 如果菜单配置变更或应用状态变更，自动同步菜单
+        menu_config_changed = 'menu_config' in update_data and old_menu_config != application.menu_config
+        is_active_changed = 'is_active' in update_data and old_is_active != application.is_active
+        
+        if menu_config_changed or is_active_changed:
+            import asyncio
+            from tree_root.services.menu_service import MenuService
+            
+            # 如果菜单配置变更，重新同步所有菜单
+            if menu_config_changed and application.menu_config:
+                asyncio.create_task(
+                    MenuService.sync_menus_from_application_config(
+                        tenant_id=tenant_id,
+                        application_uuid=str(application.uuid),
+                        menu_config=application.menu_config,
+                        is_active=application.is_active
+                    )
+                )
+            elif is_active_changed:
+                # 如果只是应用状态变更，只更新菜单的启用状态
+                from tree_root.models.menu import Menu
+                await Menu.filter(
+                    tenant_id=tenant_id,
+                    application_uuid=str(application.uuid),
+                    deleted_at__isnull=True
+                ).update(is_active=application.is_active)
+        
         return application
     
     @staticmethod
@@ -215,8 +247,18 @@ class ApplicationService:
         application.is_installed = True
         await application.save()
         
-        # 这里可以添加应用安装后的初始化逻辑
-        # 例如：创建菜单、初始化数据等
+        # 自动同步应用菜单配置到菜单管理
+        if application.menu_config:
+            import asyncio
+            from tree_root.services.menu_service import MenuService
+            asyncio.create_task(
+                MenuService.sync_menus_from_application_config(
+                    tenant_id=tenant_id,
+                    application_uuid=str(application.uuid),
+                    menu_config=application.menu_config,
+                    is_active=application.is_active
+                )
+            )
         
         return application
     
@@ -247,8 +289,14 @@ class ApplicationService:
         application.is_installed = False
         await application.save()
         
-        # 这里可以添加应用卸载后的清理逻辑
-        # 例如：删除菜单、清理数据等
+        # 自动删除关联菜单（软删除）
+        from tree_root.models.menu import Menu
+        from datetime import datetime
+        await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(uuid),
+            deleted_at__isnull=True
+        ).update(deleted_at=datetime.now())
         
         return application
     
@@ -273,6 +321,15 @@ class ApplicationService:
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
         application.is_active = True
         await application.save()
+        
+        # 自动更新关联菜单的状态
+        from tree_root.models.menu import Menu
+        await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(uuid),
+            deleted_at__isnull=True
+        ).update(is_active=True)
+        
         return application
     
     @staticmethod
@@ -296,6 +353,15 @@ class ApplicationService:
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
         application.is_active = False
         await application.save()
+        
+        # 自动更新关联菜单的状态
+        from tree_root.models.menu import Menu
+        await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(uuid),
+            deleted_at__isnull=True
+        ).update(is_active=False)
+        
         return application
     
     @staticmethod

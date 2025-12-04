@@ -84,6 +84,10 @@ class Menu(BaseModel):
             ("sort_order",),
             ("is_active",),
             ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "is_active"),  # 按组织+启用状态查询
+            ("tenant_id", "application_uuid", "is_active"),  # 按组织+应用+启用状态查询
+            ("tenant_id", "parent_id", "is_active"),  # 按组织+父菜单+启用状态查询（树形结构查询）
         ]
     
     def get_meta(self) -> Dict[str, Any]:

@@ -12,6 +12,7 @@ from tortoise.transactions import in_transaction
 from tree_root.models.code_rule import CodeRule
 from tree_root.models.code_sequence import CodeSequence
 from tree_root.services.code_rule_service import CodeRuleService
+from soil.exceptions.exceptions import ValidationError
 
 
 class CodeGenerationService:

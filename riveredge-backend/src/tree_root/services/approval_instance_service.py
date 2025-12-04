@@ -13,6 +13,9 @@ from tortoise.exceptions import IntegrityError
 from tree_root.models.approval_instance import ApprovalInstance
 from tree_root.models.approval_process import ApprovalProcess
 from tree_root.schemas.approval_instance import ApprovalInstanceCreate, ApprovalInstanceUpdate, ApprovalInstanceAction
+from tree_root.services.message_service import MessageService
+from tree_root.schemas.message_template import SendMessageRequest
+from soil.models.user import User
 from soil.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -67,21 +70,35 @@ class ApprovalInstanceService:
             )
             await approval_instance.save()
             
-            # TODO: 集成 Inngest 工作流触发
+            # 异步发送消息通知
+            import asyncio
+            asyncio.create_task(
+                ApprovalInstanceService._send_approval_submitted_notification(
+                    tenant_id=tenant_id,
+                    approval_instance=approval_instance,
+                    process=process
+                )
+            )
+            
             # 触发审批工作流事件
-            # from tree_root.inngest.client import inngest_client
-            # from inngest import Event
-            # await inngest_client.send_event(
-            #     event=Event(
-            #         name="approval/submit",
-            #         data={
-            #             "tenant_id": tenant_id,
-            #             "approval_id": str(approval_instance.uuid),
-            #             "process_id": str(process.uuid),
-            #             "current_node": "start"
-            #         }
-            #     )
-            # )
+            from tree_root.inngest.client import inngest_client
+            from inngest import Event
+            
+            try:
+                await inngest_client.send_event(
+                    event=Event(
+                        name="approval/submit",
+                        data={
+                            "tenant_id": tenant_id,
+                            "approval_id": str(approval_instance.uuid),
+                            "process_id": str(process.uuid),
+                        }
+                    )
+                )
+            except Exception as e:
+                # 如果 Inngest 事件发送失败，记录错误但不影响审批实例创建
+                from loguru import logger
+                logger.error(f"发送审批工作流事件失败: {e}")
             
             return approval_instance
         except IntegrityError:
@@ -253,24 +270,215 @@ class ApprovalInstanceService:
                 raise ValidationError("转交操作必须指定目标用户")
             approval_instance.current_approver_id = action.transfer_to_user_id
         
+        old_status = approval_instance.status
+        old_current_approver_id = approval_instance.current_approver_id
+        
         await approval_instance.save()
         
-        # TODO: 集成 Inngest 工作流触发
+        # 异步发送消息通知
+        import asyncio
+        asyncio.create_task(
+            ApprovalInstanceService._send_approval_action_notification(
+                tenant_id=tenant_id,
+                approval_instance=approval_instance,
+                action=action,
+                user_id=user_id,
+                old_status=old_status,
+                old_current_approver_id=old_current_approver_id
+            )
+        )
+        
         # 触发审批操作事件
-        # from tree_root.inngest.client import inngest_client
-        # from inngest import Event
-        # await inngest_client.send_event(
-        #     event=Event(
-        #         name="approval/action",
-        #         data={
-        #             "tenant_id": tenant_id,
-        #             "approval_id": str(approval_instance.uuid),
-        #             "action": action.action,
-        #             "comment": action.comment,
-        #             "user_id": user_id
-        #         }
-        #     )
-        # )
+        from tree_root.inngest.client import inngest_client
+        from inngest import Event
+        
+        try:
+            event_data = {
+                "tenant_id": tenant_id,
+                "approval_id": str(approval_instance.uuid),
+                "action": action.action,
+                "user_id": user_id,
+            }
+            if action.comment:
+                event_data["comment"] = action.comment
+            if action.transfer_to_user_id:
+                event_data["transfer_to_user_id"] = action.transfer_to_user_id
+            
+            await inngest_client.send_event(
+                event=Event(
+                    name="approval/action",
+                    data=event_data
+                )
+            )
+        except Exception as e:
+            # 如果 Inngest 事件发送失败，记录错误但不影响审批操作
+            from loguru import logger
+            logger.error(f"发送审批操作事件失败: {e}")
         
         return approval_instance
+    
+    @staticmethod
+    async def _send_approval_submitted_notification(
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+        process: ApprovalProcess
+    ) -> None:
+        """
+        发送审批提交通知
+        
+        Args:
+            tenant_id: 组织ID
+            approval_instance: 审批实例
+            process: 审批流程
+        """
+        try:
+            # 获取提交人信息
+            submitter = await User.filter(
+                id=approval_instance.submitter_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).first()
+            
+            if not submitter or not submitter.email:
+                return
+            
+            # 发送消息给提交人
+            await MessageService.send_message(
+                tenant_id=tenant_id,
+                request=SendMessageRequest(
+                    type="internal",
+                    recipient=submitter.email,
+                    subject=f"审批已提交：{approval_instance.title}",
+                    content=f"您提交的审批「{approval_instance.title}」已成功提交，流程：{process.name}。请等待审批。",
+                )
+            )
+            
+            # 如果有当前审批人，发送消息给审批人
+            if approval_instance.current_approver_id:
+                approver = await User.filter(
+                    id=approval_instance.current_approver_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if approver and approver.email:
+                    await MessageService.send_message(
+                        tenant_id=tenant_id,
+                        request=SendMessageRequest(
+                            type="internal",
+                            recipient=approver.email,
+                            subject=f"待审批：{approval_instance.title}",
+                            content=f"您有一个待审批的申请：{approval_instance.title}，提交人：{submitter.full_name or submitter.username}，流程：{process.name}。",
+                        )
+                    )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"发送审批提交通知失败: {str(e)}")
+    
+    @staticmethod
+    async def _send_approval_action_notification(
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+        action: ApprovalInstanceAction,
+        user_id: int,
+        old_status: str,
+        old_current_approver_id: Optional[int]
+    ) -> None:
+        """
+        发送审批操作通知
+        
+        Args:
+            tenant_id: 组织ID
+            approval_instance: 审批实例
+            action: 审批操作
+            user_id: 操作人ID
+            old_status: 旧状态
+            old_current_approver_id: 旧审批人ID
+        """
+        try:
+            await approval_instance.fetch_related('process')
+            process = approval_instance.process
+            
+            # 获取提交人信息
+            submitter = await User.filter(
+                id=approval_instance.submitter_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).first()
+            
+            if not submitter or not submitter.email:
+                return
+            
+            # 获取操作人信息
+            operator = await User.filter(
+                id=user_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).first()
+            
+            # 根据操作类型发送不同的消息
+            action_text = {
+                "approve": "已通过",
+                "reject": "已拒绝",
+                "cancel": "已取消",
+                "transfer": "已转交"
+            }.get(action.action, action.action)
+            
+            # 发送消息给提交人
+            comment_text = f"，备注：{action.comment}" if action.comment else ""
+            operator_name = operator.full_name or operator.username if operator else "系统"
+            
+            await MessageService.send_message(
+                tenant_id=tenant_id,
+                request=SendMessageRequest(
+                    type="internal",
+                    recipient=submitter.email,
+                    subject=f"审批{action_text}：{approval_instance.title}",
+                    content=f"您的审批「{approval_instance.title}」已被{operator_name}{action_text}{comment_text}。流程：{process.name}。",
+                )
+            )
+            
+            # 如果审批完成（approved/rejected/cancelled），发送完成通知
+            if approval_instance.status in ["approved", "rejected", "cancelled"]:
+                status_text = {
+                    "approved": "已通过",
+                    "rejected": "已拒绝",
+                    "cancelled": "已取消"
+                }.get(approval_instance.status, approval_instance.status)
+                
+                await MessageService.send_message(
+                    tenant_id=tenant_id,
+                    request=SendMessageRequest(
+                        type="internal",
+                        recipient=submitter.email,
+                        subject=f"审批完成：{approval_instance.title}",
+                        content=f"您的审批「{approval_instance.title}」已完成，结果：{status_text}。流程：{process.name}。",
+                    )
+                )
+            
+            # 如果有新的审批人（转交或进入下一节点），发送消息给新审批人
+            if approval_instance.current_approver_id and \
+               approval_instance.current_approver_id != old_current_approver_id and \
+               approval_instance.status == "pending":
+                new_approver = await User.filter(
+                    id=approval_instance.current_approver_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if new_approver and new_approver.email:
+                    await MessageService.send_message(
+                        tenant_id=tenant_id,
+                        request=SendMessageRequest(
+                            type="internal",
+                            recipient=new_approver.email,
+                            subject=f"待审批：{approval_instance.title}",
+                            content=f"您有一个待审批的申请：{approval_instance.title}，提交人：{submitter.full_name or submitter.username}，流程：{process.name}。",
+                        )
+                    )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"发送审批操作通知失败: {str(e)}")
 

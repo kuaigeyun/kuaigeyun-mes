@@ -18,6 +18,7 @@ from tree_root.schemas.user_message import (
     UserMessageListResponse,
     UserMessageStatsResponse,
 )
+from soil.models.user import User
 from soil.exceptions.exceptions import NotFoundError
 
 
@@ -55,9 +56,29 @@ class UserMessageService:
             UserMessageListResponse: 用户消息列表
         """
         # 构建查询条件
-        # 注意：MessageLog 的 recipient 字段是字符串，需要转换为字符串匹配
-        # 或者根据实际业务逻辑调整（如果 recipient 存储的是用户ID字符串）
-        query = Q(tenant_id=tenant_id, recipient=str(user_id))
+        # MessageLog 的 recipient 字段可能存储用户ID、邮箱或手机号
+        # 需要同时匹配用户ID和用户的联系方式（邮箱、手机号等）
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            # 如果用户不存在，返回空列表
+            return UserMessageListResponse(
+                items=[],
+                total=0,
+                page=page,
+                page_size=page_size,
+            )
+        
+        # 构建 recipient 匹配条件（用户ID、邮箱、手机号等）
+        recipient_conditions = [str(user_id)]
+        if user.email:
+            recipient_conditions.append(user.email)
+        # 如果有手机号字段，也可以添加
+        # if user.phone:
+        #     recipient_conditions.append(user.phone)
+        
+        # 使用 OR 条件查询
+        # Tortoise ORM 的 Q 对象支持使用 __in 操作符进行多值匹配
+        query = Q(tenant_id=tenant_id, recipient__in=recipient_conditions)
         
         # 状态过滤
         if status:
@@ -108,13 +129,24 @@ class UserMessageService:
         Raises:
             NotFoundError: 当消息不存在时抛出
         """
-        try:
-            message = await MessageLog.get(
-                uuid=message_uuid,
-                tenant_id=tenant_id,
-                recipient=str(user_id)
-            )
-        except DoesNotExist:
+        # 获取用户信息以匹配 recipient
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            raise NotFoundError("用户不存在")
+        
+        # 构建 recipient 匹配条件
+        recipient_conditions = [str(user_id)]
+        if user.email:
+            recipient_conditions.append(user.email)
+        
+        # 查询消息
+        message = await MessageLog.filter(
+            uuid=message_uuid,
+            tenant_id=tenant_id,
+            recipient__in=recipient_conditions
+        ).first()
+        
+        if not message:
             raise NotFoundError("消息不存在")
         
         return UserMessageResponse.model_validate(message)
@@ -136,10 +168,20 @@ class UserMessageService:
         Returns:
             int: 更新的消息数量
         """
+        # 获取用户信息以匹配 recipient
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            return 0
+        
+        # 构建 recipient 匹配条件
+        recipient_conditions = [str(user_id)]
+        if user.email:
+            recipient_conditions.append(user.email)
+        
         # 构建查询条件
         query = Q(
             tenant_id=tenant_id,
-            recipient=str(user_id),
+            recipient__in=recipient_conditions,
             uuid__in=message_uuids,
             status__in=["pending", "sending", "success"]  # 只标记未读消息
         )
@@ -167,19 +209,35 @@ class UserMessageService:
         Returns:
             UserMessageStatsResponse: 用户消息统计
         """
-        query = Q(tenant_id=tenant_id, recipient=str(user_id))
+        # 获取用户信息以匹配 recipient
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            return UserMessageStatsResponse(
+                total=0,
+                unread=0,
+                read=0,
+                failed=0,
+            )
+        
+        # 构建 recipient 匹配条件
+        recipient_conditions = [str(user_id)]
+        if user.email:
+            recipient_conditions.append(user.email)
+        
+        # 构建基础查询条件
+        base_query = Q(tenant_id=tenant_id, recipient__in=recipient_conditions)
         
         # 统计总数
-        total = await MessageLog.filter(query).count()
+        total = await MessageLog.filter(base_query).count()
         
         # 统计未读（pending、sending、success 状态）
-        unread = await MessageLog.filter(query & Q(status__in=["pending", "sending", "success"])).count()
+        unread = await MessageLog.filter(base_query & Q(status__in=["pending", "sending", "success"])).count()
         
         # 统计已读
-        read = await MessageLog.filter(query & Q(status="read")).count()
+        read = await MessageLog.filter(base_query & Q(status="read")).count()
         
         # 统计失败
-        failed = await MessageLog.filter(query & Q(status="failed")).count()
+        failed = await MessageLog.filter(base_query & Q(status="failed")).count()
         
         return UserMessageStatsResponse(
             total=total,

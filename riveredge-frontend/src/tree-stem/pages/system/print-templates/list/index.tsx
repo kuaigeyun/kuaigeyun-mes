@@ -7,8 +7,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Tabs } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import CardView from '../card-view';
 import { UniTable } from '../../../../components/uni_table';
 import {
   getPrintTemplateList,
@@ -34,6 +35,7 @@ const PrintTemplateListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
   // Modal 相关状态（创建/编辑打印模板）
   const [modalVisible, setModalVisible] = useState(false);
@@ -373,7 +375,42 @@ const PrintTemplateListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<PrintTemplate>
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs
+          activeKey={viewMode}
+          onChange={(key) => setViewMode(key as 'card' | 'list')}
+          items={[
+            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
+            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
+          ]}
+        />
+        {viewMode === 'list' && (
+          <Space>
+            <Button
+              danger
+              onClick={handleBatchDelete}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量删除
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              新建
+            </Button>
+          </Space>
+        )}
+      </div>
+
+      {/* 卡片视图 */}
+      {viewMode === 'card' && <CardView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <UniTable<PrintTemplate>
         headerTitle="打印模板管理"
         actionRef={actionRef}
         columns={columns}
@@ -400,29 +437,13 @@ const PrintTemplateListPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
-        toolBarRender={() => [
-          <Button
-            key="batch-delete"
-            danger
-            onClick={handleBatchDelete}
-            disabled={selectedRowKeys.length === 0}
-          >
-            批量删除
-          </Button>,
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建
-          </Button>,
-        ]}
+        toolBarRender={() => []}
         search={{
           labelWidth: 'auto',
           showAdvancedSearch: true,
         }}
-      />
+        />
+      )}
 
       {/* 创建/编辑 Modal */}
       <Modal

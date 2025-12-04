@@ -132,8 +132,12 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             operation_module = self._parse_operation_module(request.url.path)
             operation_object_type = self._parse_operation_object_type(request.url.path)
             
-            # 获取操作内容
-            operation_content = f"{request.method} {request.url.path}"
+            # 从请求路径中提取操作对象的 UUID（如果存在）
+            operation_object_uuid = self._parse_operation_object_uuid(request.url.path)
+            
+            # 获取操作内容（包含操作结果）
+            operation_result = "成功" if response.status_code < 400 else "失败"
+            operation_content = f"{request.method} {request.url.path} - {operation_result} (状态码: {response.status_code})"
             
             # 获取 IP 地址
             ip_address = self._get_client_ip(request)
@@ -148,6 +152,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 operation_type=operation_type,
                 operation_module=operation_module,
                 operation_object_type=operation_object_type,
+                operation_object_uuid=operation_object_uuid,
                 operation_content=operation_content,
                 ip_address=ip_address,
                 user_agent=user_agent,
@@ -241,6 +246,27 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             # 转换为类名（首字母大写，单数形式）
             # 这里简单处理，实际可能需要更复杂的映射
             return object_name.capitalize()
+        return None
+    
+    def _parse_operation_object_uuid(self, path: str) -> Optional[str]:
+        """
+        从请求路径中提取操作对象的 UUID
+        
+        Args:
+            path: 请求路径
+            
+        Returns:
+            Optional[str]: 操作对象 UUID
+        """
+        # 从路径中提取 UUID（如果存在）
+        # 例如：/api/v1/system/users/{uuid} -> uuid
+        # 例如：/api/v1/system/users/{uuid}/roles -> uuid
+        import re
+        # UUID 格式：8-4-4-4-12 十六进制字符
+        uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+        match = re.search(uuid_pattern, path, re.IGNORECASE)
+        if match:
+            return match.group(0)
         return None
     
     def _get_client_ip(self, request: Request) -> Optional[str]:

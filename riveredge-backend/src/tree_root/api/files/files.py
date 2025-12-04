@@ -407,19 +407,23 @@ async def batch_delete_files(
 
 
 @router.get("/kkfileview/health")
-async def check_kkfileview_health():
+async def check_kkfileview_health(
+    tenant_id: int = Depends(get_current_tenant),
+):
     """
-    检查 kkFileView 服务健康状态
+    检查 kkFileView 服务健康状态（支持多实例）
     
-    检查 kkFileView 预览服务是否正常运行。
+    检查 kkFileView 预览服务是否正常运行，支持多个服务实例的健康检查。
     
     Returns:
-        Dict[str, Any]: 健康状态信息
+        Dict[str, Any]: 健康检查结果
+        {
+            "overall_healthy": bool,  # 整体是否健康
+            "services": [...],  # 各个服务的健康状态
+            "healthy_count": int,  # 健康服务数量
+            "total_count": int  # 总服务数量
+        }
     """
-    is_healthy = await FilePreviewService.check_kkfileview_health()
-    return {
-        "healthy": is_healthy,
-        "service": "kkFileView",
-        "url": FilePreviewService.KKFILEVIEW_URL,
-    }
+    health_status = await FilePreviewService.check_kkfileview_health(tenant_id=tenant_id)
+    return health_status
 

@@ -53,6 +53,11 @@ class MessageLog(BaseModel):
             ("status",),
             ("inngest_run_id",),
             ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "status"),  # 按组织+状态查询
+            ("tenant_id", "type", "status"),  # 按组织+类型+状态查询
+            ("tenant_id", "recipient", "status"),  # 按组织+收件人+状态查询（用户消息查询）
+            ("tenant_id", "created_at"),  # 按组织+创建时间查询（时间范围查询）
         ]
     
     def __str__(self):
