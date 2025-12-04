@@ -21,71 +21,105 @@
  *   - /platform/admin - 平台超级管理员管理
  */
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-// 从 tree-stem 导入所有页面、组件和服务
+import { Spin } from 'antd';
+// 从 tree-stem 导入布局组件（布局组件需要立即加载）
 import BasicLayout from '../../tree-stem/layouts/BasicLayout';
+
+// 加载中组件
+const LoadingFallback: React.FC = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh'
+  }}>
+    <Spin size="large" />
+  </div>
+);
+
+// 公共页面（立即加载，不需要懒加载）
 import IndexPage from '../../tree-stem/pages';
 import LoginPage from '../../tree-stem/pages/login';
 import RegisterPage from '../../tree-stem/pages/register';
 import PersonalRegisterPage from '../../tree-stem/pages/register/personal';
 import OrganizationRegisterPage from '../../tree-stem/pages/register/organization';
-import SystemDashboardPage from '../../tree-stem/pages/system/dashboard';
 import NotFoundPage from '../../tree-stem/pages/404';
-// 平台级页面
 import PlatformLoginPage from '../../tree-stem/pages/platform/login';
-import PlatformDashboardPage from '../../tree-stem/pages/platform/operation';
-import TenantListPage from '../../tree-stem/pages/platform/tenants/list';
-import TenantDetailPage from '../../tree-stem/pages/platform/tenants/detail';
-// 平台超级管理员页面
-import PlatformSuperAdminPage from '../../tree-stem/pages/platform';
-import PackageManagementPage from '../../tree-stem/pages/platform/packages';
-import MonitoringPage from '../../tree-stem/pages/platform/monitoring';
-// 系统级功能页面
-import RoleListPage from '../../tree-stem/pages/system/roles/list';
-import PermissionListPage from '../../tree-stem/pages/system/permissions/list';
-import DepartmentListPage from '../../tree-stem/pages/system/departments/list';
-import PositionListPage from '../../tree-stem/pages/system/positions/list';
-import UserListPage from '../../tree-stem/pages/system/users/list';
-import DataDictionaryListPage from '../../tree-stem/pages/system/data-dictionaries/list';
-import SystemParameterListPage from '../../tree-stem/pages/system/system-parameters/list';
-import CodeRuleListPage from '../../tree-stem/pages/system/code-rules/list';
-import CustomFieldListPage from '../../tree-stem/pages/system/custom-fields/list';
-import SiteSettingsPage from '../../tree-stem/pages/system/site-settings';
-import InvitationCodeListPage from '../../tree-stem/pages/system/invitation-codes/list';
-import LanguageListPage from '../../tree-stem/pages/system/languages/list';
-import ApplicationListPage from '../../tree-stem/pages/system/applications/list';
-import MenuListPage from '../../tree-stem/pages/system/menus';
-import IntegrationConfigListPage from '../../tree-stem/pages/system/integration-configs/list';
-import FileListPage from '../../tree-stem/pages/system/files/list';
-import APIListPage from '../../tree-stem/pages/system/apis/list';
-import DataSourceListPage from '../../tree-stem/pages/system/data-sources/list';
-import DatasetListPage from '../../tree-stem/pages/system/datasets/list';
-import MessageConfigListPage from '../../tree-stem/pages/system/messages/config';
-import MessageTemplateListPage from '../../tree-stem/pages/system/messages/template';
-import ScheduledTaskListPage from '../../tree-stem/pages/system/scheduled-tasks/list';
-import ApprovalProcessListPage from '../../tree-stem/pages/system/approval-processes/list';
-import ApprovalInstanceListPage from '../../tree-stem/pages/system/approval-processes/instances';
-import ApprovalProcessDesignerPage from '../../tree-stem/pages/system/approval-processes/designer';
-import ElectronicRecordListPage from '../../tree-stem/pages/system/electronic-records/list';
-import ScriptListPage from '../../tree-stem/pages/system/scripts/list';
-import PrintTemplateListPage from '../../tree-stem/pages/system/print-templates/list';
-import PrintDeviceListPage from '../../tree-stem/pages/system/print-devices/list';
-import UserProfilePage from '../../tree-stem/pages/personal/profile';
-import UserPreferencesPage from '../../tree-stem/pages/personal/preferences';
-import UserMessagesPage from '../../tree-stem/pages/personal/messages';
-import UserTasksPage from '../../tree-stem/pages/personal/tasks';
-import InngestDashboardPage from '../../tree-stem/pages/system/inngest';
-import OperationLogsPage from '../../tree-stem/pages/system/operation-logs';
-import LoginLogsPage from '../../tree-stem/pages/system/login-logs';
-import OnlineUsersPage from '../../tree-stem/pages/system/online-users';
-import DataBackupsPage from '../../tree-stem/pages/system/data-backups';
 
-// 布局包装组件
+// 懒加载系统级页面（按功能模块分组）
+const SystemDashboardPage = lazy(() => import('../../tree-stem/pages/system/dashboard'));
+
+// 权限管理模块
+const RoleListPage = lazy(() => import('../../tree-stem/pages/system/roles/list'));
+const PermissionListPage = lazy(() => import('../../tree-stem/pages/system/permissions/list'));
+
+// 组织管理模块
+const DepartmentListPage = lazy(() => import('../../tree-stem/pages/system/departments/list'));
+const PositionListPage = lazy(() => import('../../tree-stem/pages/system/positions/list'));
+const UserListPage = lazy(() => import('../../tree-stem/pages/system/users/list'));
+
+// 核心配置模块
+const DataDictionaryListPage = lazy(() => import('../../tree-stem/pages/system/data-dictionaries/list'));
+const SystemParameterListPage = lazy(() => import('../../tree-stem/pages/system/system-parameters/list'));
+const CodeRuleListPage = lazy(() => import('../../tree-stem/pages/system/code-rules/list'));
+const CustomFieldListPage = lazy(() => import('../../tree-stem/pages/system/custom-fields/list'));
+const LanguageListPage = lazy(() => import('../../tree-stem/pages/system/languages/list'));
+const SiteSettingsPage = lazy(() => import('../../tree-stem/pages/system/site-settings'));
+
+// 应用中心模块
+const ApplicationListPage = lazy(() => import('../../tree-stem/pages/system/applications/list'));
+const MenuListPage = lazy(() => import('../../tree-stem/pages/system/menus'));
+const InvitationCodeListPage = lazy(() => import('../../tree-stem/pages/system/invitation-codes/list'));
+
+// 数据中心模块
+const FileListPage = lazy(() => import('../../tree-stem/pages/system/files/list'));
+const APIListPage = lazy(() => import('../../tree-stem/pages/system/apis/list'));
+const DataSourceListPage = lazy(() => import('../../tree-stem/pages/system/data-sources/list'));
+const DatasetListPage = lazy(() => import('../../tree-stem/pages/system/datasets/list'));
+const IntegrationConfigListPage = lazy(() => import('../../tree-stem/pages/system/integration-configs/list'));
+
+// 流程管理模块
+const MessageConfigListPage = lazy(() => import('../../tree-stem/pages/system/messages/config'));
+const MessageTemplateListPage = lazy(() => import('../../tree-stem/pages/system/messages/template'));
+const ScheduledTaskListPage = lazy(() => import('../../tree-stem/pages/system/scheduled-tasks/list'));
+const ApprovalProcessListPage = lazy(() => import('../../tree-stem/pages/system/approval-processes/list'));
+const ApprovalInstanceListPage = lazy(() => import('../../tree-stem/pages/system/approval-processes/instances'));
+const ApprovalProcessDesignerPage = lazy(() => import('../../tree-stem/pages/system/approval-processes/designer'));
+const ElectronicRecordListPage = lazy(() => import('../../tree-stem/pages/system/electronic-records/list'));
+const ScriptListPage = lazy(() => import('../../tree-stem/pages/system/scripts/list'));
+const PrintTemplateListPage = lazy(() => import('../../tree-stem/pages/system/print-templates/list'));
+const PrintDeviceListPage = lazy(() => import('../../tree-stem/pages/system/print-devices/list'));
+
+// 个人中心模块
+const UserProfilePage = lazy(() => import('../../tree-stem/pages/personal/profile'));
+const UserPreferencesPage = lazy(() => import('../../tree-stem/pages/personal/preferences'));
+const UserMessagesPage = lazy(() => import('../../tree-stem/pages/personal/messages'));
+const UserTasksPage = lazy(() => import('../../tree-stem/pages/personal/tasks'));
+
+// 监控运维模块
+const InngestDashboardPage = lazy(() => import('../../tree-stem/pages/system/inngest'));
+const OperationLogsPage = lazy(() => import('../../tree-stem/pages/system/operation-logs'));
+const LoginLogsPage = lazy(() => import('../../tree-stem/pages/system/login-logs'));
+const OnlineUsersPage = lazy(() => import('../../tree-stem/pages/system/online-users'));
+const DataBackupsPage = lazy(() => import('../../tree-stem/pages/system/data-backups'));
+
+// 平台级页面（懒加载）
+const PlatformDashboardPage = lazy(() => import('../../tree-stem/pages/platform/operation'));
+const TenantListPage = lazy(() => import('../../tree-stem/pages/platform/tenants/list'));
+const TenantDetailPage = lazy(() => import('../../tree-stem/pages/platform/tenants/detail'));
+const PlatformSuperAdminPage = lazy(() => import('../../tree-stem/pages/platform'));
+const PackageManagementPage = lazy(() => import('../../tree-stem/pages/platform/packages'));
+const MonitoringPage = lazy(() => import('../../tree-stem/pages/platform/monitoring'));
+
+// 布局包装组件（支持懒加载）
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <BasicLayout>
-      {children}
+      <Suspense fallback={<LoadingFallback />}>
+        {children}
+      </Suspense>
     </BasicLayout>
   );
 };

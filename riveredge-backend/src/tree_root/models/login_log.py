@@ -51,6 +51,11 @@ class LoginLog(BaseModel):
             ("login_ip",),
             ("login_status",),
             ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "user_id"),  # 按组织+用户查询
+            ("tenant_id", "login_status"),  # 按组织+登录状态查询
+            ("tenant_id", "created_at"),  # 按组织+创建时间查询（时间范围查询）
+            ("tenant_id", "user_id", "created_at"),  # 按组织+用户+时间查询
         ]
     
     def __str__(self):

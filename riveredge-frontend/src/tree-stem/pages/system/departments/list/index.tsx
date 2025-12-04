@@ -7,21 +7,22 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
-import type { DataNode } from 'antd/es/tree';
+import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined } from '@ant-design/icons';
+import type { DataNode, TreeProps } from 'antd/es/tree';
 import {
   getDepartmentTree,
   getDepartmentByUuid,
   createDepartment,
   updateDepartment,
   deleteDepartment,
+  updateDepartmentOrder,
   Department,
   DepartmentTreeItem,
   CreateDepartmentData,
   UpdateDepartmentData,
 } from '../../../../services/department';
-import { getUserList } from '../../../../services/user';
+import { getUserList, User } from '../../../../services/user';
 
 /**
  * 部门管理列表页面组件
@@ -45,6 +46,10 @@ const DepartmentListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Department | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  
+  // 部门成员相关状态
+  const [departmentMembers, setDepartmentMembers] = useState<User[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
 
   /**
    * 加载部门树
@@ -238,10 +243,138 @@ const DepartmentListPage: React.FC = () => {
       setDrawerVisible(true);
       const detail = await getDepartmentByUuid(record.uuid);
       setDetailData(detail);
+      
+      // 加载部门成员
+      await loadDepartmentMembers(record.uuid);
     } catch (error: any) {
       messageApi.error(error.message || '获取部门详情失败');
     } finally {
       setDetailLoading(false);
+    }
+  };
+  
+  /**
+   * 加载部门成员
+   */
+  const loadDepartmentMembers = async (departmentUuid: string) => {
+    try {
+      setMembersLoading(true);
+      const users = await getUserList({
+        department_uuid: departmentUuid,
+        page: 1,
+        page_size: 1000,
+      });
+      setDepartmentMembers(users.items || []);
+    } catch (error: any) {
+      console.error('加载部门成员失败:', error);
+      setDepartmentMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+  
+  /**
+   * 处理拖拽排序
+   */
+  const handleDrop: TreeProps['onDrop'] = async (info) => {
+    const dropKey = info.node.key;
+    const dragKey = info.dragNode.key;
+    const dropPos = info.node.pos.split('-');
+    const dropPosition = info.dropPosition - Number(dropPos[dropPos.length - 1]);
+    
+    // 如果拖拽到同一位置，不处理
+    if (dragKey === dropKey && dropPosition === 0) {
+      return;
+    }
+    
+    // 查找拖拽节点和目标节点的数据
+    const findNode = (nodes: DataNode[], key: React.Key): DataNode | null => {
+      for (const node of nodes) {
+        if (node.key === key) {
+          return node;
+        }
+        if (node.children) {
+          const found = findNode(node.children, key);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    const dragNode = findNode(treeData, dragKey);
+    const dropNode = findNode(treeData, dropKey);
+    
+    if (!dragNode || !dropNode) {
+      return;
+    }
+    
+    // 获取同级节点（同一父节点下的所有节点）
+    const getSiblingNodes = (nodes: DataNode[], parentKey?: React.Key): DataNode[] => {
+      if (!parentKey) {
+        return nodes;
+      }
+      for (const node of nodes) {
+        if (node.key === parentKey) {
+          return node.children || [];
+        }
+        if (node.children) {
+          const siblings = getSiblingNodes(node.children, parentKey);
+          if (siblings.length > 0) {
+            return siblings;
+          }
+        }
+      }
+      return [];
+    };
+    
+    // 获取父节点
+    const getParentKey = (nodes: DataNode[], key: React.Key, parentKey?: React.Key): React.Key | null => {
+      for (const node of nodes) {
+        if (node.key === key) {
+          return parentKey || null;
+        }
+        if (node.children) {
+          const found = getParentKey(node.children, key, node.key);
+          if (found !== null) {
+            return found;
+          }
+        }
+      }
+      return null;
+    };
+    
+    const parentKey = getParentKey(treeData, dropKey);
+    const siblings = getSiblingNodes(treeData, parentKey);
+    
+    // 计算新的排序顺序
+    const newSiblings = [...siblings];
+    const dragIndex = newSiblings.findIndex((node) => node.key === dragKey);
+    const dropIndex = newSiblings.findIndex((node) => node.key === dropKey);
+    
+    // 移除拖拽节点
+    const [removed] = newSiblings.splice(dragIndex, 1);
+    
+    // 插入到新位置
+    if (dropPosition === -1) {
+      // 插入到目标节点之前
+      newSiblings.splice(dropIndex, 0, removed);
+    } else {
+      // 插入到目标节点之后
+      newSiblings.splice(dropIndex + 1, 0, removed);
+    }
+    
+    // 更新排序顺序
+    const departmentOrders = newSiblings.map((node, index) => ({
+      uuid: node.key as string,
+      sort_order: index,
+    }));
+    
+    try {
+      await updateDepartmentOrder(departmentOrders);
+      messageApi.success('排序更新成功');
+      loadDepartmentTree();
+    } catch (error: any) {
+      messageApi.error(error.message || '排序更新失败');
     }
   };
 
@@ -514,18 +647,20 @@ const DepartmentListPage: React.FC = () => {
           </Button>
         </div>
         <Tree
-            className="department-tree"
+          className="department-tree"
           treeData={treeData}
           onSelect={handleSelect}
-            expandedKeys={expandedKeys}
-            autoExpandParent={autoExpandParent}
-            onExpand={handleExpand}
+          expandedKeys={expandedKeys}
+          autoExpandParent={autoExpandParent}
+          onExpand={handleExpand}
           blockNode
           selectedKeys={selectedNode ? [selectedNode.uuid] : []}
+          draggable
+          onDrop={handleDrop}
         />
       </div>
       
-      {/* 右侧：详情面板 - 使用 Card 组件符合 Ant Design 最佳实践 */}
+      {/* 右侧：详情侧边栏 - 使用 Card 组件符合 Ant Design 最佳实践 */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {selectedNode ? (
           <Card
@@ -555,6 +690,32 @@ const DepartmentListPage: React.FC = () => {
               </Space>
             }
           >
+            {/* 统计信息 */}
+            <Row gutter={16} style={{ marginBottom: 24 }}>
+              <Col span={8}>
+                <Statistic
+                  title="子部门数"
+                  value={selectedNode.children_count || 0}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title="用户数"
+                  value={selectedNode.user_count || 0}
+                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<UserOutlined />}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title="状态"
+                  value={selectedNode.is_active ? '启用' : '禁用'}
+                  valueStyle={{ color: selectedNode.is_active ? '#52c41a' : '#999' }}
+                />
+              </Col>
+            </Row>
+            
             <ProDescriptions
               column={2}
               dataSource={selectedNode}
@@ -563,28 +724,9 @@ const DepartmentListPage: React.FC = () => {
                 { title: '部门代码', dataIndex: 'code' },
                 { title: '描述', dataIndex: 'description', span: 2 },
                 {
-                  title: '状态',
-                  dataIndex: 'is_active',
-                  render: (value) => (
-                    <Tag color={value ? 'success' : 'default'}>
-                      {value ? '启用' : '禁用'}
-                    </Tag>
-                  ),
-                },
-                {
                   title: '排序',
                   dataIndex: 'sort_order',
                   render: (value: any) => value !== undefined && value !== null ? value : '-',
-                },
-                {
-                  title: '子部门数',
-                  dataIndex: 'children_count',
-                  render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
-                },
-                {
-                  title: '用户数',
-                  dataIndex: 'user_count',
-                  render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
                 },
               ]}
             />
@@ -654,42 +796,97 @@ const DepartmentListPage: React.FC = () => {
       <Drawer
         title="部门详情"
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        width={600}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDepartmentMembers([]);
+        }}
+        width={800}
         loading={detailLoading}
       >
         {detailData && (
-          <ProDescriptions
-            column={2}
-            dataSource={detailData}
-            columns={[
-              { title: '部门名称', dataIndex: 'name' },
-              { title: '部门代码', dataIndex: 'code' },
-              { title: '描述', dataIndex: 'description', span: 2 },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
-              },
-              {
-                title: '排序',
-                dataIndex: 'sort_order',
-                render: (value: any) => value !== undefined && value !== null ? value : '-',
-              },
-              {
-                title: '子部门数',
-                dataIndex: 'children_count',
-                render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
-              },
-              {
-                title: '用户数',
-                dataIndex: 'user_count',
-                render: (value: any) => (typeof value === 'number' && value > 0) ? value : '-',
-              },
-              { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-              { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-            ]}
-          />
+          <>
+            {/* 统计信息 */}
+            <Row gutter={16} style={{ marginBottom: 24 }}>
+              <Col span={8}>
+                <Statistic
+                  title="子部门数"
+                  value={detailData.children_count || 0}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title="用户数"
+                  value={detailData.user_count || 0}
+                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<UserOutlined />}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title="状态"
+                  value={detailData.is_active ? '启用' : '禁用'}
+                  valueStyle={{ color: detailData.is_active ? '#52c41a' : '#999' }}
+                />
+              </Col>
+            </Row>
+            
+            <ProDescriptions
+              column={2}
+              dataSource={detailData}
+              columns={[
+                { title: '部门名称', dataIndex: 'name' },
+                { title: '部门代码', dataIndex: 'code' },
+                { title: '描述', dataIndex: 'description', span: 2 },
+                {
+                  title: '排序',
+                  dataIndex: 'sort_order',
+                  render: (value: any) => value !== undefined && value !== null ? value : '-',
+                },
+                { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+                { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+              ]}
+            />
+            
+            {/* 部门成员列表 */}
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ marginBottom: 16 }}>部门成员 ({departmentMembers.length})</h3>
+              <Table
+                dataSource={departmentMembers}
+                loading={membersLoading}
+                rowKey="uuid"
+                pagination={false}
+                size="small"
+                columns={[
+                  {
+                    title: '用户名',
+                    dataIndex: 'username',
+                    key: 'username',
+                  },
+                  {
+                    title: '姓名',
+                    dataIndex: 'full_name',
+                    key: 'full_name',
+                  },
+                  {
+                    title: '邮箱',
+                    dataIndex: 'email',
+                    key: 'email',
+                  },
+                  {
+                    title: '状态',
+                    dataIndex: 'is_active',
+                    key: 'is_active',
+                    render: (value: boolean) => (
+                      <Tag color={value ? 'success' : 'default'}>
+                        {value ? '启用' : '禁用'}
+                      </Tag>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          </>
         )}
       </Drawer>
       </div>

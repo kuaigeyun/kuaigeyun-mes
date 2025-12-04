@@ -188,10 +188,34 @@ class LanguageService:
                 deleted_at__isnull=True
             ).update(is_default=False)
         
+        # 记录变更前的状态（用于通知前端）
+        old_code = language.code
+        old_is_active = language.is_active
+        old_is_default = language.is_default
+        
         for key, value in update_data.items():
             setattr(language, key, value)
         
         await language.save()
+        
+        # 如果语言代码、状态或默认语言标记变更，通知前端（异步，不阻塞主流程）
+        code_changed = old_code != language.code
+        status_changed = old_is_active != language.is_active
+        default_changed = old_is_default != language.is_default
+        
+        if code_changed or status_changed or default_changed:
+            import asyncio
+            # 异步通知前端语言变更
+            asyncio.create_task(
+                LanguageService._notify_frontend(
+                    tenant_id=tenant_id,
+                    language_code=old_code if code_changed else language.code,
+                    new_language_code=language.code if code_changed else None,
+                    is_active=language.is_active,
+                    is_default=language.is_default
+                )
+            )
+        
         return language
     
     @staticmethod
@@ -268,5 +292,49 @@ class LanguageService:
         language = await LanguageService.get_language_by_uuid(tenant_id, uuid)
         language.update_translations(translations)
         await language.save()
+        
+        # 翻译内容更新，通知前端（异步，不阻塞主流程）
+        import asyncio
+        asyncio.create_task(
+            LanguageService._notify_frontend(
+                tenant_id=tenant_id,
+                language_code=language.code,
+                translations_updated=True
+            )
+        )
+        
         return language
+    
+    @staticmethod
+    async def _notify_frontend(
+        tenant_id: int,
+        language_code: str,
+        new_language_code: Optional[str] = None,
+        is_active: bool = True,
+        is_default: bool = False,
+        translations_updated: bool = False
+    ) -> None:
+        """
+        通知前端语言变更
+        
+        这是一个预留方法，用于将来实现前端的语言变更通知。
+        目前只是记录变更，不执行具体操作。
+        
+        Args:
+            tenant_id: 组织ID
+            language_code: 语言代码
+            new_language_code: 新语言代码（如果语言代码变更）
+            is_active: 是否启用
+            is_default: 是否默认语言
+            translations_updated: 翻译内容是否更新
+        """
+        # TODO: 如果将来需要前端自动刷新翻译，可以在这里实现
+        # 例如：
+        # 1. 通过 WebSocket 推送语言变更通知
+        # 2. 前端监听通知，自动重新加载翻译内容
+        # 3. 更新 i18next 的资源
+        
+        # 注意：翻译内容更新时，前端应该自动重新加载翻译
+        # 可以通过 WebSocket 或轮询机制实现
+        pass
 

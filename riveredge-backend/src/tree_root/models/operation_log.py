@@ -55,6 +55,11 @@ class OperationLog(BaseModel):
             ("operation_module",),
             ("operation_object_type",),
             ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "user_id"),  # 按组织+用户查询
+            ("tenant_id", "created_at"),  # 按组织+创建时间查询（时间范围查询）
+            ("tenant_id", "operation_module"),  # 按组织+模块查询
+            ("tenant_id", "user_id", "created_at"),  # 按组织+用户+时间查询
         ]
     
     def __str__(self):

@@ -20,6 +20,8 @@ from tree_root.schemas.data_backup import (
     DataBackupListResponse,
     DataBackupRestoreResponse,
 )
+from tree_root.services.system_parameter_service import SystemParameterService
+from tree_root.services.file_service import FileService
 from soil.exceptions.exceptions import NotFoundError, ValidationError
 from soil.infrastructure.database.database import DB_CONFIG
 from loguru import logger
@@ -56,20 +58,25 @@ class DataBackupService:
             status="pending",
         )
         
-        # TODO: 通过 Inngest 触发备份任务
-        # from tree_root.inngest.client import inngest_client
-        # from inngest import Event
-        # await inngest_client.send_event(
-        #     event=Event(
-        #         name="backup/execute",
-        #         data={
-        #             "tenant_id": tenant_id,
-        #             "backup_id": str(backup.uuid),
-        #             "backup_type": data.backup_type,
-        #             "backup_scope": data.backup_scope
-        #         }
-        #     )
-        # )
+        # 通过 Inngest 触发备份任务
+        from tree_root.inngest.client import inngest_client
+        from inngest import Event
+        
+        try:
+            await inngest_client.send_event(
+                event=Event(
+                    name="backup/execute",
+                    data={
+                        "tenant_id": tenant_id,
+                        "backup_uuid": str(backup.uuid),
+                        "backup_type": data.backup_type,
+                        "backup_scope": data.backup_scope
+                    }
+                )
+            )
+        except Exception as e:
+            # 如果 Inngest 事件发送失败，记录错误但不影响备份创建
+            logger.error(f"发送备份执行事件失败: {e}")
         
         return DataBackupResponse.model_validate(backup)
     
@@ -174,9 +181,13 @@ class DataBackupService:
         await backup.save()
         
         try:
+            # 从参数设置读取备份策略
+            backup_dir_path = await DataBackupService._get_backup_dir(tenant_id)
+            backup_timeout = await DataBackupService._get_backup_timeout(tenant_id)
+            
             # 生成备份文件路径
-            backup_dir = Path("backups")
-            backup_dir.mkdir(exist_ok=True)
+            backup_dir = Path(backup_dir_path)
+            backup_dir.mkdir(parents=True, exist_ok=True)
             backup_filename = f"backup_{backup.uuid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sql"
             backup_filepath = backup_dir / backup_filename
             
@@ -206,7 +217,7 @@ class DataBackupService:
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=3600,  # 1小时超时
+                timeout=backup_timeout,  # 从参数设置读取超时时间
             )
             
             if result.returncode != 0:
@@ -215,17 +226,23 @@ class DataBackupService:
             # 获取备份文件大小
             file_size = backup_filepath.stat().st_size
             
+            # 上传备份文件到文件管理模块（异步，不阻塞主流程）
+            import asyncio
+            asyncio.create_task(
+                DataBackupService._upload_backup_to_file_management(
+                    tenant_id=tenant_id,
+                    backup=backup,
+                    backup_filepath=backup_filepath,
+                    file_size=file_size
+                )
+            )
+            
             # 更新备份记录
             backup.status = "success"
             backup.completed_at = datetime.now()
             backup.file_path = str(backup_filepath)
             backup.file_size = file_size
             await backup.save()
-            
-            # TODO: 上传备份文件到文件管理模块
-            # file_uuid = await upload_backup_file(backup_filepath)
-            # backup.file_uuid = file_uuid
-            # await backup.save()
             
             logger.info(f"备份成功: {backup_uuid}, 文件大小: {file_size} 字节")
             
@@ -281,11 +298,28 @@ class DataBackupService:
         if backup.status != "success":
             raise ValidationError("备份未完成，无法恢复")
         
-        if not backup.file_path:
+        # 优先从文件管理获取备份文件路径
+        backup_filepath = None
+        if backup.file_uuid:
+            try:
+                file_record = await FileService.get_file_by_uuid(tenant_id, backup.file_uuid)
+                # 构建完整文件路径
+                backup_filepath = Path(FileService.UPLOAD_DIR) / file_record.file_path
+                if not backup_filepath.exists():
+                    raise ValidationError("备份文件不存在于文件系统")
+            except NotFoundError:
+                # 如果文件管理中的文件不存在，尝试使用原始路径
+                if backup.file_path and Path(backup.file_path).exists():
+                    backup_filepath = Path(backup.file_path)
+                else:
+                    raise ValidationError("备份文件不存在")
+        elif backup.file_path:
+            # 如果没有 file_uuid，使用原始路径
+            backup_filepath = Path(backup.file_path)
+            if not backup_filepath.exists():
+                raise ValidationError("备份文件不存在于文件系统")
+        else:
             raise ValidationError("备份文件不存在")
-        
-        if not Path(backup.file_path).exists():
-            raise ValidationError("备份文件不存在于文件系统")
         
         try:
             # 构建 psql 命令（使用 -f 参数执行 SQL 文件）
@@ -295,7 +329,7 @@ class DataBackupService:
                 "-p", str(DB_CONFIG.get("port", 5432)),
                 "-U", DB_CONFIG.get("user", "postgres"),
                 "-d", DB_CONFIG.get("database", "riveredge"),
-                "-f", backup.file_path,
+                "-f", str(backup_filepath),
             ]
             
             # 执行恢复
@@ -354,12 +388,232 @@ class DataBackupService:
         """
         backup = await DataBackupService.get_backup_by_uuid(tenant_id, backup_uuid)
         
+        # 如果备份文件已关联到文件管理，删除文件管理中的文件（异步，不阻塞主流程）
+        if backup.file_uuid:
+            import asyncio
+            asyncio.create_task(
+                DataBackupService._delete_backup_file_from_file_management(
+                    tenant_id=tenant_id,
+                    file_uuid=backup.file_uuid
+                )
+            )
+        
         # 软删除
         await backup.delete()
         
-        # TODO: 删除备份文件（可选）
-        # if backup.file_path and Path(backup.file_path).exists():
-        #     Path(backup.file_path).unlink()
-        
         return True
+    
+    @staticmethod
+    async def _delete_backup_file_from_file_management(
+        tenant_id: int,
+        file_uuid: str
+    ) -> None:
+        """
+        从文件管理中删除备份文件
+        
+        Args:
+            tenant_id: 组织ID
+            file_uuid: 文件UUID
+        """
+        try:
+            await FileService.delete_file(
+                tenant_id=tenant_id,
+                uuid=file_uuid
+            )
+            logger.info(f"备份文件已从文件管理中删除: {file_uuid}")
+        except NotFoundError:
+            # 文件不存在，忽略
+            pass
+        except Exception as e:
+            logger.warning(f"从文件管理中删除备份文件失败: {e}")
+    
+    @staticmethod
+    async def _get_backup_dir(tenant_id: int) -> str:
+        """
+        从系统参数读取备份文件存储目录
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            str: 备份文件存储目录
+        """
+        try:
+            param = await SystemParameterService.get_parameter(tenant_id, "backup.storage.dir")
+            
+            if param and param.is_active:
+                dir_path = param.get_value()
+                if dir_path:
+                    return dir_path
+        except Exception:
+            pass
+        
+        return "backups"  # 默认目录
+    
+    @staticmethod
+    async def _get_backup_timeout(tenant_id: int) -> int:
+        """
+        从系统参数读取备份超时时间（秒）
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            int: 备份超时时间（秒）
+        """
+        try:
+            param = await SystemParameterService.get_parameter(tenant_id, "backup.timeout")
+            
+            if param and param.is_active:
+                timeout = param.get_value()
+                if isinstance(timeout, (int, float)):
+                    return int(timeout)
+        except Exception:
+            pass
+        
+        return 3600  # 默认1小时
+    
+    @staticmethod
+    async def _get_backup_retention_days(tenant_id: int) -> int:
+        """
+        从系统参数读取备份保留天数
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            int: 备份保留天数
+        """
+        try:
+            param = await SystemParameterService.get_parameter(tenant_id, "backup.retention.days")
+            
+            if param and param.is_active:
+                days = param.get_value()
+                if isinstance(days, (int, float)):
+                    return int(days)
+        except Exception:
+            pass
+        
+        return 7  # 默认保留7天
+    
+    @staticmethod
+    async def _get_backup_retention_count(tenant_id: int) -> int:
+        """
+        从系统参数读取备份保留数量
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            int: 备份保留数量
+        """
+        try:
+            param = await SystemParameterService.get_parameter(tenant_id, "backup.retention.count")
+            
+            if param and param.is_active:
+                count = param.get_value()
+                if isinstance(count, (int, float)):
+                    return int(count)
+        except Exception:
+            pass
+        
+        return 10  # 默认保留10个
+    
+    @staticmethod
+    async def _get_backup_full_frequency(tenant_id: int) -> str:
+        """
+        从系统参数读取全量备份频率（Cron表达式）
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            str: Cron表达式（如 "0 2 * * *" 表示每天凌晨2点）
+        """
+        try:
+            param = await SystemParameterService.get_parameter(tenant_id, "backup.full.frequency")
+            
+            if param and param.is_active:
+                frequency = param.get_value()
+                if frequency:
+                    return frequency
+        except Exception:
+            pass
+        
+        return "0 2 * * *"  # 默认每天凌晨2点
+    
+    @staticmethod
+    async def _get_backup_incremental_frequency(tenant_id: int) -> str:
+        """
+        从系统参数读取增量备份频率（Cron表达式）
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            str: Cron表达式（如 "0 * * * *" 表示每小时）
+        """
+        try:
+            param = await SystemParameterService.get_parameter(tenant_id, "backup.incremental.frequency")
+            
+            if param and param.is_active:
+                frequency = param.get_value()
+                if frequency:
+                    return frequency
+        except Exception:
+            pass
+        
+        return "0 * * * *"  # 默认每小时
+    
+    @staticmethod
+    async def _upload_backup_to_file_management(
+        tenant_id: int,
+        backup: DataBackup,
+        backup_filepath: Path,
+        file_size: int
+    ) -> None:
+        """
+        将备份文件上传到文件管理模块
+        
+        Args:
+            tenant_id: 组织ID
+            backup: 备份对象
+            backup_filepath: 备份文件路径
+            file_size: 文件大小
+        """
+        try:
+            import shutil
+            
+            # 读取备份文件内容
+            with open(backup_filepath, 'rb') as f:
+                file_content = f.read()
+            
+            # 生成文件存储路径（使用文件管理的路径格式）
+            storage_path = FileService._get_file_storage_path(tenant_id, backup_filepath.name)
+            full_storage_path = Path(FileService.UPLOAD_DIR) / storage_path
+            full_storage_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 将备份文件复制到文件管理的存储目录
+            shutil.copy2(backup_filepath, full_storage_path)
+            
+            # 创建文件记录
+            file_record = await FileService.create_file(
+                tenant_id=tenant_id,
+                original_name=backup_filepath.name,
+                file_path=str(storage_path),  # 使用相对路径
+                file_size=file_size,
+                file_type="application/sql",  # SQL 备份文件
+                category="backup",
+                tags=["backup", backup.backup_type, backup.backup_scope],
+                description=f"数据备份文件: {backup.name} ({backup.backup_type}, {backup.backup_scope})"
+            )
+            
+            # 更新备份记录的 file_uuid
+            backup.file_uuid = str(file_record.uuid)
+            await backup.save()
+            
+            logger.info(f"备份文件已上传到文件管理: {backup.uuid}, 文件UUID: {file_record.uuid}")
+        except Exception as e:
+            logger.warning(f"上传备份文件到文件管理失败: {e}")
+            # 上传失败不影响备份流程，静默处理
 

@@ -558,4 +558,90 @@ class AuthService:
             )
         
         return user
+    
+    async def _log_login_attempt(
+        self,
+        tenant_id: Optional[int],
+        user_id: Optional[int],
+        username: str,
+        login_status: str,
+        failure_reason: Optional[str],
+        request: Request
+    ) -> None:
+        """
+        记录登录尝试日志
+        
+        Args:
+            tenant_id: 组织ID（登录失败时可能为空）
+            user_id: 用户ID（登录失败时可能为空）
+            username: 登录账号
+            login_status: 登录状态（success、failed）
+            failure_reason: 失败原因（登录失败时记录）
+            request: 请求对象
+        """
+        try:
+            from tree_root.services.login_log_service import LoginLogService
+            from tree_root.schemas.login_log import LoginLogCreate
+            
+            # 获取 IP 地址
+            login_ip = None
+            if request.client:
+                login_ip = request.client.host
+            # 优先从 X-Forwarded-For 获取（代理服务器）
+            forwarded_for = request.headers.get("X-Forwarded-For")
+            if forwarded_for:
+                login_ip = forwarded_for.split(",")[0].strip()
+            # 从 X-Real-IP 获取
+            if not login_ip:
+                real_ip = request.headers.get("X-Real-IP")
+                if real_ip:
+                    login_ip = real_ip
+            
+            # 获取用户代理
+            user_agent = request.headers.get("User-Agent", "")
+            
+            # 解析登录设备（简单判断）
+            login_device = None
+            if user_agent:
+                user_agent_lower = user_agent.lower()
+                if "mobile" in user_agent_lower or "android" in user_agent_lower or "iphone" in user_agent_lower:
+                    login_device = "Mobile"
+                elif "tablet" in user_agent_lower or "ipad" in user_agent_lower:
+                    login_device = "Tablet"
+                else:
+                    login_device = "PC"
+            
+            # 解析登录浏览器（简单提取）
+            login_browser = None
+            if user_agent:
+                if "Chrome" in user_agent:
+                    login_browser = "Chrome"
+                elif "Firefox" in user_agent:
+                    login_browser = "Firefox"
+                elif "Safari" in user_agent:
+                    login_browser = "Safari"
+                elif "Edge" in user_agent:
+                    login_browser = "Edge"
+                elif "Opera" in user_agent:
+                    login_browser = "Opera"
+                else:
+                    login_browser = "Unknown"
+            
+            # 创建登录日志
+            login_log_data = LoginLogCreate(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                username=username,
+                login_ip=login_ip or "unknown",
+                login_location=None,  # 可以根据 IP 解析地理位置（可选）
+                login_device=login_device,
+                login_browser=login_browser,
+                login_status=login_status,
+                failure_reason=failure_reason,
+            )
+            
+            await LoginLogService.create_login_log(login_log_data)
+        except Exception as e:
+            # 登录日志记录失败不影响登录流程，静默处理
+            logger.warning(f"记录登录日志失败: {e}")
 

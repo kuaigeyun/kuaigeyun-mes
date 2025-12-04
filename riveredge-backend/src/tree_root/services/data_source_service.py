@@ -178,12 +178,30 @@ class DataSourceService:
             if existing_data_source:
                 raise ValidationError(f"数据源代码 '{data_source_data.code}' 已存在")
         
+        # 记录变更前的状态
+        old_is_active = data_source.is_active
+        old_config = data_source.config
+        
         # 更新数据源
         update_data = data_source_data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(data_source, key, value)
         
         await data_source.save()
+        
+        # 如果数据源状态或配置变更，异步通知数据集管理
+        if (data_source_data.is_active is not None and old_is_active != data_source.is_active) or \
+           (data_source_data.config and old_config != data_source.config):
+            import asyncio
+            from tree_root.services.dataset_service import DatasetService
+            asyncio.create_task(
+                DatasetService._notify_datasets_of_data_source_change(
+                    tenant_id=tenant_id,
+                    data_source_code=data_source.code,
+                    is_active=data_source.is_active,
+                    config_changed=(data_source_data.config and old_config != data_source.config)
+                )
+            )
         
         return data_source
     
@@ -205,9 +223,24 @@ class DataSourceService:
         # 获取数据源
         data_source = await self.get_data_source_by_uuid(tenant_id, data_source_uuid)
         
+        # 记录数据源代码（用于通知）
+        data_source_code = data_source.code
+        
         # 软删除
         data_source.deleted_at = datetime.now()
         await data_source.save()
+        
+        # 异步通知数据集管理数据源已被删除
+        import asyncio
+        from tree_root.services.dataset_service import DatasetService
+        asyncio.create_task(
+            DatasetService._notify_datasets_of_data_source_change(
+                tenant_id=tenant_id,
+                data_source_code=data_source_code,
+                is_active=False,
+                is_deleted=True
+            )
+        )
     
     async def test_connection(
         self,

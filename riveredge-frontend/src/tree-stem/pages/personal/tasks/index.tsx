@@ -7,8 +7,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Badge, Tag, Button, Space, message, Modal, Input } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
+import { App, Card, Badge, Tag, Button, Space, message, Modal, Input, Tabs } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, FileTextOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import KanbanView from './kanban-view';
 import {
   getUserTasks,
   getUserTaskStats,
@@ -28,6 +29,7 @@ const UserTasksPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const [stats, setStats] = useState<UserTaskStats | null>(null);
   const [taskType, setTaskType] = useState<'pending' | 'submitted'>('pending');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [processModalVisible, setProcessModalVisible] = useState(false);
   const [currentTask, setCurrentTask] = useState<UserTask | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
@@ -285,51 +287,73 @@ const UserTasksPage: React.FC = () => {
         </div>
       )}
 
-      {/* 任务列表 */}
+      {/* 视图切换和任务类型切换 */}
       <Card>
-        <ProTable<UserTask>
-          columns={columns}
-          request={async (params, sorter, filter) => {
-            const response = await getUserTasks({
-              page: params.current || 1,
-              page_size: params.pageSize || 20,
-              status: params.status as string | undefined,
-              task_type: taskType,
-            });
-            return {
-              data: response.items,
-              success: true,
-              total: response.total,
-            };
-          }}
-          rowKey="uuid"
-          search={{
-            labelWidth: 'auto',
-            defaultCollapsed: false,
-          }}
-          pagination={{
-            defaultPageSize: 20,
-            showSizeChanger: true,
-            showQuickJumper: true,
-          }}
-          toolBarRender={() => [
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Tabs
+            activeKey={taskType}
+            onChange={(key) => setTaskType(key as 'pending' | 'submitted')}
+            items={[
+              { key: 'pending', label: '待处理' },
+              { key: 'submitted', label: '我提交的' },
+            ]}
+          />
+          <Space>
             <Button
-              key="pending"
-              type={taskType === 'pending' ? 'primary' : 'default'}
-              onClick={() => setTaskType('pending')}
+              type={viewMode === 'kanban' ? 'primary' : 'default'}
+              icon={<AppstoreOutlined />}
+              onClick={() => setViewMode('kanban')}
             >
-              待处理
-            </Button>,
+              看板视图
+            </Button>
             <Button
-              key="submitted"
-              type={taskType === 'submitted' ? 'primary' : 'default'}
-              onClick={() => setTaskType('submitted')}
+              type={viewMode === 'list' ? 'primary' : 'default'}
+              icon={<UnorderedListOutlined />}
+              onClick={() => setViewMode('list')}
             >
-              我提交的
-            </Button>,
-          ]}
-          headerTitle="我的任务"
-        />
+              列表视图
+            </Button>
+          </Space>
+        </div>
+
+        {/* 看板视图 */}
+        {viewMode === 'kanban' && (
+          <KanbanView
+            taskType={taskType}
+            onRefresh={loadStats}
+          />
+        )}
+
+        {/* 列表视图 */}
+        {viewMode === 'list' && (
+          <ProTable<UserTask>
+            columns={columns}
+            request={async (params, sorter, filter) => {
+              const response = await getUserTasks({
+                page: params.current || 1,
+                page_size: params.pageSize || 20,
+                status: params.status as string | undefined,
+                task_type: taskType,
+              });
+              return {
+                data: response.items,
+                success: true,
+                total: response.total,
+              };
+            }}
+            rowKey="uuid"
+            search={{
+              labelWidth: 'auto',
+              defaultCollapsed: false,
+            }}
+            pagination={{
+              defaultPageSize: 20,
+              showSizeChanger: true,
+              showQuickJumper: true,
+            }}
+            headerTitle="我的任务"
+          />
+        )}
       </Card>
 
       {/* 处理任务 Modal */}

@@ -83,36 +83,58 @@ class MessageService:
             status="pending",
         )
         
-        # TODO: 集成 Inngest 事件驱动
         # 发送 Inngest 事件触发消息发送
-        # from tree_root.inngest.client import inngest_client
-        # from inngest import Event
-        # 
-        # await inngest_client.send_event(
-        #     event=Event(
-        #         name="message/send",
-        #         data={
-        #             "tenant_id": tenant_id,
-        #             "message_log_uuid": str(message_log.uuid),
-        #             "message_type": request.type,
-        #             "recipient": request.recipient,
-        #             "subject": subject,
-        #             "content": content,
-        #             "config_uuid": str(config.uuid),
-        #         }
-        #     )
-        # )
+        from tree_root.inngest.client import inngest_client
+        from inngest import Event
         
-        # 临时实现：直接标记为成功（等待 Inngest 集成后改为异步处理）
-        message_log.status = "sending"
-        message_log.sent_at = datetime.now()
-        await message_log.save()
-        
-        return SendMessageResponse(
-            success=True,
-            message_log_uuid=message_log.uuid,
-            inngest_run_id=None,  # TODO: 从 Inngest 响应中获取
-        )
+        try:
+            # 发送 Inngest 事件
+            event_response = await inngest_client.send_event(
+                event=Event(
+                    name="message/send",
+                    data={
+                        "tenant_id": tenant_id,
+                        "message_log_uuid": str(message_log.uuid),
+                        "message_type": request.type,
+                        "recipient": request.recipient,
+                        "subject": subject,
+                        "content": content,
+                        "config_uuid": str(config.uuid),
+                    }
+                )
+            )
+            
+            # 从 Inngest 响应中获取 run_id（如果有）
+            inngest_run_id = None
+            if hasattr(event_response, 'ids') and event_response.ids:
+                inngest_run_id = event_response.ids[0] if isinstance(event_response.ids, list) else str(event_response.ids)
+            
+            # 更新消息日志的 Inngest run_id
+            if inngest_run_id:
+                message_log.inngest_run_id = inngest_run_id
+                await message_log.save()
+            
+            return SendMessageResponse(
+                success=True,
+                message_log_uuid=message_log.uuid,
+                inngest_run_id=inngest_run_id,
+            )
+        except Exception as e:
+            # 如果 Inngest 事件发送失败，记录错误但保持消息日志为 pending 状态
+            # 这样可以通过重试机制重新发送
+            message_log.status = "pending"
+            message_log.error_message = f"Inngest 事件发送失败: {str(e)}"
+            await message_log.save()
+            
+            # 记录错误日志
+            from loguru import logger
+            logger.error(f"发送 Inngest 事件失败: {e}")
+            
+            return SendMessageResponse(
+                success=False,
+                message_log_uuid=message_log.uuid,
+                inngest_run_id=None,
+            )
     
     @staticmethod
     async def list_message_logs(

@@ -355,6 +355,30 @@ class RoleService:
             permissions_to_remove = [p for p in current_permissions if p.id in to_remove]
             await role.permissions.remove(*permissions_to_remove)
         
+        # 角色权限变更后，自动更新关联菜单的可见性
+        # 获取变更的权限代码
+        changed_permission_codes = []
+        if to_add and permission_uuids:
+            # 获取添加的权限对象
+            added_permissions = [p for p in permissions if p.id in to_add]
+            changed_permission_codes.extend([p.code for p in added_permissions])
+        if to_remove:
+            # 获取移除的权限对象
+            removed_permissions = [p for p in current_permissions if p.id in to_remove]
+            changed_permission_codes.extend([p.code for p in removed_permissions])
+        
+        # 更新关联菜单的可见性（异步，不阻塞主流程）
+        if changed_permission_codes:
+            import asyncio
+            from tree_root.services.menu_service import MenuService
+            for permission_code in changed_permission_codes:
+                asyncio.create_task(
+                    MenuService.update_menus_by_permission_code(
+                        tenant_id=tenant_id,
+                        permission_code=permission_code
+                    )
+                )
+        
         return {
             "success": True,
             "message": "权限分配成功",

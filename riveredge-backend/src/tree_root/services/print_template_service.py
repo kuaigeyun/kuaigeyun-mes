@@ -13,6 +13,7 @@ import re
 from tortoise.exceptions import IntegrityError
 
 from tree_root.models.print_template import PrintTemplate
+from tree_root.services.print_device_service import PrintDeviceService
 from tree_root.schemas.print_template import (
     PrintTemplateCreate,
     PrintTemplateUpdate,
@@ -47,6 +48,14 @@ class PrintTemplateService:
             ValidationError: 当模板代码已存在时抛出
         """
         try:
+            # 如果 config 中包含 device_uuid，验证打印设备是否存在
+            if data.config and data.config.get("device_uuid"):
+                device_uuid = data.config.get("device_uuid")
+                try:
+                    await PrintDeviceService.get_print_device_by_uuid(tenant_id, device_uuid)
+                except NotFoundError:
+                    raise ValidationError(f"关联的打印设备不存在: {device_uuid}")
+            
             print_template = PrintTemplate(
                 tenant_id=tenant_id,
                 **data.model_dump()
@@ -146,10 +155,52 @@ class PrintTemplateService:
         print_template = await PrintTemplateService.get_print_template_by_uuid(tenant_id, uuid)
         
         update_data = data.model_dump(exclude_unset=True)
+        
+        # 如果更新了 config 中的 device_uuid，验证打印设备是否存在
+        if 'config' in update_data and update_data['config'] and update_data['config'].get("device_uuid"):
+            device_uuid = update_data['config'].get("device_uuid")
+            try:
+                await PrintDeviceService.get_print_device_by_uuid(tenant_id, device_uuid)
+            except NotFoundError:
+                raise ValidationError(f"关联的打印设备不存在: {device_uuid}")
+        
+        # 合并 config（如果只更新了部分配置）
+        if 'config' in update_data and update_data['config'] and print_template.config:
+            # 合并现有配置和新配置
+            merged_config = {**print_template.config, **update_data['config']}
+            update_data['config'] = merged_config
+        
+        old_device_uuid = None
+        if print_template.config and print_template.config.get("device_uuid"):
+            old_device_uuid = print_template.config.get("device_uuid")
+        
         for key, value in update_data.items():
             setattr(print_template, key, value)
         
         await print_template.save()
+        
+        # 如果打印设备 UUID 变更，异步通知打印设备服务
+        new_device_uuid = None
+        if print_template.config and print_template.config.get("device_uuid"):
+            new_device_uuid = print_template.config.get("device_uuid")
+        
+        if old_device_uuid != new_device_uuid:
+            import asyncio
+            if old_device_uuid:
+                asyncio.create_task(
+                    PrintDeviceService._notify_templates_of_device_change(
+                        tenant_id=tenant_id,
+                        device_uuid=old_device_uuid
+                    )
+                )
+            if new_device_uuid:
+                asyncio.create_task(
+                    PrintDeviceService._notify_templates_of_device_change(
+                        tenant_id=tenant_id,
+                        device_uuid=new_device_uuid
+                    )
+                )
+        
         return print_template
     
     @staticmethod

@@ -7,8 +7,9 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, ThunderboltOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import CardView from '../card-view';
 import { UniTable } from '../../../../components/uni_table';
 import {
   getDataSourceList,
@@ -33,6 +34,7 @@ const DataSourceListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
   // Modal 相关状态（创建/编辑数据源）
   const [modalVisible, setModalVisible] = useState(false);
@@ -338,7 +340,33 @@ const DataSourceListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<DataSource>
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs
+          activeKey={viewMode}
+          onChange={(key) => setViewMode(key as 'card' | 'list')}
+          items={[
+            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
+            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
+          ]}
+        />
+        {viewMode === 'list' && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            新建数据源
+          </Button>
+        )}
+      </div>
+
+      {/* 卡片视图 */}
+      {viewMode === 'card' && <CardView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <UniTable<DataSource>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -400,7 +428,8 @@ const DataSourceListPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
-      />
+        />
+      )}
 
       {/* 创建/编辑数据源 Modal */}
       <Modal

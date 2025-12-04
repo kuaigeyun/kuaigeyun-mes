@@ -7,8 +7,9 @@
 
 import React, { useState } from 'react';
 import { ProTable, ProColumns, ProForm, ProFormText, ProFormSelect } from '@ant-design/pro-components';
-import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button } from 'antd';
-import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Tabs } from 'antd';
+import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import CardView from './card-view';
 import {
   getBackups,
   createBackup,
@@ -32,6 +33,7 @@ const DataBackupsPage: React.FC = () => {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [currentBackup, setCurrentBackup] = useState<DataBackup | null>(null);
   const [formRef] = ProForm.useForm();
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   /**
    * 查看备份详情
@@ -231,9 +233,34 @@ const DataBackupsPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      {/* 备份列表 */}
-      <Card>
-        <ProTable<DataBackup>
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs
+          activeKey={viewMode}
+          onChange={(key) => setViewMode(key as 'card' | 'list')}
+          items={[
+            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
+            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
+          ]}
+        />
+        {viewMode === 'list' && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateModalVisible(true)}
+          >
+            创建备份
+          </Button>
+        )}
+      </div>
+
+      {/* 卡片视图 */}
+      {viewMode === 'card' && <CardView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <Card>
+          <ProTable<DataBackup>
           columns={columns}
           manualRequest={!currentUser}
           request={async (params, sorter, filter) => {
@@ -300,8 +327,9 @@ const DataBackupsPage: React.FC = () => {
             </Button>,
           ]}
           headerTitle="数据备份"
-        />
-      </Card>
+          />
+        </Card>
+      )}
 
       {/* 创建备份 Modal */}
       <Modal

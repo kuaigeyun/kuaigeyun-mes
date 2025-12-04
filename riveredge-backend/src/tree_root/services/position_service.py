@@ -123,9 +123,16 @@ class PositionService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        # 分页
+        # 优化分页查询：先查询总数，再查询数据
         total = await query.count()
-        positions = await query.offset((page - 1) * page_size).limit(page_size).all()
+        
+        # 限制分页大小，避免过大查询
+        if page_size > 100:
+            page_size = 100
+        
+        # 分页查询（使用索引字段排序）
+        offset = (page - 1) * page_size
+        positions = await query.order_by("-created_at").offset(offset).limit(page_size).all()
         
         # 获取关联的部门信息和用户数量
         result = []
@@ -305,7 +312,12 @@ class PositionService:
         ).count()
         
         if user_count > 0:
-            raise ValidationError(f"职位下存在用户（{user_count}人），无法删除")
+            # 自动清理关联用户的职位字段（设置为NULL）
+            await User.filter(
+                tenant_id=tenant_id,
+                position_id=position.id,
+                deleted_at__isnull=True
+            ).update(position_id=None)
         
         # 软删除
         from datetime import datetime

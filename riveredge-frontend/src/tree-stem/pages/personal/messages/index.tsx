@@ -7,8 +7,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Badge, Tag, Button, Space, message, Modal } from 'antd';
-import { BellOutlined, CheckOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Card, Badge, Tag, Button, Space, message, Modal, Tabs } from 'antd';
+import { BellOutlined, CheckOutlined, EyeOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import CardView from './card-view';
 import {
   getUserMessages,
   getUserMessageStats,
@@ -25,6 +26,7 @@ const UserMessagesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const [stats, setStats] = useState<UserMessageStats | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   /**
    * 加载消息统计
@@ -244,8 +246,26 @@ const UserMessagesPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      {/* 统计卡片 */}
-      {stats && (
+      {/* 视图切换 */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Tabs
+          activeKey={viewMode}
+          onChange={(key) => setViewMode(key as 'card' | 'list')}
+          items={[
+            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
+            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
+          ]}
+        />
+      </div>
+
+      {/* 卡片视图 */}
+      {viewMode === 'card' && <CardView />}
+
+      {/* 列表视图 */}
+      {viewMode === 'list' && (
+        <>
+          {/* 统计卡片 */}
+          {stats && (
         <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
           <Card style={{ flex: 1 }}>
             <div style={{ textAlign: 'center' }}>
@@ -325,9 +345,11 @@ const UserMessagesPage: React.FC = () => {
             </Button>,
           ]}
           headerTitle="我的消息"
-        />
-      </Card>
-    </div>
+          />
+        </Card>
+        </>
+      )}
+      </div>
   );
 };
 

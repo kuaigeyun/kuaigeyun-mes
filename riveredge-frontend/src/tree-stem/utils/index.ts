@@ -9,4 +9,7 @@ export * from './storage';
 export * from './format';
 export * from './pinyin';
 export * from './import';
+export * from './errorHandler';
+export * from './errorRecovery';
+export * from './batchOperations';
 

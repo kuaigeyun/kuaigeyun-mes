@@ -199,13 +199,17 @@ class UserService:
         if is_tenant_admin is not None:
             query &= Q(is_tenant_admin=is_tenant_admin)
         
-        # 查询总数
+        # 优化分页查询：先查询总数，再查询数据
         total = await User.filter(query).count()
         
-        # 分页查询
+        # 限制分页大小，避免过大查询
+        if page_size > 100:
+            page_size = 100
+        
+        # 分页查询（使用索引字段排序）
         offset = (page - 1) * page_size
         # ⚠️ 修复：不预加载 roles，避免表不存在时出错，改为在循环中单独查询
-        users = await User.filter(query).offset(offset).limit(page_size).all()
+        users = await User.filter(query).order_by("-created_at").offset(offset).limit(page_size).all()
         
         # 构建响应数据（遵循自增ID+UUID混合方案，只对外暴露UUID）
         items = []
@@ -379,6 +383,11 @@ class UserService:
         if not user:
             raise NotFoundError(f"用户不存在: {user_uuid}")
         
+        # 记录变更前的状态（用于检测变更）
+        old_department_id = user.department_id
+        old_position_id = user.position_id
+        old_is_active = user.is_active
+        
         # 验证部门（如果提供）
         if data.department_uuid is not None:
             if data.department_uuid:
@@ -440,7 +449,96 @@ class UserService:
         # 重新加载关联数据
         await user.fetch_related('roles', 'department', 'position')
         
+        # 如果部门或职位变更，触发权限更新（异步，不阻塞主流程）
+        # 注意：目前系统中部门/职位没有权限模板，这里只是预留接口
+        # 如果将来需要根据部门/职位自动分配权限，可以在这里实现
+        department_changed = old_department_id != user.department_id
+        position_changed = old_position_id != user.position_id
+        
+        if department_changed or position_changed:
+            import asyncio
+            # 异步处理权限更新（如果将来有权限模板功能）
+            # 目前只是记录变更，不执行具体操作
+            asyncio.create_task(
+                UserService._handle_department_position_change(
+                    tenant_id=tenant_id,
+                    user_id=user.id,
+                    old_department_id=old_department_id,
+                    new_department_id=user.department_id,
+                    old_position_id=old_position_id,
+                    new_position_id=user.position_id
+                )
+            )
+        
+        # 如果用户被禁用，清除在线用户信息（异步，不阻塞主流程）
+        if old_is_active and not user.is_active:
+            import asyncio
+            asyncio.create_task(
+                UserService._clear_online_user(
+                    tenant_id=tenant_id,
+                    user_id=user.id
+                )
+            )
+        
         return user
+    
+    @staticmethod
+    async def _handle_department_position_change(
+        tenant_id: int,
+        user_id: int,
+        old_department_id: Optional[int],
+        new_department_id: Optional[int],
+        old_position_id: Optional[int],
+        new_position_id: Optional[int]
+    ) -> None:
+        """
+        处理部门/职位变更后的权限更新
+        
+        这是一个预留方法，用于将来实现根据部门/职位权限模板自动分配权限的功能。
+        目前只是记录变更，不执行具体操作。
+        
+        Args:
+            tenant_id: 组织ID
+            user_id: 用户ID
+            old_department_id: 旧部门ID
+            new_department_id: 新部门ID
+            old_position_id: 旧职位ID
+            new_position_id: 新职位ID
+        """
+        # TODO: 如果将来需要根据部门/职位权限模板自动分配权限，可以在这里实现
+        # 例如：
+        # 1. 获取新部门/职位的权限模板
+        # 2. 自动为用户分配相应的角色或权限
+        # 3. 移除旧部门/职位相关的权限
+        pass
+    
+    @staticmethod
+    async def _clear_online_user(
+        tenant_id: int,
+        user_id: int
+    ) -> None:
+        """
+        清除在线用户信息
+        
+        当用户被禁用或删除时，清除 Redis 中的在线用户信息。
+        
+        Args:
+            tenant_id: 组织ID
+            user_id: 用户ID
+        """
+        try:
+            from tree_root.services.online_user_service import OnlineUserService
+            await OnlineUserService.force_logout(
+                tenant_id=tenant_id,
+                user_id=user_id
+            )
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"用户 {user_id} 的在线状态已清除（组织ID: {tenant_id}）")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"清除在线用户信息失败: {e}")
     
     @staticmethod
     async def delete_user(
@@ -481,6 +579,15 @@ class UserService:
         # 软删除
         user.deleted_at = datetime.now()
         await user.save()
+        
+        # 清除在线用户信息（异步，不阻塞主流程）
+        import asyncio
+        asyncio.create_task(
+            UserService._clear_online_user(
+                tenant_id=tenant_id,
+                user_id=user.id
+            )
+        )
     
     @staticmethod
     async def import_users_from_data(

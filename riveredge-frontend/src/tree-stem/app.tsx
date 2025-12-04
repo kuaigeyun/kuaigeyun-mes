@@ -7,15 +7,18 @@
  * - Ant Design 5.21.4 + Pro Components 2.8.2 (UI组件)
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
 import { App as AntdApp, Spin, ConfigProvider, theme, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getToken, clearAuth, getUserInfo } from './utils/auth';
 import { useGlobalStore } from './stores';
+import { loadUserLanguage } from './config/i18n';
+import { getUserPreference, UserPreference } from './services/userPreference';
 // 使用 maintree 中的路由配置
 import AppRoutes from '../maintree/routes';
+import ErrorBoundary from './components/error-boundary';
 
 // 将 Ant Design message 实例注入到全局，供 api.ts 使用
 if (typeof window !== 'undefined') {
@@ -151,21 +154,122 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 // 主应用组件
 export default function App() {
+  const [userPreference, setUserPreference] = useState<UserPreference | null>(null);
+  const [themeConfig, setThemeConfig] = useState<{
+    algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm;
+    token: { colorPrimary: string };
+  }>({
+    algorithm: theme.defaultAlgorithm,
+    token: { colorPrimary: '#1890ff' },
+  });
+
+  // 初始化时加载用户偏好设置
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      // 加载用户偏好设置
+      getUserPreference()
+        .then((preference) => {
+          setUserPreference(preference);
+          
+          // 应用主题偏好
+          const userTheme = preference?.preferences?.theme || 'light';
+          if (userTheme === 'dark') {
+            setThemeConfig({
+              algorithm: theme.darkAlgorithm,
+              token: { colorPrimary: '#1890ff' },
+            });
+          } else if (userTheme === 'auto') {
+            // 自动模式：根据系统偏好决定
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            setThemeConfig({
+              algorithm: prefersDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+              token: { colorPrimary: '#1890ff' },
+            });
+          } else {
+            // 默认浅色主题
+            setThemeConfig({
+              algorithm: theme.defaultAlgorithm,
+              token: { colorPrimary: '#1890ff' },
+            });
+          }
+          
+          // 加载用户选择的语言
+          return loadUserLanguage();
+        })
+        .catch((error) => {
+          console.warn('Failed to load user preference:', error);
+          // 如果加载失败，使用默认设置
+          loadUserLanguage().catch((err) => {
+            console.warn('Failed to load user language:', err);
+          });
+        });
+    }
+  }, []);
+
+  // 监听系统主题变化（当用户偏好为 auto 时）
+  useEffect(() => {
+    if (userPreference?.preferences?.theme === 'auto') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e: MediaQueryListEvent) => {
+        setThemeConfig({
+          algorithm: e.matches ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          token: { colorPrimary: '#1890ff' },
+        });
+      };
+      
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, [userPreference?.preferences?.theme]);
+
+  // 监听用户偏好更新事件
+  useEffect(() => {
+    const handlePreferenceUpdate = async (event: CustomEvent) => {
+      // 重新加载用户偏好设置
+      try {
+        const preference = await getUserPreference();
+        setUserPreference(preference);
+        
+        // 应用新的主题偏好
+        const userTheme = preference?.preferences?.theme || 'light';
+        if (userTheme === 'dark') {
+          setThemeConfig({
+            algorithm: theme.darkAlgorithm,
+            token: { colorPrimary: '#1890ff' },
+          });
+        } else if (userTheme === 'auto') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          setThemeConfig({
+            algorithm: prefersDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+            token: { colorPrimary: '#1890ff' },
+          });
+        } else {
+          setThemeConfig({
+            algorithm: theme.defaultAlgorithm,
+            token: { colorPrimary: '#1890ff' },
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to reload user preference:', error);
+      }
+    };
+    
+    window.addEventListener('userPreferenceUpdated', handlePreferenceUpdate as EventListener);
+    return () => {
+      window.removeEventListener('userPreferenceUpdated', handlePreferenceUpdate as EventListener);
+    };
+  }, []);
+
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.defaultAlgorithm, // 浅色主题算法
-        token: {
-          // 可以在这里自定义主题token
-          colorPrimary: '#1890ff',
-        },
-      }}
-    >
-      <AntdApp>
-        <AuthGuard>
-          <AppRoutes />
-        </AuthGuard>
-      </AntdApp>
+    <ConfigProvider theme={themeConfig}>
+            <AntdApp>
+              <ErrorBoundary>
+                <AuthGuard>
+                  <AppRoutes />
+                </AuthGuard>
+              </ErrorBoundary>
+            </AntdApp>
     </ConfigProvider>
   );
 }

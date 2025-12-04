@@ -329,10 +329,47 @@ class DepartmentService:
         ).count()
         
         if user_count > 0:
-            raise ValidationError(f"部门下存在用户（{user_count}人），无法删除")
+            # 自动清理关联用户的部门字段（设置为NULL）
+            await User.filter(
+                tenant_id=tenant_id,
+                department_id=department.id,
+                deleted_at__isnull=True
+            ).update(department_id=None)
         
         # 软删除
         from datetime import datetime
         department.deleted_at = datetime.now()
         await department.save()
+    
+    @staticmethod
+    async def update_department_order(
+        tenant_id: int,
+        department_orders: List[Dict[str, Any]]
+    ) -> bool:
+        """
+        更新部门排序
+        
+        Args:
+            tenant_id: 组织ID
+            department_orders: 部门排序列表，格式：[{"uuid": "...", "sort_order": 1}, ...]
+            
+        Returns:
+            bool: 是否成功
+        """
+        for order_item in department_orders:
+            department_uuid = order_item.get("uuid")
+            sort_order = order_item.get("sort_order")
+            
+            if department_uuid and sort_order is not None:
+                department = await Department.filter(
+                    uuid=department_uuid,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if department:
+                    department.sort_order = sort_order
+                    await department.save()
+        
+        return True
 
