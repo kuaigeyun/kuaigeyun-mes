@@ -7,7 +7,7 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { App, Input, Button, Form, Typography, Avatar } from 'antd';
-import { LockOutlined } from '@ant-design/icons';
+import { LockOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import TweenOne from 'rc-tween-one';
 import { useGlobalStore } from '../../stores';
@@ -288,6 +288,8 @@ export default function LockScreenPage() {
    * 处理解锁
    */
   const handleUnlock = async (values: { password: string }) => {
+    // 使用真实密码值（如果表单值为空，使用状态中的值）
+    const password = values.password || realPassword;
     if (!currentUser) {
       message.error('用户信息不存在，请重新登录');
       navigate('/login');
@@ -306,7 +308,7 @@ export default function LockScreenPage() {
         // 平台超级管理员：使用平台登录接口
         const platformResponse = await platformSuperAdminLogin({
           username: currentUser.username,
-          password: values.password,
+          password: password,
         });
 
         // 验证成功，更新 token
@@ -340,7 +342,7 @@ export default function LockScreenPage() {
         // 系统级用户：使用系统登录接口
         const systemResponse = await login({
           username: currentUser.username,
-          password: values.password,
+          password: password,
         });
 
         // 验证成功，更新 token
@@ -391,6 +393,11 @@ export default function LockScreenPage() {
 
   // 日期和时间状态
   const [currentTime, setCurrentTime] = useState(new Date());
+  const passwordInputRef = useRef<any>(null);
+  // 密码显示/隐藏状态
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  // 实际密码值（用于提交）
+  const [realPassword, setRealPassword] = useState('');
 
   /**
    * 实时更新时间（每秒更新一次）
@@ -404,6 +411,58 @@ export default function LockScreenPage() {
       clearInterval(timer);
     };
   }, []);
+
+  /**
+   * 阻止浏览器自动填充密码
+   */
+  useEffect(() => {
+    // 延迟执行，确保 DOM 已渲染
+    const timer = setTimeout(() => {
+      // 查找所有密码输入框并清除自动填充
+      const passwordInputs = document.querySelectorAll('input[type="password"]');
+      passwordInputs.forEach((input: any) => {
+        if (input) {
+          input.setAttribute('autocomplete', 'new-password');
+          input.setAttribute('data-form-type', 'other');
+          input.setAttribute('data-lpignore', 'true');
+          input.setAttribute('data-1p-ignore', 'true');
+          input.setAttribute('data-dashlane-ignore', 'true');
+          input.setAttribute('data-bitwarden-watching', '1');
+          // 如果已被自动填充，清除值
+          if (input.value) {
+            input.value = '';
+            form.setFieldsValue({ password: '' });
+          }
+        }
+      });
+
+      // 监听输入事件，如果检测到自动填充，立即清除
+      const handleInput = (e: any) => {
+        if (e.target.value && e.target.value.length > 0) {
+          // 检查是否是自动填充（通常自动填充会在页面加载时立即填充）
+          const isAutofill = e.target.matches(':-webkit-autofill');
+          if (isAutofill) {
+            e.target.value = '';
+            form.setFieldsValue({ password: '' });
+          }
+        }
+      };
+
+      passwordInputs.forEach((input: any) => {
+        input.addEventListener('input', handleInput);
+        input.addEventListener('change', handleInput);
+      });
+
+      return () => {
+        passwordInputs.forEach((input: any) => {
+          input.removeEventListener('input', handleInput);
+          input.removeEventListener('change', handleInput);
+        });
+      };
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [form]);
 
   /**
    * 格式化日期
@@ -454,6 +513,21 @@ export default function LockScreenPage() {
         }
         .geometric-shape-3 {
           animation: float 8s ease-in-out infinite;
+        }
+        /* 阻止浏览器自动填充样式 */
+        input[type="password"]:-webkit-autofill,
+        input[type="password"]:-webkit-autofill:hover,
+        input[type="password"]:-webkit-autofill:focus,
+        input[type="password"]:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 30px white inset !important;
+          -webkit-text-fill-color: #000 !important;
+          transition: background-color 5000s ease-in-out 0s;
+        }
+        /* 隐藏密码管理器的下拉菜单 */
+        input[type="password"]::-webkit-credentials-auto-fill-button {
+          display: none !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
         }
       `}</style>
       <div
@@ -612,7 +686,26 @@ export default function LockScreenPage() {
             onFinish={handleUnlock}
             layout="vertical"
             size="large"
+            autoComplete="off"
+            id="lock-screen-form"
           >
+            {/* 隐藏的假输入框，用于欺骗浏览器 */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="off"
+              style={{ position: 'absolute', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              tabIndex={-1}
+              readOnly
+            />
+            <input
+              type="password"
+              name="password-fake"
+              autoComplete="new-password"
+              style={{ position: 'absolute', left: '-9999px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+              tabIndex={-1}
+              readOnly
+            />
             <Form.Item
               name="password"
               rules={[
@@ -620,12 +713,108 @@ export default function LockScreenPage() {
                 { min: 6, message: '密码至少6位' },
               ]}
             >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="请输入密码解锁"
-                autoFocus
-                onPressEnter={() => form.submit()}
-              />
+              <div style={{ position: 'relative' }}>
+                {/* 隐藏的真实输入框，用于捕获用户输入 */}
+                <input
+                  type="text"
+                  ref={passwordInputRef}
+                  autoComplete="off"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-dashlane-ignore="true"
+                  data-bitwarden-watching="1"
+                  id="lock-screen-password-real"
+                  name="lock-screen-password-real"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    zIndex: 2,
+                    pointerEvents: 'auto',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'transparent',
+                    caretColor: 'transparent',
+                  }}
+                  value={realPassword}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setRealPassword(value);
+                    form.setFieldsValue({ password: value });
+                  }}
+                  onFocus={(e) => {
+                    // 清除可能被自动填充的值
+                    setTimeout(() => {
+                      if (e.target.value && e.target.value.length > 0) {
+                        // 检查是否是自动填充（通常自动填充会在页面加载时立即填充）
+                        const isAutofill = document.activeElement === e.target && e.target.value.length > 6;
+                        if (isAutofill) {
+                          e.target.value = '';
+                          setRealPassword('');
+                          form.setFieldsValue({ password: '' });
+                        }
+                      }
+                    }, 100);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      form.setFieldsValue({ password: realPassword });
+                      form.submit();
+                    }
+                  }}
+                />
+                {/* 显示的输入框，用于显示圆点或真实字符 */}
+                <Input
+                  type="text"
+                  prefix={<LockOutlined />}
+                  placeholder="请输入密码解锁"
+                  autoFocus
+                  autoComplete="off"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-dashlane-ignore="true"
+                  data-bitwarden-watching="1"
+                  id="lock-screen-password-display"
+                  name="lock-screen-password-display"
+                  readOnly
+                  value={passwordVisible ? realPassword : '•'.repeat(realPassword.length)}
+                  style={{
+                    pointerEvents: 'none',
+                  }}
+                  onFocus={() => {
+                    // 将焦点转移到隐藏的真实输入框
+                    if (passwordInputRef.current) {
+                      passwordInputRef.current.focus();
+                    }
+                  }}
+                />
+                {/* 独立的眼睛图标，可点击 */}
+                <span
+                  onClick={() => setPasswordVisible(!passwordVisible)}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    cursor: 'pointer',
+                    color: 'rgba(0, 0, 0, 0.45)',
+                    zIndex: 3,
+                    pointerEvents: 'auto',
+                    display: 'flex',
+                    alignItems: 'center',
+                    height: '22px',
+                  }}
+                >
+                  {passwordVisible ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                </span>
+              </div>
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 0 }}>

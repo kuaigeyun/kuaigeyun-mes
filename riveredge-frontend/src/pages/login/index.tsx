@@ -7,14 +7,17 @@
  */
 
 import { ProForm, ProFormText } from '@ant-design/pro-components';
-import { App, Typography, Button, Space, Tooltip } from 'antd';
+import { App, Typography, Button, Space, Tooltip, ConfigProvider } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, BgColorsOutlined, GlobalOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { login, guestLogin, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { TenantSelectionModal, TermsModal } from '../../components';
+import ThemeColorEditor from '../../components/theme-color-editor';
+import { theme } from 'antd';
+import { getSiteSetting } from '../../services/siteSetting';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -38,6 +41,7 @@ interface LoginFormData {
 export default function LoginPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const { token } = theme.useToken(); // 获取当前主题 token
   // 使用全局状态管理（Zustand状态管理规范）
   const { setCurrentUser } = useGlobalStore();
 
@@ -49,6 +53,35 @@ export default function LoginPage() {
   // 条款弹窗状态
   const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [termsModalType, setTermsModalType] = useState<'user' | 'privacy'>('user');
+
+  // 主题颜色状态
+  const [themeColor, setThemeColor] = useState<string>('#1890ff');
+
+  // 加载主题颜色
+  useEffect(() => {
+    const loadThemeColor = async () => {
+      try {
+        const siteSetting = await getSiteSetting().catch(() => null);
+        const themeConfig = siteSetting?.settings?.theme_config || {};
+        const legacyThemeColor = siteSetting?.settings?.theme_color;
+        const colorPrimary = legacyThemeColor || themeConfig.colorPrimary || token.colorPrimary || '#1890ff';
+        setThemeColor(typeof colorPrimary === 'string' ? colorPrimary : '#1890ff');
+      } catch (error) {
+        // 如果加载失败，使用默认颜色
+        setThemeColor(token.colorPrimary || '#1890ff');
+      }
+    };
+    loadThemeColor();
+
+    // 监听主题更新事件
+    const handleThemeUpdate = () => {
+      loadThemeColor();
+    };
+    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
+    return () => {
+      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
+    };
+  }, [token.colorPrimary]);
 
   /**
    * 处理登录提交
@@ -295,7 +328,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-container">
+    <ConfigProvider
+      theme={{
+        algorithm: theme.defaultAlgorithm, // 强制使用浅色模式，不受全局深色模式影响
+        token: {
+          colorPrimary: themeColor,
+        },
+      }}
+    >
+      <div 
+        className="login-container"
+        style={{
+          background: themeColor,
+        }}
+      >
       {/* 右上角工具栏（颜色切换、语言切换） */}
       <div
         className="login-toolbar"
@@ -309,32 +355,34 @@ export default function LoginPage() {
           gap: '12px',
         }}
       >
-        <Tooltip
-          title="切换主题颜色（待实现）"
-          placement="bottomLeft"
-          getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
-          overlayStyle={{ maxWidth: '200px' }}
+        <ThemeColorEditor
+          onThemeUpdate={(colorPrimary) => {
+            setThemeColor(colorPrimary);
+          }}
         >
-          <Button
-            type="default"
-            icon={<BgColorsOutlined />}
-            onClick={() => {
-              // 占位：后续实现主题切换功能
-              message.info('主题切换功能待实现');
-            }}
-            style={{
-              backgroundColor: '#fff',
-              color: '#1890ff',
-              borderColor: '#1890ff',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              minWidth: '40px',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          />
-        </Tooltip>
+          <Tooltip
+            title="主题颜色设置"
+            placement="bottomLeft"
+            getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
+            overlayStyle={{ maxWidth: '200px' }}
+          >
+            <Button
+              type="default"
+              icon={<BgColorsOutlined />}
+              style={{
+                backgroundColor: '#fff',
+                color: themeColor,
+                borderColor: themeColor,
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                minWidth: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            />
+          </Tooltip>
+        </ThemeColorEditor>
         <Tooltip
           title="切换语言（待实现）"
           placement="bottomLeft"
@@ -350,8 +398,8 @@ export default function LoginPage() {
             }}
             style={{
               backgroundColor: '#fff',
-              color: '#1890ff',
-              borderColor: '#1890ff',
+              color: themeColor,
+              borderColor: themeColor,
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
               minWidth: '40px',
               height: '40px',
@@ -364,7 +412,12 @@ export default function LoginPage() {
       </div>
 
       {/* LOGO 和框架名称（手机端显示在顶部） */}
-      <div className="logo-header">
+      <div 
+        className="logo-header"
+        style={{
+          background: themeColor,
+        }}
+      >
         <img 
           src="/img/logo.png" 
           alt="RiverEdge Logo" 
@@ -386,7 +439,7 @@ export default function LoginPage() {
                   justifyContent: 'center',
                   fontSize: '20px',
                   fontWeight: 'bold',
-                  color: '#1890ff',
+                  color: themeColor,
                 },
                 textContent: 'RE',
               })
@@ -397,7 +450,12 @@ export default function LoginPage() {
       </div>
 
       {/* 左侧品牌展示区（桌面端显示，手机端隐藏） */}
-      <div className="login-left">
+      <div 
+        className="login-left"
+        style={{
+          background: themeColor,
+        }}
+      >
         {/* LOGO 和框架名称放在左上角（桌面端） */}
         <div className="logo-top-left">
           <img 
@@ -421,7 +479,7 @@ export default function LoginPage() {
                     justifyContent: 'center',
                     fontSize: '18px',
                     fontWeight: 'bold',
-                    color: '#1890ff',
+                    color: themeColor,
                     marginRight: '16px',
                   },
                   textContent: 'RE',
@@ -496,6 +554,8 @@ export default function LoginPage() {
                 style: {
                   width: '100%',
                   height: '40px',
+                  backgroundColor: themeColor,
+                  borderColor: themeColor,
                 },
               },
             }}
@@ -542,15 +602,20 @@ export default function LoginPage() {
                 onClick={handleGuestLogin}
                 style={{
                   height: '40px',
-                  borderColor: '#1890ff',
-                  color: '#1890ff',
+                  borderColor: themeColor,
+                  color: themeColor,
                 }}
               >
                 免注册体验
               </Button>
             </div>
-            <Text className="register-link">
-              还没有账号？<Link to="/register">立即注册</Link>
+            <Text 
+              className="register-link"
+              style={{
+                color: themeColor,
+              }}
+            >
+              还没有账号？<Link to="/register" style={{ color: themeColor }}>立即注册</Link>
             </Text>
           </div>
 
@@ -563,7 +628,7 @@ export default function LoginPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ padding: 0, fontSize: '12px', height: 'auto' }}
+                style={{ padding: 0, fontSize: '12px', height: 'auto', color: themeColor }}
                 onClick={() => {
                   setTermsModalType('user');
                   setTermsModalVisible(true);
@@ -574,7 +639,7 @@ export default function LoginPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ padding: 0, fontSize: '12px', height: 'auto' }}
+                style={{ padding: 0, fontSize: '12px', height: 'auto', color: themeColor }}
                 onClick={() => {
                   setTermsModalType('privacy');
                   setTermsModalVisible(true);
@@ -609,6 +674,7 @@ export default function LoginPage() {
         type={termsModalType}
         onClose={() => setTermsModalVisible(false)}
       />
-    </div>
+      </div>
+    </ConfigProvider>
   );
 }
