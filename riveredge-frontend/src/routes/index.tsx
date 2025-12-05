@@ -50,6 +50,7 @@ import PlatformLoginPage from '../pages/platform/login';
 
 // 懒加载系统级页面（按功能模块分组）
 const SystemDashboardPage = lazy(() => import('../pages/system/dashboard'));
+const AnalysisPage = lazy(() => import('../pages/system/dashboard/analysis'));
 
 // 权限管理模块
 const RoleListPage = lazy(() => import('../pages/system/roles/list'));
@@ -151,14 +152,9 @@ const AppRoutes: React.FC = () => {
 
       {/* ==================== 系统级路由（用户登录后访问） ==================== */}
       {/* 系统仪表盘 */}
-      <Route
-        path="/system/dashboard"
-        element={
-          <LayoutWrapper>
-            <SystemDashboardPage />
-          </LayoutWrapper>
-        }
-      />
+      <Route path="/system/dashboard" element={<LayoutWrapper><SystemDashboardPage /></LayoutWrapper>} />
+      <Route path="/system/dashboard/workplace" element={<LayoutWrapper><SystemDashboardPage /></LayoutWrapper>} />
+      <Route path="/system/dashboard/analysis" element={<LayoutWrapper><AnalysisPage /></LayoutWrapper>} />
       {/* 系统级功能 */}
       {/* 角色管理 */}
       <Route
