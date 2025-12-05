@@ -22,6 +22,14 @@ export interface GlobalState {
    */
   loading: boolean;
   /**
+   * 锁屏状态
+   */
+  isLocked: boolean;
+  /**
+   * 锁屏前的路径
+   */
+  lockedPath?: string;
+  /**
    * 设置当前用户信息
    */
   setCurrentUser: (user?: CurrentUser) => void;
@@ -29,6 +37,14 @@ export interface GlobalState {
    * 设置加载状态
    */
   setLoading: (loading: boolean) => void;
+  /**
+   * 锁定屏幕
+   */
+  lockScreen: (path?: string) => void;
+  /**
+   * 解锁屏幕
+   */
+  unlockScreen: () => void;
   /**
    * 退出登录
    */
@@ -45,17 +61,30 @@ export const useGlobalStore = create<GlobalState>()(
     (set) => ({
       currentUser: undefined,
       loading: false,
+      isLocked: false,
+      lockedPath: undefined,
       setCurrentUser: (user) => set({ currentUser: user }),
       setLoading: (loading) => set({ loading }),
+      lockScreen: (path) => set({ isLocked: true, lockedPath: path }),
+      unlockScreen: () => {
+        set((state) => {
+          const path = state.lockedPath;
+          return { isLocked: false, lockedPath: undefined };
+        });
+      },
       logout: () => {
         clearAuth();
-        set({ currentUser: undefined });
+        set({ currentUser: undefined, isLocked: false, lockedPath: undefined });
         window.location.href = '/login';
       },
     }),
     {
       name: 'riveredge-global-store',
-      partialize: (state) => ({ currentUser: state.currentUser }),
+      partialize: (state) => ({ 
+        currentUser: state.currentUser,
+        isLocked: state.isLocked,
+        lockedPath: state.lockedPath,
+      }),
     }
   )
 );
