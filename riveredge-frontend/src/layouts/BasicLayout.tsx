@@ -6,8 +6,8 @@
 
 import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { useState, useMemo, useEffect } from 'react';
-import { Spin } from 'antd';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Spin, theme } from 'antd';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
   DashboardOutlined,
@@ -50,6 +50,7 @@ import { useQuery } from '@tanstack/react-query';
 import TenantSelector from '../components/tenant_selector';
 import PageTabs from '../components/page_tabs';
 import TechStackModal from '../components/tech-stack-modal';
+import ThemeEditor from '../components/theme-editor';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentPlatformSuperAdmin } from '../services/platformAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
@@ -619,10 +620,111 @@ const menuConfig: MenuDataItem[] = [
 export default function BasicLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { token } = theme.useToken(); // 获取主题 token
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
+  
+  /**
+   * 计算颜色的亮度值
+   * @param color - 颜色值（十六进制或 rgb/rgba 格式）
+   * @returns 亮度值（0-255）
+   */
+  const calculateColorBrightness = (color: string): number => {
+    if (!color || typeof color !== 'string') return 255; // 默认返回浅色
+    
+    // 处理十六进制颜色
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      // 处理 3 位十六进制（如 #fff）
+      const fullHex = hex.length === 3 
+        ? hex.split('').map(c => c + c).join('')
+        : hex;
+      const r = parseInt(fullHex.slice(0, 2), 16);
+      const g = parseInt(fullHex.slice(2, 4), 16);
+      const b = parseInt(fullHex.slice(4, 6), 16);
+      // 计算亮度 (使用相对亮度公式)
+      return (r * 299 + g * 587 + b * 114) / 1000;
+    }
+    
+    // 处理 rgb/rgba 格式
+    if (color.startsWith('rgb')) {
+      const match = color.match(/\d+/g);
+      if (match && match.length >= 3) {
+        const r = parseInt(match[0]);
+        const g = parseInt(match[1]);
+        const b = parseInt(match[2]);
+        return (r * 299 + g * 587 + b * 114) / 1000;
+      }
+    }
+    
+    return 255; // 默认返回浅色
+  };
+
+  // 使用 Ant Design 原生方式判断是否为深色模式
+  // 通过检查 token 中的背景色值来判断（深色模式下 colorBgContainer 通常是深色）
+  // 更可靠的方法：检查 colorBgContainer 的亮度值
+  const isDarkMode = React.useMemo(() => {
+    const bgColor = token.colorBgContainer;
+    const brightness = calculateColorBrightness(bgColor);
+    // 如果亮度小于 128，认为是深色模式
+    return brightness < 128;
+  }, [token.colorBgContainer]);
+
+  // 菜单栏背景色状态（用于响应主题更新）
+  const [siderBgColorState, setSiderBgColorState] = useState<string | undefined>(() => {
+    return (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+  });
+
+  // 监听主题更新事件，实时更新菜单栏背景色
+  useEffect(() => {
+    const handleThemeUpdate = () => {
+      // 延迟一下，确保全局变量已经更新
+      setTimeout(() => {
+        const customBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+        setSiderBgColorState(customBgColor);
+      }, 0);
+    };
+
+    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
+    return () => {
+      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
+    };
+  }, []);
+
+  // 计算菜单栏背景色和对应的文字颜色
+  const siderBgColor = React.useMemo(() => {
+    // 深色模式下，不使用自定义背景色，使用默认背景色
+    if (isDarkMode) {
+      return token.colorBgContainer;
+    }
+    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
+    const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+    return customBgColor || token.colorBgContainer;
+  }, [siderBgColorState, token.colorBgContainer, isDarkMode]);
+
+  // 根据菜单栏背景色计算文字颜色
+  const siderTextColor = React.useMemo(() => {
+    // 深色模式下，使用深色模式的默认文字颜色
+    if (isDarkMode) {
+      return 'var(--ant-colorText)';
+    }
+    
+    // 浅色模式下，检查是否有自定义背景色
+    const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+    
+    if (customBgColor) {
+      // 如果有自定义背景色，根据背景色亮度计算文字颜色
+      const brightness = calculateColorBrightness(customBgColor);
+      // 如果背景色较暗（亮度 < 128），使用浅色文字；否则使用深色文字
+      return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
+    } else {
+      // 如果没有自定义背景色（使用默认背景色），按浅色背景处理，使用深色文字
+      return 'var(--ant-colorText)';
+    }
+  }, [siderBgColorState, isDarkMode]);
 
   /**
    * 检查锁屏状态，如果已锁定则重定向到锁屏页
@@ -716,7 +818,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }[] = [];
     
     // 查找当前路径对应的菜单项及其父级菜单
-    const findMenuPath = (items: MenuDataItem[], targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
+    const findMenuPath = (items: MenuDataItem[] | undefined, targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
+      // 防御性检查：如果 items 为空或未定义，直接返回 null
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return null;
+      }
+      
       for (const item of items) {
         const currentPath = [...path, item];
         
@@ -896,7 +1003,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 处理主题颜色切换
    */
   const handleThemeChange = () => {
-    message.info('主题颜色配置功能开发中');
+    setThemeEditorOpen(true);
   };
 
   /**
@@ -917,8 +1024,39 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         onCancel={() => setTechStackModalOpen(false)}
       />
       
+      {/* 动态设置全局背景色，确保深色模式下正确应用 */}
+      <style>{`
+        html, body {
+          background-color: ${token.colorBgLayout} !important;
+          transition: none !important;
+        }
+        #root {
+          background-color: ${token.colorBgLayout} !important;
+          transition: none !important;
+        }
+        /* 禁用主题切换时的过渡动画，让切换更干脆 */
+        * {
+          transition: background-color 0s !important;
+          transition: color 0s !important;
+          transition: border-color 0s !important;
+        }
+        /* 确保 Ant Design 组件也立即切换，无过渡 */
+        .ant-pro-layout,
+        .ant-pro-layout *,
+        .ant-layout,
+        .ant-layout * {
+          transition: background-color 0s !important;
+          transition: color 0s !important;
+          transition: border-color 0s !important;
+        }
+      `}</style>
       {/* 自定义分组标题样式 */}
       <style>{`
+        /* 动态注入主题色到 CSS 变量 */
+        :root {
+          --riveredge-menu-primary-color: ${token.colorPrimary};
+          --ant-colorBgLayout: ${token.colorBgLayout};
+        }
         /* ==================== PageContainer 相关 ==================== */
         .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,
         .ant-pro-page-container .ant-breadcrumb {
@@ -1028,18 +1166,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* ==================== 菜单分组标题样式 ==================== */
         /* 参考：https://ant-design.antgroup.com/components/menu-cn
          * groupTitleColor: rgba(0,0,0,0.45), groupTitleFontSize: 14, groupTitleLineHeight: 1.5714285714285714
+         * 使用主题颜色变量，支持深色模式，并根据菜单栏背景色自动适配
          */
+        /* 侧边栏内的分组标题 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
           font-size: 14px !important;
-          color: rgba(0, 0, 0, 0.45) !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           line-height: 1.5714285714285714 !important;
           font-weight: normal !important;
           padding: 12px 16px 12px 0 !important;
           margin: 0 0 8px 0 !important;
-          border-bottom: 1px solid #f0f0f0 !important;
+          border-bottom: 1px solid ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'} !important;
           background: transparent !important;
           cursor: default !important;
           user-select: none !important;
@@ -1047,6 +1187,42 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           text-transform: none !important;
           letter-spacing: 0 !important;
         }
+        /* 浅色模式下，菜单收起时弹出的二级菜单中的分组标题 - 使用深色文字 */
+        /* 弹出菜单通常在 body 下，不在 .ant-pro-layout 内，所以使用全局选择器 */
+        /* 只在浅色模式下应用（非深色模式），确保优先级足够高，放在最后以覆盖其他规则 */
+        ${!isDarkMode ? `
+        /* 弹出菜单中的分组标题 - 使用深色文字（弹出菜单背景是浅色的） */
+        /* 使用更具体的选择器确保优先级足够高 */
+        body .ant-menu-submenu-popup .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup .ant-menu .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup .ant-menu-submenu .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup .ant-menu-vertical .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup .ant-menu-vertical-left .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup .ant-menu-vertical-right .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup.ant-menu-vertical .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup.ant-menu-vertical-left .ant-menu-item-group-title,
+        body .ant-menu-submenu-popup.ant-menu-vertical-right .ant-menu-item-group-title,
+        body .ant-menu-popup .ant-menu-item-group-title,
+        body .ant-menu-popup .ant-menu .ant-menu-item-group-title,
+        body .ant-menu-popup .ant-menu-submenu .ant-menu-item-group-title,
+        .ant-menu-submenu-popup .ant-menu-item-group-title,
+        .ant-menu-submenu-popup .ant-menu .ant-menu-item-group-title,
+        .ant-menu-submenu-popup .ant-menu-submenu .ant-menu-item-group-title {
+          color: rgba(0, 0, 0, 0.45) !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+        }
+        body .ant-menu-submenu-popup .ant-menu-item-group-title:hover,
+        body .ant-menu-submenu-popup .ant-menu-item-group-title:active,
+        body .ant-menu-submenu-popup .ant-menu-item-group-title:focus,
+        body .ant-menu-popup .ant-menu-item-group-title:hover,
+        body .ant-menu-popup .ant-menu-item-group-title:active,
+        body .ant-menu-popup .ant-menu-item-group-title:focus,
+        .ant-menu-submenu-popup .ant-menu-item-group-title:hover,
+        .ant-menu-submenu-popup .ant-menu-item-group-title:active,
+        .ant-menu-submenu-popup .ant-menu-item-group-title:focus {
+          color: rgba(0, 0, 0, 0.45) !important;
+        }
+        ` : ''}
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:active,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:focus,
@@ -1057,7 +1233,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:active,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title:focus {
           background: transparent !important;
-          color: rgba(0, 0, 0, 0.45) !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
         /* ==================== 一级菜单项 - 统一所有一级菜单项样式，与子菜单标题对齐 ==================== */
         /* 统一所有一级菜单项的 padding-left，与子菜单标题一致（24px），覆盖内联样式 */
@@ -1104,6 +1280,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding-left: 24px !important;
         }
         /* 子菜单标题样式（ant-menu-submenu-title）- 独立设置，不影响普通菜单项 */
+        /* 使用主题颜色变量，支持深色模式 */
         .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
           padding-top: 0 !important;
@@ -1111,23 +1288,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding-right: 16px !important;
           height: 40px !important;
           line-height: 40px !important;
-          color: rgba(0, 0, 0, 0.88) !important;
+          color: ${siderTextColor} !important;
           font-size: 14px !important;
           font-weight: normal !important;
         }
         /* 子菜单标题悬浮状态 */
         .ant-menu-submenu-title:hover {
-          background-color: rgba(0, 0, 0, 0.06) !important;
-          color: rgba(0, 0, 0, 0.88) !important;
+          background-color: var(--ant-colorFillTertiary) !important;
+          color: ${siderTextColor} !important;
         }
         /* 子菜单标题激活状态 */
         .ant-menu-submenu-selected > .ant-menu-submenu-title {
-          color: #1677ff !important;
+          color: var(--riveredge-menu-primary-color) !important;
         }
         /* 使用自定义样式选择器针对插件分组标题 */
         .menu-group-title-plugin {
           font-size: 12px !important;
-          color: #8c8c8c !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           font-weight: 500 !important;
           padding: 8px 16px !important;
           cursor: default !important;
@@ -1137,7 +1314,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 系统菜单分组标题样式 */
         .menu-group-title-system {
           font-size: 12px !important;
-          color: #8c8c8c !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           font-weight: 500 !important;
           padding: 8px 16px !important;
           cursor: default !important;
@@ -1145,13 +1322,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           pointer-events: none !important;
           margin-top: 8px !important;
         }
-        /* 隐藏默认的收起按钮（在侧边栏顶部） */
-        .ant-pro-layout .ant-pro-sider-collapsed-button {
-          display: none !important;
-        }
-        .ant-pro-layout .ant-layout-sider-trigger {
-          display: none !important;
-        }
+        /* 使用 ProLayout 原生收起按钮，保持原生行为 */
+        /* 不再隐藏原生收起按钮，让 ProLayout 自己处理收起展开逻辑 */
         /* 隐藏 ant-pro-layout-container 里的 footer */
         .ant-pro-layout-container .ant-pro-layout-footer {
           display: none !important;
@@ -1159,16 +1331,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container footer {
           display: none !important;
         }
-        /* 菜单底部收起按钮 hover 效果：方形背景 */
+        /* 菜单底部收起按钮样式 - 根据菜单栏背景色自动适配 */
+        .menu-collapse-button {
+          color: ${siderTextColor} !important;
+        }
         .menu-collapse-button:hover {
-          background-color: rgba(0, 0, 0, 0.06) !important;
+          background-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.08)' : 'var(--ant-colorFillTertiary)'} !important;
           border-radius: 4px !important;
+          color: ${siderTextColor} !important;
         }
         .menu-collapse-button:active {
-          background-color: rgba(0, 0, 0, 0.1) !important;
+          background-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'var(--ant-colorFillSecondary)'} !important;
+          color: ${siderTextColor} !important;
         }
         /* 隐藏左侧菜单栏滚动条，但保持滚轮滚动功能 */
         /* 使用通用选择器覆盖所有可能的滚动容器 */
+        /* 注意：只设置滚动条样式，不设置背景色，避免覆盖 ProLayout 原生深色模式 */
         .ant-pro-layout .ant-pro-sider *,
         .ant-pro-layout .ant-layout-sider * {
           scrollbar-width: none !important; /* Firefox */
@@ -1181,35 +1359,83 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 0 !important;
         }
         /* ==================== 菜单底部 ==================== */
+        /* 使用主题边框颜色，支持深色模式，并根据菜单栏背景色自动适配 */
         .ant-pro-sider-footer {
           margin-bottom: 10px !important;
           padding-bottom: 0 !important;
-          border-top-color: #d9d9d9 !important;
+          border-top-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'} !important;
         }
-        /* 统一顶部和标签栏的透明度和 backdrop-filter */
+        /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量 */
+        :root {
+          --ant-colorBgContainer: ${token.colorBgContainer};
+        }
         .ant-pro-layout .ant-pro-layout-header,
         .ant-pro-layout .ant-layout-header {
-          background: rgba(255, 255, 255, 0.85) !important;
+          background: ${token.colorBgContainer} !important;
           backdrop-filter: blur(8px) !important;
           -webkit-backdrop-filter: blur(8px) !important;
         }
-        /* 内容区背景颜色与 PageContainer 一致 */
+        /* 内容区背景颜色与 PageContainer 一致 - 使用 token 值 */
         .ant-pro-layout-bg-list {
-          background: #f0f2f5 !important;
+          background: ${token.colorBgLayout} !important;
         }
-        /* 左侧菜单区单独设置背景色，与总体背景色区分开 */
+        /* 确保 ProLayout 内容区域背景色与激活标签一致 */
+        .ant-pro-layout-content,
+        .ant-pro-layout-content .ant-pro-page-container,
+        .ant-pro-layout-content .ant-pro-page-container-children-content {
+          background: ${token.colorBgLayout} !important;
+        }
+        /* 左侧菜单区背景色 - 与顶栏和标签栏保持一致 */
+        /* 浅色模式下，如果设置了自定义背景色，则使用自定义背景色；否则使用默认背景色（与顶栏一致） */
+        /* 深色模式下，始终使用默认深色背景 */
+        /* 强制覆盖 ProLayout 的 navTheme 默认背景色 */
         .ant-pro-layout .ant-pro-sider,
         .ant-pro-layout .ant-layout-sider,
-        .ant-pro-layout .ant-pro-sider-menu {
-          background: #fff !important;
+        .ant-pro-layout .ant-pro-sider-menu,
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider,
+        .ant-pro-layout .ant-pro-sider .ant-layout-sider-children,
+        .ant-pro-layout[data-theme="light"] .ant-pro-sider,
+        .ant-pro-layout[data-theme="light"] .ant-layout-sider,
+        .ant-pro-layout[data-theme="light"] .ant-pro-sider-menu {
+          background: ${siderBgColor} !important;
         }
+        
+        /* 根据菜单栏背景色自动适配文字颜色 */
+        /* 深色背景使用浅色文字，浅色背景使用深色文字 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:not(.ant-menu-submenu-selected > .ant-menu-submenu-title),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title {
+          color: ${siderTextColor} !important;
+        }
+        
+        /* 菜单项图标颜色也自动适配 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected) .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item:not(.ant-menu-item-selected) .anticon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:not(.ant-menu-submenu-selected > .ant-menu-submenu-title) .anticon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .anticon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .anticon {
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : siderTextColor} !important;
+        }
+        
+        /* 子菜单项文字颜色也自动适配 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item:not(.ant-menu-item-selected),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item:not(.ant-menu-item-selected) {
+          color: ${siderTextColor} !important;
+        }
+        
+        /* 三级子菜单标题箭头图标颜色也自动适配 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .ant-menu-submenu-arrow,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title) .ant-menu-submenu-arrow {
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
+        }
+        
         /* 菜单栏增加与顶部间距 */
         .ant-pro-layout .ant-pro-sider-menu {
           padding-top: 8px !important;
         }
-        /* 一级菜单激活状态 - 蓝色背景，白色文字 */
+        /* 一级菜单激活状态 - 使用主题色背景，白色文字 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
-          background-color: #1890ff !important;
+          background-color: var(--riveredge-menu-primary-color) !important;
           border-right: none !important;
           box-shadow: none !important;
           color: #fff !important;
@@ -1236,13 +1462,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: transparent !important;
         }
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title > .ant-menu-title-content {
-          color: #1890ff !important;
+          color: var(--riveredge-menu-primary-color) !important;
         }
         
-        /* 二级及以下菜单激活状态 - 有蓝色背景 */
+        /* 二级及以下菜单激活状态 - 使用主题色背景 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected {
-          background-color: #1890ff !important;
+          background-color: var(--riveredge-menu-primary-color) !important;
         }
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected > .ant-menu-title-content > a,
@@ -1252,7 +1478,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-selected::after,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected::after {
-          border-right-color: #1890ff !important;
+          border-right-color: var(--riveredge-menu-primary-color) !important;
         }
         /* 隐藏子菜单中的图标（只保留一级菜单的图标） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
@@ -1263,12 +1489,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 二级及以下子菜单标题固定样式 - 无论是否有子菜单被选中，都保持相同样式（排除分组标题） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) {
           background-color: transparent !important;
           background: transparent !important;
-          color: rgba(0, 0, 0, 0.45) !important;
-          border-bottom: 1px solid #f0f0f0 !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
+          border-bottom: 1px solid ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'var(--ant-colorBorderSecondary)'} !important;
           
           padding-top: 4px !important;
           padding-bottom: 4px !important;
@@ -1291,14 +1517,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title) > .ant-menu-title-content {
           background: transparent !important;
-          color: rgba(0, 0, 0, 0.45) !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
         }
-        /* 确保分组标题不受子菜单激活状态影响 */
+        /* 确保分组标题不受子菜单激活状态影响，使用菜单栏文字颜色 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
           background: transparent !important;
-          color: rgba(0, 0, 0, 0.45) !important;
+          color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
         /* ==================== 菜单收起/展开动画优化 - 干净利落 ==================== */
         /* 侧边栏收起/展开动画 - 快速且干脆 */
@@ -1353,53 +1579,55 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .ant-space {
           gap: 8px !important;
         }
-        /* 统一按钮样式 - 深灰色图标，圆形淡灰色背景 */
+        /* 统一按钮样式 - 保留圆形背景，使用 token 值确保深色/浅色模式都正确 */
         .ant-pro-layout .ant-pro-layout-header .ant-btn {
-          width: 32px;
-          height: 32px;
-          padding: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          width: 32px !important;
+          height: 32px !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
           border-radius: 50% !important;
-          background-color: rgba(0, 0, 0, 0.04) !important;
+          background-color: ${token.colorFillTertiary} !important;
           border: none !important;
           transition: none !important;
-          color: #595959 !important;
+          color: ${token.colorText} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-btn .anticon {
-          color: #595959 !important;
+          color: ${token.colorText} !important;
         }
-        /* 禁用顶栏按钮的 hover/active 效果 */
+        /* 保留圆形背景的 hover 效果 */
         .ant-pro-layout .ant-pro-layout-header .ant-btn:hover,
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active {
-          background-color: rgba(0, 0, 0, 0.04) !important;
-          color: #595959 !important;
+          background-color: ${token.colorFillTertiary} !important;
+          color: ${token.colorText} !important;
+          border-radius: 50% !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon,
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon {
-          color: #595959 !important;
+          color: ${token.colorText} !important;
         }
-        /* Badge 内按钮样式 - 确保按钮样式一致，完全禁用 hover */
+        /* Badge 内按钮样式 - 确保按钮样式一致，保留圆形背景 */
         .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn {
           width: 32px !important;
           height: 32px !important;
           padding: 0 !important;
           border-radius: 50% !important;
-          background-color: rgba(0, 0, 0, 0.04) !important;
+          background-color: ${token.colorFillTertiary} !important;
           transition: none !important;
         }
-        /* 完全禁用 Badge 内按钮的 hover 效果 */
+        /* 保留 Badge 内按钮的圆形背景 hover 效果 */
         .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover,
         .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn {
-          background-color: rgba(0, 0, 0, 0.04) !important;
-          color: #595959 !important;
+          background-color: ${token.colorFillTertiary} !important;
+          color: ${token.colorText} !important;
           border-color: transparent !important;
           box-shadow: none !important;
           transform: none !important;
+          border-radius: 50% !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover .anticon {
-          color: #595959 !important;
+          color: ${token.colorText} !important;
         }
         /* 确保 Badge 本身无任何 hover 效果 */
         .ant-pro-layout .ant-pro-layout-header .ant-badge:hover {
@@ -1416,25 +1644,26 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0;
           transition: none !important;
         }
-        /* 租户选择器内的选择框样式 - 胶囊型（与搜索框完全一致，使用相同的颜色值 #F5F5F5） */
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
-        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector {
+        /* 租户选择器内的选择框样式 - 胶囊型（与搜索框完全一致，使用 token 值） */
+        /* 只对 selector 设置背景色，避免双层背景 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select {
+          background: transparent !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector {
           border-radius: 16px !important; /* 胶囊型圆角 */
           border: none !important;
           box-shadow: none !important;
-          background-color: #F5F5F5 !important;
-          background: #F5F5F5 !important;
+          background-color: ${token.colorFillTertiary} !important;
           height: 32px !important;
         }
-        /* 租户选择器所有状态 - 确保颜色与搜索框完全一致（#F5F5F5） */
+        /* 租户选择器所有状态 - 确保颜色与搜索框完全一致 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
           border: none !important;
           box-shadow: none !important;
-          background: #F5F5F5 !important;
+          background: ${token.colorFillTertiary} !important;
         }
         /* 租户选择器内部输入框样式 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
@@ -1450,17 +1679,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
           background-color: transparent !important;
         }
-        /* 搜索框样式 */
+        /* 搜索框样式 - 使用 token 值，与按钮背景色一致 */
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper {
           border: none !important;
           box-shadow: none !important;
-          background-color: rgba(0, 0, 0, 0.04) !important;
+          background-color: ${token.colorFillTertiary} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover,
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper-focused {
           border: none !important;
           box-shadow: none !important;
-          background-color: rgba(0, 0, 0, 0.04) !important;
+          background-color: ${token.colorFillTertiary} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-input {
           background-color: transparent !important;
@@ -1519,7 +1748,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           white-space: nowrap !important;
           display: inline-flex !important;
         }
-        /* 面包屑前面的小竖线 */
+        /* 面包屑前面的小竖线 - 使用主题边框颜色 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before {
           content: '';
           position: absolute;
@@ -1528,13 +1757,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           transform: translateY(-50%);
           width: 1px;
           height: 16px;
-          background-color: #d9d9d9;
+          background-color: var(--ant-colorBorderSecondary);
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
-          color: #595959;
+          color: var(--ant-colorText);
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a:hover {
-          color: #1890ff;
+          color: var(--riveredge-menu-primary-color);
         }
         /* 面包屑下拉菜单样式优化 - 确保完整显示 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown {
@@ -1575,7 +1804,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         title="RiverEdge SaaS"
         logo="/img/logo.png"
         layout="mix"
-        navTheme="light"
+        navTheme={isDarkMode ? "realDark" : "light"}
         contentWidth="Fluid"
         fixedHeader
         fixSiderbar
@@ -1584,7 +1813,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         location={location}
         contentStyle={{
           padding: 0,
-          background: '#f0f2f5',
+          background: token.colorBgLayout,
         }}
         headerContentRender={() => (
           <Breadcrumb
@@ -1605,7 +1834,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     </span>
                   )}
                   {index === generateBreadcrumb.length - 1 ? (
-                    <span style={{ color: '#262626', fontWeight: 500 }}>{item.title}</span>
+                    <span style={{ color: 'var(--ant-colorText)', fontWeight: 500 }}>{item.title}</span>
                   ) : (
                     <a 
                       onClick={() => {
@@ -1632,7 +1861,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             <Input
               key="search"
               placeholder="搜索菜单、功能..."
-              prefix={<SearchOutlined style={{ fontSize: 16, color: '#595959' }} />}
+              prefix={<SearchOutlined style={{ fontSize: 16, color: 'var(--ant-colorTextSecondary)' }} />}
               size="small"
               onPressEnter={(e) => {
                 const value = (e.target as HTMLInputElement).value;
@@ -1642,7 +1871,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 width: 280,
                 height: 32,
                 borderRadius: '16px',
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                backgroundColor: token.colorFillTertiary,
               }}
               allowClear
             />
@@ -1742,14 +1971,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '16px',
-                    background: 'rgba(0, 0, 0, 0.04)',
+                    background: token.colorFillTertiary,
                   }}
                 >
                   <Avatar
                     size={24}
                     src={(currentUser as any)?.avatar}
                     style={{
-                      backgroundColor: '#595959',
+                      backgroundColor: token.colorPrimary,
                       flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',
@@ -1762,7 +1991,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   <span
                     style={{
                       fontSize: 14,
-                      color: '#262626',
+                      color: 'var(--ant-colorText)',
                       lineHeight: '32px',
                       height: '32px',
                       display: 'flex',
@@ -1814,7 +2043,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               className={item.className}
               style={{
                 fontSize: '12px',
-                color: '#8c8c8c',
+                color: 'var(--ant-colorTextSecondary)',
                 fontWeight: 500,
                 padding: '8px 16px',
                 cursor: 'default',
@@ -1849,9 +2078,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     const isSelected = liElement.classList.contains('ant-menu-item-selected');
                     
                     if (isSelected) {
-                      // 选中状态：蓝色背景，白色文字
+                      // 选中状态：使用主题色背景，白色文字
                       liElement.style.color = '#fff';
-                      liElement.style.backgroundColor = '#1890ff';
+                      liElement.style.backgroundColor = token.colorPrimary;
                       
                       // 设置文字和图标为白色
                       const titleContent = liElement.querySelector('.ant-menu-title-content') as HTMLElement;
@@ -1869,8 +2098,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         icon.style.color = '#fff';
                       }
                     } else {
-                      // 未选中状态：透明背景，黑色文字
-                      liElement.style.color = 'rgba(0, 0, 0, 0.88)';
+                      // 未选中状态：透明背景，使用主题文字颜色
+                      liElement.style.color = 'var(--ant-colorText)';
                       liElement.style.backgroundColor = 'transparent';
                     }
                     
@@ -1899,14 +2128,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           </div>
         );
       }}
-      menuFooterRender={() => (
-        <div style={{
-          padding: '8px 4px',
-          paddingBottom: 0,
-          marginBottom: 0,
-          borderTop: '1px solid #d9d9d9',
-          textAlign: 'center',
-        }}>
+      collapsedButtonRender={(collapsed) => (
+        <div
+          style={{
+            padding: '4px 0',
+            borderTop: `1px solid ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'}`,
+          }}
+        >
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -1919,6 +2147,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: '4px',
+              color: siderTextColor,
             }}
           />
         </div>
@@ -1926,6 +2155,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     >
       <PageTabs menuConfig={menuConfig}>{children}</PageTabs>
     </ProLayout>
+    
+    {/* 技术栈信息弹窗 */}
+    <TechStackModal
+      open={techStackModalOpen}
+      onCancel={() => setTechStackModalOpen(false)}
+    />
+    
+    {/* 主题编辑面板 */}
+    <ThemeEditor
+      open={themeEditorOpen}
+      onClose={() => setThemeEditorOpen(false)}
+      onThemeUpdate={(themeConfig) => {
+        // 主题更新回调（可选）
+        console.log('主题配置已更新:', themeConfig);
+      }}
+    />
     </>
   );
 }
