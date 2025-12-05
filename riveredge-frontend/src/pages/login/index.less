@@ -2,7 +2,7 @@
 .login-container {
   display: flex;
   min-height: 100vh;
-  background: #1890ff;
+  /* 背景色通过内联样式动态设置 */
 
   /* 移动端：垂直布局 */
   @media (max-width: 768px) {
@@ -15,7 +15,7 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
-    background: #1890ff;
+    /* 背景色通过内联样式动态设置 */
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 
@@ -47,7 +47,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px;
-    background: #1890ff;
+    /* 背景色通过内联样式动态设置 */
     backdrop-filter: blur(10px);
     border-right: 1px solid rgba(255, 255, 255, 0.2);
 
@@ -147,15 +147,16 @@
         text-align: center;
 
         .register-link {
-          color: #1890ff !important;
+          /* 颜色通过内联样式动态设置 */
           font-size: 14px !important;
 
           a {
-            color: #1890ff !important;
+            /* 颜色通过内联样式动态设置 */
             text-decoration: underline !important;
+            transition: opacity 0.2s;
 
             &:hover {
-              color: #40a9ff !important;
+              opacity: 0.8;
             }
           }
         }

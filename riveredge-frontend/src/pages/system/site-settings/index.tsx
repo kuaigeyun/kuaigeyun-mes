@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { App, Card, Form, Input, Switch, Button, ColorPicker, Upload, message, Space, Divider } from 'antd';
+import { App, Card, Form, Input, Switch, Button, ColorPicker, Upload, message, Space, Divider, InputNumber, Select } from 'antd';
 import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
+import { theme } from 'antd';
 import {
   getSiteSetting,
   updateSiteSetting,
@@ -40,10 +41,16 @@ const SiteSettingsPage: React.FC = () => {
       setSiteSetting(setting);
       
       // 设置表单初始值
+      // 兼容旧版本：如果存在 theme_color，优先使用；否则使用 theme_config
+      const themeConfig = setting.settings?.theme_config || {};
+      const legacyThemeColor = setting.settings?.theme_color;
       form.setFieldsValue({
         site_name: setting.settings?.site_name || '',
         site_logo: setting.settings?.site_logo || '',
-        theme_color: setting.settings?.theme_color || '#1890ff',
+        theme_color: legacyThemeColor || themeConfig.colorPrimary || '#1890ff',
+        theme_borderRadius: themeConfig.borderRadius || 6,
+        theme_fontSize: themeConfig.fontSize || 14,
+        theme_compact: themeConfig.compact || false,
         enable_invitation: setting.settings?.enable_invitation !== false,
         enable_register: setting.settings?.enable_register !== false,
         copyright: setting.settings?.copyright || '',
@@ -64,10 +71,18 @@ const SiteSettingsPage: React.FC = () => {
       setSaving(true);
       const values = await form.validateFields();
       
+      // 构建主题配置对象（使用 Ant Design 原生配置格式）
+      const themeConfig = {
+        colorPrimary: values.theme_color || '#1890ff',
+        borderRadius: values.theme_borderRadius || 6,
+        fontSize: values.theme_fontSize || 14,
+        compact: values.theme_compact || false,
+      };
+      
       const settings: Record<string, any> = {
         site_name: values.site_name,
         site_logo: values.site_logo,
-        theme_color: values.theme_color,
+        theme_config: themeConfig,
         enable_invitation: values.enable_invitation,
         enable_register: values.enable_register,
         copyright: values.copyright,
@@ -76,6 +91,11 @@ const SiteSettingsPage: React.FC = () => {
       
       await updateSiteSetting({ settings });
       messageApi.success('保存成功');
+      
+      // 触发主题更新事件，通知应用重新加载主题配置
+      window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
+        detail: { themeConfig }
+      }));
       
       // 重新加载设置
       await loadSiteSetting();
@@ -149,9 +169,35 @@ const SiteSettingsPage: React.FC = () => {
           <Card type="inner" title="主题设置" style={{ marginBottom: 16 }}>
             <Form.Item
               name="theme_color"
-              label="主题色"
+              label="主题色（colorPrimary）"
+              tooltip="Ant Design 原生配置：主要品牌颜色"
             >
-              <ColorPicker showText />
+              <ColorPicker showText format="hex" />
+            </Form.Item>
+            
+            <Form.Item
+              name="theme_borderRadius"
+              label="圆角大小（borderRadius）"
+              tooltip="Ant Design 原生配置：组件圆角大小（单位：px）"
+            >
+              <InputNumber min={0} max={16} style={{ width: '100%' }} />
+            </Form.Item>
+            
+            <Form.Item
+              name="theme_fontSize"
+              label="字体大小（fontSize）"
+              tooltip="Ant Design 原生配置：基础字体大小（单位：px）"
+            >
+              <InputNumber min={12} max={20} style={{ width: '100%' }} />
+            </Form.Item>
+            
+            <Form.Item
+              name="theme_compact"
+              label="紧凑模式（compact）"
+              tooltip="Ant Design 原生配置：是否启用紧凑模式"
+              valuePropName="checked"
+            >
+              <Switch />
             </Form.Item>
           </Card>
 

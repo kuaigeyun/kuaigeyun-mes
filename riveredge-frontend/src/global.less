@@ -17,7 +17,8 @@ html, body {
     'Segoe UI Emoji', 'Segoe UI Symbol';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f5f5;
+  /* 使用 Ant Design 主题变量，支持深色模式 */
+  background-color: var(--ant-colorBgLayout);
 }
 
 #root {
@@ -28,30 +29,31 @@ html, body {
 code {
   font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono',
     Consolas, 'Courier New', monospace;
-  background-color: rgba(0, 0, 0, 0.04);
+  /* 使用主题变量，支持深色模式 */
+  background-color: var(--ant-colorFillTertiary);
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 0.9em;
 }
 
-/* 滚动条样式 */
+/* 滚动条样式 - 使用主题变量，支持深色模式 */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--ant-colorFillTertiary);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--ant-colorTextQuaternary);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--ant-colorTextTertiary);
 }
 
 /* 高级搜索 Modal 动画统一 */
