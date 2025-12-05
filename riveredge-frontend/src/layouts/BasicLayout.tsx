@@ -244,6 +244,16 @@ const menuConfig: MenuDataItem[] = [
     path: '/system/dashboard',
     name: '仪表盘',
     icon: <DashboardOutlined />,
+    children: [
+      {
+        path: '/system/dashboard/workplace',
+        name: '工作台',
+      },
+      {
+        path: '/system/dashboard/analysis',
+        name: '分析页',
+      },
+    ],
   },
 
   // ==================== 【第二组】应用菜单（插件式加载） ====================
@@ -909,6 +919,53 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .page-tabs-content .ant-pro-table {
           padding: 24px !important;
         }
+        /* 侧边栏收起时，确保内容区域左边距正确 - 覆盖所有可能的情况 */
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content {
+          margin-left: 0 !important;
+        }
+        /* 侧边栏收起时，内容区域和页面容器的左边距 */
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .ant-pro-page-container {
+          margin-left: 0 !important;
+          padding-left: 0 !important;
+        }
+        /* 侧边栏收起状态下的内容区域 - 使用更通用的选择器 */
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed + .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed ~ .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider.ant-layout-sider-collapsed + .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider.ant-layout-sider-collapsed ~ .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed + .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed ~ .ant-pro-layout-content {
+          margin-left: 0 !important;
+          padding-left: 0 !important;
+        }
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed + .ant-pro-layout-content .ant-pro-page-container,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed ~ .ant-pro-layout-content .ant-pro-page-container,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider.ant-layout-sider-collapsed + .ant-pro-layout-content .ant-pro-page-container,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider.ant-layout-sider-collapsed ~ .ant-pro-layout-content .ant-pro-page-container,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed + .ant-pro-layout-content .ant-pro-page-container,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed ~ .ant-pro-layout-content .ant-pro-page-container {
+          margin-left: 0 !important;
+          padding-left: 0 !important;
+        }
+        /* 覆盖所有可能的布局容器 */
+        .ant-pro-layout-container .ant-pro-layout-content,
+        .ant-pro-layout-container .ant-layout-content {
+          margin-left: 0 !important;
+        }
+        /* 侧边栏收起时，确保所有内容容器都没有左边距 */
+        .ant-pro-layout.ant-pro-layout-has-mix[class*="collapsed"] .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider[class*="collapsed"] ~ .ant-pro-layout-content,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider[class*="collapsed"] ~ .ant-pro-layout-content {
+          margin-left: 0 !important;
+          padding-left: 0 !important;
+        }
+        /* 确保 PageTabs 组件在侧边栏收起时也没有左边距 */
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .page-tabs-wrapper,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed ~ .ant-pro-layout-content .page-tabs-wrapper,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed ~ .ant-pro-layout-content .page-tabs-wrapper {
+          margin-left: 0 !important;
+          padding-left: 0 !important;
+        }
         /* 文件管理页面无边距（覆盖全局规则） */
         .page-tabs-content .file-management-page .ant-pro-table {
           padding: 0 !important;
@@ -990,9 +1047,51 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: transparent !important;
           color: rgba(0, 0, 0, 0.45) !important;
         }
-        /* ==================== 一级菜单项 - 确保使用默认对齐 ==================== */
+        /* ==================== 一级菜单项 - 统一所有一级菜单项样式，与子菜单标题对齐 ==================== */
+        /* 统一所有一级菜单项的 padding-left，与子菜单标题一致（24px），覆盖内联样式 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item {
-          padding-left: 16px !important;
+          padding-left: 24px !important;
+          margin-left: 0 !important;
+        }
+        /* 统一所有一级菜单项的图标样式 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .anticon {
+          font-size: 16px !important;
+          width: 16px !important;
+          height: 16px !important;
+          min-width: 16px !important;
+          min-height: 16px !important;
+          max-width: 16px !important;
+          max-height: 16px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          margin-right: 12px !important;
+          margin-left: 0 !important;
+          color: inherit !important;
+          line-height: 1 !important;
+          vertical-align: middle !important;
+        }
+        /* 侧边栏收起时，移除一级菜单项的左边距 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item {
+          padding-left: 0 !important;
+          margin-left: 0 !important;
+        }
+        /* 收起状态下，一级菜单项图标居中显示 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon {
+          margin-right: 0 !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
+        /* 收起状态下，隐藏一级菜单选中项的右边框，确保图标正常显示 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
+          border-right-color: transparent !important;
         }
         /* ==================== 分组菜单下的子菜单项 ==================== */
         /* 使用最高优先级的选择器覆盖内联样式 - 必须匹配所有可能的组合 */
@@ -1112,16 +1211,34 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu {
           padding-top: 8px !important;
         }
-        /* 一级菜单激活状态 - 只有文字颜色，无背景色 */
+        /* 一级菜单激活状态 - 完全移除所有选中状态样式差异，让所有菜单项看起来完全一致 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
           background-color: transparent !important;
+          border-right: none !important;
+          box-shadow: none !important;
         }
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a {
-          color: #1890ff !important;
+          color: rgba(0, 0, 0, 0.88) !important;
+          font-weight: normal !important;
         }
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
-          border-right-color: #1890ff !important;
+          display: none !important;
+        }
+        /* 确保所有一级菜单项都使用完全相同的样式，无论选中状态如何 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
+          color: rgba(0, 0, 0, 0.88) !important;
+          background-color: transparent !important;
+          border-right: none !important;
+          box-shadow: none !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item > .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a {
+          color: rgba(0, 0, 0, 0.88) !important;
+          font-weight: normal !important;
         }
         /* 一级子菜单标题激活状态 - 只有文字颜色，无背景色 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
@@ -1191,6 +1308,101 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
           background: transparent !important;
           color: rgba(0, 0, 0, 0.45) !important;
+        }
+        /* ==================== 菜单收起/展开动画优化 - 干净利落 ==================== */
+        /* 侧边栏收起/展开动画 - 快速且干脆 */
+        .ant-pro-layout .ant-pro-sider,
+        .ant-pro-layout .ant-layout-sider {
+          transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        /* 菜单容器动画优化 */
+        .ant-pro-layout .ant-pro-sider-menu,
+        .ant-pro-layout .ant-layout-sider .ant-menu {
+          transition: none !important;
+        }
+        /* 菜单项动画优化 - 移除所有过渡效果，立即显示/隐藏 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
+          transition: none !important;
+        }
+        /* 子菜单展开/收起动画 - 快速且干脆 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-inline .ant-menu {
+          transition: opacity 0.1s ease-out, max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        /* 菜单项文字和图标立即显示/隐藏，无过渡 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
+          transition: none !important;
+        }
+        /* 收起状态下，菜单项立即隐藏文字，但保持图标显示 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content {
+          opacity: 0 !important;
+          width: 0 !important;
+          overflow: hidden !important;
+          transition: none !important;
+        }
+        /* 收起状态下，确保图标仍然显示 - 包括所有菜单项状态和图标容器 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        /* 同时确保图标元素本身也显示 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .anticon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .anticon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .anticon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon,
+        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon {
+          display: inline-flex !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+          width: 16px !important;
+          height: 16px !important;
+          min-width: 16px !important;
+          min-height: 16px !important;
+          max-width: 16px !important;
+          max-height: 16px !important;
+          flex-shrink: 0 !important;
+        }
+        /* 展开状态下，菜单项立即显示文字 */
+        .ant-pro-layout .ant-pro-sider:not(.ant-pro-sider-collapsed) .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-layout-sider:not(.ant-layout-sider-collapsed) .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content {
+          opacity: 1 !important;
+          width: auto !important;
+          transition: none !important;
+        }
+        /* 子菜单展开/收起时，立即显示/隐藏，无延迟 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-open > .ant-menu,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-open > .ant-menu-submenu > .ant-menu {
+          display: block !important;
+          opacity: 1 !important;
+          max-height: 1000px !important;
+          transition: opacity 0.1s ease-out, max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.ant-menu-submenu-open) > .ant-menu,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.ant-menu-submenu-open) > .ant-menu-submenu > .ant-menu {
+          display: none !important;
+          opacity: 0 !important;
+          max-height: 0 !important;
+          transition: opacity 0.1s ease-out, max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        /* 菜单项 hover 效果 - 立即响应，无过渡 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:hover,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:hover {
+          transition: background-color 0.1s ease-out !important;
         }
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
         .ant-pro-layout .ant-pro-layout-header .ant-space {
@@ -1670,8 +1882,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </div>
           );
         }
-        // 普通菜单项正常渲染
-        // 如果是分组菜单下的子菜单项，通过 ref 设置正确的 padding-left
+        // 统一所有一级菜单项的样式，确保完全一致
         return (
           <div
             onClick={() => {
@@ -1679,7 +1890,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 navigate(item.path);
               }
             }}
-            style={{ cursor: item.path ? 'pointer' : 'default' }}
+            style={{
+              cursor: item.path ? 'pointer' : 'default',
+              color: 'rgba(0, 0, 0, 0.88)',
+              backgroundColor: 'transparent',
+              borderRight: 'none',
+              boxShadow: 'none',
+              fontWeight: 'normal'
+            }}
             ref={(el) => {
               if (el) {
                 // 使用 setTimeout 确保 DOM 已渲染
@@ -1687,6 +1905,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   // 查找内部的 li 元素（Ant Design Menu 渲染的）
                   const liElement = el.querySelector('li.ant-menu-item') as HTMLElement;
                   if (liElement) {
+                    // 强制设置所有一级菜单项的样式一致
+                    liElement.style.color = 'rgba(0, 0, 0, 0.88)';
+                    liElement.style.backgroundColor = 'transparent';
+                    liElement.style.borderRight = 'none';
+                    liElement.style.boxShadow = 'none';
+                    liElement.style.fontWeight = 'normal';
+
+                    // 隐藏右边框指示器
+                    const afterElement = liElement.querySelector('::after') as HTMLElement;
+                    if (afterElement) {
+                      afterElement.style.display = 'none';
+                    }
+
                     // 检查是否在分组菜单下（通过查找父元素中的 .ant-menu-item-group）
                     const menuGroup = el.closest('.ant-menu-item-group');
                     if (menuGroup && liElement.style.paddingLeft === '48px') {

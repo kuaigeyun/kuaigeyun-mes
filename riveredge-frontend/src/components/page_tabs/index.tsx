@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Button, Dropdown, MenuProps } from 'antd';
-import { CaretLeftFilled, CaretRightFilled } from '@ant-design/icons';
+import { CaretLeftFilled, CaretRightFilled, ReloadOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 
 /**
@@ -68,6 +68,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
   const tabsNavRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
 
   /**
    * 根据路径获取标签标题
@@ -102,43 +103,43 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           key: path,
           path,
           label: getTabTitle(path),
-          closable: path !== '/system/dashboard', // 工作台标签不可关闭
+          closable: path !== '/system/dashboard/workplace', // 工作台标签不可关闭
         };
 
         let newTabs: TabItem[];
 
-        // 如果添加的是仪表盘，确保它在第一个位置
-        if (path === '/system/dashboard') {
-          // 检查是否已存在仪表盘标签
-          const dashboardTab = prevTabs.find((tab) => tab.key === '/system/dashboard');
-          if (dashboardTab) {
+        // 如果添加的是工作台，确保它在第一个位置
+        if (path === '/system/dashboard/workplace') {
+          // 检查是否已存在工作台标签
+          const workplaceTab = prevTabs.find((tab) => tab.key === '/system/dashboard/workplace');
+          if (workplaceTab) {
             return prevTabs;
           }
-          // 仪表盘始终在第一个位置
+          // 工作台始终在第一个位置
           newTabs = [newTab, ...prevTabs];
         } else {
-          // 其他标签添加在仪表盘之后
-          const dashboardIndex = prevTabs.findIndex((tab) => tab.key === '/system/dashboard');
-          if (dashboardIndex >= 0) {
-            // 如果存在仪表盘，插入到仪表盘之后
-            const beforeDashboard = prevTabs.slice(0, dashboardIndex + 1);
-            const afterDashboard = prevTabs.slice(dashboardIndex + 1);
-            newTabs = [...beforeDashboard, newTab, ...afterDashboard];
+          // 其他标签添加在工作台之后
+          const workplaceIndex = prevTabs.findIndex((tab) => tab.key === '/system/dashboard/workplace');
+          if (workplaceIndex >= 0) {
+            // 如果存在工作台，插入到工作台之后
+            const beforeWorkplace = prevTabs.slice(0, workplaceIndex + 1);
+            const afterWorkplace = prevTabs.slice(workplaceIndex + 1);
+            newTabs = [...beforeWorkplace, newTab, ...afterWorkplace];
           } else {
-            // 如果没有仪表盘，先添加仪表盘，再添加新标签
-            const dashboardTab: TabItem = {
-              key: '/system/dashboard',
-              path: '/system/dashboard',
-              label: getTabTitle('/system/dashboard'),
+            // 如果没有工作台，先添加工作台，再添加新标签
+            const workplaceTab: TabItem = {
+              key: '/system/dashboard/workplace',
+              path: '/system/dashboard/workplace',
+              label: getTabTitle('/system/dashboard/workplace'),
               closable: false,
             };
-            newTabs = [dashboardTab, newTab];
+            newTabs = [workplaceTab, newTab];
           }
         }
 
-        // 性能优化：如果标签数量超过限制，自动关闭最旧的标签（保留仪表盘）
+        // 性能优化：如果标签数量超过限制，自动关闭最旧的标签（保留工作台）
         if (newTabs.length > TAB_CONFIG.MAX_TABS) {
-          // 找到最旧的标签（除了仪表盘）
+          // 找到最旧的标签（除了工作台）
           const closableTabs = newTabs.filter((tab) => tab.closable);
           if (closableTabs.length > 0) {
             // 移除最旧的标签（第一个可关闭的标签）
@@ -168,13 +169,29 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   useEffect(() => {
     if (location.pathname) {
-      // 确保仪表盘标签始终存在（固定第一个）
-      addTab('/system/dashboard');
+      // 确保工作台标签始终存在（固定第一个）
+      addTab('/system/dashboard/workplace');
       // 添加当前页面标签
       addTab(location.pathname);
       setActiveKey(location.pathname);
     }
   }, [location.pathname, addTab]);
+
+  /**
+   * 监听 refresh 参数，实现局部刷新
+   */
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.has('_refresh')) {
+      // 移除 refresh 参数，保持 URL 干净
+      searchParams.delete('_refresh');
+      const newSearch = searchParams.toString();
+      const newPath = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+      navigate(newPath, { replace: true });
+      // 更新 refreshKey 触发组件重新渲染
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [location.search, location.pathname, navigate]);
 
   /**
    * 处理标签切换
@@ -202,7 +219,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
       } else {
         // 如果没有标签了，跳转到工作台
-        navigate('/system/dashboard');
+        navigate('/system/dashboard/workplace');
       }
     }
 
@@ -231,17 +248,17 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    * 关闭其他标签
    */
   const handleCloseOthers = (targetKey: string) => {
-    // 保留目标标签和仪表盘标签（如果存在）
-    const dashboardTab = tabs.find((tab) => tab.key === '/system/dashboard');
+    // 保留目标标签和工作台标签（如果存在）
+    const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
     const targetTab = tabs.find((tab) => tab.key === targetKey);
     const newTabs: TabItem[] = [];
-    
-    // 先添加仪表盘标签（如果存在且不是目标标签）
-    if (dashboardTab && dashboardTab.key !== targetKey) {
-      newTabs.push(dashboardTab);
+
+    // 先添加工作台标签（如果存在且不是目标标签）
+    if (workplaceTab && workplaceTab.key !== targetKey) {
+      newTabs.push(workplaceTab);
     }
-    
-    // 添加目标标签（如果存在且不是仪表盘）
+
+    // 添加目标标签（如果存在且不是工作台）
     if (targetTab) {
       newTabs.push(targetTab);
     }
@@ -256,46 +273,69 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   const handleCloseAll = () => {
     // 只保留仪表盘标签
-    const dashboardTab = tabs.find((tab) => tab.key === '/system/dashboard');
-    if (dashboardTab) {
-      setTabs([dashboardTab]);
-      setActiveKey('/system/dashboard');
-      navigate('/system/dashboard');
+    const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
+    if (workplaceTab) {
+      setTabs([workplaceTab]);
+      setActiveKey('/system/dashboard/workplace');
+      navigate('/system/dashboard/workplace');
     } else {
       setTabs([]);
-      navigate('/system/dashboard');
+      navigate('/system/dashboard/workplace');
     }
   };
+
+  /**
+   * 处理标签刷新 - 局部刷新当前标签页
+   */
+  const handleTabRefresh = useCallback((tabKey: string) => {
+    // 如果当前路径就是目标路径，通过添加 refresh 参数来触发局部刷新
+    if (location.pathname === tabKey) {
+      // 添加 refresh 参数，触发路由变化，从而触发组件重新渲染
+      const separator = location.search ? '&' : '?';
+      navigate(`${tabKey}${separator}_refresh=${Date.now()}`, { replace: true });
+    } else {
+      // 如果当前路径不是目标路径，先导航到目标路径
+      navigate(tabKey, { replace: true });
+    }
+  }, [navigate, location.pathname, location.search]);
 
   /**
    * 获取标签右键菜单
    */
   const getTabContextMenu = (tabKey: string): MenuProps => {
     const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
-    const isDashboard = tabKey === '/system/dashboard';
+    const isWorkplace = tabKey === '/system/dashboard/workplace';
     const hasRightTabs = targetIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
 
     const menuItems: MenuProps['items'] = [
       {
+        key: 'refresh',
+        label: '刷新',
+        icon: <ReloadOutlined />,
+      },
+      {
+        type: 'divider',
+      },
+      {
         key: 'close',
         label: '关闭',
-        disabled: isDashboard, // 仪表盘标签不可关闭
+        disabled: isWorkplace, // 工作台标签不可关闭
       },
       {
         key: 'closeRight',
         label: '关闭右侧',
-        disabled: !hasRightTabs || isDashboard,
+        disabled: !hasRightTabs || isWorkplace,
       },
       {
         key: 'closeOthers',
         label: '关闭其他',
-        disabled: !hasOtherTabs || isDashboard,
+        disabled: !hasOtherTabs || isWorkplace,
       },
       {
         key: 'closeAll',
         label: '全部关闭',
-        disabled: tabs.length <= 1 || (tabs.length === 1 && isDashboard),
+        disabled: tabs.length <= 1 || (tabs.length === 1 && isWorkplace),
       },
     ];
 
@@ -303,6 +343,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
       items: menuItems,
       onClick: ({ key }) => {
         switch (key) {
+          case 'refresh':
+            handleTabRefresh(tabKey);
+            break;
           case 'close':
             handleTabClose(tabKey);
             break;
@@ -413,7 +456,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
       <style>{`
         /* 标签栏样式优化 */
         .page-tabs-container .ant-tabs {
-          margin: 0;
+          margin: 0 !important;
+          margin-bottom: 0 !important;
           border: none !important;
           border-bottom: none !important;
           box-shadow: none !important;
@@ -421,8 +465,10 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
         /* 覆盖 Ant Design Tabs 原生下边框样式 */
         .page-tabs-container .ant-tabs-nav {
-          margin: 0;
-          padding: 0;
+          margin: 0 !important;
+          margin-bottom: 0 !important;
+          padding: 0 !important;
+          padding-bottom: 0 !important;
           border-bottom: none !important;
         }
         .page-tabs-container .ant-tabs-nav::before {
@@ -438,6 +484,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
         .page-tabs-container .ant-tabs-nav-list {
           border-bottom: none !important;
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
         }
         /* 覆盖所有可能的边框颜色 #F0F0F0 */
         .page-tabs-container .ant-tabs-nav,
@@ -490,19 +538,27 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border-bottom-right-radius: 8px !important;
           position: relative;
           z-index: 1;
-          margin-bottom: -1px !important;
+          margin-bottom: 0px !important;
+          margin-top: 0 !important;
           overflow: visible !important;
           /* 使用 box-shadow 创建底部外圆角效果 */
           box-shadow: 8px 8px 0 0 #f0f2f5, -8px 8px 0 0 #f0f2f5;
+        }
+        /* 确保单个标签时也没有底部间距 */
+        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
+          margin-bottom: 0 !important;
+        }
+        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
+          margin-bottom: 0px !important;
         }
         /* 激活标签底部外圆角效果 - 使用伪元素创建反圆角（参考：https://juejin.cn/post/7224311569777934392） */
         .page-tabs-container .ant-tabs-tab-active::before {
           content: '';
           position: absolute;
           left: -8px;
-          bottom: 0;
+          bottom: 0px;
           width: 8px;
-          height: 38px;
+          height: 40px;
           background: rgba(255, 255, 255, 0.85);
           border-radius: 0 0 8px 0;
           z-index: -1;
@@ -512,9 +568,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           content: '';
           position: absolute;
           right: -8px;
-          bottom: 0;
+          bottom: 0px;
           width: 8px;
-          height: 38px;
+          height: 40px;
           background: rgba(255, 255, 255, 0.85);
           border-radius: 0 0 0 8px;
           z-index: -1;
@@ -549,17 +605,36 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           flex-shrink: 0;
           padding-top: 2px;
           padding-bottom: 0;
+          margin-bottom: 0;
           position: sticky;
           top: 56px; /* ProLayout 顶栏高度 */
           z-index: 10;
           overflow: visible !important;
           border-bottom: none !important;
         }
+        /* 确保单个标签时也没有底部间距 */
+        .page-tabs-container .ant-tabs-nav {
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+        }
+        .page-tabs-container .ant-tabs-nav-list {
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+        }
+        /* 当只有一个标签时，确保没有额外间距 */
+        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
+          margin-bottom: 0 !important;
+        }
+        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
+          margin-bottom: -1px !important;
+        }
         .page-tabs-content {
           flex: 1;
           overflow: auto;
           position: relative;
           background: #f0f2f5;
+          margin-top: 0 !important;
+          padding-top: 0 !important;
           /* 隐藏垂直滚动条但保留滚动功能 */
           scrollbar-width: none !important; /* Firefox */
           -ms-overflow-style: none !important; /* IE 10+ */
@@ -578,6 +653,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border: none !important;
           box-shadow: none !important;
           overflow: visible !important;
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
           z-index: 1;
           pointer-events: none;
         }
@@ -732,7 +809,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                         e.preventDefault();
                         e.stopPropagation();
                         // 仪表盘标签不可双击关闭
-                        if (tab.key !== '/system/dashboard' && tab.closable) {
+                        if (tab.key !== '/system/dashboard/workplace' && tab.closable) {
                           handleTabClose(tab.key);
                         }
                       }}
@@ -760,7 +837,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
             </div>
           </div>
         </div>
-        <div className="page-tabs-content">
+        <div className="page-tabs-content" key={`content-${activeKey}-${refreshKey}`}>
           {children}
         </div>
       </div>
