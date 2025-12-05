@@ -622,7 +622,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
-  const { currentUser, logout } = useGlobalStore();
+  const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
+
+  /**
+   * 检查锁屏状态，如果已锁定则重定向到锁屏页
+   */
+  useEffect(() => {
+    if (isLocked && location.pathname !== '/lock-screen') {
+      navigate('/lock-screen', { replace: true });
+    }
+  }, [isLocked, location.pathname, navigate]);
 
   /**
    * 处理搜索
@@ -894,7 +903,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 处理锁定屏幕
    */
   const handleLockScreen = () => {
-    message.info('锁定屏幕功能开发中');
+    // 保存当前路径
+    lockScreen(location.pathname);
+    // 导航到锁屏页
+    navigate('/lock-screen', { replace: true });
   };
 
   return (
@@ -1072,26 +1084,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           line-height: 1 !important;
           vertical-align: middle !important;
         }
-        /* 侧边栏收起时，移除一级菜单项的左边距 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item {
-          padding-left: 0 !important;
-          margin-left: 0 !important;
-        }
-        /* 收起状态下，一级菜单项图标居中显示 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon {
-          margin-right: 0 !important;
-          margin-left: auto !important;
-          margin-right: auto !important;
-        }
-        /* 收起状态下，隐藏一级菜单选中项的右边框，确保图标正常显示 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
-          border-right-color: transparent !important;
+        /* 选中菜单项的图标强制白色 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon {
+          color: #fff !important;
         }
         /* ==================== 分组菜单下的子菜单项 ==================== */
         /* 使用最高优先级的选择器覆盖内联样式 - 必须匹配所有可能的组合 */
@@ -1211,34 +1207,29 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu {
           padding-top: 8px !important;
         }
-        /* 一级菜单激活状态 - 完全移除所有选中状态样式差异，让所有菜单项看起来完全一致 */
+        /* 一级菜单激活状态 - 蓝色背景，白色文字 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
-          background-color: transparent !important;
+          background-color: #1890ff !important;
           border-right: none !important;
           box-shadow: none !important;
+          color: #fff !important;
         }
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a {
-          color: rgba(0, 0, 0, 0.88) !important;
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > span,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-title-content a,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-title-content span {
+          color: #fff !important;
           font-weight: normal !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon .anticon {
+          color: #fff !important;
         }
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected::after {
           display: none !important;
-        }
-        /* 确保所有一级菜单项都使用完全相同的样式，无论选中状态如何 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
-          color: rgba(0, 0, 0, 0.88) !important;
-          background-color: transparent !important;
-          border-right: none !important;
-          box-shadow: none !important;
-        }
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item > .ant-menu-title-content > a,
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected > .ant-menu-title-content > a {
-          color: rgba(0, 0, 0, 0.88) !important;
-          font-weight: normal !important;
         }
         /* 一级子菜单标题激活状态 - 只有文字颜色，无背景色 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title {
@@ -1336,52 +1327,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-icon,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
-          transition: none !important;
-        }
-        /* 收起状态下，菜单项立即隐藏文字，但保持图标显示 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content {
-          opacity: 0 !important;
-          width: 0 !important;
-          overflow: hidden !important;
-          transition: none !important;
-        }
-        /* 收起状态下，确保图标仍然显示 - 包括所有菜单项状态和图标容器 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .ant-menu-item-icon,
-        /* 同时确保图标元素本身也显示 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .anticon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .anticon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item .anticon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon,
-        .ant-pro-layout .ant-pro-sider.ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon {
-          display: inline-flex !important;
-          opacity: 1 !important;
-          visibility: visible !important;
-          width: 16px !important;
-          height: 16px !important;
-          min-width: 16px !important;
-          min-height: 16px !important;
-          max-width: 16px !important;
-          max-height: 16px !important;
-          flex-shrink: 0 !important;
-        }
-        /* 展开状态下，菜单项立即显示文字 */
-        .ant-pro-layout .ant-pro-sider:not(.ant-pro-sider-collapsed) .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-layout-sider:not(.ant-layout-sider-collapsed) .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content {
-          opacity: 1 !important;
-          width: auto !important;
           transition: none !important;
         }
         /* 子菜单展开/收起时，立即显示/隐藏，无延迟 */
@@ -1834,7 +1779,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 锁定屏幕按钮 - 移到最后一个防止误点
           actions.push(
-            <Tooltip key="lock" title="锁定屏幕">
+            <Tooltip key="lock" title="锁定屏幕" placement="bottomRight">
               <Button
                 type="text"
                 size="small"
@@ -1892,11 +1837,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             }}
             style={{
               cursor: item.path ? 'pointer' : 'default',
-              color: 'rgba(0, 0, 0, 0.88)',
-              backgroundColor: 'transparent',
-              borderRight: 'none',
-              boxShadow: 'none',
-              fontWeight: 'normal'
             }}
             ref={(el) => {
               if (el) {
@@ -1905,9 +1845,35 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   // 查找内部的 li 元素（Ant Design Menu 渲染的）
                   const liElement = el.querySelector('li.ant-menu-item') as HTMLElement;
                   if (liElement) {
-                    // 强制设置所有一级菜单项的样式一致
-                    liElement.style.color = 'rgba(0, 0, 0, 0.88)';
-                    liElement.style.backgroundColor = 'transparent';
+                    // 检查是否是选中状态
+                    const isSelected = liElement.classList.contains('ant-menu-item-selected');
+                    
+                    if (isSelected) {
+                      // 选中状态：蓝色背景，白色文字
+                      liElement.style.color = '#fff';
+                      liElement.style.backgroundColor = '#1890ff';
+                      
+                      // 设置文字和图标为白色
+                      const titleContent = liElement.querySelector('.ant-menu-title-content') as HTMLElement;
+                      if (titleContent) {
+                        titleContent.style.color = '#fff';
+                        const link = titleContent.querySelector('a');
+                        if (link) {
+                          link.style.color = '#fff';
+                        }
+                      }
+                      
+                      // 设置图标为白色
+                      const icon = liElement.querySelector('.ant-menu-item-icon, .anticon') as HTMLElement;
+                      if (icon) {
+                        icon.style.color = '#fff';
+                      }
+                    } else {
+                      // 未选中状态：透明背景，黑色文字
+                      liElement.style.color = 'rgba(0, 0, 0, 0.88)';
+                      liElement.style.backgroundColor = 'transparent';
+                    }
+                    
                     liElement.style.borderRight = 'none';
                     liElement.style.boxShadow = 'none';
                     liElement.style.fontWeight = 'normal';

@@ -47,6 +47,7 @@ import PersonalRegisterPage from '../pages/register/personal';
 import OrganizationRegisterPage from '../pages/register/organization';
 import NotFoundPage from '../pages/404';
 import PlatformLoginPage from '../pages/platform/login';
+import LockScreenPage from '../pages/lock-screen';
 
 // 懒加载系统级页面（按功能模块分组）
 const SystemDashboardPage = lazy(() => import('../pages/system/dashboard'));
@@ -149,6 +150,8 @@ const AppRoutes: React.FC = () => {
       <Route path="/register/organization" element={<OrganizationRegisterPage />} />
       {/* 平台超管登录 */}
       <Route path="/platform" element={<PlatformLoginPage />} />
+      {/* 锁屏页面 */}
+      <Route path="/lock-screen" element={<LockScreenPage />} />
 
       {/* ==================== 系统级路由（用户登录后访问） ==================== */}
       {/* 系统仪表盘 */}
