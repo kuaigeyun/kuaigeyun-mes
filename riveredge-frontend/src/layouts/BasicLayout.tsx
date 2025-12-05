@@ -42,12 +42,14 @@ import {
   HistoryOutlined,
   LoginOutlined,
   UnorderedListOutlined,
+  AppstoreAddOutlined,
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import TenantSelector from '../components/tenant_selector';
 import PageTabs from '../components/page_tabs';
+import TechStackModal from '../components/tech-stack-modal';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentPlatformSuperAdmin } from '../services/platformAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
@@ -609,6 +611,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const { currentUser, logout } = useGlobalStore();
 
   /**
@@ -797,6 +800,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       type: 'divider',
     },
     {
+      key: 'copyright',
+      icon: <FileTextOutlined />,
+      label: '版权声明',
+    },
+    {
+      type: 'divider',
+    },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: '退出登录',
@@ -809,6 +820,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     switch (key) {
       case 'profile':
         message.info('个人资料功能开发中');
+        break;
+      case 'copyright':
+        setTechStackModalOpen(true);
         break;
       case 'logout':
         logout();
@@ -875,6 +889,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   return (
     <>
+      {/* 技术栈列表 Modal */}
+      <TechStackModal
+        open={techStackModalOpen}
+        onCancel={() => setTechStackModalOpen(false)}
+      />
+      
       {/* 自定义分组标题样式 */}
       <style>{`
         /* ==================== PageContainer 相关 ==================== */
@@ -1126,6 +1146,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item-selected::after {
           border-right-color: #1890ff !important;
         }
+        /* 隐藏子菜单中的图标（只保留一级菜单的图标） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item .ant-menu-item-icon {
+          display: none !important;
+        }
         /* 二级及以下子菜单标题固定样式 - 无论是否有子菜单被选中，都保持相同样式（排除分组标题） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
@@ -1258,6 +1284,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
           background: transparent !important;
         }
+        /* 租户选择器文字左右边距 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item {
+          padding-left: 6px !important;
+          padding-right: 18px !important;
+        }
         /* 禁用租户选择器 wrapper 的 hover 效果 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
           background-color: transparent !important;
@@ -1293,10 +1324,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           height: 100%;
           position: relative;
           white-space: nowrap !important;
-          overflow: hidden;
-          flex: 1;
+          overflow: visible !important;
+          flex: 1 1 auto;
           min-width: 0;
-          max-width: calc(100% - 400px);
+          max-width: none;
         }
         /* 面包屑内部容器防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
@@ -1304,13 +1335,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           display: flex !important;
           flex-wrap: nowrap !important;
           white-space: nowrap !important;
-          overflow: hidden;
+          overflow: visible !important;
         }
-        /* 面包屑项防止换行 */
+        /* 面包屑项防止换行，允许收缩但优先显示最后一项 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item {
           white-space: nowrap !important;
-          flex-shrink: 0 !important;
+          flex-shrink: 1 !important;
           display: inline-flex !important;
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+        }
+        /* 最后一个面包屑项不收缩，优先显示完整 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:last-child {
+          flex-shrink: 0 !important;
         }
         /* 面包屑分隔符防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-separator {
@@ -1341,6 +1379,40 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a:hover {
           color: #1890ff;
         }
+        /* 面包屑下拉菜单样式优化 - 确保完整显示 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown {
+          z-index: 1050 !important;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown-menu {
+          max-height: 400px;
+          overflow-y: auto;
+        }
+        /* 确保 header 和面包屑容器不裁剪下拉菜单 */
+        .ant-pro-layout-container .ant-layout-header {
+          overflow: visible !important;
+        }
+        .ant-pro-layout-container .ant-pro-layout-header {
+          overflow: visible !important;
+        }
+        /* 面包屑下拉菜单样式优化 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown {
+          z-index: 1050 !important;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown-menu {
+          max-height: 400px;
+          overflow-y: auto;
+        }
+        /* 确保面包屑容器不裁剪下拉菜单 */
+        .ant-pro-layout-container .ant-layout-header {
+          overflow: visible !important;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb {
+          overflow: visible !important;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ul {
+          overflow: visible !important;
+        }
       `}</style>
       <ProLayout
         title="RiverEdge SaaS"
@@ -1369,7 +1441,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             items={generateBreadcrumb.map((item, index) => ({
               title: (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {item.icon && (
+                  {/* 只有第一项（一级菜单）显示图标 */}
+                  {item.icon && index === 0 && (
                     <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>
                       {item.icon}
                     </span>

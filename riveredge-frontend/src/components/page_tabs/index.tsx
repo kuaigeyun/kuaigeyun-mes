@@ -415,12 +415,40 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs {
           margin: 0;
           border: none !important;
+          border-bottom: none !important;
           box-shadow: none !important;
           outline: none !important;
         }
+        /* 覆盖 Ant Design Tabs 原生下边框样式 */
         .page-tabs-container .ant-tabs-nav {
           margin: 0;
           padding: 0;
+          border-bottom: none !important;
+        }
+        .page-tabs-container .ant-tabs-nav::before {
+          display: none !important;
+          border-bottom: none !important;
+        }
+        .page-tabs-container .ant-tabs-nav-wrap {
+          border-bottom: none !important;
+        }
+        .page-tabs-container .ant-tabs-nav-wrap::before {
+          display: none !important;
+          border-bottom: none !important;
+        }
+        .page-tabs-container .ant-tabs-nav-list {
+          border-bottom: none !important;
+        }
+        /* 覆盖所有可能的边框颜色 #F0F0F0 */
+        .page-tabs-container .ant-tabs-nav,
+        .page-tabs-container .ant-tabs-nav-wrap,
+        .page-tabs-container .ant-tabs-nav-list,
+        .page-tabs-container .ant-tabs-tab {
+          border-color: transparent !important;
+        }
+        .page-tabs-container .ant-tabs-nav::after {
+          display: none !important;
+          border-bottom: none !important;
         }
         .page-tabs-container .ant-tabs-tab {
           margin: 0 !important;
@@ -443,6 +471,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           width: 1px;
           height: 16px;
           background: #e8e8e8;
+          z-index: 0;
         }
         .page-tabs-container .ant-tabs-content-holder {
           display: none;
@@ -451,12 +480,45 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-ink-bar {
           display: none !important;
         }
-        /* 激活标签背景色与内容区一致 */
+        /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 */
         .page-tabs-container .ant-tabs-tab-active {
           background: #f0f2f5 !important;
           border-bottom: none !important;
-          border-top-left-radius: 4px !important;
-          border-top-right-radius: 4px !important;
+          border-top-left-radius: 8px !important;
+          border-top-right-radius: 8px !important;
+          border-bottom-left-radius: 8px !important;
+          border-bottom-right-radius: 8px !important;
+          position: relative;
+          z-index: 1;
+          margin-bottom: -1px !important;
+          overflow: visible !important;
+          /* 使用 box-shadow 创建底部外圆角效果 */
+          box-shadow: 8px 8px 0 0 #f0f2f5, -8px 8px 0 0 #f0f2f5;
+        }
+        /* 激活标签底部外圆角效果 - 使用伪元素创建反圆角（参考：https://juejin.cn/post/7224311569777934392） */
+        .page-tabs-container .ant-tabs-tab-active::before {
+          content: '';
+          position: absolute;
+          left: -8px;
+          bottom: 0;
+          width: 8px;
+          height: 38px;
+          background: rgba(255, 255, 255, 0.85);
+          border-radius: 0 0 8px 0;
+          z-index: -1;
+          pointer-events: none;
+        }
+        .page-tabs-container .ant-tabs-tab-active::after {
+          content: '';
+          position: absolute;
+          right: -8px;
+          bottom: 0;
+          width: 8px;
+          height: 38px;
+          background: rgba(255, 255, 255, 0.85);
+          border-radius: 0 0 0 8px;
+          z-index: -1;
+          pointer-events: none;
         }
         /* 激活标签向左偏移1px，但排除第一个标签 */
         .page-tabs-container .ant-tabs-tab-active:not(:first-child) {
@@ -478,6 +540,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           height: 100%;
           display: flex;
           flex-direction: column;
+          overflow: visible !important;
         }
         .page-tabs-header {
           background: rgba(255, 255, 255, 0.85);
@@ -485,9 +548,12 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           -webkit-backdrop-filter: blur(8px);
           flex-shrink: 0;
           padding-top: 2px;
+          padding-bottom: 0;
           position: sticky;
           top: 56px; /* ProLayout 顶栏高度 */
           z-index: 10;
+          overflow: visible !important;
+          border-bottom: none !important;
         }
         .page-tabs-content {
           flex: 1;
@@ -561,13 +627,13 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border: none !important;
           box-shadow: none !important;
         }
-        /* 按钮容器样式 - 底部边框和高度与 ant-tabs 一致 */
+        /* 按钮容器样式 - 高度与 ant-tabs 一致 */
         .page-tabs-scroll-button-wrapper {
           display: flex;
           align-items: center;
           justify-content: center;
           height: 38px;
-          border-bottom: 1px solid #f0f0f0;
+          border-bottom: none !important;
         }
         .page-tabs-scroll-button-left {
           margin-right: 4px;
@@ -579,16 +645,23 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           position: relative;
           z-index: 2;
         }
-        /* 标签栏容器 - 允许横向滚动 */
+        /* 标签栏容器 - 允许横向滚动，底部允许溢出显示外圆角 */
         .page-tabs-container {
           flex: 1;
-          overflow: hidden;
+          overflow-x: hidden;
+          overflow-y: visible;
           position: relative;
           z-index: 1;
         }
         .page-tabs-container .ant-tabs-nav {
           overflow-x: auto;
-          overflow-y: hidden;
+          overflow-y: visible;
+        }
+        .page-tabs-container .ant-tabs-nav-list {
+          overflow: visible !important;
+        }
+        .page-tabs-container .ant-tabs-tab {
+          overflow: visible !important;
         }
         .page-tabs-container .ant-tabs-nav::-webkit-scrollbar {
           display: none;
@@ -599,7 +672,29 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
           .ant-tabs-nav-more{
             padding: 8px 4px 8px 8px!important;
+            box-shadow: none !important;
           }
+        /* 移除所有可能移动的阴影效果和分隔线 */
+        .page-tabs-container .ant-tabs-nav-more {
+          box-shadow: none !important;
+        }
+        .page-tabs-container .ant-tabs-nav-operations {
+          box-shadow: none !important;
+        }
+        /* 移除 nav-operations 的伪元素分隔线 */
+        .page-tabs-container .ant-tabs-nav-operations::before,
+        .page-tabs-container .ant-tabs-nav-operations::after {
+          display: none !important;
+          box-shadow: none !important;
+        }
+        /* 移除 nav-wrap 的分隔线 */
+        .page-tabs-container .ant-tabs-nav-wrap::after {
+          display: none !important;
+        }
+        /* 移除 nav-list 的分隔线 */
+        .page-tabs-container .ant-tabs-nav-list::after {
+          display: none !important;
+        }
       `}</style>
       <div className="page-tabs-wrapper">
         <div className="page-tabs-header">

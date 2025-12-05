@@ -4,8 +4,8 @@
 # 严禁使用CMD和PowerShell，只使用bash和Linux命令
 #
 # 快速启动选项:
-#   ./start-all.sh fast    - 最快启动，强制静默
-#   QUIET=true ./start-all.sh  - 静默启动
+#   ./Launch.sh fast    - 最快启动，强制静默
+#   QUIET=true ./Launch.sh  - 静默启动
 #   ./fast-start.sh        - 快速启动脚本别名
 
 set -e  # 遇到错误立即退出
@@ -1686,10 +1686,10 @@ main() {
         echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
         echo
         echo "管理命令:"
-        echo "  查看状态:    ./start-all.sh status"
-        echo "  停止服务:    ./start-all.sh stop"
-        echo "  重启服务:    ./start-all.sh restart"
-        echo "  获取帮助:    ./start-all.sh help"
+        echo "  查看状态:    ./Launch.sh status"
+        echo "  停止服务:    ./Launch.sh stop"
+        echo "  重启服务:    ./Launch.sh restart"
+        echo "  获取帮助:    ./Launch.sh help"
         echo
         echo "日志文件:"
         echo "  后端日志:    startlogs/backend.log"
@@ -1699,7 +1699,7 @@ main() {
         echo
         echo "提示:"
         echo "  服务将在后台持续运行"
-        echo "  如需停止，请使用 ./start-all.sh stop"
+        echo "  如需停止，请使用 ./Launch.sh stop"
         echo "  首次访问可能需要等待前端完全编译"
         echo
         echo "=================================================================================="
