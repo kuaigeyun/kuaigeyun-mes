@@ -151,4 +151,5 @@ export const FieldHelp: React.FC<FieldHelpProps> = ({
 };
 
 export default HelpTooltip;
+export { HelpTooltip };
 

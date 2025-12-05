@@ -24,7 +24,12 @@ export interface TabItem {
  * 从菜单配置中查找页面标题
  */
 const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
-  const findInMenu = (items: MenuDataItem[]): string | null => {
+  const findInMenu = (items: MenuDataItem[] | undefined): string | null => {
+    // 防御性检查：如果 items 为空或未定义，直接返回 null
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return null;
+    }
+    
     for (const item of items) {
       // 精确匹配
       if (item.path === path) {
@@ -38,6 +43,11 @@ const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
     }
     return null;
   };
+
+  // 防御性检查：如果 menuConfig 为空或未定义，直接返回路径的最后一部分
+  if (!menuConfig || !Array.isArray(menuConfig) || menuConfig.length === 0) {
+    return path.split('/').pop() || '未命名页面';
+  }
 
   return findInMenu(menuConfig) || path.split('/').pop() || '未命名页面';
 };
@@ -462,6 +472,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border-bottom: none !important;
           box-shadow: none !important;
           outline: none !important;
+          background: var(--ant-colorBgContainer) !important;
         }
         /* 覆盖 Ant Design Tabs 原生下边框样式 */
         .page-tabs-container .ant-tabs-nav {
@@ -477,6 +488,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
         .page-tabs-container .ant-tabs-nav-wrap {
           border-bottom: none !important;
+          overflow-x: auto !important;
+          overflow-y: visible !important;
         }
         .page-tabs-container .ant-tabs-nav-wrap::before {
           display: none !important;
@@ -486,6 +499,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border-bottom: none !important;
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
+          overflow: visible !important;
         }
         /* 覆盖所有可能的边框颜色 #F0F0F0 */
         .page-tabs-container .ant-tabs-nav,
@@ -498,13 +512,19 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           display: none !important;
           border-bottom: none !important;
         }
+        /* Chrome 式标签样式 - 所有标签都有顶部圆角 */
         .page-tabs-container .ant-tabs-tab {
           margin: 0 !important;
           padding: 8px 16px !important;
           border: none !important;
           border-bottom: none !important;
-          background: transparent !important;
-          border-radius: 0 !important;
+          background: var(--ant-colorBgContainer) !important;
+          border-top-left-radius: 8px !important;
+          border-top-right-radius: 8px !important;
+          border-bottom-left-radius: 0 !important;
+          border-bottom-right-radius: 0 !important;
+          position: relative;
+          overflow: visible !important;
         }
         /* 未激活标签：使用竖线分隔 */
         .page-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
@@ -518,8 +538,13 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           transform: translateY(-50%);
           width: 1px;
           height: 16px;
-          background: #e8e8e8;
-          z-index: 0;
+          background: rgba(0, 0, 0, 0.16) !important;
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 最后一个标签不需要右侧竖线 */
+        .page-tabs-container .ant-tabs-tab:last-child::after {
+          display: none !important;
         }
         .page-tabs-container .ant-tabs-content-holder {
           display: none;
@@ -528,21 +553,53 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-ink-bar {
           display: none !important;
         }
-        /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 */
+        /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 - 使用主题背景色 */
+        /* 参考：https://juejin.cn/post/6986827061461516324 */
         .page-tabs-container .ant-tabs-tab-active {
-          background: #f0f2f5 !important;
+          background: var(--ant-colorBgLayout) !important;
           border-bottom: none !important;
           border-top-left-radius: 8px !important;
           border-top-right-radius: 8px !important;
-          border-bottom-left-radius: 8px !important;
-          border-bottom-right-radius: 8px !important;
+          border-bottom-left-radius: 0 !important;
+          border-bottom-right-radius: 0 !important;
           position: relative;
-          z-index: 1;
+          z-index: 2;
           margin-bottom: 0px !important;
           margin-top: 0 !important;
           overflow: visible !important;
-          /* 使用 box-shadow 创建底部外圆角效果 */
-          box-shadow: 8px 8px 0 0 #f0f2f5, -8px 8px 0 0 #f0f2f5;
+          /* Chrome 式外圆角效果 - 强制显示圆角，防止被父容器裁剪 */
+          border-radius: 8px 8px 0 0 !important;
+        }
+        /* Chrome 式反向圆角 - 使用伪元素实现左右两侧的内凹圆角 */
+        .page-tabs-container .ant-tabs-tab-active::before,
+        .page-tabs-container .ant-tabs-tab-active::after {
+          position: absolute;
+          bottom: 0;
+          content: '';
+          width: 16px;
+          height: 16px;
+          border-radius: 100%;
+          box-shadow: 0 0 0 40px var(--ant-colorBgLayout);
+          pointer-events: none;
+          z-index: -1;
+        }
+        /* 左侧反向圆角 */
+        .page-tabs-container .ant-tabs-tab-active::before {
+          left: -16px;
+          clip-path: inset(50% -8px 0 50%);
+        }
+        /* 右侧反向圆角 - 调整 clip-path 确保右侧圆角正确显示 */
+        .page-tabs-container .ant-tabs-tab-active::after {
+          right: -16px;
+          clip-path: inset(50% 50% 0 -8px);
+        }
+        /* 第一个标签不需要左侧反向圆角 */
+        .page-tabs-container .ant-tabs-tab-active:first-child::before {
+          display: none;
+        }
+        /* 最后一个标签不需要右侧反向圆角 */
+        .page-tabs-container .ant-tabs-tab-active:last-child::after {
+          display: none;
         }
         /* 确保单个标签时也没有底部间距 */
         .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
@@ -551,38 +608,22 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
           margin-bottom: 0px !important;
         }
-        /* 激活标签底部外圆角效果 - 使用伪元素创建反圆角（参考：https://juejin.cn/post/7224311569777934392） */
-        .page-tabs-container .ant-tabs-tab-active::before {
-          content: '';
-          position: absolute;
-          left: -8px;
-          bottom: 0px;
-          width: 8px;
-          height: 40px;
-          background: rgba(255, 255, 255, 0.85);
-          border-radius: 0 0 8px 0;
-          z-index: -1;
-          pointer-events: none;
-        }
-        .page-tabs-container .ant-tabs-tab-active::after {
-          content: '';
-          position: absolute;
-          right: -8px;
-          bottom: 0px;
-          width: 8px;
-          height: 40px;
-          background: rgba(255, 255, 255, 0.85);
-          border-radius: 0 0 0 8px;
-          z-index: -1;
-          pointer-events: none;
-        }
-        /* 激活标签向左偏移1px，但排除第一个标签 */
+        /* Chrome 式标签：激活标签与内容区无缝融合 */
+        /* 激活标签向左偏移1px，但排除第一个标签，实现标签之间的重叠效果 */
         .page-tabs-container .ant-tabs-tab-active:not(:first-child) {
           margin-left: -1px !important;
           padding-left: 17px !important;
         }
+        /* Chrome 式效果：激活标签文字颜色 */
         .page-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
-          color: #1890ff;
+          color: var(--ant-colorText) !important;
+          font-weight: 500 !important;
+        }
+        /* Chrome 式效果：激活标签与相邻未激活标签之间的分隔线隐藏 */
+        /* 注意：不能隐藏激活标签的 ::after，因为需要用它来实现右侧圆角 */
+        /* 只隐藏未激活标签右侧的分隔线 */
+        .page-tabs-container .ant-tabs-tab-active + .ant-tabs-tab::after {
+          display: none !important;
         }
         /* 移除标签切换时的过渡动画 */
         .page-tabs-container .ant-tabs-tab {
@@ -599,9 +640,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           overflow: visible !important;
         }
         .page-tabs-header {
-          background: rgba(255, 255, 255, 0.85);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
+          background: var(--ant-colorBgContainer) !important;
           flex-shrink: 0;
           padding-top: 2px;
           padding-bottom: 0;
@@ -611,6 +650,23 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           z-index: 10;
           overflow: visible !important;
           border-bottom: none !important;
+        }
+        /* 确保背景色生效 - 增加选择器优先级，支持深色模式 */
+        div.page-tabs-header {
+          background: var(--ant-colorBgContainer) !important;
+        }
+        /* 标签栏容器背景色与菜单栏一致 */
+        .page-tabs-container {
+          background: var(--ant-colorBgContainer) !important;
+        }
+        .page-tabs-container .ant-tabs-nav {
+          background: var(--ant-colorBgContainer) !important;
+        }
+        .page-tabs-container .ant-tabs-nav-wrap {
+          background: var(--ant-colorBgContainer) !important;
+        }
+        .page-tabs-container .ant-tabs-nav-list {
+          background: var(--ant-colorBgContainer) !important;
         }
         /* 确保单个标签时也没有底部间距 */
         .page-tabs-container .ant-tabs-nav {
@@ -632,7 +688,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           flex: 1;
           overflow: auto;
           position: relative;
-          background: #f0f2f5;
+          background: var(--ant-colorBgLayout);
           margin-top: 0 !important;
           padding-top: 0 !important;
           /* 隐藏垂直滚动条但保留滚动功能 */
@@ -676,33 +732,66 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border-bottom: none !important;
           background: transparent !important;
           box-shadow: none !important;
-          color: #bfbfbf;
+          color: var(--ant-colorTextDisabled) !important;
           cursor: default;
-          pointer-events: none;
+          pointer-events: auto;
           position: relative;
           z-index: 2;
           margin-bottom: 0 !important;
           line-height: 1 !important;
+        }
+        /* 按钮图标颜色 - 强制继承按钮颜色 */
+        .page-tabs-scroll-button .anticon,
+        .page-tabs-scroll-button .ant-btn-icon,
+        .page-tabs-scroll-button span.anticon {
+          color: inherit !important;
         }
         /* 去掉按钮的所有伪元素和边框 */
         .page-tabs-scroll-button::before,
         .page-tabs-scroll-button::after {
           display: none !important;
         }
-        .page-tabs-scroll-button:disabled {
-          color: #bfbfbf !important;
+        /* 无法点击时：浅灰色 - 覆盖所有可能的样式 */
+        .page-tabs-scroll-button:disabled,
+        .page-tabs-scroll-button.ant-btn-disabled,
+        .page-tabs-scroll-button[disabled] {
+          color: var(--ant-colorTextDisabled) !important;
           background: transparent !important;
           cursor: not-allowed !important;
+          pointer-events: none !important;
         }
-        .page-tabs-scroll-button:not(:disabled) {
-          color: #1890ff !important;
+        .page-tabs-scroll-button:disabled .anticon,
+        .page-tabs-scroll-button:disabled .ant-btn-icon,
+        .page-tabs-scroll-button:disabled span.anticon,
+        .page-tabs-scroll-button.ant-btn-disabled .anticon,
+        .page-tabs-scroll-button.ant-btn-disabled .ant-btn-icon,
+        .page-tabs-scroll-button.ant-btn-disabled span.anticon,
+        .page-tabs-scroll-button[disabled] .anticon,
+        .page-tabs-scroll-button[disabled] .ant-btn-icon,
+        .page-tabs-scroll-button[disabled] span.anticon {
+          color: var(--ant-colorTextDisabled) !important;
+        }
+        /* 可以点击时：主题色 - 覆盖所有可能的样式 */
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
+          color: var(--ant-colorPrimary) !important;
           cursor: pointer !important;
+          pointer-events: auto !important;
         }
-        .page-tabs-scroll-button:not(:disabled):hover {
-          color: #40a9ff;
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon {
+          color: var(--ant-colorPrimary) !important;
+        }
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover {
+          color: var(--ant-colorPrimaryHover) !important;
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
+        }
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .ant-btn-icon,
+        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover span.anticon {
+          color: var(--ant-colorPrimaryHover) !important;
         }
         /* 按钮容器样式 - 高度与 ant-tabs 一致 */
         .page-tabs-scroll-button-wrapper {
@@ -785,6 +874,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                 onClick={() => scrollTabs('left')}
                 disabled={!canScrollLeft}
                 className="page-tabs-scroll-button page-tabs-scroll-button-left"
+                style={{
+                  color: !canScrollLeft ? 'var(--ant-colorTextDisabled)' : 'var(--ant-colorPrimary)',
+                }}
               />
             </div>
             <Tabs
@@ -833,6 +925,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                 onClick={() => scrollTabs('right')}
                 disabled={!canScrollRight}
                 className="page-tabs-scroll-button page-tabs-scroll-button-right"
+                style={{
+                  color: !canScrollRight ? 'var(--ant-colorTextDisabled)' : 'var(--ant-colorPrimary)',
+                }}
               />
             </div>
           </div>
