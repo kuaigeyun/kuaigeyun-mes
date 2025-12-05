@@ -27,3 +27,4 @@ export type { HelpDocumentProps, HelpSection } from './help-document';
 export { default as ErrorBoundary } from './error-boundary';
 export { default as KanbanBoard } from './kanban-board';
 export type { KanbanBoardProps, KanbanColumn, KanbanCardProps } from './kanban-board';
+export { default as TechStackModal } from './tech-stack-modal';

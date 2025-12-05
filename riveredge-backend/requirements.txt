@@ -1,52 +1,50 @@
-# RiverEdge SaaS 多组织框架 - 后端依赖 (Python 3.11.9 + pip 24.x)
-# 锁定版本 - 确保可重现的构建环境
-# 生成时间: 2025-11-29
-# 第一阶段升级时间: 2025-01-XX（后端核心升级）
+# RiverEdge SaaS 多组织框架 - 后端依赖 (Python 3.11 LTS + pip)
+# 主流稳定版本 - 确保可重现的构建环境
+# 最后更新: 2025-01-04（统一为当前主流稳定版本）
 
-# Web 框架 - 第一阶段升级（2025-01-XX）
-fastapi>=0.115.0,<0.116.0  # 升级：0.104.1 → 0.115.0+（性能优化，向后兼容）
-uvicorn[standard]>=0.32.0,<0.33.0  # 升级：0.30.0 → 0.32.0+（性能优化，WebSocket 改进）
+# Web 框架 ⭐ FIR 核心
+fastapi>=0.115.0,<0.116.0  # 主流稳定版，性能优化，向后兼容
+uvicorn[standard]>=0.32.0,<0.33.0  # 主流稳定版，性能优化，WebSocket 改进
 
-# 数据验证 - 第一阶段升级（2025-01-XX）
-pydantic>=2.9.0,<2.10.0  # 升级：2.8.0 → 2.9.0+（性能优化，Bug 修复）
-pydantic-settings>=2.6.0,<2.7.0  # 升级：2.5.0 → 2.6.0+（与 Pydantic 2.9+ 同步）
+# 数据验证
+pydantic>=2.9.0,<2.10.0  # 主流稳定版，性能优化，Bug 修复
+pydantic-settings>=2.6.0,<2.7.0  # 主流稳定版，与 Pydantic 2.9+ 同步
 
-# ORM 和数据库 - 稳定兼容版本（第二阶段升级）
-tortoise-orm==0.20.1  # 保持当前版本，与FastAPI 0.115+兼容，第二阶段升级到0.21.1
-aerich==0.7.1
-asyncpg==0.29.0  # Python 3.11+ 预编译包
-psycopg2-binary==2.9.9  # 同步备选方案
+# ORM 和数据库 - 主流稳定版
+tortoise-orm==0.21.1  # 主流稳定版，与FastAPI 0.115+完美兼容
+aerich>=0.7.1  # 主流稳定版，Tortoise ORM 数据库迁移工具
+asyncpg>=0.29.0  # PostgreSQL 异步驱动，Python 3.11+ 预编译包
 
 # 缓存
-redis[hiredis]==5.0.1
+redis[hiredis]>=5.0.1  # redis-py，使用 redis.asyncio 异步接口，支持 hiredis
 
 # 认证和安全
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
+python-jose[cryptography]>=3.3.0  # JWT 认证
+passlib[bcrypt]>=1.7.4  # 密码加密
+python-multipart>=0.0.9  # 表单数据处理
 
-# HTTP 客户端 - 第一阶段升级（2025-01-XX）
-httpx>=0.27.0,<0.28.0  # 升级：0.25.2 → 0.27.0+（性能优化，更好的异步支持）
+# HTTP 客户端
+httpx>=0.27.0,<0.28.0  # 主流稳定版，性能优化，更好的异步支持
 
-# 日志 - 第一阶段升级（2025-01-XX）
-loguru>=0.7.3,<0.8.0  # 升级：0.7.2 → 0.7.3+（Bug 修复，性能优化）
+# 日志
+loguru>=0.7.3,<0.8.0  # 主流稳定版，Bug 修复，性能优化
 
 # 系统监控
-psutil==5.9.8  # 跨平台系统资源监控库（CPU、内存、磁盘、网络等）
+psutil>=5.9.8  # 跨平台系统资源监控库（CPU、内存、磁盘、网络等）
 
-# 测试框架
-pytest==7.4.3
-pytest-asyncio==0.21.1
+# 测试框架 - 主流稳定版
+pytest>=8.0.0  # 测试框架，主流稳定版
+pytest-asyncio>=0.23.0  # 异步测试支持，主流稳定版
 
 # 环境变量管理（必需，用于加载 .env 文件）
 python-dotenv>=1.0.0
 
-# 中文拼音支持（可选，用于拼音首字母搜索）
+# 中文拼音支持（用于拼音首字母搜索）
 pypinyin>=0.51.0  # 中文拼音转换库，支持拼音首字母提取
 
-# 异步文件操作（第三阶段：文件管理）
+# 异步文件操作
 aiofiles>=23.2.1  # 异步文件操作库，用于文件上传、下载等操作
 
-# 工作流引擎（第四阶段：流程管理）
-inngest>=0.3.0  # Inngest Python SDK，用于工作流编排和事件驱动
+# 工作流引擎 ⭐ FIR 核心
+inngest>=0.3.0  # Inngest Python SDK，工作流引擎，必需，已集成到核心系统
 

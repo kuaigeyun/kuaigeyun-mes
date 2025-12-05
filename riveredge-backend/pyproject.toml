@@ -9,30 +9,30 @@ description = "RiverEdge SaaS 多组织框架 - 后端 Monorepo"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-    "fastapi>=0.115.0,<0.116.0",  # 第一阶段升级：0.104.1 → 0.115.0+
-    "uvicorn[standard]>=0.32.0,<0.33.0",  # 第一阶段升级：0.30.0 → 0.32.0+
-    "pydantic>=2.9.0,<2.10.0",  # 第一阶段升级：2.8.0 → 2.9.0+
-    "pydantic-settings>=2.6.0,<2.7.0",  # 第一阶段升级：2.5.0 → 2.6.0+
-    "tortoise-orm==0.20.1",  # 保持当前版本，第二阶段升级
-    "aerich==0.7.1",  # 保持当前版本，第二阶段升级
-    "asyncpg==0.29.0",  # 保持当前版本，第二阶段升级
-    "psycopg2-binary==2.9.9",  # 保持当前版本，第二阶段升级
-    "redis[hiredis]==5.0.1",  # 保持当前版本，第二阶段升级
-    "python-jose[cryptography]==3.3.0",
-    "httpx>=0.27.0,<0.28.0",  # 第一阶段升级：0.25.2 → 0.27.0+
-    "loguru>=0.7.3,<0.8.0",  # 第一阶段升级：0.7.2 → 0.7.3+
-    "passlib[bcrypt]==1.7.4",
-    "python-multipart==0.0.6",
-    "psutil==5.9.8",  # 保持当前版本，需要谨慎升级
+    "fastapi>=0.115.0,<0.116.0",  # ⭐ FIR 核心，主流稳定版
+    "uvicorn[standard]>=0.32.0,<0.33.0",  # 主流稳定版
+    "pydantic>=2.9.0,<2.10.0",  # 主流稳定版
+    "pydantic-settings>=2.6.0,<2.7.0",  # 主流稳定版
+    "tortoise-orm==0.21.1",  # 主流稳定版，与FastAPI 0.115+完美兼容
+    "aerich>=0.7.1",  # 主流稳定版，Tortoise ORM 数据库迁移工具
+    "asyncpg>=0.29.0",  # PostgreSQL 异步驱动，Python 3.11+ 预编译包
+    "redis[hiredis]>=5.0.1",  # redis-py，使用 redis.asyncio 异步接口，支持 hiredis
+    "python-jose[cryptography]>=3.3.0",  # JWT 认证
+    "httpx>=0.27.0,<0.28.0",  # 主流稳定版
+    "loguru>=0.7.3,<0.8.0",  # 主流稳定版
+    "passlib[bcrypt]>=1.7.4",  # 密码加密
+    "python-multipart>=0.0.9",  # 表单数据处理
+    "psutil>=5.9.8",  # 系统资源监控
     "python-dotenv>=1.0.0",
     "pypinyin>=0.51.0",
-    "aiofiles>=23.2.1",  # 第三阶段：文件管理 - 异步文件操作库
+    "aiofiles>=23.2.1",  # 异步文件操作库，用于文件上传、下载等操作
+    "inngest>=0.3.0",  # 工作流引擎 ⭐ FIR 核心，必需，已集成到核心系统
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==7.4.3",
-    "pytest-asyncio==0.21.1",
+    "pytest>=8.0.0",  # 测试框架，主流稳定版
+    "pytest-asyncio>=0.23.0",  # 异步测试支持，主流稳定版
     "pytest-cov==4.1.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
