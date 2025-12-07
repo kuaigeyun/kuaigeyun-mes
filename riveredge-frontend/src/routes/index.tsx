@@ -404,6 +404,8 @@ const AppRoutes: React.FC = () => {
           </LayoutWrapper>
         }
       />
+      {/* 个人中心 - 默认重定向到个人资料 */}
+      <Route path="/personal" element={<Navigate to="/personal/profile" replace />} />
       <Route
         path="/personal/profile"
         element={

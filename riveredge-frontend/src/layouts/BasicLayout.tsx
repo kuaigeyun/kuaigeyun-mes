@@ -6,7 +6,7 @@
 
 import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Spin, theme } from 'antd';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
@@ -574,6 +574,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
+  const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
+  const breadcrumbRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
   
   // 获取可用语言列表
@@ -727,6 +729,63 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, []);
 
   /**
+   * 检测面包屑是否换行，如果换行则隐藏
+   */
+  useEffect(() => {
+    const checkBreadcrumbWrap = () => {
+      if (!breadcrumbRef.current) {
+        setBreadcrumbVisible(true);
+        return;
+      }
+      
+      const breadcrumbElement = breadcrumbRef.current;
+      const olElement = breadcrumbElement.querySelector('ol') || breadcrumbElement.querySelector('ul');
+      if (!olElement) {
+        setBreadcrumbVisible(true);
+        return;
+      }
+      
+      // 检测第一个和最后一个元素是否在同一行
+      const firstItem = olElement.querySelector('.ant-breadcrumb-item:first-child');
+      const lastItem = olElement.querySelector('.ant-breadcrumb-item:last-child');
+      if (firstItem && lastItem) {
+        const firstRect = firstItem.getBoundingClientRect();
+        const lastRect = lastItem.getBoundingClientRect();
+        // 如果最后一个元素在第一个元素下方（允许5px误差），说明换行了
+        const isWrapped = lastRect.top > firstRect.top + 5;
+        setBreadcrumbVisible(!isWrapped);
+      } else {
+        setBreadcrumbVisible(true);
+      }
+    };
+
+    // 延迟检测，确保 DOM 已完全渲染
+    const timer = setTimeout(checkBreadcrumbWrap, 100);
+
+    // 监听窗口大小变化
+    window.addEventListener('resize', checkBreadcrumbWrap);
+    
+    // 使用 MutationObserver 监听 DOM 变化
+    const observer = new MutationObserver(() => {
+      setTimeout(checkBreadcrumbWrap, 50);
+    });
+    if (breadcrumbRef.current) {
+      observer.observe(breadcrumbRef.current, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+      });
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkBreadcrumbWrap);
+      observer.disconnect();
+    };
+  }, [location.pathname]);
+
+  /**
    * 为分组标题动态添加自定义 className
    * 因为 ProLayout 不会将 className 传递给 type: 'group' 的项
    */
@@ -818,11 +877,50 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     
     const menuPath = findMenuPath(menuConfig, location.pathname);
     
+    // 查找菜单组下每层第一组的第一个实际菜单项（有 path 的）
+    // 规则：只查找每层第一组的第一个菜单项，不遍历所有项
+    const findFirstActualMenuItem = (items: MenuDataItem[] | undefined): MenuDataItem | null => {
+      if (!items || !Array.isArray(items) || items.length === 0) return null;
+      
+      // 只处理第一项（第一组）
+      const firstItem = items[0];
+      
+      // 如果第一项是菜单组，递归查找其子项的第一组
+      if (firstItem.type === 'group' && firstItem.children) {
+        return findFirstActualMenuItem(firstItem.children);
+      }
+      
+      // 如果第一项是实际菜单项（有 path），返回它
+      if (firstItem.path && firstItem.name) {
+        return firstItem;
+      }
+      
+      // 如果第一项有子项（但不是菜单组），递归查找其子项的第一组
+      if (firstItem.children) {
+        return findFirstActualMenuItem(firstItem.children);
+      }
+      
+      return null;
+    };
+    
     if (menuPath) {
       menuPath.forEach((item, index) => {
         if (item.name && item.path) {
           // 检查是否有同级菜单（父级菜单有多个子项）
           let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+          
+          // 检查第一级菜单项：如果第一个子项是菜单组，找到该菜单组下的第一个实际菜单项
+          let actualPath = item.path;
+          if (index === 0 && item.children && item.children.length > 0) {
+            const firstChild = item.children[0];
+            // 如果第一个子项是菜单组，找到该菜单组下的第一个实际菜单项
+            if (firstChild.type === 'group' && firstChild.children) {
+              const firstMenuItem = findFirstActualMenuItem(firstChild.children);
+              if (firstMenuItem && firstMenuItem.path) {
+                actualPath = firstMenuItem.path;
+              }
+            }
+          }
           
           if (index > 0) {
             // 获取父级菜单项
@@ -845,10 +943,60 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           
           breadcrumbItems.push({
             title: item.name as string,
-            path: item.path,
+            path: actualPath, // 使用实际路径（可能是第一个菜单组下的第一个菜单项）
             icon: item.icon,
             menu: menu,
           });
+        } else if (item.name && item.type === 'group') {
+          // 菜单组：找到第一个实际菜单项作为点击目标
+          const firstMenuItem = findFirstActualMenuItem(item.children);
+          if (firstMenuItem && firstMenuItem.path) {
+            // 检查是否有同级菜单组（父级菜单有多个子项，包括菜单组）
+            let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
+            
+            if (index > 0) {
+              const parentItem = menuPath[index - 1];
+              if (parentItem.children && parentItem.children.length > 1) {
+                // 为同级菜单组创建下拉菜单，每个菜单组显示其第一个实际菜单项
+                menu = {
+                  items: parentItem.children
+                    .filter(child => child.name)
+                    .map(child => {
+                      // 如果是菜单组，找到第一个实际菜单项
+                      if (child.type === 'group') {
+                        const firstItem = findFirstActualMenuItem(child.children);
+                        if (firstItem && firstItem.path) {
+                          return {
+                            key: firstItem.path,
+                            label: child.name as string,
+                            onClick: () => {
+                              navigate(firstItem.path!);
+                            },
+                          };
+                        }
+                      } else if (child.path) {
+                        return {
+                          key: child.path,
+                          label: child.name as string,
+                          onClick: () => {
+                            navigate(child.path!);
+                          },
+                        };
+                      }
+                      return null;
+                    })
+                    .filter((item): item is { key: string; label: string; onClick: () => void } => item !== null),
+                };
+              }
+            }
+            
+            breadcrumbItems.push({
+              title: item.name as string,
+              path: firstMenuItem.path, // 使用第一个实际菜单项的路径
+              icon: item.icon,
+              menu: menu,
+            });
+          }
         }
       });
     } else {
@@ -865,6 +1013,63 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     
     return breadcrumbItems;
   }, [location.pathname, menuConfig, navigate]);
+
+  /**
+   * 检测面包屑是否换行，如果换行则隐藏
+   */
+  useEffect(() => {
+    const checkBreadcrumbWrap = () => {
+      if (!breadcrumbRef.current) {
+        setBreadcrumbVisible(true);
+        return;
+      }
+      
+      const breadcrumbElement = breadcrumbRef.current;
+      const olElement = breadcrumbElement.querySelector('ol') || breadcrumbElement.querySelector('ul');
+      if (!olElement) {
+        setBreadcrumbVisible(true);
+        return;
+      }
+      
+      // 检测第一个和最后一个元素是否在同一行
+      const firstItem = olElement.querySelector('.ant-breadcrumb-item:first-child');
+      const lastItem = olElement.querySelector('.ant-breadcrumb-item:last-child');
+      if (firstItem && lastItem) {
+        const firstRect = firstItem.getBoundingClientRect();
+        const lastRect = lastItem.getBoundingClientRect();
+        // 如果最后一个元素在第一个元素下方（允许5px误差），说明换行了
+        const isWrapped = lastRect.top > firstRect.top + 5;
+        setBreadcrumbVisible(!isWrapped);
+      } else {
+        setBreadcrumbVisible(true);
+      }
+    };
+
+    // 延迟检测，确保 DOM 已完全渲染
+    const timer = setTimeout(checkBreadcrumbWrap, 100);
+
+    // 监听窗口大小变化
+    window.addEventListener('resize', checkBreadcrumbWrap);
+    
+    // 使用 MutationObserver 监听 DOM 变化
+    const observer = new MutationObserver(() => {
+      setTimeout(checkBreadcrumbWrap, 50);
+    });
+    if (breadcrumbRef.current) {
+      observer.observe(breadcrumbRef.current, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+      });
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkBreadcrumbWrap);
+      observer.disconnect();
+    };
+  }, [location.pathname]);
 
   /**
    * 根据用户权限过滤菜单
@@ -1204,35 +1409,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 只在浅色模式下应用（非深色模式），确保优先级足够高，放在最后以覆盖其他规则 */
         ${!isDarkMode ? `
         /* 弹出菜单中的分组标题 - 使用深色文字（弹出菜单背景是浅色的） */
-        /* 使用更具体的选择器确保优先级足够高 */
         body .ant-menu-submenu-popup .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup .ant-menu .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup .ant-menu-submenu .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup .ant-menu-vertical .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup .ant-menu-vertical-left .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup .ant-menu-vertical-right .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup.ant-menu-vertical .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup.ant-menu-vertical-left .ant-menu-item-group-title,
-        body .ant-menu-submenu-popup.ant-menu-vertical-right .ant-menu-item-group-title,
         body .ant-menu-popup .ant-menu-item-group-title,
-        body .ant-menu-popup .ant-menu .ant-menu-item-group-title,
-        body .ant-menu-popup .ant-menu-submenu .ant-menu-item-group-title,
-        .ant-menu-submenu-popup .ant-menu-item-group-title,
-        .ant-menu-submenu-popup .ant-menu .ant-menu-item-group-title,
-        .ant-menu-submenu-popup .ant-menu-submenu .ant-menu-item-group-title {
-          color: rgba(0, 0, 0, 0.45) !important;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
-        }
         body .ant-menu-submenu-popup .ant-menu-item-group-title:hover,
         body .ant-menu-submenu-popup .ant-menu-item-group-title:active,
         body .ant-menu-submenu-popup .ant-menu-item-group-title:focus,
         body .ant-menu-popup .ant-menu-item-group-title:hover,
         body .ant-menu-popup .ant-menu-item-group-title:active,
-        body .ant-menu-popup .ant-menu-item-group-title:focus,
-        .ant-menu-submenu-popup .ant-menu-item-group-title:hover,
-        .ant-menu-submenu-popup .ant-menu-item-group-title:active,
-        .ant-menu-submenu-popup .ant-menu-item-group-title:focus {
+        body .ant-menu-popup .ant-menu-item-group-title:focus {
           color: rgba(0, 0, 0, 0.45) !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
         }
         ` : ''}
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
@@ -1293,7 +1479,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 子菜单标题样式（ant-menu-submenu-title）- 独立设置，不影响普通菜单项 */
         /* 使用主题颜色变量，支持深色模式 */
-        .ant-menu-submenu-title {
+        /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
           padding-top: 0 !important;
           padding-bottom: 0 !important;
@@ -1305,12 +1492,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-weight: normal !important;
         }
         /* 子菜单标题悬浮状态 */
-        .ant-menu-submenu-title:hover {
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:hover {
           background-color: var(--ant-colorFillTertiary) !important;
           color: ${siderTextColor} !important;
         }
         /* 子菜单标题激活状态 */
-        .ant-menu-submenu-selected > .ant-menu-submenu-title {
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
           color: var(--riveredge-menu-primary-color) !important;
         }
         /* 使用自定义样式选择器针对插件分组标题 */
@@ -1340,50 +1527,34 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-pro-layout-footer {
           display: none !important;
         }
-        /* ==================== 菜单收起状态下的显示控制 ==================== */
-        /* 策略：使用 font-size: 0 隐藏文本节点，精确隐藏文字元素，确保图标显示 */
+        /* ==================== 菜单收起状态 - 系统性重构，遵循 Ant Design 原生行为 ==================== */
+        /* 原则：不干扰 Ant Design 原生行为，只做最小化自定义（隐藏文字和箭头） */
         
-        /* 第一步：确保所有图标都显示（最高优先级，覆盖所有可能的图标位置） */
-        /* 图标在菜单项直接子元素中 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .anticon:not(.ant-menu-submenu-arrow),
-        /* 图标在子菜单标题直接子元素中 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title > .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title > .anticon:not(.ant-menu-submenu-arrow),
-        /* 图标在 .ant-menu-title-content 内部 */
+        /* 1. 确保图标显示（最高优先级，覆盖所有可能的图标位置，包括在 .ant-menu-title-content 内部的情况） */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow),
+        /* 图标在 .ant-menu-title-content 内部的情况 - 必须明确设置 font-size，不受父元素影响 */
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .ant-menu-item-icon,
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
         .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .ant-menu-item-icon,
         .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
-        /* 所有菜单项的图标（通用规则，确保覆盖） */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow) {
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow) {
           display: inline-flex !important;
-          opacity: 1 !important;
-          visibility: visible !important;
-          width: 16px !important;
-          height: 16px !important;
-          min-width: 16px !important;
-          min-height: 16px !important;
-          max-width: 16px !important;
-          max-height: 16px !important;
           font-size: 16px !important;
           line-height: 1 !important;
-          text-indent: 0 !important;
-          position: relative !important;
-          z-index: 10 !important;
-          margin-right: 0 !important;
+          width: 16px !important;
+          height: 16px !important;
+          opacity: 1 !important;
+          visibility: visible !important;
         }
         
-        /* 第二步：使用 font-size: 0 隐藏 .ant-menu-title-content 内的文本节点（纯文本） */
+        /* 2. 隐藏文字内容（只隐藏文字元素，不影响图标） */
+        /* 使用 font-size: 0 隐藏文本节点，但确保图标不受影响 */
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
         .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
@@ -1391,9 +1562,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-size: 0 !important;
           line-height: 0 !important;
         }
-        
-        /* 第三步：隐藏所有文字元素（span、a 等），但排除图标 */
-        /* 直接子元素 */
+        /* 隐藏所有文字元素（span、a 等），但排除图标 */
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
@@ -1401,32 +1570,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
         .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
         .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
-        /* 深层嵌套的文字元素 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon) {
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a {
           display: none !important;
-          opacity: 0 !important;
-          width: 0 !important;
-          height: 0 !important;
-          overflow: hidden !important;
-          visibility: hidden !important;
-          font-size: 0 !important;
-          line-height: 0 !important;
         }
-        /* 隐藏子菜单箭头 */
+        
+        /* 3. 隐藏子菜单箭头（遵循 Ant Design 原生行为） */
         .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon.ant-menu-submenu-arrow,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon.ant-menu-submenu-arrow {
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
           display: none !important;
-          opacity: 0 !important;
-          width: 0 !important;
-          height: 0 !important;
-          overflow: hidden !important;
-          visibility: hidden !important;
         }
         .ant-pro-layout-container footer {
           display: none !important;
@@ -1785,6 +1936,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           box-shadow: none !important;
           background-color: ${token.colorFillTertiary} !important;
         }
+        /* 手机模式下隐藏搜索框 */
+        @media (max-width: 768px) {
+          .ant-pro-layout .ant-pro-layout-header .ant-space-item:has(.ant-input-affix-wrapper),
+          .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper {
+            display: none !important;
+          }
+        }
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover,
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper-focused {
           border: none !important;
@@ -1802,15 +1960,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
-          margin-left: 16px;
-          padding-left: 30px;
+          padding-left: 16px;
           font-size: 14px;
+        }
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
+        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
           display: flex !important;
           align-items: center;
           height: 100%;
           position: relative;
           white-space: nowrap !important;
-          overflow: visible !important;
+          overflow: hidden !important;
           flex: 1 1 auto;
           min-width: 0;
           max-width: none;
@@ -1848,6 +2008,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           white-space: nowrap !important;
           display: inline-flex !important;
         }
+        /* 面包屑链接内部的 gap - 图标和文字之间的间距 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-link span,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
+          gap: 8px !important;
+        }
         /* 面包屑前面的小竖线 - 使用主题边框颜色 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before {
           content: '';
@@ -1857,7 +2022,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           transform: translateY(-50%);
           width: 1px;
           height: 16px;
-          background-color: var(--ant-colorBorderSecondary);
+          background-color: ${token.colorBorder} !important;
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
           color: var(--ant-colorText);
@@ -1899,6 +2064,49 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ul {
           overflow: visible !important;
         }
+        /* 平板和手机模式下隐藏面包屑 - 放在最后，确保最高优先级 */
+        @media (max-width: 1024px) {
+          .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
+          .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb,
+          body .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
+          body .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        }
+        /* ==================== 弹出菜单文字颜色（放在最后，确保最高优先级） ==================== */
+        /* 浅色模式下，菜单收起时弹出的菜单 - 使用深色文字（弹出菜单背景是浅色的） */
+        ${!isDarkMode ? `
+        /* 弹出菜单中的第一层菜单项和子菜单标题 - 使用深色文字（最高优先级，覆盖所有其他规则） */
+        body .ant-menu-submenu-popup .ant-menu-item,
+        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title,
+        body .ant-menu-submenu-popup .ant-menu-item-group .ant-menu-item,
+        body .ant-menu-popup .ant-menu-item,
+        body .ant-menu-popup .ant-menu-submenu > .ant-menu-submenu-title,
+        body .ant-menu-popup .ant-menu-item-group .ant-menu-item,
+        /* 覆盖所有状态（hover、selected） */
+        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title:hover,
+        body .ant-menu-submenu-popup .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
+        body .ant-menu-popup .ant-menu-submenu > .ant-menu-submenu-title:hover,
+        body .ant-menu-popup .ant-menu-submenu.ant-menu-submenu-selected > .ant-menu-submenu-title,
+        /* 文字内容 */
+        body .ant-menu-submenu-popup .ant-menu-item .ant-menu-title-content,
+        body .ant-menu-submenu-popup .ant-menu-item .ant-menu-title-content > a,
+        body .ant-menu-submenu-popup .ant-menu-item .ant-menu-title-content > span,
+        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content,
+        body .ant-menu-submenu-popup .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content > span,
+        body .ant-menu-submenu-popup .ant-menu-item-group .ant-menu-item .ant-menu-title-content,
+        body .ant-menu-popup .ant-menu-item .ant-menu-title-content,
+        body .ant-menu-popup .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content,
+        body .ant-menu-popup .ant-menu-item-group .ant-menu-item .ant-menu-title-content {
+          color: var(--ant-colorText) !important;
+        }
+        ` : ''}
       `}</style>
       <ProLayout
         title="RiverEdge SaaS"
@@ -1917,8 +2125,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         headerContentRender={() => (
           <Breadcrumb
+            ref={breadcrumbRef}
             style={{ 
-              display: 'flex',
+              display: breadcrumbVisible ? 'flex' : 'none',
               alignItems: 'center',
               height: '100%',
               whiteSpace: 'nowrap',
