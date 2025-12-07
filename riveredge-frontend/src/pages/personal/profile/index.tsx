@@ -187,7 +187,7 @@ const UserProfilePage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '16px' }}>
       <Card title="个人资料" loading={loading}>
         <ProForm
           formRef={formRef}

@@ -305,11 +305,11 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   }), []);
 
   if (loading) {
-    return <div style={{ padding: 24 }}>加载中...</div>;
+    return <div style={{ padding: 16 }}>加载中...</div>;
   }
 
   if (!processData) {
-    return <div style={{ padding: 24 }}>流程数据不存在</div>;
+    return <div style={{ padding: 16 }}>流程数据不存在</div>;
   }
 
   return (
@@ -318,7 +318,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       <Card
         size="small"
         style={{ marginBottom: 16 }}
-        styles={{ body: { padding: '12px 24px' } }}
+        styles={{ body: { padding: '12px 16px' } }}
       >
         <Space>
           <Button

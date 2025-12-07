@@ -89,7 +89,6 @@ const ScheduledTaskListPage = lazy(() => import('../pages/system/scheduled-tasks
 const ApprovalProcessListPage = lazy(() => import('../pages/system/approval-processes/list'));
 const ApprovalInstanceListPage = lazy(() => import('../pages/system/approval-processes/instances'));
 const ApprovalProcessDesignerPage = lazy(() => import('../pages/system/approval-processes/designer'));
-const ElectronicRecordListPage = lazy(() => import('../pages/system/electronic-records/list'));
 const ScriptListPage = lazy(() => import('../pages/system/scripts/list'));
 const PrintTemplateListPage = lazy(() => import('../pages/system/print-templates/list'));
 const PrintDeviceListPage = lazy(() => import('../pages/system/print-devices/list'));
@@ -378,14 +377,6 @@ const AppRoutes: React.FC = () => {
         element={
           <LayoutWrapper>
             <ApprovalInstanceListPage />
-          </LayoutWrapper>
-        }
-      />
-      <Route
-        path="/system/electronic-records"
-        element={
-          <LayoutWrapper>
-            <ElectronicRecordListPage />
           </LayoutWrapper>
         }
       />

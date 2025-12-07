@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { App, Button, Space, Modal, Upload, Tree, Breadcrumb, Table, Menu, Input, Tooltip, Divider } from 'antd';
+import { App, Button, Space, Modal, Upload, Tree, Breadcrumb, Table, Menu, Input, Tooltip, Divider, theme } from 'antd';
 import { 
   EditOutlined, 
   DeleteOutlined, 
@@ -88,6 +88,7 @@ type ViewType = 'icons' | 'list' | 'details';
  */
 const FileListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken(); // 获取主题 token
   
   // 视图状态
   const [viewType, setViewType] = useState<ViewType>('details');
@@ -582,7 +583,18 @@ const FileListPage: React.FC = () => {
   }, 0);
 
   return (
-    <div className="file-management-page" style={{ display: 'flex', height: 'calc(100vh - 96px)', padding: 0, margin: 0 }}>
+    <div 
+      className="file-management-page" 
+      style={{ 
+        display: 'flex', 
+        height: 'calc(100vh - 96px)', 
+        padding: '16px', 
+        margin: 0, 
+        boxSizing: 'border-box',
+        borderRadius: token.borderRadiusLG || token.borderRadius,
+        overflow: 'hidden',
+      }}
+    >
       <style>{`
         .file-manager-tree .ant-tree-node-content-wrapper {
           padding: 4px 8px !important;
@@ -601,6 +613,8 @@ const FileListPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
+          borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
         }}
       >
         {/* 搜索栏 */}
@@ -631,7 +645,14 @@ const FileListPage: React.FC = () => {
       </div>
 
       {/* 右侧主内容区 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
+      <div style={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        backgroundColor: token.colorBgContainer,
+        borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
+        borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
+      }}>
         {/* 顶部工具栏 */}
         <div
           style={{

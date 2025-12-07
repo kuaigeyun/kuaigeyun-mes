@@ -47,6 +47,7 @@ import {
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import TenantSelector from '../components/tenant_selector';
 import PageTabs from '../components/page_tabs';
 import TechStackModal from '../components/tech-stack-modal';
@@ -55,6 +56,10 @@ import { getCurrentUser } from '../services/auth';
 import { getCurrentPlatformSuperAdmin } from '../services/platformAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
 import { useGlobalStore } from '../stores';
+import { getLanguageList, Language } from '../services/language';
+import { updateUserPreference } from '../services/userPreference';
+import { LANGUAGE_MAP } from '../config/i18n';
+import i18n, { refreshTranslations } from '../config/i18n';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -224,7 +229,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 /**
- * 菜单配置
+ * 菜单配置函数
  *
  * 按照菜单分组架构设计：
  * 【第一组】固定仪表盘 - 平台级、系统级、应用级都可见
@@ -237,22 +242,25 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
  *      ├─ 职位管理（第3优先级）
  *      └─ 账户管理（第4优先级）
  * 【第四组】运营中心 - 仅平台级管理员可见
+ * 
+ * @param t - i18n 翻译函数
+ * @returns 菜单配置数组
  */
-const menuConfig: MenuDataItem[] = [
+const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
   // ==================== 【第一组】固定仪表盘 ====================
   // 可见范围：平台级、系统级、应用级 都可见
   {
     path: '/system/dashboard',
-    name: '仪表盘',
+    name: t('menu.dashboard') || '仪表盘',
     icon: <DashboardOutlined />,
     children: [
       {
         path: '/system/dashboard/workplace',
-        name: '工作台',
+        name: t('menu.dashboard.workplace') || '工作台',
       },
       {
         path: '/system/dashboard/analysis',
-        name: '分析页',
+        name: t('menu.dashboard.analysis') || '分析页',
       },
     ],
   },
@@ -262,63 +270,7 @@ const menuConfig: MenuDataItem[] = [
   // 注意：插件式的菜单按分组菜单设计，应用的名称作为分组名，不可点击，只显示
   // 插件里的菜单直接显示到左侧菜单
   // TODO: 后续从插件系统动态加载应用菜单
-  {
-    // 使用无 path 的菜单项作为分组标题，通过自定义渲染实现分组效果
-    name: 'MES 制造执行系统',  // 分组标题，不可点击，只显示
-    // 不设置 path，使其不可点击
-    // 不设置 icon，使其显示为分组标题样式
-    className: 'menu-group-title-plugin',  // 自定义样式选择器
-  },
-  // 应用下的菜单项直接显示在主菜单中（扁平化结构）
-  {
-    path: '/mes/production',
-    name: '生产管理',
-    icon: <ShopOutlined />,
-    children: [
-      {
-        path: '/mes/production/plan',
-        name: '生产计划',
-      },
-      {
-        path: '/mes/production/workorder',
-        name: '工单管理',
-      },
-      {
-        path: '/mes/production/route',
-        name: '工艺路线',
-      },
-    ],
-  },
-  {
-    path: '/mes/quality',
-    name: '质量管理',
-    icon: <ExperimentOutlined />,
-    children: [
-      {
-        path: '/mes/quality/inspection',
-        name: '质检单',
-      },
-      {
-        path: '/mes/quality/defect',
-        name: '不良品管理',
-      },
-    ],
-  },
-  {
-    path: '/mes/inventory',
-    name: '库存管理',
-    icon: <DatabaseOutlined />,
-    children: [
-      {
-        path: '/mes/inventory/material',
-        name: '原材料',
-      },
-      {
-        path: '/mes/inventory/product',
-        name: '成品库',
-      },
-    ],
-  },
+  // 占位的 MES 菜单已移除
 
   // ==================== 【第三组】系统菜单 ====================
   // 可见范围：平台级、系统级、应用级 可见
@@ -368,58 +320,58 @@ const menuConfig: MenuDataItem[] = [
       {
         key: 'core-config-group',
         type: 'group',
-        name: '核心配置',
-        label: '核心配置',
+        name: t('menu.group.core-config') || '核心配置',
+        label: t('menu.group.core-config') || '核心配置',
         className: 'riveredge-menu-group-title',
         children: [
           {
             path: '/system/applications',
-            name: '应用中心',
+            name: t('menu.system.applications') || '应用中心',
             icon: <AppstoreOutlined />,
           },
           {
             path: '/system/menus',
-            name: '菜单管理',
+            name: t('menu.system.menus') || '菜单管理',
             icon: <UnorderedListOutlined />,
           },
           {
             path: '/system/site-settings',
-            name: '站点设置',
+            name: t('menu.system.site-settings') || '站点设置',
             icon: <SettingOutlined />,
           },
           {
             path: '/system/system-parameters',
-            name: '参数设置',
+            name: t('menu.system.system-parameters') || '参数设置',
             icon: <SettingOutlined />,
           },
           {
             path: '/system/data-dictionaries',
-            name: '数据字典',
+            name: t('menu.system.data-dictionaries') || '数据字典',
             icon: <DatabaseOutlined />,
           },
           {
             path: '/system/code-rules',
-            name: '编码规则',
+            name: t('menu.system.code-rules') || '编码规则',
             icon: <FileTextOutlined />,
           },
           {
             path: '/system/integration-configs',
-            name: '集成设置',
+            name: t('menu.system.integration-configs') || '集成设置',
             icon: <ApiOutlined />,
           },
           {
             path: '/system/languages',
-            name: '语言管理',
+            name: t('menu.system.languages') || '语言管理',
             icon: <FileTextOutlined />,
           },
           {
             path: '/system/custom-fields',
-            name: '自定义字段',
+            name: t('menu.system.custom-fields') || '自定义字段',
             icon: <AppstoreOutlined />,
           },
           {
             path: '/system/invitation-codes',
-            name: '邀请码管理',
+            name: t('menu.system.invitation-codes') || '邀请码管理',
             icon: <TeamOutlined />,
           },
         ],
@@ -463,11 +415,6 @@ const menuConfig: MenuDataItem[] = [
         className: 'riveredge-menu-group-title',
         children: [
           {
-            path: '/system/inngest',
-            name: 'Inngest服务',
-            icon: <MonitorOutlined />,
-          },
-          {
             path: '/system/messages/config',
             name: '消息配置',
             icon: <BellOutlined />,
@@ -491,11 +438,6 @@ const menuConfig: MenuDataItem[] = [
             path: '/system/approval-instances',
             name: '审批实例',
             icon: <CheckCircleOutlined />,
-          },
-          {
-            path: '/system/electronic-records',
-            name: '电子记录',
-            icon: <FileTextOutlined />,
           },
           {
             path: '/system/scripts',
@@ -598,12 +540,17 @@ const menuConfig: MenuDataItem[] = [
       },
       {
         path: '/platform/monitoring',
-        name: '系统监控',
+        name: t('menu.platform.monitoring') || '系统监控',
+        icon: <MonitorOutlined />,
+      },
+      {
+        path: '/system/inngest',
+        name: t('menu.platform.inngest') || '流程后台',
         icon: <MonitorOutlined />,
       },
       {
         path: '/platform/admin',
-        name: '平台管理',
+        name: t('menu.platform.admin') || '平台管理',
         icon: <CrownOutlined />,
       },
     ],
@@ -621,11 +568,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken(); // 获取主题 token
+  const { i18n: i18nInstance, t } = useTranslation(); // 获取 i18n 实例和翻译函数
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
+  
+  // 获取可用语言列表
+  const { data: languageListData } = useQuery({
+    queryKey: ['availableLanguages'],
+    queryFn: () => getLanguageList({ is_active: true }),
+    staleTime: 5 * 60 * 1000, // 5 分钟缓存
+  });
+  
+  // 当前语言代码
+  const currentLanguage = i18nInstance.language || 'zh-CN';
   
   /**
    * 计算颜色的亮度值
@@ -805,6 +764,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
   }, [currentUser]); // 当用户或菜单数据变化时重新添加 className
 
+  // 获取翻译后的菜单配置（必须在 generateBreadcrumb 之前定义）
+  const menuConfig = useMemo(() => getMenuConfig(t), [t]);
 
   /**
    * 根据当前路径和菜单配置生成面包屑
@@ -994,10 +955,61 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   /**
    * 处理语言切换
+   * 
+   * @param languageCode - 语言代码（如 'zh-CN', 'en-US'）
    */
-  const handleLanguageChange = () => {
-    message.info('语言切换功能开发中');
-  };
+  const handleLanguageChange = React.useCallback(async (languageCode: string) => {
+    try {
+      // 切换到新语言
+      await i18n.changeLanguage(languageCode);
+      
+      // 从后端加载翻译内容
+      await refreshTranslations();
+      
+      // 更新用户偏好设置
+      try {
+        await updateUserPreference({
+          preferences: {
+            language: languageCode,
+          },
+        });
+      } catch (error) {
+        // 如果更新偏好设置失败，不影响语言切换
+        console.warn('更新用户偏好设置失败:', error);
+      }
+      
+      message.success(`已切换到${LANGUAGE_MAP[languageCode] || languageCode}`);
+    } catch (error: any) {
+      console.error('切换语言失败:', error);
+      message.error(error?.message || '切换语言失败，请重试');
+    }
+  }, []);
+  
+  /**
+   * 构建语言切换下拉菜单
+   */
+  const languageMenuItems: MenuProps['items'] = React.useMemo(() => {
+    // 从后端获取的语言列表
+    const backendLanguages = languageListData?.items || [];
+    
+    // 如果后端有语言列表，优先使用后端的
+    if (backendLanguages.length > 0) {
+      return backendLanguages
+        .filter((lang: Language) => lang.is_active)
+        .map((lang: Language) => ({
+          key: lang.code,
+          label: lang.native_name || lang.name || LANGUAGE_MAP[lang.code] || lang.code,
+          onClick: () => handleLanguageChange(lang.code),
+        }));
+    }
+    
+    // 如果没有后端语言列表，使用默认的语言映射
+    return Object.entries(LANGUAGE_MAP).map(([code, name]) => ({
+      key: code,
+      label: name,
+      onClick: () => handleLanguageChange(code),
+    }));
+  }, [languageListData, handleLanguageChange]);
 
   /**
    * 处理主题颜色切换
@@ -1065,9 +1077,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-page-container .ant-pro-page-container-children-content {
           padding: 0 !important;
         }
-        /* 全局页面边距：24px */
+        /* 全局页面边距：16px */
         .page-tabs-content .ant-pro-table {
-          padding: 24px !important;
+          padding: 16px !important;
         }
         /* 侧边栏收起时，确保内容区域左边距正确 - 覆盖所有可能的情况 */
         .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content {
@@ -1327,6 +1339,94 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 隐藏 ant-pro-layout-container 里的 footer */
         .ant-pro-layout-container .ant-pro-layout-footer {
           display: none !important;
+        }
+        /* ==================== 菜单收起状态下的显示控制 ==================== */
+        /* 策略：使用 font-size: 0 隐藏文本节点，精确隐藏文字元素，确保图标显示 */
+        
+        /* 第一步：确保所有图标都显示（最高优先级，覆盖所有可能的图标位置） */
+        /* 图标在菜单项直接子元素中 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-item > .anticon:not(.ant-menu-submenu-arrow),
+        /* 图标在子菜单标题直接子元素中 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title > .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title > .anticon:not(.ant-menu-submenu-arrow),
+        /* 图标在 .ant-menu-title-content 内部 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
+        /* 所有菜单项的图标（通用规则，确保覆盖） */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow) {
+          display: inline-flex !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+          width: 16px !important;
+          height: 16px !important;
+          min-width: 16px !important;
+          min-height: 16px !important;
+          max-width: 16px !important;
+          max-height: 16px !important;
+          font-size: 16px !important;
+          line-height: 1 !important;
+          text-indent: 0 !important;
+          position: relative !important;
+          z-index: 10 !important;
+          margin-right: 0 !important;
+        }
+        
+        /* 第二步：使用 font-size: 0 隐藏 .ant-menu-title-content 内的文本节点（纯文本） */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content {
+          font-size: 0 !important;
+          line-height: 0 !important;
+        }
+        
+        /* 第三步：隐藏所有文字元素（span、a 等），但排除图标 */
+        /* 直接子元素 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
+        /* 深层嵌套的文字元素 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon),
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content span:not(.anticon):not(.ant-menu-item-icon) {
+          display: none !important;
+          opacity: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+          overflow: hidden !important;
+          visibility: hidden !important;
+          font-size: 0 !important;
+          line-height: 0 !important;
+        }
+        /* 隐藏子菜单箭头 */
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow,
+        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon.ant-menu-submenu-arrow,
+        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon.ant-menu-submenu-arrow {
+          display: none !important;
+          opacity: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+          overflow: hidden !important;
+          visibility: hidden !important;
         }
         .ant-pro-layout-container footer {
           display: none !important;
@@ -1879,28 +1979,47 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 消息提醒（带数量徽标）
           actions.push(
-            <Tooltip key="notifications" title="消息通知">
-              <Badge count={5} size="small" offset={[-8,8]}>
+            <Badge key="notifications" count={5} size="small" offset={[-8,8]}>
+              <Tooltip title="消息通知">
                 <Button
                   type="text"
                   size="small"
                   icon={<BellOutlined style={{ fontSize: 16 }} />}
                   onClick={() => message.info('消息通知功能开发中')}
                 />
-              </Badge>
-            </Tooltip>
+              </Tooltip>
+            </Badge>
           );
           
-          // 语言切换
+          // 语言切换下拉菜单
           actions.push(
-            <Tooltip key="language" title="语言切换">
-              <Button
-                type="text"
-                size="small"
-                icon={<TranslationOutlined style={{ fontSize: 16 }} />}
-                onClick={handleLanguageChange}
-              />
-            </Tooltip>
+            <Dropdown
+              key="language"
+              menu={{
+                items: languageMenuItems,
+                selectedKeys: [currentLanguage],
+              }}
+              placement="bottomLeft"
+              trigger={['click']}
+              open={languageDropdownOpen}
+              onOpenChange={(open) => {
+                setLanguageDropdownOpen(open);
+              }}
+            >
+              <Tooltip 
+                title={`当前语言: ${LANGUAGE_MAP[currentLanguage] || currentLanguage}`}
+                trigger={['hover']}
+                mouseEnterDelay={0.5}
+                open={languageDropdownOpen ? false : undefined}
+                destroyTooltipOnHide
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<TranslationOutlined style={{ fontSize: 16 }} />}
+                />
+              </Tooltip>
+            </Dropdown>
           );
 
           // 颜色配置

@@ -57,7 +57,7 @@ export default function MonitoringPage() {
 
   if (error) {
     return (
-      <div style={{ padding: '24px' }}>
+      <div style={{ padding: '16px' }}>
         <Alert
           message="获取系统信息失败"
           description="无法连接到系统监控服务，请稍后重试"
@@ -82,7 +82,7 @@ export default function MonitoringPage() {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '16px' }}>
       {/* 系统概览 */}
       
       <Row gutter={[16, 16]}>

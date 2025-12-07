@@ -95,7 +95,7 @@ export default function PlatformSuperAdminPage() {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '16px' }}>
       <ProCard
         title="平台管理员信息"
         extra={

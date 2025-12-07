@@ -131,7 +131,7 @@ const UserPreferencesPage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '16px' }}>
       <Card title="偏好设置" loading={loading}>
         <ProForm
           formRef={formRef}

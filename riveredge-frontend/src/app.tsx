@@ -68,11 +68,23 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次，使用 initializedRef 确保只执行一次
 
+  // 公开页面（只包括登录和注册页面，不包括平台管理页面）
+  // ⚠️ 关键修复：先定义公开页面判断，避免在 shouldFetchUser 中使用未定义的变量
+  const publicPaths = ['/login', '/register', '/register/personal', '/register/organization'];
+  // 平台登录页是公开的，但其他平台页面需要登录
+  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
+  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
+
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
+  // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误
   const shouldFetchUser = React.useMemo(() => {
     const token = getToken();
+    // 如果是公开页面，不尝试获取用户信息（避免后端未运行时出现连接错误）
+    if (isPublicPath) {
+      return false;
+    }
     return !!token && !currentUser && initializedRef.current;
-  }, [currentUser]);
+  }, [currentUser, isPublicPath]);
 
   const { data: userData, isLoading } = useQuery({
     queryKey: ['currentUser'],
@@ -124,12 +136,6 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     setLoading(isLoading);
   }, [isLoading, setLoading]);
-
-  // 公开页面（只包括登录和注册页面，不包括平台管理页面）
-  const publicPaths = ['/login', '/register', '/register/personal', '/register/organization'];
-  // 平台登录页是公开的，但其他平台页面需要登录
-  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
-  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
 
   // 检查是否有 token（这是判断是否登录的唯一标准）
   const token = getToken();

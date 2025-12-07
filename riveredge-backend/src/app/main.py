@@ -59,7 +59,6 @@ from core.api.messages.message_templates import router as message_templates_rout
 from core.api.messages.messages import router as messages_router
 from core.api.scheduled_tasks.scheduled_tasks import router as scheduled_tasks_router
 from core.api.approval_processes import approval_processes_router, approval_instances_router
-from core.api.electronic_records.electronic_records import router as electronic_records_router
 from core.api.scripts.scripts import router as scripts_router
 from core.api.print_templates.print_templates import router as print_templates_router
 from core.api.print_devices.print_devices import router as print_devices_router
@@ -229,7 +228,6 @@ app.include_router(messages_router, prefix="/api/v1/system")
 app.include_router(scheduled_tasks_router, prefix="/api/v1/system")
 app.include_router(approval_processes_router, prefix="/api/v1/system")
 app.include_router(approval_instances_router, prefix="/api/v1/system")
-app.include_router(electronic_records_router, prefix="/api/v1/system")
 app.include_router(scripts_router, prefix="/api/v1/system")
 app.include_router(print_templates_router, prefix="/api/v1/system")
 app.include_router(print_devices_router, prefix="/api/v1/system")
