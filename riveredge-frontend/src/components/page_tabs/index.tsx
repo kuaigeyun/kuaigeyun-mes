@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tabs, Button, Dropdown, MenuProps } from 'antd';
+import { Tabs, Button, Dropdown, MenuProps, theme } from 'antd';
 import { CaretLeftFilled, CaretRightFilled, ReloadOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 
@@ -73,6 +73,7 @@ const TAB_CONFIG = {
 export default function PageTabs({ menuConfig, children }: PageTabsProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { token } = theme.useToken();
   const [tabs, setTabs] = useState<TabItem[]>([]);
   const [activeKey, setActiveKey] = useState<string>('');
   const tabsNavRef = useRef<HTMLDivElement>(null);
@@ -719,78 +720,101 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-header-wrapper .page-tabs-container {
           pointer-events: auto;
         }
-        /* 滚动按钮样式 */
-        .page-tabs-scroll-button {
-          width: 24px;
-          height: 30px;
-          padding: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+        /* 滚动按钮样式 - 默认主题色（可点击时） */
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .page-tabs-header-wrapper button.page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
+          width: 24px !important;
+          height: 30px !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          flex-shrink: 0 !important;
           border: none !important;
           border-bottom: none !important;
           background: transparent !important;
           box-shadow: none !important;
-          color: var(--ant-colorTextDisabled) !important;
-          cursor: default;
-          pointer-events: auto;
-          position: relative;
-          z-index: 2;
+          color: ${token.colorPrimary} !important;
+          cursor: pointer !important;
+          pointer-events: auto !important;
+          position: relative !important;
+          z-index: 2 !important;
           margin-bottom: 0 !important;
           line-height: 1 !important;
         }
-        /* 按钮图标颜色 - 强制继承按钮颜色 */
-        .page-tabs-scroll-button .anticon,
-        .page-tabs-scroll-button .ant-btn-icon,
-        .page-tabs-scroll-button span.anticon {
-          color: inherit !important;
+        /* 按钮图标颜色 - 可点击时使用主题色 */
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg {
+          color: ${token.colorPrimary} !important;
+          fill: ${token.colorPrimary} !important;
         }
         /* 去掉按钮的所有伪元素和边框 */
-        .page-tabs-scroll-button::before,
-        .page-tabs-scroll-button::after {
+        .page-tabs-header-wrapper .page-tabs-scroll-button::before,
+        .page-tabs-header-wrapper .page-tabs-scroll-button::after {
           display: none !important;
         }
         /* 无法点击时：浅灰色 - 覆盖所有可能的样式 */
-        .page-tabs-scroll-button:disabled,
-        .page-tabs-scroll-button.ant-btn-disabled,
-        .page-tabs-scroll-button[disabled] {
-          color: var(--ant-colorTextDisabled) !important;
+        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled,
+        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled],
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:disabled,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn.ant-btn-disabled,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:disabled,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text.ant-btn-disabled,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-disabled,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button[disabled] {
+          color: rgba(0, 0, 0, 0.25) !important;
           background: transparent !important;
           cursor: not-allowed !important;
           pointer-events: none !important;
         }
-        .page-tabs-scroll-button:disabled .anticon,
-        .page-tabs-scroll-button:disabled .ant-btn-icon,
-        .page-tabs-scroll-button:disabled span.anticon,
-        .page-tabs-scroll-button.ant-btn-disabled .anticon,
-        .page-tabs-scroll-button.ant-btn-disabled .ant-btn-icon,
-        .page-tabs-scroll-button.ant-btn-disabled span.anticon,
-        .page-tabs-scroll-button[disabled] .anticon,
-        .page-tabs-scroll-button[disabled] .ant-btn-icon,
-        .page-tabs-scroll-button[disabled] span.anticon {
-          color: var(--ant-colorTextDisabled) !important;
+        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled .ant-btn-icon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled span.anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled .ant-btn-icon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled span.anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled] .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled] .ant-btn-icon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled] span.anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:disabled .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn.ant-btn-disabled .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:disabled .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text.ant-btn-disabled .anticon,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled .anticon,
+        .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled svg,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled svg {
+          color: rgba(0, 0, 0, 0.25) !important;
+          fill: rgba(0, 0, 0, 0.25) !important;
         }
-        /* 可以点击时：主题色 - 覆盖所有可能的样式 */
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
-          color: var(--ant-colorPrimary) !important;
-          cursor: pointer !important;
-          pointer-events: auto !important;
-        }
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon {
-          color: var(--ant-colorPrimary) !important;
-        }
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover {
+        /* 可以点击时：主题色（默认状态，hover 时加深） */
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover {
           color: var(--ant-colorPrimaryHover) !important;
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
         }
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .ant-btn-icon,
-        .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover span.anticon {
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .ant-btn-icon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover span.anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon {
           color: var(--ant-colorPrimaryHover) !important;
         }
         /* 按钮容器样式 - 高度与 ant-tabs 一致 */
@@ -799,6 +823,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           align-items: center;
           justify-content: center;
           height: 38px;
+          padding-bottom: 1px !important;
           border-bottom: none !important;
         }
         .page-tabs-scroll-button-left {
@@ -837,7 +862,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           scrollbar-width: none;
         }
           .ant-tabs-nav-more{
-            padding: 8px 4px 8px 8px!important;
+            padding: 8px 0px 8px 8px!important;
             box-shadow: none !important;
           }
         /* 移除所有可能移动的阴影效果和分隔线 */
@@ -874,9 +899,6 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                 onClick={() => scrollTabs('left')}
                 disabled={!canScrollLeft}
                 className="page-tabs-scroll-button page-tabs-scroll-button-left"
-                style={{
-                  color: !canScrollLeft ? 'var(--ant-colorTextDisabled)' : 'var(--ant-colorPrimary)',
-                }}
               />
             </div>
             <Tabs
@@ -925,9 +947,6 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                 onClick={() => scrollTabs('right')}
                 disabled={!canScrollRight}
                 className="page-tabs-scroll-button page-tabs-scroll-button-right"
-                style={{
-                  color: !canScrollRight ? 'var(--ant-colorTextDisabled)' : 'var(--ant-colorPrimary)',
-                }}
               />
             </div>
           </div>
