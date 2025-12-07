@@ -160,15 +160,6 @@ from .approval_instance import (
     ApprovalInstanceResponse,
 )
 
-# 电子记录 Schema
-from .electronic_record import (
-    ElectronicRecordCreate,
-    ElectronicRecordUpdate,
-    ElectronicRecordSignRequest,
-    ElectronicRecordArchiveRequest,
-    ElectronicRecordResponse,
-)
-
 # 脚本管理 Schema
 from .script import (
     ScriptCreate,
@@ -382,12 +373,6 @@ __all__ = [
     "ApprovalInstanceUpdate",
     "ApprovalInstanceAction",
     "ApprovalInstanceResponse",
-    # 电子记录 Schema
-    "ElectronicRecordCreate",
-    "ElectronicRecordUpdate",
-    "ElectronicRecordSignRequest",
-    "ElectronicRecordArchiveRequest",
-    "ElectronicRecordResponse",
     # 脚本管理 Schema
     "ScriptCreate",
     "ScriptUpdate",

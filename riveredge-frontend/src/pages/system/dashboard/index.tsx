@@ -102,27 +102,6 @@ const fetchTodos = async () => {
 // 快捷操作配置
 const quickActions = [
   {
-    key: 'production',
-    title: '生产管理',
-    icon: <ShopOutlined />,
-    path: '/mes/production',
-    description: '生产计划、工单管理',
-  },
-  {
-    key: 'quality',
-    title: '质量管理',
-    icon: <ExperimentOutlined />,
-    path: '/mes/quality',
-    description: '质检单、不良品管理',
-  },
-  {
-    key: 'inventory',
-    title: '库存管理',
-    icon: <DatabaseOutlined />,
-    path: '/mes/inventory',
-    description: '原材料、成品库',
-  },
-  {
     key: 'users',
     title: '用户管理',
     icon: <UserOutlined />,

@@ -90,7 +90,6 @@ TORTOISE_ORM = {
                 "core.models.scheduled_task",
                 "core.models.approval_process",
                 "core.models.approval_instance",
-                "core.models.electronic_record",
                 "core.models.script",
                 "core.models.print_template",
                 "core.models.print_device",

@@ -4,17 +4,21 @@
  */
 
 import React from 'react';
+import { theme } from 'antd';
 
 const InngestDashboard: React.FC = () => {
+  const { token } = theme.useToken(); // 获取主题 token
+
   return (
     <div
       style={{
         height: 'calc(100vh - 96px)',
         width: '100%',
-        padding: 0,
+        padding: '16px',
         margin: 0,
         display: 'flex',
         flexDirection: 'column',
+        boxSizing: 'border-box',
       }}
     >
       <iframe
@@ -24,6 +28,8 @@ const InngestDashboard: React.FC = () => {
           height: '100%',
           border: 'none',
           flex: 1,
+          borderRadius: token.borderRadiusLG || token.borderRadius,
+          overflow: 'hidden',
         }}
         title="Inngest Dashboard"
       />

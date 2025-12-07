@@ -72,9 +72,6 @@ from .scheduled_task import ScheduledTask
 from .approval_process import ApprovalProcess
 from .approval_instance import ApprovalInstance
 
-# 电子记录模型
-from .electronic_record import ElectronicRecord
-
 # 脚本管理模型
 from .script import Script
 
@@ -143,8 +140,6 @@ __all__ = [
     # 审批流程模型
     "ApprovalProcess",
     "ApprovalInstance",
-    # 电子记录模型
-    "ElectronicRecord",
     # 脚本管理模型
     "Script",
     # 打印模板模型

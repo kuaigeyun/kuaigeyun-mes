@@ -93,7 +93,7 @@ export default defineConfig({
           if (id.includes('pages/system/files') || id.includes('pages/system/apis') || id.includes('pages/system/data-sources') || id.includes('pages/system/datasets')) {
             return 'module-datacenter';
           }
-          if (id.includes('pages/system/messages') || id.includes('pages/system/scheduled-tasks') || id.includes('pages/system/approval-processes') || id.includes('pages/system/electronic-records') || id.includes('pages/system/scripts') || id.includes('pages/system/print')) {
+          if (id.includes('pages/system/messages') || id.includes('pages/system/scheduled-tasks') || id.includes('pages/system/approval-processes') || id.includes('pages/system/scripts') || id.includes('pages/system/print')) {
             return 'module-process';
           }
           if (id.includes('pages/personal')) {

@@ -636,7 +636,7 @@ export default function LockScreenPage() {
           zIndex: 10,
           width: '100%',
           maxWidth: 400,
-          padding: '0 24px',
+          padding: '0 16px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -656,7 +656,7 @@ export default function LockScreenPage() {
           style={{
             background: 'rgba(255, 255, 255, 0.85)',
             borderRadius: '16px',
-            padding: '32px 24px',
+            padding: '32px 16px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
             backdropFilter: 'blur(10px)',
             width: '100%',

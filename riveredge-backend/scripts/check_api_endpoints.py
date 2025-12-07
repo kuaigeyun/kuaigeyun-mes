@@ -21,7 +21,7 @@ ENDPOINT_RULES = {
                 "/site-settings", "/invitation-codes", "/languages", "/applications", "/menus",
                 "/integration-configs", "/files", "/apis", "/data-sources", "/datasets",
                 "/message-configs", "/message-templates", "/messages", "/scheduled-tasks",
-                "/approval-processes", "/approval-instances", "/electronic-records", "/scripts",
+                "/approval-processes", "/approval-instances", "/scripts",
                 "/print-templates", "/print-devices", "/operation-logs", "/login-logs",
                 "/online-users", "/data-backups", "/help-documents"],
         "personal": ["/user-profile", "/user-preferences", "/user-messages", "/user-tasks"]

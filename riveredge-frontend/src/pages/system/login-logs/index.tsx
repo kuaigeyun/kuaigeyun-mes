@@ -182,7 +182,7 @@ const LoginLogsPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '16px' }}>
       {/* 统计卡片 */}
       {stats && (
         <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>

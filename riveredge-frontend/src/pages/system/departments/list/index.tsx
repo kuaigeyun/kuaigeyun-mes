@@ -491,8 +491,8 @@ const DepartmentListPage: React.FC = () => {
         
         /* 保留顶部间距 - 通过 paddingTop 实现 */
         .department-page-container .ant-pro-page-container .ant-pro-page-container-children-content {
-          padding: 24px !important;
-          padding-top: 24px !important;
+          padding: 16px !important;
+          padding-top: 16px !important;
         }
         
         /* 树形结构容器样式 */
@@ -625,12 +625,12 @@ const DepartmentListPage: React.FC = () => {
         }
 
         .ant-pro-page-container-children-container{
-          padding: 24px !important;
+          padding: 16px !important;
         }
       `}</style>
       <div style={{ display: 'flex', height: 'calc(100vh - 144px)', gap: '24px' }}>
       {/* 左侧：树形列表 */}
-        <div className="department-tree-container" style={{ padding: '24px' }}>
+        <div className="department-tree-container" style={{ padding: '16px' }}>
           <div className="department-tree-header">
             <Space>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>部门列表</h3>
