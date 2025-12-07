@@ -42,18 +42,56 @@ code {
   height: 8px;
 }
 
+/* 隐藏滚动条按钮（小三角）- 使用最强制的方式 */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* 系统级隐藏所有滚动条轨道 - 最高优先级 */
+html body *::-webkit-scrollbar-track,
+html body ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track {
-  background: var(--ant-colorFillTertiary);
-  border-radius: 4px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  clip-path: inset(100%) !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--ant-colorTextQuaternary);
   border-radius: 4px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ant-colorTextTertiary);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--ant-colorTextSecondary);
 }
 
 /* 高级搜索 Modal 动画统一 */

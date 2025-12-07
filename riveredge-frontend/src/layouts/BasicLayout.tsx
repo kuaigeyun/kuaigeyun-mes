@@ -21,7 +21,6 @@ import {
   MonitorOutlined,
   AppstoreOutlined,
   ControlOutlined,
-  ExperimentOutlined,
   ShopOutlined,
   FileTextOutlined,
   DatabaseOutlined,
@@ -42,7 +41,6 @@ import {
   HistoryOutlined,
   LoginOutlined,
   UnorderedListOutlined,
-  AppstoreAddOutlined,
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
@@ -88,29 +86,24 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const shouldFetchUser = !!getToken() && !currentUser;
 
   // 根据用户类型调用不同的接口
-  const { data: userData, isLoading } = useQuery({
+  const { data: userData, isLoading, error } = useQuery({
     queryKey: ['currentUser', isPlatformSuperAdmin],
     queryFn: async () => {
       // 优先使用 userInfo 判断用户类型
       const shouldUsePlatformAPI = isPlatformSuperAdmin;
-      
+
       if (shouldUsePlatformAPI) {
         // 平台超级管理员：调用平台接口
-        try {
-          const platformUser = await getCurrentPlatformSuperAdmin();
-          return {
-            id: platformUser.id,
-            username: platformUser.username,
-            email: platformUser.email,
-            full_name: platformUser.full_name,
-            is_platform_admin: true, // 平台超级管理员始终是平台管理
-            is_tenant_admin: false,
-            tenant_id: undefined,
-          };
-        } catch (error) {
-          // 如果平台接口失败，可能是 token 无效，抛出错误让 onError 处理
-          throw error;
-        }
+        const platformUser = await getCurrentPlatformSuperAdmin();
+        return {
+          id: platformUser.id,
+          username: platformUser.username,
+          email: platformUser.email,
+          full_name: platformUser.full_name,
+          is_platform_admin: true, // 平台超级管理员始终是平台管理
+          is_tenant_admin: false,
+          tenant_id: undefined,
+        };
       } else {
         // 系统级用户：调用系统接口
         return await getCurrentUser();
@@ -119,50 +112,54 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     enabled: shouldFetchUser,
     retry: false,
     staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
-    onSuccess: (data) => {
-      setCurrentUser(data);
-    },
-    onError: (error: any) => {
-      // 如果有 token，尝试从 localStorage 恢复用户信息
-      if (getToken()) {
-        const savedUserInfo = getUserInfo();
-        if (savedUserInfo) {
-          // 从 localStorage 恢复用户信息
-          const restoredUser = {
-            id: savedUserInfo.id || 1,
-            username: savedUserInfo.username || 'admin',
-            email: savedUserInfo.email,
-            full_name: savedUserInfo.full_name,
-            is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
-            is_tenant_admin: savedUserInfo.is_tenant_admin || false,
-            tenant_id: savedUserInfo.tenant_id,
-          };
-          setCurrentUser(restoredUser);
-          
-          // 如果是平台超级管理员，但后端接口失败，记录警告但不阻止访问
-          if (savedUserInfo.user_type === 'platform_superadmin') {
-            console.warn('⚠️ 获取平台超级管理员信息失败，使用本地缓存:', error);
-          } else {
-            console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
-          }
+  });
+
+  // 处理查询错误
+  useEffect(() => {
+    if (error && getToken()) {
+      const savedUserInfo = getUserInfo();
+      if (savedUserInfo) {
+        // 从 localStorage 恢复用户信息
+        const restoredUser = {
+          id: savedUserInfo.id || 1,
+          username: savedUserInfo.username || 'admin',
+          email: savedUserInfo.email,
+          full_name: savedUserInfo.full_name,
+          is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
+          is_tenant_admin: savedUserInfo.is_tenant_admin || false,
+          tenant_id: savedUserInfo.tenant_id,
+        };
+        setCurrentUser(restoredUser);
+
+        // 如果是平台超级管理员，但后端接口失败，记录警告但不阻止访问
+        if (savedUserInfo.user_type === 'platform_superadmin') {
+          console.warn('⚠️ 获取平台超级管理员信息失败，使用本地缓存:', error);
         } else {
-          // ⚠️ 修复：没有本地缓存时，不要立即清理认证信息，避免导致重定向
-          // 只有在明确是 401 错误时才清理（401 错误会在 api.ts 中处理）
-          if (error?.response?.status === 401) {
-            console.error('❌ 认证已过期，请重新登录:', error);
-            // 401 错误会在 api.ts 中处理，这里不需要再次清理
-          } else {
-            console.warn('⚠️ 获取用户信息失败，但保留当前状态，允许继续访问:', error);
-            // 不清理认证信息，允许用户继续访问（可能是网络问题等临时错误）
-          }
+          console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
         }
       } else {
-        // 没有 token，清理认证信息
-        clearAuth();
-        setCurrentUser(undefined);
+        // 没有本地缓存时，清理认证信息
+        if ((error as any)?.response?.status === 401) {
+          console.error('❌ 认证已过期，请重新登录:', error);
+          clearAuth();
+          setCurrentUser(undefined);
+        } else {
+          console.warn('⚠️ 获取用户信息失败，但保留当前状态，允许继续访问:', error);
+        }
       }
-    },
-  });
+    } else if (!getToken()) {
+      // 没有 token，清理认证信息
+      clearAuth();
+      setCurrentUser(undefined);
+    }
+  }, [error, setCurrentUser]);
+
+  // 处理成功获取用户数据
+  useEffect(() => {
+    if (userData) {
+      setCurrentUser(userData);
+    }
+  }, [userData, setCurrentUser]);
 
   React.useEffect(() => {
     setLoading(isLoading);
@@ -1344,42 +1341,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           justify-content: space-between;
           align-items: center;
         }
-        /* 隐藏整个页面的垂直滚动条（但保持滚轮滚动功能） */
-        .ant-pro-layout,
-        .ant-pro-layout *,
-        .ant-pro-layout-container,
-        .ant-pro-layout-container *,
-        .ant-pro-page-container,
-        .ant-pro-page-container *,
-        .ant-pro-layout-content,
-        .ant-pro-layout-content *,
-        .ant-layout,
-        .ant-layout *,
-        .ant-layout-content,
-        .ant-layout-content *,
-        body,
-        html {
-          scrollbar-width: none !important; /* Firefox */
-          -ms-overflow-style: none !important; /* IE 10+ */
-        }
-        .ant-pro-layout *::-webkit-scrollbar,
-        .ant-pro-layout::-webkit-scrollbar,
-        .ant-pro-layout-container *::-webkit-scrollbar,
-        .ant-pro-layout-container::-webkit-scrollbar,
-        .ant-pro-page-container *::-webkit-scrollbar,
-        .ant-pro-page-container::-webkit-scrollbar,
-        .ant-pro-layout-content *::-webkit-scrollbar,
-        .ant-pro-layout-content::-webkit-scrollbar,
-        .ant-layout *::-webkit-scrollbar,
-        .ant-layout::-webkit-scrollbar,
-        .ant-layout-content *::-webkit-scrollbar,
-        .ant-layout-content::-webkit-scrollbar,
-        body::-webkit-scrollbar,
-        html::-webkit-scrollbar {
-          display: none !important; /* Chrome, Safari, Edge */
-          width: 0 !important;
-          height: 0 !important;
-        }
+        /* 全局滚动条样式 - 只对主要内容区域隐藏滚动条，保持菜单滚动条可见 */
         /* ==================== 菜单分组标题样式 ==================== */
         /* 参考：https://ant-design.antgroup.com/components/menu-cn
          * groupTitleColor: rgba(0,0,0,0.45), groupTitleFontSize: 14, groupTitleLineHeight: 1.5714285714285714
@@ -1396,7 +1358,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-weight: normal !important;
           padding: 12px 16px 12px 0 !important;
           margin: 0 0 8px 0 !important;
-          border-bottom: 1px solid ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
           background: transparent !important;
           cursor: default !important;
           user-select: none !important;
@@ -1418,7 +1380,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         body .ant-menu-popup .ant-menu-item-group-title:active,
         body .ant-menu-popup .ant-menu-item-group-title:focus {
           color: rgba(0, 0, 0, 0.45) !important;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
         }
         ` : ''}
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group-title:hover,
@@ -1433,12 +1395,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
-        /* ==================== 一级菜单项 - 统一所有一级菜单项样式，与子菜单标题对齐 ==================== */
-        /* 统一所有一级菜单项的 padding-left，与子菜单标题一致（24px），覆盖内联样式 */
-        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item {
-          padding-left: 24px !important;
-          margin-left: 0 !important;
-        }
+        /* ==================== 一级菜单项 - 完全遵循 Ant Design 原生样式 ==================== */
+        /* 不做任何修改，完全使用 Ant Design 的原生样式和垂直居中 */
         /* 统一所有一级菜单项的图标样式 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .ant-menu-item-icon,
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .anticon {
@@ -1463,6 +1421,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected .anticon {
           color: #fff !important;
         }
+        /* ==================== 菜单项样式 - 使用 Ant Design 原生 ==================== */
+        /* 让 Ant Design 使用其默认的菜单项高度和行高 */
+
         /* ==================== 分组菜单下的子菜单项 ==================== */
         /* 使用最高优先级的选择器覆盖内联样式 - 必须匹配所有可能的组合 */
         /* 注意：CSS 的 !important 可以覆盖内联样式，但需要选择器足够具体 */
@@ -1473,20 +1434,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item.ant-menu-item-selected,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-item-group .ant-menu-item-group .ant-menu-item {
-          padding-left: 24px !important;
-        }
-        /* 子菜单标题样式（ant-menu-submenu-title）- 独立设置，不影响普通菜单项 */
+        /* 子菜单标题样式（ant-menu-submenu-title）- 使用 Ant Design 原生样式 */
         /* 使用主题颜色变量，支持深色模式 */
         /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
-          padding-top: 0 !important;
-          padding-bottom: 0 !important;
           padding-right: 16px !important;
-          height: 40px !important;
-          line-height: 40px !important;
           color: ${siderTextColor} !important;
           font-size: 14px !important;
           font-weight: normal !important;
@@ -1527,58 +1480,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-pro-layout-footer {
           display: none !important;
         }
-        /* ==================== 菜单收起状态 - 系统性重构，遵循 Ant Design 原生行为 ==================== */
-        /* 原则：不干扰 Ant Design 原生行为，只做最小化自定义（隐藏文字和箭头） */
-        
-        /* 1. 确保图标显示（最高优先级，覆盖所有可能的图标位置，包括在 .ant-menu-title-content 内部的情况） */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .anticon:not(.ant-menu-submenu-arrow),
-        /* 图标在 .ant-menu-title-content 内部的情况 - 必须明确设置 font-size，不受父元素影响 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .ant-menu-item-icon,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content .anticon:not(.ant-menu-submenu-arrow) {
-          display: inline-flex !important;
-          font-size: 16px !important;
-          line-height: 1 !important;
-          width: 16px !important;
-          height: 16px !important;
-          opacity: 1 !important;
-          visibility: visible !important;
-        }
-        
-        /* 2. 隐藏文字内容（只隐藏文字元素，不影响图标） */
-        /* 使用 font-size: 0 隐藏文本节点，但确保图标不受影响 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content {
-          font-size: 0 !important;
-          line-height: 0 !important;
-        }
-        /* 隐藏所有文字元素（span、a 等），但排除图标 */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content > a,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > span:not(.anticon):not(.ant-menu-item-icon),
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content > a {
-          display: none !important;
-        }
-        
-        /* 3. 隐藏子菜单箭头（遵循 Ant Design 原生行为） */
-        .ant-pro-layout .ant-pro-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow,
-        .ant-pro-layout .ant-layout-sider-collapsed .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
-          display: none !important;
-        }
+        /* ==================== 菜单收起状态 - 遵循 Ant Design 原生行为 ==================== */
+        /* 原则：让 Ant Design 自己处理菜单收起/展开，不做过多干预 */
         .ant-pro-layout-container footer {
           display: none !important;
         }
@@ -1595,26 +1498,80 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'var(--ant-colorFillSecondary)'} !important;
           color: ${siderTextColor} !important;
         }
-        /* 隐藏左侧菜单栏滚动条，但保持滚轮滚动功能 */
-        /* 使用通用选择器覆盖所有可能的滚动容器 */
-        /* 注意：只设置滚动条样式，不设置背景色，避免覆盖 ProLayout 原生深色模式 */
-        .ant-pro-layout .ant-pro-sider *,
-        .ant-pro-layout .ant-layout-sider * {
-          scrollbar-width: none !important; /* Firefox */
-          -ms-overflow-style: none !important; /* IE 10+ */
-        }
-        .ant-pro-layout .ant-pro-sider *::-webkit-scrollbar,
-        .ant-pro-layout .ant-layout-sider *::-webkit-scrollbar {
-          display: none !important; /* Chrome, Safari, Edge */
-          width: 0 !important;
-          height: 0 !important;
-        }
         /* ==================== 菜单底部 ==================== */
         /* 使用主题边框颜色，支持深色模式，并根据菜单栏背景色自动适配 */
         .ant-pro-sider-footer {
           margin-bottom: 10px !important;
           padding-bottom: 0 !important;
-          border-top-color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'} !important;
+        }
+        /* ==================== 全局滚动条样式 ==================== */
+        /* 隐藏整个页面的滚动条，只保留UniTable的滚动条 */
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        .ant-pro-layout::-webkit-scrollbar,
+        .ant-pro-layout-container::-webkit-scrollbar,
+        .ant-pro-page-container::-webkit-scrollbar,
+        .ant-pro-layout-content::-webkit-scrollbar,
+        .ant-layout::-webkit-scrollbar,
+        .ant-layout-content::-webkit-scrollbar {
+          width: 0 !important;
+          height: 0 !important;
+          display: none !important;
+        }
+        html,
+        body,
+        .ant-pro-layout,
+        .ant-pro-layout-container,
+        .ant-pro-page-container,
+        .ant-pro-layout-content,
+        .ant-layout,
+        .ant-layout-content {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        /* ==================== 左侧菜单栏滚动条样式 ==================== */
+        /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度 */
+        .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar {
+          width: 0 !important;
+          height: 0 !important;
+          display: none !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar-track {
+          display: none !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar-thumb {
+          display: none !important;
+        }
+        /* Firefox 左侧菜单栏滚动条样式 */
+        .ant-pro-layout .ant-pro-sider-menu {
+          scrollbar-width: none !important;
+        }
+        /* ==================== UniTable 滚动条样式 ==================== */
+        /* UniTable 组件滚动条样式 */
+        .uni-table-pro-table .ant-table-container::-webkit-scrollbar,
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .uni-table-pro-table .ant-table-container::-webkit-scrollbar-track,
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-track {
+          background: ${token.colorFillTertiary};
+          border-radius: 4px;
+        }
+        .uni-table-pro-table .ant-table-container::-webkit-scrollbar-thumb,
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
+          border-radius: 4px;
+        }
+        .uni-table-pro-table .ant-table-container::-webkit-scrollbar-thumb:hover,
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb:hover {
+          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'};
+        }
+        /* Firefox UniTable 滚动条样式 */
+        .uni-table-pro-table .ant-table-container,
+        .uni-table-pro-table .ant-table-body {
+          scrollbar-width: thin;
+          scrollbar-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.3) ' + token.colorFillTertiary : 'rgba(0, 0, 0, 0.3) ' + token.colorFillTertiary};
         }
         /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量 */
         :root {
@@ -1683,6 +1640,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 菜单栏增加与顶部间距 */
         .ant-pro-layout .ant-pro-sider-menu {
           padding-top: 8px !important;
+          /* 确保菜单容器有正确的布局 */
+          display: flex !important;
+          flex-direction: column !important;
+          height: 100% !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+        /* 确保菜单项正常显示 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu {
+          flex-shrink: 0 !important;
+        }
+        /* 菜单底部区域确保在底部 */
+        .ant-pro-layout .ant-pro-sider-footer {
+          margin-top: auto !important;
+          flex-shrink: 0 !important;
         }
         /* 一级菜单激活状态 - 使用主题色背景，白色文字 */
         .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item.ant-menu-item-selected {
@@ -1737,7 +1710,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item .ant-menu-item-icon {
           display: none !important;
         }
-        /* 二级及以下子菜单标题固定样式 - 无论是否有子菜单被选中，都保持相同样式（排除分组标题） */
+        /* 二级及以下子菜单标题固定样式 - 使用 Ant Design 原生样式（排除分组标题） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
@@ -1745,17 +1718,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: transparent !important;
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
-          border-bottom: 1px solid ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'var(--ant-colorBorderSecondary)'} !important;
-          
-          padding-top: 4px !important;
-          padding-bottom: 4px !important;
+          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+
           padding-left: 28px !important;
           padding-right: 16px !important;
           border-radius: 0 !important;
           box-sizing: border-box !important;
-          min-height: 32px !important;
-          height: auto !important;
-          line-height: 1.5 !important;
           transition: none !important;
         }
         /* 二级子菜单标题 hover 和 content 样式 */
@@ -1777,55 +1745,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
         }
-        /* ==================== 菜单收起/展开动画优化 - 干净利落 ==================== */
-        /* 侧边栏收起/展开动画 - 快速且干脆 */
-        .ant-pro-layout .ant-pro-sider,
-        .ant-pro-layout .ant-layout-sider {
-          transition: width 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        }
-        /* 菜单容器动画优化 */
-        .ant-pro-layout .ant-pro-sider-menu,
-        .ant-pro-layout .ant-layout-sider .ant-menu {
-          transition: none !important;
-        }
-        /* 菜单项动画优化 - 移除所有过渡效果，立即显示/隐藏 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
-          transition: none !important;
-        }
-        /* 子菜单展开/收起动画 - 快速且干脆 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-inline .ant-menu {
-          transition: opacity 0.1s ease-out, max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        }
-        /* 菜单项文字和图标立即显示/隐藏，无过渡 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-icon,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
-          transition: none !important;
-        }
-        /* 子菜单展开/收起时，立即显示/隐藏，无延迟 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-open > .ant-menu,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-open > .ant-menu-submenu > .ant-menu {
-          display: block !important;
-          opacity: 1 !important;
-          max-height: 1000px !important;
-          transition: opacity 0.1s ease-out, max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        }
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.ant-menu-submenu-open) > .ant-menu,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu:not(.ant-menu-submenu-open) > .ant-menu-submenu > .ant-menu {
-          display: none !important;
-          opacity: 0 !important;
-          max-height: 0 !important;
-          transition: opacity 0.1s ease-out, max-height 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        }
-        /* 菜单项 hover 效果 - 立即响应，无过渡 */
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:hover,
-        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:hover {
-          transition: background-color 0.1s ease-out !important;
-        }
+        /* ==================== 菜单动画 - 使用 Ant Design 默认 ==================== */
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
         .ant-pro-layout .ant-pro-layout-header .ant-space {
           gap: 8px !important;
@@ -2124,43 +2044,44 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background: token.colorBgLayout,
         }}
         headerContentRender={() => (
-          <Breadcrumb
-            ref={breadcrumbRef}
-            style={{ 
-              display: breadcrumbVisible ? 'flex' : 'none',
-              alignItems: 'center',
-              height: '100%',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            }}
-            items={generateBreadcrumb.map((item, index) => ({
-              title: (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {/* 只有第一项（一级菜单）显示图标 */}
-                  {item.icon && index === 0 && (
-                    <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>
-                      {item.icon}
-                    </span>
-                  )}
-                  {index === generateBreadcrumb.length - 1 ? (
-                    <span style={{ color: 'var(--ant-colorText)', fontWeight: 500 }}>{item.title}</span>
-                  ) : (
-                    <a 
-                      onClick={() => {
-                        if (item.path) {
-                          navigate(item.path);
-                        }
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {item.title}
-                    </a>
-                  )}
-                </span>
-              ),
-              menu: item.menu,
-            }))}
-          />
+          <div ref={breadcrumbRef}>
+            <Breadcrumb
+              style={{
+                display: breadcrumbVisible ? 'flex' : 'none',
+                alignItems: 'center',
+                height: '100%',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+              items={generateBreadcrumb.map((item, index) => ({
+                title: (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {/* 只有第一项（一级菜单）显示图标 */}
+                    {item.icon && index === 0 && (
+                      <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>
+                        {item.icon}
+                      </span>
+                    )}
+                    {index === generateBreadcrumb.length - 1 ? (
+                      <span style={{ color: 'var(--ant-colorText)', fontWeight: 500 }}>{item.title}</span>
+                    ) : (
+                      <a
+                        onClick={() => {
+                          if (item.path) {
+                            navigate(item.path);
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {item.title}
+                      </a>
+                    )}
+                  </span>
+                ),
+                menu: item.menu,
+              }))}
+            />
+          </div>
         )}
         actionsRender={() => {
           const actions = [];
@@ -2384,7 +2305,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </div>
           );
         }
-        // 统一所有一级菜单项的样式，确保完全一致
+        // 使用 Ant Design 原生渲染，只添加点击导航功能
         return (
           <div
             onClick={() => {
@@ -2395,62 +2316,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             style={{
               cursor: item.path ? 'pointer' : 'default',
             }}
-            ref={(el) => {
-              if (el) {
-                // 使用 setTimeout 确保 DOM 已渲染
-                setTimeout(() => {
-                  // 查找内部的 li 元素（Ant Design Menu 渲染的）
-                  const liElement = el.querySelector('li.ant-menu-item') as HTMLElement;
-                  if (liElement) {
-                    // 检查是否是选中状态
-                    const isSelected = liElement.classList.contains('ant-menu-item-selected');
-                    
-                    if (isSelected) {
-                      // 选中状态：使用主题色背景，白色文字
-                      liElement.style.color = '#fff';
-                      liElement.style.backgroundColor = token.colorPrimary;
-                      
-                      // 设置文字和图标为白色
-                      const titleContent = liElement.querySelector('.ant-menu-title-content') as HTMLElement;
-                      if (titleContent) {
-                        titleContent.style.color = '#fff';
-                        const link = titleContent.querySelector('a');
-                        if (link) {
-                          link.style.color = '#fff';
-                        }
-                      }
-                      
-                      // 设置图标为白色
-                      const icon = liElement.querySelector('.ant-menu-item-icon, .anticon') as HTMLElement;
-                      if (icon) {
-                        icon.style.color = '#fff';
-                      }
-                    } else {
-                      // 未选中状态：透明背景，使用主题文字颜色
-                      liElement.style.color = 'var(--ant-colorText)';
-                      liElement.style.backgroundColor = 'transparent';
-                    }
-                    
-                    liElement.style.borderRight = 'none';
-                    liElement.style.boxShadow = 'none';
-                    liElement.style.fontWeight = 'normal';
-
-                    // 隐藏右边框指示器
-                    const afterElement = liElement.querySelector('::after') as HTMLElement;
-                    if (afterElement) {
-                      afterElement.style.display = 'none';
-                    }
-
-                    // 检查是否在分组菜单下（通过查找父元素中的 .ant-menu-item-group）
-                    const menuGroup = el.closest('.ant-menu-item-group');
-                    if (menuGroup && liElement.style.paddingLeft === '48px') {
-                      // 设置正确的 padding-left，覆盖内联样式
-                      liElement.style.paddingLeft = '24px';
-                    }
-                  }
-                }, 0);
-              }
-            }}
           >
             {dom}
           </div>
@@ -2459,22 +2324,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       collapsedButtonRender={(collapsed) => (
         <div
           style={{
-            padding: '4px 0',
-            borderTop: `1px solid ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.06)'}`,
+            padding: '8px',
+            borderTop: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
           }}
         >
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            className="menu-collapse-button"
             style={{
               width: '100%',
-              height: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
               color: siderTextColor,
             }}
           />
