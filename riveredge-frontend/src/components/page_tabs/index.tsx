@@ -692,14 +692,6 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           background: var(--ant-colorBgLayout);
           margin-top: 0 !important;
           padding-top: 0 !important;
-          /* 隐藏垂直滚动条但保留滚动功能 */
-          scrollbar-width: none !important; /* Firefox */
-          -ms-overflow-style: none !important; /* IE 10+ */
-        }
-        .page-tabs-content::-webkit-scrollbar {
-          display: none !important; /* Chrome, Safari, Edge */
-          width: 0 !important;
-          height: 0 !important;
         }
         /* 标签栏头部包装器 - 包含滚动按钮 */
         .page-tabs-header-wrapper {
@@ -853,13 +845,6 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
         .page-tabs-container .ant-tabs-tab {
           overflow: visible !important;
-        }
-        .page-tabs-container .ant-tabs-nav::-webkit-scrollbar {
-          display: none;
-        }
-        .page-tabs-container .ant-tabs-nav {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
         }
           .ant-tabs-nav-more{
             padding: 8px 0px 8px 8px!important;
