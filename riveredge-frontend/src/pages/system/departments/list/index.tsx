@@ -601,7 +601,7 @@ const DepartmentListPage: React.FC = () => {
         </div>
         
         {/* 部门树 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+        <div style={{ flex: 1, padding: '8px' }}>
           <Tree
             className="department-tree"
             treeData={filteredTreeData.length > 0 || !searchKeyword.trim() ? filteredTreeData : treeData}
@@ -702,7 +702,7 @@ const DepartmentListPage: React.FC = () => {
         </div>
 
         {/* 内容区域 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
           {selectedNode ? (
             <>
               {/* 统计信息 */}
