@@ -348,11 +348,33 @@ const RoleListPage: React.FC = () => {
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, filter, searchFormValues) => {
-          const response = await getRoleList({
+          // ⚠️ 修复：正确处理高级搜索参数
+          // 1. name 字段转换为 keyword（后端使用 keyword 搜索名称）
+          // 2. is_system 字段直接传递（后端支持 is_system 筛选）
+          // 3. is_active 字段直接传递（后端支持 is_active 筛选）
+          const apiParams: any = {
             page: params.current || 1,
             page_size: params.pageSize || 20,
-            keyword: searchFormValues?.keyword,
-          });
+          };
+          
+          // 处理 keyword（优先使用 searchFormValues.keyword，如果没有则使用 name）
+          if (searchFormValues?.keyword) {
+            apiParams.keyword = searchFormValues.keyword;
+          } else if (searchFormValues?.name) {
+            apiParams.keyword = searchFormValues.name;
+          }
+          
+          // 处理 is_system（需要转换为 boolean）
+          if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '') {
+            apiParams.is_system = searchFormValues.is_system === 'true' || searchFormValues.is_system === true;
+          }
+          
+          // 处理 is_active（需要转换为 boolean）
+          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '') {
+            apiParams.is_active = searchFormValues.is_active === 'true' || searchFormValues.is_active === true;
+          }
+          
+          const response = await getRoleList(apiParams);
           return {
             data: response.items,
             success: true,

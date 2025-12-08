@@ -51,6 +51,8 @@ export interface RoleListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  is_active?: boolean;
+  is_system?: boolean;
 }
 
 /**
