@@ -567,6 +567,11 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         // 保存排序到 localStorage
         const orderKey = `saved_search_order_shared_${pagePath}`;
       localStorage.setItem(orderKey, JSON.stringify(newOrder));
+      
+      // ⭐ 触发自定义事件，通知 QuerySearchButton 更新排序
+      window.dispatchEvent(new CustomEvent('savedSearchOrderChanged', {
+        detail: { pagePath, type: 'shared' }
+      }));
     }
   }, [pagePath, sharedSearches]);
   
@@ -585,6 +590,11 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         // 保存排序到 localStorage
         const orderKey = `saved_search_order_personal_${pagePath}`;
       localStorage.setItem(orderKey, JSON.stringify(newOrder));
+      
+      // ⭐ 触发自定义事件，通知 QuerySearchButton 更新排序
+      window.dispatchEvent(new CustomEvent('savedSearchOrderChanged', {
+        detail: { pagePath, type: 'personal' }
+      }));
     }
   }, [pagePath, personalSearches]);
   
@@ -2452,6 +2462,26 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   // 获取当前页面路径
   const pagePath = location.pathname;
   
+  // ⭐ 排序更新触发器（用于响应弹窗中的拖拽排序）
+  const [orderUpdateTrigger, setOrderUpdateTrigger] = useState(0);
+  
+  // ⭐ 监听排序变化事件
+  useEffect(() => {
+    const handleOrderChange = (event: CustomEvent) => {
+      const { pagePath: eventPagePath } = event.detail;
+      // 只响应当前页面的排序变化
+      if (eventPagePath === pagePath) {
+        setOrderUpdateTrigger(prev => prev + 1);
+      }
+    };
+    
+    window.addEventListener('savedSearchOrderChanged', handleOrderChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('savedSearchOrderChanged', handleOrderChange as EventListener);
+    };
+  }, [pagePath]);
+  
   // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
   const hasToken = !!getToken();
   
@@ -2530,7 +2560,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
     
     // 合并排序后的钉住条件（共享在前，个人在后）
     return [...orderedShared, ...orderedPersonal];
-  }, [savedSearchesData?.items, pagePath]);
+  }, [savedSearchesData?.items, pagePath, orderUpdateTrigger]);
   
   // ⭐ 限制显示的钉住条件数量，避免影响后面的视图组件
   const MAX_VISIBLE_PINNED = 5; // 最多显示 5 个钉住的条件
