@@ -16,6 +16,23 @@ export interface TenantCheckResponse {
 }
 
 /**
+ * 组织搜索选项接口
+ */
+export interface TenantSearchOption {
+  tenant_id: number;
+  tenant_name: string;
+  tenant_domain: string;
+}
+
+/**
+ * 组织搜索响应接口
+ */
+export interface TenantSearchResponse {
+  items: TenantSearchOption[];
+  total: number;
+}
+
+/**
  * 个人注册请求数据接口
  */
 export interface PersonalRegisterRequest {
@@ -37,7 +54,19 @@ export interface PersonalRegisterResponse {
 }
 
 /**
- * 检查组织是否存在
+ * 搜索组织（支持组织代码或组织名模糊搜索）
+ *
+ * @param keyword - 搜索关键词（组织代码或组织名）
+ * @returns 组织搜索结果
+ */
+export async function searchTenants(keyword: string): Promise<TenantSearchResponse> {
+  return apiRequest<TenantSearchResponse>('/tenants/search', {
+    params: { keyword, page: 1, page_size: 10 },
+  });
+}
+
+/**
+ * 检查组织是否存在（通过域名）
  *
  * @param domain - 组织域名
  * @returns 组织检查结果
@@ -60,13 +89,35 @@ export async function registerPersonal(data: PersonalRegisterRequest): Promise<P
 }
 
 /**
+ * 组织注册请求数据接口
+ */
+export interface OrganizationRegisterRequest {
+  tenant_name: string;
+  tenant_domain?: string;
+  username: string;
+  email?: string;
+  password: string;
+  full_name?: string;
+}
+
+/**
+ * 组织注册响应接口
+ */
+export interface OrganizationRegisterResponse {
+  success: boolean;
+  message: string;
+  tenant_id?: number;
+  user_id?: number;
+}
+
+/**
  * 组织注册
  *
  * @param data - 组织注册数据
  * @returns 注册响应
  */
-export async function registerOrganization(data: any): Promise<any> {
-  return apiRequest('/auth/register/organization', {
+export async function registerOrganization(data: OrganizationRegisterRequest): Promise<OrganizationRegisterResponse> {
+  return apiRequest<OrganizationRegisterResponse>('/auth/register/organization', {
     method: 'POST',
     data,
   });

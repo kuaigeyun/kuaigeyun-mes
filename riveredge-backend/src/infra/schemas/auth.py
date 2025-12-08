@@ -224,6 +224,7 @@ class CurrentUserResponse(BaseModel):
         email: 用户邮箱
         full_name: 用户全名
         tenant_id: 组织 ID
+        tenant_name: 组织名称（可选，如果用户有组织则返回）
         is_active: 是否激活
         is_platform_admin: 是否为平台管理
         is_tenant_admin: 是否为组织管理员
@@ -235,6 +236,7 @@ class CurrentUserResponse(BaseModel):
     email: Optional[str] = Field(None, description="用户邮箱（可选）")
     full_name: Optional[str] = Field(None, description="用户全名")
     tenant_id: Optional[int] = Field(None, description="组织 ID（平台管理可能没有组织）")
+    tenant_name: Optional[str] = Field(None, description="组织名称（可选，如果用户有组织则返回）")
     is_active: bool = Field(..., description="是否激活")
     is_platform_admin: bool = Field(..., description="是否为平台管理（系统级超级管理员）")
     is_tenant_admin: bool = Field(..., description="是否为组织管理员")

@@ -102,11 +102,17 @@ export async function apiRequest<T = any>(
   // 获取认证 Token
   const token = getAuthToken();
   
-  // 检查是否是登录接口（登录接口不应该携带 token）
-  const isAuthEndpoint = url.includes('/auth/login') || url.includes('/login');
+  // 检查是否是公开接口（登录、注册等接口不应该携带 token）
+  const isPublicEndpoint = 
+    url.includes('/auth/login') || 
+    url.includes('/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/register') ||
+    url.includes('/tenants/search') ||
+    url.includes('/tenants/check-domain');
   
-  // 检查 Token 是否存在（登录接口除外）
-  if (!token && !isAuthEndpoint) {
+  // 检查 Token 是否存在（公开接口除外）
+  if (!token && !isPublicEndpoint) {
     console.warn(`⚠️ API 请求 ${url} 没有 Token`);
   }
   
@@ -118,9 +124,9 @@ export async function apiRequest<T = any>(
     method: options?.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
-      // 如果存在 Token 且不是登录接口，添加到请求头
-      // ⚠️ 关键修复：登录接口不应该携带 token，避免过期 token 干扰登录验证
-      ...(token && !isAuthEndpoint ? { 'Authorization': `Bearer ${token}` } : {}),
+      // 如果存在 Token 且不是公开接口，添加到请求头
+      // ⚠️ 关键修复：公开接口（登录、注册等）不应该携带 token，避免过期 token 干扰验证
+      ...(token && !isPublicEndpoint ? { 'Authorization': `Bearer ${token}` } : {}),
       // 如果存在组织ID且不是平台级接口，添加到请求头
       // ⚠️ 关键修复：系统级API需要组织上下文，平台级API不需要
       // ⚠️ 重要：对于系统级API，必须要有组织上下文
@@ -172,27 +178,29 @@ export async function apiRequest<T = any>(
       
       // 处理 401 未授权错误
       if (response.status === 401) {
-        // ⚠️ 关键修复：区分登录接口和其他接口的错误处理
-        const isAuthEndpoint = url.includes('/auth/login') || url.includes('/login');
-        if (isAuthEndpoint) {
-          // 登录接口返回 401，说明用户名或密码错误
+        // ⚠️ 关键修复：区分公开接口和其他接口的错误处理
+        const isPublicEndpoint = 
+          url.includes('/auth/login') || 
+          url.includes('/login') ||
+          url.includes('/auth/register') ||
+          url.includes('/register') ||
+          url.includes('/tenants/search') ||
+          url.includes('/tenants/check-domain');
+        if (isPublicEndpoint) {
+          // 公开接口返回 401，说明认证失败（登录：用户名或密码错误；注册：可能的问题）
           // 尝试从响应中提取错误信息
-          const errorMessage = data?.detail || data?.message || '用户名或密码错误';
+          const errorMessage = data?.detail || data?.message || (url.includes('/register') ? '注册失败' : '用户名或密码错误');
           const error = new Error(errorMessage) as any;
           error.response = { data, status: response.status };
           throw error;
         } else {
           // 其他接口返回 401，可能是 Token 过期或无效
-          // 清除过期的 Token 并重定向到登录页
+          // 清除过期的 Token，路由守卫会自动处理重定向到登录页
           console.warn('⚠️ API 返回 401，Token 已过期或无效，清除 Token');
           clearAuth();
           
-          // 延迟重定向，避免在请求处理过程中重定向
-          setTimeout(() => {
-            if (window.location.pathname !== '/login' && !window.location.pathname.startsWith('/platform')) {
-              window.location.href = '/login';
-            }
-          }, 100);
+          // ⚠️ 关键修复：不在这里直接跳转，由路由守卫自动处理重定向，避免页面刷新
+          // 路由守卫会在检测到没有 token 时自动重定向到登录页
           
           const error = new Error('认证已过期，请重新登录') as any;
           error.response = { data, status: response.status };

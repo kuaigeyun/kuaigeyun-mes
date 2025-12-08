@@ -5,7 +5,7 @@
  * 单体部署本质上就是只有 routes，没有新建其他租户应用
  * 
  * 路由结构：
- * - 公开页面：/login, /register/*
+ * - 公开页面：/login（登录和注册功能都在此页面，注册通过 Drawer 实现）
  * - 系统级路由（/system/*）：用户登录后访问
  *   - /system/dashboard - 系统仪表盘
  *   - /system/roles - 角色管理
@@ -42,9 +42,6 @@ const LoadingFallback: React.FC = () => (
 // 公共页面（立即加载，不需要懒加载）
 import IndexPage from '../pages';
 import LoginPage from '../pages/login';
-import RegisterPage from '../pages/register';
-import PersonalRegisterPage from '../pages/register/personal';
-import OrganizationRegisterPage from '../pages/register/organization';
 import NotFoundPage from '../pages/404';
 import PlatformLoginPage from '../pages/platform/login';
 import LockScreenPage from '../pages/lock-screen';
@@ -130,9 +127,10 @@ const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
  *
  * 按照新的页面结构组织路由：
  * - /login - 用户登录
- * - /register/* - 注册页面
  * - /system/* - 系统级功能（登录后访问）
  * - /platform/* - 平台级功能（平台超管登录后访问）
+ * 
+ * 注意：注册功能已整合到登录页面（/login），通过 Drawer 实现，不再有独立的注册路由
  */
 const AppRoutes: React.FC = () => {
   return (
@@ -141,12 +139,8 @@ const AppRoutes: React.FC = () => {
       <Route path="/" element={<IndexPage />} />
 
       {/* ==================== 公开页面 ==================== */}
-      {/* 用户登录 */}
+      {/* 用户登录（包含注册功能，通过 Drawer 实现） */}
       <Route path="/login" element={<LoginPage />} />
-      {/* 注册页面 */}
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/register/personal" element={<PersonalRegisterPage />} />
-      <Route path="/register/organization" element={<OrganizationRegisterPage />} />
       {/* 平台超管登录 */}
       <Route path="/platform" element={<PlatformLoginPage />} />
       {/* 锁屏页面 */}

@@ -12,7 +12,7 @@ import asyncio
 
 from infra.models.user import User
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
-from infra.schemas.auth import LoginRequest, UserRegisterRequest
+from infra.schemas.auth import LoginRequest, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest
 from infra.schemas.tenant import TenantCreate
 from infra.domain.security.security import (
     create_token_for_user,
@@ -99,6 +99,212 @@ class AuthService:
         )
         
         return user
+    
+    async def register_personal(
+        self,
+        data: PersonalRegisterRequest
+    ) -> dict:
+        """
+        个人注册
+        
+        如果提供了 tenant_id，则在指定组织中创建用户；否则在默认组织中创建用户。
+        如果提供了 invite_code，则验证邀请码并直接注册成功（免审核）。
+        
+        Args:
+            data: 个人注册请求数据
+            
+        Returns:
+            dict: 包含 success、message、user_id 的字典
+            
+        Raises:
+            HTTPException: 当组织不存在、用户名已存在或邀请码无效时抛出
+        """
+        from infra.services.user_service import UserService
+        from infra.services.tenant_service import TenantService
+        
+        user_service = UserService()
+        tenant_service = TenantService()
+        
+        # 确定要使用的组织 ID
+        tenant_id = data.tenant_id
+        
+        # 如果没有提供 tenant_id，使用默认组织
+        if tenant_id is None:
+            default_tenant = await tenant_service.get_tenant_by_domain(
+                "default",
+                skip_tenant_filter=True
+            )
+            if not default_tenant:
+                # 如果默认组织不存在，创建它
+                from infra.schemas.tenant import TenantCreate
+                default_tenant_data = TenantCreate(
+                    name="默认组织",
+                    domain="default",
+                    status=TenantStatus.ACTIVE,
+                    plan=TenantPlan.BASIC,
+                    settings={
+                        "description": "系统默认组织，用于个人注册",
+                        "is_default": True,
+                    },
+                    max_users=1000,
+                    max_storage=10240,
+                    expires_at=None,
+                )
+                default_tenant = await tenant_service.create_tenant(default_tenant_data)
+                await tenant_service.initialize_tenant_data(default_tenant.id)
+            tenant_id = default_tenant.id
+        
+        # 检查组织是否存在
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="组织不存在"
+            )
+        
+        # 检查组织是否激活
+        if tenant.status != TenantStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="组织未激活，无法注册"
+            )
+        
+        # 如果提供了邀请码，验证邀请码（这里简化处理，实际应该从组织设置中读取邀请码）
+        if data.invite_code:
+            # TODO: 实现邀请码验证逻辑
+            # 如果邀请码有效，直接注册成功（免审核）
+            pass
+        
+        # 检查组织内用户名是否已存在
+        existing_username = await User.get_or_none(
+            tenant_id=tenant_id,
+            username=data.username
+        )
+        if existing_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该组织下用户名已被使用"
+            )
+        
+        # 创建用户
+        from infra.schemas.user import UserCreate
+        user_data = UserCreate(
+            username=data.username,
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name,
+            tenant_id=tenant_id,
+            is_active=True,  # 个人注册直接激活
+            is_platform_admin=False,
+            is_tenant_admin=False,
+        )
+        user = await user_service.create_user(user_data, tenant_id=tenant_id)
+        
+        return {
+            "success": True,
+            "message": "注册成功",
+            "user_id": user.id
+        }
+    
+    async def register_organization(
+        self,
+        data: OrganizationRegisterRequest
+    ) -> dict:
+        """
+        组织注册
+        
+        创建新组织并注册管理员用户。
+        如果未提供 tenant_domain，则自动生成8位随机域名。
+        
+        Args:
+            data: 组织注册请求数据
+            
+        Returns:
+            dict: 包含 success、message、tenant_id、user_id 的字典
+            
+        Raises:
+            HTTPException: 当域名已存在或用户名已存在时抛出
+        """
+        from infra.services.tenant_service import TenantService
+        from infra.services.user_service import UserService
+        from infra.schemas.tenant import TenantCreate
+        from infra.schemas.user import UserCreate
+        import random
+        import string
+        
+        tenant_service = TenantService()
+        user_service = UserService()
+        
+        # 确定组织域名
+        tenant_domain = data.tenant_domain
+        
+        # 如果未提供域名，自动生成8位随机域名
+        if not tenant_domain:
+            # 生成8位随机字符串（小写字母和数字）
+            chars = string.ascii_lowercase + string.digits
+            tenant_domain = ''.join(random.choices(chars, k=8))
+            
+            # 确保域名唯一
+            max_attempts = 10
+            attempts = 0
+            while await Tenant.get_or_none(domain=tenant_domain) and attempts < max_attempts:
+                tenant_domain = ''.join(random.choices(chars, k=8))
+                attempts += 1
+            
+            if attempts >= max_attempts:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="无法生成唯一的组织域名，请稍后重试"
+                )
+        
+        # 检查域名是否已存在
+        existing_tenant = await Tenant.get_or_none(domain=tenant_domain)
+        if existing_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"域名 {tenant_domain} 已被使用"
+            )
+        
+        # 创建组织（状态为 INACTIVE，需要管理员审核）
+        tenant_data = TenantCreate(
+            name=data.tenant_name,
+            domain=tenant_domain,
+            status=TenantStatus.INACTIVE,  # 新注册的组织需要审核
+            plan=TenantPlan.TRIAL,  # 默认体验套餐
+            settings={
+                "description": f"组织注册：{data.tenant_name}",
+                "registered_by": data.username,
+            },
+            max_users=None,  # 根据套餐自动设置
+            max_storage=None,  # 根据套餐自动设置
+            expires_at=None,
+        )
+        tenant = await tenant_service.create_tenant(tenant_data)
+        
+        # 初始化组织数据（创建默认角色、权限等）
+        await tenant_service.initialize_tenant_data(tenant.id)
+        
+        # 创建管理员用户
+        user_data = UserCreate(
+            username=data.username,
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name,
+            tenant_id=tenant.id,
+            is_active=True,  # 管理员直接激活
+            is_platform_admin=False,
+            is_tenant_admin=True,  # ⭐ 关键：设置为组织管理员
+        )
+        user = await user_service.create_user(user_data, tenant_id=tenant.id)
+        
+        logger.info(f"组织注册成功: {tenant.name} (ID: {tenant.id}, 域名: {tenant.domain}), 管理员: {user.username} (ID: {user.id})")
+        
+        return {
+            "success": True,
+            "message": "注册成功，等待管理员审核",
+            "tenant_id": tenant.id,
+            "user_id": user.id
+        }
     
     async def login(
         self,
@@ -283,6 +489,20 @@ class AuthService:
                     }
                     for tenant in tenants_queryset
                 ]
+            # ⚠️ 关键修复：如果用户只有一个组织，确保也返回该组织信息（用于前端显示组织名称）
+            elif final_tenant_id:
+                # 如果用户只有一个组织，直接查询该组织信息
+                tenant = await Tenant.get_or_none(id=final_tenant_id)
+                if tenant:
+                    user_tenants_list = [
+                        {
+                            "id": tenant.id,
+                            "uuid": str(tenant.uuid),
+                            "name": tenant.name,
+                            "domain": tenant.domain,
+                            "status": tenant.status.value,
+                        }
+                    ]
         
         # 判断是否需要组织选择
         requires_tenant_selection = len(user_tenants_list) > 1
@@ -477,20 +697,24 @@ class AuthService:
             expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
             
             # 4. 返回登录响应
+            # ⚠️ 关键修复：在 user 对象中包含 tenant_name，确保前端可以正确显示租户名称
+            user_info_dict = {
+                "id": guest_user.id,
+                "uuid": str(guest_user.uuid),
+                "username": guest_user.username,
+                "email": guest_user.email,
+                "full_name": guest_user.full_name,
+                "tenant_id": default_tenant.id,
+                "tenant_name": default_tenant.name,  # ⚠️ 关键修复：包含租户名称
+                "is_platform_admin": guest_user.is_platform_admin,
+                "is_tenant_admin": guest_user.is_tenant_admin,
+            }
+            
             return {
                 "access_token": access_token,
                 "token_type": "bearer",
                 "expires_in": expires_in,
-                "user": {
-                    "id": guest_user.id,
-                    "uuid": str(guest_user.uuid),
-                    "username": guest_user.username,
-                    "email": guest_user.email,
-                    "full_name": guest_user.full_name,
-                    "tenant_id": default_tenant.id,
-                    "is_platform_admin": guest_user.is_platform_admin,
-                    "is_tenant_admin": guest_user.is_tenant_admin,
-                },
+                "user": user_info_dict,
                 "tenants": None,  # 体验账户只有一个组织，不需要选择
                 "default_tenant_id": default_tenant.id,
                 "requires_tenant_selection": False,

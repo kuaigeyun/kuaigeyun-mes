@@ -6,7 +6,7 @@
  */
 
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { App, Input, Button, Form, Typography, Avatar } from 'antd';
+import { App, Input, Button, Form, Typography, Avatar, ConfigProvider } from 'antd';
 import { LockOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import TweenOne from 'rc-tween-one';
@@ -15,6 +15,10 @@ import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/aut
 import { login } from '../../services/auth';
 import { platformSuperAdminLogin } from '../../services/platformAdmin';
 import { setToken } from '../../utils/auth';
+import { theme } from 'antd';
+
+// 固定主题颜色（不受全局主题影响）
+const FIXED_THEME_COLOR = '#1890ff';
 
 const { Title, Text } = Typography;
 
@@ -487,7 +491,15 @@ export default function LockScreenPage() {
   };
 
   return (
-    <>
+    <ConfigProvider
+      theme={{
+        algorithm: theme.defaultAlgorithm, // 强制使用浅色模式，不受全局深色模式影响
+        token: {
+          colorPrimary: FIXED_THEME_COLOR, // 固定主题色，不受全局主题影响
+        },
+      }}
+    >
+      <>
       <style>{`
         @keyframes rotateSlow {
           0% {
@@ -550,7 +562,7 @@ export default function LockScreenPage() {
             left: 0,
             width: '100%',
             height: '100%',
-            background: '#1890ff',
+            background: FIXED_THEME_COLOR,
             zIndex: 0,
             pointerEvents: 'none',
             overflow: 'hidden',
@@ -667,7 +679,7 @@ export default function LockScreenPage() {
             <Avatar
               size={80}
               style={{
-                backgroundColor: '#1890ff',
+                backgroundColor: FIXED_THEME_COLOR,
                 marginBottom: 16,
                 boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
               }}
@@ -854,5 +866,6 @@ export default function LockScreenPage() {
       </div>
     </div>
     </>
+    </ConfigProvider>
   );
 }

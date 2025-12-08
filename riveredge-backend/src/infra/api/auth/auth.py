@@ -7,8 +7,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
 
-from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest
+from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse
 from infra.services.auth_service import AuthService
+from infra.api.deps.deps import get_current_user
+from infra.models.user import User
 
 # 创建路由
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -113,6 +115,44 @@ async def guest_login():
     return LoginResponse(**result)
 
 
+@router.get("/me", response_model=CurrentUserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取当前用户信息接口
+    
+    返回当前登录用户的详细信息，包括组织信息。
+    
+    Args:
+        current_user: 当前用户对象（通过依赖注入获取）
+        
+    Returns:
+        CurrentUserResponse: 当前用户信息响应数据
+    """
+    from infra.models.tenant import Tenant
+    
+    # 获取租户信息（如果用户有租户）
+    tenant_name = None
+    if current_user.tenant_id:
+        tenant = await Tenant.get_or_none(id=current_user.tenant_id)
+        if tenant:
+            tenant_name = tenant.name
+    
+    return CurrentUserResponse(
+        id=current_user.id,
+        uuid=str(current_user.uuid),
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        tenant_id=current_user.tenant_id,
+        tenant_name=tenant_name,  # ⚠️ 关键修复：返回租户名称
+        is_active=current_user.is_active,
+        is_platform_admin=current_user.is_platform_admin,
+        is_tenant_admin=current_user.is_tenant_admin,
+    )
+
+
 @router.post("/logout")
 async def logout():
     """
@@ -125,5 +165,62 @@ async def logout():
     """
     return {
         "message": "登出成功"
+    }
+
+
+@router.post("/register/personal")
+async def register_personal(data: PersonalRegisterRequest):
+    """
+    个人注册接口
+    
+    个人用户注册。如果提供了 tenant_id，则在指定组织中创建用户；
+    否则在默认组织中创建用户。如果提供了 invite_code，则验证邀请码并直接注册成功（免审核）。
+    
+    Args:
+        data: 个人注册请求数据
+        
+    Returns:
+        RegisterResponse: 注册成功的响应数据
+        
+    Raises:
+        HTTPException: 当组织不存在、用户名已存在或邀请码无效时抛出
+    """
+    service = AuthService()
+    result = await service.register_personal(data)
+    # 返回格式与前端期望一致：{ success, message, user_id }
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "user_id": result["user_id"]
+    }
+
+
+@router.post("/register/organization")
+async def register_organization(data: OrganizationRegisterRequest):
+    """
+    组织注册接口
+    
+    创建新组织并注册管理员用户。
+    如果未提供 tenant_domain，则自动生成8位随机域名。
+    新注册的组织状态为 INACTIVE，需要平台管理员审核。
+    
+    Args:
+        data: 组织注册请求数据
+        
+    Returns:
+        RegisterResponse: 注册成功的响应数据（包含 tenant_domain）
+        
+    Raises:
+        HTTPException: 当域名已存在或用户名已存在时抛出
+    """
+    service = AuthService()
+    result = await service.register_organization(data)
+    
+    # 返回格式与前端期望一致：{ success, message, tenant_id, user_id }
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "tenant_id": result["tenant_id"],
+        "user_id": result["user_id"]
     }
 

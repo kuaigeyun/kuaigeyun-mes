@@ -96,8 +96,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   const addTab = useCallback(
     (path: string) => {
-      // 排除登录页等不需要标签的页面
-      const excludePaths = ['/login', '/register'];
+      // 排除登录页等不需要标签的页面（注册功能已整合到登录页面）
+      const excludePaths = ['/login'];
       if (excludePaths.some((p) => path.startsWith(p))) {
         return;
       }

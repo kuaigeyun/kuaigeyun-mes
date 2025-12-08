@@ -23,6 +23,7 @@ from infra.infrastructure.database.database import register_db
 # 导入所有平台级 API 路由
 # 注意：SuperAdmin Auth已移除，使用Platform Admin Auth替代
 from infra.api.tenants.tenants import router as tenants_router
+from infra.api.tenants.public import router as tenants_public_router
 from infra.api.packages.packages_config import router as packages_config_router
 from infra.api.packages.packages import router as packages_router
 from infra.api.platform_superadmin.platform_superadmin import router as platform_superadmin_router
@@ -191,6 +192,9 @@ const ui = SwaggerUIBundle({
 
 # 用户认证路由 (User Authentication APIs)
 app.include_router(auth_router, prefix="/api/v1")
+
+# 公开的组织接口（不需要认证，用于注册等功能）
+app.include_router(tenants_public_router, prefix="/api/v1")
 
 # 平台级功能路由 (Platform Level APIs)
 app.include_router(packages_config_router, prefix="/api/v1/platform")

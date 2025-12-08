@@ -88,7 +88,7 @@ export default function PlatformSuperAdminPage() {
         // 清除查询缓存
         queryClient.clear();
         messageApi.success('已退出登录');
-        // 跳转到平台登录页面
+        // ⚠️ 关键修复：使用 navigate 跳转，避免页面刷新
         navigate('/platform/login', { replace: true });
       },
     });
