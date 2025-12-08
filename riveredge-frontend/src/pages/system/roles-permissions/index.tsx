@@ -531,7 +531,7 @@ const RolesPermissionsPage: React.FC = () => {
         </div>
         
         {/* 角色树 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+        <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
           <Spin spinning={rolesLoading}>
             <Tree
               className="roles-permissions-tree"

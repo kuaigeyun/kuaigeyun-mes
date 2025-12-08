@@ -7,7 +7,7 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { App, Input, Button, Form, Typography, Avatar, ConfigProvider } from 'antd';
-import { LockOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { LockOutlined, EyeOutlined, EyeInvisibleOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import TweenOne from 'rc-tween-one';
 import { useGlobalStore } from '../../stores';
@@ -394,6 +394,9 @@ export default function LockScreenPage() {
   // 获取用户显示名称
   const displayName = currentUser?.full_name || currentUser?.username || '用户';
   const userInitial = displayName[0]?.toUpperCase() || 'U';
+  
+  // 判断是否是体验用户
+  const isGuestUser = currentUser?.username === 'guest';
 
   // 日期和时间状态
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -678,14 +681,14 @@ export default function LockScreenPage() {
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <Avatar
               size={80}
+              src={(currentUser as any)?.avatar}
+              icon={!((currentUser as any)?.avatar) ? <UserOutlined /> : undefined}
               style={{
-                backgroundColor: FIXED_THEME_COLOR,
+                backgroundColor: !((currentUser as any)?.avatar) ? FIXED_THEME_COLOR : undefined,
                 marginBottom: 16,
                 boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
               }}
-            >
-              {userInitial}
-            </Avatar>
+            />
             <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
               {displayName}
             </Title>
@@ -844,9 +847,20 @@ export default function LockScreenPage() {
 
           {/* 提示信息 */}
           <div style={{ marginTop: 24, textAlign: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              输入您的密码以解锁屏幕
-            </Text>
+            {isGuestUser ? (
+              <div>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                  体验用户解锁密码：<Text strong style={{ color: FIXED_THEME_COLOR }}>guest123</Text>
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  输入密码以解锁屏幕
+                </Text>
+              </div>
+            ) : (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                输入您的密码以解锁屏幕
+              </Text>
+            )}
           </div>
         </div>
       </div>
