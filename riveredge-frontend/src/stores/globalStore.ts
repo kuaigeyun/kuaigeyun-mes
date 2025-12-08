@@ -75,7 +75,8 @@ export const useGlobalStore = create<GlobalState>()(
       logout: () => {
         clearAuth();
         set({ currentUser: undefined, isLocked: false, lockedPath: undefined });
-        window.location.href = '/login';
+        // ⚠️ 关键修复：不在这里直接跳转，由调用方使用 navigate 进行跳转，避免页面刷新
+        // 路由守卫会自动处理重定向到登录页
       },
     }),
     {

@@ -134,6 +134,57 @@ class TenantListResponse(BaseModel):
     page_size: int = Field(..., description="每页数量")
 
 
+class TenantSearchOption(BaseModel):
+    """
+    组织搜索选项 Schema
+    
+    用于组织搜索结果的单个组织信息
+    
+    Attributes:
+        tenant_id: 组织 ID
+        tenant_name: 组织名称
+        tenant_domain: 组织域名
+    """
+    
+    tenant_id: int = Field(..., description="组织 ID")
+    tenant_name: str = Field(..., description="组织名称")
+    tenant_domain: str = Field(..., description="组织域名")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TenantSearchResponse(BaseModel):
+    """
+    组织搜索响应 Schema
+    
+    用于返回组织搜索结果
+    
+    Attributes:
+        items: 组织列表
+        total: 总数量
+    """
+    
+    items: list[TenantSearchOption] = Field(..., description="组织列表")
+    total: int = Field(..., description="总数量")
+
+
+class TenantCheckResponse(BaseModel):
+    """
+    组织检查响应 Schema
+    
+    用于检查组织域名是否存在
+    
+    Attributes:
+        exists: 组织是否存在
+        tenant_id: 组织 ID（如果存在）
+        tenant_name: 组织名称（如果存在）
+    """
+    
+    exists: bool = Field(..., description="组织是否存在")
+    tenant_id: Optional[int] = Field(None, description="组织 ID（如果存在）")
+    tenant_name: Optional[str] = Field(None, description="组织名称（如果存在）")
+
+
 class TenantUsageResponse(BaseModel):
     """
     组织使用量统计响应 Schema

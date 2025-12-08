@@ -12,7 +12,7 @@ import { useLocation, Navigate } from 'react-router-dom';
 import { App as AntdApp, Spin, ConfigProvider, theme, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
-import { getToken, clearAuth, getUserInfo } from './utils/auth';
+import { getToken, clearAuth, getUserInfo, setUserInfo } from './utils/auth';
 import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
@@ -58,8 +58,11 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
+          tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
         };
         setCurrentUser(restoredUser);
+        // ⚠️ 关键修复：确保恢复的用户信息也保存到 localStorage
+        setUserInfo(restoredUser);
       }
     }
     
@@ -68,9 +71,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次，使用 initializedRef 确保只执行一次
 
-  // 公开页面（只包括登录和注册页面，不包括平台管理页面）
+  // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
   // ⚠️ 关键修复：先定义公开页面判断，避免在 shouldFetchUser 中使用未定义的变量
-  const publicPaths = ['/login', '/register', '/register/personal', '/register/organization'];
+  const publicPaths = ['/login'];
   // 平台登录页是公开的，但其他平台页面需要登录
   const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
@@ -94,6 +97,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     onSuccess: (data) => {
       if (data) {
         setCurrentUser(data);
+        // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name（如果后端返回）
+        // 注意：如果后端没有返回 tenant_name，需要根据 tenant_id 查询租户信息
+        setUserInfo(data);
       }
     },
     onError: (error) => {
@@ -111,8 +117,11 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
+          tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
         };
         setCurrentUser(restoredUser);
+        // ⚠️ 关键修复：确保恢复的用户信息也保存到 localStorage
+        setUserInfo(restoredUser);
         console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
       } else if (token) {
         // 有 token 但没有保存的用户信息，使用默认值

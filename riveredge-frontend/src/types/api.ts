@@ -36,11 +36,14 @@ export interface PageParams {
  */
 export interface CurrentUser {
   id: number;
+  uuid?: string;
   username: string;
   email?: string;
   full_name?: string;
   is_platform_admin?: boolean;
   is_tenant_admin?: boolean;
   tenant_id?: number;
+  tenant_name?: string; // ⚠️ 关键修复：添加租户名称字段
+  is_active?: boolean;
 }
 

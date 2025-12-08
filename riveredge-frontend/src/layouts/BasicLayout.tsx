@@ -165,8 +165,8 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setLoading(isLoading);
   }, [isLoading, setLoading]);
 
-  // 公开页面（只包括登录和注册页面，不包括平台管理页面）
-  const publicPaths = ['/login', '/register', '/register/personal', '/register/organization'];
+  // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
+  const publicPaths = ['/login'];
   // 平台登录页是公开的，但其他平台页面需要登录
   const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
@@ -1115,6 +1115,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         break;
       case 'logout':
         logout();
+        // ⚠️ 关键修复：退出登录后使用 navigate 跳转，避免页面刷新
+        navigate('/login', { replace: true });
         break;
     }
   };

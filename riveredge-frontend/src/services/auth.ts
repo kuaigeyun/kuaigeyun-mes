@@ -38,6 +38,7 @@ export interface LoginResponse {
     email?: string;
     full_name?: string;
     tenant_id?: number;
+    tenant_name?: string;  // ⚠️ 关键修复：包含租户名称
     is_platform_admin?: boolean;
     is_tenant_admin?: boolean;
   };
