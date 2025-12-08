@@ -97,42 +97,43 @@ class PositionService:
         Returns:
             dict: 包含职位列表和分页信息
         """
-        # 构建查询
-        query = Position.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        from core.utils.search_utils import list_with_search
         
-        # 关键词搜索
-        if keyword:
-            query = query.filter(
-                Q(name__icontains=keyword) |
-                Q(code__icontains=keyword) |
-                Q(description__icontains=keyword)
-            )
+        # 构建精确匹配条件
+        exact_filters = {'deleted_at__isnull': True}
+        if is_active is not None:
+            exact_filters['is_active'] = is_active
         
-        # 部门筛选
+        # 处理部门筛选
         if department_uuid:
             department = await Department.filter(
                 uuid=department_uuid,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).first()
-            
             if department:
-                query = query.filter(department_id=department.id)
-        
-        # 筛选
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        
-        # 优化分页查询：先查询总数，再查询数据
-        total = await query.count()
+                exact_filters['department_id'] = department.id
         
         # 限制分页大小，避免过大查询
         if page_size > 100:
             page_size = 100
         
-        # 分页查询（使用索引字段排序）
-        offset = (page - 1) * page_size
-        positions = await query.order_by("-created_at").offset(offset).limit(page_size).all()
+        # 使用通用搜索工具（自动支持拼音首字母搜索）
+        search_result = await list_with_search(
+            model=Position,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            search_fields=['name', 'code', 'description'],
+            exact_filters=exact_filters if exact_filters else None,
+            allowed_sort_fields=['name', 'code', 'is_active', 'created_at', 'updated_at'],
+            default_sort='-created_at',
+            tenant_id=tenant_id,
+            skip_tenant_filter=False
+        )
+        
+        # 获取搜索结果的职位对象
+        positions = search_result["items"]
         
         # 获取关联的部门信息和用户数量
         result = []
@@ -177,9 +178,9 @@ class PositionService:
         
         return {
             "items": result,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
+            "total": search_result["total"],
+            "page": search_result["page"],
+            "page_size": search_result["page_size"],
         }
     
     @staticmethod

@@ -6,7 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Table, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -79,6 +79,7 @@ const LanguageListPage: React.FC = () => {
       // 获取语言详情
       const detail = await getLanguageByUuid(record.uuid);
       formRef.current?.setFieldsValue({
+        code: detail.code,
         name: detail.name,
         native_name: detail.native_name,
         is_default: detail.is_default,
@@ -457,13 +458,16 @@ const LanguageListPage: React.FC = () => {
           submitter={false}
           layout="vertical"
         >
-          <ProFormText
+          <ProFormSelect
             name="code"
             label="语言代码"
-            rules={[{ required: true, message: '请输入语言代码' }]}
-            placeholder="例如：zh、en、ja（ISO 639-1）"
+            rules={[{ required: true, message: '请选择语言代码' }]}
             disabled={isEdit}
             extra="语言代码用于程序识别，创建后不可修改"
+            options={[
+              { label: '简体中文 (zh-CN)', value: 'zh-CN' },
+              { label: 'English (en-US)', value: 'en-US' },
+            ]}
           />
           <ProFormText
             name="name"

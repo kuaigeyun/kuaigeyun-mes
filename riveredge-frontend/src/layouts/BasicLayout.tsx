@@ -541,7 +541,7 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
         icon: <MonitorOutlined />,
       },
       {
-        path: '/system/inngest',
+        path: '/platform/inngest',
         name: t('menu.platform.inngest') || '流程后台',
         icon: <MonitorOutlined />,
       },
@@ -1352,7 +1352,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected .ant-menu-item-group-title,
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu-selected > .ant-menu-item-group-title {
-          font-size: 14px !important;
+          font-size: var(--ant-fontSize) !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           line-height: 1.5714285714285714 !important;
           font-weight: normal !important;
@@ -1441,7 +1441,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
           padding-right: 16px !important;
           color: ${siderTextColor} !important;
-          font-size: 14px !important;
+          font-size: var(--ant-fontSize) !important;
           font-weight: normal !important;
         }
         /* 子菜单标题悬浮状态 */
@@ -1455,7 +1455,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 使用自定义样式选择器针对插件分组标题 */
         .menu-group-title-plugin {
-          font-size: 12px !important;
+          font-size: var(--ant-fontSizeSM) !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           font-weight: 500 !important;
           padding: 8px 16px !important;
@@ -1465,7 +1465,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 系统菜单分组标题样式 */
         .menu-group-title-system {
-          font-size: 12px !important;
+          font-size: var(--ant-fontSizeSM) !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
           font-weight: 500 !important;
           padding: 8px 16px !important;
@@ -1710,6 +1710,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item-group .ant-menu-item .ant-menu-item-icon {
           display: none !important;
         }
+        /* 子菜单内边距设置 */
+        .ant-pro-base-menu-inline .ant-pro-base-menu-inline-submenu-has-icon > .ant-menu-sub {
+          padding-inline-start: 0 !important;
+          padding:0 10px !important;
+        }
+        .ant-menu-item ant-menu-item-only-child ant-pro-base-menu-inline-menu-item {
+          padding-left: 32px !important;
+        }
         /* 二级及以下子菜单标题固定样式 - 使用 Ant Design 原生样式（排除分组标题） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu .ant-menu-submenu .ant-menu-submenu > .ant-menu-submenu-title:not(.ant-menu-item-group-title),
@@ -1718,9 +1726,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: transparent !important;
           background: transparent !important;
           color: ${siderTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : 'var(--ant-colorTextSecondary)'} !important;
-          border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          /* border-bottom: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} !important; */
 
-          padding-left: 28px !important;
+          padding-left: 32px !important;
           padding-right: 16px !important;
           border-radius: 0 !important;
           box-sizing: border-box !important;
@@ -1908,6 +1916,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           white-space: nowrap !important;
           flex-shrink: 1 !important;
           display: inline-flex !important;
+          align-items: center !important;
           min-width: 0;
           max-width: 100%;
           overflow: hidden;
@@ -1921,17 +1930,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           white-space: nowrap !important;
           flex-shrink: 0 !important;
           display: inline-flex !important;
+          align-items: center !important;
         }
         /* 面包屑内部文本防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb span,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb a {
           white-space: nowrap !important;
           display: inline-flex !important;
+          align-items: center !important;
         }
         /* 面包屑链接内部的 gap - 图标和文字之间的间距 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-link span,
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
-          gap: 8px !important;
+          gap: 4px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+        }
+        /* 面包屑项内部的链接和文字对齐 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-link {
+          display: inline-flex !important;
+          align-items: center !important;
+        }
+        /* 面包屑下拉箭头对齐 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .anticon {
+          display: inline-flex !important;
+          align-items: center !important;
+          vertical-align: middle !important;
         }
         /* 面包屑前面的小竖线 - 使用主题边框颜色 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before {

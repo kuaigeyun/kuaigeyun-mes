@@ -13,12 +13,10 @@ import { getUserPreference } from '../services/userPreference';
 import zhCN from '../locales/zh-CN';
 import enUS from '../locales/en-US';
 
-// 语言代码到语言名称的映射
+// 语言代码到语言名称的映射（仅保留简体中文和英语）
 export const LANGUAGE_MAP: Record<string, string> = {
   'zh-CN': '简体中文',
-  'zh-TW': '繁体中文',
   'en-US': 'English',
-  'ja-JP': '日本語',
 };
 
 // 初始化 i18n

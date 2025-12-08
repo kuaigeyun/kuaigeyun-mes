@@ -93,27 +93,31 @@ class RoleService:
         Returns:
             dict: 包含角色列表和分页信息
         """
-        # 构建查询
-        query = Role.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        from core.utils.search_utils import list_with_search
         
-        # 关键词搜索
-        if keyword:
-            query = query.filter(
-                Q(name__icontains=keyword) |
-                Q(code__icontains=keyword) |
-                Q(description__icontains=keyword)
-            )
-        
-        # 筛选
+        # 构建精确匹配条件
+        exact_filters = {'deleted_at__isnull': True}
         if is_active is not None:
-            query = query.filter(is_active=is_active)
-        
+            exact_filters['is_active'] = is_active
         if is_system is not None:
-            query = query.filter(is_system=is_system)
+            exact_filters['is_system'] = is_system
         
-        # 分页
-        total = await query.count()
-        roles = await query.offset((page - 1) * page_size).limit(page_size).all()
+        # 使用通用搜索工具（自动支持拼音首字母搜索）
+        search_result = await list_with_search(
+            model=Role,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            search_fields=['name', 'code', 'description'],
+            exact_filters=exact_filters if exact_filters else None,
+            allowed_sort_fields=['name', 'code', 'is_active', 'is_system', 'created_at', 'updated_at'],
+            default_sort='-created_at',
+            tenant_id=tenant_id,
+            skip_tenant_filter=False
+        )
+        
+        # 获取搜索结果的角色对象
+        roles = search_result["items"]
         
         # 获取关联的权限数量和用户数量
         result = []
@@ -139,9 +143,9 @@ class RoleService:
         
         return {
             "items": result,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
+            "total": search_result["total"],
+            "page": search_result["page"],
+            "page_size": search_result["page_size"],
         }
     
     @staticmethod

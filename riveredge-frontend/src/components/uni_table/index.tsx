@@ -7,9 +7,10 @@
 
 import React, { useRef, useLayoutEffect, ReactNode, useState, useEffect } from 'react';
 import { ProTable, ActionType, ProColumns, ProFormInstance, ProTableProps } from '@ant-design/pro-components';
-import { Button, Space, Radio, Dropdown, MenuProps, App } from 'antd';
-import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined } from '@ant-design/icons';
+import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme } from 'antd';
+import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined, SearchOutlined } from '@ant-design/icons';
 import { QuerySearchButton } from '../riveredge_query';
+import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
 // 内联的 useProTableSearch hook（简化实现）
 const useProTableSearch = () => {
   const searchParamsRef = useRef<Record<string, any> | undefined>(undefined);
@@ -444,8 +445,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   ...restProps
 }: UniTableProps<T>) {
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   // 导入弹窗状态
   const [importModalVisible, setImportModalVisible] = useState(false);
+  
+  // 预加载拼音库（组件挂载时）
+  useEffect(() => {
+    import('../../utils/pinyin').then(({ preloadPinyinLib }) => {
+      preloadPinyinLib().catch((err: any) => {
+        console.warn('预加载拼音库失败:', err);
+      });
+    });
+  }, []);
   
   // 自动生成导入配置（如果启用且未手动提供）
   const autoImportConfig = React.useMemo(() => {
@@ -470,6 +481,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [tableData, setTableData] = useState<T[]>([]);
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
   const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch();
+  // 模糊搜索关键词状态
+  const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('');
+  // 防抖定时器引用
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const internalActionRef = useRef<ActionType>();
   const internalFormRef = useRef<ProFormInstance>();
@@ -574,6 +589,68 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [currentViewType, tableData.length]);
 
   /**
+   * 处理模糊搜索（带防抖）
+   * 
+   * 根据最佳实践：
+   * 1. 使用防抖（300ms）来优化性能，避免频繁请求
+   * 2. 搜索关键词存储到 searchParamsRef 中，作为 keyword 参数传递给后端
+   * 3. 支持清除搜索，清除时重新加载数据
+   */
+  const handleFuzzySearch = (value: string) => {
+    setFuzzySearchKeyword(value);
+    
+    // 清除之前的防抖定时器
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // 设置防抖定时器（300ms）
+    debounceTimerRef.current = setTimeout(() => {
+      // 更新搜索参数
+      if (searchParamsRef.current) {
+        searchParamsRef.current.keyword = value.trim() || undefined;
+      } else {
+        searchParamsRef.current = {
+          keyword: value.trim() || undefined,
+        };
+      }
+      
+      // 触发表格重新加载
+      if (actionRef?.current) {
+        actionRef.current.reload();
+      }
+    }, 300);
+  };
+
+  /**
+   * 清除模糊搜索
+   */
+  const handleClearFuzzySearch = () => {
+    setFuzzySearchKeyword('');
+    
+    // 清除搜索参数
+    if (searchParamsRef.current) {
+      delete searchParamsRef.current.keyword;
+    }
+    
+    // 触发表格重新加载
+    if (actionRef?.current) {
+      actionRef.current.reload();
+    }
+  };
+
+  /**
+   * 组件卸载时清除防抖定时器
+   */
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  /**
    * 处理排序参数转换和搜索参数获取
    */
   const handleRequest = async (
@@ -587,6 +664,58 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     
     // 调用用户提供的 request 函数，传递搜索表单值
     const result = await request(params, sort, filter, searchFormValues);
+    
+    // 支持拼音搜索：如果关键词是拼音格式，在前端对返回的数据进行二次过滤
+    const keyword = searchFormValues?.keyword;
+    if (keyword && isPinyinKeyword(keyword) && result.data && Array.isArray(result.data)) {
+      const keywordUpper = keyword.toUpperCase();
+      
+      // 使用 Promise.all 进行异步拼音匹配
+      const filteredDataPromises = result.data.map(async (record: any) => {
+        // 遍历所有列，检查是否有匹配的字段
+        for (const column of columns) {
+          if (!column.dataIndex) continue;
+          
+          // 获取字段值（支持嵌套字段，如 'user.name'）
+          const getFieldValue = (obj: any, path: string | string[] | number): any => {
+            if (Array.isArray(path)) {
+              return path.reduce((acc, key) => acc?.[key], obj);
+            }
+            if (typeof path === 'number') {
+              return obj?.[path];
+            }
+            const keys = String(path).split('.');
+            return keys.reduce((acc, key) => acc?.[key], obj);
+          };
+          
+          const fieldValue = getFieldValue(record, column.dataIndex as string | string[] | number);
+          if (!fieldValue) continue;
+          
+          // 将字段值转换为字符串进行匹配
+          const valueStr = String(fieldValue);
+          
+          // 1. 文本匹配
+          const textMatch = valueStr.toLowerCase().includes(keyword.toLowerCase());
+          if (textMatch) return record;
+          
+          // 2. 拼音首字母匹配（异步）
+          const pinyinMatch = await matchPinyinInitialsAsync(valueStr, keywordUpper);
+          if (pinyinMatch) return record;
+        }
+        return null;
+      });
+      
+      // 等待所有匹配完成
+      const filteredResults = await Promise.all(filteredDataPromises);
+      const filteredData = filteredResults.filter(item => item !== null);
+      
+      // 更新结果数据
+      result.data = filteredData;
+      // 更新总数（如果前端过滤，总数可能不准确，但至少显示过滤后的数量）
+      if (result.total !== undefined) {
+        result.total = filteredData.length;
+      }
+    }
     
     // 保存数据到 state（用于其他视图）
     if (result.data) {
@@ -751,7 +880,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const buildRightActions = () => {
     const actions: ReactNode[] = [];
 
-    // 导入按钮
+    // 导入按钮（使用 success 绿色系，filled 样式，无框线，淡色）
+    // 参考 Material Design、Ant Design、Figma 等主流设计系统：
+    // - 导入/上传操作使用绿色（success）表示正向操作
+    // - filled 样式：使用填充背景色，无边框，淡色版本
     if (showImportButton) {
       actions.push(
         <Button
@@ -759,19 +891,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           icon={<UploadOutlined />}
           onClick={handleImportClick}
           style={{
-            borderColor: '#069E61',
-            color: '#069E61',
-            backgroundColor: 'transparent',
+            backgroundColor: token.colorSuccessBg || token.colorFillTertiary,
+            border: 'none',
+            color: token.colorSuccess,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#069E61';
-            e.currentTarget.style.borderColor = '#069E61';
-            e.currentTarget.style.color = '#ffffff';
+            e.currentTarget.style.backgroundColor = token.colorSuccessBgHover || token.colorFillSecondary;
+            e.currentTarget.style.color = token.colorSuccessHover || token.colorSuccess;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.borderColor = '#069E61';
-            e.currentTarget.style.color = '#069E61';
+            e.currentTarget.style.backgroundColor = token.colorSuccessBg || token.colorFillTertiary;
+            e.currentTarget.style.color = token.colorSuccess;
           }}
         >
           导入
@@ -828,7 +958,22 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}
           trigger={['click']}
         >
-          <Button icon={<DownloadOutlined />}>
+          <Button 
+            icon={<DownloadOutlined />}
+            style={{
+              backgroundColor: token.colorPrimaryBg || token.colorFillTertiary,
+              border: 'none',
+              color: token.colorPrimary,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = token.colorPrimaryBgHover || token.colorFillSecondary;
+              e.currentTarget.style.color = token.colorPrimaryHover || token.colorPrimary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = token.colorPrimaryBg || token.colorFillTertiary;
+              e.currentTarget.style.color = token.colorPrimary;
+            }}
+          >
             导出
             <DownOutlined style={{ marginLeft: 4, fontSize: '12px' }} />
           </Button>
@@ -901,6 +1046,78 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-pro-table .ant-pro-table-list-toolbar-container {
           padding-bottom: 0px !important;
         }
+        /* 统一三个组件的风格：模糊搜索框、高级搜索按钮、重置按钮 */
+        /* 1. 模糊搜索框 - 去除框线，使用背景色区分 */
+        .uni-table-fuzzy-search .ant-input-affix-wrapper,
+        .uni-table-fuzzy-search .ant-input-search-button {
+          height: 32px !important;
+        }
+        /* 搜索框整体：使用主题背景色和边框色，统一圆角 - 最高优先级 */
+        html body .uni-table-fuzzy-search.ant-input-search,
+        html body .uni-table-fuzzy-search .ant-input-group-wrapper,
+        html body .uni-table-fuzzy-search .ant-input-group,
+        html body .uni-table-fuzzy-search .ant-input-search.ant-input-search,
+        html body .pro-table-button-container .uni-table-fuzzy-search,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper {
+          border: 1px solid var(--ant-colorBorder) !important;
+          border-radius: ${token.borderRadius}px !important;
+          overflow: hidden !important;
+          background-color: var(--ant-colorBgContainer) !important;
+          box-shadow: none !important;
+        }
+        /* 隐藏搜索按钮和图标 - 实时搜索不需要 */
+        html body .uni-table-fuzzy-search .ant-input-search-button,
+        html body .uni-table-fuzzy-search .ant-input-group-addon,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-search-button,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-addon {
+          display: none !important;
+        }
+        /* 输入框部分：完整圆角（使用主题圆角值），无边框，主题色文字 */
+        html body .uni-table-fuzzy-search .ant-input-affix-wrapper,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
+          border: none !important;
+          background-color: transparent !important;
+          border-radius: ${token.borderRadius}px !important;
+        }
+        html body .uni-table-fuzzy-search .ant-input,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input {
+          color: var(--ant-colorText) !important;
+          background-color: transparent !important;
+        }
+        html body .uni-table-fuzzy-search .ant-input::placeholder,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input::placeholder {
+          color: var(--ant-colorTextPlaceholder) !important;
+          opacity: 0.5 !important;
+        }
+        /* 去掉获取焦点后的蓝色边框 - 仅针对模糊搜索框 */
+        html body .uni-table-fuzzy-search.ant-input-search:focus,
+        html body .uni-table-fuzzy-search .ant-input-group-wrapper:focus,
+        html body .uni-table-fuzzy-search .ant-input-group:focus,
+        html body .uni-table-fuzzy-search .ant-input-affix-wrapper:focus,
+        html body .uni-table-fuzzy-search .ant-input-affix-wrapper-focused,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper:focus,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper:focus,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper-focused {
+          border-color: var(--ant-colorBorder) !important;
+          box-shadow: none !important;
+          outline: none !important;
+        }
+        /* 深色模式下的优化 */
+        html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group-wrapper,
+        html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper {
+          background-color: var(--ant-colorBgContainer) !important;
+          border-color: var(--ant-colorBorder) !important;
+        }
+        html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input,
+        html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input {
+          color: var(--ant-colorText) !important;
+          background-color: transparent !important;
+        }
+        html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input::placeholder,
+        html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input::placeholder {
+          color: var(--ant-colorTextPlaceholder) !important;
+          opacity: 0.5 !important;
+        }
       `}</style>
       <div 
         ref={containerRef} 
@@ -913,28 +1130,43 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }}
       >
       {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
-      {(showAdvancedSearch || beforeSearchButtons || afterSearchButtons || (viewTypes && viewTypes.length > 1)) && (
-        <div
-          ref={buttonContainerRef}
-          className="pro-table-button-container"
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {beforeSearchButtons}
-            {showAdvancedSearch && (
-              <QuerySearchButton
-                columns={columns}
-                formRef={formRef as React.MutableRefObject<ProFormInstance>}
-                actionRef={actionRef as React.MutableRefObject<ActionType>}
-                searchParamsRef={searchParamsRef}
-              />
-            )}
-            {afterSearchButtons}
-          </div>
-          {/* 视图切换按钮（右侧） */}
-          {buildViewTypeButtons()}
+      {/* 模糊搜索框始终显示，其他按钮根据条件显示 */}
+      <div
+        ref={buttonContainerRef}
+        className="pro-table-button-container"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {beforeSearchButtons}
+          {/* 模糊搜索框 - 根据最佳实践实现，样式与高级搜索按钮一致 */}
+          <Input.Search
+            className="uni-table-fuzzy-search"
+            placeholder="模糊搜索"
+            allowClear
+            value={fuzzySearchKeyword}
+            onChange={(e) => handleFuzzySearch(e.target.value)}
+            onSearch={(value) => handleFuzzySearch(value)}
+            onClear={handleClearFuzzySearch}
+            style={{ 
+              width: 160,
+              borderRadius: `${token.borderRadius}px`,
+            }}
+            size="small"
+            enterButton={false}
+          />
+          {showAdvancedSearch && (
+            <QuerySearchButton
+              columns={columns}
+              formRef={formRef as React.MutableRefObject<ProFormInstance>}
+              actionRef={actionRef as React.MutableRefObject<ActionType>}
+              searchParamsRef={searchParamsRef}
+            />
+          )}
+          {afterSearchButtons}
         </div>
-      )}
+        {/* 视图切换按钮（右侧） */}
+        {(viewTypes && viewTypes.length > 1) && buildViewTypeButtons()}
+      </div>
 
       {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
       <div style={{ display: currentViewType === 'table' ? 'block' : 'none' }}>

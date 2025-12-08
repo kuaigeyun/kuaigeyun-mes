@@ -2110,10 +2110,19 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
       <Button
           ref={buttonRef}
           onClick={handleOpen}
-        type="primary"
-          ghost
+          type="text"
           style={{
-            backgroundColor: token.colorBgContainer,
+            backgroundColor: token.colorFillTertiary,
+            color: token.colorPrimary,
+            height: '32px',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+            e.currentTarget.style.color = token.colorPrimary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = token.colorFillTertiary;
+            e.currentTarget.style.color = token.colorPrimary;
           }}
       >
         高级搜索
@@ -2122,23 +2131,19 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         <Button
           onClick={handleReset}
           icon={<ReloadOutlined />}
+          type="text"
           style={{
-            borderColor: token.colorBorder,
+            backgroundColor: token.colorFillTertiary,
             color: token.colorTextSecondary,
-            backgroundColor: token.colorBgContainer,
-            boxShadow: 'none',
+            height: '32px',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = token.colorPrimary;
-            e.currentTarget.style.color = token.colorPrimary;
             e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-            e.currentTarget.style.boxShadow = 'none';
+            e.currentTarget.style.color = token.colorText;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = token.colorBorder;
+            e.currentTarget.style.backgroundColor = token.colorFillTertiary;
             e.currentTarget.style.color = token.colorTextSecondary;
-            e.currentTarget.style.backgroundColor = token.colorBgContainer;
-            e.currentTarget.style.boxShadow = 'none';
           }}
         >
           重置
