@@ -677,7 +677,7 @@ const FileListPage: React.FC = () => {
         </div>
         
         {/* 文件夹树 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+        <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
           <Tree
             className="file-manager-tree"
             treeData={filteredTreeData.length > 0 || !treeSearchValue.trim() ? filteredTreeData : treeData}

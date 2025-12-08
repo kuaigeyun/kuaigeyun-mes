@@ -354,28 +354,42 @@ export default function App() {
           setUserPreference(preference);
         }
         
-        // 获取用户颜色模式偏好
-        const userTheme = preference?.preferences?.theme || 'light';
-        const actualTheme = userTheme === 'auto' 
-          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-          : userTheme;
+        // 判断是否有用户偏好设置（检查 theme 是否存在）
+        const hasUserPreference = preference?.preferences?.theme !== undefined && preference?.preferences?.theme !== null;
         
-        // 先尝试从本地存储读取完整主题配置（如果存在），避免先显示浅色再切换到深色
-        const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-        if (cachedThemeConfig) {
-          try {
-            const parsedConfig = JSON.parse(cachedThemeConfig);
-            if (parsedConfig && typeof parsedConfig === 'object') {
-              // 如果有缓存的主题配置，立即应用（使用实际的主题模式，避免先显示浅色）
-              applyThemeConfig(actualTheme, parsedConfig);
+        if (hasUserPreference) {
+          // 非首次登录：优先使用保存的偏好设置
+          const userTheme = preference.preferences.theme;
+          // 如果用户偏好是 'auto'，默认使用浅色而不是跟随系统
+          const actualTheme = userTheme === 'auto' ? 'light' : userTheme;
+          // 使用站点主题配置（可能包含自定义主题色等）
+          applyThemeConfig(actualTheme, siteTheme);
+        } else {
+          // 首次登录或未做偏好设置：检查本地缓存
+          const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
+          if (cachedThemeConfig) {
+            try {
+              const parsedConfig = JSON.parse(cachedThemeConfig);
+              if (parsedConfig && typeof parsedConfig === 'object') {
+                // 无偏好设置但有本地缓存：使用本地缓存
+                // 从缓存中获取主题模式，如果没有则使用浅色
+                const cachedTheme = parsedConfig.theme || 'light';
+                const actualTheme = cachedTheme === 'auto' ? 'light' : cachedTheme;
+                applyThemeConfig(actualTheme, parsedConfig);
+              } else {
+                // 缓存格式错误：使用默认主题色+浅色模式
+                applyThemeConfig('light', null);
+              }
+            } catch (e) {
+              console.warn('Failed to parse cached theme config:', e);
+              // 解析失败：使用默认主题色+浅色模式
+              applyThemeConfig('light', null);
             }
-          } catch (e) {
-            console.warn('Failed to parse cached theme config:', e);
+          } else {
+            // 无偏好设置且无本地缓存：使用默认主题色+浅色模式
+            applyThemeConfig('light', null);
           }
         }
-        
-        // 应用主题配置（使用加载的配置，覆盖缓存）
-        applyThemeConfig(actualTheme, siteTheme);
         
         // 加载用户选择的语言
         return loadUserLanguage();
@@ -383,41 +397,31 @@ export default function App() {
         console.warn('Failed to load preferences:', error);
         // 如果加载失败，尝试使用本地存储的主题配置
         const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-        let fallbackConfig = null;
         if (cachedThemeConfig) {
           try {
-            fallbackConfig = JSON.parse(cachedThemeConfig);
+            const fallbackConfig = JSON.parse(cachedThemeConfig);
+            if (fallbackConfig && typeof fallbackConfig === 'object') {
+              const cachedTheme = fallbackConfig.theme || 'light';
+              const actualTheme = cachedTheme === 'auto' ? 'light' : cachedTheme;
+              applyThemeConfig(actualTheme, fallbackConfig);
+            } else {
+              applyThemeConfig('light', null);
+            }
           } catch (e) {
             console.warn('Failed to parse cached theme config:', e);
+            applyThemeConfig('light', null);
           }
+        } else {
+          // 无缓存：使用默认主题色+浅色模式
+          applyThemeConfig('light', null);
         }
-        const userTheme = 'light';
-        applyThemeConfig(userTheme, fallbackConfig);
         loadUserLanguage().catch((err) => {
           console.warn('Failed to load user language:', err);
         });
       });
     } else {
-      // 未登录时，如果有缓存的主题配置，使用它；否则使用默认设置
-      const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-      if (cachedThemeConfig) {
-        try {
-          const parsedConfig = JSON.parse(cachedThemeConfig);
-          if (parsedConfig && typeof parsedConfig === 'object') {
-            // 检查系统主题偏好
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const defaultTheme = prefersDark ? 'dark' : 'light';
-            applyThemeConfig(defaultTheme, parsedConfig);
-          } else {
-            applyThemeConfig('light', null);
-          }
-        } catch (e) {
-          console.warn('Failed to parse cached theme config:', e);
-          applyThemeConfig('light', null);
-        }
-      } else {
-        applyThemeConfig('light', null);
-      }
+      // 未登录时，忽略所有缓存，强制使用默认色+浅色模式
+      applyThemeConfig('light', null);
     }
   }, []);
 

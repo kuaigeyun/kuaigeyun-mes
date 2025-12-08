@@ -343,6 +343,19 @@ export default function LoginPage() {
   const fixedThemeColor = '#1890ff';
 
   /**
+   * 处理社交登录
+   * 
+   * @param provider - 社交登录提供商（wechat, qq, wechat_work, dingtalk, feishu）
+   */
+  const handleSocialLogin = (provider: 'wechat' | 'qq' | 'wechat_work' | 'dingtalk' | 'feishu') => {
+    // TODO: 实现社交登录逻辑
+    // 1. 跳转到对应平台的授权页面
+    // 2. 获取授权码后回调到后端
+    // 3. 后端验证并返回 Token
+    message.info(`${provider} 登录功能待实现`);
+  };
+
+  /**
    * 处理登录提交
    *
    * 登录成功后判断组织数量：
@@ -870,6 +883,172 @@ export default function LoginPage() {
           </ProForm>
 
           <div className="login-form-footer">
+            {/* 社交登录区域 */}
+            <div style={{ marginTop: 24, marginBottom: 24 }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                gap: '12px',
+                marginBottom: 12
+              }}>
+                {/* 左侧分割线 */}
+                <div style={{ 
+                  flex: 1, 
+                  height: '1px', 
+                  background: 'rgba(0, 0, 0, 0.1)',
+                  maxWidth: '80px'
+                }}></div>
+                
+                {/* 社交图标按钮 */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '8px', 
+                  alignItems: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  {/* 微信登录 */}
+                  <Tooltip title="微信登录">
+                    <Button
+                      type="default"
+                      shape="circle"
+                      size="large"
+                      onClick={() => handleSocialLogin('wechat')}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        backgroundColor: 'transparent',
+                        borderColor: '#07C160',
+                        borderWidth: '1px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0,
+                      }}
+                    >
+                      <img 
+                        src="/social/wechat.svg" 
+                        alt="微信" 
+                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                      />
+                    </Button>
+                  </Tooltip>
+                  {/* QQ登录 */}
+                  <Tooltip title="QQ登录">
+                    <Button
+                      type="default"
+                      shape="circle"
+                      size="large"
+                      onClick={() => handleSocialLogin('qq')}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderColor: '#12B7F5',
+                        borderWidth: '1px',
+                        padding: 0,
+                      }}
+                    >
+                      <img 
+                        src="/social/qq.svg" 
+                        alt="QQ" 
+                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                      />
+                    </Button>
+                  </Tooltip>
+                  {/* 企业微信登录 */}
+                  <Tooltip title="企业微信登录">
+                    <Button
+                      type="default"
+                      shape="circle"
+                      size="large"
+                      onClick={() => handleSocialLogin('wechat_work')}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderColor: '#4A90E2',
+                        borderWidth: '1px',
+                        padding: 0,
+                      }}
+                    >
+                      <img 
+                        src="/social/qwei.svg" 
+                        alt="企业微信" 
+                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                      />
+                    </Button>
+                  </Tooltip>
+                  {/* 钉钉登录 */}
+                  <Tooltip title="钉钉登录">
+                    <Button
+                      type="default"
+                      shape="circle"
+                      size="large"
+                      onClick={() => handleSocialLogin('dingtalk')}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderColor: '#008CE7',
+                        borderWidth: '1px',
+                        padding: 0,
+                      }}
+                    >
+                      <img 
+                        src="/social/dingtalk.svg" 
+                        alt="钉钉" 
+                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                      />
+                    </Button>
+                  </Tooltip>
+                  {/* 飞书登录 */}
+                  <Tooltip title="飞书登录">
+                    <Button
+                      type="default"
+                      shape="circle"
+                      size="large"
+                      onClick={() => handleSocialLogin('feishu')}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderColor: '#3370FF',
+                        borderWidth: '1px',
+                        padding: 0,
+                      }}
+                    >
+                      <img 
+                        src="/social/feishu.svg" 
+                        alt="飞书" 
+                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                      />
+                    </Button>
+                  </Tooltip>
+                </div>
+                
+                {/* 右侧分割线 */}
+                <div style={{ 
+                  flex: 1, 
+                  height: '1px', 
+                  background: 'rgba(0, 0, 0, 0.1)',
+                  maxWidth: '80px'
+                }}></div>
+              </div>
+            </div>
+
             <div style={{ marginBottom: 16 }}>
               <Button
                 type="default"
@@ -886,6 +1065,7 @@ export default function LoginPage() {
                 免注册体验
               </Button>
             </div>
+
             <Text 
               className="register-link"
               style={{

@@ -30,6 +30,9 @@ export default function PlatformLoginPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm<LoginFormData>();
   const { setCurrentUser } = useGlobalStore();
+  
+  // 固定主题颜色（不受全局主题影响）
+  const fixedThemeColor = '#1890ff';
 
   // 登录请求
   const loginMutation = useMutation({
@@ -79,6 +82,9 @@ export default function PlatformLoginPage() {
     <ConfigProvider
       theme={{
         algorithm: theme.defaultAlgorithm, // 强制使用浅色模式，不受全局深色模式影响
+        token: {
+          colorPrimary: fixedThemeColor, // 固定主题色，不受全局主题影响
+        },
       }}
     >
       <div
@@ -87,7 +93,7 @@ export default function PlatformLoginPage() {
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: '100vh',
-          background: 'linear-gradient(135deg, #1890ff 0%, #40a9ff 100%)',
+          background: `linear-gradient(135deg, ${fixedThemeColor} 0%, #40a9ff 100%)`, // 使用固定主题色
           padding: '20px',
         }}
       >

@@ -263,3 +263,40 @@ html body ::-webkit-scrollbar-track,
 .ant-tree-list-holder {
   padding-left: 0 !important;
 }
+
+/* 通用隐藏滚动条样式 - 不显示滚动条且不占用宽度 */
+.hide-scrollbar,
+.left-panel-scroll-container {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE/Edge */
+  
+  &::-webkit-scrollbar {
+    display: none !important; /* Chrome/Safari/Webkit */
+    width: 0 !important;
+    height: 0 !important;
+  }
+}
+
+/* Drawer 组件隐藏滚动条且不占用宽度 */
+.ant-drawer-body {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE/Edge */
+  
+  &::-webkit-scrollbar {
+    display: none !important; /* Chrome/Safari/Webkit */
+    width: 0 !important;
+    height: 0 !important;
+  }
+}
+
+/* Modal 组件隐藏滚动条且不占用宽度 */
+.ant-modal-body {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE/Edge */
+  
+  &::-webkit-scrollbar {
+    display: none !important; /* Chrome/Safari/Webkit */
+    width: 0 !important;
+    height: 0 !important;
+  }
+}
