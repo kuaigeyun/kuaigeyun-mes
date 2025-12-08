@@ -6,9 +6,9 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined } from '@ant-design/icons';
+import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col, Input, Divider, theme } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import {
   getDepartmentTree,
@@ -29,6 +29,7 @@ import { getUserList, User } from '../../../../services/user';
  */
 const DepartmentListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
   const formRef = useRef<ProFormInstance>();
   const [treeData, setTreeData] = useState<DataNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<Department | null>(null);
@@ -50,6 +51,9 @@ const DepartmentListPage: React.FC = () => {
   // 部门成员相关状态
   const [departmentMembers, setDepartmentMembers] = useState<User[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  
+  // 搜索相关状态
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   /**
    * 加载部门树
@@ -61,27 +65,11 @@ const DepartmentListPage: React.FC = () => {
       // 转换为 Ant Design Tree 原生数据格式
       const convertToTreeData = (items: DepartmentTreeItem[]): DataNode[] => {
         return items.map(item => {
-          // 构建节点标题（将图标和文字放在同一行，优化间距）
+          // 构建节点标题（只显示部门名称和操作按钮）
           const titleContent = (
             <div className="department-tree-title-content">
               <div className="department-tree-title-left">
-                {/* 文字（已移除图标） */}
                 <span className="department-tree-text">{item.name}</span>
-                <div className="department-tree-tags">
-                <Tag color={item.is_active ? 'success' : 'default'}>
-                  {item.is_active ? '启用' : '禁用'}
-                </Tag>
-                {(item.children_count && item.children_count > 0) ? (
-                  <Tag color="blue">
-                    {item.children_count} 子部门
-                  </Tag>
-                ) : null}
-                {(item.user_count && item.user_count > 0) ? (
-                  <Tag color="green">
-                    {item.user_count} 人
-                  </Tag>
-                ) : null}
-                </div>
               </div>
               <div className="department-tree-actions">
               <Dropdown
@@ -476,69 +464,51 @@ const DepartmentListPage: React.FC = () => {
     return options;
   };
 
+  /**
+   * 过滤树数据（根据搜索关键词）
+   */
+  const filterTreeData = (nodes: DataNode[], keyword: string): DataNode[] => {
+    if (!keyword.trim()) {
+      return nodes;
+    }
+    
+    const filtered: DataNode[] = [];
+    nodes.forEach(node => {
+      const item = node.data as DepartmentTreeItem;
+      const matches = item.name.toLowerCase().includes(keyword.toLowerCase()) ||
+                     (item.code && item.code.toLowerCase().includes(keyword.toLowerCase()));
+      
+      const filteredChildren = node.children ? filterTreeData(node.children, keyword) : [];
+      
+      if (matches || filteredChildren.length > 0) {
+        filtered.push({
+          ...node,
+          children: filteredChildren.length > 0 ? filteredChildren : undefined,
+        });
+      }
+    });
+    
+    return filtered;
+  };
+
+  const filteredTreeData = filterTreeData(treeData, searchKeyword);
+
   return (
-    <div className="department-page-container">
-      <PageContainer>
-      {/* 树形结构样式优化 - 遵循 Ant Design 8px 网格系统和最佳实践 */}
+    <div 
+      className="department-page-container" 
+      style={{ 
+        display: 'flex', 
+        height: 'calc(100vh - 96px)', 
+        padding: '16px', 
+        margin: 0, 
+        boxSizing: 'border-box',
+        borderRadius: token.borderRadiusLG || token.borderRadius,
+        overflow: 'hidden',
+      }}
+    >
       <style>{`
-        /* 隐藏 PageContainer 的 ant-page-header */
-        .department-page-container .ant-pro-page-container .ant-page-header {
-          display: none !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          height: 0 !important;
-        }
-        
-        /* 保留顶部间距 - 通过 paddingTop 实现 */
-        .department-page-container .ant-pro-page-container .ant-pro-page-container-children-content {
-          padding: 16px !important;
-          padding-top: 16px !important;
-        }
-        
-        /* 树形结构容器样式 */
-        .department-tree-container {
-          width: 400px;
-          border-right: 1px solid #f0f0f0;
-          padding: 0;
-          overflow: auto;
-          background: #fff;
-          border-radius: 8px;
-        }
-        
-        /* 树形结构标题区域 */
-        .department-tree-header {
-          margin-bottom: 24px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        
-        /* 树节点样式优化 - 增加间距和内边距 */
-        .department-tree .ant-tree-node-content-wrapper {
-          padding: 8px 12px !important;
-          margin: 4px 0 !important;
-          border-radius: 4px;
-          transition: all 0.2s;
-          min-height: 40px;
-          display: flex;
-          align-items: center;
-        }
-        
-        /* 树节点 hover 效果 */
-        .department-tree .ant-tree-node-content-wrapper:hover {
-          background-color: #f5f5f5;
-        }
-        
-        /* 树节点选中状态 */
-        .department-tree .ant-tree-node-selected .ant-tree-node-content-wrapper {
-          background-color: #e6f7ff !important;
-          border: 1px solid #91d5ff;
-        }
-        
         /* 树节点标题内容间距优化 */
         .department-tree .ant-tree-node-content-wrapper .ant-tree-title {
-          display: flex;
-          align-items: center;
           width: 100%;
           padding: 0;
         }
@@ -559,13 +529,6 @@ const DepartmentListPage: React.FC = () => {
           gap: 8px;
           flex: 1;
           min-width: 0;
-        }
-        
-        /* 树节点图标样式 */
-        .department-tree-icon {
-          color: #1890ff;
-          font-size: 16px;
-          flex-shrink: 0;
         }
         
         /* 树节点文字样式 */
@@ -589,83 +552,129 @@ const DepartmentListPage: React.FC = () => {
           flex-shrink: 0;
           margin-left: 8px;
         }
-        
-        /* 树节点展开/收起图标间距 */
-        .department-tree .ant-tree-switcher {
-          width: 24px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        /* 树节点缩进优化 - 增加层级间距 */
-        .department-tree .ant-tree-child-tree {
-          margin-left: 8px;
-        }
-        
-        /* 树节点连接线样式 */
-        .department-tree .ant-tree-indent-unit {
-          width: 24px;
-        }
-        
-        /* 树节点整体行高优化 */
-        .department-tree .ant-tree-treenode {
-          padding: 2px 0;
-          margin: 0;
-        }
-        
-        /* 树节点列表整体间距 */
-        .department-tree .ant-tree-list {
-          padding: 0;
-        }
-        
-        /* 树节点列表项间距 */
-        .department-tree .ant-tree-list-holder-inner {
-          padding: 0;
-        }
-
-        .ant-pro-page-container-children-container{
-          padding: 16px !important;
-        }
       `}</style>
-      <div style={{ display: 'flex', height: 'calc(100vh - 144px)', gap: '24px' }}>
-      {/* 左侧：树形列表 */}
-        <div className="department-tree-container" style={{ padding: '16px' }}>
-          <div className="department-tree-header">
-            <Space>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>部门列表</h3>
-              <Button
-                type="text"
-                size="small"
-                icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
-                onClick={expandedKeys.length > 0 ? handleCollapseAll : handleExpandAll}
-                title={expandedKeys.length > 0 ? '收起全部' : '展开全部'}
-              />
-            </Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => handleCreate()}>
+      {/* 左侧部门树 */}
+      <div
+        style={{
+          width: '300px',
+          borderTop: `1px solid ${token.colorBorder}`,
+          borderBottom: `1px solid ${token.colorBorder}`,
+          borderLeft: `1px solid ${token.colorBorder}`,
+          borderRight: 'none',
+          backgroundColor: token.colorFillAlter || '#fafafa',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
+          borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
+        }}
+      >
+        {/* 搜索栏 */}
+        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+          <Input
+            placeholder="搜索部门"
+            prefix={<SearchOutlined />}
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            allowClear
+            size="middle"
+          />
+        </div>
+        
+        {/* 工具栏 */}
+        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}`, display: 'flex', gap: '8px' }}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => handleCreate()}
+            block
+          >
             新建根部门
           </Button>
+          <Button
+            type="text"
+            icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
+            onClick={expandedKeys.length > 0 ? handleCollapseAll : handleExpandAll}
+            title={expandedKeys.length > 0 ? '收起全部' : '展开全部'}
+            style={{ height: '32px', padding: '4px 8px' }}
+          />
         </div>
-        <Tree
-          className="department-tree"
-          treeData={treeData}
-          onSelect={handleSelect}
-          expandedKeys={expandedKeys}
-          autoExpandParent={autoExpandParent}
-          onExpand={handleExpand}
-          blockNode
-          selectedKeys={selectedNode ? [selectedNode.uuid] : []}
-          draggable
-          onDrop={handleDrop}
-        />
+        
+        {/* 部门树 */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+          <Tree
+            className="department-tree"
+            treeData={filteredTreeData.length > 0 || !searchKeyword.trim() ? filteredTreeData : treeData}
+            onSelect={handleSelect}
+            expandedKeys={expandedKeys}
+            autoExpandParent={autoExpandParent}
+            onExpand={handleExpand}
+            blockNode
+            selectedKeys={selectedNode ? [selectedNode.uuid] : []}
+            draggable
+            onDrop={handleDrop}
+          />
+        </div>
       </div>
-      
-      {/* 右侧：详情侧边栏 - 使用 Card 组件符合 Ant Design 最佳实践 */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {selectedNode ? (
-          <Card
-            title={selectedNode.name}
-            extra={
+
+      {/* 右侧主内容区 */}
+      <div style={{ 
+        flex: 1, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        backgroundColor: token.colorBgContainer,
+        border: `1px solid ${token.colorBorder}`,
+        borderLeft: 'none',
+        borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
+        borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
+      }}>
+        {/* 顶部工具栏 */}
+        <div
+          style={{
+            borderBottom: `1px solid ${token.colorBorder}`,
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <Space>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={() => {
+                loadDepartmentTree();
+              }}
+            >
+              刷新
+            </Button>
+          </Space>
+          
+          <Divider type="vertical" />
+          
+          {/* 部门信息 */}
+          <div style={{ flex: 1 }}>
+            {selectedNode ? (
+              <Space>
+                <span style={{ fontWeight: 500 }}>{selectedNode.name}</span>
+                {selectedNode.code && <Tag color="blue">{selectedNode.code}</Tag>}
+                <Tag color={selectedNode.is_active ? 'success' : 'default'}>
+                  {selectedNode.is_active ? '启用' : '禁用'}
+                </Tag>
+                {selectedNode.children_count && selectedNode.children_count > 0 && (
+                  <Tag color="blue">{selectedNode.children_count} 子部门</Tag>
+                )}
+                {selectedNode.user_count && selectedNode.user_count > 0 && (
+                  <Tag color="green">{selectedNode.user_count} 人</Tag>
+                )}
+              </Space>
+            ) : (
+              <span style={{ color: token.colorTextSecondary }}>请从左侧选择一个部门</span>
+            )}
+          </div>
+          
+          {selectedNode && (
+            <>
+              <Divider type="vertical" />
               <Space>
                 <Button icon={<EyeOutlined />} onClick={() => handleView(selectedNode)}>
                   查看详情
@@ -688,54 +697,61 @@ const DepartmentListPage: React.FC = () => {
                   添加子部门
                 </Button>
               </Space>
-            }
-          >
-            {/* 统计信息 */}
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-              <Col span={8}>
-                <Statistic
-                  title="子部门数"
-                  value={selectedNode.children_count || 0}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="用户数"
-                  value={selectedNode.user_count || 0}
-                  valueStyle={{ color: '#52c41a' }}
-                  prefix={<UserOutlined />}
-                />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="状态"
-                  value={selectedNode.is_active ? '启用' : '禁用'}
-                  valueStyle={{ color: selectedNode.is_active ? '#52c41a' : '#999' }}
-                />
-              </Col>
-            </Row>
-            
-            <ProDescriptions
-              column={2}
-              dataSource={selectedNode}
-              columns={[
-                { title: '部门名称', dataIndex: 'name' },
-                { title: '部门代码', dataIndex: 'code' },
-                { title: '描述', dataIndex: 'description', span: 2 },
-                {
-                  title: '排序',
-                  dataIndex: 'sort_order',
-                  render: (value: any) => value !== undefined && value !== null ? value : '-',
-                },
-              ]}
-            />
-          </Card>
-        ) : (
-          <Card>
-          <Empty description="请选择部门" />
-          </Card>
-        )}
+            </>
+          )}
+        </div>
+
+        {/* 内容区域 */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+          {selectedNode ? (
+            <>
+              {/* 统计信息 */}
+              <Row gutter={16} style={{ marginBottom: 24 }}>
+                <Col span={8}>
+                  <Statistic
+                    title="子部门数"
+                    value={selectedNode.children_count || 0}
+                    valueStyle={{ color: token.colorPrimary }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title="用户数"
+                    value={selectedNode.user_count || 0}
+                    valueStyle={{ color: token.colorSuccess }}
+                    prefix={<UserOutlined />}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title="状态"
+                    value={selectedNode.is_active ? '启用' : '禁用'}
+                    valueStyle={{ color: selectedNode.is_active ? token.colorSuccess : token.colorTextTertiary }}
+                  />
+                </Col>
+              </Row>
+              
+              <Divider />
+              
+              <ProDescriptions
+                column={2}
+                dataSource={selectedNode}
+                columns={[
+                  { title: '部门名称', dataIndex: 'name' },
+                  { title: '部门代码', dataIndex: 'code' },
+                  { title: '描述', dataIndex: 'description', span: 2 },
+                  {
+                    title: '排序',
+                    dataIndex: 'sort_order',
+                    render: (value: any) => value !== undefined && value !== null ? value : '-',
+                  },
+                ]}
+              />
+            </>
+          ) : (
+            <Empty description="请从左侧选择一个部门" />
+          )}
+        </div>
       </div>
 
       {/* 创建/编辑 Modal */}
@@ -811,14 +827,14 @@ const DepartmentListPage: React.FC = () => {
                 <Statistic
                   title="子部门数"
                   value={detailData.children_count || 0}
-                  valueStyle={{ color: '#1890ff' }}
+                  valueStyle={{ color: token.colorPrimary }}
                 />
               </Col>
               <Col span={8}>
                 <Statistic
                   title="用户数"
                   value={detailData.user_count || 0}
-                  valueStyle={{ color: '#52c41a' }}
+                  valueStyle={{ color: token.colorSuccess }}
                   prefix={<UserOutlined />}
                 />
               </Col>
@@ -826,7 +842,7 @@ const DepartmentListPage: React.FC = () => {
                 <Statistic
                   title="状态"
                   value={detailData.is_active ? '启用' : '禁用'}
-                  valueStyle={{ color: detailData.is_active ? '#52c41a' : '#999' }}
+                  valueStyle={{ color: detailData.is_active ? token.colorSuccess : token.colorTextTertiary }}
                 />
               </Col>
             </Row>
@@ -889,8 +905,6 @@ const DepartmentListPage: React.FC = () => {
           </>
         )}
       </Drawer>
-      </div>
-      </PageContainer>
     </div>
   );
 };

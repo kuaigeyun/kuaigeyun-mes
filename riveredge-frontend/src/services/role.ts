@@ -163,14 +163,16 @@ export async function deleteRole(roleUuid: string): Promise<void> {
  * 
  * 为角色分配权限列表，自动验证组织权限。
  * 
- * @param roleId - 角色 ID
- * @param permissionIds - 权限 ID 列表
+ * @param roleUuid - 角色 UUID
+ * @param permissionUuids - 权限 UUID 列表
  * @returns 更新后的角色信息
  */
 export async function assignPermissions(roleUuid: string, permissionUuids: string[]): Promise<Role> {
   return apiRequest<Role>(`/system/roles/${roleUuid}/permissions`, {
     method: 'POST',
-    data: permissionUuids, // 后端 Body 接收 UUID 数组
+    data: {
+      permission_uuids: permissionUuids, // 后端期望对象格式：{ permission_uuids: [...] }
+    },
   });
 }
 

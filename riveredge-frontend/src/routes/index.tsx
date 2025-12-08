@@ -53,6 +53,7 @@ const AnalysisPage = lazy(() => import('../pages/system/dashboard/analysis'));
 // 权限管理模块
 const RoleListPage = lazy(() => import('../pages/system/roles/list'));
 const PermissionListPage = lazy(() => import('../pages/system/permissions/list'));
+const RolesPermissionsPage = lazy(() => import('../pages/system/roles-permissions'));
 
 // 组织管理模块
 const DepartmentListPage = lazy(() => import('../pages/system/departments/list'));
@@ -152,16 +153,16 @@ const AppRoutes: React.FC = () => {
       <Route path="/system/dashboard/workplace" element={<LayoutWrapper><SystemDashboardPage /></LayoutWrapper>} />
       <Route path="/system/dashboard/analysis" element={<LayoutWrapper><AnalysisPage /></LayoutWrapper>} />
       {/* 系统级功能 */}
-      {/* 角色管理 */}
+      {/* 角色权限管理（合并页面） */}
       <Route
         path="/system/roles"
         element={
           <LayoutWrapper>
-            <RoleListPage />
+            <RolesPermissionsPage />
           </LayoutWrapper>
         }
       />
-      {/* 权限管理 */}
+      {/* 权限管理（保留，但建议通过角色权限管理页面访问） */}
       <Route
         path="/system/permissions"
         element={

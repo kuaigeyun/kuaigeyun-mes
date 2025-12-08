@@ -199,9 +199,9 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_sys_permiss_permiss_8e9b79" ON "sys_permissions" ("permission_type");
 
         -- 10. 角色-权限关联表
+        -- 注意：关联表（中间表）不需要 uuid 字段，只需要主键和外键即可
         CREATE TABLE IF NOT EXISTS "sys_role_permissions" (
             "id" SERIAL NOT NULL PRIMARY KEY,
-            "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "role_id" INT NOT NULL,
             "permission_id" INT NOT NULL,
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -211,9 +211,9 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_sys_role_pe_permiss_fa70a0" ON "sys_role_permissions" ("permission_id");
 
         -- 11. 用户-角色关联表
+        -- 注意：关联表（中间表）不需要 uuid 字段，只需要主键和外键即可
         CREATE TABLE IF NOT EXISTS "sys_user_roles" (
             "id" SERIAL NOT NULL PRIMARY KEY,
-            "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "user_id" INT NOT NULL,
             "role_id" INT NOT NULL,
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

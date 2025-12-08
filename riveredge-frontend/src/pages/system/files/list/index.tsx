@@ -45,7 +45,7 @@ import {
   batchDeleteFiles,
   getFilePreview,
   getFileDownloadUrl,
-  File,
+  type File,
   FileUpdate,
   FileListParams,
   FilePreviewResponse,
@@ -112,6 +112,9 @@ const FileListPage: React.FC = () => {
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [renameFile, setRenameFile] = useState<File | null>(null);
+  const [createFolderVisible, setCreateFolderVisible] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
   
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -250,6 +253,55 @@ const FileListPage: React.FC = () => {
       loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
     } catch (error: any) {
       messageApi.error(error.message || '上传失败');
+    }
+  };
+
+  /**
+   * 处理新建文件夹
+   */
+  const handleCreateFolder = async () => {
+    if (!folderName.trim()) {
+      messageApi.warning('请输入文件夹名称');
+      return;
+    }
+
+    // 检查文件夹名称是否已存在
+    const categories = new Set<string>();
+    fileList.forEach(file => {
+      if (file.category) {
+        categories.add(file.category);
+      }
+    });
+    
+    if (categories.has(folderName.trim())) {
+      messageApi.warning('文件夹名称已存在');
+      return;
+    }
+
+    try {
+      setCreatingFolder(true);
+      // 创建一个占位文件来表示文件夹
+      // 使用一个包含文件夹标识的文本文件作为占位符
+      const placeholderContent = new Blob(['FOLDER_PLACEHOLDER'], { type: 'text/plain' });
+      const placeholderFile = new File([placeholderContent], `folder_${folderName.trim()}.txt`, { type: 'text/plain' });
+      
+      await uploadFile(placeholderFile, {
+        category: folderName.trim(),
+        description: '文件夹占位文件',
+      });
+      
+      messageApi.success('文件夹创建成功');
+      setCreateFolderVisible(false);
+      setFolderName('');
+      // 刷新文件列表
+      await loadFileList();
+      // 自动选中新创建的文件夹
+      setSelectedTreeKeys([folderName.trim()]);
+      setCurrentPath(['全部文件', folderName.trim()]);
+    } catch (error: any) {
+      messageApi.error(error.message || '创建文件夹失败');
+    } finally {
+      setCreatingFolder(false);
     }
   };
 
@@ -595,21 +647,16 @@ const FileListPage: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      <style>{`
-        .file-manager-tree .ant-tree-node-content-wrapper {
-          padding: 4px 8px !important;
-        }
-        .file-manager-tree .ant-tree-title {
-          user-select: none;
-        }
-      `}</style>
       
       {/* 左侧文件夹树 */}
       <div
         style={{
-          width: '250px',
-          borderRight: '1px solid #f0f0f0',
-          backgroundColor: '#fafafa',
+          width: '300px',
+          borderTop: `1px solid ${token.colorBorder}`,
+          borderBottom: `1px solid ${token.colorBorder}`,
+          borderLeft: `1px solid ${token.colorBorder}`,
+          borderRight: 'none',
+          backgroundColor: token.colorFillAlter || '#fafafa',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
@@ -618,7 +665,7 @@ const FileListPage: React.FC = () => {
         }}
       >
         {/* 搜索栏 */}
-        <div style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
           <Input
             placeholder="搜索文件夹"
             prefix={<SearchOutlined />}
@@ -650,13 +697,15 @@ const FileListPage: React.FC = () => {
         display: 'flex', 
         flexDirection: 'column', 
         backgroundColor: token.colorBgContainer,
+        border: `1px solid ${token.colorBorder}`,
+        borderLeft: 'none',
         borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
         borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
       }}>
         {/* 顶部工具栏 */}
         <div
           style={{
-            borderBottom: '1px solid #f0f0f0',
+            borderBottom: `1px solid ${token.colorBorder}`,
             padding: '8px 16px',
             display: 'flex',
             alignItems: 'center',
@@ -717,7 +766,7 @@ const FileListPage: React.FC = () => {
         {/* 操作工具栏 */}
         <div
           style={{
-            borderBottom: '1px solid #f0f0f0',
+            borderBottom: `1px solid ${token.colorBorder}`,
             padding: '8px 16px',
             display: 'flex',
             alignItems: 'center',
@@ -733,7 +782,7 @@ const FileListPage: React.FC = () => {
           </Button>
           <Button
             icon={<PlusOutlined />}
-            onClick={() => messageApi.info('新建文件夹功能开发中')}
+            onClick={() => setCreateFolderVisible(true)}
           >
             新建文件夹
           </Button>
@@ -774,13 +823,13 @@ const FileListPage: React.FC = () => {
         {/* 底部状态栏 */}
         <div
           style={{
-            borderTop: '1px solid #f0f0f0',
+            borderTop: `1px solid ${token.colorBorder}`,
             padding: '8px 16px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: '12px',
-            color: '#666',
+            color: token.colorTextSecondary,
           }}
         >
           <span>
@@ -854,6 +903,26 @@ const FileListPage: React.FC = () => {
           onChange={(e) => setRenameValue(e.target.value)}
           placeholder="请输入新名称"
           onPressEnter={handleRename}
+        />
+      </Modal>
+
+      {/* 新建文件夹 Modal */}
+      <Modal
+        title="新建文件夹"
+        open={createFolderVisible}
+        onCancel={() => {
+          setCreateFolderVisible(false);
+          setFolderName('');
+        }}
+        onOk={handleCreateFolder}
+        confirmLoading={creatingFolder}
+      >
+        <Input
+          value={folderName}
+          onChange={(e) => setFolderName(e.target.value)}
+          placeholder="请输入文件夹名称"
+          onPressEnter={handleCreateFolder}
+          autoFocus
         />
       </Modal>
 
