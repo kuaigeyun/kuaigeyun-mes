@@ -455,17 +455,13 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
   const hasToken = !!getToken();
   
-  // ⚠️ 修复：检查是否是平台超级管理员（平台超级管理员不支持 saved-searches API）
-  const userInfo = getUserInfo();
-  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin' || userInfo?.is_platform_admin === true;
-  
   // 获取已保存的搜索条件列表
-  // ⚠️ 修复：平台超级管理员不支持 saved-searches API，不调用
+  // 注意：所有用户（包括普通用户、组织管理员、平台管理用户、平台超级管理员）都可以使用 saved-searches API
   const { data: savedSearchesData } = useQuery({
     queryKey: ['savedSearches', pagePath],
     queryFn: () => getSavedSearchList(pagePath, true),
-    // ⚠️ 修复：只在弹窗打开且有 Token 且不是平台超级管理员时才获取数据，避免 401 错误导致退出登录
-    enabled: visible && hasToken && !isPlatformSuperAdmin,
+    // 只要弹窗打开且有 Token 就可以获取数据
+    enabled: visible && hasToken,
     // ⚠️ 修复：401 错误时静默失败，不抛出错误，避免触发全局错误处理
     retry: (failureCount, error: any) => {
       // 如果是 401 错误，不重试
@@ -795,6 +791,15 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⭐ 最佳实践：使用统一的过滤函数
       const filteredValues = filterEmptyValues(values);
       
+      // 调试日志（开发环境）
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 高级搜索 - 设置搜索参数:', {
+          values,
+          filteredValues,
+          hasSearchParamsRef: !!searchParamsRef,
+        });
+      }
+      
       // ⭐ 最佳实践：统一设置搜索参数到所有需要的地方
       // 1. 设置到 ProTable 的表单（用于表单值读取）
       if (formRef.current) {
@@ -802,8 +807,23 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       }
       
       // 2. 存储到 searchParamsRef（用于直接传递搜索参数）
+      // ⚠️ 修复：始终设置 searchParamsRef.current，即使 filteredValues 是空对象
+      // 这样可以确保 handleRequest 能够正确获取搜索参数，避免时序问题
       if (searchParamsRef) {
         searchParamsRef.current = filteredValues;
+        
+        // 调试日志：确认 searchParamsRef 已设置
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔍 高级搜索 - searchParamsRef 已设置:', {
+            searchParamsRef: searchParamsRef.current,
+            filteredValues,
+          });
+        }
+      } else {
+        // 调试日志：searchParamsRef 不存在
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('⚠️ 高级搜索 - searchParamsRef 不存在！');
+        }
       }
       
       // 关闭弹窗
@@ -821,6 +841,11 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       });
       
       // ⭐ 最佳实践：触发 ProTable 重新查询
+      // ⚠️ 修复：在 reload 之前再次确认 searchParamsRef.current 的值
+      if (process.env.NODE_ENV === 'development' && searchParamsRef) {
+        console.log('🔍 高级搜索 - reload 前的 searchParamsRef:', searchParamsRef.current);
+      }
+      
       if (actionRef.current) {
         actionRef.current.reload(false);
       }
@@ -1753,17 +1778,13 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
   const hasToken = !!getToken();
   
-  // ⚠️ 修复：检查是否是平台超级管理员（平台超级管理员不支持 saved-searches API）
-  const userInfo = getUserInfo();
-  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin' || userInfo?.is_platform_admin === true;
-  
   // 获取已保存的搜索条件列表（只获取钉住的）
-  // ⚠️ 修复：平台超级管理员不支持 saved-searches API，不调用
+  // 注意：所有用户（包括普通用户、组织管理员、平台管理用户、平台超级管理员）都可以使用 saved-searches API
   const { data: savedSearchesData } = useQuery({
     queryKey: ['savedSearches', pagePath],
     queryFn: () => getSavedSearchList(pagePath, true),
-    // ⚠️ 修复：只在有 Token 且不是平台超级管理员时才获取数据，避免 401 错误导致退出登录
-    enabled: hasToken && !isPlatformSuperAdmin,
+    // 只要有 Token 就可以获取数据
+    enabled: hasToken,
     // ⚠️ 修复：401 错误时静默失败，不抛出错误，避免触发全局错误处理
     retry: (failureCount, error: any) => {
       // 如果是 401 错误，不重试
