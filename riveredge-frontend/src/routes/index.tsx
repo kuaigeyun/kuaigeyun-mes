@@ -440,7 +440,7 @@ const AppRoutes: React.FC = () => {
       />
       {/* Inngest Dashboard */}
       <Route
-        path="/system/inngest"
+        path="/platform/inngest"
         element={
           <LayoutWrapper>
             <InngestDashboardPage />
