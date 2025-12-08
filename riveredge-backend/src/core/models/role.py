@@ -44,12 +44,15 @@ class Role(BaseModel):
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     
     # 多对多关系：角色-权限关联（通过 core_role_permissions 表）
-    permissions = fields.ManyToManyField(
-        "models.Permission",
-        related_name="roles",
-        through="models.RolePermission",
-        description="角色关联的权限"
-    )
+    # 注意：由于 Tortoise ORM 对 through 关系的支持有限，我们直接使用 RolePermission 模型进行查询
+    # 这里暂时注释掉关系定义，避免 Tortoise ORM 解析错误
+    # 实际查询时使用 RolePermission 模型直接查询关联表
+    # permissions = fields.ManyToManyField(
+    #     "models.Permission",
+    #     related_name="roles",
+    #     through="models.RolePermission",
+    #     description="角色关联的权限"
+    # )
     
     class Meta:
         """

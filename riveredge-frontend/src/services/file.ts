@@ -118,18 +118,23 @@ export async function uploadFile(
     formData.append('file', file, 'uploaded-file');
   }
   
-  // 添加可选参数
+  // 构建查询参数（后端 API 期望 category、tags、description 作为 Query 参数）
+  const queryParams = new URLSearchParams();
   if (options?.category) {
-    formData.append('category', options.category);
+    queryParams.append('category', options.category);
   }
   if (options?.tags) {
-    formData.append('tags', JSON.stringify(options.tags));
+    queryParams.append('tags', JSON.stringify(options.tags));
   }
   if (options?.description) {
-    formData.append('description', options.description);
+    queryParams.append('description', options.description);
   }
   
-  return apiRequest<FileUploadResponse>('/system/files/upload', {
+  const url = queryParams.toString() 
+    ? `/system/files/upload?${queryParams.toString()}`
+    : '/system/files/upload';
+  
+  return apiRequest<FileUploadResponse>(url, {
     method: 'POST',
     body: formData,
     // 注意：上传文件时不要设置 Content-Type，让浏览器自动设置（包含 boundary）

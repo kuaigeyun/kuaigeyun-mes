@@ -166,11 +166,12 @@ class RoleService:
         Raises:
             NotFoundError: 当角色不存在时抛出
         """
+        # 不再使用 prefetch_related('permissions')，避免多对多关系查询问题
         role = await Role.filter(
             uuid=role_uuid,
             tenant_id=tenant_id,
             deleted_at__isnull=True
-        ).prefetch_related('permissions').first()
+        ).first()
         
         if not role:
             raise NotFoundError("角色", role_uuid)
@@ -340,24 +341,35 @@ class RoleService:
         else:
             permission_ids = []
         
-        # 获取当前角色的权限
-        current_permissions = await role.permissions.all()
-        current_permission_ids = {p.id for p in current_permissions}
+        # 通过 RolePermission 关联表获取当前角色的权限
+        from core.models.role_permission import RolePermission
+        current_role_permissions = await RolePermission.filter(role_id=role.id).all()
+        current_permission_ids = {rp.permission_id for rp in current_role_permissions}
         new_permission_ids = set(permission_ids)
         
         # 计算需要添加和移除的权限
         to_add = new_permission_ids - current_permission_ids
         to_remove = current_permission_ids - new_permission_ids
         
-        # 添加权限
+        # 添加权限（通过 RolePermission 关联表）
         if to_add:
-            permissions_to_add = [p for p in permissions if p.id in to_add]
-            await role.permissions.add(*permissions_to_add)
+            from datetime import datetime
+            role_permissions_to_add = [
+                RolePermission(
+                    role_id=role.id,
+                    permission_id=permission_id,
+                    created_at=datetime.now()
+                )
+                for permission_id in to_add
+            ]
+            await RolePermission.bulk_create(role_permissions_to_add, ignore_conflicts=True)
         
-        # 移除权限
+        # 移除权限（通过 RolePermission 关联表）
         if to_remove:
-            permissions_to_remove = [p for p in current_permissions if p.id in to_remove]
-            await role.permissions.remove(*permissions_to_remove)
+            await RolePermission.filter(
+                role_id=role.id,
+                permission_id__in=list(to_remove)
+            ).delete()
         
         # 角色权限变更后，自动更新关联菜单的可见性
         # 获取变更的权限代码
@@ -367,8 +379,12 @@ class RoleService:
             added_permissions = [p for p in permissions if p.id in to_add]
             changed_permission_codes.extend([p.code for p in added_permissions])
         if to_remove:
-            # 获取移除的权限对象
-            removed_permissions = [p for p in current_permissions if p.id in to_remove]
+            # 获取移除的权限对象（从数据库中查询）
+            removed_permissions = await Permission.filter(
+                id__in=list(to_remove),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
             changed_permission_codes.extend([p.code for p in removed_permissions])
         
         # 更新关联菜单的可见性（异步，不阻塞主流程）
@@ -403,19 +419,35 @@ class RoleService:
             role_uuid: 角色UUID
             
         Returns:
-            List[Permission]: 权限列表
+            List[Permission]: 权限列表（仅包含未删除的权限）
             
         Raises:
             NotFoundError: 当角色不存在时抛出
         """
+        # 获取角色
         role = await Role.filter(
             uuid=role_uuid,
             tenant_id=tenant_id,
             deleted_at__isnull=True
-        ).prefetch_related('permissions').first()
+        ).first()
         
         if not role:
             raise NotFoundError("角色", role_uuid)
         
-        return list(role.permissions)
+        # 通过 RolePermission 关联表查询权限
+        from core.models.role_permission import RolePermission
+        role_permissions = await RolePermission.filter(role_id=role.id).all()
+        permission_ids = [rp.permission_id for rp in role_permissions]
+        
+        # 查询权限（仅未删除的）
+        if permission_ids:
+            permissions = await Permission.filter(
+                id__in=permission_ids,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+        else:
+            permissions = []
+        
+        return list(permissions)
 

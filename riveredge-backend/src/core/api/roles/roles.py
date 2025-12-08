@@ -171,11 +171,10 @@ async def get_role(
             role_uuid=role_uuid
         )
         
-        # 暂时注释掉权限列表获取，避免多对多关系查询问题
-        # permissions = await role.permissions.all()
-        # permission_list = [PermissionInfo.model_validate(p) for p in permissions]
-        permission_list = []
-        permission_count = 0
+        # 通过 RolePermission 关联表获取权限数量
+        from core.models.role_permission import RolePermission
+        permission_count = await RolePermission.filter(role_id=role.id).count()
+        permission_list = []  # 权限列表暂时为空，避免多对多关系查询问题
         
         # 获取关联的用户数量
         from core.models.user_role import UserRole
@@ -192,6 +191,14 @@ async def get_role(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
+        )
+    except Exception as e:
+        # 捕获其他可能的异常（如数据库操作错误）
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取角色详情失败: {str(e)}"
         )
 
 
@@ -335,6 +342,14 @@ async def assign_permissions(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
+    except Exception as e:
+        # 捕获其他可能的异常（如数据库操作错误）
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"分配角色权限失败: {str(e)}"
+        )
 
 
 @router.get("/{role_uuid}/permissions", response_model=list[PermissionInfo])
@@ -370,5 +385,13 @@ async def get_role_permissions(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
+        )
+    except Exception as e:
+        # 捕获其他可能的异常（如序列化错误）
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取角色权限失败: {str(e)}"
         )
 

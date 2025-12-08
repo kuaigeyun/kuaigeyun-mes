@@ -119,11 +119,15 @@ export async function apiRequest<T = any>(
   // 获取当前选择的组织ID
   const currentTenantId = getCurrentTenantId();
   
+  // 检查 body 是否是 FormData
+  const isFormData = options?.body instanceof FormData;
+  
   // 构建请求配置
   const fetchOptions: RequestInit = {
     method: options?.method || 'GET',
     headers: {
-      'Content-Type': 'application/json',
+      // 如果是 FormData，不设置 Content-Type，让浏览器自动设置（包含 boundary）
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       // 如果存在 Token 且不是公开接口，添加到请求头
       // ⚠️ 关键修复：公开接口（登录、注册等）不应该携带 token，避免过期 token 干扰验证
       ...(token && !isPublicEndpoint ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -139,9 +143,14 @@ export async function apiRequest<T = any>(
   if (options?.data !== undefined) {
     fetchOptions.body = JSON.stringify(options.data);
   } else if (options?.body !== undefined) {
-    fetchOptions.body = typeof options.body === 'string' 
-      ? options.body 
-      : JSON.stringify(options.body);
+    if (isFormData) {
+      // FormData 直接使用，不序列化
+      fetchOptions.body = options.body;
+    } else {
+      fetchOptions.body = typeof options.body === 'string' 
+        ? options.body 
+        : JSON.stringify(options.body);
+    }
   }
 
   // 合并其他选项（但排除 data，因为已经处理过了）

@@ -233,8 +233,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
  * 【第二组】应用菜单（插件式加载）- 根据用户权限和已安装插件动态加载
  * 【第三组】系统配置 - 平台级、系统级、应用级可见
  *   └─ 用户管理（分组标题，不可点击）
- *      ├─ 角色管理（第1优先级）
- *      ├─ 权限管理（包含在角色权限管理中）
+ *      ├─ 角色权限管理（第1优先级，包含角色和权限管理）
  *      ├─ 部门管理（第2优先级）
  *      ├─ 职位管理（第3优先级）
  *      └─ 账户管理（第4优先级）
@@ -288,13 +287,8 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
           // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
           {
             path: '/system/roles',
-            name: '角色管理',
+            name: '角色权限',
             icon: <CrownOutlined />,
-          },
-          {
-            path: '/system/permissions',
-            name: '权限管理',
-            icon: <LockOutlined />,
           },
           {
             path: '/system/departments',
