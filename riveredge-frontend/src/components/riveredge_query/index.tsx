@@ -7,8 +7,8 @@
 import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, forwardRef } from 'react';
 import type { ActionType, ProFormInstance, ProColumns } from '@ant-design/pro-components';
 import { ProForm, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDateRangePicker } from '@ant-design/pro-components';
-import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, MenuProps, theme } from 'antd';
-import { SaveOutlined, DeleteOutlined, DownOutlined, EditOutlined, PushpinOutlined, PushpinFilled, MoreOutlined, ReloadOutlined, SearchOutlined, ShareAltOutlined, HolderOutlined } from '@ant-design/icons';
+import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, MenuProps, theme, Tabs, Tag, Divider } from 'antd';
+import { SaveOutlined, DeleteOutlined, DownOutlined, EditOutlined, PushpinOutlined, PushpinFilled, MoreOutlined, ReloadOutlined, SearchOutlined, ShareAltOutlined, HolderOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { AutoCompleteProps } from 'antd';
 import { filterByPinyinInitials } from '../../utils/pinyin';
 import { useLocation } from 'react-router-dom';
@@ -16,6 +16,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSavedSearchList, createSavedSearch, deleteSavedSearchByUuid, updateSavedSearchByUuid, SavedSearch } from '../../services/savedSearch';
 import { getToken, getUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
+import { QuickFilters } from './QuickFilters';
+import { AdvancedFilters } from './AdvancedFilters';
+import type { FilterGroup, FilterConfigData } from './types';
+import { convertFiltersToApiParams } from './filterUtils';
 import {
   DndContext,
   closestCenter,
@@ -452,6 +456,14 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   const [saveIsPinned, setSaveIsPinned] = useState(false);
   const [editingSearch, setEditingSearch] = useState<SavedSearch | null>(null);
   
+  // 筛选功能状态
+  const [quickFilters, setQuickFilters] = useState<Record<string, any[]>>({});
+  const [filterGroups, setFilterGroups] = useState<FilterGroup[]>([]);
+  const [activeTab, setActiveTab] = useState<'search' | 'filter'>('search');
+  
+  // 帮助弹窗状态
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+  
   // 检查是否有 Token（只有登录用户才能获取保存的搜索条件）
   const hasToken = !!getToken();
   
@@ -791,11 +803,28 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⭐ 最佳实践：使用统一的过滤函数
       const filteredValues = filterEmptyValues(values);
       
+      // ⭐ 筛选功能：合并筛选条件到搜索参数
+      const filterConfig: FilterConfigData = {
+        groups: filterGroups,
+        quickFilters,
+      };
+      const filterParams = convertFiltersToApiParams(filterConfig, columns);
+      
+      // 合并搜索参数和筛选参数
+      const finalSearchParams = {
+        ...filteredValues,
+        ...filterParams,
+      };
+      
       // 调试日志（开发环境）
       if (process.env.NODE_ENV === 'development') {
         console.log('🔍 高级搜索 - 设置搜索参数:', {
           values,
           filteredValues,
+          quickFilters,
+          filterGroups,
+          filterParams,
+          finalSearchParams,
           hasSearchParamsRef: !!searchParamsRef,
         });
       }
@@ -803,20 +832,20 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⭐ 最佳实践：统一设置搜索参数到所有需要的地方
       // 1. 设置到 ProTable 的表单（用于表单值读取）
       if (formRef.current) {
-        formRef.current.setFieldsValue(filteredValues);
+        formRef.current.setFieldsValue(finalSearchParams);
       }
       
       // 2. 存储到 searchParamsRef（用于直接传递搜索参数）
       // ⚠️ 修复：始终设置 searchParamsRef.current，即使 filteredValues 是空对象
       // 这样可以确保 handleRequest 能够正确获取搜索参数，避免时序问题
       if (searchParamsRef) {
-        searchParamsRef.current = filteredValues;
+        searchParamsRef.current = finalSearchParams;
         
         // 调试日志：确认 searchParamsRef 已设置
         if (process.env.NODE_ENV === 'development') {
           console.log('🔍 高级搜索 - searchParamsRef 已设置:', {
             searchParamsRef: searchParamsRef.current,
-            filteredValues,
+            finalSearchParams,
           });
         }
       } else {
@@ -854,7 +883,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       console.error('搜索处理失败:', error);
       messageApi.error('搜索失败，请稍后重试');
     }
-  }, [formRef, searchParamsRef, actionRef, onClose, filterEmptyValues, messageApi]);
+  }, [formRef, searchParamsRef, actionRef, onClose, filterEmptyValues, messageApi, columns, quickFilters, filterGroups]);
 
   /**
    * 处理重置（最佳实践：统一清空所有搜索相关状态）
@@ -873,6 +902,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       if (searchParamsRef) {
         searchParamsRef.current = undefined;
       }
+      
+      // ⭐ 筛选功能：清空筛选条件
+      setQuickFilters({});
+      setFilterGroups([]);
       
       // ⭐ 最佳实践：等待表单重置完成后再触发 reload
       await new Promise<void>((resolve) => {
@@ -899,17 +932,23 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     const values = searchFormRef.current?.getFieldsValue() || {};
     const filteredValues = filterEmptyValues(values);
     
-    if (Object.keys(filteredValues).length === 0) {
-      messageApi.warning('请先设置搜索条件');
+    // ⭐ 检查是否有搜索条件或筛选条件
+    const hasSearchValues = Object.keys(filteredValues).length > 0;
+    const hasQuickFilters = Object.keys(quickFilters).length > 0;
+    const hasFilterGroups = filterGroups.length > 0;
+    
+    // 如果既没有字段搜索值，也没有筛选条件，则提示
+    if (!hasSearchValues && !hasQuickFilters && !hasFilterGroups) {
+      messageApi.warning('请先设置搜索条件或筛选条件');
       return;
     }
     
     // 打开保存弹窗
     setSaveModalVisible(true);
-  }, [filterEmptyValues, messageApi]);
+  }, [filterEmptyValues, messageApi, quickFilters, filterGroups]);
   
   /**
-   * 确认保存搜索条件（最佳实践：统一空值过滤）
+   * 确认保存搜索条件（最佳实践：统一空值过滤，包含筛选条件）
    */
   const handleConfirmSave = useCallback(() => {
     if (!saveName.trim()) {
@@ -920,6 +959,24 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     const values = searchFormRef.current?.getFieldsValue() || {};
     const filteredValues = filterEmptyValues(values);
     
+    // ⭐ 筛选功能：合并筛选条件到搜索参数
+    const filterConfig: FilterConfigData = {
+      groups: filterGroups,
+      quickFilters,
+    };
+    const filterParams = convertFiltersToApiParams(filterConfig, columns);
+    
+    // 合并搜索参数和筛选参数
+    const finalSearchParams = {
+      ...filteredValues,
+      ...filterParams,
+      // 保存筛选配置（用于恢复）
+      _filterConfig: {
+        groups: filterGroups,
+        quickFilters,
+      },
+    };
+    
     if (editingSearch) {
       // 更新现有搜索条件
       updateSavedSearchMutation.mutate({
@@ -928,7 +985,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           name: saveName.trim(),
           is_shared: saveIsShared,
           is_pinned: saveIsPinned,
-          search_params: filteredValues,
+          search_params: finalSearchParams,
         },
       });
     } else {
@@ -938,10 +995,10 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         name: saveName.trim(),
         is_shared: saveIsShared,
         is_pinned: saveIsPinned,
-        search_params: filteredValues,
+        search_params: finalSearchParams,
       });
     }
-  }, [saveName, saveIsShared, saveIsPinned, editingSearch, pagePath, filterEmptyValues, messageApi, updateSavedSearchMutation, createSavedSearchMutation]);
+  }, [saveName, saveIsShared, saveIsPinned, editingSearch, pagePath, filterEmptyValues, messageApi, updateSavedSearchMutation, createSavedSearchMutation, filterGroups, quickFilters, columns]);
   
   /**
    * 加载已保存的搜索条件
@@ -984,10 +1041,26 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⭐ 最佳实践：使用统一的过滤函数
       const filteredParams = filterEmptyValues(savedSearch.search_params);
       
+      // ⭐ 筛选功能：恢复筛选配置
+      const savedFilterConfig = savedSearch.search_params?._filterConfig;
+      if (savedFilterConfig) {
+        if (savedFilterConfig.groups) {
+          setFilterGroups(savedFilterConfig.groups);
+        }
+        if (savedFilterConfig.quickFilters) {
+          setQuickFilters(savedFilterConfig.quickFilters);
+        }
+        // 切换到筛选标签页
+        setActiveTab('filter');
+      }
+      
       // ⭐ 最佳实践：设置到搜索表单和 ProTable 表单（不设置 searchParamsRef，不触发搜索）
-      searchFormRef.current?.setFieldsValue(filteredParams);
+      // 排除 _filterConfig，因为它不是搜索参数
+      const searchParamsWithoutFilterConfig = { ...filteredParams };
+      delete searchParamsWithoutFilterConfig._filterConfig;
+      searchFormRef.current?.setFieldsValue(searchParamsWithoutFilterConfig);
       if (formRef.current) {
-        formRef.current.setFieldsValue(filteredParams);
+        formRef.current.setFieldsValue(searchParamsWithoutFilterConfig);
       }
       
       // 不关闭弹窗，让用户可以看到已加载的条件并可以修改
@@ -1035,13 +1108,27 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⭐ 最佳实践：使用统一的过滤函数
       const filteredParams = filterEmptyValues(savedSearch.search_params);
       
+      // ⭐ 筛选功能：恢复筛选配置
+      const savedFilterConfig = savedSearch.search_params?._filterConfig;
+      if (savedFilterConfig) {
+        if (savedFilterConfig.groups) {
+          setFilterGroups(savedFilterConfig.groups);
+        }
+        if (savedFilterConfig.quickFilters) {
+          setQuickFilters(savedFilterConfig.quickFilters);
+        }
+      }
+      
       // ⭐ 最佳实践：设置到所有需要的地方
-      searchFormRef.current?.setFieldsValue(filteredParams);
+      // 排除 _filterConfig，因为它不是搜索参数
+      const searchParamsWithoutFilterConfig = { ...filteredParams };
+      delete searchParamsWithoutFilterConfig._filterConfig;
+      searchFormRef.current?.setFieldsValue(searchParamsWithoutFilterConfig);
       if (formRef.current) {
-        formRef.current.setFieldsValue(filteredParams);
+        formRef.current.setFieldsValue(searchParamsWithoutFilterConfig);
       }
       if (searchParamsRef) {
-        searchParamsRef.current = filteredParams;
+        searchParamsRef.current = searchParamsWithoutFilterConfig;
       }
       
       // ⭐ 最佳实践：等待表单值更新后再触发搜索
@@ -1177,14 +1264,20 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   return (
     <>
       <style>{`
+        .query-search-modal-wrap .ant-modal-body {
+          max-height: calc(80vh - 120px) !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
         .query-search-modal-wrap .ant-list-item-meta-title {
           margin-bottom: 0 !important;
         }
         .query-search-modal-wrap .ant-list-item-action > li {
           padding: 0 2px !important;
         }
-        .ant-list-item {
-          border-radius: 6px !important;
+        .query-search-modal-wrap .ant-list-item {
+          border-radius: ${token.borderRadius}px !important;
         }
         .ant-list-item-meta-avatar {
           margin-right: 4px !important;
@@ -1209,18 +1302,34 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         title="搜索条件"
         open={visible}
         onCancel={onClose}
-        width={1200}
+        width={1400}
         centered={false}
-        style={style}
+        style={{
+          ...style,
+          maxHeight: '80vh',
+        }}
         getContainer={() => document.body}
         mask={true}
         wrapClassName="query-search-modal-wrap"
         footer={null}
       >
-      <div style={{ display: 'flex', minHeight: 400 }}>
+      <div style={{ 
+        display: 'flex', 
+        minHeight: 400,
+        maxHeight: 'calc(80vh - 120px)',
+        overflow: 'hidden',
+      }}>
         {/* 左侧：搜索表单 */}
         <div 
-          style={{ flex: '2', paddingRight: 16, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' }}
+          style={{ 
+            flex: '3', 
+            paddingRight: 16, 
+            borderRight: '1px solid #f0f0f0', 
+            display: 'flex', 
+            flexDirection: 'column',
+            overflow: 'hidden',
+            minHeight: 0,
+          }}
           onKeyDown={(e) => {
             // 按回车时触发搜索
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
@@ -1267,18 +1376,78 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             </div>
           )}
           
-          <ProForm
-            formRef={searchFormRef}
-            submitter={false}
-          >
-            <Row gutter={16}>
-              {searchableColumns.map((column) => (
-                <Col span={12} key={column.dataIndex as string}>
-                  {renderFormItem(column)}
-                </Col>
-              ))}
-            </Row>
-          </ProForm>
+          {/* 搜索和筛选标签页 */}
+          <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            <Tabs
+              activeKey={activeTab}
+              onChange={(key) => setActiveTab(key as 'search' | 'filter')}
+              items={[
+              {
+                key: 'search',
+                label: '字段搜索',
+                children: (
+                  <ProForm
+                    formRef={searchFormRef}
+                    submitter={false}
+                  >
+                    <Row gutter={16}>
+                      {searchableColumns.map((column) => (
+                        <Col span={12} key={column.dataIndex as string}>
+                          {renderFormItem(column)}
+                        </Col>
+                      ))}
+                    </Row>
+                  </ProForm>
+                ),
+              },
+              {
+                key: 'filter',
+                label: (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>筛选条件</span>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<QuestionCircleOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHelpModalVisible(true);
+                      }}
+                      style={{ 
+                        padding: 0,
+                        width: 16,
+                        height: 16,
+                        minWidth: 16,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: token.colorTextSecondary,
+                      }}
+                      title="使用帮助"
+                    />
+                  </span>
+                ),
+                children: (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* 快速筛选 */}
+                    <QuickFilters
+                      columns={columns}
+                      quickFilters={quickFilters}
+                      onChange={setQuickFilters}
+                    />
+                    
+                    {/* 高级筛选 */}
+                    <AdvancedFilters
+                      columns={columns}
+                      filterGroups={filterGroups}
+                      onChange={setFilterGroups}
+                    />
+                  </div>
+                ),
+              },
+            ]}
+            />
+          </div>
           
           {/* 搜索相关按钮（底部对齐） */}
           <div style={{ marginTop: 'auto', paddingTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -1306,7 +1475,18 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         </div>
         
         {/* 中间：共享搜索条件 */}
-        <div style={{ flex: '1', paddingLeft: 16, paddingRight: 16, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ 
+          flex: '1', 
+          minWidth: '280px',
+          maxWidth: '320px',
+          paddingLeft: 16, 
+          paddingRight: 16, 
+          borderRight: '1px solid #f0f0f0', 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minHeight: 0,
+        }}>
           <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
             共享搜索条件
           </Typography.Title>
@@ -1314,7 +1494,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             <div style={{ 
               flex: 1, 
               overflowY: 'auto', 
-              maxHeight: '400px',
+              overflowX: 'hidden',
+              minHeight: 0,
               paddingRight: 4,
             }}>
               <DndContext
@@ -1337,7 +1518,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                   style={{ 
                     padding: '8px 12px',
                     border: `1px solid ${token.colorSuccessBorder}`,
-                    borderRadius: '4px',
+                    borderRadius: token.borderRadius,
                     marginBottom: 8,
                     backgroundColor: token.colorSuccessBg,
                     transition: 'all 0.2s',
@@ -1488,7 +1669,16 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         </div>
         
         {/* 右侧：个人搜索条件 */}
-        <div style={{ flex: '1', paddingLeft: 16, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ 
+          flex: '1', 
+          minWidth: '280px',
+          maxWidth: '320px',
+          paddingLeft: 16, 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minHeight: 0,
+        }}>
           <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
             个人搜索条件
           </Typography.Title>
@@ -1496,7 +1686,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             <div style={{ 
               flex: 1, 
               overflowY: 'auto', 
-              maxHeight: '400px',
+              overflowX: 'hidden',
+              minHeight: 0,
               paddingRight: 4,
             }}>
               <DndContext
@@ -1519,7 +1710,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                   style={{ 
                     padding: '8px 12px',
                     border: `1px solid ${token.colorInfoBorder}`,
-                    borderRadius: '4px',
+                    borderRadius: token.borderRadius,
                     marginBottom: 8,
                     backgroundColor: token.colorInfoBg,
                     transition: 'all 0.2s',
@@ -1684,6 +1875,492 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           )}
         </div>
       </div>
+      </Modal>
+      
+      {/* 筛选条件使用帮助弹窗 */}
+      <Modal
+        title="筛选条件使用帮助"
+        open={helpModalVisible}
+        onCancel={() => setHelpModalVisible(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setHelpModalVisible(false)}>
+            我知道了
+          </Button>
+        ]}
+        width={700}
+      >
+        <div style={{ lineHeight: 1.8, color: token.colorText }}>
+          {/* 快速筛选说明 */}
+          <div style={{ 
+            marginBottom: 24, 
+            padding: '16px', 
+            backgroundColor: token.colorSuccessBg, 
+            borderRadius: token.borderRadius,
+            border: `1px solid ${token.colorSuccessBorder}`,
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              marginBottom: 12,
+            }}>
+              <Tag color="success" style={{ marginRight: 8 }}>快速筛选</Tag>
+              <h3 style={{ 
+                margin: 0, 
+                color: token.colorText, 
+                fontSize: token.fontSizeLG,
+                fontWeight: 600,
+              }}>
+                最简单的方式
+              </h3>
+            </div>
+            <p style={{ 
+              marginBottom: 12, 
+              color: token.colorText,
+              fontSize: token.fontSize,
+            }}>
+              就像在购物网站上选择商品分类一样，点击标签就能快速筛选数据。
+            </p>
+            <div style={{ 
+              padding: '12px', 
+              backgroundColor: token.colorBgContainer, 
+              borderRadius: token.borderRadius,
+              marginTop: 12,
+            }}>
+              <Typography.Text strong style={{ color: token.colorText, fontSize: token.fontSizeSM }}>
+                如何使用：
+              </Typography.Text>
+              <ul style={{ 
+                margin: '8px 0 0 0', 
+                paddingLeft: 20, 
+                color: token.colorTextSecondary,
+                fontSize: token.fontSizeSM,
+              }}>
+                <li style={{ marginBottom: 4 }}>点击标签即可选中或取消选中</li>
+                <li style={{ marginBottom: 4 }}>可以同时选择多个标签（比如同时选择<Tag color="processing" style={{ margin: '0 4px' }}>激活</Tag>和<Tag color="processing" style={{ margin: '0 4px' }}>待审核</Tag>）</li>
+                <li>点击右上角的"清除全部"可以一键清空所有筛选</li>
+              </ul>
+            </div>
+          </div>
+          
+          {/* 高级筛选说明 */}
+          <div style={{ 
+            marginBottom: 24, 
+            padding: '16px', 
+            backgroundColor: token.colorPrimaryBg, 
+            borderRadius: token.borderRadius,
+            border: `1px solid ${token.colorPrimaryBorder}`,
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              marginBottom: 12,
+            }}>
+              <Tag color="processing" style={{ marginRight: 8 }}>高级筛选</Tag>
+              <h3 style={{ 
+                margin: 0, 
+                color: token.colorText, 
+                fontSize: token.fontSizeLG,
+                fontWeight: 600,
+              }}>
+                精确查找
+              </h3>
+            </div>
+            <p style={{ 
+              marginBottom: 16, 
+              color: token.colorText,
+              fontSize: token.fontSize,
+            }}>
+              当快速筛选无法满足需求时，可以使用高级筛选来精确控制查找条件。
+            </p>
+            
+            {/* 操作步骤 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                marginBottom: 8,
+              }}>
+                <span style={{ 
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: token.colorPrimary,
+                  color: '#fff',
+                  fontSize: token.fontSizeSM,
+                  fontWeight: 600,
+                  marginRight: 8,
+                }}>1</span>
+                <h4 style={{ 
+                  margin: 0, 
+                  color: token.colorText, 
+                  fontSize: token.fontSize,
+                  fontWeight: 500,
+                }}>
+                  添加筛选条件
+                </h4>
+              </div>
+              <div style={{ 
+                marginLeft: 32,
+                padding: '12px',
+                backgroundColor: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+              }}>
+                <ul style={{ 
+                  margin: 0, 
+                  paddingLeft: 20, 
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <li style={{ marginBottom: 4 }}>点击"添加条件组"按钮</li>
+                  <li style={{ marginBottom: 4 }}>在条件组内点击"添加条件"按钮</li>
+                  <li>每个条件需要选择：<strong style={{ color: token.colorText }}>字段</strong>、<strong style={{ color: token.colorText }}>操作符</strong>、<strong style={{ color: token.colorText }}>值</strong></li>
+                </ul>
+              </div>
+            </div>
+            
+            {/* 操作符说明 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                marginBottom: 8,
+              }}>
+                <span style={{ 
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: token.colorPrimary,
+                  color: '#fff',
+                  fontSize: token.fontSizeSM,
+                  fontWeight: 600,
+                  marginRight: 8,
+                }}>2</span>
+                <h4 style={{ 
+                  margin: 0, 
+                  color: token.colorText, 
+                  fontSize: token.fontSize,
+                  fontWeight: 500,
+                }}>
+                  操作符是什么意思？
+                </h4>
+              </div>
+              <div style={{ 
+                marginLeft: 32,
+                padding: '12px',
+                backgroundColor: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+              }}>
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  <div>
+                    <Tag color="default" style={{ marginRight: 8 }}>等于</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>完全一样</Typography.Text>
+                  </div>
+                  <div>
+                    <Tag color="default" style={{ marginRight: 8 }}>不等于</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>排除这个值</Typography.Text>
+                  </div>
+                  <div>
+                    <Tag color="default" style={{ marginRight: 8 }}>包含</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>文字里包含（模糊查找）</Typography.Text>
+                  </div>
+                  <div>
+                    <Tag color="default" style={{ marginRight: 8 }}>不包含</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>文字里不包含</Typography.Text>
+                  </div>
+                  <div>
+                    <Tag color="default" style={{ marginRight: 8 }}>大于/小于</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>数字或日期比较</Typography.Text>
+                  </div>
+                  <div>
+                    <Tag color="default" style={{ marginRight: 8 }}>为空/不为空</Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>有没有填写</Typography.Text>
+                  </div>
+                </Space>
+              </div>
+            </div>
+            
+            {/* 逻辑说明 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                marginBottom: 8,
+              }}>
+                <span style={{ 
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: token.colorPrimary,
+                  color: '#fff',
+                  fontSize: token.fontSizeSM,
+                  fontWeight: 600,
+                  marginRight: 8,
+                }}>3</span>
+                <h4 style={{ 
+                  margin: 0, 
+                  color: token.colorText, 
+                  fontSize: token.fontSize,
+                  fontWeight: 500,
+                }}>
+                  AND 和 OR 的区别
+                </h4>
+              </div>
+              <div style={{ 
+                marginLeft: 32,
+                padding: '12px',
+                backgroundColor: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+              }}>
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <div style={{ 
+                    padding: '12px',
+                    backgroundColor: token.colorSuccessBg,
+                    borderRadius: token.borderRadius,
+                    border: `1px solid ${token.colorSuccessBorder}`,
+                  }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <Tag color="success" style={{ marginRight: 8 }}>AND（且）</Tag>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                        所有条件都要满足
+                      </Typography.Text>
+                    </div>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                      例如：状态 <Tag color="default" style={{ margin: '0 4px' }}>=</Tag> 激活 <Tag color="success" style={{ margin: '0 4px' }}>且</Tag> 创建时间 <Tag color="default" style={{ margin: '0 4px' }}>{'>'}</Tag> 2024-01-01
+                      <br/>
+                      <span style={{ fontSize: token.fontSizeSM * 0.9 }}>（必须同时满足这两个条件）</span>
+                    </Typography.Text>
+                  </div>
+                  <div style={{ 
+                    padding: '12px',
+                    backgroundColor: token.colorWarningBg,
+                    borderRadius: token.borderRadius,
+                    border: `1px solid ${token.colorWarningBorder}`,
+                  }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <Tag color="warning" style={{ marginRight: 8 }}>OR（或）</Tag>
+                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                        满足任意一个条件即可
+                      </Typography.Text>
+                    </div>
+                    <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                      例如：名称 <Tag color="default" style={{ margin: '0 4px' }}>包含</Tag> "管理员" <Tag color="warning" style={{ margin: '0 4px' }}>或</Tag> 名称 <Tag color="default" style={{ margin: '0 4px' }}>包含</Tag> "系统"
+                      <br/>
+                      <span style={{ fontSize: token.fontSizeSM * 0.9 }}>（满足其中一个条件就可以）</span>
+                    </Typography.Text>
+                  </div>
+                </Space>
+              </div>
+            </div>
+          </div>
+          
+          <Divider orientation="left" style={{ margin: '24px 0' }}>
+            <Typography.Text strong>实际使用示例</Typography.Text>
+          </Divider>
+          
+          {/* 使用场景 */}
+          <div style={{ marginBottom: 24 }}>
+            {/* 场景一 */}
+            <div style={{ 
+              marginBottom: 16,
+              padding: '16px',
+              backgroundColor: token.colorFillAlter,
+              borderRadius: token.borderRadius,
+              border: `1px solid ${token.colorBorderSecondary}`,
+            }}>
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Tag color="blue" style={{ marginRight: 8 }}>示例一</Tag>
+                <h4 style={{ 
+                  margin: 0,
+                  color: token.colorText,
+                  fontSize: token.fontSize,
+                  fontWeight: 600,
+                }}>
+                  查找特定状态的用户
+                </h4>
+              </div>
+              <div style={{ 
+                padding: '12px',
+                backgroundColor: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+              }}>
+                <p style={{ 
+                  margin: '0 0 8px 0',
+                  color: token.colorText,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <strong>我想找：</strong>状态为"激活"或"待审核"的用户
+                </p>
+                <p style={{ 
+                  margin: 0,
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <strong>怎么做：</strong>在"快速筛选"区域，直接点击"激活"和"待审核"这两个标签就可以了！
+                </p>
+              </div>
+            </div>
+            
+            {/* 场景二 */}
+            <div style={{ 
+              marginBottom: 16,
+              padding: '16px',
+              backgroundColor: token.colorFillAlter,
+              borderRadius: token.borderRadius,
+              border: `1px solid ${token.colorBorderSecondary}`,
+            }}>
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Tag color="blue" style={{ marginRight: 8 }}>示例二</Tag>
+                <h4 style={{ 
+                  margin: 0,
+                  color: token.colorText,
+                  fontSize: token.fontSize,
+                  fontWeight: 600,
+                }}>
+                  同时满足多个条件
+                </h4>
+              </div>
+              <div style={{ 
+                padding: '12px',
+                backgroundColor: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+              }}>
+                <p style={{ 
+                  margin: '0 0 8px 0',
+                  color: token.colorText,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <strong>我想找：</strong>创建时间在 2024 年 1 月之后，<strong>并且</strong>状态为"激活"的记录
+                </p>
+                <p style={{ 
+                  margin: '0 0 8px 0',
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <strong>怎么做：</strong>
+                </p>
+                <ol style={{ 
+                  margin: 0,
+                  paddingLeft: 20,
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <li>点击"添加条件组"，逻辑选择"AND"</li>
+                  <li>添加第一个条件：创建时间 {'>'} 2024-01-01</li>
+                  <li>添加第二个条件：状态 = 激活</li>
+                  <li>点击"搜索"按钮</li>
+                </ol>
+              </div>
+            </div>
+            
+            {/* 场景三 */}
+            <div style={{ 
+              marginBottom: 0,
+              padding: '16px',
+              backgroundColor: token.colorFillAlter,
+              borderRadius: token.borderRadius,
+              border: `1px solid ${token.colorBorderSecondary}`,
+            }}>
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Tag color="blue" style={{ marginRight: 8 }}>示例三</Tag>
+                <h4 style={{ 
+                  margin: 0,
+                  color: token.colorText,
+                  fontSize: token.fontSize,
+                  fontWeight: 600,
+                }}>
+                  满足任意一个条件
+                </h4>
+              </div>
+              <div style={{ 
+                padding: '12px',
+                backgroundColor: token.colorBgContainer,
+                borderRadius: token.borderRadius,
+              }}>
+                <p style={{ 
+                  margin: '0 0 8px 0',
+                  color: token.colorText,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <strong>我想找：</strong>名称包含"管理员"<strong>或者</strong>包含"系统"的角色
+                </p>
+                <p style={{ 
+                  margin: '0 0 8px 0',
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <strong>怎么做：</strong>
+                </p>
+                <ol style={{ 
+                  margin: 0,
+                  paddingLeft: 20,
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <li>点击"添加条件组"，逻辑选择"OR"</li>
+                  <li>添加第一个条件：名称 包含 "管理员"</li>
+                  <li>添加第二个条件：名称 包含 "系统"</li>
+                  <li>点击"搜索"按钮</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+          
+          {/* 温馨提示 */}
+          <div style={{ 
+            padding: '16px', 
+            backgroundColor: token.colorInfoBg, 
+            borderRadius: token.borderRadius,
+            border: `1px solid ${token.colorInfoBorder}`,
+          }}>
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'flex-start',
+            }}>
+              <Tag color="processing" style={{ marginRight: 8, marginTop: 2 }}>提示</Tag>
+              <div style={{ flex: 1 }}>
+                <Typography.Text strong style={{ 
+                  color: token.colorText, 
+                  fontSize: token.fontSize,
+                  display: 'block',
+                  marginBottom: 8,
+                }}>
+                  温馨提示
+                </Typography.Text>
+                <ul style={{ 
+                  margin: 0,
+                  paddingLeft: 20,
+                  color: token.colorInfo,
+                  fontSize: token.fontSizeSM,
+                }}>
+                  <li>筛选条件会与上方的"字段搜索"一起生效</li>
+                  <li>可以点击"保存搜索条件"按钮，把常用的筛选保存起来，下次直接使用</li>
+                  <li>如果筛选没有结果，检查一下筛选值是否填写完整</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
       
       {/* 保存搜索条件弹窗 */}
@@ -2177,7 +2854,7 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
               alignItems: 'center', 
               gap: 0, 
               marginLeft: 8,
-              borderRadius: '6px',
+              borderRadius: token.borderRadius,
               border: `1px solid ${token.colorBorder}`,
               overflow: 'hidden',
               backgroundColor: token.colorBgContainer,
