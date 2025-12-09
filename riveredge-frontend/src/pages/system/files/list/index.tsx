@@ -719,8 +719,6 @@ const FileListPage: React.FC = () => {
             <Button icon={<ReloadOutlined />} onClick={() => loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string)} />
           </Space>
           
-          <Divider type="vertical" />
-          
           {/* 地址栏 */}
           <Breadcrumb
             style={{ flex: 1 }}
@@ -734,8 +732,6 @@ const FileListPage: React.FC = () => {
               ),
             }))}
           />
-          
-          <Divider type="vertical" />
           
           {/* 视图切换 */}
           <Space>

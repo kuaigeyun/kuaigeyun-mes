@@ -557,6 +557,7 @@ const DepartmentListPage: React.FC = () => {
       <div
         style={{
           width: '300px',
+          flexShrink: 0,
           borderTop: `1px solid ${token.colorBorder}`,
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
@@ -567,6 +568,7 @@ const DepartmentListPage: React.FC = () => {
           height: '100%',
           borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
           borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
+          boxSizing: 'border-box',
         }}
       >
         {/* 搜索栏 */}
@@ -623,10 +625,14 @@ const DepartmentListPage: React.FC = () => {
         display: 'flex', 
         flexDirection: 'column', 
         backgroundColor: token.colorBgContainer,
-        border: `1px solid ${token.colorBorder}`,
+        borderTop: `1px solid ${token.colorBorder}`,
+        borderBottom: `1px solid ${token.colorBorder}`,
+        borderRight: `1px solid ${token.colorBorder}`,
         borderLeft: 'none',
         borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
         borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
+        boxSizing: 'border-box',
+        minWidth: 0,
       }}>
         {/* 顶部工具栏 */}
         <div
@@ -648,8 +654,6 @@ const DepartmentListPage: React.FC = () => {
               刷新
             </Button>
           </Space>
-          
-          <Divider type="vertical" />
           
           {/* 部门信息 */}
           <div style={{ flex: 1 }}>
@@ -674,7 +678,6 @@ const DepartmentListPage: React.FC = () => {
           
           {selectedNode && (
             <>
-              <Divider type="vertical" />
               <Space>
                 <Button icon={<EyeOutlined />} onClick={() => handleView(selectedNode)}>
                   查看详情

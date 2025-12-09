@@ -7,40 +7,7 @@ import zhCN from 'antd/locale/zh_CN'
 import App from './app'
 import './global.less'
 
-// 抑制 findDOMNode 警告（Ant Design 在 React 18 StrictMode 下的已知问题）
-if (process.env.NODE_ENV === 'development') {
-  const originalError = console.error;
-  const originalWarn = console.warn;
-  
-  const isFindDOMNodeWarning = (message: any): boolean => {
-    if (typeof message !== 'string') {
-      return false;
-    }
-    const lowerMessage = message.toLowerCase();
-    return (
-      lowerMessage.includes('finddomnode') ||
-      lowerMessage.includes('finddomnode is deprecated') ||
-      lowerMessage.includes('warning: finddomnode') ||
-      lowerMessage.includes('finddomnode was passed')
-    );
-  };
-  
-  console.error = (...args: any[]) => {
-    const hasFindDOMNodeWarning = args.some(arg => isFindDOMNodeWarning(arg));
-    if (hasFindDOMNodeWarning) {
-      return;
-    }
-    originalError.apply(console, args);
-  };
-  
-  console.warn = (...args: any[]) => {
-    const hasFindDOMNodeWarning = args.some(arg => isFindDOMNodeWarning(arg));
-    if (hasFindDOMNodeWarning) {
-      return;
-    }
-    originalWarn.apply(console, args);
-  };
-}
+// Ant Design 6.0 已移除 findDOMNode 兼容逻辑，不再需要抑制警告
 
 // 创建 Query Client（配置智能重试和错误处理）
 const queryClient = new QueryClient({

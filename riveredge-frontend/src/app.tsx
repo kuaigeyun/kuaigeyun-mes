@@ -4,7 +4,7 @@
  * 使用现代化 React 生态技术栈：
  * - React 18.3.1 + TypeScript 5.6.3
  * - React Router DOM 6.26.2 (路由管理)
- * - Ant Design 5.21.4 + Pro Components 2.8.2 (UI组件)
+ * - Ant Design 6.1.0 + Pro Components 2.8.2 (UI组件)
  */
 
 import React, { useEffect, useState } from 'react';

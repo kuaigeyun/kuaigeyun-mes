@@ -233,7 +233,7 @@ const techStackData: TechStackItem[] = [
   },
   {
     name: 'Ant Design',
-    version: '5.21.4+',
+    version: '6.1.0+',
     description: '企业级 UI 组件库',
     license: 'MIT License',
     commercialUse: true,
