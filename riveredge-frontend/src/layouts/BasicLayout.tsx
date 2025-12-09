@@ -2161,7 +2161,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 trigger={['hover']}
                 mouseEnterDelay={0.5}
                 open={languageDropdownOpen ? false : undefined}
-                destroyTooltipOnHide
+                destroyOnHidden
               >
                 <Button
                   type="text"

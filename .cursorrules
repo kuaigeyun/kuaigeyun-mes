@@ -72,7 +72,7 @@
 - **状态管理**: Zustand 5.0.0（不得使用 Redux 等）
 - **数据获取**: TanStack Query 5.51.1（不得使用 Axios、fetch 等）
 - **表单管理**: React Hook Form 7.53.0（不得使用其他表单库）
-- **UI 组件库**: Ant Design 5.21.4 + Ant Design Pro Components 2.8.2（不得使用 Material-UI、Element UI 等）
+- **UI 组件库**: Ant Design 6.1.0 + Ant Design Pro Components 2.8.2（不得使用 Material-UI、Element UI 等）
 - **类型系统**: TypeScript 5.6.3（必须使用 TypeScript，不得使用 JavaScript）
 
 ## 📐 命名规范（必须严格遵循）

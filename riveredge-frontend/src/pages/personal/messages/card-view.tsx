@@ -325,7 +325,7 @@ const CardView: React.FC = () => {
                         <Text type="secondary">
                           {typeStats.total} 条消息
                         </Text>
-                        <Divider type="vertical" />
+                        <Divider orientation="vertical" />
                         <Badge count={typeStats.unread} showZero={false}>
                           <Text type="secondary">未读: {typeStats.unread}</Text>
                         </Badge>

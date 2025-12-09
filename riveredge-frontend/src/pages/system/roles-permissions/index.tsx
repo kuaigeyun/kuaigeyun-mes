@@ -582,8 +582,6 @@ const RolesPermissionsPage: React.FC = () => {
             </Button>
           </Space>
           
-          <Divider type="vertical" />
-          
           {/* 角色信息 */}
           <div style={{ flex: 1 }}>
             {selectedRole ? (
@@ -600,7 +598,6 @@ const RolesPermissionsPage: React.FC = () => {
           
           {selectedRole && (
             <>
-              <Divider type="vertical" />
               <Button
                 type="primary"
                 icon={<SaveOutlined />}

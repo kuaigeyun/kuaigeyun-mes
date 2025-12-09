@@ -309,7 +309,7 @@ const CardView: React.FC = () => {
                         <Text type="secondary">
                           {typeStats.total} 个集成
                         </Text>
-                        <Divider type="vertical" />
+                        <Divider orientation="vertical" />
                         <Badge status="success" text={`已连接: ${typeStats.connected}`} />
                         <Badge status="warning" text={`未连接: ${typeStats.disconnected}`} />
                       </Space>
