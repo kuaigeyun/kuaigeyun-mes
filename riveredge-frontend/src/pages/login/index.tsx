@@ -10,10 +10,10 @@ import { ProForm, ProFormText, ProFormGroup } from '@ant-design/pro-components';
 import { App, Typography, Button, Space, Tooltip, ConfigProvider, Card, Row, Col, Drawer, Alert, AutoComplete, Input } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, UserAddOutlined, ApartmentOutlined, ArrowLeftOutlined, MailOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest } from '../../services/register';
-import { login, guestLogin, type LoginResponse } from '../../services/auth';
+import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { TenantSelectionModal, TermsModal } from '../../components';
@@ -343,17 +343,216 @@ export default function LoginPage() {
   const fixedThemeColor = '#1890ff';
 
   /**
+   * 处理登录成功后的逻辑
+   * 
+   * 统一处理登录成功后的逻辑，包括：
+   * - 保存 Token
+   * - 判断组织数量并处理跳转
+   * - 更新用户状态
+   * 
+   * @param response - 登录响应数据
+   * @param credentials - 登录凭据（用于多组织选择后重新登录）
+   */
+  const handleLoginSuccess = (response: LoginResponse, credentials?: LoginFormData) => {
+    if (!response || !response.access_token) {
+      message.error('登录失败，请检查用户名和密码');
+      return;
+    }
+
+    // 保存 Token
+    setToken(response.access_token);
+
+    // 判断组织数量
+    const tenants = response.tenants || [];
+    const isPlatformAdmin = response.user?.is_platform_admin || false;
+
+    // 平台管理：直接进入
+    if (isPlatformAdmin) {
+      // 保存组织 ID（如果有）
+      if (response.default_tenant_id) {
+        setTenantId(response.default_tenant_id);
+      }
+
+      // 从 tenants 数组中查找对应的租户名称（平台管理员可能没有租户）
+      const tenantName = response.default_tenant_id && tenants.length > 0 
+        ? tenants.find(t => t.id === response.default_tenant_id)?.name || ''
+        : '';
+
+      // 更新用户状态
+      const userInfo = {
+        id: response.user.id,
+        username: response.user.username,
+        email: response.user.email,
+        full_name: response.user.full_name,
+        is_platform_admin: response.user.is_platform_admin,
+        is_tenant_admin: response.user.is_tenant_admin,
+        tenant_id: response.default_tenant_id,
+        tenant_name: tenantName,
+        user_type: 'platform_superadmin',
+      };
+      setCurrentUser(userInfo);
+      setUserInfo(userInfo);
+
+      message.success('登录成功');
+      navigate('/login/dashboard');
+      return;
+    }
+
+    // 多组织：显示选择弹窗
+    if (tenants.length > 1 || response.requires_tenant_selection) {
+      setLoginResponse(response);
+      if (credentials) {
+        setLoginCredentials(credentials);
+      }
+      setTenantSelectionVisible(true);
+      return;
+    }
+
+    // 单组织：直接进入
+    const selectedTenantId = response.user?.tenant_id || response.default_tenant_id || tenants[0]?.id;
+
+    if (selectedTenantId) {
+      setTenantId(selectedTenantId);
+
+      // 从 tenants 数组中查找对应的租户名称
+      const selectedTenant = tenants.find(t => t.id === selectedTenantId);
+      const tenantName = selectedTenant?.name || '';
+
+      // 更新用户状态
+      const userInfo = {
+        id: response.user.id,
+        username: response.user.username,
+        email: response.user.email,
+        full_name: response.user.full_name,
+        is_platform_admin: response.user.is_platform_admin,
+        is_tenant_admin: response.user.is_tenant_admin,
+        tenant_id: selectedTenantId,
+        tenant_name: tenantName,
+        user_type: 'user',
+      };
+      setCurrentUser(userInfo);
+      setUserInfo(userInfo);
+
+      message.success('登录成功');
+
+      // 使用 React Router 进行页面跳转
+      const urlParams = new URL(window.location.href).searchParams;
+      navigate(urlParams.get('redirect') || '/login/dashboard');
+    } else {
+      message.error('登录失败，无法确定组织');
+    }
+  };
+
+  /**
+   * 处理微信登录
+   * 
+   * 跳转到微信授权页面
+   */
+  const handleWechatLogin = async () => {
+    try {
+      // 微信授权 URL
+      // 注意：需要配置微信开放平台的 AppID 和回调地址
+      // 优先从环境变量获取，如果没有则提示配置
+      // 从环境变量获取微信 AppID（需要在 .env 文件中配置 VITE_WECHAT_APPID）
+      const WECHAT_APPID = (import.meta as any).env?.VITE_WECHAT_APPID || '';
+      
+      // 如果 AppID 未配置，提示用户
+      if (!WECHAT_APPID) {
+        message.warning('微信登录功能未配置，请联系管理员配置 VITE_WECHAT_APPID');
+        return;
+      }
+
+      // 生成回调地址（前端地址）
+      const redirectUri = encodeURIComponent(`${window.location.origin}/login?provider=wechat`);
+      
+      // 生成随机 state，用于防止 CSRF 攻击
+      const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      // 保存 state 到 sessionStorage，用于回调时验证
+      sessionStorage.setItem('wechat_login_state', state);
+
+      // 跳转到微信授权页面
+      // 微信开放平台网站应用授权地址
+      const wechatAuthUrl = `https://open.weixin.qq.com/connect/qrconnect?appid=${WECHAT_APPID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`;
+      window.location.href = wechatAuthUrl;
+    } catch (error: any) {
+      message.error('微信登录跳转失败，请稍后重试');
+      console.error('微信登录错误:', error);
+    }
+  };
+
+  /**
    * 处理社交登录
    * 
    * @param provider - 社交登录提供商（wechat, qq, wechat_work, dingtalk, feishu）
    */
   const handleSocialLogin = (provider: 'wechat' | 'qq' | 'wechat_work' | 'dingtalk' | 'feishu') => {
-    // TODO: 实现社交登录逻辑
-    // 1. 跳转到对应平台的授权页面
-    // 2. 获取授权码后回调到后端
-    // 3. 后端验证并返回 Token
-    message.info(`${provider} 登录功能待实现`);
+    if (provider === 'wechat') {
+      handleWechatLogin();
+    } else {
+      // TODO: 实现其他社交登录
+      message.info(`${provider} 登录功能待实现`);
+    }
   };
+
+  /**
+   * 处理微信登录回调
+   * 
+   * 从 URL 中获取 code 和 state，验证后调用后端 API 完成登录
+   */
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const provider = urlParams.get('provider');
+
+    // 检查是否是微信登录回调
+    if (provider === 'wechat' && code && state) {
+      // 验证 state（防止 CSRF 攻击）
+      const savedState = sessionStorage.getItem('wechat_login_state');
+      if (savedState !== state) {
+        message.error('微信登录验证失败，请重试');
+        // 清除 URL 参数，避免重复处理
+        window.history.replaceState({}, '', '/login');
+        return;
+      }
+
+      // 清除 state
+      sessionStorage.removeItem('wechat_login_state');
+
+      // 调用后端 API 完成登录
+      const handleWechatCallback = async () => {
+        try {
+          message.loading('正在登录...', 0);
+          const response = await wechatLoginCallback(code);
+          message.destroy();
+          handleLoginSuccess(response);
+        } catch (error: any) {
+          message.destroy();
+          let errorMessage = '微信登录失败，请稍后重试';
+          
+          if (error?.response?.data) {
+            const errorData = error.response.data;
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+            } else if (errorData.detail) {
+              errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          
+          message.error(errorMessage);
+          // 清除 URL 参数
+          window.history.replaceState({}, '', '/login');
+        }
+      };
+
+      handleWechatCallback();
+    }
+  }, []);
 
   /**
    * 处理登录提交
@@ -368,93 +567,7 @@ export default function LoginPage() {
   const handleSubmit = async (values: LoginFormData) => {
     try {
       const response = await login(values);
-
-      if (response && response.access_token) {
-        // 保存 Token
-        setToken(response.access_token);
-
-        // 判断组织数量
-        const tenants = response.tenants || [];
-        const isPlatformAdmin = response.user?.is_platform_admin || false;
-
-        // 平台管理：直接进入
-        if (isPlatformAdmin) {
-          // 保存组织 ID（如果有）
-          if (response.default_tenant_id) {
-            setTenantId(response.default_tenant_id);
-          }
-
-          // 从 tenants 数组中查找对应的租户名称（平台管理员可能没有租户）
-          const tenantName = response.default_tenant_id && tenants.length > 0 
-            ? tenants.find(t => t.id === response.default_tenant_id)?.name || ''
-            : '';
-
-          // 更新用户状态
-          const userInfo = {
-            id: response.user.id,
-            username: response.user.username,
-            email: response.user.email,
-            full_name: response.user.full_name,
-            is_platform_admin: response.user.is_platform_admin,
-            is_tenant_admin: response.user.is_tenant_admin,
-            tenant_id: response.default_tenant_id,
-            tenant_name: tenantName, // ⚠️ 关键修复：保存租户名称
-            user_type: 'platform_superadmin',
-          };
-          setCurrentUser(userInfo);
-          // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name
-          setUserInfo(userInfo);
-
-          message.success('登录成功');
-          navigate('/login/dashboard');
-          return;
-        }
-
-        // 多组织：显示选择弹窗
-        if (tenants.length > 1 || response.requires_tenant_selection) {
-          setLoginResponse(response);
-          setLoginCredentials(values); // 保存登录凭据，用于选择组织后重新登录
-          setTenantSelectionVisible(true);
-          return;
-        }
-
-        // 单组织：直接进入
-        const selectedTenantId = response.user?.tenant_id || response.default_tenant_id || tenants[0]?.id;
-
-        if (selectedTenantId) {
-          setTenantId(selectedTenantId);
-
-          // 从 tenants 数组中查找对应的租户名称
-          const selectedTenant = tenants.find(t => t.id === selectedTenantId);
-          const tenantName = selectedTenant?.name || '';
-
-          // 更新用户状态
-          const userInfo = {
-            id: response.user.id,
-            username: response.user.username,
-            email: response.user.email,
-            full_name: response.user.full_name,
-            is_platform_admin: response.user.is_platform_admin,
-            is_tenant_admin: response.user.is_tenant_admin,
-            tenant_id: selectedTenantId,
-            tenant_name: tenantName, // ⚠️ 关键修复：保存租户名称
-            user_type: 'user',
-          };
-          setCurrentUser(userInfo);
-          // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name
-          setUserInfo(userInfo);
-
-          message.success('登录成功');
-
-          // 使用 React Router 进行页面跳转
-          const urlParams = new URL(window.location.href).searchParams;
-          navigate(urlParams.get('redirect') || '/login/dashboard');
-        } else {
-          message.error('登录失败，无法确定组织');
-        }
-      } else {
-        message.error('登录失败，请检查用户名和密码');
-      }
+      handleLoginSuccess(response, values);
     } catch (error: any) {
       // 提取错误信息（支持多种错误格式）
       let errorMessage = '登录失败，请稍后重试';

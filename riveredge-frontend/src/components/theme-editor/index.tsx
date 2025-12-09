@@ -4,7 +4,7 @@
  * 使用 Ant Design 原生主题配置，支持实时预览和应用
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider } from 'antd';
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
@@ -62,6 +62,60 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     { color: '#1f1f1f', label: '深灰' },
     { color: '#141414', label: '深黑' },
   ];
+
+  // 使用 Form.useWatch 监听表单值变化
+  const colorPrimaryValue = Form.useWatch('colorPrimary', form);
+  const siderBgColorValue = Form.useWatch('siderBgColor', form);
+
+  /**
+   * 规范化颜色值为字符串格式（用于 ColorPicker 的 value 属性）
+   */
+  const normalizeColorValue = (color: any, defaultValue: string = '#1890ff'): string => {
+    if (!color) return defaultValue;
+    if (typeof color === 'string') return color;
+    
+    // 处理颜色对象：优先使用 toHexString 方法
+    if (color && typeof color.toHexString === 'function') {
+      try {
+        return color.toHexString();
+      } catch (e) {
+        console.warn('Color toHexString failed:', e);
+      }
+    }
+    
+    // 处理包含 metaColor 的颜色对象
+    if (color && color.metaColor) {
+      if (typeof color.metaColor.toHexString === 'function') {
+        try {
+          return color.metaColor.toHexString();
+        } catch (e) {
+          console.warn('Color metaColor toHexString failed:', e);
+        }
+      }
+      // 如果 metaColor 有 r, g, b 属性，手动转换为 hex
+      if (typeof color.metaColor.r === 'number' && typeof color.metaColor.g === 'number' && typeof color.metaColor.b === 'number') {
+        const r = Math.round(color.metaColor.r).toString(16).padStart(2, '0');
+        const g = Math.round(color.metaColor.g).toString(16).padStart(2, '0');
+        const b = Math.round(color.metaColor.b).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+      }
+    }
+    
+    return defaultValue;
+  };
+
+  // 规范化后的颜色值（使用 useMemo 确保始终是字符串）
+  const normalizedColorPrimary = useMemo(() => {
+    const normalized = normalizeColorValue(colorPrimaryValue, token.colorPrimary || '#1890ff');
+    // 确保返回值是有效的字符串，避免传递 undefined 或 null
+    return normalized || token.colorPrimary || '#1890ff';
+  }, [colorPrimaryValue, token.colorPrimary]);
+
+  const normalizedSiderBgColor = useMemo(() => {
+    const normalized = normalizeColorValue(siderBgColorValue, '');
+    // 确保返回值是有效的字符串，避免传递 undefined 或 null
+    return normalized || '';
+  }, [siderBgColorValue]);
 
   /**
    * 加载站点主题配置和用户偏好设置
@@ -565,34 +619,18 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             name="colorPrimary"
             label="自定义颜色"
             getValueFromEvent={(color) => {
-              if (!color) return '#1890ff';
-              if (typeof color === 'string') return color;
-              if (color && typeof color.toHexString === 'function') return color.toHexString();
-              if (color && color.metaColor && typeof color.metaColor.toHexString === 'function') {
-                return color.metaColor.toHexString();
-              }
-              return '#1890ff';
+              return normalizeColorValue(color, '#1890ff');
             }}
             normalize={(value) => {
-              if (!value) return '#1890ff';
-              if (typeof value === 'string') return value;
-              if (value && typeof value.toHexString === 'function') return value.toHexString();
-              if (value && value.metaColor && typeof value.metaColor.toHexString === 'function') {
-                return value.metaColor.toHexString();
-              }
-              return '#1890ff';
+              return normalizeColorValue(value, '#1890ff');
             }}
           >
             <ColorPicker 
               showText 
               format="hex"
-              value={form.getFieldValue('colorPrimary') || token.colorPrimary || '#1890ff'}
+              value={normalizedColorPrimary}
               onChange={(color) => {
-                const colorValue = typeof color === 'string' 
-                  ? color 
-                  : (color && typeof color.toHexString === 'function' 
-                    ? color.toHexString() 
-                    : token.colorPrimary || '#1890ff');
+                const colorValue = normalizeColorValue(color, token.colorPrimary || '#1890ff');
                 form.setFieldValue('colorPrimary', colorValue);
               }}
             />
@@ -661,18 +699,60 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               getValueFromEvent={(color) => {
                 if (!color) return '';
                 if (typeof color === 'string') return color;
-                if (color && typeof color.toHexString === 'function') return color.toHexString();
-                if (color && color.metaColor && typeof color.metaColor.toHexString === 'function') {
-                  return color.metaColor.toHexString();
+                // 处理颜色对象：优先使用 toHexString 方法
+                if (color && typeof color.toHexString === 'function') {
+                  try {
+                    return color.toHexString();
+                  } catch (e) {
+                    console.warn('Color toHexString failed:', e);
+                  }
+                }
+                // 处理包含 metaColor 的颜色对象
+                if (color && color.metaColor) {
+                  if (typeof color.metaColor.toHexString === 'function') {
+                    try {
+                      return color.metaColor.toHexString();
+                    } catch (e) {
+                      console.warn('Color metaColor toHexString failed:', e);
+                    }
+                  }
+                  // 如果 metaColor 有 r, g, b 属性，手动转换为 hex
+                  if (typeof color.metaColor.r === 'number' && typeof color.metaColor.g === 'number' && typeof color.metaColor.b === 'number') {
+                    const r = Math.round(color.metaColor.r).toString(16).padStart(2, '0');
+                    const g = Math.round(color.metaColor.g).toString(16).padStart(2, '0');
+                    const b = Math.round(color.metaColor.b).toString(16).padStart(2, '0');
+                    return `#${r}${g}${b}`;
+                  }
                 }
                 return '';
               }}
               normalize={(value) => {
                 if (!value) return '';
                 if (typeof value === 'string') return value;
-                if (value && typeof value.toHexString === 'function') return value.toHexString();
-                if (value && value.metaColor && typeof value.metaColor.toHexString === 'function') {
-                  return value.metaColor.toHexString();
+                // 处理颜色对象：优先使用 toHexString 方法
+                if (value && typeof value.toHexString === 'function') {
+                  try {
+                    return value.toHexString();
+                  } catch (e) {
+                    console.warn('Color toHexString failed:', e);
+                  }
+                }
+                // 处理包含 metaColor 的颜色对象
+                if (value && value.metaColor) {
+                  if (typeof value.metaColor.toHexString === 'function') {
+                    try {
+                      return value.metaColor.toHexString();
+                    } catch (e) {
+                      console.warn('Color metaColor toHexString failed:', e);
+                    }
+                  }
+                  // 如果 metaColor 有 r, g, b 属性，手动转换为 hex
+                  if (typeof value.metaColor.r === 'number' && typeof value.metaColor.g === 'number' && typeof value.metaColor.b === 'number') {
+                    const r = Math.round(value.metaColor.r).toString(16).padStart(2, '0');
+                    const g = Math.round(value.metaColor.g).toString(16).padStart(2, '0');
+                    const b = Math.round(value.metaColor.b).toString(16).padStart(2, '0');
+                    return `#${r}${g}${b}`;
+                  }
                 }
                 return '';
               }}
@@ -680,19 +760,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               <ColorPicker 
                 showText 
                 format="hex"
-                value={form.getFieldValue('siderBgColor') || ''}
+                value={normalizedSiderBgColor}
                 onChange={(color) => {
                   // 处理清除按钮点击（color 为 null 或 undefined）
                   if (!color || color === null) {
                     form.setFieldValue('siderBgColor', '');
                     return;
                   }
-                  
-                  const colorValue = typeof color === 'string' 
-                    ? color 
-                    : (color && typeof color.toHexString === 'function' 
-                      ? color.toHexString() 
-                      : '');
+                  const colorValue = normalizeColorValue(color, '');
                   form.setFieldValue('siderBgColor', colorValue);
                 }}
                 allowClear

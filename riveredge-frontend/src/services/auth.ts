@@ -127,3 +127,18 @@ export async function logout(): Promise<void> {
     method: 'POST',
   });
 }
+
+/**
+ * 微信登录回调
+ * 
+ * 使用微信授权码换取 JWT Token
+ * 
+ * @param code - 微信授权码
+ * @returns 登录响应数据
+ */
+export async function wechatLoginCallback(code: string): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/wechat/callback', {
+    method: 'POST',
+    data: { code },
+  });
+}
