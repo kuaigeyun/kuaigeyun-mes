@@ -733,6 +733,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
+  const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
   
@@ -1376,6 +1377,52 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
   };
 
+  /**
+   * 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
+   * 
+   * @param menuItems - 菜单项数组
+   * @param currentPath - 当前路径
+   * @returns 应该展开的菜单 key 数组
+   */
+  const calculateOpenKeys = React.useCallback((menuItems: MenuDataItem[], currentPath: string): string[] => {
+    const openKeys: string[] = [];
+    
+    /**
+     * 递归查找包含当前路径的菜单项
+     * 
+     * @param items - 菜单项数组
+     * @param path - 当前路径
+     * @param parentKeys - 父菜单的 key 数组
+     * @returns 是否找到匹配的菜单项
+     */
+    const findParentMenu = (items: MenuDataItem[], path: string, parentKeys: string[] = []): boolean => {
+      for (const item of items) {
+        const itemKey = item.key || item.path;
+        if (!itemKey) continue;
+        
+        // 如果当前路径完全匹配菜单项的 path，说明找到了目标菜单
+        if (item.path === path) {
+          // 将父菜单的 key 添加到 openKeys（不包括当前菜单本身）
+          openKeys.push(...parentKeys);
+          return true;
+        }
+        
+        // 如果菜单项有子菜单，检查当前路径是否在该菜单项的子菜单中
+        if (item.children && item.children.length > 0) {
+          // 检查子菜单中是否有匹配的路径
+          const hasMatch = findParentMenu(item.children, path, [...parentKeys, itemKey as string]);
+          if (hasMatch) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    
+    findParentMenu(menuItems, currentPath);
+    return openKeys;
+  }, []);
+
   const filteredMenuData = useMemo(() => {
     if (!currentUser) return [];
 
@@ -1447,6 +1494,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     return menuItems;
   }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed]);
+
+  // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
+  const requiredOpenKeys = useMemo(() => {
+    return calculateOpenKeys(filteredMenuData, location.pathname);
+  }, [filteredMenuData, location.pathname, calculateOpenKeys]);
+
+  // 合并用户手动展开的菜单和当前路径的父菜单
+  const openKeys = useMemo(() => {
+    // 合并两个数组，去重
+    const merged = [...new Set([...requiredOpenKeys, ...userOpenKeys])];
+    return merged;
+  }, [requiredOpenKeys, userOpenKeys]);
 
 
   /**
@@ -3110,8 +3169,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }}
       menuProps={{
         mode: 'inline',
+        openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
+        onOpenChange: (keys) => {
+          // 更新用户手动展开的菜单
+          // 从 keys 中移除 requiredOpenKeys（必须展开的菜单），剩下的就是用户手动展开的
+          const userKeys = keys.filter(key => !requiredOpenKeys.includes(key));
+          setUserOpenKeys(userKeys);
+          // 注意：如果用户尝试收起必须展开的菜单，我们会在下一次渲染时通过 openKeys 的合并逻辑自动恢复
+        },
       }}
-      onMenuHeaderClick={() => navigate('/system/dashboard')}
+      onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
       menuItemRender={(item: any, dom) => {
         // 处理外部链接
         if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
