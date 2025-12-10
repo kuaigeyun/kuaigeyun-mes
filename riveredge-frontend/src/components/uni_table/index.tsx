@@ -7,7 +7,7 @@
 
 import React, { useRef, useLayoutEffect, ReactNode, useState, useEffect } from 'react';
 import { ProTable, ActionType, ProColumns, ProFormInstance, ProTableProps } from '@ant-design/pro-components';
-import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme } from 'antd';
+import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme, Empty } from 'antd';
 import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined, SearchOutlined } from '@ant-design/icons';
 import { QuerySearchButton } from '../riveredge_query';
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
@@ -1095,8 +1095,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html body .uni-table-fuzzy-search .ant-input-search-button,
         html body .uni-table-fuzzy-search .ant-input-group-addon,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-search-button,
-        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-addon {
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-addon,
+        html body .uni-table-fuzzy-search .anticon-search,
+        html body .pro-table-button-container .uni-table-fuzzy-search .anticon-search,
+        html body .uni-table-fuzzy-search .ant-input-suffix .anticon,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-suffix .anticon,
+        html body .uni-table-fuzzy-search .ant-input-group .ant-input-group-addon,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group .ant-input-group-addon {
           display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         /* 输入框部分：完整圆角（使用主题圆角值），无边框，主题色文字 */
         html body .uni-table-fuzzy-search .ant-input-affix-wrapper,
@@ -1164,7 +1176,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {beforeSearchButtons}
-          {/* 模糊搜索框 - 根据最佳实践实现，样式与高级搜索按钮一致 */}
+          {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
           <Input
             className="uni-table-fuzzy-search"
             placeholder="模糊搜索"
@@ -1172,7 +1184,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             value={fuzzySearchKeyword}
             onChange={(e) => handleFuzzySearch(e.target.value)}
             onPressEnter={(e) => handleFuzzySearch((e.target as HTMLInputElement).value)}
-            style={{ 
+            style={{
               width: 160,
               height: '32px',
             }}
@@ -1201,11 +1213,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           request={handleRequest}
           rowKey={rowKey}
           search={false}
-          size="small"
           className="uni-table-pro-table"
           style={{ margin: 0, padding: 0 }}
           toolbar={{
-            actions: buildRightActions() ? [buildRightActions()] : [],
+            // 合并自定义 actions 和用户传入的 actions
+            actions: [
+              ...(buildRightActions() ? [buildRightActions()] : []),
+              ...(restProps.toolbar?.actions 
+                ? (Array.isArray(restProps.toolbar.actions) 
+                    ? restProps.toolbar.actions 
+                    : [restProps.toolbar.actions])
+                : []),
+            ],
+            // 恢复 ProTable 原生的密度和列设置功能
+            options: {
+              density: true,
+              setting: true,
+              reload: true,
+              fullScreen: true,
+              // 如果用户传入了 toolbar.options，则合并用户配置
+              ...(restProps.toolbar?.options || {}),
+            },
           }}
         rowSelection={
           enableRowSelection
@@ -1265,9 +1293,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       {currentViewType === 'card' && viewTypes.includes('card') && (
         <div style={{ padding: '16px', minHeight: '400px' }}>
           {cardViewConfig?.renderCard ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-              {tableData.map((item, index) => cardViewConfig.renderCard!(item, index))}
-            </div>
+            tableData.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                {tableData.map((item, index) => cardViewConfig.renderCard!(item, index))}
+              </div>
+            ) : (
+              <Empty 
+                description="暂无应用数据" 
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                style={{ marginTop: '60px' }}
+              />
+            )
           ) : (
             <div style={{ 
               textAlign: 'center', 
