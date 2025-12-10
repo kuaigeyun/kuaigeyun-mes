@@ -1165,20 +1165,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {beforeSearchButtons}
           {/* 模糊搜索框 - 根据最佳实践实现，样式与高级搜索按钮一致 */}
-          <Input.Search
+          <Input
             className="uni-table-fuzzy-search"
             placeholder="模糊搜索"
             allowClear
             value={fuzzySearchKeyword}
             onChange={(e) => handleFuzzySearch(e.target.value)}
-            onSearch={(value) => handleFuzzySearch(value)}
-            onClear={handleClearFuzzySearch}
+            onPressEnter={(e) => handleFuzzySearch((e.target as HTMLInputElement).value)}
             style={{ 
               width: 160,
-              borderRadius: `${token.borderRadius}px`,
+              height: '32px',
             }}
-            size="small"
-            enterButton={false}
           />
           {showAdvancedSearch && (
             <QuerySearchButton
