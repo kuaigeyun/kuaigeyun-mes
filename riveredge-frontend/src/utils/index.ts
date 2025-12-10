@@ -12,4 +12,5 @@ export * from './import';
 export * from './errorHandler';
 export * from './errorRecovery';
 export * from './batchOperations';
+export * from './manufacturingIcons';
 

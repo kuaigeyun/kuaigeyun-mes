@@ -297,7 +297,7 @@ export default function TermsModal({ open, type, onClose }: TermsModalProps) {
       open={open}
       onCancel={onClose}
       footer={null}
-      width={800}
+      size={800}
       style={{ top: 20 }}
       styles={{ body: { padding: '24px' } }}
     >

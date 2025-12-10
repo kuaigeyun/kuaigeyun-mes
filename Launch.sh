@@ -233,7 +233,7 @@ check_project_integrity() {
     local required_dirs=(
         "riveredge-backend/src"
         "riveredge-backend/src/infra"
-        "riveredge-backend/src/app"
+        "riveredge-backend/src/server"
         "riveredge-frontend/src"
     )
 
@@ -248,7 +248,7 @@ check_project_integrity() {
         "riveredge-backend/pyproject.toml"
         "riveredge-backend/requirements.txt"
         "riveredge-frontend/package.json"
-        "riveredge-backend/src/app/main.py"
+        "riveredge-backend/src/server/main.py"
     )
 
     for file in "${required_files[@]}"; do
@@ -839,7 +839,7 @@ start_backend() {
     # 启动后端服务（使用 uvicorn）
     log_info "使用 uvicorn 启动后端服务..."
     # 使用更稳定的启动方式：指定正确的模块路径和工作目录
-    PYTHONPATH="$(pwd)/src" nohup python -m uvicorn app.main:app --host 0.0.0.0 --port $port --reload --reload-include "*.py" > ../startlogs/backend.log 2>&1 &
+    PYTHONPATH="$(pwd)/src" nohup python -m uvicorn server.main:app --host 0.0.0.0 --port $port --reload --reload-include "*.py" > ../startlogs/backend.log 2>&1 &
     local backend_pid=$!
     echo $backend_pid > ../startlogs/backend.pid
 
@@ -1403,7 +1403,7 @@ stop_all() {
 
     # 使用 pkill 快速清理（如果可用，后台执行避免卡住）
     if command -v pkill &> /dev/null; then
-        pkill -f "uvicorn.*app.main:app" 2>/dev/null &
+        pkill -f "uvicorn.*server.main:app" 2>/dev/null &
         pkill -f "vite.*--port" 2>/dev/null &
     fi
 
@@ -1541,9 +1541,9 @@ main() {
     check_disk_space
 
     # 检查项目结构（更新路径）
-    if [ ! -d "riveredge-backend/src/infra" ] || [ ! -d "riveredge-backend/src/app" ] || [ ! -d "riveredge-frontend/src" ]; then
+    if [ ! -d "riveredge-backend/src/infra" ] || [ ! -d "riveredge-backend/src/server" ] || [ ! -d "riveredge-frontend/src" ]; then
         log_error "项目结构不完整，请确保在项目根目录运行"
-        log_error "需要: riveredge-backend/src/infra/, riveredge-backend/src/app/ 和 riveredge-frontend/src/ 目录"
+        log_error "需要: riveredge-backend/src/infra/, riveredge-backend/src/server/ 和 riveredge-frontend/src/ 目录"
         exit 1
     fi
 

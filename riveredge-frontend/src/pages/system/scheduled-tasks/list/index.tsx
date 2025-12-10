@@ -461,7 +461,7 @@ const ScheduledTaskListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={900}
+        size={900}
       >
         <ProForm
           formRef={formRef}
@@ -569,7 +569,7 @@ const ScheduledTaskListPage: React.FC = () => {
         title="定时任务详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
         loading={detailLoading}
       >
         {detailData && (

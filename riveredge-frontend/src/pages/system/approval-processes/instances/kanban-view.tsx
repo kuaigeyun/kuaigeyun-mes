@@ -372,28 +372,28 @@ const KanbanView: React.FC = () => {
               <Statistic
                 title="总审批数"
                 value={stats.total}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="待审批"
                 value={stats.pending}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="已通过"
                 value={stats.approved}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="已拒绝"
                 value={stats.rejected}
-                valueStyle={{ color: '#ff4d4f' }}
+                styles={{ content: { color: '#ff4d4f' } }}
               />
             </Col>
           </Row>
@@ -418,7 +418,7 @@ const KanbanView: React.FC = () => {
       <Drawer
         title="审批实例详情"
         placement="right"
-        width={700}
+        size={700}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);

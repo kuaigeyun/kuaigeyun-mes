@@ -1,0 +1,27 @@
+{
+    "name": "@riveredge/kuaimes-frontend",
+    "version": "1.0.0",
+    "description": "快格轻MES 前端插件",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "react-router-dom": "^6.26.2",
+        "antd": "^6.1.0",
+        "@ant-design/pro-components": "^2.8.2",
+        "@ant-design/icons": "^6.1.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.1",
+        "typescript": "^5.6.3",
+        "vite": "^5.4.8"
+    }
+}

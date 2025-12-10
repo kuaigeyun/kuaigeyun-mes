@@ -342,7 +342,7 @@ const ApprovalProcessListPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -413,7 +413,7 @@ const ApprovalProcessListPage: React.FC = () => {
         title="审批流程详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
       >
         {detailLoading ? (
           <div>加载中...</div>

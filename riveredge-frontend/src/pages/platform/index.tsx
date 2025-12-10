@@ -177,7 +177,7 @@ export default function PlatformSuperAdminPage() {
           setEditFormData(null);
         }}
         footer={null}
-        width={600}
+        size={600}
       >
         {editFormData && (
           <PlatformSuperAdminForm

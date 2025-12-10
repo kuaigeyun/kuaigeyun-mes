@@ -64,7 +64,6 @@ const TenantSelector: React.FC = () => {
             className="tenant-selector-select"
             suffixIcon={<SwapOutlined />}  // 使用切换图标替换默认的下拉箭头
             onChange={handleTenantChange}
-            allowClear
             disabled={isLoading}
           >
             {tenantData?.items?.map((tenant: any) => (

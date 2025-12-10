@@ -486,7 +486,7 @@ const APIListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={900}
+        size={900}
         style={{ top: 20 }}
       >
         <ProForm
@@ -611,7 +611,7 @@ const APIListPage: React.FC = () => {
         title="接口详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
         loading={detailLoading}
       >
         {detailData && (
@@ -766,7 +766,7 @@ const APIListPage: React.FC = () => {
           setTestResult(null);
           setTestRequestJson('{}');
         }}
-        width={800}
+        size={800}
         extra={
           <Button
             type="primary"

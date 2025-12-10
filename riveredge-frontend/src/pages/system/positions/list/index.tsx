@@ -329,7 +329,7 @@ const PositionListPage: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -378,7 +378,7 @@ const PositionListPage: React.FC = () => {
         title="职位详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (

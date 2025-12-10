@@ -451,7 +451,7 @@ const LanguageListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}
@@ -502,7 +502,7 @@ const LanguageListPage: React.FC = () => {
         title="语言详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (
@@ -569,7 +569,7 @@ const LanguageListPage: React.FC = () => {
           setCurrentLanguageForTranslation(null);
           setTranslations({});
         }}
-        width={800}
+        size={800}
         loading={translationLoading}
         extra={[
           <Button

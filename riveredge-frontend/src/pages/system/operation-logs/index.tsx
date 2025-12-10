@@ -330,7 +330,7 @@ const OperationLogsPage: React.FC = () => {
           setCurrentLog(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentLog && (
           <Descriptions column={1} bordered>

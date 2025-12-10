@@ -679,7 +679,7 @@ const RolesPermissionsPage: React.FC = () => {
         onCancel={() => setRoleModalVisible(false)}
         onOk={handleSubmitRole}
         confirmLoading={roleFormLoading}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}

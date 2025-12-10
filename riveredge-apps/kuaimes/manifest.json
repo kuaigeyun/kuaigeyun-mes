@@ -1,0 +1,109 @@
+{
+  "name": "快格轻MES",
+  "code": "kuaimes",
+  "version": "1.0.0",
+  "description": "轻量级制造执行系统",
+  "icon": "/apps/kuaimes/icon.png",
+  "author": "RiverEdge Team",
+  "entry_point": "/apps/kuaimes/index.js",
+  "route_path": "/apps/kuaimes",
+  "menu_config": {
+    "title": "快格轻MES",
+    "icon": "AppstoreOutlined",
+    "path": "/apps/kuaimes",
+    "children": [
+      {
+        "title": "生产计划",
+        "path": "/apps/kuaimes/planning",
+        "children": [
+          {
+            "title": "工单管理",
+            "path": "/apps/kuaimes/planning/workorders",
+            "permission": "kuaimes:workorder:view"
+          },
+          {
+            "title": "生产排程",
+            "path": "/apps/kuaimes/planning/scheduling",
+            "permission": "kuaimes:scheduling:view"
+          }
+        ]
+      },
+      {
+        "title": "生产执行",
+        "path": "/apps/kuaimes/execution",
+        "children": [
+          {
+            "title": "实时报工",
+            "path": "/apps/kuaimes/execution/reporting",
+            "permission": "kuaimes:reporting:view"
+          },
+          {
+            "title": "进度跟踪",
+            "path": "/apps/kuaimes/execution/progress",
+            "permission": "kuaimes:progress:view"
+          }
+        ]
+      },
+      {
+        "title": "物料管理",
+        "path": "/apps/kuaimes/material",
+        "children": [
+          {
+            "title": "库存明细",
+            "path": "/apps/kuaimes/material/inventory",
+            "permission": "kuaimes:inventory:view"
+          },
+          {
+            "title": "出入库操作",
+            "path": "/apps/kuaimes/material/stock",
+            "permission": "kuaimes:stock:view"
+          }
+        ]
+      },
+      {
+        "title": "质量管控",
+        "path": "/apps/kuaimes/quality",
+        "children": [
+          {
+            "title": "质检标准",
+            "path": "/apps/kuaimes/quality/standards",
+            "permission": "kuaimes:quality:standards:view"
+          },
+          {
+            "title": "质量追溯",
+            "path": "/apps/kuaimes/quality/traceability",
+            "permission": "kuaimes:quality:traceability:view"
+          },
+          {
+            "title": "不良品处理",
+            "path": "/apps/kuaimes/quality/defects",
+            "permission": "kuaimes:quality:defects:view"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "kuaimes:order:view",
+    "kuaimes:order:create",
+    "kuaimes:order:update",
+    "kuaimes:order:delete",
+    "kuaimes:workorder:view",
+    "kuaimes:workorder:create",
+    "kuaimes:workorder:update",
+    "kuaimes:workorder:delete",
+    "kuaimes:scheduling:view",
+    "kuaimes:reporting:view",
+    "kuaimes:progress:view",
+    "kuaimes:inventory:view",
+    "kuaimes:stock:view",
+    "kuaimes:quality:standards:view",
+    "kuaimes:quality:traceability:view",
+    "kuaimes:quality:defects:view"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}
+

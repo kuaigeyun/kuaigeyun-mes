@@ -408,7 +408,7 @@ const RoleListPage: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -449,7 +449,7 @@ const RoleListPage: React.FC = () => {
         title="角色详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (
@@ -486,7 +486,7 @@ const RoleListPage: React.FC = () => {
         onCancel={() => setPermissionModalVisible(false)}
         onOk={handleSubmitPermissions}
         confirmLoading={permissionLoading}
-        width={600}
+        size={600}
       >
         <Tree
           checkable

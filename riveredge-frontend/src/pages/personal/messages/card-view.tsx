@@ -252,7 +252,7 @@ const CardView: React.FC = () => {
                   title="总消息数"
                   value={stats.total}
                   prefix={<BellOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
+                  styles={{ content: { color: '#1890ff' } }}
                 />
               </Col>
               <Col xs={24} sm={12} md={6}>
@@ -260,7 +260,7 @@ const CardView: React.FC = () => {
                   title="未读消息"
                   value={stats.unread}
                   prefix={<BellOutlined />}
-                  valueStyle={{ color: '#ff4d4f' }}
+                  styles={{ content: { color: '#ff4d4f' } }}
                 />
               </Col>
               <Col xs={24} sm={12} md={6}>
@@ -268,7 +268,7 @@ const CardView: React.FC = () => {
                   title="已读消息"
                   value={stats.read}
                   prefix={<CheckOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: { color: '#52c41a' } }}
                 />
               </Col>
               <Col xs={24} sm={12} md={6}>
@@ -276,7 +276,7 @@ const CardView: React.FC = () => {
                   title="失败消息"
                   value={stats.failed}
                   prefix={<BellOutlined />}
-                  valueStyle={{ color: '#faad14' }}
+                  styles={{ content: { color: '#faad14' } }}
                 />
               </Col>
             </Row>
@@ -369,7 +369,7 @@ const CardView: React.FC = () => {
                                     style={{ fontSize: 16 }}
                                   />
                                 </Tooltip>,
-                                {unread && (
+                                ...(unread ? [
                                   <Tooltip title="标记已读">
                                     <CheckOutlined
                                       key="mark"
@@ -377,8 +377,8 @@ const CardView: React.FC = () => {
                                       style={{ fontSize: 16, color: '#52c41a' }}
                                     />
                                   </Tooltip>
-                                )},
-                              ].filter(Boolean)}
+                                ] : []),
+                              ]}
                             >
                               <div style={{ marginBottom: 16 }}>
                                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -458,7 +458,7 @@ const CardView: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentMessage(null);
         }}
-        width={600}
+        size={600}
       >
         {currentMessage && (
           <div>

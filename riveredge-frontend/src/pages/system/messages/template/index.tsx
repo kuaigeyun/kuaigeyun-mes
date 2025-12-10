@@ -343,7 +343,7 @@ const MessageTemplateListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -417,7 +417,7 @@ const MessageTemplateListPage: React.FC = () => {
         title="消息模板详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
         loading={detailLoading}
       >
         {detailData && (

@@ -211,7 +211,7 @@ const CardView: React.FC = () => {
                   title="总在线用户数"
                   value={stats.total}
                   prefix={<UserOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
+                  styles={{ content: { color: '#1890ff' } }}
                 />
               </Col>
               <Col xs={24} sm={12} md={8}>
@@ -219,7 +219,7 @@ const CardView: React.FC = () => {
                   title="活跃用户数（最近5分钟）"
                   value={stats.active}
                   prefix={<ClockCircleOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: { color: '#52c41a' } }}
                 />
               </Col>
               <Col xs={24} sm={12} md={8}>
@@ -227,7 +227,7 @@ const CardView: React.FC = () => {
                   title="组织数量"
                   value={Object.keys(stats.by_tenant).length}
                   prefix={<GlobalOutlined />}
-                  valueStyle={{ color: '#faad14' }}
+                  styles={{ content: { color: '#faad14' } }}
                 />
               </Col>
             </Row>
@@ -367,7 +367,7 @@ const CardView: React.FC = () => {
           setCurrentUserInfo(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentUserInfo && (
           <Descriptions column={1} bordered>

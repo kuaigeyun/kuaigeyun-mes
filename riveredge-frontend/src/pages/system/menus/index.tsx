@@ -402,7 +402,7 @@ const MenuListPage: React.FC = () => {
           formRef.current?.resetFields();
         }}
         footer={null}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}
@@ -494,7 +494,7 @@ const MenuListPage: React.FC = () => {
           setDrawerVisible(false);
           setDetailData(null);
         }}
-        width={600}
+        size={600}
       >
         {detailLoading ? (
           <div>加载中...</div>

@@ -99,6 +99,8 @@ TORTOISE_ORM = {
                 "core.models.data_backup",
                 # Aerich 模型
                 "aerich.models",
+                # 插件模型（从 src/apps 目录加载）
+                "apps.kuaimes.models.order",  # 快格轻MES 订单模型
             ],
             "default_connection": "default",
         },

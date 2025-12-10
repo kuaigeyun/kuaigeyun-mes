@@ -224,7 +224,7 @@ const CardView: React.FC = () => {
                 title="总备份数"
                 value={stats.total}
                 prefix={<DatabaseOutlined />}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -232,7 +232,7 @@ const CardView: React.FC = () => {
                 title="成功备份"
                 value={stats.success}
                 prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -240,7 +240,7 @@ const CardView: React.FC = () => {
                 title="失败备份"
                 value={stats.failed}
                 prefix={<CloseCircleOutlined />}
-                valueStyle={{ color: '#ff4d4f' }}
+                styles={{ content: { color: '#ff4d4f' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -248,7 +248,7 @@ const CardView: React.FC = () => {
                 title="执行中"
                 value={stats.running}
                 prefix={<ClockCircleOutlined />}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
           </Row>
@@ -258,7 +258,7 @@ const CardView: React.FC = () => {
                 title="全量备份"
                 value={stats.full}
                 prefix={<DatabaseOutlined />}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -266,7 +266,7 @@ const CardView: React.FC = () => {
                 title="增量备份"
                 value={stats.incremental}
                 prefix={<DatabaseOutlined />}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -274,7 +274,7 @@ const CardView: React.FC = () => {
                 title="总备份大小"
                 value={formatFileSize(stats.totalSize)}
                 prefix={<CloudDownloadOutlined />}
-                valueStyle={{ color: '#722ed1' }}
+                styles={{ content: { color: '#722ed1' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -282,7 +282,7 @@ const CardView: React.FC = () => {
                 title="成功备份大小"
                 value={formatFileSize(stats.successSize)}
                 prefix={<CloudDownloadOutlined />}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
           </Row>
@@ -427,7 +427,7 @@ const CardView: React.FC = () => {
           setCurrentBackup(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentBackup && (
           <Descriptions column={1} bordered>

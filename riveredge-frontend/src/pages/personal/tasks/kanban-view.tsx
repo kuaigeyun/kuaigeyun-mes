@@ -262,7 +262,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
       <Drawer
         title="任务详情"
         placement="right"
-        width={600}
+        size={600}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);

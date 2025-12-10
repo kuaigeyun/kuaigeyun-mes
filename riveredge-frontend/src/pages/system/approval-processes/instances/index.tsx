@@ -341,7 +341,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         open={submitModalVisible}
         onCancel={() => setSubmitModalVisible(false)}
         footer={null}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}
@@ -400,7 +400,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         open={actionModalVisible}
         onCancel={() => setActionModalVisible(false)}
         footer={null}
-        width={500}
+        size={500}
       >
         <ProForm
           formRef={formRef}
@@ -434,7 +434,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         title="审批实例详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
       >
         {detailLoading ? (
           <div>加载中...</div>

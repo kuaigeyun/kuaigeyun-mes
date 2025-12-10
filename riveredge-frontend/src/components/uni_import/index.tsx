@@ -757,7 +757,7 @@ export const UniImport: React.FC<UniImportProps> = ({
         title={title}
         open={visible}
         onCancel={onCancel}
-        width={width}
+        size={width}
         footer={
           <Space>
             {showCancelButton && (
@@ -777,7 +777,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             )}
           </Space>
         }
-        destroyOnClose={true}
+        destroyOnHidden={true}
         styles={{
           body: {
             padding: '16px',

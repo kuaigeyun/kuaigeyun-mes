@@ -116,7 +116,7 @@ const HelpDocument: React.FC<HelpDocumentProps> = ({
             关闭
           </Button>,
         ]}
-        width={800}
+        size={800}
         style={{ top: 20 }}
       >
         <Tabs

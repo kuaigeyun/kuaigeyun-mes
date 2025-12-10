@@ -88,7 +88,7 @@ export default function TenantSelectionModal({
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={500}
+      size={500}
       closable={false}
       maskClosable={false}
     >
@@ -99,7 +99,7 @@ export default function TenantSelectionModal({
       </div>
 
       <List
-        dataSource={tenants}
+        dataSource={tenants || []}
         renderItem={(tenant) => (
           <List.Item
             style={{

@@ -459,7 +459,7 @@ const SystemParameterListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}
@@ -515,7 +515,7 @@ const SystemParameterListPage: React.FC = () => {
         title="参数详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (

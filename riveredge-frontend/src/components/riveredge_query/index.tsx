@@ -1312,7 +1312,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         title="搜索条件"
         open={visible}
         onCancel={onClose}
-        width={1400}
+        size={1400}
         centered={true}
         style={{
           maxHeight: '80vh',
@@ -1896,7 +1896,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             我知道了
           </Button>
         ]}
-        width={700}
+        size={700}
       >
         <div style={{ lineHeight: 1.8, color: token.colorText }}>
           {/* 快速筛选说明 */}

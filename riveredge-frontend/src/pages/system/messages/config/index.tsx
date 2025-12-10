@@ -355,7 +355,7 @@ const MessageConfigListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -450,7 +450,7 @@ const MessageConfigListPage: React.FC = () => {
         title="消息配置详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
         loading={detailLoading}
       >
         {detailData && (

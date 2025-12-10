@@ -190,7 +190,7 @@ const PermissionListPage: React.FC = () => {
         title="权限详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (

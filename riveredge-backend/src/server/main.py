@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -95,6 +95,26 @@ async def lifespan(app: FastAPI):
     if not Tortoise._inited:
         await Tortoise.init(config=TORTOISE_ORM)
     
+    # 自动扫描并注册插件应用（为所有租户注册）
+    # 注意：插件应用会在系统启动时自动扫描并注册，菜单也会自动同步
+    try:
+        from core.services.application_service import ApplicationService
+        from infra.models.tenant import Tenant
+        
+        # 获取所有租户
+        tenants = await Tenant.all()
+        for tenant in tenants:
+            try:
+                apps = await ApplicationService.scan_and_register_plugins(tenant_id=tenant.id)
+                if apps:
+                    print(f"✅ 为租户 {tenant.name} (ID: {tenant.id}) 自动注册了 {len(apps)} 个插件应用，菜单已自动同步")
+            except Exception as e:
+                print(f"⚠️ 为租户 {tenant.id} 扫描插件失败: {e}")
+    except Exception as e:
+        print(f"⚠️ 自动扫描插件失败: {e}")
+        import traceback
+        traceback.print_exc()
+    
     yield
 
     # 关闭时清理
@@ -126,6 +146,84 @@ app.add_middleware(ExceptionHandlerMiddleware)
 # 注册操作日志中间件
 from core.middleware.operation_log_middleware import OperationLogMiddleware
 app.add_middleware(OperationLogMiddleware)
+
+# 动态加载插件路由
+# 注意：插件路由需要在应用启动时或请求时动态加载
+# 这里提供一个基础框架，实际使用时需要根据插件注册机制来实现
+
+# 动态加载插件路由
+# 插件后端代码现在放在 src/apps/插件名/ 目录下
+# 自动扫描并注册所有已安装且启用的插件路由
+def load_plugin_routes():
+    """
+    动态加载插件路由
+    
+    扫描 src/apps 目录下的所有插件，自动注册其路由。
+    """
+    apps_dir = Path(__file__).parent.parent / "apps"  # 插件目录
+    if not apps_dir.exists():
+        return
+    
+    # 遍历 apps 目录下的所有插件
+    for plugin_dir in apps_dir.iterdir():
+        if not plugin_dir.is_dir():
+            continue
+        
+        plugin_code = plugin_dir.name
+        
+        # 尝试导入插件的路由模块
+        # 约定：插件路由应该在 apps.{plugin_code}.api 目录下
+        try:
+            # 动态导入插件路由
+            # 注意：插件需要遵循约定，在 api 目录下定义 router
+            import importlib
+            api_module_path = f"apps.{plugin_code}.api"
+            
+            # 尝试导入 api 模块
+            try:
+                api_module = importlib.import_module(api_module_path)
+                
+                # 查找所有 router 对象
+                for attr_name in dir(api_module):
+                    attr = getattr(api_module, attr_name)
+                    if isinstance(attr, APIRouter):
+                        app.include_router(attr, prefix="/api/v1")
+                        print(f"✅ 已注册插件 {plugin_code} 的路由: {attr_name}")
+            except ImportError:
+                # 如果 api 模块不存在，尝试导入具体的路由文件
+                # 约定：插件路由文件应该在 apps.{plugin_code}.api.*.py
+                import pkgutil
+                api_package_dir = plugin_dir / "api"
+                
+                if api_package_dir.exists():
+                    # 遍历 api 目录下的所有子目录（如 orders）
+                    for subdir in api_package_dir.iterdir():
+                        if not subdir.is_dir():
+                            continue
+                        
+                        # 尝试导入子目录中的模块（如 orders.orders）
+                        for py_file in subdir.glob("*.py"):
+                            if py_file.name == "__init__.py":
+                                continue
+                            
+                            module_name = py_file.stem
+                            submodule_path = f"{api_module_path}.{subdir.name}.{module_name}"
+                            
+                            try:
+                                module = importlib.import_module(submodule_path)
+                                # 查找 router 对象
+                                for attr_name in dir(module):
+                                    attr = getattr(module, attr_name)
+                                    if isinstance(attr, APIRouter):
+                                        app.include_router(attr, prefix="/api/v1")
+                                        print(f"✅ 已注册插件 {plugin_code} 的路由: {submodule_path}.{attr_name}")
+                            except Exception as e:
+                                print(f"⚠️ 加载插件 {plugin_code} 的路由模块 {submodule_path} 失败: {e}")
+        except Exception as e:
+            print(f"⚠️ 加载插件 {plugin_code} 失败: {e}")
+
+# 加载插件路由
+load_plugin_routes()
 
 # 挂载静态文件目录
 app.mount("/static", StaticFiles(directory="src/static"), name="static")

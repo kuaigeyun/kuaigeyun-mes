@@ -395,7 +395,7 @@ const CodeRuleListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={700}
+        size={700}
       >
         <ProForm
           formRef={formRef}
@@ -491,7 +491,7 @@ const CodeRuleListPage: React.FC = () => {
         title="规则详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (
@@ -582,7 +582,7 @@ const CodeRuleListPage: React.FC = () => {
             关闭
           </Button>,
         ]}
-        width={600}
+        size={600}
       >
         {currentRuleForTest && (
           <div>

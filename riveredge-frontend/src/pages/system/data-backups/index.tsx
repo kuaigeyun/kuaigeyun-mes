@@ -340,7 +340,7 @@ const DataBackupsPage: React.FC = () => {
           formRef.resetFields();
         }}
         footer={null}
-        width={600}
+        size={600}
       >
         <ProForm
           form={formRef}
@@ -394,7 +394,7 @@ const DataBackupsPage: React.FC = () => {
           setCurrentBackup(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentBackup && (
           <Descriptions column={1} bordered>
