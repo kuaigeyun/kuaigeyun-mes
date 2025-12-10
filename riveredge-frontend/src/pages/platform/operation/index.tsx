@@ -474,7 +474,7 @@ export default function OperationsDashboard() {
                     title="总组织数"
                     value={displayStatistics?.total || 0}
                     prefix={<ApartmentOutlined />}
-                    valueStyle={{ color: '#1890ff' }}
+                    styles={{ content: { color: '#1890ff' } }}
                   />
                 </Card>
               </Col>
@@ -484,7 +484,7 @@ export default function OperationsDashboard() {
                     title="激活组织"
                     value={displayStatistics?.by_status?.active || 0}
                     prefix={<RiseOutlined />}
-                    valueStyle={{ color: '#52c41a' }}
+                    styles={{ content: { color: '#52c41a' } }}
                   />
                 </Card>
               </Col>
@@ -494,7 +494,7 @@ export default function OperationsDashboard() {
                     title="未激活组织"
                     value={displayStatistics?.by_status?.inactive || 0}
                     prefix={<FallOutlined />}
-                    valueStyle={{ color: '#faad14' }}
+                    styles={{ content: { color: '#faad14' } }}
                   />
                 </Card>
               </Col>
@@ -504,7 +504,7 @@ export default function OperationsDashboard() {
                     title="已暂停组织"
                     value={displayStatistics?.by_status?.suspended || 0}
                     prefix={<ApartmentOutlined />}
-                    valueStyle={{ color: '#ff4d4f' }}
+                    styles={{ content: { color: '#ff4d4f' } }}
                   />
                 </Card>
               </Col>

@@ -5,18 +5,16 @@
  * 支持应用的 CRUD 操作、安装/卸载、启用/禁用功能。
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Switch, Card, Dropdown } from 'antd';
-import { 
-  EditOutlined, 
-  DeleteOutlined, 
-  EyeOutlined, 
-  PlusOutlined, 
-  DownloadOutlined, 
-  StopOutlined, 
-  CheckCircleOutlined, 
-  MoreOutlined, 
+import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Drawer, Modal, message, Switch, Card, Dropdown, Popconfirm, Row, Col, Input, Select, Pagination, Form, Spin } from 'antd';
+import { useForm } from 'antd/es/form/Form';
+import {
+  EyeOutlined,
+  DownloadOutlined,
+  StopOutlined,
+  MoreOutlined,
   AppstoreOutlined,
   UserOutlined,
   ShopOutlined,
@@ -26,28 +24,30 @@ import {
   BarChartOutlined,
   ApiOutlined,
   CloudOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
-import { UniTable } from '../../../../components/uni_table';
 import {
   getApplicationList,
   getApplicationByUuid,
-  createApplication,
-  updateApplication,
-  deleteApplication,
   installApplication,
   uninstallApplication,
   enableApplication,
   disableApplication,
   Application,
-  ApplicationCreate,
-  ApplicationUpdate,
 } from '../../../../services/application';
 
 /**
  * 根据应用代码获取图标组件
  */
-const getApplicationIcon = (code: string) => {
+const getApplicationIcon = (code: string, icon?: string | null) => {
+  // 如果有自定义图标 URL，使用图片
+  if (icon) {
+    return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+  }
+  
+  // 根据应用代码返回默认图标
   const iconMap: Record<string, React.ReactNode> = {
+    kuaimes: <DatabaseOutlined />, // 快格轻MES
     crm: <UserOutlined />,
     erp: <ShopOutlined />,
     mes: <DatabaseOutlined />,
@@ -61,222 +61,81 @@ const getApplicationIcon = (code: string) => {
 };
 
 /**
- * 模拟应用数据（用于开发阶段展示）
- */
-const mockApplications: Application[] = [
-  {
-    uuid: 'mock-001',
-    tenant_id: 1,
-    name: 'CRM 客户关系管理',
-    code: 'crm',
-    description: '全面的客户关系管理系统，帮助企业管理客户信息、销售机会、合同管理等业务。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '1.0.0',
-    route_path: '/apps/crm',
-    entry_point: '/apps/crm/index',
-    menu_config: {},
-    permission_code: 'app:crm',
-    is_system: false,
-    is_active: true,
-    is_installed: true,
-    sort_order: 1,
-    created_at: '2024-01-15T10:00:00Z',
-    updated_at: '2024-01-20T15:30:00Z',
-  },
-  {
-    uuid: 'mock-002',
-    tenant_id: 1,
-    name: 'ERP 企业资源规划',
-    code: 'erp',
-    description: '企业资源规划系统，集成采购、库存、生产、财务等核心业务流程。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '2.1.0',
-    route_path: '/apps/erp',
-    entry_point: '/apps/erp/index',
-    menu_config: {},
-    permission_code: 'app:erp',
-    is_system: false,
-    is_active: true,
-    is_installed: true,
-    sort_order: 2,
-    created_at: '2024-01-10T09:00:00Z',
-    updated_at: '2024-01-25T11:20:00Z',
-  },
-  {
-    uuid: 'mock-003',
-    tenant_id: 1,
-    name: 'MES 制造执行系统',
-    code: 'mes',
-    description: '示例应用描述',
-    icon: null, // 使用图标组件，不存储URL
-    version: '1.0.0',
-    route_path: '/apps/example',
-    entry_point: '/apps/example/index',
-    menu_config: {},
-    permission_code: 'app:example',
-    is_system: false,
-    is_active: true,
-    is_installed: true,
-    sort_order: 3,
-    created_at: '2024-01-05T08:00:00Z',
-    updated_at: '2024-01-22T14:10:00Z',
-  },
-  {
-    uuid: 'mock-004',
-    tenant_id: 1,
-    name: 'WMS 仓库管理系统',
-    code: 'wms',
-    description: '智能仓库管理系统，支持多仓库、多货位、批次管理、库存盘点等功能。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '1.2.0',
-    route_path: '/apps/wms',
-    entry_point: '/apps/wms/index',
-    menu_config: {},
-    permission_code: 'app:wms',
-    is_system: false,
-    is_active: false,
-    is_installed: true,
-    sort_order: 4,
-    created_at: '2024-01-12T11:00:00Z',
-    updated_at: '2024-01-18T16:45:00Z',
-  },
-  {
-    uuid: 'mock-005',
-    tenant_id: 1,
-    name: 'OA 办公自动化',
-    code: 'oa',
-    description: '办公自动化系统，提供审批流程、文档管理、日程安排、通讯录等功能。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '1.8.5',
-    route_path: '/apps/oa',
-    entry_point: '/apps/oa/index',
-    menu_config: {},
-    permission_code: 'app:oa',
-    is_system: false,
-    is_active: true,
-    is_installed: false,
-    sort_order: 5,
-    created_at: '2024-01-08T10:30:00Z',
-    updated_at: '2024-01-08T10:30:00Z',
-  },
-  {
-    uuid: 'mock-006',
-    tenant_id: 1,
-    name: 'SCM 供应链管理',
-    code: 'scm',
-    description: '供应链管理系统，涵盖供应商管理、采购管理、合同管理、物流跟踪等。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '1.3.1',
-    route_path: '/apps/scm',
-    entry_point: '/apps/scm/index',
-    menu_config: {},
-    permission_code: 'app:scm',
-    is_system: false,
-    is_active: true,
-    is_installed: false,
-    sort_order: 6,
-    created_at: '2024-01-20T14:00:00Z',
-    updated_at: '2024-01-20T14:00:00Z',
-  },
-  {
-    uuid: 'mock-007',
-    tenant_id: 1,
-    name: 'BI 商业智能',
-    code: 'bi',
-    description: '商业智能分析平台，提供数据可视化、报表分析、数据挖掘等功能。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '2.0.0',
-    route_path: '/apps/bi',
-    entry_point: '/apps/bi/index',
-    menu_config: {},
-    permission_code: 'app:bi',
-    is_system: false,
-    is_active: true,
-    is_installed: true,
-    sort_order: 7,
-    created_at: '2024-01-15T09:15:00Z',
-    updated_at: '2024-01-23T13:25:00Z',
-  },
-  {
-    uuid: 'mock-008',
-    tenant_id: 1,
-    name: 'HR 人力资源',
-    code: 'hr',
-    description: '人力资源管理系统，包括员工信息、考勤管理、薪资管理、绩效评估等模块。',
-    icon: null, // 使用图标组件，不存储URL
-    version: '1.6.0',
-    route_path: '/apps/hr',
-    entry_point: '/apps/hr/index',
-    menu_config: {},
-    permission_code: 'app:hr',
-    is_system: false,
-    is_active: false,
-    is_installed: false,
-    sort_order: 8,
-    created_at: '2024-01-18T11:30:00Z',
-    updated_at: '2024-01-18T11:30:00Z',
-  },
-];
-
-/**
  * 应用中心列表页面组件
  */
 const ApplicationListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  
-  // Modal 相关状态（创建/编辑应用）
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentApplicationUuid, setCurrentApplicationUuid] = useState<string | null>(null);
-  const [formLoading, setFormLoading] = useState(false);
-  
+  const [form] = useForm();
+  const queryClient = useQueryClient();
+
+  // 数据状态
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  // 分页状态
+  const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  // 筛选状态
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [isSystemFilter, setIsSystemFilter] = useState<string>('');
+  const [isInstalledFilter, setIsInstalledFilter] = useState<string>('');
+  const [isActiveFilter, setIsActiveFilter] = useState<string>('');
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Application | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   /**
-   * 处理新建应用
+   * 加载应用列表数据
    */
-  const handleCreate = () => {
-    setIsEdit(false);
-    setCurrentApplicationUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      is_system: false,
-      is_active: true,
-      sort_order: 0,
-    });
-  };
-
-  /**
-   * 处理编辑应用
-   */
-  const handleEdit = async (record: Application) => {
+  const loadApplications = async (page = current, size = pageSize) => {
     try {
-      setIsEdit(true);
-      setCurrentApplicationUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取应用详情
-      const detail = await getApplicationByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
-        name: detail.name,
-        description: detail.description,
-        icon: detail.icon,
-        version: detail.version,
-        route_path: detail.route_path,
-        entry_point: detail.entry_point,
-        permission_code: detail.permission_code,
-        is_active: detail.is_active,
-        sort_order: detail.sort_order,
-      });
+      setLoading(true);
+
+      // 构建查询参数
+      const params: any = {
+        skip: (page - 1) * size,
+        limit: size,
+      };
+
+      // 添加筛选条件
+      if (isActiveFilter !== '') {
+        params.is_active = isActiveFilter === 'true';
+      }
+      if (isInstalledFilter !== '') {
+        params.is_installed = isInstalledFilter === 'true';
+      }
+
+      const allData = await getApplicationList(params);
+      let filteredData = allData || [];
+
+      // 前端筛选（因为后端可能不支持某些筛选）
+      if (isSystemFilter !== '') {
+        filteredData = filteredData.filter(item => item.is_system === (isSystemFilter === 'true'));
+      }
+
+      // 搜索关键词筛选
+      if (searchKeyword.trim()) {
+        const keyword = searchKeyword.toLowerCase();
+        filteredData = filteredData.filter(item =>
+          item.name.toLowerCase().includes(keyword) ||
+          item.code.toLowerCase().includes(keyword) ||
+          (item.description && item.description.toLowerCase().includes(keyword))
+        );
+      }
+
+      setApplications(filteredData);
+      setTotal(filteredData.length);
     } catch (error: any) {
-      messageApi.error(error.message || '获取应用详情失败');
+      console.error('获取应用列表失败:', error);
+      messageApi.error(error?.message || '获取应用列表失败');
+      setApplications([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -296,56 +155,17 @@ const ApplicationListPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理删除应用
-   */
-  const handleDelete = async (record: Application) => {
-    // TODO: 后续对接真实API时，移除模拟逻辑
-    const USE_MOCK_DATA = true;
-    
-    if (USE_MOCK_DATA) {
-      // 模拟删除：从模拟数据中移除
-      const index = mockApplications.findIndex(app => app.uuid === record.uuid);
-      if (index !== -1) {
-        mockApplications.splice(index, 1);
-      }
-      messageApi.success('删除成功');
-      actionRef.current?.reload();
-      return;
-    }
-    
-    try {
-      await deleteApplication(record.uuid);
-      messageApi.success('删除成功');
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
-    }
-  };
 
   /**
    * 处理安装应用
    */
   const handleInstall = async (record: Application) => {
-    // TODO: 后续对接真实API时，移除模拟逻辑
-    const USE_MOCK_DATA = true;
-    
-    if (USE_MOCK_DATA) {
-      // 模拟安装：更新模拟数据
-      const index = mockApplications.findIndex(app => app.uuid === record.uuid);
-      if (index !== -1) {
-        mockApplications[index].is_installed = true;
-        mockApplications[index].is_active = true;
-      }
-      messageApi.success('安装成功');
-      actionRef.current?.reload();
-      return;
-    }
-    
     try {
       await installApplication(record.uuid);
       messageApi.success('安装成功');
-      actionRef.current?.reload();
+      loadApplications();
+      // 使应用菜单缓存失效，自动更新菜单
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     } catch (error: any) {
       messageApi.error(error.message || '安装失败');
     }
@@ -355,25 +175,12 @@ const ApplicationListPage: React.FC = () => {
    * 处理卸载应用
    */
   const handleUninstall = async (record: Application) => {
-    // TODO: 后续对接真实API时，移除模拟逻辑
-    const USE_MOCK_DATA = true;
-    
-    if (USE_MOCK_DATA) {
-      // 模拟卸载：更新模拟数据
-      const index = mockApplications.findIndex(app => app.uuid === record.uuid);
-      if (index !== -1) {
-        mockApplications[index].is_installed = false;
-        mockApplications[index].is_active = false;
-      }
-      messageApi.success('卸载成功');
-      actionRef.current?.reload();
-      return;
-    }
-    
     try {
       await uninstallApplication(record.uuid);
       messageApi.success('卸载成功');
-      actionRef.current?.reload();
+      loadApplications();
+      // 使应用菜单缓存失效，自动更新菜单
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     } catch (error: any) {
       messageApi.error(error.message || '卸载失败');
     }
@@ -383,20 +190,6 @@ const ApplicationListPage: React.FC = () => {
    * 处理启用/禁用应用
    */
   const handleToggleActive = async (record: Application, checked: boolean) => {
-    // TODO: 后续对接真实API时，移除模拟逻辑
-    const USE_MOCK_DATA = true;
-    
-    if (USE_MOCK_DATA) {
-      // 模拟启用/禁用：更新模拟数据
-      const index = mockApplications.findIndex(app => app.uuid === record.uuid);
-      if (index !== -1) {
-        mockApplications[index].is_active = checked;
-      }
-      messageApi.success(checked ? '启用成功' : '禁用成功');
-      actionRef.current?.reload();
-      return;
-    }
-    
     try {
       if (checked) {
         await enableApplication(record.uuid);
@@ -405,225 +198,43 @@ const ApplicationListPage: React.FC = () => {
         await disableApplication(record.uuid);
         messageApi.success('禁用成功');
       }
-      actionRef.current?.reload();
+      loadApplications();
+      // 使应用菜单缓存失效，自动更新菜单
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
     }
   };
 
+
   /**
-   * 处理提交表单（创建/更新应用）
+   * 处理搜索
    */
-  const handleSubmit = async () => {
-    try {
-      setFormLoading(true);
-      const values = await formRef.current?.validateFields();
-      
-      if (isEdit && currentApplicationUuid) {
-        await updateApplication(currentApplicationUuid, {
-          name: values.name,
-          description: values.description,
-          icon: values.icon,
-          version: values.version,
-          route_path: values.route_path,
-          entry_point: values.entry_point,
-          permission_code: values.permission_code,
-          is_active: values.is_active,
-          sort_order: values.sort_order,
-        } as ApplicationUpdate);
-        messageApi.success('更新成功');
-      } else {
-        await createApplication({
-          name: values.name,
-          code: values.code,
-          description: values.description,
-          icon: values.icon,
-          version: values.version,
-          route_path: values.route_path,
-          entry_point: values.entry_point,
-          permission_code: values.permission_code,
-          is_system: values.is_system || false,
-          is_active: values.is_active,
-          sort_order: values.sort_order,
-        } as ApplicationCreate);
-        messageApi.success('创建成功');
-      }
-      
-      setModalVisible(false);
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
-    } finally {
-      setFormLoading(false);
-    }
+  const handleSearch = () => {
+    setCurrent(1); // 重置到第一页
+    loadApplications(1, pageSize);
   };
 
   /**
-   * 表格列定义
+   * 处理筛选条件变化
    */
-  const columns: ProColumns<Application>[] = [
-    {
-      title: '应用名称',
-      dataIndex: 'name',
-      width: 200,
-      fixed: 'left',
-    },
-    {
-      title: '应用代码',
-      dataIndex: 'code',
-      width: 150,
-    },
-    {
-      title: '版本',
-      dataIndex: 'version',
-      width: 100,
-      hideInSearch: true,
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      ellipsis: true,
-      hideInSearch: true,
-    },
-    {
-      title: '路由路径',
-      dataIndex: 'route_path',
-      width: 200,
-      hideInSearch: true,
-    },
-    {
-      title: '系统应用',
-      dataIndex: 'is_system',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '是', status: 'Default' },
-        false: { text: '否', status: 'Processing' },
-      },
-      render: (_, record) => (
-        <Tag color={record.is_system ? 'default' : 'blue'}>
-          {record.is_system ? '是' : '否'}
-        </Tag>
-      ),
-    },
-    {
-      title: '安装状态',
-      dataIndex: 'is_installed',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '已安装', status: 'Success' },
-        false: { text: '未安装', status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.is_installed ? 'success' : 'default'}>
-          {record.is_installed ? '已安装' : '未安装'}
-        </Tag>
-      ),
-    },
-    {
-      title: '启用状态',
-      dataIndex: 'is_active',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
-      },
-      render: (_, record) => (
-        <Switch
-          checked={record.is_active}
-          onChange={(checked) => handleToggleActive(record, checked)}
-          disabled={!record.is_installed}
-        />
-      ),
-    },
-    {
-      title: '排序',
-      dataIndex: 'sort_order',
-      width: 80,
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 300,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            查看
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          {!record.is_installed ? (
-            <Popconfirm
-              title="确定要安装这个应用吗？"
-              onConfirm={() => handleInstall(record)}
-            >
-              <Button
-                type="link"
-                size="small"
-                icon={<DownloadOutlined />}
-              >
-                安装
-              </Button>
-            </Popconfirm>
-          ) : (
-            <Popconfirm
-              title="确定要卸载这个应用吗？"
-              onConfirm={() => handleUninstall(record)}
-              disabled={record.is_system}
-            >
-              <Button
-                type="link"
-                size="small"
-                icon={<StopOutlined />}
-                disabled={record.is_system}
-              >
-                卸载
-              </Button>
-            </Popconfirm>
-          )}
-          <Popconfirm
-            title="确定要删除这个应用吗？"
-            onConfirm={() => handleDelete(record)}
-            disabled={record.is_system}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-              disabled={record.is_system}
-            >
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+  const handleFilterChange = (filterType: string, value: string) => {
+    if (filterType === 'isSystem') setIsSystemFilter(value);
+    if (filterType === 'isInstalled') setIsInstalledFilter(value);
+    if (filterType === 'isActive') setIsActiveFilter(value);
+
+    setCurrent(1); // 重置到第一页
+    loadApplications(1, pageSize);
+  };
+
+  /**
+   * 处理分页变化
+   */
+  const handlePaginationChange = (page: number, size: number) => {
+    setCurrent(page);
+    setPageSize(size);
+    loadApplications(page, size);
+  };
 
   /**
    * 渲染应用卡片
@@ -635,12 +246,6 @@ const ApplicationListPage: React.FC = () => {
         label: '查看详情',
         icon: <EyeOutlined />,
         onClick: () => handleView(application),
-      },
-      {
-        key: 'edit',
-        label: '编辑',
-        icon: <EditOutlined />,
-        onClick: () => handleEdit(application),
       },
       {
         type: 'divider' as const,
@@ -670,23 +275,6 @@ const ApplicationListPage: React.FC = () => {
               });
             },
           },
-      {
-        type: 'divider' as const,
-      },
-      {
-        key: 'delete',
-        label: '删除',
-        icon: <DeleteOutlined />,
-        danger: true,
-        disabled: application.is_system,
-        onClick: () => {
-          if (application.is_system) return;
-          Modal.confirm({
-            title: '确定要删除这个应用吗？',
-            onOk: () => handleDelete(application),
-          });
-        },
-      },
     ];
 
     return (
@@ -710,12 +298,25 @@ const ApplicationListPage: React.FC = () => {
               borderBottom: '1px solid #f0f0f0',
             }}
           >
-            {React.cloneElement(getApplicationIcon(application.code) as React.ReactElement, {
-              style: {
-                fontSize: 72,
-                color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
-              },
-            })}
+            {application.icon ? (
+              <img 
+                src={application.icon} 
+                alt={application.name} 
+                style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover',
+                  opacity: application.is_active && application.is_installed ? 1 : 0.5,
+                }} 
+              />
+            ) : (
+              React.cloneElement(getApplicationIcon(application.code, application.icon) as React.ReactElement, {
+                style: {
+                  fontSize: 72,
+                  color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
+                },
+              })
+            )}
           </div>
         }
         actions={[
@@ -802,200 +403,133 @@ const ApplicationListPage: React.FC = () => {
     );
   };
 
-  return (
-    <div>
-      <UniTable<Application>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // TODO: 后续对接真实API时，移除模拟数据逻辑
-          const USE_MOCK_DATA = true; // 开发阶段使用模拟数据
-          
-          if (USE_MOCK_DATA) {
-            // 使用模拟数据
-            let filteredData = [...mockApplications];
-            
-            // 状态筛选
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              filteredData = filteredData.filter(item => item.is_active === searchFormValues.is_active);
-            }
-            
-            // 安装状态筛选
-            if (searchFormValues?.is_installed !== undefined && searchFormValues.is_installed !== '' && searchFormValues.is_installed !== null) {
-              filteredData = filteredData.filter(item => item.is_installed === searchFormValues.is_installed);
-            }
-            
-            // 系统应用筛选
-            if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '' && searchFormValues.is_system !== null) {
-              filteredData = filteredData.filter(item => item.is_system === searchFormValues.is_system);
-            }
-            
-            // 前端进行分页处理
-            const page = params.current || 1;
-            const pageSize = params.pageSize || 12;
-            const startIndex = (page - 1) * pageSize;
-            const endIndex = startIndex + pageSize;
-            const paginatedData = filteredData.slice(startIndex, endIndex);
-            
-            return {
-              data: paginatedData,
-              success: true,
-              total: filteredData.length,
-            };
-          }
-          
-          // 真实API调用（后续启用）
-          const apiParams: any = {};
-          
-          // 状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          // 安装状态筛选
-          if (searchFormValues?.is_installed !== undefined && searchFormValues.is_installed !== '' && searchFormValues.is_installed !== null) {
-            apiParams.is_installed = searchFormValues.is_installed;
-          }
-          
-          try {
-            // 获取所有数据（应用数量通常不会太多）
-            const allData = await getApplicationList(apiParams);
-            
-            // 前端进行分页处理
-            const page = params.current || 1;
-            const pageSize = params.pageSize || 12;
-            const startIndex = (page - 1) * pageSize;
-            const endIndex = startIndex + pageSize;
-            const paginatedData = allData.slice(startIndex, endIndex);
-            
-            return {
-              data: paginatedData,
-              success: true,
-              total: allData.length,
-            };
-          } catch (error: any) {
-            console.error('获取应用列表失败:', error);
-            messageApi.error(error?.message || '获取应用列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 12,
-          showSizeChanger: true,
-          pageSizeOptions: ['12', '24', '48', '96'],
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建应用
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        viewTypes={['card', 'table']}
-        defaultViewType="card" // 默认显示卡片视图
-        cardViewConfig={{
-          renderCard: renderApplicationCard,
-        }}
-      />
+  // 组件挂载时加载数据
+  useEffect(() => {
+    loadApplications();
+  }, []);
 
-      {/* 创建/编辑应用 Modal */}
-      <Modal
-        title={isEdit ? '编辑应用' : '新建应用'}
-        open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        width={700}
-      >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label="应用名称"
-            rules={[{ required: true, message: '请输入应用名称' }]}
-            placeholder="请输入应用名称"
-          />
-          <ProFormText
-            name="code"
-            label="应用代码"
-            rules={[
-              { required: true, message: '请输入应用代码' },
-              { pattern: /^[a-z0-9_]+$/, message: '应用代码只能包含小写字母、数字和下划线' },
-            ]}
-            placeholder="请输入应用代码（唯一标识，如：crm_app）"
-            disabled={isEdit}
-          />
-          <ProFormTextArea
-            name="description"
-            label="应用描述"
-            placeholder="请输入应用描述"
-          />
-          <ProFormText
-            name="icon"
-            label="应用图标"
-            placeholder="请输入图标URL或路径"
-          />
-          <ProFormText
-            name="version"
-            label="应用版本"
-            placeholder="请输入应用版本（如：1.0.0）"
-          />
-          <ProFormText
-            name="route_path"
-            label="路由路径"
-            placeholder="请输入应用路由路径（如：/apps/crm）"
-          />
-          <ProFormText
-            name="entry_point"
-            label="入口点"
-            placeholder="请输入应用入口点（前端组件路径或URL）"
-          />
-          <ProFormText
-            name="permission_code"
-            label="权限代码"
-            placeholder="请输入权限代码（关联权限）"
-          />
-          {!isEdit && (
-            <ProFormSwitch
-              name="is_system"
-              label="是否系统应用"
+  return (
+    <div style={{ padding: '24px' }}>
+      {/* 头部工具栏 */}
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ margin: 0, marginBottom: '8px' }}>应用中心</h2>
+          <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>管理系统中的应用，支持安装、启用、禁用等操作。插件应用会在系统启动时自动扫描并注册。</p>
+        </div>
+      </div>
+
+      {/* 搜索和筛选 */}
+      <Card style={{ marginBottom: '24px' }}>
+        <Form layout="inline" form={form}>
+          <Form.Item label="搜索应用">
+            <Input
+              placeholder="输入应用名称、代码或描述"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              onPressEnter={handleSearch}
+              style={{ width: '300px' }}
+              allowClear
             />
+          </Form.Item>
+          <Form.Item label="系统应用">
+            <Select
+              placeholder="全部"
+              value={isSystemFilter}
+              onChange={(value) => handleFilterChange('isSystem', value)}
+              style={{ width: '120px' }}
+              allowClear
+            >
+              <Select.Option value="true">是</Select.Option>
+              <Select.Option value="false">否</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item label="安装状态">
+            <Select
+              placeholder="全部"
+              value={isInstalledFilter}
+              onChange={(value) => handleFilterChange('isInstalled', value)}
+              style={{ width: '120px' }}
+              allowClear
+            >
+              <Select.Option value="true">已安装</Select.Option>
+              <Select.Option value="false">未安装</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item label="启用状态">
+            <Select
+              placeholder="全部"
+              value={isActiveFilter}
+              onChange={(value) => handleFilterChange('isActive', value)}
+              style={{ width: '120px' }}
+              allowClear
+            >
+              <Select.Option value="true">启用</Select.Option>
+              <Select.Option value="false">禁用</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" onClick={handleSearch}>
+              搜索
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      {/* 应用卡片列表 */}
+      <Spin spinning={loading}>
+        <Row gutter={[24, 24]}>
+          {applications.map((application, index) => (
+            <Col key={application.uuid} xs={24} sm={12} md={8} lg={6} xl={6}>
+              {renderApplicationCard(application, index)}
+            </Col>
+          ))}
+        </Row>
+      </Spin>
+
+      {/* 分页 */}
+      {total > 0 && (
+        <div style={{ marginTop: '24px', textAlign: 'right' }}>
+          <Pagination
+            current={current}
+            pageSize={pageSize}
+            total={total}
+            showSizeChanger
+            showQuickJumper
+            showTotal={(total, range) => `共 ${total} 个应用，显示 ${range[0]}-${range[1]} 个`}
+            pageSizeOptions={['12', '24', '48', '96']}
+            onChange={handlePaginationChange}
+          />
+        </div>
+      )}
+
+      {/* 空状态 */}
+      {!loading && applications.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px' }}>
+          <AppstoreOutlined style={{ fontSize: '48px', color: '#d9d9d9', marginBottom: '16px' }} />
+          <div style={{ color: '#666', marginBottom: '16px' }}>
+            {searchKeyword || isSystemFilter || isInstalledFilter || isActiveFilter ? '没有找到符合条件的应用' : '暂无应用'}
+          </div>
+          {(searchKeyword || isSystemFilter || isInstalledFilter || isActiveFilter) && (
+            <Button onClick={() => {
+              setSearchKeyword('');
+              setIsSystemFilter('');
+              setIsInstalledFilter('');
+              setIsActiveFilter('');
+              setCurrent(1);
+              loadApplications(1, pageSize);
+            }}>
+              清除筛选条件
+            </Button>
           )}
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-          <ProFormDigit
-            name="sort_order"
-            label="排序顺序"
-            placeholder="请输入排序顺序（数字越小越靠前）"
-            min={0}
-          />
-        </ProForm>
-      </Modal>
+        </div>
+      )}
 
       {/* 查看详情 Drawer */}
       <Drawer
         title="应用详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
         loading={detailLoading}
       >
         {detailData && (
@@ -1035,6 +569,25 @@ const ApplicationListPage: React.FC = () => {
               {
                 title: '权限代码',
                 dataIndex: 'permission_code',
+              },
+              {
+                title: '菜单配置',
+                dataIndex: 'menu_config',
+                render: (value) => value ? (
+                  <pre style={{ 
+                    margin: 0, 
+                    fontSize: 12, 
+                    maxWidth: 600, 
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    padding: '8px',
+                    background: '#f5f5f5',
+                    borderRadius: '4px'
+                  }}>
+                    {JSON.stringify(value, null, 2)}
+                  </pre>
+                ) : '-',
               },
               {
                 title: '系统应用',

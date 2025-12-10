@@ -10,6 +10,30 @@ import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutline
 import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getUserPreference, updateUserPreference } from '../../services/userPreference';
+import { getToken } from '../../utils/auth';
+
+// 调试函数：检查当前配置状态（在浏览器控制台中调用）
+(window as any).debugThemeConfig = async () => {
+  console.log('=== 调试主题配置状态 ===');
+
+  try {
+    // 检查用户偏好设置
+    const userPreference = await getUserPreference().catch(() => null);
+    console.log('用户偏好设置:', userPreference);
+
+    // 检查站点设置
+    const siteSetting = await getSiteSetting().catch(() => null);
+    console.log('站点设置:', siteSetting);
+
+    // 检查是否有token
+    const token = getToken();
+    console.log('用户登录状态:', !!token);
+
+    console.log('=== 调试完成 ===');
+  } catch (error) {
+    console.error('调试失败:', error);
+  }
+};
 
 const { Text, Paragraph } = Typography;
 
@@ -41,7 +65,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       fontSize?: number;
     };
   } | null>(null);
-  const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light'); // 颜色模式：浅色/深色/跟随系统
+  const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light');
+  const [tabsPersistenceValue, setTabsPersistenceValue] = useState<boolean>(false);
+  const [compactValue, setCompactValue] = useState<boolean>(false); // 颜色模式：浅色/深色/跟随系统
 
   // 预设主题颜色
   const presetColors = [
@@ -63,9 +89,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     { color: '#141414', label: '深黑' },
   ];
 
-  // 使用 Form.useWatch 监听表单值变化
-  const colorPrimaryValue = Form.useWatch('colorPrimary', form);
-  const siderBgColorValue = Form.useWatch('siderBgColor', form);
+  // 使用 useState 管理表单值变化（避免在 Form 外部使用 Form.useWatch）
+  const [colorPrimaryValue, setColorPrimaryValue] = useState<string>('#1890ff');
+  const [siderBgColorValue, setSiderBgColorValue] = useState<string>('');
 
   /**
    * 规范化颜色值为字符串格式（用于 ColorPicker 的 value 属性）
@@ -159,15 +185,40 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 获取当前实际使用的其他主题值（如果没有保存的配置）
       const currentBorderRadius = themeConfig.borderRadius ?? token.borderRadius ?? 6;
       const currentFontSize = themeConfig.fontSize ?? token.fontSize ?? 14;
+
+      // 读取标签栏持久化配置：优先从本地存储读取，其次从用户偏好设置读取，默认关闭
+      let tabsPersistence = false;
+
+      // 优先从本地存储读取
+      const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
+      if (localTabsPersistence !== null) {
+        tabsPersistence = localTabsPersistence === 'true';
+      } else if (userPreference?.preferences && 'tabs_persistence' in userPreference.preferences) {
+        // 如果本地存储没有，从用户偏好设置读取
+        tabsPersistence = Boolean(userPreference.preferences.tabs_persistence);
+        // 同步到本地存储
+        localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistence));
+      }
       
-      form.setFieldsValue({
+
+      // 设置表单初始值
+      const formValues = {
         colorPrimary: colorPrimaryValue,
         borderRadius: currentBorderRadius,
         fontSize: currentFontSize,
         compact: themeConfig.compact || false,
-        siderBgColor: themeConfig.siderBgColor || '', // 左侧菜单栏背景色（仅浅色模式）
-        colorMode: userThemeMode, // 颜色模式
-      });
+        siderBgColor: themeConfig.siderBgColor || '',
+        colorMode: userThemeMode,
+        tabsPersistence: tabsPersistence,
+      };
+
+      form.setFieldsValue(formValues);
+
+      // 初始化状态变量
+      setColorPrimaryValue(colorPrimaryValue);
+      setSiderBgColorValue(themeConfig.siderBgColor || '');
+      setTabsPersistenceValue(tabsPersistence);
+      setCompactValue(themeConfig.compact || false);
       
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);
@@ -214,19 +265,39 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
    * 处理表单值变化（实时预览）
    */
   const handleValuesChange = (changedValues: any, allValues: any) => {
+    // 调试：监控表单值变化
+    console.log('表单值变化:', changedValues, '所有值:', allValues);
+    if (changedValues.tabsPersistence !== undefined) {
+      console.log('Switch开关状态改变:', changedValues.tabsPersistence, '当前表单值:', allValues.tabsPersistence);
+      setTabsPersistenceValue(changedValues.tabsPersistence);
+    }
+    if (changedValues.compact !== undefined) {
+      console.log('紧凑模式开关状态改变:', changedValues.compact);
+      setCompactValue(changedValues.compact);
+    }
     // 确保 colorPrimary 是字符串格式
     if (changedValues.colorPrimary) {
-      const colorValue = typeof changedValues.colorPrimary === 'string' 
-        ? changedValues.colorPrimary 
+      const colorValue = typeof changedValues.colorPrimary === 'string'
+        ? changedValues.colorPrimary
         : changedValues.colorPrimary.toHexString?.() || '#1890ff';
       allValues.colorPrimary = colorValue;
+      setColorPrimaryValue(colorValue);
     }
-    
+
+    // 如果 siderBgColor 改变，更新状态
+    if (changedValues.siderBgColor !== undefined) {
+      const siderBgValue = typeof changedValues.siderBgColor === 'string'
+        ? changedValues.siderBgColor
+        : changedValues.siderBgColor?.toHexString?.() || '';
+      allValues.siderBgColor = siderBgValue;
+      setSiderBgColorValue(siderBgValue);
+    }
+
     // 如果颜色模式改变，更新状态
     if (changedValues.colorMode) {
       setColorMode(changedValues.colorMode);
     }
-    
+
     applyPreviewTheme(allValues, allValues.colorMode);
   };
 
@@ -265,9 +336,19 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const handleSave = async () => {
     try {
       setSaving(true);
+      
       // 获取表单的最终值（用户选择的结果）
       const values = await form.validateFields();
       
+      
+      // 重要：在 validateFields 之后，直接从表单获取当前值
+      // 因为 Switch 组件的值可能在 validateFields 时丢失
+      const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
+
+      console.log('=== 保存标签持久化配置 ===');
+      console.log('form.getFieldValue("tabsPersistence"):', form.getFieldValue('tabsPersistence'));
+      console.log('最终保存值:', tabsPersistenceValue);
+
       // 构建站点主题配置对象（使用 Ant Design 原生配置格式）
       // 确保 colorPrimary 是字符串格式
       let colorPrimaryValue = values.colorPrimary || '#1890ff';
@@ -296,6 +377,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         fontSize: values.fontSize || 14,
         compact: values.compact || false,
       };
+
       
       // 保存左侧菜单栏背景色（仅在浅色模式下保存，包括空字符串，用于清除自定义背景色）
       if (values.colorMode === 'light' || (!values.colorMode && colorMode === 'light')) {
@@ -310,39 +392,77 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         themeConfig.siderBgColor = '';
       }
       
+      // 保存标签栏持久化配置
+      // 如果用户已登录，保存到用户偏好设置；否则保存到本地存储
+      const hasToken = !!getToken();
+
+      if (hasToken) {
+        // 用户已登录，保存到用户偏好设置
+        // 需要先获取现有的用户偏好设置，然后合并更新
+        try {
+          const currentPreference = await getUserPreference().catch(() => null);
+          const currentPreferences = currentPreference?.preferences || {};
+
+          // 合并更新：保留现有的偏好设置，只更新标签栏持久化和颜色模式
+          const updatedPreferences: Record<string, any> = {
+            ...currentPreferences,
+            tabs_persistence: tabsPersistenceValue,
+          };
+
+          // 添加颜色模式配置（如果存在）
+          if (values.colorMode) {
+            updatedPreferences.theme = values.colorMode;
+          }
+
+          await updateUserPreference({ preferences: updatedPreferences });
+
+          // 立即保存到本地存储（必须在保存到后端之后，确保值正确）
+          // 这是最重要的，因为读取时优先从本地存储读取
+          localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
+          console.log('已保存到后端和本地存储:', tabsPersistenceValue, '验证:', localStorage.getItem('riveredge_tabs_persistence'));
+
+          // 触发用户偏好更新事件，通知 PageTabs 组件更新配置
+          console.log('触发用户偏好更新事件:', updatedPreferences);
+          window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
+            detail: { preferences: updatedPreferences }
+          }));
+        } catch (error: any) {
+          // 如果保存失败，降级到本地存储
+          localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
+
+          // 即使保存失败，也触发事件通知组件更新（使用本地存储的值）
+          window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
+            detail: { preferences: { tabs_persistence: tabsPersistenceValue } }
+          }));
+        }
+      } else {
+        // 用户未登录，保存到本地存储
+        localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
+
+        // 触发事件通知组件更新（使用本地存储的值）
+        window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
+          detail: { preferences: { tabs_persistence: tabsPersistenceValue } }
+        }));
+      }
+
       // 保存站点主题配置
       const settings: Record<string, any> = {
         theme_config: themeConfig,
       };
-      
+
       await updateSiteSetting({ settings });
       
       // 临时方案：同时保存到本地存储（后续会做偏好设置）
       const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
       localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(themeConfig));
       
+
       message.success('主题配置保存成功');
       
       // 先触发站点主题更新事件，传递用户最终选择的配置（优先应用）
       window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
         detail: { themeConfig }
       }));
-      
-      // 然后保存用户颜色模式偏好（浅色/深色/跟随系统）
-      // 延迟触发用户偏好更新事件，避免覆盖刚保存的主题配置
-      if (values.colorMode) {
-        const preferences: Record<string, any> = {
-          theme: values.colorMode,
-        };
-        await updateUserPreference({ preferences });
-        
-        // 延迟触发，确保主题配置已经应用
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
-            detail: { preferences }
-          }));
-        }, 50);
-      }
       
       // 调用回调
       if (onThemeUpdate) {
@@ -362,6 +482,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
    * 处理重置
    */
   const handleReset = () => {
+    setTabsPersistenceValue(false);
+    setCompactValue(false);
     form.setFieldsValue({
       colorPrimary: '#1890ff',
       borderRadius: 6,
@@ -369,8 +491,21 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       compact: false,
       colorMode: 'light',
       siderBgColor: '', // 重置时设置为空字符串，表示使用默认背景色（无色）
+      tabsPersistence: false, // 重置时关闭标签栏持久化
     });
+
+    // 重置时清除本地存储的持久化配置
+    localStorage.removeItem('riveredge_tabs_persistence');
+    localStorage.removeItem('riveredge_saved_tabs');
+    localStorage.removeItem('riveredge_saved_active_key');
+
+    // 触发重置事件
+    window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
+      detail: { preferences: { tabs_persistence: false } }
+    }));
     setColorMode('light');
+    setColorPrimaryValue('#1890ff');
+    setSiderBgColorValue('');
     applyPreviewTheme(form.getFieldsValue(), 'light');
   };
 
@@ -392,7 +527,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       open={open}
       onClose={onClose}
       closable={false}
-      width={520}
+      size={520}
       extra={
         <Space>
           <Button
@@ -413,6 +548,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         </Space>
       }
     >
+      {open && form && (
+      <>
       <Form
         form={form}
         layout="vertical"
@@ -810,19 +947,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               }}
             />
           </Form.Item>
-          
-          <Form.Item
-            name="compact"
-            label="紧凑模式"
-            valuePropName="checked"
-          >
-            <div>
-              <Switch />
-              <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                启用后，界面元素间距更小，可显示更多内容
-              </Text>
-            </div>
-          </Form.Item>
         </Card>
 
         {/* 文字设置 */}
@@ -859,6 +983,52 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               }}
             />
           </Form.Item>
+        </Card>
+
+        {/* 主题配置 */}
+        <Card 
+          size="small" 
+          title="主题配置" 
+          style={{ marginBottom: 16 }}
+          bodyStyle={{ padding: '16px' }}
+        >
+          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+            调整主题相关的配置选项
+          </Paragraph>
+          
+          <Form.Item
+            name="compact"
+            label="紧凑模式"
+            valuePropName="checked"
+          >
+            <div>
+              <Switch checked={compactValue} onChange={(checked) => {
+                setCompactValue(checked);
+                form.setFieldsValue({ compact: checked });
+              }} />
+              <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                启用后，界面元素间距更小，可显示更多内容
+              </Text>
+            </div>
+          </Form.Item>
+
+          <Form.Item
+            name="tabsPersistence"
+            label="标签栏持久化"
+            valuePropName="checked"
+          >
+            <div>
+              <Switch checked={tabsPersistenceValue} onChange={(checked) => {
+                setTabsPersistenceValue(checked);
+                form.setFieldsValue({ tabsPersistence: checked });
+                console.log('Switch直接onChange:', checked);
+              }} />
+              <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                启用后，关闭浏览器后重新打开，已打开的标签页会自动恢复；关闭后只保留仪表板、钉住标签和当前页面
+              </Text>
+            </div>
+          </Form.Item>
+
         </Card>
       </Form>
 
@@ -922,6 +1092,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           </div>
         </Card>
       </ConfigProvider>
+      </>
+      )}
     </Drawer>
   );
 };

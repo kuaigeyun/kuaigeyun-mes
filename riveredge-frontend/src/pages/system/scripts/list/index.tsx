@@ -434,7 +434,7 @@ const ScriptListPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
-        width={900}
+        size={900}
       >
         <ProForm
           formRef={formRef}
@@ -514,7 +514,7 @@ const ScriptListPage: React.FC = () => {
         open={executeModalVisible}
         onCancel={() => setExecuteModalVisible(false)}
         footer={null}
-        width={700}
+        size={700}
       >
         <ProForm
           formRef={executeFormRef}
@@ -581,7 +581,7 @@ const ScriptListPage: React.FC = () => {
         title="脚本详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
       >
         {detailLoading ? (
           <div>加载中...</div>

@@ -299,7 +299,7 @@ export default function PackageManagementPage() {
           setEditFormData(null);
         }}
         footer={null}
-        width={600}
+        size={600}
       >
         {editFormData && (
           <PackageForm
@@ -319,7 +319,7 @@ export default function PackageManagementPage() {
         open={createModalVisible}
         onCancel={() => setCreateModalVisible(false)}
         footer={null}
-        width={600}
+        size={600}
       >
         <PackageForm
           onSubmit={handleSave}

@@ -4,7 +4,9 @@
 提供应用的 CRUD 操作和安装/卸载功能。
 """
 
-from typing import Optional, List
+import json
+from pathlib import Path
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 
@@ -170,18 +172,15 @@ class ApplicationService:
         is_active_changed = 'is_active' in update_data and old_is_active != application.is_active
         
         if menu_config_changed or is_active_changed:
-            import asyncio
             from core.services.menu_service import MenuService
             
-            # 如果菜单配置变更，重新同步所有菜单
+            # 如果菜单配置变更，重新同步所有菜单（同步执行，确保菜单立即可用）
             if menu_config_changed and application.menu_config:
-                asyncio.create_task(
-                    MenuService.sync_menus_from_application_config(
-                        tenant_id=tenant_id,
-                        application_uuid=str(application.uuid),
-                        menu_config=application.menu_config,
-                        is_active=application.is_active
-                    )
+                await MenuService.sync_menus_from_application_config(
+                    tenant_id=tenant_id,
+                    application_uuid=str(application.uuid),
+                    menu_config=application.menu_config,
+                    is_active=application.is_active
                 )
             elif is_active_changed:
                 # 如果只是应用状态变更，只更新菜单的启用状态
@@ -247,17 +246,14 @@ class ApplicationService:
         application.is_installed = True
         await application.save()
         
-        # 自动同步应用菜单配置到菜单管理
+        # 自动同步应用菜单配置到菜单管理（同步执行，确保菜单立即可用）
         if application.menu_config:
-            import asyncio
             from core.services.menu_service import MenuService
-            asyncio.create_task(
-                MenuService.sync_menus_from_application_config(
-                    tenant_id=tenant_id,
-                    application_uuid=str(application.uuid),
-                    menu_config=application.menu_config,
-                    is_active=application.is_active
-                )
+            await MenuService.sync_menus_from_application_config(
+                tenant_id=tenant_id,
+                application_uuid=str(application.uuid),
+                menu_config=application.menu_config,
+                is_active=application.is_active
             )
         
         return application
@@ -322,13 +318,24 @@ class ApplicationService:
         application.is_active = True
         await application.save()
         
-        # 自动更新关联菜单的状态
-        from core.models.menu import Menu
-        await Menu.filter(
-            tenant_id=tenant_id,
-            application_uuid=str(uuid),
-            deleted_at__isnull=True
-        ).update(is_active=True)
+        # 如果应用已安装且有菜单配置，确保菜单已同步并启用
+        if application.is_installed and application.menu_config:
+            from core.services.menu_service import MenuService
+            # 重新同步菜单，确保菜单状态与应用状态一致
+            await MenuService.sync_menus_from_application_config(
+                tenant_id=tenant_id,
+                application_uuid=str(uuid),
+                menu_config=application.menu_config,
+                is_active=True
+            )
+        else:
+            # 如果应用没有菜单配置，直接更新现有菜单状态
+            from core.models.menu import Menu
+            await Menu.filter(
+                tenant_id=tenant_id,
+                application_uuid=str(uuid),
+                deleted_at__isnull=True
+            ).update(is_active=True)
         
         return application
     
@@ -389,4 +396,160 @@ class ApplicationService:
             query = query.filter(is_active=is_active)
         
         return await query.order_by("sort_order", "id")
+    
+    @staticmethod
+    def _get_plugins_directory() -> Path:
+        """
+        获取插件目录路径
+        
+        Returns:
+            Path: 插件目录路径（src/apps）
+        """
+        # 插件现在放在 src/apps/ 目录下
+        current_file = Path(__file__).resolve()  # 使用绝对路径
+        # riveredge-backend/src/core/services/application_service.py
+        # -> riveredge-backend/src/core/services/
+        # -> riveredge-backend/src/core/
+        # -> riveredge-backend/src/
+        # -> riveredge-backend/src/apps
+        backend_src_dir = current_file.parent.parent.parent  # riveredge-backend/src
+        plugins_dir = backend_src_dir / "apps"
+        return plugins_dir
+    
+    @staticmethod
+    def _scan_plugin_manifests() -> List[Dict[str, Any]]:
+        """
+        扫描插件目录，读取所有插件的 manifest.json 文件
+        
+        Returns:
+            List[Dict[str, Any]]: 插件清单列表，每个元素包含 manifest.json 的内容和插件目录路径
+        """
+        plugins_dir = ApplicationService._get_plugins_directory()
+        plugins = []
+        
+        if not plugins_dir.exists():
+            return plugins
+        
+        # 遍历 src/apps 目录下的所有子目录
+        for plugin_dir in plugins_dir.iterdir():
+            if not plugin_dir.is_dir():
+                continue
+            
+            # 查找 manifest.json 文件
+            manifest_file = plugin_dir / "manifest.json"
+            if not manifest_file.exists():
+                continue
+            
+            try:
+                # 读取 manifest.json
+                with open(manifest_file, 'r', encoding='utf-8') as f:
+                    manifest_data = json.load(f)
+                
+                # 添加插件目录路径信息
+                manifest_data['_plugin_dir'] = str(plugin_dir)
+                plugins.append(manifest_data)
+            except (json.JSONDecodeError, IOError) as e:
+                # 忽略无法读取的 manifest.json
+                print(f"警告: 无法读取插件 {plugin_dir.name} 的 manifest.json: {e}")
+                continue
+        
+        return plugins
+    
+    @staticmethod
+    async def scan_and_register_plugins(tenant_id: int) -> List[Application]:
+        """
+        扫描插件目录并自动注册插件应用
+        
+        从 src/apps 目录扫描所有插件的 manifest.json 文件，
+        自动在数据库中创建或更新应用记录。
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            List[Application]: 已注册的应用列表
+        """
+        plugins = ApplicationService._scan_plugin_manifests()
+        registered_apps = []
+        
+        for manifest in plugins:
+            try:
+                # 从 manifest.json 提取应用信息
+                code = manifest.get('code')
+                if not code:
+                    print(f"警告: 插件 {manifest.get('name', 'unknown')} 缺少 code 字段，跳过注册")
+                    continue
+                
+                # 检查应用是否已存在
+                existing_app = await ApplicationService.get_application_by_code(
+                    tenant_id=tenant_id,
+                    code=code
+                )
+                
+                # 构建应用数据
+                # 如果应用已存在，保持现有的 is_active 状态；否则默认启用
+                is_active = existing_app.is_active if existing_app else True
+                
+                app_data = ApplicationCreate(
+                    name=manifest.get('name', code),
+                    code=code,
+                    description=manifest.get('description'),
+                    icon=manifest.get('icon'),
+                    version=manifest.get('version', '1.0.0'),
+                    route_path=manifest.get('route_path'),
+                    entry_point=manifest.get('entry_point'),
+                    menu_config=manifest.get('menu_config'),
+                    permission_code=manifest.get('permission_code') or f"app:{code}",
+                    is_system=False,  # 插件应用不是系统应用
+                    is_active=is_active,  # 保持现有状态或默认启用
+                    sort_order=manifest.get('sort_order', 0),
+                )
+                
+                if existing_app:
+                    # 更新现有应用（保留 is_active 和 is_installed 状态）
+                    # 检查菜单配置是否变更
+                    menu_config_changed = existing_app.menu_config != app_data.menu_config
+                    
+                    update_data = ApplicationUpdate(
+                        name=app_data.name,
+                        description=app_data.description,
+                        icon=app_data.icon,
+                        version=app_data.version,
+                        route_path=app_data.route_path,
+                        entry_point=app_data.entry_point,
+                        menu_config=app_data.menu_config,
+                        permission_code=app_data.permission_code,
+                        sort_order=app_data.sort_order,
+                    )
+                    application = await ApplicationService.update_application(
+                        tenant_id=tenant_id,
+                        uuid=str(existing_app.uuid),
+                        data=update_data
+                    )
+                    
+                    # 如果菜单配置变更，确保菜单已同步（update_application 已经会同步，但这里明确确保）
+                    if menu_config_changed and application.menu_config and application.is_installed:
+                        from core.services.menu_service import MenuService
+                        await MenuService.sync_menus_from_application_config(
+                            tenant_id=tenant_id,
+                            application_uuid=str(application.uuid),
+                            menu_config=application.menu_config,
+                            is_active=application.is_active
+                        )
+                else:
+                    # 创建新应用
+                    application = await ApplicationService.create_application(
+                        tenant_id=tenant_id,
+                        data=app_data
+                    )
+                
+                registered_apps.append(application)
+                
+            except Exception as e:
+                print(f"错误: 注册插件 {manifest.get('name', 'unknown')} 失败: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        return registered_apps
 

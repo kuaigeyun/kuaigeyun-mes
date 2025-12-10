@@ -546,7 +546,7 @@ const CustomFieldListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={700}
+        size={700}
       >
         <ProForm
           formRef={formRef}
@@ -648,7 +648,7 @@ const CustomFieldListPage: React.FC = () => {
         title="字段详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (

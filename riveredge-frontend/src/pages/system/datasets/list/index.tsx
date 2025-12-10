@@ -438,7 +438,7 @@ const DatasetListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -534,7 +534,7 @@ const DatasetListPage: React.FC = () => {
         title="数据集详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
         loading={detailLoading}
       >
         {detailData && (
@@ -636,7 +636,7 @@ const DatasetListPage: React.FC = () => {
             关闭
           </Button>,
         ]}
-        width={1000}
+        size={1000}
       >
         {executeLoading ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

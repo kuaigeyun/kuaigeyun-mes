@@ -6,9 +6,10 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tabs, Button, Dropdown, MenuProps, theme } from 'antd';
-import { CaretLeftFilled, CaretRightFilled, ReloadOutlined } from '@ant-design/icons';
+import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip } from 'antd';
+import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
+import { getUserPreference } from '../../services/userPreference';
 
 /**
  * 标签项接口
@@ -18,6 +19,8 @@ export interface TabItem {
   path: string;
   label: string;
   closable?: boolean;
+  /** 是否固定 */
+  pinned?: boolean;
 }
 
 /**
@@ -58,6 +61,10 @@ const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
 interface PageTabsProps {
   menuConfig: MenuDataItem[];
   children: React.ReactNode;
+  /** 是否全屏 */
+  isFullscreen?: boolean;
+  /** 切换全屏状态 */
+  onToggleFullscreen?: () => void;
 }
 
 /**
@@ -70,7 +77,7 @@ const TAB_CONFIG = {
 /**
  * 页面标签栏组件
  */
-export default function PageTabs({ menuConfig, children }: PageTabsProps) {
+export default function PageTabs({ menuConfig, children, isFullscreen = false, onToggleFullscreen }: PageTabsProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
@@ -80,6 +87,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [tabsPersistence, setTabsPersistence] = useState<boolean>(false); // 标签栏持久化配置
+  const [isInitialized, setIsInitialized] = useState<boolean>(false); // 是否已初始化（避免重复恢复）
 
   /**
    * 根据路径获取标签标题
@@ -115,10 +124,12 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           path,
           label: getTabTitle(path),
           closable: path !== '/system/dashboard/workplace', // 工作台标签不可关闭
+          pinned: false, // 默认不固定
         };
 
         let newTabs: TabItem[];
 
+        // 排序逻辑：工作台 -> 固定标签 -> 其他标签
         // 如果添加的是工作台，确保它在第一个位置
         if (path === '/system/dashboard/workplace') {
           // 检查是否已存在工作台标签
@@ -129,29 +140,31 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           // 工作台始终在第一个位置
           newTabs = [newTab, ...prevTabs];
         } else {
-          // 其他标签添加在工作台之后
-          const workplaceIndex = prevTabs.findIndex((tab) => tab.key === '/system/dashboard/workplace');
-          if (workplaceIndex >= 0) {
-            // 如果存在工作台，插入到工作台之后
-            const beforeWorkplace = prevTabs.slice(0, workplaceIndex + 1);
-            const afterWorkplace = prevTabs.slice(workplaceIndex + 1);
-            newTabs = [...beforeWorkplace, newTab, ...afterWorkplace];
+          // 其他标签：插入到工作台之后，固定标签之后
+          const workplaceTab = prevTabs.find((tab) => tab.key === '/system/dashboard/workplace');
+          const pinnedTabs = prevTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
+          const unpinnedTabs = prevTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
+          
+          if (workplaceTab) {
+            // 有工作台：工作台 -> 固定标签 -> 新标签 -> 其他标签
+            newTabs = [workplaceTab, ...pinnedTabs, newTab, ...unpinnedTabs];
           } else {
-            // 如果没有工作台，先添加工作台，再添加新标签
+            // 没有工作台：先添加工作台，再添加新标签
             const workplaceTab: TabItem = {
               key: '/system/dashboard/workplace',
               path: '/system/dashboard/workplace',
               label: getTabTitle('/system/dashboard/workplace'),
               closable: false,
+              pinned: false, // 工作台默认不固定（但始终在第一个位置）
             };
-            newTabs = [workplaceTab, newTab];
+            newTabs = [workplaceTab, ...pinnedTabs, newTab, ...unpinnedTabs];
           }
         }
 
-        // 性能优化：如果标签数量超过限制，自动关闭最旧的标签（保留工作台）
+        // 性能优化：如果标签数量超过限制，自动关闭最旧的标签（保留工作台和固定标签）
         if (newTabs.length > TAB_CONFIG.MAX_TABS) {
-          // 找到最旧的标签（除了工作台）
-          const closableTabs = newTabs.filter((tab) => tab.closable);
+          // 找到最旧的标签（除了工作台和固定标签）
+          const closableTabs = newTabs.filter((tab) => tab.closable && !tab.pinned && tab.key !== '/system/dashboard/workplace');
           if (closableTabs.length > 0) {
             // 移除最旧的标签（第一个可关闭的标签）
             const oldestTab = closableTabs[0];
@@ -176,9 +189,231 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
   }, []);
 
   /**
-   * 监听路由变化，自动添加标签
+   * 固定/取消固定标签
+   */
+  const togglePinTab = useCallback((targetKey: string) => {
+    setTabs((prevTabs) => {
+      const newTabs = prevTabs.map((tab) => {
+        if (tab.key === targetKey) {
+          return { ...tab, pinned: !tab.pinned };
+        }
+        return tab;
+      });
+      
+      // 排序：固定标签在前，然后是按顺序排列的其他标签
+      // 工作台始终在第一个位置（如果存在）
+      const workplaceTab = newTabs.find((tab) => tab.key === '/system/dashboard/workplace');
+      const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
+      const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
+      
+      const sortedTabs: TabItem[] = [];
+      if (workplaceTab) {
+        sortedTabs.push(workplaceTab);
+      }
+      sortedTabs.push(...pinnedTabs);
+      sortedTabs.push(...unpinnedTabs);
+      
+      return sortedTabs;
+    });
+  }, []);
+
+  /**
+   * 读取标签栏持久化配置
    */
   useEffect(() => {
+    const loadTabsPersistence = async () => {
+      try {
+        console.log('PageTabs开始加载标签持久化配置');
+        // 优先从用户偏好设置读取
+        const userPreference = await getUserPreference().catch(() => null);
+        console.log('PageTabs读取用户偏好设置结果:', userPreference);
+
+        if (userPreference?.preferences?.tabs_persistence !== undefined) {
+          const persistence = userPreference.preferences.tabs_persistence;
+          setTabsPersistence(persistence);
+          // 如果未启用持久化，立即标记为已初始化
+          if (!persistence) {
+            setIsInitialized(true);
+          }
+        } else {
+          // 其次从本地存储读取
+          const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
+          if (localTabsPersistence !== null) {
+            const persistence = localTabsPersistence === 'true';
+            setTabsPersistence(persistence);
+            // 如果未启用持久化，立即标记为已初始化
+            if (!persistence) {
+              setIsInitialized(true);
+            }
+          } else {
+            // 默认关闭，立即标记为已初始化
+            setTabsPersistence(false);
+            setIsInitialized(true);
+          }
+        }
+      } catch (error) {
+        // 如果获取失败，从本地存储读取
+        const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
+        if (localTabsPersistence !== null) {
+          const persistence = localTabsPersistence === 'true';
+          setTabsPersistence(persistence);
+          // 如果未启用持久化，立即标记为已初始化
+          if (!persistence) {
+            setIsInitialized(true);
+          }
+        } else {
+          // 默认关闭，立即标记为已初始化
+          setTabsPersistence(false);
+          setIsInitialized(true);
+        }
+      }
+    };
+    
+    loadTabsPersistence();
+    
+    // 监听用户偏好更新事件
+    const handleUserPreferenceUpdated = (event: CustomEvent) => {
+      console.log('PageTabs收到用户偏好更新事件:', event.detail);
+      if (event.detail?.preferences?.tabs_persistence !== undefined) {
+        const persistence = event.detail.preferences.tabs_persistence;
+        console.log('PageTabs更新标签栏持久化配置:', persistence);
+        setTabsPersistence(persistence);
+        // 配置更新后，立即标记为已初始化（无论开启还是关闭）
+        setIsInitialized(true);
+        console.log('PageTabs配置更新完成，已标记为已初始化');
+      }
+    };
+    
+    window.addEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
+    
+    return () => {
+      window.removeEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
+    };
+  }, []);
+
+  /**
+   * 恢复持久化的标签（仅在启用持久化且未初始化时执行一次）
+   * 刷新页面时恢复之前打开的标签
+   */
+  useEffect(() => {
+    // 如果已经初始化或有标签了，不再恢复
+    if (isInitialized) {
+      return;
+    }
+    
+    // 如果 tabsPersistence 还没有加载完成（还是默认值 false），等待加载完成
+    // 通过检查 localStorage 来判断是否已经加载完成
+    const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
+    const userPreferenceTabsPersistence = tabsPersistence;
+    
+    // 如果既没有从用户偏好设置读取到，也没有从本地存储读取到，说明还在加载中，等待
+    if (!userPreferenceTabsPersistence && localTabsPersistence === null) {
+      // 还在加载中，等待
+      return;
+    }
+    
+    // 确定最终的持久化配置值
+    const finalTabsPersistence = userPreferenceTabsPersistence || (localTabsPersistence === 'true');
+    
+    // 如果未启用持久化，直接标记为已初始化，不恢复任何标签
+    // 只保留工作台标签（会在路由监听中自动添加）
+    if (!finalTabsPersistence) {
+      console.log('标签持久化未启用，只保留基础标签');
+      setIsInitialized(true);
+      return;
+    }
+    
+    // 启用持久化时，尝试从 localStorage 恢复标签
+    try {
+      const savedTabs = localStorage.getItem('riveredge_saved_tabs');
+      
+      if (savedTabs) {
+        const parsedTabs: TabItem[] = JSON.parse(savedTabs);
+        
+        if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
+          // 验证并恢复标签
+          const validTabs = parsedTabs.filter((tab) => {
+            // 验证标签格式
+            return tab && typeof tab === 'object' && tab.key && tab.path && tab.label;
+          });
+          
+          if (validTabs.length > 0) {
+            // 确保工作台标签存在
+            const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
+            if (!hasWorkplace) {
+              const workplaceTab: TabItem = {
+                key: '/system/dashboard/workplace',
+                path: '/system/dashboard/workplace',
+                label: getTabTitle('/system/dashboard/workplace'),
+                closable: false,
+                pinned: false,
+              };
+              validTabs.unshift(workplaceTab);
+            }
+            
+            setTabs(validTabs);
+            
+            // 恢复当前激活的标签（如果存在）
+            const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
+            
+            if (savedActiveKey && validTabs.some((tab) => tab.key === savedActiveKey)) {
+              setActiveKey(savedActiveKey);
+              // 使用 setTimeout 确保在下一个事件循环中导航，避免与路由监听冲突
+              setTimeout(() => {
+                navigate(savedActiveKey);
+              }, 0);
+            } else {
+              // 默认激活第一个标签
+              setActiveKey(validTabs[0].key);
+              setTimeout(() => {
+                navigate(validTabs[0].key);
+              }, 0);
+            }
+            
+            setIsInitialized(true);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      // 恢复失败，使用默认行为
+    }
+    
+    // 如果没有保存的标签，标记为已初始化，使用默认行为
+    setIsInitialized(true);
+  }, [tabsPersistence, isInitialized, getTabTitle, navigate]);
+
+  /**
+   * 保存标签到本地存储（当启用持久化且标签变化时）
+   * 每次标签变化时自动保存，刷新页面时就能恢复
+   */
+  useEffect(() => {
+    if (!tabsPersistence || !isInitialized || tabs.length === 0) {
+      return;
+    }
+    
+    try {
+      // 保存标签列表
+      localStorage.setItem('riveredge_saved_tabs', JSON.stringify(tabs));
+      // 保存当前激活的标签
+      if (activeKey) {
+        localStorage.setItem('riveredge_saved_active_key', activeKey);
+      }
+    } catch (error) {
+      // 保存失败，静默处理
+    }
+  }, [tabs, activeKey, tabsPersistence, isInitialized]);
+
+  /**
+   * 监听路由变化，自动添加标签
+   * 注意：如果启用了持久化且正在恢复标签，不要立即添加标签，避免覆盖恢复的标签
+   */
+  useEffect(() => {
+    if (!isInitialized) {
+      // 如果还没有初始化，等待恢复标签完成
+      return;
+    }
+    
     if (location.pathname) {
       // 确保工作台标签始终存在（固定第一个）
       addTab('/system/dashboard/workplace');
@@ -186,7 +421,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
       addTab(location.pathname);
       setActiveKey(location.pathname);
     }
-  }, [location.pathname, addTab]);
+  }, [location.pathname, addTab, isInitialized]);
 
   /**
    * 监听 refresh 参数，实现局部刷新
@@ -244,12 +479,29 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
     const targetIndex = tabs.findIndex((tab) => tab.key === targetKey);
     if (targetIndex === -1) return;
 
-    // 保留目标标签及其左侧的所有标签
-    const newTabs = tabs.slice(0, targetIndex + 1);
-    setTabs(newTabs);
+    // 保留目标标签及其左侧的所有标签，以及所有固定标签
+    const targetTab = tabs[targetIndex];
+    const leftTabs = tabs.slice(0, targetIndex + 1);
+    const rightTabs = tabs.slice(targetIndex + 1);
+    // 保留右侧的固定标签
+    const rightPinnedTabs = rightTabs.filter((tab) => tab.pinned || tab.key === '/system/dashboard/workplace');
+    const newTabs = [...leftTabs, ...rightPinnedTabs];
+    
+    // 重新排序：工作台 -> 固定标签 -> 其他标签
+    const workplaceTab = newTabs.find((tab) => tab.key === '/system/dashboard/workplace');
+    const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
+    const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
+    const sortedTabs: TabItem[] = [];
+    if (workplaceTab) {
+      sortedTabs.push(workplaceTab);
+    }
+    sortedTabs.push(...pinnedTabs);
+    sortedTabs.push(...unpinnedTabs);
+    
+    setTabs(sortedTabs);
 
     // 如果当前激活的标签被关闭，切换到目标标签
-    if (!newTabs.find((tab) => tab.key === activeKey)) {
+    if (!sortedTabs.find((tab) => tab.key === activeKey)) {
       setActiveKey(targetKey);
       navigate(targetKey);
     }
@@ -259,15 +511,19 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    * 关闭其他标签
    */
   const handleCloseOthers = (targetKey: string) => {
-    // 保留目标标签和工作台标签（如果存在）
+    // 保留目标标签、工作台标签和所有固定标签
     const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
     const targetTab = tabs.find((tab) => tab.key === targetKey);
+    const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace' && tab.key !== targetKey);
     const newTabs: TabItem[] = [];
 
     // 先添加工作台标签（如果存在且不是目标标签）
     if (workplaceTab && workplaceTab.key !== targetKey) {
       newTabs.push(workplaceTab);
     }
+
+    // 添加固定标签（不包括目标标签）
+    newTabs.push(...pinnedTabs);
 
     // 添加目标标签（如果存在且不是工作台）
     if (targetTab) {
@@ -283,12 +539,24 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    * 全部关闭
    */
   const handleCloseAll = () => {
-    // 只保留仪表盘标签
+    // 保留工作台标签和所有固定标签
     const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
+    const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
+    const newTabs: TabItem[] = [];
+
+    // 先添加工作台标签（如果存在）
     if (workplaceTab) {
-      setTabs([workplaceTab]);
-      setActiveKey('/system/dashboard/workplace');
-      navigate('/system/dashboard/workplace');
+      newTabs.push(workplaceTab);
+    }
+
+    // 添加所有固定标签
+    newTabs.push(...pinnedTabs);
+
+    // 如果还有标签，切换到第一个标签；否则跳转到工作台
+    if (newTabs.length > 0) {
+      setTabs(newTabs);
+      setActiveKey(newTabs[0].key);
+      navigate(newTabs[0].key);
     } else {
       setTabs([]);
       navigate('/system/dashboard/workplace');
@@ -315,9 +583,11 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
    */
   const getTabContextMenu = (tabKey: string): MenuProps => {
     const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
+    const targetTab = tabs.find((tab) => tab.key === tabKey);
     const isWorkplace = tabKey === '/system/dashboard/workplace';
     const hasRightTabs = targetIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
+    const isPinned = targetTab?.pinned || false;
 
     const menuItems: MenuProps['items'] = [
       {
@@ -329,9 +599,17 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         type: 'divider',
       },
       {
+        key: 'pin',
+        label: isPinned ? '取消固定' : '固定',
+        icon: <PushpinOutlined style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} />,
+      },
+      {
+        type: 'divider',
+      },
+      {
         key: 'close',
         label: '关闭',
-        disabled: isWorkplace, // 工作台标签不可关闭
+        disabled: isWorkplace || isPinned, // 工作台和固定标签不可关闭
       },
       {
         key: 'closeRight',
@@ -356,6 +634,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         switch (key) {
           case 'refresh':
             handleTabRefresh(tabKey);
+            break;
+          case 'pin':
+            togglePinTab(tabKey);
             break;
           case 'close':
             handleTabClose(tabKey);
@@ -482,6 +763,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           padding: 0 !important;
           padding-bottom: 0 !important;
           border-bottom: none !important;
+          height: 38px !important;
+          overflow: visible !important;
         }
         .page-tabs-container .ant-tabs-nav::before {
           display: none !important;
@@ -490,7 +773,21 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-nav-wrap {
           border-bottom: none !important;
           overflow-x: auto !important;
-          overflow-y: visible !important;
+          /* 不设置 overflow-y，避免与 overflow-x: auto 冲突导致 visible 被计算为 auto */
+          height: 38px !important;
+          clip-path: none !important;
+          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
+          box-sizing: border-box !important;
+          /* 隐藏滚动条且不占用高度 */
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE/Edge */
+        }
+        /* 隐藏 Chrome/Safari/Webkit 滚动条且不占用高度 */
+        .page-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
         }
         .page-tabs-container .ant-tabs-nav-wrap::before {
           display: none !important;
@@ -501,6 +798,9 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
           overflow: visible !important;
+          height: 38px !important;
+          display: flex !important;
+          align-items: center !important;
         }
         /* 覆盖所有可能的边框颜色 #F0F0F0 */
         .page-tabs-container .ant-tabs-nav,
@@ -517,6 +817,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-tab {
           margin: 0 !important;
           padding: 8px 16px !important;
+          padding-bottom: 8px !important;
           border: none !important;
           border-bottom: none !important;
           background: var(--ant-colorBgContainer) !important;
@@ -526,6 +827,22 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border-bottom-right-radius: 0 !important;
           position: relative;
           overflow: visible !important;
+          height: 38px !important;
+          line-height: 22px !important;
+          display: flex !important;
+          align-items: center !important;
+          box-sizing: border-box !important;
+        }
+        /* 标签按钮和关闭按钮垂直居中 */
+        .page-tabs-container .ant-tabs-tab-btn {
+          display: flex !important;
+          align-items: center !important;
+          line-height: 22px !important;
+        }
+        .page-tabs-container .ant-tabs-tab-remove {
+          display: flex !important;
+          align-items: center !important;
+          line-height: 22px !important;
         }
         /* 未激活标签：使用竖线分隔 */
         .page-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
@@ -570,6 +887,12 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           overflow: visible !important;
           /* Chrome 式外圆角效果 - 强制显示圆角，防止被父容器裁剪 */
           border-radius: 8px 8px 0 0 !important;
+          height: 38px !important;
+          padding: 8px 16px !important;
+          padding-bottom: 8px !important;
+          box-sizing: border-box !important;
+          display: flex !important;
+          align-items: center !important;
         }
         /* Chrome 式反向圆角 - 使用伪元素实现左右两侧的内凹圆角 */
         .page-tabs-container .ant-tabs-tab-active::before,
@@ -583,6 +906,10 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           box-shadow: 0 0 0 40px var(--ant-colorBgLayout);
           pointer-events: none;
           z-index: -1;
+          /* 确保伪元素不被父容器裁剪 */
+          overflow: visible !important;
+          /* 确保伪元素可以溢出显示 */
+          will-change: transform;
         }
         /* 左侧反向圆角 */
         .page-tabs-container .ant-tabs-tab-active::before {
@@ -622,10 +949,11 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         }
         /* Chrome 式效果：激活标签与相邻未激活标签之间的分隔线隐藏 */
         /* 注意：不能隐藏激活标签的 ::after，因为需要用它来实现右侧圆角 */
-        /* 只隐藏未激活标签右侧的分隔线 */
-        .page-tabs-container .ant-tabs-tab-active + .ant-tabs-tab::after {
+        /* 但是，激活标签后面的标签仍然需要显示分割线，所以不隐藏它 */
+        /* 注释掉原来的规则，让分割线正常显示 */
+        /* .page-tabs-container .ant-tabs-tab-active + .ant-tabs-tab::after {
           display: none !important;
-        }
+        } */
         /* 移除标签切换时的过渡动画 */
         .page-tabs-container .ant-tabs-tab {
           transition: none !important;
@@ -702,6 +1030,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           border: none !important;
           box-shadow: none !important;
           overflow: visible !important;
+          overflow-x: visible !important;
+          overflow-y: visible !important;
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
           z-index: 1;
@@ -736,6 +1066,7 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           position: relative !important;
           z-index: 2 !important;
           margin-bottom: 0 !important;
+          margin-top: 0 !important;
           line-height: 1 !important;
         }
         /* 按钮图标颜色 - 可点击时使用主题色 */
@@ -769,10 +1100,25 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled,
         .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-disabled,
         .page-tabs-header-wrapper button.page-tabs-scroll-button[disabled] {
-          color: rgba(0, 0, 0, 0.25) !important;
+          width: 24px !important;
+          height: 30px !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          flex-shrink: 0 !important;
+          border: none !important;
+          border-bottom: none !important;
           background: transparent !important;
+          box-shadow: none !important;
+          color: rgba(0, 0, 0, 0.25) !important;
           cursor: not-allowed !important;
           pointer-events: none !important;
+          position: relative !important;
+          z-index: 2 !important;
+          margin-bottom: 0 !important;
+          margin-top: 0 !important;
+          line-height: 1 !important;
         }
         .page-tabs-header-wrapper .page-tabs-scroll-button:disabled .anticon,
         .page-tabs-header-wrapper .page-tabs-scroll-button:disabled .ant-btn-icon,
@@ -815,7 +1161,8 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           align-items: center;
           justify-content: center;
           height: 38px;
-          padding-bottom: 1px !important;
+          padding-bottom: 0 !important;
+          padding-top: 0 !important;
           border-bottom: none !important;
         }
         .page-tabs-scroll-button-left {
@@ -828,6 +1175,37 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
           position: relative;
           z-index: 2;
         }
+        /* 全屏按钮容器样式 */
+        .page-tabs-fullscreen-button-wrapper {
+          margin-left: 4px;
+          position: relative;
+          z-index: 2;
+          padding-left: 4px;
+          padding-right: 4px;
+        }
+        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致 */
+        .page-tabs-fullscreen-button-wrapper::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 1px;
+          height: 16px;
+          background: rgba(0, 0, 0, 0.16) !important;
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 全屏按钮样式 - 覆盖滚动按钮的padding设置 */
+        .page-tabs-header-wrapper .page-tabs-fullscreen-button,
+        .page-tabs-header-wrapper .page-tabs-fullscreen-button.ant-btn,
+        .page-tabs-header-wrapper .page-tabs-fullscreen-button.ant-btn-text,
+        .page-tabs-header-wrapper button.page-tabs-fullscreen-button,
+        .page-tabs-header-wrapper button.page-tabs-fullscreen-button.ant-btn,
+        .page-tabs-header-wrapper button.page-tabs-fullscreen-button.ant-btn-text {
+          padding-left: 4px !important;
+          padding-right: 4px !important;
+        }
         /* 标签栏容器 - 允许横向滚动，底部允许溢出显示外圆角 */
         .page-tabs-container {
           flex: 1;
@@ -839,9 +1217,13 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
         .page-tabs-container .ant-tabs-nav {
           overflow-x: auto;
           overflow-y: visible;
+          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
         }
         .page-tabs-container .ant-tabs-nav-list {
           overflow: visible !important;
+          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
         }
         .page-tabs-container .ant-tabs-tab {
           overflow: visible !important;
@@ -907,18 +1289,28 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                       onDoubleClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // 仪表盘标签不可双击关闭
-                        if (tab.key !== '/system/dashboard/workplace' && tab.closable) {
+                        // 仪表盘标签和固定标签不可双击关闭
+                        if (tab.key !== '/system/dashboard/workplace' && tab.closable && !tab.pinned) {
                           handleTabClose(tab.key);
                         }
                       }}
-                      style={{ userSelect: 'none' }}
+                      style={{ userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
                       {tab.label}
+                      {tab.pinned && (
+                        <PushpinOutlined 
+                          style={{ 
+                            fontSize: 12, 
+                            color: 'var(--ant-colorPrimary)',
+                            transform: 'rotate(-45deg)',
+                            flexShrink: 0,
+                          }} 
+                        />
+                      )}
                     </span>
                   </Dropdown>
                 ),
-                closable: tab.closable,
+                closable: tab.closable && !tab.pinned, // 固定标签不可关闭
               }))}
               size="small"
               className="page-tabs-container"
@@ -934,6 +1326,20 @@ export default function PageTabs({ menuConfig, children }: PageTabsProps) {
                 className="page-tabs-scroll-button page-tabs-scroll-button-right"
               />
             </div>
+            {/* 全屏按钮 */}
+            {onToggleFullscreen && (
+              <div className="page-tabs-scroll-button-wrapper page-tabs-fullscreen-button-wrapper">
+                <Tooltip title={isFullscreen ? '退出全屏' : '全屏'} placement="left">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                    onClick={onToggleFullscreen}
+                    className="page-tabs-scroll-button page-tabs-fullscreen-button"
+                  />
+                </Tooltip>
+              </div>
+            )}
           </div>
         </div>
         <div className="page-tabs-content" key={`content-${activeKey}-${refreshKey}`}>

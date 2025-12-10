@@ -27,8 +27,8 @@ i18n
     lng: 'zh-CN',
     fallbackLng: 'zh-CN',
     
-    // 调试模式（开发环境）
-    debug: import.meta.env.DEV,
+    // 调试模式（关闭调试日志）
+    debug: false,
     
     // 插值配置
     interpolation: {

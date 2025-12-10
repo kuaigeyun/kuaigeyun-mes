@@ -222,7 +222,7 @@ const CardView: React.FC = () => {
                 title="总数据源数"
                 value={stats.total}
                 prefix={<DatabaseOutlined />}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -230,7 +230,7 @@ const CardView: React.FC = () => {
                 title="已连接"
                 value={stats.connected}
                 prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -238,7 +238,7 @@ const CardView: React.FC = () => {
                 title="未连接"
                 value={stats.disconnected}
                 prefix={<CloseCircleOutlined />}
-                valueStyle={{ color: '#ff4d4f' }}
+                styles={{ content: { color: '#ff4d4f' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -246,7 +246,7 @@ const CardView: React.FC = () => {
                 title="已禁用"
                 value={stats.inactive}
                 prefix={<ExclamationCircleOutlined />}
-                valueStyle={{ color: '#faad14' }}
+                styles={{ content: { color: '#faad14' } }}
               />
             </Col>
           </Row>
@@ -395,7 +395,7 @@ const CardView: React.FC = () => {
           setCurrentDataSource(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentDataSource && (
           <Descriptions column={1} bordered>
@@ -480,7 +480,7 @@ const CardView: React.FC = () => {
             关闭
           </Button>,
         ]}
-        width={600}
+        size={600}
       >
         {testingUuid && !testResult && (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>

@@ -451,7 +451,7 @@ const PrintTemplateListPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
-        width={900}
+        size={900}
       >
         <ProForm
           formRef={formRef}
@@ -542,7 +542,7 @@ const PrintTemplateListPage: React.FC = () => {
         open={renderModalVisible}
         onCancel={() => setRenderModalVisible(false)}
         footer={null}
-        width={700}
+        size={700}
       >
         <ProForm
           formRef={renderFormRef}
@@ -605,7 +605,7 @@ const PrintTemplateListPage: React.FC = () => {
         title="打印模板详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
       >
         {detailLoading ? (
           <div>加载中...</div>

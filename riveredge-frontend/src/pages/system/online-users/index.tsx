@@ -292,7 +292,7 @@ const OnlineUsersPage: React.FC = () => {
           setCurrentUserInfo(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentUserInfo && (
           <Descriptions column={1} bordered>

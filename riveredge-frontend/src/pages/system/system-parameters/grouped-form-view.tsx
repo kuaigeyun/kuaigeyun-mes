@@ -101,11 +101,11 @@ const GroupedFormView: React.FC = () => {
         page: 1,
         page_size: 1000, // 加载所有参数
       });
-      setParameters(response.items);
+      setParameters(response.items || []);
       
       // 设置表单初始值
       const initialValues: Record<string, any> = {};
-      response.items.forEach((param) => {
+      (response.items || []).forEach((param) => {
         // 根据类型处理值
         if (param.type === 'json') {
           initialValues[param.key] = typeof param.value === 'string' ? param.value : JSON.stringify(param.value, null, 2);
@@ -137,7 +137,7 @@ const GroupedFormView: React.FC = () => {
     });
     
     // 分配参数到分组
-    parameters.forEach((param) => {
+    (parameters || []).forEach((param) => {
       let assigned = false;
       
       for (const group of DEFAULT_GROUPS) {
@@ -173,7 +173,7 @@ const GroupedFormView: React.FC = () => {
       // 构建批量更新数据
       const updates: BatchUpdateSystemParameterData = {};
       Object.keys(values).forEach((key) => {
-        const param = parameters.find((p) => p.key === key);
+        const param = (parameters || []).find((p) => p.key === key);
         if (param) {
           let processedValue: any = values[key];
           
@@ -230,7 +230,7 @@ const GroupedFormView: React.FC = () => {
     try {
       // 构建 CSV 数据
       const headers = ['参数键', '参数值', '参数类型', '描述', '是否系统参数', '是否启用'];
-      const rows = parameters.map((param) => [
+      const rows = (parameters || []).map((param) => [
         param.key,
         typeof param.value === 'object' ? JSON.stringify(param.value) : String(param.value),
         param.type,
@@ -590,7 +590,7 @@ const GroupedFormView: React.FC = () => {
       <Drawer
         title={selectedParameter ? `参数变更历史 - ${selectedParameter.key}` : '参数变更历史'}
         placement="right"
-        width={700}
+        size={700}
         open={historyDrawerVisible}
         onClose={() => {
           setHistoryDrawerVisible(false);

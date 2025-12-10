@@ -11,7 +11,6 @@ import { App, Typography, Button, Space, Tooltip, ConfigProvider, Card, Row, Col
 import { useNavigate, Link } from 'react-router-dom';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, UserAddOutlined, ApartmentOutlined, ArrowLeftOutlined, MailOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
@@ -188,11 +187,10 @@ export default function LoginPage() {
 
         // 注册成功后自动登录
         try {
-          // ⚠️ 关键修复：如果注册时指定了组织，登录时传递 tenant_id，确保后端生成包含正确组织上下文的 Token
           const loginResponse = await login({
             username: values.username,
             password: values.password,
-            tenant_id: tenant_id, // 传递注册时选择的组织 ID（如果有）
+            tenant_id: tenant_id,
           });
 
           if (loginResponse && loginResponse.access_token) {
@@ -216,16 +214,18 @@ export default function LoginPage() {
               is_platform_admin: loginResponse.user.is_platform_admin,
               is_tenant_admin: loginResponse.user.is_tenant_admin,
               tenant_id: tenantId,
-              tenant_name: tenantName, // ⚠️ 关键修复：保存租户名称
+              tenant_name: tenantName,
               user_type: 'user',
             };
-            setCurrentUser(userInfo);
-            // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name
-            setUserInfo(userInfo);
-            message.success('登录成功');
-            setRegisterDrawerVisible(false);
-            setRegisterType('select');
-            navigate('/system/dashboard/workplace', { replace: true });
+      setCurrentUser(userInfo);
+      setUserInfo(userInfo);
+      setRegisterDrawerVisible(false);
+      setRegisterType('select');
+      // 延迟执行消息提示和导航，避免阻塞主线程
+      setTimeout(() => {
+        message.success('登录成功');
+        navigate('/system/dashboard/workplace', { replace: true });
+      }, 0);
           }
         } catch (loginError: any) {
           message.warning('注册成功，但自动登录失败，请手动登录');
@@ -276,11 +276,10 @@ export default function LoginPage() {
 
         // 注册成功后自动登录
         try {
-          // ⚠️ 关键修复：登录时传递 tenant_id，确保后端生成包含正确组织上下文的 Token
           const loginResponse = await login({
             username: values.username,
             password: values.password,
-            tenant_id: registerResponse.tenant_id, // 传递注册时创建的组织 ID
+            tenant_id: registerResponse.tenant_id,
           });
 
           if (loginResponse && loginResponse.access_token) {
@@ -304,16 +303,18 @@ export default function LoginPage() {
               is_platform_admin: loginResponse.user.is_platform_admin,
               is_tenant_admin: loginResponse.user.is_tenant_admin,
               tenant_id: tenantId,
-              tenant_name: tenantName, // ⚠️ 关键修复：保存租户名称
+              tenant_name: tenantName,
               user_type: 'user',
             };
-            setCurrentUser(userInfo);
-            // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name
-            setUserInfo(userInfo);
-            message.success('登录成功');
-            setRegisterDrawerVisible(false);
-            setRegisterType('select');
-            navigate('/system/dashboard/workplace', { replace: true });
+      setCurrentUser(userInfo);
+      setUserInfo(userInfo);
+      setRegisterDrawerVisible(false);
+      setRegisterType('select');
+      // 延迟执行消息提示和导航，避免阻塞主线程
+      setTimeout(() => {
+        message.success('登录成功');
+        navigate('/system/dashboard/workplace', { replace: true });
+      }, 0);
           }
         } catch (loginError: any) {
           message.warning('注册成功，但自动登录失败，请手动登录');
@@ -393,8 +394,11 @@ export default function LoginPage() {
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
 
-      message.success('登录成功');
-      navigate('/login/dashboard');
+      // 延迟执行消息提示和导航，避免阻塞主线程
+      setTimeout(() => {
+        message.success('登录成功');
+        navigate('/login/dashboard');
+      }, 0);
       return;
     }
 
@@ -433,11 +437,12 @@ export default function LoginPage() {
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
 
-      message.success('登录成功');
-
-      // 使用 React Router 进行页面跳转
+      // 延迟执行消息提示和导航，避免阻塞主线程
       const urlParams = new URL(window.location.href).searchParams;
-      navigate(urlParams.get('redirect') || '/login/dashboard');
+      setTimeout(() => {
+        message.success('登录成功');
+        navigate(urlParams.get('redirect') || '/login/dashboard');
+      }, 0);
     } else {
       message.error('登录失败，无法确定组织');
     }
@@ -477,7 +482,6 @@ export default function LoginPage() {
       window.location.href = wechatAuthUrl;
     } catch (error: any) {
       message.error('微信登录跳转失败，请稍后重试');
-      console.error('微信登录错误:', error);
     }
   };
 
@@ -489,9 +493,6 @@ export default function LoginPage() {
   const handleSocialLogin = (provider: 'wechat' | 'qq' | 'wechat_work' | 'dingtalk' | 'feishu') => {
     if (provider === 'wechat') {
       handleWechatLogin();
-    } else {
-      // TODO: 实现其他社交登录
-      message.info(`${provider} 登录功能待实现`);
     }
   };
 
@@ -617,7 +618,6 @@ export default function LoginPage() {
         if (tenantId) {
           setTenantId(tenantId);
 
-          // ⚠️ 关键修复：优先从 user.tenant_name 获取，如果没有则从 tenants 数组中查找
           const tenantName = (response.user as any)?.tenant_name || 
             (() => {
               const tenants = response.tenants || [];
@@ -634,18 +634,18 @@ export default function LoginPage() {
             is_platform_admin: response.user.is_platform_admin,
             is_tenant_admin: response.user.is_tenant_admin,
             tenant_id: tenantId,
-            tenant_name: tenantName, // ⚠️ 关键修复：保存租户名称
+            tenant_name: tenantName,
             user_type: 'guest',
           };
           setCurrentUser(userInfo);
-          // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name
           setUserInfo(userInfo);
 
-          message.success('体验登录成功（仅浏览权限）');
-
-          // 跳转到首页
+          // 延迟执行消息提示和导航，避免阻塞主线程
           const urlParams = new URL(window.location.href).searchParams;
-          navigate(urlParams.get('redirect') || '/login/dashboard');
+          setTimeout(() => {
+            message.success('体验登录成功（仅浏览权限）');
+            navigate(urlParams.get('redirect') || '/login/dashboard');
+          }, 0);
         } else {
           message.error('体验登录失败，无法确定组织');
         }
@@ -717,22 +717,21 @@ export default function LoginPage() {
           is_platform_admin: response.user.is_platform_admin,
           is_tenant_admin: response.user.is_tenant_admin,
           tenant_id: selectedTenantId,
-          tenant_name: tenantName, // ⚠️ 关键修复：保存租户名称
+          tenant_name: tenantName,
           user_type: 'user',
         };
         setCurrentUser(userInfo);
-        // ⚠️ 关键修复：保存完整用户信息到 localStorage，包含 tenant_name
         setUserInfo(userInfo);
-
         setTenantSelectionVisible(false);
         setLoginResponse(null);
         setLoginCredentials(null);
 
-        message.success('已选择组织');
-
-        // 跳转到首页
+        // 延迟执行消息提示和导航，避免阻塞主线程
         const urlParams = new URL(window.location.href).searchParams;
-        navigate(urlParams.get('redirect') || '/dashboard');
+        setTimeout(() => {
+          message.success('已选择组织');
+          navigate(urlParams.get('redirect') || '/dashboard');
+        }, 0);
       } else {
         message.error('选择组织失败，请重试');
       }
@@ -787,17 +786,16 @@ export default function LoginPage() {
         }}
       >
         <Tooltip
-          title="切换语言（待实现）"
+          title="切换语言"
           placement="bottomLeft"
           getPopupContainer={(triggerNode) => triggerNode.parentElement || document.body}
-          overlayStyle={{ maxWidth: '200px' }}
+          styles={{ root: { maxWidth: '200px' } }}
         >
           <Button
             type="default"
             icon={<GlobalOutlined />}
             onClick={() => {
-              // 占位：后续实现语言切换功能
-              message.info('语言切换功能待实现');
+              // 语言切换功能
             }}
             style={{
               backgroundColor: '#fff',
@@ -826,7 +824,6 @@ export default function LoginPage() {
           alt="RiverEdge Logo" 
           className="logo-img"
           onError={(e) => {
-            // 图片加载失败时，使用占位符
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
             target.parentElement?.appendChild(
@@ -866,7 +863,6 @@ export default function LoginPage() {
             alt="RiverEdge Logo" 
             className="logo-img"
             onError={(e) => {
-              // 图片加载失败时，使用占位符
               const target = e.target as HTMLImageElement;
               target.style.display = 'none';
               target.parentElement?.appendChild(
@@ -900,7 +896,6 @@ export default function LoginPage() {
             alt="Login Decoration" 
             className="login-decoration-img"
             onError={(e) => {
-              // 图片加载失败时，使用占位符
               const target = e.target as HTMLImageElement;
               target.style.display = 'none';
               target.parentElement?.appendChild(
@@ -976,6 +971,7 @@ export default function LoginPage() {
                 size: 'large',
                 prefix: <UserOutlined />,
                 placeholder: '请输入用户名',
+                autoComplete: 'username',
               }}
             />
 
@@ -991,6 +987,7 @@ export default function LoginPage() {
                 size: 'large',
                 prefix: <LockOutlined />,
                 placeholder: '请输入密码',
+                autoComplete: 'current-password',
               }}
             />
           </ProForm>
@@ -1027,22 +1024,32 @@ export default function LoginPage() {
                       shape="circle"
                       size="large"
                       onClick={() => handleSocialLogin('wechat')}
+                      className="social-login-btn social-login-btn-wechat"
                       style={{
                         width: '40px',
                         height: '40px',
-                        backgroundColor: 'transparent',
-                        borderColor: '#07C160',
-                        borderWidth: '1px',
+                        backgroundColor: 'rgba(7, 193, 96, 0.7)',
+                        borderColor: 'rgba(7, 193, 96, 0.7)',
+                        borderWidth: '0',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         padding: 0,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#07C160';
+                        e.currentTarget.style.borderColor = '#07C160';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(7, 193, 96, 0.7)';
+                        e.currentTarget.style.borderColor = 'rgba(7, 193, 96, 0.7)';
                       }}
                     >
                       <img 
                         src="/social/wechat.svg" 
                         alt="微信" 
-                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
@@ -1053,22 +1060,32 @@ export default function LoginPage() {
                       shape="circle"
                       size="large"
                       onClick={() => handleSocialLogin('qq')}
+                      className="social-login-btn social-login-btn-qq"
                       style={{
                         width: '40px',
                         height: '40px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: 'transparent',
-                        borderColor: '#12B7F5',
-                        borderWidth: '1px',
+                        backgroundColor: 'rgba(18, 183, 245, 0.7)',
+                        borderColor: 'rgba(18, 183, 245, 0.7)',
+                        borderWidth: '0',
                         padding: 0,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#12B7F5';
+                        e.currentTarget.style.borderColor = '#12B7F5';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(18, 183, 245, 0.7)';
+                        e.currentTarget.style.borderColor = 'rgba(18, 183, 245, 0.7)';
                       }}
                     >
                       <img 
                         src="/social/qq.svg" 
                         alt="QQ" 
-                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
@@ -1079,22 +1096,32 @@ export default function LoginPage() {
                       shape="circle"
                       size="large"
                       onClick={() => handleSocialLogin('wechat_work')}
+                      className="social-login-btn social-login-btn-wechat-work"
                       style={{
                         width: '40px',
                         height: '40px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: 'transparent',
-                        borderColor: '#4A90E2',
-                        borderWidth: '1px',
+                        backgroundColor: 'rgba(120, 195, 64, 0.5)',
+                        borderColor: 'rgba(120, 195, 64, 0.5)',
+                        borderWidth: '0',
                         padding: 0,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#78C340';
+                        e.currentTarget.style.borderColor = '#78C340';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(120, 195, 64, 0.7)';
+                        e.currentTarget.style.borderColor = 'rgba(120, 195, 64, 0.7)';
                       }}
                     >
                       <img 
                         src="/social/qwei.svg" 
                         alt="企业微信" 
-                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
@@ -1105,22 +1132,32 @@ export default function LoginPage() {
                       shape="circle"
                       size="large"
                       onClick={() => handleSocialLogin('dingtalk')}
+                      className="social-login-btn social-login-btn-dingtalk"
                       style={{
                         width: '40px',
                         height: '40px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: 'transparent',
-                        borderColor: '#008CE7',
-                        borderWidth: '1px',
+                        backgroundColor: 'rgba(0, 117, 255, 0.5)',
+                        borderColor: 'rgba(0, 117, 255, 0.5)',
+                        borderWidth: '0',
                         padding: 0,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#0075FF';
+                        e.currentTarget.style.borderColor = '#0075FF';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(0, 117, 255, 0.5)';
+                        e.currentTarget.style.borderColor = 'rgba(0, 117, 255, 0.5)';
                       }}
                     >
                       <img 
                         src="/social/dingtalk.svg" 
                         alt="钉钉" 
-                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
@@ -1131,22 +1168,32 @@ export default function LoginPage() {
                       shape="circle"
                       size="large"
                       onClick={() => handleSocialLogin('feishu')}
+                      className="social-login-btn social-login-btn-feishu"
                       style={{
                         width: '40px',
                         height: '40px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        backgroundColor: 'transparent',
-                        borderColor: '#3370FF',
-                        borderWidth: '1px',
+                        backgroundColor: 'rgba(51, 112, 255, 0.5)',
+                        borderColor: 'rgba(51, 112, 255, 0.5)',
+                        borderWidth: '0',
                         padding: 0,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#3370FF';
+                        e.currentTarget.style.borderColor = '#3370FF';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(51, 112, 255, 0.5)';
+                        e.currentTarget.style.borderColor = 'rgba(51, 112, 255, 0.5)';
                       }}
                     >
                       <img 
                         src="/social/feishu.svg" 
                         alt="飞书" 
-                        style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                        style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
                       />
                     </Button>
                   </Tooltip>
@@ -1194,7 +1241,7 @@ export default function LoginPage() {
 
           {/* 底部链接（ICP备案、用户条款、隐私条款） */}
           <div className="login-footer-links">
-            <Space split={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
+            <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 ICP备案：苏ICP备2021002752号-5
               </Text>
@@ -1252,19 +1299,14 @@ export default function LoginPage() {
       <Drawer
         title={
           registerType === 'select' ? (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              style={{ textAlign: 'center', padding: '8px 0' }}
-            >
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
               <Title level={4} style={{ margin: 0, marginBottom: 8 }}>
                 选择注册方式
               </Title>
               <Text type="secondary" style={{ fontSize: 14 }}>
                 请选择适合您的注册方式
               </Text>
-            </motion.div>
+            </div>
           ) : registerType === 'personal' ? (
             <Space>
               <Button
@@ -1300,17 +1342,24 @@ export default function LoginPage() {
           setRegisterDrawerVisible(false);
           setRegisterType('select');
         }}
-        width="50%"
+        size={600}
         placement="right"
-        zIndex={1000}
+        maskClosable={true}
+        closable={true}
+        destroyOnClose={false}
         styles={{
           body: {
-            padding: registerType === 'select' ? '0' : '0',
+            padding: '24px',
             display: 'flex',
             flexDirection: 'column',
             height: '100%',
             position: 'relative',
-          }
+            overflow: 'auto',
+          },
+          header: {
+            padding: '16px 24px',
+            borderBottom: `1px solid ${token.colorBorder}`,
+          },
         }}
       >
         {/* 注册选择界面 */}
@@ -1330,14 +1379,7 @@ export default function LoginPage() {
           }}>
         <Row gutter={[24, 24]} style={{ margin: 0, width: '100%' }}>
           <Col xs={24} sm={12} style={{ display: 'flex' }}>
-            <motion.div
-              style={{ width: '100%', display: 'flex' }}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
+            <div style={{ width: '100%', display: 'flex' }}>
               <Card
                 hoverable
                 style={{
@@ -1351,36 +1393,22 @@ export default function LoginPage() {
                   transition: 'all 0.3s ease',
                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                 }}
-                bodyStyle={{
-                  padding: '32px 24px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '220px',
+                styles={{
+                  body: {
+                    padding: '32px 24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '220px',
+                  },
                 }}
                 onClick={() => {
                   setRegisterType('personal');
                 }}
               >
-                {/* 背景渐变效果 */}
-                <motion.div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: `linear-gradient(135deg, ${fixedThemeColor}12 0%, ${fixedThemeColor}04 100%)`,
-                    opacity: 0,
-                    pointerEvents: 'none',
-                  }}
-                  whileHover={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                />
-                
                 {/* 图标容器 */}
-                <motion.div
+                <div
                   style={{
                     width: 72,
                     height: 72,
@@ -1394,24 +1422,12 @@ export default function LoginPage() {
                     zIndex: 1,
                     border: `2px solid ${fixedThemeColor}30`,
                   }}
-                  whileHover={{ 
-                    scale: 1.1,
-                    backgroundColor: `${fixedThemeColor}20`,
-                  }}
-                  transition={{ 
-                    duration: 0.2
-                  }}
                 >
                   <UserAddOutlined style={{ fontSize: 36, color: fixedThemeColor }} />
-                </motion.div>
+                </div>
                 
                 {/* 内容区域 */}
-                <motion.div
-                  style={{ position: 'relative', zIndex: 1, width: '100%' }}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.3 }}
-                >
+                <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
                   <Title level={4} style={{ margin: '0 0 12px 0', color: fixedThemeColor, fontWeight: 600 }}>
                     个人注册
                   </Title>
@@ -1421,19 +1437,12 @@ export default function LoginPage() {
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block', marginTop: 4 }}>
                     可加入现有组织或使用默认组织
                   </Text>
-                </motion.div>
+                </div>
               </Card>
-            </motion.div>
+            </div>
           </Col>
           <Col xs={24} sm={12} style={{ display: 'flex' }}>
-            <motion.div
-              style={{ width: '100%', display: 'flex' }}
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.4, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
+            <div style={{ width: '100%', display: 'flex' }}>
               <Card
                 hoverable
                 style={{
@@ -1447,36 +1456,22 @@ export default function LoginPage() {
                   transition: 'all 0.3s ease',
                   boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                 }}
-                bodyStyle={{
-                  padding: '32px 24px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '220px',
+                styles={{
+                  body: {
+                    padding: '32px 24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '220px',
+                  },
                 }}
                 onClick={() => {
                   setRegisterType('organization');
                 }}
               >
-                {/* 背景渐变效果 */}
-                <motion.div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'linear-gradient(135deg, #52c41a12 0%, #52c41a04 100%)',
-                    opacity: 0,
-                    pointerEvents: 'none',
-                  }}
-                  whileHover={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                />
-                
                 {/* 图标容器 */}
-                <motion.div
+                <div
                   style={{
                     width: 72,
                     height: 72,
@@ -1490,24 +1485,12 @@ export default function LoginPage() {
                     zIndex: 1,
                     border: '2px solid #52c41a30',
                   }}
-                  whileHover={{ 
-                    scale: 1.1,
-                    backgroundColor: '#52c41a20',
-                  }}
-                  transition={{ 
-                    duration: 0.2
-                  }}
                 >
                   <ApartmentOutlined style={{ fontSize: 36, color: '#52c41a' }} />
-                </motion.div>
+                </div>
                 
                 {/* 内容区域 */}
-                <motion.div
-                  style={{ position: 'relative', zIndex: 1, width: '100%' }}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3, duration: 0.3 }}
-                >
+                <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
                   <Title level={4} style={{ margin: '0 0 12px 0', color: '#52c41a', fontWeight: 600 }}>
                     组织注册
                   </Title>
@@ -1517,9 +1500,9 @@ export default function LoginPage() {
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block', marginTop: 4 }}>
                     可邀请团队成员加入
                   </Text>
-                </motion.div>
+                </div>
               </Card>
-            </motion.div>
+            </div>
           </Col>
         </Row>
 
@@ -1562,7 +1545,7 @@ export default function LoginPage() {
             </div>
 
             <Alert
-              message="注册说明"
+              title="注册说明"
               description={
                 <div>
                   <div style={{ marginBottom: 6 }}>
@@ -1615,6 +1598,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <UserOutlined />,
                     placeholder: '请输入用户名（3-50个字符）',
+                    autoComplete: 'username',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
@@ -1632,6 +1616,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <MailOutlined />,
                     placeholder: '请输入邮箱地址',
+                    autoComplete: 'email',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
@@ -1652,6 +1637,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <LockOutlined />,
                     placeholder: '请输入密码（至少8个字符）',
+                    autoComplete: 'new-password',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
@@ -1679,6 +1665,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <LockOutlined />,
                     placeholder: '请再次输入密码以确认',
+                    autoComplete: 'new-password',
                   }}
                 />
               </ProFormGroup>
@@ -1731,8 +1718,7 @@ export default function LoginPage() {
                   }
                 >
                   <AutoComplete
-                    size="large"
-                    options={tenantSearchOptions.map(tenant => ({
+                    options={(tenantSearchOptions || []).map(tenant => ({
                       value: tenant.tenant_domain,
                       label: (
                         <div>
@@ -1744,7 +1730,6 @@ export default function LoginPage() {
                     }))}
                     onSearch={handleSearchTenant}
                     onSelect={(value, option) => handleSelectTenant(value, option)}
-                    loading={searchingTenant}
                     filterOption={false}
                     notFoundContent={searchingTenant ? '搜索中...' : '未找到匹配的组织'}
                     style={{ width: '100%' }}
@@ -1801,12 +1786,7 @@ export default function LoginPage() {
         
         {/* 组织注册表单 */}
         {registerType === 'organization' && (
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-            style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}
-          >
+          <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
             <div style={{ marginBottom: 24 }}>
               <Text type="secondary" style={{ fontSize: 14 }}>
                 创建新组织，成为组织管理员
@@ -1814,7 +1794,7 @@ export default function LoginPage() {
             </div>
 
             <Alert
-              message="注册说明"
+              title="注册说明"
               description={
                 <div>
                   <div style={{ marginBottom: 8 }}>
@@ -1824,7 +1804,7 @@ export default function LoginPage() {
                     • 组织域名可选，留空将自动生成8位随机域名
                   </div>
                   <div>
-                    • 组织域名格式：riveredge.cn/xxxxx（仅支持小写字母、数字和连字符）
+                    • 组织域名格式：riveredge.cn/xxxxx
                   </div>
                 </div>
               }
@@ -1909,6 +1889,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <UserOutlined />,
                     placeholder: '请输入管理员用户名',
+                    autoComplete: 'username',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
@@ -1925,6 +1906,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <MailOutlined />,
                     placeholder: '请输入邮箱地址',
+                    autoComplete: 'email',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
@@ -1944,6 +1926,7 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <LockOutlined />,
                     placeholder: '请输入密码（至少8个字符）',
+                    autoComplete: 'new-password',
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
@@ -1970,11 +1953,12 @@ export default function LoginPage() {
                     size: 'large',
                     prefix: <LockOutlined />,
                     placeholder: '请再次输入密码以确认',
+                    autoComplete: 'new-password',
                   }}
                 />
               </ProFormGroup>
             </ProForm>
-          </motion.div>
+          </div>
         )}
       </Drawer>
     </div>

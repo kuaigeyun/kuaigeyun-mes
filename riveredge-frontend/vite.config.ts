@@ -4,7 +4,8 @@ import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  // 明确设置根目录为 src（与 package.json 中的 vite src 命令一致）
+  root: resolve(__dirname, 'src'),
   server: {
     host: '0.0.0.0',
     port: 3000, // 默认端口
@@ -14,6 +15,7 @@ export default defineConfig({
     hmr: {
       overlay: true, // 显示错误覆盖层
     },
+    // 插件现在放在项目内（src/apps/），不需要访问项目外的文件
     watch: {
       // 优化文件监听，减少不必要的重启
       ignored: [
@@ -33,10 +35,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': resolve(__dirname, 'src'), // @指向src目录
     },
     dedupe: ['react', 'react-dom', 'rc-field-form'],
   },
+  plugins: [
+    react(),
+    // 插件现在放在 src/apps/ 目录下，不需要特殊的路径解析
+  ],
   optimizeDeps: {
     include: [
       'rc-field-form',

@@ -375,7 +375,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         title="节点配置"
         open={nodeConfigVisible}
         onClose={() => setNodeConfigVisible(false)}
-        width={400}
+        size={400}
         footer={
           <Space>
             <Button onClick={() => setNodeConfigVisible(false)}>取消</Button>

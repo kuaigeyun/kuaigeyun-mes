@@ -846,7 +846,7 @@ const FileListPage: React.FC = () => {
           setUploadFileList([]);
         }}
         onOk={handleUpload}
-        width={600}
+        size={600}
       >
         <Upload
           fileList={uploadFileList}

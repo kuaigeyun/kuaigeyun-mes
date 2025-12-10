@@ -301,7 +301,7 @@ const CardView: React.FC = () => {
                 title="总模板数"
                 value={stats.total}
                 prefix={<FileTextOutlined />}
-                valueStyle={{ color: '#1890ff' }}
+                styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -309,7 +309,7 @@ const CardView: React.FC = () => {
                 title="已启用"
                 value={stats.active}
                 prefix={<FileTextOutlined />}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: { color: '#52c41a' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -317,7 +317,7 @@ const CardView: React.FC = () => {
                 title="默认模板"
                 value={stats.default}
                 prefix={<FileTextOutlined />}
-                valueStyle={{ color: '#faad14' }}
+                styles={{ content: { color: '#faad14' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -325,7 +325,7 @@ const CardView: React.FC = () => {
                 title="总使用次数"
                 value={stats.totalUsage}
                 prefix={<PrinterOutlined />}
-                valueStyle={{ color: '#722ed1' }}
+                styles={{ content: { color: '#722ed1' } }}
               />
             </Col>
           </Row>
@@ -499,7 +499,7 @@ const CardView: React.FC = () => {
           setCurrentTemplate(null);
         }}
         footer={null}
-        width={800}
+        size={800}
       >
         {currentTemplate && (
           <Descriptions column={1} bordered>
@@ -583,7 +583,7 @@ const CardView: React.FC = () => {
           setPreviewContent('');
         }}
         footer={null}
-        width={900}
+        size={900}
       >
         {currentTemplate && (
           <div>
@@ -633,7 +633,7 @@ const CardView: React.FC = () => {
           setCurrentTemplate(null);
         }}
         footer={null}
-        width={1000}
+        size={1000}
       >
         {currentTemplate && (
           <Tabs
@@ -708,7 +708,7 @@ const CardView: React.FC = () => {
           setCurrentTemplate(null);
         }}
         footer={null}
-        width={700}
+        size={700}
       >
         {currentTemplate && (
           <div>
@@ -782,7 +782,7 @@ const CardView: React.FC = () => {
             渲染
           </Button>,
         ]}
-        width={700}
+        size={700}
       >
         {currentTemplate && (
           <div>

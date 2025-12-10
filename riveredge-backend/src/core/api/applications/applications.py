@@ -355,3 +355,31 @@ async def disable_application(
             detail=str(e)
         )
 
+
+@router.post("/scan", response_model=List[ApplicationResponse])
+async def scan_plugins(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    扫描插件目录并自动注册插件应用
+    
+    从 riveredge-apps 目录扫描所有插件的 manifest.json 文件，
+    自动在数据库中创建或更新应用记录。
+    
+    Args:
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        List[ApplicationResponse]: 已注册的应用列表
+    """
+    try:
+        applications = await ApplicationService.scan_and_register_plugins(
+            tenant_id=tenant_id
+        )
+        return [ApplicationResponse.model_validate(app) for app in applications]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"扫描插件失败: {str(e)}"
+        )
+

@@ -48,6 +48,66 @@
 
 **错误做法：**
 - ❌ 假设 `rgba(0, 0, 0, 0.04)` 和 `#F5F5F5` 是等价的
+
+### 教训 2：Ant Design Switch 组件状态同步问题（2025-01-XX）
+
+**问题：**
+- **所有Switch组件**的视觉状态和表单值不同步（不仅标签持久化，还包括紧凑模式等所有开关）
+- 用户点击开关后，开关显示"开启"，但 `form.getFieldValue()` 返回 `false`
+- 导致保存时获取到错误的开关状态，花了3小时排查
+
+**根本原因：**
+- Ant Design Form.Item 使用 `valuePropName="checked"` 绑定Switch
+- 通过 `form.setFieldsValue()` 异步设置初始值时，Switch组件的渲染时机与表单值更新时机不匹配
+- Switch组件的视觉状态可能不反映表单的实际值
+
+**正确解决方案：**
+```typescript
+// 1. 为每个开关使用独立的状态变量
+const [switchValue, setSwitchValue] = useState<boolean>(false);
+
+// 2. 在数据加载时初始化状态变量
+setSwitchValue(initialValue);
+
+// 3. Switch成为受控组件，双向同步
+<Switch
+  checked={switchValue}
+  onChange={(checked) => {
+    setSwitchValue(checked);
+    form.setFieldsValue({ fieldName: checked });
+  }}
+/>
+
+// 4. Form的onValuesChange也同步更新状态
+const handleValuesChange = (changedValues, allValues) => {
+  if (changedValues.fieldName !== undefined) {
+    setSwitchValue(changedValues.fieldName);
+  }
+};
+```
+
+**错误做法：**
+- ❌ 只依赖Form.Item的 `valuePropName="checked"` 绑定（所有开关都会有此问题）
+- ❌ 强制设置 `checked={form.getFieldValue('fieldName')}` （会导致无限循环或状态不同步）
+- ❌ 移除Switch的onChange，只依赖Form的onValuesChange（可能导致时序问题）
+
+**排查步骤：**
+1. 检查所有Switch是否显示为受控组件（是否有 `checked` 属性）
+2. 检查Form.Item是否有正确的 `name` 和 `valuePropName="checked"`
+3. 检查表单值设置时机是否与组件渲染时机同步
+4. 使用状态变量确保开关视觉状态和表单值始终一致
+5. **重点检查**：点击开关后，视觉状态是否立即改变，表单值是否同步更新
+
+**影响：**
+- 所有开关功能失效，用户界面显示状态与实际保存状态不一致
+- 可能导致功能开关无效或状态错乱
+- 调试困难，需要分别检查视觉状态和表单值
+- **严重性**：影响所有使用Switch组件的功能，排查时间长（3小时+）
+
+**预防措施：**
+- 所有Switch组件都应该使用状态变量管理
+- 避免只依赖Form.Item的自动绑定
+- 确保双向同步机制
 - ❌ 没有先查看搜索框的实际颜色值
 - ❌ "重新实现"而不是直接复制
 

@@ -685,7 +685,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={1000}
+      size={1000}
       style={{ top: 20 }}
       styles={{
         body: {

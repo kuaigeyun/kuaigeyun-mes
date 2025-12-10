@@ -512,7 +512,7 @@ const DepartmentListPage: React.FC = () => {
           width: 100%;
           padding: 0;
         }
-        
+      
         /* 树节点标题内部元素间距 */
         .department-tree-title-content {
           display: flex;
@@ -522,7 +522,7 @@ const DepartmentListPage: React.FC = () => {
           gap: 8px;
         }
         
-        /* 树节点标题左侧内容（图标+文字+标签） */
+        /* 树节点标题左侧内容（文字） */
         .department-tree-title-left {
           display: flex;
           align-items: center;
@@ -536,14 +536,6 @@ const DepartmentListPage: React.FC = () => {
           font-weight: 500;
           font-size: 14px;
           line-height: 1.5;
-          flex-shrink: 0;
-        }
-        
-        /* 树节点标签间距 */
-        .department-tree-tags {
-          display: flex;
-          align-items: center;
-          gap: 6px;
           flex-shrink: 0;
         }
         
@@ -714,14 +706,14 @@ const DepartmentListPage: React.FC = () => {
                   <Statistic
                     title="子部门数"
                     value={selectedNode.children_count || 0}
-                    valueStyle={{ color: token.colorPrimary }}
+                    styles={{ content: { color: token.colorPrimary } }}
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic
                     title="用户数"
                     value={selectedNode.user_count || 0}
-                    valueStyle={{ color: token.colorSuccess }}
+                    styles={{ content: { color: token.colorSuccess } }}
                     prefix={<UserOutlined />}
                   />
                 </Col>
@@ -729,7 +721,7 @@ const DepartmentListPage: React.FC = () => {
                   <Statistic
                     title="状态"
                     value={selectedNode.is_active ? '启用' : '禁用'}
-                    valueStyle={{ color: selectedNode.is_active ? token.colorSuccess : token.colorTextTertiary }}
+                    styles={{ content: { color: selectedNode.is_active ? token.colorSuccess : token.colorTextTertiary } }}
                   />
                 </Col>
               </Row>
@@ -764,7 +756,7 @@ const DepartmentListPage: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -819,7 +811,7 @@ const DepartmentListPage: React.FC = () => {
           setDrawerVisible(false);
           setDepartmentMembers([]);
         }}
-        width={800}
+        size={800}
         loading={detailLoading}
       >
         {detailData && (
@@ -830,14 +822,14 @@ const DepartmentListPage: React.FC = () => {
                 <Statistic
                   title="子部门数"
                   value={detailData.children_count || 0}
-                  valueStyle={{ color: token.colorPrimary }}
+                  styles={{ content: { color: token.colorPrimary } }}
                 />
               </Col>
               <Col span={8}>
                 <Statistic
                   title="用户数"
                   value={detailData.user_count || 0}
-                  valueStyle={{ color: token.colorSuccess }}
+                  styles={{ content: { color: token.colorSuccess } }}
                   prefix={<UserOutlined />}
                 />
               </Col>
@@ -845,7 +837,7 @@ const DepartmentListPage: React.FC = () => {
                 <Statistic
                   title="状态"
                   value={detailData.is_active ? '启用' : '禁用'}
-                  valueStyle={{ color: detailData.is_active ? token.colorSuccess : token.colorTextTertiary }}
+                  styles={{ content: { color: detailData.is_active ? token.colorSuccess : token.colorTextTertiary } }}
                 />
               </Col>
             </Row>

@@ -21,11 +21,14 @@
  *   - /platform/admin - 平台超级管理员管理
  */
 
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Spin } from 'antd';
 // 从 app 导入布局组件（布局组件需要立即加载）
 import BasicLayout from '../layouts/BasicLayout';
+import { getInstalledApplicationList } from '../services/application';
+import { loadPlugin, PluginRoute } from '../utils/pluginLoader';
+import type { Application } from '../services/application';
 
 // 加载中组件
 const LoadingFallback: React.FC = () => (
@@ -124,16 +127,89 @@ const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 };
 
 /**
+ * 动态插件路由 Hook
+ * 
+ * 加载并返回插件路由配置
+ */
+const usePluginRoutes = (): React.ReactNode[] => {
+  const [pluginRoutes, setPluginRoutes] = useState<React.ReactNode[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPlugins = async () => {
+      // 检查用户是否已登录
+      const { getToken, getTenantId } = await import('../utils/auth');
+      const token = getToken();
+      const tenantId = getTenantId();
+      
+      // 如果用户未登录或没有组织上下文，不加载插件
+      if (!token || !tenantId) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        // 获取已安装且启用的应用列表
+        const applications = await getInstalledApplicationList({ is_active: true });
+        
+        // 加载所有插件
+        const routes: React.ReactNode[] = [];
+        for (const app of applications) {
+          if (app.entry_point && app.route_path) {
+            try {
+              const pluginRouteConfigs = await loadPlugin(app);
+              for (const routeConfig of pluginRouteConfigs) {
+                routes.push(
+                  <Route
+                    key={`plugin-${app.code}-${routeConfig.path}`}
+                    path={`${routeConfig.path}/*`}
+                    element={
+                      <LayoutWrapper>
+                        <Suspense fallback={<LoadingFallback />}>
+                          <routeConfig.component />
+                        </Suspense>
+                      </LayoutWrapper>
+                    }
+                  />
+                );
+              }
+            } catch (error) {
+              // 插件加载失败时，静默处理（可能是插件文件不存在或未构建）
+              console.warn(`加载插件 ${app.code} 失败（可能插件文件未构建）:`, error);
+            }
+          }
+        }
+        
+        setPluginRoutes(routes);
+      } catch (error) {
+        // 获取应用列表失败时，静默处理（可能是未登录或权限问题）
+        console.warn('加载插件列表失败（可能未登录）:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPlugins();
+  }, []);
+
+  return loading ? [] : pluginRoutes;
+};
+
+/**
  * 路由配置
  *
  * 按照新的页面结构组织路由：
  * - /login - 用户登录
  * - /system/* - 系统级功能（登录后访问）
  * - /platform/* - 平台级功能（平台超管登录后访问）
+ * - /apps/* - 插件应用路由（动态加载）
  * 
  * 注意：注册功能已整合到登录页面（/login），通过 Drawer 实现，不再有独立的注册路由
  */
 const AppRoutes: React.FC = () => {
+  // 加载插件路由
+  const pluginRoutes = usePluginRoutes();
+
   return (
     <Routes>
       {/* 首页重定向 */}
@@ -566,6 +642,9 @@ const AppRoutes: React.FC = () => {
       <Route path="/platform/platform/organization_manager" element={<Navigate to="/platform/tenants" replace />} />
       <Route path="/platform/platform/organization_manager/detail" element={<Navigate to="/platform/tenants/detail" replace />} />
       <Route path="/platform-superadmin" element={<Navigate to="/platform/admin" replace />} />
+
+      {/* ==================== 插件应用路由（动态加载） ==================== */}
+      {pluginRoutes}
 
       {/* 404页面 */}
       <Route path="*" element={<NotFoundPage />} />

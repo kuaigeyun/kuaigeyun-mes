@@ -1184,7 +1184,7 @@ const SuperAdminTenantList: React.FC = () => {
     {/* 组织详情 Drawer */}
     <Drawer
       title="组织详情"
-      width={720}
+      size={720}
       open={drawerVisible}
       onClose={handleCloseDetail}
       extra={
@@ -1365,8 +1365,8 @@ const SuperAdminTenantList: React.FC = () => {
       open={modalVisible}
       onCancel={handleCloseModal}
       footer={null}
-      width={800}
-      destroyOnClose
+      size={800}
+      destroyOnHidden
     >
       <ProForm
         formRef={formRef}

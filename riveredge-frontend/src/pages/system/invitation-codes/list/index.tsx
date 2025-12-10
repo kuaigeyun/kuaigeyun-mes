@@ -335,7 +335,7 @@ const InvitationCodeListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}
@@ -377,7 +377,7 @@ const InvitationCodeListPage: React.FC = () => {
         title="邀请码详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (

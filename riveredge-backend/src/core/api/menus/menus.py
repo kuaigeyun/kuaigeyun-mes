@@ -4,6 +4,7 @@
 提供菜单的查询、创建、更新、删除和树形结构管理功能。
 """
 
+import os
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from typing import Optional, List, Dict, Any
 
@@ -99,11 +100,26 @@ async def get_menu_tree(
     Returns:
         List[MenuTreeResponse]: 菜单树列表
     """
+    # 开发环境下：自动扫描并同步插件菜单，确保菜单配置修改后立即生效
+    if os.getenv("ENVIRONMENT", "development") == "development" or os.getenv("DEBUG", "false").lower() == "true":
+        try:
+            from core.services.application_service import ApplicationService
+            # 自动扫描并注册插件（只扫描，不阻塞主流程）
+            # 如果菜单配置有变化，会自动同步菜单
+            await ApplicationService.scan_and_register_plugins(tenant_id=tenant_id)
+        except Exception as e:
+            # 扫描失败不影响菜单获取
+            print(f"⚠️ 开发环境自动扫描插件失败（不影响菜单获取）: {e}")
+    
+    # 开发环境下禁用缓存，确保菜单实时刷新
+    use_cache = os.getenv("ENVIRONMENT", "development") != "development" and os.getenv("DEBUG", "false").lower() != "true"
+    
     return await MenuService.get_menu_tree(
         tenant_id=tenant_id,
         parent_uuid=parent_uuid,
         application_uuid=application_uuid,
         is_active=is_active,
+        use_cache=use_cache,
     )
 
 

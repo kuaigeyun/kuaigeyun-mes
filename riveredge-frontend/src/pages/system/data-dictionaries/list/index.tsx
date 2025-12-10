@@ -529,7 +529,7 @@ const DataDictionaryListPage: React.FC = () => {
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
         confirmLoading={formLoading}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={formRef}
@@ -566,7 +566,7 @@ const DataDictionaryListPage: React.FC = () => {
         title="字典详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (
@@ -620,7 +620,7 @@ const DataDictionaryListPage: React.FC = () => {
           setCurrentDictionaryForItems(null);
           setItems([]);
         }}
-        width={800}
+        size={800}
       >
         <div style={{ marginBottom: 16 }}>
           <Button
@@ -647,7 +647,7 @@ const DataDictionaryListPage: React.FC = () => {
         onOk={handleSubmitItem}
         onCancel={() => setItemModalVisible(false)}
         confirmLoading={itemFormLoading}
-        width={600}
+        size={600}
       >
         <ProForm
           formRef={itemFormRef}

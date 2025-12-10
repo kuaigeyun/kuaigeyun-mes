@@ -476,7 +476,7 @@ const UserListPage: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         confirmLoading={formLoading}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -552,7 +552,7 @@ const UserListPage: React.FC = () => {
         title="用户详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={600}
+        size={600}
         loading={detailLoading}
       >
         {detailData && (

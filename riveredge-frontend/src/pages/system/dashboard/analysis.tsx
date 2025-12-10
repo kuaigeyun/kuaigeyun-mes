@@ -12,7 +12,6 @@ import {
   Col,
   Statistic,
   Progress,
-  List,
   Avatar,
   Typography,
   Space,
@@ -156,7 +155,7 @@ export default function AnalysisPage() {
               value={1128930}
               prefix={<DollarOutlined />}
               suffix="元"
-              valueStyle={{ color: '#3f8600' }}
+              styles={{ content: { color: '#3f8600' } }}
             />
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -172,7 +171,7 @@ export default function AnalysisPage() {
               title="订单数量"
               value={2847}
               prefix={<ShoppingCartOutlined />}
-              valueStyle={{ color: '#1890ff' }}
+              styles={{ content: { color: '#1890ff' } }}
             />
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -188,7 +187,7 @@ export default function AnalysisPage() {
               title="访客数量"
               value={12345}
               prefix={<UserOutlined />}
-              valueStyle={{ color: '#722ed1' }}
+              styles={{ content: { color: '#722ed1' } }}
             />
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -204,7 +203,7 @@ export default function AnalysisPage() {
               title="转化率"
               value={32.5}
               suffix="%"
-              valueStyle={{ color: '#faad14' }}
+              styles={{ content: { color: '#faad14' } }}
             />
             <div style={{ marginTop: 8 }}>
               <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -302,29 +301,36 @@ export default function AnalysisPage() {
             }
             loading={topProductsLoading}
           >
-            <List
-              dataSource={topProducts}
-              renderItem={(item, index) => (
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={
-                      <Avatar style={{ backgroundColor: COLORS[index % COLORS.length] }}>
-                        {index + 1}
-                      </Avatar>
-                    }
-                    title={
+            <div>
+              {topProducts?.map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: '12px 0',
+                    borderBottom: index < (topProducts?.length || 0) - 1 ? '1px solid #f0f0f0' : 'none',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Avatar style={{ backgroundColor: COLORS[index % COLORS.length], marginRight: 12, flexShrink: 0 }}>
+                    {index + 1}
+                  </Avatar>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ marginBottom: 4 }}>
                       <Space>
                         <Text strong>{item.name}</Text>
                         <Tag color={item.growth > 0 ? 'success' : 'error'}>
                           {item.growth > 0 ? '+' : ''}{item.growth}%
                         </Tag>
                       </Space>
-                    }
-                    description={`销售额: ¥${item.sales.toLocaleString()}`}
-                  />
-                </List.Item>
-              )}
-            />
+                    </div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      销售额: ¥{item.sales.toLocaleString()}
+                    </Text>
+                  </div>
+                </div>
+              ))}
+            </div>
           </Card>
         </Col>
 

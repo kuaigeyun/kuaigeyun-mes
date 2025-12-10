@@ -198,3 +198,17 @@ export async function disableApplication(applicationUuid: string): Promise<Appli
   });
 }
 
+/**
+ * 扫描插件目录并自动注册插件应用
+ * 
+ * 从 riveredge-apps 目录扫描所有插件的 manifest.json 文件，
+ * 自动在数据库中创建或更新应用记录。
+ * 
+ * @returns 已注册的应用列表
+ */
+export async function scanPlugins(): Promise<Application[]> {
+  return apiRequest<Application[]>('/system/applications/scan', {
+    method: 'POST',
+  });
+}
+

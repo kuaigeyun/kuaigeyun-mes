@@ -10,7 +10,6 @@ import {
   Card, 
   Row, 
   Col, 
-  List, 
   Avatar, 
   Typography, 
   Space, 
@@ -253,48 +252,46 @@ export default function DashboardPage() {
             style={{ height: '100%' }}
           >
             {notifications && notifications.length > 0 ? (
-              <List
-                dataSource={notifications}
-                renderItem={(item) => (
-                  <List.Item
+              <div>
+                {notifications.map((item, index) => (
+                  <div
+                    key={index}
                     style={{
                       padding: '12px 0',
-                      borderBottom: '1px solid #f0f0f0',
+                      borderBottom: index < notifications.length - 1 ? '1px solid #f0f0f0' : 'none',
                       cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
                     }}
                     onClick={() => {
                       // TODO: 处理点击通知
                     }}
                   >
-                    <List.Item.Meta
-                      avatar={
-                        <Avatar
-                          style={{
-                            backgroundColor: item.read ? '#f0f0f0' : '#1890ff',
-                          }}
-                        >
-                          <BellOutlined />
-                        </Avatar>
-                      }
-                      title={
+                    <Avatar
+                      style={{
+                        backgroundColor: item.read ? '#f0f0f0' : '#1890ff',
+                        marginRight: 12,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <BellOutlined />
+                    </Avatar>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ marginBottom: 4 }}>
                         <Space>
                           <Text strong={!item.read}>{item.title}</Text>
                           {!item.read && <Badge dot />}
                         </Space>
-                      }
-                      description={
-                        <div>
-                          <div style={{ marginBottom: 4 }}>{item.content}</div>
-                          <Text type="secondary" style={{ fontSize: '12px' }}>
-                            <ClockCircleOutlined style={{ marginRight: 4 }} />
-                            {dayjs(item.time).format('YYYY-MM-DD HH:mm')}
-                          </Text>
-                        </div>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
+                      </div>
+                      <div style={{ marginBottom: 4 }}>{item.content}</div>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        <ClockCircleOutlined style={{ marginRight: 4 }} />
+                        {dayjs(item.time).format('YYYY-MM-DD HH:mm')}
+                      </Text>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <Empty description="暂无消息" />
             )}
@@ -328,51 +325,44 @@ export default function DashboardPage() {
             style={{ height: '100%' }}
           >
             {todos && todos.length > 0 ? (
-              <List
-                dataSource={todos}
-                renderItem={(item) => (
-                  <List.Item
+              <div>
+                {todos.map((item, index) => (
+                  <div
+                    key={index}
                     style={{
                       padding: '12px 0',
-                      borderBottom: '1px solid #f0f0f0',
+                      borderBottom: index < todos.length - 1 ? '1px solid #f0f0f0' : 'none',
                       cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
                     }}
                     onClick={() => {
                       // TODO: 处理点击待办
                     }}
-                    actions={[
-                      <Tag
-                        key="priority"
-                        color={priorityColorMap[item.priority]}
-                      >
-                        {priorityTextMap[item.priority]}优先级
-                      </Tag>,
-                    ]}
                   >
-                    <List.Item.Meta
-                      avatar={
-                        <Avatar
-                          style={{
-                            backgroundColor: '#f0f0f0',
-                          }}
-                        >
-                          <ClockCircleOutlined />
-                        </Avatar>
-                      }
-                      title={
-                        <Space>
-                          <Text>{item.title}</Text>
-                        </Space>
-                      }
-                      description={
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          截止日期：{dayjs(item.dueDate).format('YYYY-MM-DD')}
-                        </Text>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
+                    <Avatar
+                      style={{
+                        backgroundColor: '#f0f0f0',
+                        marginRight: 12,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ClockCircleOutlined />
+                    </Avatar>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text>{item.title}</Text>
+                        <Tag color={priorityColorMap[item.priority]}>
+                          {priorityTextMap[item.priority]}优先级
+                        </Tag>
+                      </div>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        截止日期：{dayjs(item.dueDate).format('YYYY-MM-DD')}
+                      </Text>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <Empty description="暂无待办事项" />
             )}

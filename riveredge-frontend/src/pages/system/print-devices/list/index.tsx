@@ -468,13 +468,13 @@ const PrintDeviceListPage: React.FC = () => {
           const { current = 1, pageSize = 20, ...rest } = params;
           const skip = (current - 1) * pageSize;
           const limit = pageSize;
-          
+
           const listParams: any = {
             skip,
             limit,
             ...searchFormValues,
           };
-          
+
           const data = await getPrintDeviceList(listParams);
           return {
             data,
@@ -493,6 +493,7 @@ const PrintDeviceListPage: React.FC = () => {
           showAdvancedSearch: true,
         }}
       />
+      )}
 
       {/* 创建/编辑 Modal */}
       <Modal
@@ -500,7 +501,7 @@ const PrintDeviceListPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
-        width={800}
+        size={800}
       >
         <ProForm
           formRef={formRef}
@@ -581,7 +582,7 @@ const PrintDeviceListPage: React.FC = () => {
         open={testModalVisible}
         onCancel={() => setTestModalVisible(false)}
         footer={null}
-        width={500}
+        size={500}
       >
         {testFormLoading ? (
           <div>测试中...</div>
@@ -607,7 +608,7 @@ const PrintDeviceListPage: React.FC = () => {
         open={printModalVisible}
         onCancel={() => setPrintModalVisible(false)}
         footer={null}
-        width={700}
+        size={700}
       >
         <ProForm
           formRef={printFormRef}
@@ -664,7 +665,7 @@ const PrintDeviceListPage: React.FC = () => {
         title="打印设备详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={700}
+        size={700}
       >
         {detailLoading ? (
           <div>加载中...</div>
