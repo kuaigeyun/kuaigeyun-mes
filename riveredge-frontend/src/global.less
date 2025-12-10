@@ -138,13 +138,12 @@ html body ::-webkit-scrollbar-track,
 }
 
 /* Spin 容器 padding 优化 */
-.roles-permissions-tree {
-  padding: 10px 10px 10px 0px !important;
+.roles-permissions-tree, .file-manager-tree ,.department-tree{
+  padding: 10px !important;
 }
 
-/* 文件管理树形结构 padding 优化 */
-.file-manager-tree {
-  padding: 10px !important;
+:where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-treenode {
+  padding: 4px 0 !important;
 }
 
 /* Spin 嵌套容器 padding 优化 */
@@ -187,5 +186,51 @@ html body ::-webkit-scrollbar-track,
     display: none !important; /* Chrome/Safari/Webkit */
     width: 0 !important;
     height: 0 !important;
+  }
+}
+
+/* 应用级菜单分组标题容器样式优化 - 修改包含 menu-group-title-app 的菜单项容器 */
+/* 通过 data-menu-id 属性定位应用分组菜单项（key 以 app-group- 开头） */
+.ant-menu-item[data-menu-id*="app-group-"],
+.ant-menu-item[class*="menu-group-title-app"] {
+  /* 减小容器的上下 padding */
+  padding-top: 10px !important;
+  padding-bottom: 0 !important;
+  height: 26px !important;
+  line-height: 16px !important;
+  
+  /* 完全禁用容器的 hover 效果 */
+  &:hover,
+  &:focus,
+  &:active {
+    background-color: transparent !important;
+    color: var(--ant-colorTextSecondary) !important;
+    box-shadow: none !important;
+    border: none !important;
+    
+    /* 禁用 hover 时的伪元素 */
+    &::before,
+    &::after {
+      display: none !important;
+    }
+  }
+  
+  /* 禁用选中状态 */
+  &.ant-menu-item-selected {
+    background-color: transparent !important;
+    color: var(--ant-colorTextSecondary) !important;
+  }
+  
+  /* 禁用所有可能的 hover 效果 */
+  &:hover .ant-menu-title-content,
+  &:hover .menu-group-title-app {
+    background-color: transparent !important;
+    color: var(--ant-colorTextSecondary) !important;
+  }
+  
+  /* 确保内部内容区域也没有 padding */
+  .ant-menu-title-content {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
   }
 }
