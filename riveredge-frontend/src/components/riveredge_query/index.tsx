@@ -1313,9 +1313,8 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         open={visible}
         onCancel={onClose}
         width={1400}
-        centered={false}
+        centered={true}
         style={{
-          ...style,
           maxHeight: '80vh',
         }}
         getContainer={() => document.body}
@@ -2984,7 +2983,6 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
         actionRef={actionRef}
         visible={visible}
         onClose={() => setVisible(false)}
-        style={modalStyle}
         searchParamsRef={searchParamsRef}
       />
     </>

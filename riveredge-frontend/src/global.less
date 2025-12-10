@@ -143,7 +143,7 @@ html body ::-webkit-scrollbar-track,
 }
 
 /* 文件管理树形结构 padding 优化 */
-.file-manager-tree, .ant-tree-block-node {
+.file-manager-tree {
   padding: 10px !important;
 }
 
@@ -152,117 +152,6 @@ html body ::-webkit-scrollbar-track,
   padding: 0 !important;
 }
 
-/* 统一树形结构样式 */
-/* 树节点容器：统一垂直居中对齐和间距 */
-.ant-tree-treenode {
-  display: flex !important;
-  align-items: center !important;
-  margin: 4px 0 !important;
-  padding: 0 !important;
-}
-
-/* 展开箭头（switcher）：垂直居中，统一尺寸和间距 */
-.ant-tree-switcher {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  align-self: center !important;
-  width: 24px !important;
-  height: 24px !important;
-  margin: 0 4px 0 0 !important;
-  padding: 0 !important;
-  flex-shrink: 0 !important;
-  line-height: 24px !important;
-}
-
-/* 展开箭头图标：确保垂直居中 */
-.ant-tree-switcher-icon,
-.ant-tree-switcher .anticon {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  line-height: 1 !important;
-  font-size: 12px !important;
-}
-
-/* 展开箭头伪元素（hover 效果）：垂直居中 */
-.ant-tree-switcher::before {
-  line-height: 24px !important;
-}
-
-/* 展开箭头关闭状态 */
-.ant-tree-switcher.ant-tree-switcher_close {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  align-self: center !important;
-  margin: 0 4px 0 0 !important;
-  line-height: 24px !important;
-}
-
-/* 展开箭头打开状态 */
-.ant-tree-switcher.ant-tree-switcher_open {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  align-self: center !important;
-  margin: 0 4px 0 0 !important;
-  line-height: 24px !important;
-}
-
-/* 展开箭头无子节点状态 */
-.ant-tree-switcher.ant-tree-switcher-noop {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  align-self: center !important;
-  margin: 0 4px 0 0 !important;
-  line-height: 24px !important;
-}
-
-/* 选择框（checkbox）：垂直居中，统一间距 */
-.ant-tree-checkbox {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 0 8px 0 0 !important;
-  padding: 0 !important;
-  flex-shrink: 0 !important;
-}
-
-/* 节点内容包装器：垂直居中，统一内边距 */
-.ant-tree-node-content-wrapper {
-  display: flex !important;
-  align-items: center !important;
-  flex: 1 !important;
-  min-width: 0 !important;
-  padding: 4px 8px !important;
-  margin: 0 !important;
-}
-
-/* 节点标题：垂直居中 */
-.ant-tree-title {
-  display: flex !important;
-  align-items: center !important;
-  flex: 1 !important;
-  min-width: 0 !important;
-  user-select: none !important;
-}
-
-/* 节点图标：垂直居中，统一间距 */
-.ant-tree-iconEle {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin-right: 8px !important;
-  flex-shrink: 0 !important;
-}
-
-/* 确保树列表与左边缘对齐 */
-.ant-tree-list,
-.ant-tree-list-holder {
-  padding-left: 0 !important;
-}
 
 /* 通用隐藏滚动条样式 - 不显示滚动条且不占用宽度 */
 .hide-scrollbar,
