@@ -734,6 +734,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
   const [userOpenKeys, setUserOpenKeys] = useState<string[]>([]); // 用户手动展开的菜单 key
+  const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
   
@@ -1501,11 +1502,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [filteredMenuData, location.pathname, calculateOpenKeys]);
 
   // 合并用户手动展开的菜单和当前路径的父菜单
+  // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单，包括有激活子菜单的菜单组
   const openKeys = useMemo(() => {
-    // 合并两个数组，去重
-    const merged = [...new Set([...requiredOpenKeys, ...userOpenKeys])];
+    // 1. 从 requiredOpenKeys 中排除用户手动收起的菜单
+    const autoOpenKeys = requiredOpenKeys.filter(key => !userClosedKeys.includes(key));
+    // 2. 合并自动展开的菜单和用户手动展开的菜单
+    const merged = [...new Set([...autoOpenKeys, ...userOpenKeys])];
     return merged;
-  }, [requiredOpenKeys, userOpenKeys]);
+  }, [requiredOpenKeys, userOpenKeys, userClosedKeys]);
+
+  // 当路径变化时，如果新路径需要展开之前手动收起的菜单，则清除这些菜单的收起状态
+  // 这样可以确保当用户导航到新页面时，相关的菜单会自动展开
+  useEffect(() => {
+    // 如果当前路径需要展开的菜单中有被用户手动收起的，则清除这些菜单的收起状态
+    const shouldReopenKeys = requiredOpenKeys.filter(key => userClosedKeys.includes(key));
+    if (shouldReopenKeys.length > 0) {
+      setUserClosedKeys(prev => prev.filter(key => !shouldReopenKeys.includes(key)));
+    }
+  }, [location.pathname, requiredOpenKeys]); // 只在路径变化时执行
 
 
   /**
@@ -3150,7 +3164,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   <span
                     style={{
                       fontSize: 14,
-                      color: 'var(--ant-colorText)',
+                      color: token.colorText,
                       lineHeight: '32px',
                       height: '32px',
                       display: 'flex',
@@ -3186,11 +3200,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         mode: 'inline',
         openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
         onOpenChange: (keys) => {
-          // 更新用户手动展开的菜单
-          // 从 keys 中移除 requiredOpenKeys（必须展开的菜单），剩下的就是用户手动展开的
-          const userKeys = keys.filter(key => !requiredOpenKeys.includes(key));
-          setUserOpenKeys(userKeys);
-          // 注意：如果用户尝试收起必须展开的菜单，我们会在下一次渲染时通过 openKeys 的合并逻辑自动恢复
+          // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单
+          // 1. 计算哪些菜单被收起了（从 requiredOpenKeys 中移除的）
+          const closedKeys = requiredOpenKeys.filter(key => !keys.includes(key));
+          if (closedKeys.length > 0) {
+            // 用户手动收起了某些菜单，记录这些菜单
+            setUserClosedKeys(prev => [...new Set([...prev, ...closedKeys])]);
+          }
+          
+          // 2. 计算哪些菜单被展开了（不在 requiredOpenKeys 中的）
+          const manuallyOpenedKeys = keys.filter(key => !requiredOpenKeys.includes(key));
+          setUserOpenKeys(manuallyOpenedKeys);
+          
+          // 3. 如果用户重新展开了之前手动收起的菜单，从 userClosedKeys 中移除
+          const reopenedKeys = userClosedKeys.filter(key => keys.includes(key));
+          if (reopenedKeys.length > 0) {
+            setUserClosedKeys(prev => prev.filter(key => !reopenedKeys.includes(key)));
+          }
         },
       }}
       onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
