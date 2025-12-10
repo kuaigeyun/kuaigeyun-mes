@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Select, Spin, message } from 'antd';
+import { Select, Spin, message, theme } from 'antd';
 import { SwapOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { getTenantList } from '../../services/tenant';
@@ -18,6 +18,7 @@ const { Option } = Select;
  * 组织选择器组件
  */
 const TenantSelector: React.FC = () => {
+  const { token } = theme.useToken();
   const userInfo = getUserInfo();
   const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin';
   const currentTenantId = getTenantId();
@@ -77,10 +78,22 @@ const TenantSelector: React.FC = () => {
     );
   }
 
-  // 如果是系统级用户，显示当前组织名称
+  // 如果是系统级用户，显示当前组织名称（带胶囊型背景）
   const tenantName = userInfo?.tenant_name || '未知组织';
   return (
-    <span style={{ color: '#262626', fontSize: 14, fontWeight: 500 }}>
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '4px 12px',
+        borderRadius: '16px',
+        backgroundColor: token.colorFillTertiary,
+        color: token.colorText,
+        fontSize: 14,
+        fontWeight: 500,
+        height: 32,
+        lineHeight: '24px',
+      }}
+    >
       {tenantName}
     </span>
   );

@@ -2662,6 +2662,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0;
           transition: none !important;
         }
+        /* 租户选择器 wrapper 内的 span（系统级用户显示组织名称） - 胶囊型背景 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 16px !important;
+          background-color: ${token.colorFillTertiary} !important;
+          color: ${token.colorText} !important;
+          font-size: 14px;
+          font-weight: 500;
+          height: 32px;
+          line-height: 24px;
+        }
         /* 租户选择器内的选择框样式 - 胶囊型（与搜索框完全一致，使用 token 值） */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
@@ -2672,6 +2684,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           background-color: ${token.colorFillTertiary} !important;
           background: ${token.colorFillTertiary} !important;
           height: 32px !important;
+        }
+        .ant-select-content-value{
+          padding-left: 10px !important;
         }
         /* 租户选择器所有状态 - 确保颜色与搜索框完全一致 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
