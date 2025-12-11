@@ -6,7 +6,7 @@ API 依赖模块
 """
 
 from typing import Optional
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Request
 
 # 复用 soil 模块的依赖函数
 from infra.api.deps.deps import (
@@ -34,6 +34,7 @@ async def get_current_user() -> User:
 
 
 async def get_current_tenant(
+    request: Request,
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
     token: Optional[str] = Depends(oauth2_scheme)
 ) -> int:
@@ -53,6 +54,11 @@ async def get_current_tenant(
     Raises:
         HTTPException: 当组织上下文未设置时抛出（平台超级管理员除外）
     """
+    # 调试日志：检查请求头
+    from loguru import logger
+    all_headers = dict(request.headers)
+    logger.debug(f"🔍 get_current_tenant 调试信息: x_tenant_id={x_tenant_id}, all_headers={all_headers}")
+    
     # ⚠️ 关键修复：检查是否为平台超级管理员 Token
     is_platform_superadmin = False
     if token:

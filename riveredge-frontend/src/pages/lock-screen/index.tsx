@@ -16,6 +16,7 @@ import { login } from '../../services/auth';
 import { platformSuperAdminLogin } from '../../services/platformAdmin';
 import { setToken } from '../../utils/auth';
 import { theme } from 'antd';
+import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../utils/avatar';
 
 // 固定主题颜色（不受全局主题影响）
 const FIXED_THEME_COLOR = '#1890ff';
@@ -287,6 +288,59 @@ export default function LockScreenPage() {
   const { currentUser, unlockScreen, lockedPath } = useGlobalStore();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  
+  // 获取用户头像 URL（如果有 UUID）
+  useEffect(() => {
+    const loadAvatarUrl = async () => {
+      const userInfo = getUserInfo();
+      let avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
+      
+      console.log('🔍 锁屏界面 - 加载头像:', {
+        currentUser: currentUser,
+        userInfo: userInfo,
+        avatarUuid: avatarUuid,
+      });
+      
+      // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
+      if (!avatarUuid && currentUser) {
+        try {
+          const { getUserProfile } = await import('../../services/userProfile');
+          const profile = await getUserProfile();
+          if (profile.avatar) {
+            console.log('✅ 锁屏界面 - 从个人资料获取头像 UUID:', profile.avatar);
+            avatarUuid = profile.avatar;
+          }
+        } catch (error) {
+          console.warn('⚠️ 锁屏界面 - 从个人资料获取头像失败:', error);
+        }
+      }
+      
+      if (avatarUuid) {
+        console.log('✅ 锁屏界面 - 检测到头像 UUID:', avatarUuid);
+        try {
+          const url = await getAvatarUrl(avatarUuid);
+          console.log('✅ 锁屏界面 - 获取头像 URL 成功:', url);
+          if (url) {
+            setAvatarUrl(url);
+          } else {
+            console.warn('⚠️ 锁屏界面 - 获取头像 URL 返回 undefined');
+            setAvatarUrl(undefined);
+          }
+        } catch (error) {
+          console.error('❌ 锁屏界面 - 加载头像 URL 失败:', error);
+          setAvatarUrl(undefined);
+        }
+      } else {
+        console.warn('⚠️ 锁屏界面 - 未找到头像 UUID');
+        setAvatarUrl(undefined);
+      }
+    };
+    
+    if (currentUser) {
+      loadAvatarUrl();
+    }
+  }, [currentUser]);
 
   /**
    * 处理解锁
@@ -679,16 +733,30 @@ export default function LockScreenPage() {
         >
           {/* 用户信息 */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
-            <Avatar
-              size={80}
-              src={(currentUser as any)?.avatar}
-              icon={!((currentUser as any)?.avatar) ? <UserOutlined /> : undefined}
-              style={{
-                backgroundColor: !((currentUser as any)?.avatar) ? FIXED_THEME_COLOR : undefined,
-                marginBottom: 16,
-                boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
-              }}
-            />
+            {avatarUrl ? (
+              <Avatar
+                size={80}
+                src={avatarUrl}
+                style={{
+                  marginBottom: 16,
+                  boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                }}
+              />
+            ) : (
+              <Avatar
+                size={80}
+                style={{
+                  backgroundColor: FIXED_THEME_COLOR,
+                  marginBottom: 16,
+                  boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                  fontSize: getAvatarFontSize(80),
+                  fontWeight: 500,
+                }}
+              >
+                {/* 显示首字母（优先全名，否则用户名） */}
+                {getAvatarText(currentUser.full_name, currentUser.username)}
+              </Avatar>
+            )}
             <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
               {displayName}
             </Title>

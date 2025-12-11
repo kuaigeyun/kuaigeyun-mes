@@ -71,16 +71,16 @@ class FilePreviewService:
         return token
     
     @staticmethod
-    async def verify_preview_token(token: str) -> Dict[str, Any]:
+    def verify_preview_token(token: str) -> Dict[str, Any]:
         """
         验证预览token
-        
+
         Args:
             token: JWT token
-            
+
         Returns:
             Dict[str, Any]: token 解码后的数据（包含 file_uuid、tenant_id 等）
-            
+
         Raises:
             ValueError: 当 token 无效或已过期时抛出
         """

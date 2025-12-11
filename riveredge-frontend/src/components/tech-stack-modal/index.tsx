@@ -492,7 +492,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       key: 'overview',
       label: '概览',
       children: (
-        <div>
+        <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
           <Title level={4}>FIR 技术栈</Title>
           <Paragraph>
             RiverEdge SaaS 多组织框架采用 <strong>FIR 技术栈组合</strong>：
@@ -528,7 +528,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
         </Badge>
       ),
       children: (
-        <div>
+        <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
           <Title level={4}>版权声明</Title>
           <Paragraph>
             <Text strong style={{ fontSize: 16 }}>
@@ -624,52 +624,60 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       key: 'backend',
       label: `后端技术 (${backendTech.length})`,
       children: (
-        <Table
-          dataSource={backendTech}
-          columns={columns}
-          rowKey="name"
-          pagination={{ pageSize: 10 }}
-          size="small"
-        />
+        <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
+          <Table
+            dataSource={backendTech}
+            columns={columns}
+            rowKey="name"
+            pagination={{ pageSize: 10 }}
+            size="small"
+          />
+        </div>
       ),
     },
     {
       key: 'frontend',
       label: `前端技术 (${frontendTech.length})`,
       children: (
-        <Table
-          dataSource={frontendTech}
-          columns={columns}
-          rowKey="name"
-          pagination={{ pageSize: 10 }}
-          size="small"
-        />
+        <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
+          <Table
+            dataSource={frontendTech}
+            columns={columns}
+            rowKey="name"
+            pagination={{ pageSize: 10 }}
+            size="small"
+          />
+        </div>
       ),
     },
     {
       key: 'database',
       label: `数据库 (${databaseTech.length})`,
       children: (
-        <Table
-          dataSource={databaseTech}
-          columns={columns}
-          rowKey="name"
-          pagination={{ pageSize: 10 }}
-          size="small"
-        />
+        <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
+          <Table
+            dataSource={databaseTech}
+            columns={columns}
+            rowKey="name"
+            pagination={{ pageSize: 10 }}
+            size="small"
+          />
+        </div>
       ),
     },
     {
       key: 'infrastructure',
       label: `基础设施 (${infrastructureTech.length})`,
       children: (
-        <Table
-          dataSource={infrastructureTech}
-          columns={columns}
-          rowKey="name"
-          pagination={{ pageSize: 10 }}
-          size="small"
-        />
+        <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
+          <Table
+            dataSource={infrastructureTech}
+            columns={columns}
+            rowKey="name"
+            pagination={{ pageSize: 10 }}
+            size="small"
+          />
+        </div>
       ),
     },
   ];
@@ -685,7 +693,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       open={open}
       onCancel={onCancel}
       footer={null}
-      size={1000}
+      width={1200}
       style={{ top: 20 }}
       styles={{
         body: {
@@ -695,7 +703,10 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
         },
       }}
     >
-      <Tabs defaultActiveKey="overview" items={tabItems} />
+      <Tabs 
+        defaultActiveKey="overview" 
+        items={tabItems}
+      />
     </Modal>
   );
 };

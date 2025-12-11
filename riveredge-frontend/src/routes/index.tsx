@@ -50,7 +50,7 @@ import PlatformLoginPage from '../pages/platform/login';
 import LockScreenPage from '../pages/lock-screen';
 
 // 懒加载系统级页面（按功能模块分组）
-const SystemDashboardPage = lazy(() => import('../pages/system/dashboard'));
+const SystemDashboardPage = lazy(() => import('../pages/system/dashboard/index'));
 const AnalysisPage = lazy(() => import('../pages/system/dashboard/analysis'));
 
 // 权限管理模块

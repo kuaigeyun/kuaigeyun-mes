@@ -65,6 +65,7 @@ class User(BaseModel):
     # 个人资料字段（个人中心模块）
     bio = fields.TextField(null=True, description="个人简介（可选）")
     contact_info = fields.JSONField(null=True, description="联系方式（JSON格式，可选）")
+    gender = fields.CharField(max_length=10, null=True, description="性别（可选，如：male, female, other）")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

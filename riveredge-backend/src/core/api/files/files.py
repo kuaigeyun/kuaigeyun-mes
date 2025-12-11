@@ -5,7 +5,7 @@
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File as FastAPIFile
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File as FastAPIFile, Request, Header
 from fastapi.responses import FileResponse, StreamingResponse
 
 from core.schemas.file import (
@@ -20,6 +20,7 @@ from core.services.file_service import FileService
 from core.services.file_preview_service import FilePreviewService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from loguru import logger
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
@@ -54,6 +55,30 @@ async def upload_file(
         # 读取文件内容
         file_content = await file.read()
         
+        # 处理中文文件名编码
+        # FastAPI 的 UploadFile.filename 可能包含 RFC 2231 编码的中文文件名
+        # 需要正确解码，确保中文文件名能正确保存
+        original_filename = file.filename or "unknown"
+        if original_filename:
+            # 尝试解码 RFC 2231 格式的文件名（filename*=UTF-8''...）
+            from urllib.parse import unquote
+            try:
+                # 如果文件名是 RFC 2231 格式，提取并解码
+                if "filename*=" in original_filename:
+                    # 格式：filename*=UTF-8''encoded_name
+                    parts = original_filename.split("filename*=", 1)
+                    if len(parts) > 1:
+                        encoded_part = parts[1].split(";")[0].strip()
+                        if encoded_part.startswith("UTF-8''"):
+                            encoded_name = encoded_part[7:]  # 移除 "UTF-8''" 前缀
+                            original_filename = unquote(encoded_name)
+                # 如果文件名包含 URL 编码，尝试解码
+                elif "%" in original_filename:
+                    original_filename = unquote(original_filename)
+            except Exception as e:
+                # 如果解码失败，使用原始文件名
+                logger.warning(f"文件名解码失败，使用原始文件名: {e}")
+        
         # 解析标签（如果是JSON字符串）
         tags_list = None
         if tags:
@@ -67,7 +92,7 @@ async def upload_file(
         file_obj = await FileService.save_uploaded_file(
             tenant_id=tenant_id,
             file_content=file_content,
-            original_name=file.filename or "unknown",
+            original_name=original_filename,
             category=category,
             tags=tags_list,
             description=description,
@@ -119,11 +144,30 @@ async def upload_multiple_files(
             # 读取文件内容
             file_content = await file.read()
             
+            # 处理中文文件名编码（与单文件上传保持一致）
+            original_filename = file.filename or "unknown"
+            if original_filename:
+                from urllib.parse import unquote
+                try:
+                    # 尝试解码 RFC 2231 格式的文件名
+                    if "filename*=" in original_filename:
+                        parts = original_filename.split("filename*=", 1)
+                        if len(parts) > 1:
+                            encoded_part = parts[1].split(";")[0].strip()
+                            if encoded_part.startswith("UTF-8''"):
+                                encoded_name = encoded_part[7:]
+                                original_filename = unquote(encoded_name)
+                    # 如果文件名包含 URL 编码，尝试解码
+                    elif "%" in original_filename:
+                        original_filename = unquote(original_filename)
+                except Exception as e:
+                    logger.warning(f"文件名解码失败，使用原始文件名: {e}")
+            
             # 保存文件
             file_obj = await FileService.save_uploaded_file(
                 tenant_id=tenant_id,
                 file_content=file_content,
-                original_name=file.filename or "unknown",
+                original_name=original_filename,
                 category=category,
             )
             
@@ -221,18 +265,23 @@ async def get_file(
 @router.get("/{uuid}/download")
 async def download_file(
     uuid: str,
+    request: Request,
     token: Optional[str] = Query(None, description="预览token（用于权限验证）"),
-    tenant_id: int = Depends(get_current_tenant),
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
 ):
+    from loguru import logger
+    logger.info(f"🔍 download_file 请求: uuid={uuid}, token={token[:50] if token else 'None'}..., x_tenant_id={x_tenant_id}")
     """
     下载文件
     
-    根据UUID下载文件。如果提供了token，会验证token权限。
+    根据UUID下载文件。如果提供了token，会验证token权限并从token中提取tenant_id。
+    如果没有token，则从请求头获取tenant_id。
     
     Args:
         uuid: 文件UUID
         token: 预览token（用于权限验证，可选）
-        tenant_id: 当前组织ID（依赖注入）
+        request: FastAPI Request 对象
+        x_tenant_id: 从请求头获取的组织ID（可选）
         
     Returns:
         StreamingResponse: 文件流
@@ -241,21 +290,54 @@ async def download_file(
         HTTPException: 当文件不存在或token无效时抛出
     """
     try:
-        # 如果提供了token，验证token
+        # ⚠️ 关键修复：如果提供了token，从token中提取tenant_id
+        tenant_id = None
+        from loguru import logger
+        logger.debug(f"🔍 download_file 调试: token={token[:50] if token else None}..., x_tenant_id={x_tenant_id}, uuid={uuid}")
+
         if token:
             try:
-                payload = await FilePreviewService.verify_preview_token(token)
-                # 验证文件UUID和组织ID是否匹配
-                if payload.get("file_uuid") != uuid or payload.get("tenant_id") != tenant_id:
+                payload = FilePreviewService.verify_preview_token(token)
+                logger.debug(f"✅ Token 验证成功: payload={payload}")
+                # 从token中提取tenant_id
+                tenant_id = payload.get("tenant_id")
+                logger.debug(f"📋 从token提取 tenant_id: {tenant_id}")
+                # 验证文件UUID是否匹配
+                if payload.get("file_uuid") != uuid:
+                    logger.error(f"❌ 文件UUID不匹配: token_uuid={payload.get('file_uuid')}, request_uuid={uuid}")
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="无权限访问该文件"
                     )
             except ValueError as e:
+                logger.error(f"❌ Token 验证失败: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=str(e)
                 )
+        
+        # 如果没有token或token中没有tenant_id，从请求头获取
+        if tenant_id is None:
+            logger.debug("⚠️ Token 中没有 tenant_id，尝试从请求头获取")
+            if x_tenant_id:
+                try:
+                    tenant_id = int(x_tenant_id)
+                    logger.debug(f"✅ 从请求头获取 tenant_id: {tenant_id}")
+                except ValueError:
+                    logger.error(f"❌ 无效的组织ID: {x_tenant_id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="无效的组织ID"
+                    )
+            else:
+                # 如果没有token也没有请求头，抛出错误
+                logger.error("❌ 组织上下文未设置：没有token也没有X-Tenant-ID请求头")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="组织上下文未设置（请提供token或X-Tenant-ID请求头）"
+                )
+
+        logger.debug(f"🎯 最终 tenant_id: {tenant_id}, 将查询文件 uuid: {uuid}")
         
         # 获取文件
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
@@ -268,12 +350,33 @@ async def download_file(
         from core.services.file_service import FileService as FS
         full_path = os.path.join(FS.UPLOAD_DIR, file.file_path)
         
+        # 处理文件名编码（支持中文文件名）
+        # 使用 RFC 5987 格式编码文件名，避免 latin-1 编码错误
+        from urllib.parse import quote
+        
+        # 根据文件类型决定是预览（inline）还是下载（attachment）
+        # 图片文件使用 inline，让浏览器直接预览；其他文件使用 attachment，触发下载
+        file_type = file.file_type or "application/octet-stream"
+        disposition_type = "inline" if file_type.startswith("image/") else "attachment"
+        
+        # 检查文件名是否包含非 ASCII 字符
+        try:
+            # 尝试将文件名编码为 latin-1，如果失败说明包含非 ASCII 字符
+            file.original_name.encode('latin-1')
+            # 如果成功，文件名只包含 ASCII 字符，可以直接使用
+            content_disposition = f'{disposition_type}; filename="{file.original_name}"'
+        except UnicodeEncodeError:
+            # 如果包含非 ASCII 字符，使用 RFC 5987 格式
+            encoded_filename = quote(file.original_name, safe='')
+            # 对于非 ASCII 文件名，只使用 filename*=UTF-8''... 格式，避免 latin-1 编码错误
+            content_disposition = f'{disposition_type}; filename*=UTF-8\'\'{encoded_filename}'
+        
         # 返回文件流
         return StreamingResponse(
             iter([file_content]),
-            media_type=file.file_type or "application/octet-stream",
+            media_type=file_type,
             headers={
-                "Content-Disposition": f'attachment; filename="{file.original_name}"',
+                "Content-Disposition": content_disposition,
                 "Content-Length": str(file.file_size),
             }
         )

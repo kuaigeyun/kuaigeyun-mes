@@ -38,6 +38,8 @@ echo ""
 export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 
 # 启动服务（启用热重载，监控 src 目录）
-PYTHONPATH="${PYTHONPATH}:$(pwd)/src" python -m uvicorn server.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir src
+# 使用 127.0.0.1 而不是 0.0.0.0 以避免 Windows 权限问题
+# 如果端口 9000 被保留（Hyper-V/WSL2），请运行 scripts/restore_port_9000.ps1 恢复
+PYTHONPATH="${PYTHONPATH}:$(pwd)/src" python -m uvicorn server.main:app --host 127.0.0.1 --port 9000 --reload --reload-dir src
 
 

@@ -16,12 +16,18 @@ export interface UserProfile {
   avatar?: string;
   bio?: string;
   contact_info?: Record<string, any>;
+  gender?: string;
 }
 
 export interface UpdateUserProfileData {
-  avatar?: string;
+  avatar?: string | null;
   bio?: string;
   contact_info?: Record<string, any>;
+  gender?: string;
+  email?: string;
+  full_name?: string;
+  phone?: string;
+  username?: string;
 }
 
 /**
