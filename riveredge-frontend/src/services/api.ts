@@ -34,10 +34,44 @@ function getAuthToken(): string | null {
 /**
  * 获取当前选择的组织ID
  *
+ * 优先从 localStorage 的 tenant_id 获取，如果没有则尝试从 user_info 中获取
+ *
  * @returns 组织ID 或 null
  */
 function getCurrentTenantId(): string | null {
-  return localStorage.getItem('tenant_id');
+  // 优先从 localStorage 的 tenant_id 获取
+  const tenantId = localStorage.getItem('tenant_id');
+  if (tenantId) {
+    return tenantId;
+  }
+  
+  // 如果 localStorage 中没有，尝试从 user_info 中获取
+  try {
+    const userInfoStr = localStorage.getItem('user_info');
+    if (userInfoStr) {
+      const userInfo = JSON.parse(userInfoStr);
+      // 尝试多个可能的字段名：tenant_id, tenantId
+      const tenantIdFromUserInfo = userInfo?.tenant_id || userInfo?.tenantId;
+      if (tenantIdFromUserInfo) {
+        // 如果从 user_info 中获取到，同时保存到 tenant_id，避免下次再查找
+        const tenantIdStr = String(tenantIdFromUserInfo);
+        localStorage.setItem('tenant_id', tenantIdStr);
+        console.log('✅ 从 user_info 中恢复 tenant_id:', tenantIdStr);
+        return tenantIdStr;
+      } else {
+        console.warn('⚠️ user_info 中未找到 tenant_id 字段:', {
+          userInfoKeys: Object.keys(userInfo || {}),
+          userInfo: userInfo,
+        });
+      }
+    } else {
+      console.warn('⚠️ localStorage 中没有 user_info');
+    }
+  } catch (error) {
+    console.warn('⚠️ 解析 user_info 失败:', error);
+  }
+  
+  return null;
 }
 
 /**
@@ -119,24 +153,103 @@ export async function apiRequest<T = any>(
   // 获取当前选择的组织ID
   const currentTenantId = getCurrentTenantId();
   
+  // 检查是否是平台超级管理员（从 user_info 中获取）
+  let isPlatformSuperAdmin = false;
+  try {
+    const userInfoStr = localStorage.getItem('user_info');
+    if (userInfoStr) {
+      const userInfo = JSON.parse(userInfoStr);
+      isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin' || userInfo?.is_platform_admin === true;
+    }
+  } catch (error) {
+    // 忽略解析错误
+  }
+  
   // 检查 body 是否是 FormData
   const isFormData = options?.body instanceof FormData;
   
+  // 判断是否需要组织上下文（系统级API和个人中心API需要）
+  const needsTenantContext = url.startsWith('/system/') || 
+    url.startsWith('/api/v1/system/') || 
+    url.startsWith('/personal/') || 
+    url.startsWith('/api/v1/personal/');
+  
+  // 如果需要组织上下文但没有 tenant_id，输出警告（平台超级管理员除外，后端会处理默认租户）
+  if (needsTenantContext && !currentTenantId && !isPlatformSuperAdmin) {
+    console.error('⚠️ 组织上下文未设置:', {
+      url,
+      tenantId: currentTenantId,
+      isPlatformSuperAdmin,
+      localStorage_tenant_id: localStorage.getItem('tenant_id'),
+      user_info: localStorage.getItem('user_info'),
+    });
+  }
+  
+  // 构建请求头（如果是 FormData，需要删除 Content-Type，让浏览器自动设置）
+  const headers: Record<string, string> = {};
+  
+  // 如果是 FormData，不设置 Content-Type，让浏览器自动设置（包含 boundary）
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  // 如果存在 Token 且不是公开接口，添加到请求头
+  // ⚠️ 关键修复：公开接口（登录、注册等）不应该携带 token，避免过期 token 干扰验证
+  if (token && !isPublicEndpoint) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // 如果存在组织ID且需要组织上下文，添加到请求头
+  // ⚠️ 关键修复：系统级API和个人中心API需要组织上下文，平台级API不需要
+  // ⚠️ 重要：对于系统级API和个人中心API，必须要有组织上下文
+  // ⚠️ 平台超级管理员：即使没有 tenant_id，也允许发送请求（后端会使用默认租户）
+  if (needsTenantContext) {
+    if (currentTenantId) {
+      headers['X-Tenant-ID'] = currentTenantId;
+      console.log('✅ 添加 X-Tenant-ID 请求头:', currentTenantId, 'URL:', url);
+    } else if (isPlatformSuperAdmin) {
+      // 平台超级管理员即使没有 tenant_id，也允许发送请求
+      // 后端会检测到是平台超级管理员，并使用默认租户
+      console.log('ℹ️ 平台超级管理员请求，后端将使用默认租户，URL:', url);
+    } else {
+      // 非平台超级管理员且没有 tenant_id，输出详细错误信息
+      console.error('❌ 组织上下文未设置，无法添加 X-Tenant-ID 请求头:', {
+        url,
+        currentTenantId,
+        isPlatformSuperAdmin,
+        localStorage_tenant_id: localStorage.getItem('tenant_id'),
+        user_info: localStorage.getItem('user_info'),
+        needsTenantContext,
+      });
+    }
+  }
+  
+  // 合并用户自定义的 headers（如果是 FormData，需要删除 Content-Type）
+  if (options?.headers) {
+    Object.entries(options.headers).forEach(([key, value]) => {
+      // 如果是 FormData，忽略 Content-Type，让浏览器自动设置
+      if (isFormData && key.toLowerCase() === 'content-type') {
+        return;
+      }
+      headers[key] = value;
+    });
+  }
+  
+  // 合并用户自定义的 headers（如果是 FormData，需要删除 Content-Type）
+  if (options?.headers) {
+    Object.entries(options.headers).forEach(([key, value]) => {
+      // 如果是 FormData，忽略 Content-Type，让浏览器自动设置
+      if (isFormData && key.toLowerCase() === 'content-type') {
+        return;
+      }
+      headers[key] = value;
+    });
+  }
+
   // 构建请求配置
   const fetchOptions: RequestInit = {
     method: options?.method || 'GET',
-    headers: {
-      // 如果是 FormData，不设置 Content-Type，让浏览器自动设置（包含 boundary）
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      // 如果存在 Token 且不是公开接口，添加到请求头
-      // ⚠️ 关键修复：公开接口（登录、注册等）不应该携带 token，避免过期 token 干扰验证
-      ...(token && !isPublicEndpoint ? { 'Authorization': `Bearer ${token}` } : {}),
-      // 如果存在组织ID且不是平台级接口，添加到请求头
-      // ⚠️ 关键修复：系统级API需要组织上下文，平台级API不需要
-      // ⚠️ 重要：对于系统级API，必须要有组织上下文
-      ...(currentTenantId && (url.startsWith('/system/') || url.startsWith('/api/v1/system/')) ? { 'X-Tenant-ID': currentTenantId } : {}),
-      ...options?.headers,
-    },
+    headers,
   };
 
   // 处理请求体：如果提供了 data，则序列化为 JSON；否则使用 body
@@ -153,11 +266,43 @@ export async function apiRequest<T = any>(
     }
   }
 
-  // 合并其他选项（但排除 data，因为已经处理过了）
-  const { data, body, ...otherOptions } = options || {};
+  // 合并其他选项（但排除 data、body 和 headers，因为已经处理过了）
+  const { data, body, headers: userHeaders, ...otherOptions } = options || {};
+  
+  // ⚠️ 关键修复：确保 headers 不被覆盖
+  // Object.assign 会覆盖 headers，所以我们需要在最后再次设置 headers
   Object.assign(fetchOptions, otherOptions);
+  
+  // 确保 headers 始终使用我们构建的 headers（包含 X-Tenant-ID）
+  fetchOptions.headers = headers;
 
   try {
+    // 调试日志：输出请求信息
+    if (isFormData) {
+      console.log('📤 发送文件上传请求:', {
+        url: requestUrl,
+        method: fetchOptions.method,
+        hasFile: fetchOptions.body instanceof FormData,
+        headers: headers,
+        tenantId: currentTenantId,
+        isPlatformSuperAdmin,
+        allHeaders: Object.keys(headers),
+        xTenantIdHeader: headers['X-Tenant-ID'],
+        fetchOptionsHeaders: fetchOptions.headers,
+      });
+      
+      // 验证 X-Tenant-ID 是否在 fetchOptions 中
+      if (fetchOptions.headers && 'X-Tenant-ID' in fetchOptions.headers) {
+        console.log('✅ X-Tenant-ID 请求头已添加到 fetchOptions:', fetchOptions.headers['X-Tenant-ID']);
+      } else {
+        console.error('❌ X-Tenant-ID 请求头未添加到 fetchOptions!', {
+          headers: fetchOptions.headers,
+          currentTenantId,
+          needsTenantContext,
+        });
+      }
+    }
+    
     const response = await fetch(requestUrl, fetchOptions);
 
     // 读取响应体（无论成功还是失败都需要读取）
@@ -212,6 +357,35 @@ export async function apiRequest<T = any>(
           // 路由守卫会在检测到没有 token 时自动重定向到登录页
           
           const error = new Error('认证已过期，请重新登录') as any;
+          error.response = { data, status: response.status };
+          throw error;
+        }
+      }
+      
+      // 处理 400 错误（可能是组织上下文未设置或其他验证错误）
+      if (response.status === 400) {
+        const errorDetail = data?.detail || data?.message || '';
+        console.error('❌ 400 错误详情:', {
+          url,
+          errorDetail,
+          fullResponse: data,
+          localStorage_tenant_id: localStorage.getItem('tenant_id'),
+          user_info: localStorage.getItem('user_info'),
+        });
+        
+        if (errorDetail.includes('组织上下文未设置') || errorDetail.includes('tenant')) {
+          // 尝试再次获取 tenant_id
+          const retryTenantId = getCurrentTenantId();
+          if (!retryTenantId) {
+            const error = new Error('组织上下文未设置，请重新登录') as any;
+            error.response = { data, status: response.status };
+            throw error;
+          }
+        }
+        
+        // 如果是其他 400 错误，直接抛出详细错误信息
+        if (errorDetail) {
+          const error = new Error(errorDetail) as any;
           error.response = { data, status: response.status };
           throw error;
         }

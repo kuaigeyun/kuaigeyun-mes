@@ -236,7 +236,15 @@ export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_c
  * @returns 预览信息
  */
 export async function getFilePreview(fileUuid: string): Promise<FilePreviewResponse> {
-  return apiRequest<FilePreviewResponse>(`/system/files/${fileUuid}/preview`);
+  console.log('🔍 getFilePreview: 开始获取文件预览，UUID:', fileUuid);
+  try {
+    const result = await apiRequest<FilePreviewResponse>(`/system/files/${fileUuid}/preview`);
+    console.log('✅ getFilePreview: 获取成功:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ getFilePreview: 获取失败:', error);
+    throw error;
+  }
 }
 
 /**

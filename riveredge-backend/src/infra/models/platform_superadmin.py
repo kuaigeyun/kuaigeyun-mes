@@ -42,6 +42,10 @@ class PlatformSuperAdmin(BaseModel):
         full_name: 用户全名（可选）
         is_active: 是否激活
         last_login: 最后登录时间（可选）
+        avatar: 头像文件UUID（可选）
+        bio: 个人简介（可选）
+        contact_info: 联系方式（JSON格式，可选）
+        gender: 性别（可选）
         created_at: 创建时间
         updated_at: 更新时间
     """
@@ -66,6 +70,11 @@ class PlatformSuperAdmin(BaseModel):
         null=True,
         description="用户全名（可选）"
     )
+    phone = fields.CharField(
+        max_length=20,
+        null=True,
+        description="手机号（可选）"
+    )
     is_active = fields.BooleanField(
         default=True,
         description="是否激活"
@@ -73,6 +82,26 @@ class PlatformSuperAdmin(BaseModel):
     last_login = fields.DatetimeField(
         null=True,
         description="最后登录时间（可选）"
+    )
+    
+    # 个人资料字段（个人中心模块）
+    avatar = fields.CharField(
+        max_length=36,
+        null=True,
+        description="头像文件UUID（关联文件管理，可选）"
+    )
+    bio = fields.TextField(
+        null=True,
+        description="个人简介（可选）"
+    )
+    contact_info = fields.JSONField(
+        null=True,
+        description="联系方式（JSON格式，可选）"
+    )
+    gender = fields.CharField(
+        max_length=10,
+        null=True,
+        description="性别（可选，如：male, female, other）"
     )
     
     class Meta:

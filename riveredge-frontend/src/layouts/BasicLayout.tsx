@@ -65,6 +65,7 @@ import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
 import { getMenuTree, MenuTree } from '../services/menu';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
+import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -737,6 +738,70 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [userClosedKeys, setUserClosedKeys] = useState<string[]>([]); // 用户手动收起的菜单 key
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  
+  // 获取用户头像 URL（如果有 UUID）
+  useEffect(() => {
+    const loadAvatarUrl = async () => {
+      const userInfo = getUserInfo();
+      const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
+      
+      console.log('🔍 顶栏 - 加载头像:', {
+        currentUser: currentUser,
+        userInfo: userInfo,
+        avatarUuid: avatarUuid,
+      });
+      
+      if (avatarUuid) {
+        console.log('✅ 顶栏 - 检测到头像 UUID:', avatarUuid);
+        try {
+          const url = await getAvatarUrl(avatarUuid);
+          console.log('✅ 顶栏 - 获取头像 URL 成功:', url);
+          if (url) {
+            setAvatarUrl(url);
+          } else {
+            console.warn('⚠️ 顶栏 - 获取头像 URL 返回 undefined');
+            setAvatarUrl(undefined);
+          }
+        } catch (error) {
+          console.error('❌ 顶栏 - 加载头像 URL 失败:', error);
+          setAvatarUrl(undefined);
+        }
+      } else {
+        console.warn('⚠️ 顶栏 - 未找到头像 UUID');
+        // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
+        let foundAvatar = false;
+        if (currentUser) {
+          try {
+            const { getUserProfile } = await import('../services/userProfile');
+            const profile = await getUserProfile();
+            if (profile.avatar) {
+              console.log('✅ 顶栏 - 从个人资料获取头像 UUID:', profile.avatar);
+              const url = await getAvatarUrl(profile.avatar);
+              if (url) {
+                console.log('✅ 顶栏 - 从个人资料获取头像 URL 成功:', url);
+                setAvatarUrl(url);
+                foundAvatar = true;
+              } else {
+                console.warn('⚠️ 顶栏 - 从个人资料获取头像 URL 返回 undefined');
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ 顶栏 - 从个人资料获取头像失败:', error);
+          }
+        }
+        
+        // 只有在确实没有找到头像时才清空
+        if (!foundAvatar) {
+          setAvatarUrl(undefined);
+        }
+      }
+    };
+    
+    if (currentUser) {
+      loadAvatarUrl();
+    }
+  }, [currentUser]);
   
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
@@ -1365,7 +1430,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
     switch (key) {
       case 'profile':
-        message.info('个人资料功能开发中');
+        // 导航到个人资料页面
+        navigate('/personal/profile');
         break;
       case 'copyright':
         setTechStackModalOpen(true);
@@ -3147,20 +3213,34 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     background: token.colorFillTertiary,
                   }}
                 >
-                  <Avatar
-                    size={24}
-                    src={(currentUser as any)?.avatar}
-                    style={{
-                      backgroundColor: token.colorPrimary,
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {/* 优先显示全名的首字母，如果全名为空则显示用户名的首字母 */}
-                    {(currentUser.full_name || currentUser.username)?.[0]?.toUpperCase()}
-                  </Avatar>
+                  {avatarUrl ? (
+                    <Avatar
+                      size={24}
+                      src={avatarUrl}
+                      style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    />
+                  ) : (
+                    <Avatar
+                      size={24}
+                      style={{
+                        backgroundColor: token.colorPrimary,
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: getAvatarFontSize(24),
+                        fontWeight: 500,
+                      }}
+                    >
+                      {/* 显示首字母（优先全名，否则用户名） */}
+                      {getAvatarText(currentUser.full_name, currentUser.username)}
+                    </Avatar>
+                  )}
                   <span
                     style={{
                       fontSize: 14,

@@ -1312,7 +1312,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         title="搜索条件"
         open={visible}
         onCancel={onClose}
-        size={1400}
+        width={1400}
         centered={true}
         style={{
           maxHeight: '80vh',
