@@ -34,20 +34,72 @@ const SiteSettingsPage: React.FC = () => {
     loadSiteSetting();
   }, []);
 
+  /**
+   * 规范化颜色值为字符串格式（用于表单初始化）
+   */
+  const normalizeColorValue = (color: any, defaultValue: string = '#1890ff'): string => {
+    if (!color) return defaultValue;
+    if (typeof color === 'string') return color;
+
+    // 处理颜色对象：优先使用 toHexString 方法
+    if (color && typeof color.toHexString === 'function') {
+      try {
+        return color.toHexString();
+      } catch (e) {
+        console.warn('Color toHexString failed:', e);
+      }
+    }
+
+    // 处理包含 metaColor 的颜色对象
+    if (color && color.metaColor) {
+      if (typeof color.metaColor.toHexString === 'function') {
+        try {
+          return color.metaColor.toHexString();
+        } catch (e) {
+          console.warn('Color metaColor toHexString failed:', e);
+        }
+      }
+      // 如果 metaColor 有 r, g, b 属性，手动转换为 hex
+      if (typeof color.metaColor.r === 'number' && typeof color.metaColor.g === 'number' && typeof color.metaColor.b === 'number') {
+        const r = Math.round(color.metaColor.r).toString(16).padStart(2, '0');
+        const g = Math.round(color.metaColor.g).toString(16).padStart(2, '0');
+        const b = Math.round(color.metaColor.b).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+      }
+    }
+
+    // 如果 color 有 r, g, b 属性，手动转换为 hex
+    if (color && typeof color.r === 'number' && typeof color.g === 'number' && typeof color.b === 'number') {
+      const r = Math.round(color.r).toString(16).padStart(2, '0');
+      const g = Math.round(color.g).toString(16).padStart(2, '0');
+      const b = Math.round(color.b).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}`;
+    }
+
+    return defaultValue;
+  };
+
   const loadSiteSetting = async () => {
     try {
       setLoading(true);
       const setting = await getSiteSetting();
       setSiteSetting(setting);
-      
+
       // 设置表单初始值
       // 兼容旧版本：如果存在 theme_color，优先使用；否则使用 theme_config
       const themeConfig = setting.settings?.theme_config || {};
       const legacyThemeColor = setting.settings?.theme_color;
+
+      // 规范化颜色值为字符串，确保 ColorPicker 接收到正确的格式
+      const normalizedThemeColor = normalizeColorValue(
+        legacyThemeColor || themeConfig.colorPrimary,
+        '#1890ff'
+      );
+
       form.setFieldsValue({
         site_name: setting.settings?.site_name || '',
         site_logo: setting.settings?.site_logo || '',
-        theme_color: legacyThemeColor || themeConfig.colorPrimary || '#1890ff',
+        theme_color: normalizedThemeColor,
         theme_borderRadius: themeConfig.borderRadius || 6,
         theme_fontSize: themeConfig.fontSize || 14,
         theme_compact: themeConfig.compact || false,
@@ -171,6 +223,46 @@ const SiteSettingsPage: React.FC = () => {
               name="theme_color"
               label="主题色（colorPrimary）"
               tooltip="Ant Design 原生配置：主要品牌颜色"
+              getValueFromEvent={(color) => {
+                // 处理 ColorPicker 返回的颜色对象，转换为 hex 字符串
+                if (typeof color === 'string') {
+                  return color;
+                }
+                // 处理颜色对象
+                if (color && typeof color.toHexString === 'function') {
+                  try {
+                    return color.toHexString();
+                  } catch (e) {
+                    console.warn('Color toHexString failed:', e);
+                  }
+                }
+                // 处理包含 metaColor 的颜色对象
+                if (color && color.metaColor) {
+                  if (typeof color.metaColor.toHexString === 'function') {
+                    try {
+                      return color.metaColor.toHexString();
+                    } catch (e) {
+                      console.warn('Color metaColor toHexString failed:', e);
+                    }
+                  }
+                  // 如果 metaColor 有 r, g, b 属性，手动转换为 hex
+                  if (typeof color.metaColor.r === 'number' && typeof color.metaColor.g === 'number' && typeof color.metaColor.b === 'number') {
+                    const r = Math.round(color.metaColor.r).toString(16).padStart(2, '0');
+                    const g = Math.round(color.metaColor.g).toString(16).padStart(2, '0');
+                    const b = Math.round(color.metaColor.b).toString(16).padStart(2, '0');
+                    return `#${r}${g}${b}`;
+                  }
+                }
+                // 如果 color 有 r, g, b 属性，手动转换为 hex
+                if (color && typeof color.r === 'number' && typeof color.g === 'number' && typeof color.b === 'number') {
+                  const r = Math.round(color.r).toString(16).padStart(2, '0');
+                  const g = Math.round(color.g).toString(16).padStart(2, '0');
+                  const b = Math.round(color.b).toString(16).padStart(2, '0');
+                  return `#${r}${g}${b}`;
+                }
+                // 默认返回
+                return '#1890ff';
+              }}
             >
               <ColorPicker showText format="hex" />
             </Form.Item>

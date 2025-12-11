@@ -12,8 +12,8 @@ export { UniTable, default as UniTableDefault, generateImportConfigFromColumns }
 export type { UniTableProps } from './uni_table';
 export { default as UniImport } from './uni_import';
 export type { UniImportProps } from './uni_import';
-export { default as PageTabs } from './page_tabs';
-export type { TabItem } from './page_tabs';
+export { default as UniTabs } from './uni_tabs';
+export type { TabItem } from './uni_tabs';
 export { default as FileUploadComponent } from './file-upload';
 export type { FileUploadComponentProps } from './file-upload';
 export { default as VirtualList } from './virtual-list';
@@ -28,3 +28,5 @@ export { default as ErrorBoundary } from './error-boundary';
 export { default as KanbanBoard } from './kanban-board';
 export type { KanbanBoardProps, KanbanColumn, KanbanCardProps } from './kanban-board';
 export { default as TechStackModal } from './tech-stack-modal';
+export { default as LongPressVerify } from './long-press-verify';
+export type { LongPressVerifyProps } from './long-press-verify';

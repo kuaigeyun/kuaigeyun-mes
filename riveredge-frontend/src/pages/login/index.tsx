@@ -15,7 +15,7 @@ import { registerPersonal, registerOrganization, checkTenantExists, searchTenant
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
-import { TenantSelectionModal, TermsModal } from '../../components';
+import { TenantSelectionModal, TermsModal, LongPressVerify } from '../../components';
 import { theme } from 'antd';
 import './index.less';
 
@@ -63,6 +63,49 @@ export default function LoginPage() {
   const [tenantSearchOptions, setTenantSearchOptions] = useState<TenantSearchOption[]>([]);
   const [searchingTenant, setSearchingTenant] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<TenantSearchOption | null>(null);
+
+  // 频繁操作检测状态
+  const [loginFailCount, setLoginFailCount] = useState(0);
+  const [loginFailTimes, setLoginFailTimes] = useState<number[]>([]);
+  const [requireVerification, setRequireVerification] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+  
+  // 频繁操作阈值：5分钟内失败3次触发验证
+  const FAIL_COUNT_THRESHOLD = 3;
+  const TIME_WINDOW = 5 * 60 * 1000; // 5分钟
+  
+  /**
+   * 根据失败次数计算长按验证时间（递增惩罚机制）
+   * 
+   * @param failCount - 失败次数
+   * @returns 长按验证时间（毫秒）
+   */
+  const calculateVerifyDuration = (failCount: number): number => {
+    // 基础时间 2 秒
+    const baseDuration = 2000;
+    
+    // 递增惩罚规则：
+    // 3-4 次：2 秒
+    // 5-6 次：3 秒
+    // 7-8 次：5 秒
+    // 9-10 次：8 秒
+    // 11 次及以上：10 秒
+    if (failCount <= 4) {
+      return baseDuration; // 2 秒
+    } else if (failCount <= 6) {
+      return 3000; // 3 秒
+    } else if (failCount <= 8) {
+      return 5000; // 5 秒
+    } else if (failCount <= 10) {
+      return 8000; // 8 秒
+    } else {
+      return 10000; // 10 秒（最大）
+    }
+  };
+  
+  // localStorage 键名
+  const STORAGE_KEY = 'login_fail_times';
+  const VERIFIED_KEY = 'login_verified_token'; // 验证通过后的令牌
   
   /**
    * 个人注册表单数据接口
@@ -556,6 +599,157 @@ export default function LoginPage() {
   }, []);
 
   /**
+   * 从 localStorage 加载失败记录
+   */
+  const loadFailTimesFromStorage = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const times = JSON.parse(stored) as number[];
+        // 清理过期的记录
+        const now = Date.now();
+        const recentTimes = times.filter(time => now - time < TIME_WINDOW);
+        if (recentTimes.length > 0) {
+          setLoginFailTimes(recentTimes);
+          // 如果还有有效记录，更新存储
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(recentTimes));
+        } else {
+          // 如果没有有效记录，清除存储
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('加载登录失败记录失败:', error);
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  };
+
+  /**
+   * 保存失败记录到 localStorage
+   */
+  const saveFailTimesToStorage = (times: number[]) => {
+    try {
+      if (times.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(times));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (error) {
+      console.error('保存登录失败记录失败:', error);
+    }
+  };
+
+  /**
+   * 检查验证令牌是否有效
+   */
+  const checkVerifyToken = (): boolean => {
+    try {
+      const stored = localStorage.getItem(VERIFIED_KEY);
+      if (!stored) return false;
+      
+      const token = JSON.parse(stored) as { timestamp: number; expiresAt: number };
+      const now = Date.now();
+      
+      // 检查是否过期
+      if (now > token.expiresAt) {
+        localStorage.removeItem(VERIFIED_KEY);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      localStorage.removeItem(VERIFIED_KEY);
+      return false;
+    }
+  };
+
+  /**
+   * 组件加载时从 localStorage 恢复失败记录和验证状态
+   */
+  useEffect(() => {
+    loadFailTimesFromStorage();
+    // 检查是否有有效的验证令牌
+    const hasValidToken = checkVerifyToken();
+    if (hasValidToken) {
+      // 如果验证令牌有效，说明用户已经完成验证，允许直接登录
+      // 不需要再次显示验证按钮
+      setIsVerified(true);
+      // 注意：不清除 requireVerification，因为失败记录还在
+      // 但在登录时会检查验证令牌，如果有效则允许登录
+    }
+  }, []);
+
+  /**
+   * 监听登录失败次数变化，自动检查是否需要验证并保存到 localStorage
+   */
+  useEffect(() => {
+    if (loginFailTimes.length > 0) {
+      saveFailTimesToStorage(loginFailTimes);
+      checkRequireVerification();
+    } else {
+      // 如果失败记录为空，清除存储
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [loginFailTimes]);
+
+  /**
+   * 检查是否需要验证
+   * 5分钟内失败3次或以上，需要长按验证
+   * 
+   * @param currentFailTimes - 当前失败时间数组（可选，用于同步检查）
+   */
+  const checkRequireVerification = (currentFailTimes?: number[]) => {
+    const now = Date.now();
+    const failTimesToCheck = currentFailTimes !== undefined ? currentFailTimes : loginFailTimes;
+    
+    // 清理超过时间窗口的失败记录
+    const recentFailTimes = failTimesToCheck.filter(time => now - time < TIME_WINDOW);
+    
+    // 如果提供了新的失败时间数组，更新状态
+    if (currentFailTimes !== undefined) {
+      setLoginFailTimes(recentFailTimes);
+    } else if (recentFailTimes.length !== failTimesToCheck.length) {
+      // 如果有清理，更新状态
+      setLoginFailTimes(recentFailTimes);
+    }
+    
+    // 如果最近失败次数达到阈值，需要验证
+    const needVerify = recentFailTimes.length >= FAIL_COUNT_THRESHOLD;
+    
+    // 调试日志
+    if (recentFailTimes.length > 0) {
+      console.log('登录失败次数:', recentFailTimes.length, '需要验证:', needVerify);
+    }
+    
+    setRequireVerification(needVerify);
+    
+    // 如果需要验证但未通过，重置验证状态
+    if (needVerify && !isVerified) {
+      setIsVerified(false);
+    }
+    
+    return needVerify;
+  };
+
+  /**
+   * 处理验证通过
+   * 
+   * 验证通过后，生成一个验证令牌，只允许一次登录尝试
+   * 如果登录失败，需要重新验证
+   */
+  const handleVerify = () => {
+    setIsVerified(true);
+    // 生成验证令牌（包含时间戳，有效期5分钟）
+    const verifyToken = {
+      timestamp: Date.now(),
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5分钟有效期
+    };
+    // 保存验证令牌到 localStorage
+    localStorage.setItem(VERIFIED_KEY, JSON.stringify(verifyToken));
+    // 注意：不清除失败记录，验证后只允许一次尝试，如果失败需要重新验证
+  };
+
+  /**
    * 处理登录提交
    *
    * 登录成功后判断组织数量：
@@ -566,10 +760,51 @@ export default function LoginPage() {
    * @param values - 表单数据
    */
   const handleSubmit = async (values: LoginFormData) => {
+    // 检查是否需要验证 - 如果需要验证但未通过，直接阻止登录请求，不发送到后端
+    if (requireVerification && !isVerified) {
+      message.warning('检测到频繁操作，请先完成长按验证后再登录');
+      return;
+    }
+
+    // 如果已验证，检查验证令牌是否有效
+    if (isVerified) {
+      const hasValidToken = checkVerifyToken();
+      if (!hasValidToken) {
+        setIsVerified(false);
+        setRequireVerification(true);
+        message.warning('验证已过期，请重新完成长按验证');
+        return;
+      }
+    }
+
     try {
       const response = await login(values);
+      // 登录成功，清除所有记录和验证状态
+      setLoginFailTimes([]);
+      setLoginFailCount(0);
+      setRequireVerification(false);
+      setIsVerified(false);
+      // 清除 localStorage 中的所有记录
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(VERIFIED_KEY);
       handleLoginSuccess(response, values);
     } catch (error: any) {
+      // 登录失败，清除验证状态（验证后只允许一次尝试）
+      if (isVerified) {
+        setIsVerified(false);
+        localStorage.removeItem(VERIFIED_KEY);
+        message.warning('登录失败，请重新完成长按验证');
+      }
+      
+      // 记录失败时间和次数
+      const now = Date.now();
+      const updatedFailTimes = [...loginFailTimes, now];
+      setLoginFailTimes(updatedFailTimes);
+      setLoginFailCount(prev => prev + 1);
+      
+      // 检查是否需要验证（使用更新后的失败时间数组）
+      const needVerify = checkRequireVerification(updatedFailTimes);
+      
       // 提取错误信息（支持多种错误格式）
       let errorMessage = '登录失败，请稍后重试';
 
@@ -596,6 +831,11 @@ export default function LoginPage() {
       }
 
       message.error(errorMessage);
+      
+      // 如果触发验证要求，提示用户
+      if (needVerify) {
+        message.warning('检测到频繁操作，请完成长按验证后重试');
+      }
     }
   };
 
@@ -990,6 +1230,30 @@ export default function LoginPage() {
                 autoComplete: 'current-password',
               }}
             />
+
+            {/* 长按验证 - 仅在检测到频繁操作且未验证时显示 */}
+            {/* 如果验证令牌有效，说明已经完成验证，不需要再次显示验证按钮 */}
+            {requireVerification && !isVerified && (() => {
+              const verifyDuration = calculateVerifyDuration(loginFailTimes.length);
+              return (
+                <div style={{  marginBottom: 24 }}>
+                  <Tooltip 
+                    title={`检测到频繁操作，请完成验证（${verifyDuration / 1000}秒）`} 
+                    placement="top"
+                  >
+                    <div>
+                      <LongPressVerify
+                        duration={verifyDuration}
+                        onVerify={handleVerify}
+                        text={`长按验证 ${verifyDuration / 1000}秒`}
+                        size="large"
+                        disabled={false}
+                      />
+                    </div>
+                  </Tooltip>
+                </div>
+              );
+            })()}
           </ProForm>
 
           <div className="login-form-footer">
@@ -1342,7 +1606,7 @@ export default function LoginPage() {
           setRegisterDrawerVisible(false);
           setRegisterType('select');
         }}
-        size={600}
+        width="50%"
         placement="right"
         maskClosable={true}
         closable={true}

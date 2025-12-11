@@ -1,5 +1,5 @@
 /**
- * RiverEdge SaaS 多组织框架 - 页面标签栏组件
+ * RiverEdge SaaS 多组织框架 - 统一标签栏组件
  *
  * 提供多标签页管理功能，支持标签的添加、切换、关闭等操作
  */
@@ -56,9 +56,9 @@ const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
 };
 
 /**
- * 页面标签栏组件属性
+ * 统一标签栏组件属性
  */
-interface PageTabsProps {
+interface UniTabsProps {
   menuConfig: MenuDataItem[];
   children: React.ReactNode;
   /** 是否全屏 */
@@ -75,9 +75,9 @@ const TAB_CONFIG = {
 };
 
 /**
- * 页面标签栏组件
+ * 统一标签栏组件
  */
-export default function PageTabs({ menuConfig, children, isFullscreen = false, onToggleFullscreen }: PageTabsProps) {
+export default function UniTabs({ menuConfig, children, isFullscreen = false, onToggleFullscreen }: UniTabsProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
@@ -223,10 +223,10 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
   useEffect(() => {
     const loadTabsPersistence = async () => {
       try {
-        console.log('PageTabs开始加载标签持久化配置');
+        console.log('UniTabs开始加载标签持久化配置');
         // 优先从用户偏好设置读取
         const userPreference = await getUserPreference().catch(() => null);
-        console.log('PageTabs读取用户偏好设置结果:', userPreference);
+        console.log('UniTabs读取用户偏好设置结果:', userPreference);
 
         if (userPreference?.preferences?.tabs_persistence !== undefined) {
           const persistence = userPreference.preferences.tabs_persistence;
@@ -273,14 +273,14 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
     
     // 监听用户偏好更新事件
     const handleUserPreferenceUpdated = (event: CustomEvent) => {
-      console.log('PageTabs收到用户偏好更新事件:', event.detail);
+      console.log('UniTabs收到用户偏好更新事件:', event.detail);
       if (event.detail?.preferences?.tabs_persistence !== undefined) {
         const persistence = event.detail.preferences.tabs_persistence;
-        console.log('PageTabs更新标签栏持久化配置:', persistence);
+        console.log('UniTabs更新标签栏持久化配置:', persistence);
         setTabsPersistence(persistence);
         // 配置更新后，立即标记为已初始化（无论开启还是关闭）
         setIsInitialized(true);
-        console.log('PageTabs配置更新完成，已标记为已初始化');
+        console.log('UniTabs配置更新完成，已标记为已初始化');
       }
     };
     
@@ -747,7 +747,7 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
     <>
       <style>{`
         /* 标签栏样式优化 */
-        .page-tabs-container .ant-tabs {
+        .uni-tabs-container .ant-tabs {
           margin: 0 !important;
           margin-bottom: 0 !important;
           border: none !important;
@@ -758,9 +758,10 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         }
           .ant-tabs{
             padding-top: 2px;
+            padding-left: 8px;
           }
         /* 覆盖 Ant Design Tabs 原生下边框样式 */
-        .page-tabs-container .ant-tabs-nav {
+        .uni-tabs-container .ant-tabs-nav {
           margin: 0 !important;
           margin-bottom: 0 !important;
           padding: 0 !important;
@@ -769,11 +770,11 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           height: 38px !important;
           overflow: visible !important;
         }
-        .page-tabs-container .ant-tabs-nav::before {
+        .uni-tabs-container .ant-tabs-nav::before {
           display: none !important;
           border-bottom: none !important;
         }
-        .page-tabs-container .ant-tabs-nav-wrap {
+        .uni-tabs-container .ant-tabs-nav-wrap {
           border-bottom: none !important;
           overflow-x: auto !important;
           /* 不设置 overflow-y，避免与 overflow-x: auto 冲突导致 visible 被计算为 auto */
@@ -788,18 +789,18 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           -ms-overflow-style: none !important; /* IE/Edge */
         }
         /* 隐藏 Chrome/Safari/Webkit 滚动条且不占用高度 */
-        .page-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar {
+        .uni-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar {
           display: none !important;
           width: 0 !important;
           height: 0 !important;
         }
         /* 禁用 Ant Design 原生左侧阴影，使用自定义阴影适配小箭头按钮 */
         /* 注意：当 can-scroll-left 时，会通过更具体的选择器覆盖此规则显示阴影 */
-        .page-tabs-container .ant-tabs-nav-wrap::before {
+        .uni-tabs-container .ant-tabs-nav-wrap::before {
           display: none !important;
           border-bottom: none !important;
         }
-        .page-tabs-container .ant-tabs-nav-list {
+        .uni-tabs-container .ant-tabs-nav-list {
           border-bottom: none !important;
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
@@ -809,18 +810,18 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           align-items: center !important;
         }
         /* 覆盖所有可能的边框颜色 #F0F0F0 */
-        .page-tabs-container .ant-tabs-nav,
-        .page-tabs-container .ant-tabs-nav-wrap,
-        .page-tabs-container .ant-tabs-nav-list,
-        .page-tabs-container .ant-tabs-tab {
+        .uni-tabs-container .ant-tabs-nav,
+        .uni-tabs-container .ant-tabs-nav-wrap,
+        .uni-tabs-container .ant-tabs-nav-list,
+        .uni-tabs-container .ant-tabs-tab {
           border-color: transparent !important;
         }
-        .page-tabs-container .ant-tabs-nav::after {
+        .uni-tabs-container .ant-tabs-nav::after {
           display: none !important;
           border-bottom: none !important;
         }
         /* Chrome 式标签样式 - 所有标签都有顶部圆角 */
-        .page-tabs-container .ant-tabs-tab {
+        .uni-tabs-container .ant-tabs-tab {
           margin: 0 !important;
           padding: 8px 16px !important;
           padding-bottom: 8px !important;
@@ -840,21 +841,21 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           box-sizing: border-box !important;
         }
         /* 标签按钮和关闭按钮垂直居中 */
-        .page-tabs-container .ant-tabs-tab-btn {
+        .uni-tabs-container .ant-tabs-tab-btn {
           display: flex !important;
           align-items: center !important;
           line-height: 22px !important;
         }
-        .page-tabs-container .ant-tabs-tab-remove {
+        .uni-tabs-container .ant-tabs-tab-remove {
           display: flex !important;
           align-items: center !important;
           line-height: 22px !important;
         }
         /* 未激活标签：使用竖线分隔 */
-        .page-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
           position: relative;
         }
-        .page-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active)::after {
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active)::after {
           content: '';
           position: absolute;
           right: 0;
@@ -867,19 +868,19 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           opacity: 1 !important;
         }
         /* 最后一个标签不需要右侧竖线 */
-        .page-tabs-container .ant-tabs-tab:last-child::after {
+        .uni-tabs-container .ant-tabs-tab:last-child::after {
           display: none !important;
         }
-        .page-tabs-container .ant-tabs-content-holder {
+        .uni-tabs-container .ant-tabs-content-holder {
           display: none;
         }
         /* 移除标签底部指示线 */
-        .page-tabs-container .ant-tabs-ink-bar {
+        .uni-tabs-container .ant-tabs-ink-bar {
           display: none !important;
         }
         /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 - 使用主题背景色 */
         /* 参考：https://juejin.cn/post/6986827061461516324 */
-        .page-tabs-container .ant-tabs-tab-active {
+        .uni-tabs-container .ant-tabs-tab-active {
           background: var(--ant-colorBgLayout) !important;
           border-bottom: none !important;
           border-top-left-radius: 8px !important;
@@ -901,8 +902,8 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           align-items: center !important;
         }
         /* Chrome 式反向圆角 - 使用伪元素实现左右两侧的内凹圆角 */
-        .page-tabs-container .ant-tabs-tab-active::before,
-        .page-tabs-container .ant-tabs-tab-active::after {
+        .uni-tabs-container .ant-tabs-tab-active::before,
+        .uni-tabs-container .ant-tabs-tab-active::after {
           position: absolute;
           bottom: 0;
           content: '';
@@ -918,38 +919,38 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           will-change: transform;
         }
         /* 左侧反向圆角 */
-        .page-tabs-container .ant-tabs-tab-active::before {
+        .uni-tabs-container .ant-tabs-tab-active::before {
           left: -16px;
           clip-path: inset(50% -8px 0 50%);
         }
         /* 右侧反向圆角 - 调整 clip-path 确保右侧圆角正确显示 */
-        .page-tabs-container .ant-tabs-tab-active::after {
+        .uni-tabs-container .ant-tabs-tab-active::after {
           right: -16px;
           clip-path: inset(50% 50% 0 -8px);
         }
         /* 第一个标签不需要左侧反向圆角 */
-        .page-tabs-container .ant-tabs-tab-active:first-child::before {
+        .uni-tabs-container .ant-tabs-tab-active:first-child::before {
           display: none;
         }
         /* 最后一个标签不需要右侧反向圆角 */
-        .page-tabs-container .ant-tabs-tab-active:last-child::after {
+        .uni-tabs-container .ant-tabs-tab-active:last-child::after {
           display: none;
         }
         /* 确保单个标签时也没有底部间距 */
-        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
           margin-bottom: 0 !important;
         }
-        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
           margin-bottom: 0px !important;
         }
         /* Chrome 式标签：激活标签与内容区无缝融合 */
         /* 激活标签向左偏移1px，但排除第一个标签，实现标签之间的重叠效果 */
-        .page-tabs-container .ant-tabs-tab-active:not(:first-child) {
+        .uni-tabs-container .ant-tabs-tab-active:not(:first-child) {
           margin-left: -1px !important;
           padding-left: 17px !important;
         }
         /* Chrome 式效果：激活标签文字颜色 */
-        .page-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
+        .uni-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
           color: var(--ant-colorText) !important;
           font-weight: 500 !important;
         }
@@ -957,24 +958,24 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         /* 注意：不能隐藏激活标签的 ::after，因为需要用它来实现右侧圆角 */
         /* 但是，激活标签后面的标签仍然需要显示分割线，所以不隐藏它 */
         /* 注释掉原来的规则，让分割线正常显示 */
-        /* .page-tabs-container .ant-tabs-tab-active + .ant-tabs-tab::after {
+        /* .uni-tabs-container .ant-tabs-tab-active + .ant-tabs-tab::after {
           display: none !important;
         } */
         /* 移除标签切换时的过渡动画 */
-        .page-tabs-container .ant-tabs-tab {
+        .uni-tabs-container .ant-tabs-tab {
           transition: none !important;
         }
-        .page-tabs-container .ant-tabs-ink-bar {
+        .uni-tabs-container .ant-tabs-ink-bar {
           transition: none !important;
         }
         /* 标签栏与内容区无缝融合 */
-        .page-tabs-wrapper {
+        .uni-tabs-wrapper {
           height: 100%;
           display: flex;
           flex-direction: column;
           overflow: visible !important;
         }
-        .page-tabs-header {
+        .uni-tabs-header {
           background: var(--ant-colorBgContainer) !important;
           flex-shrink: 0;
           padding-bottom: 0;
@@ -986,39 +987,39 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           border-bottom: none !important;
         }
         /* 确保背景色生效 - 增加选择器优先级，支持深色模式 */
-        div.page-tabs-header {
+        div.uni-tabs-header {
           background: var(--ant-colorBgContainer) !important;
         }
         /* 标签栏容器背景色与菜单栏一致 */
-        .page-tabs-container {
+        .uni-tabs-container {
           background: var(--ant-colorBgContainer) !important;
         }
-        .page-tabs-container .ant-tabs-nav {
+        .uni-tabs-container .ant-tabs-nav {
           background: var(--ant-colorBgContainer) !important;
         }
-        .page-tabs-container .ant-tabs-nav-wrap {
+        .uni-tabs-container .ant-tabs-nav-wrap {
           background: var(--ant-colorBgContainer) !important;
         }
-        .page-tabs-container .ant-tabs-nav-list {
+        .uni-tabs-container .ant-tabs-nav-list {
           background: var(--ant-colorBgContainer) !important;
         }
         /* 确保单个标签时也没有底部间距 */
-        .page-tabs-container .ant-tabs-nav {
+        .uni-tabs-container .ant-tabs-nav {
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
         }
-        .page-tabs-container .ant-tabs-nav-list {
+        .uni-tabs-container .ant-tabs-nav-list {
           margin-bottom: 0 !important;
           padding-bottom: 0 !important;
         }
         /* 当只有一个标签时，确保没有额外间距 */
-        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
           margin-bottom: 0 !important;
         }
-        .page-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
           margin-bottom: -1px !important;
         }
-        .page-tabs-content {
+        .uni-tabs-content {
           flex: 1;
           overflow: auto;
           position: relative;
@@ -1027,7 +1028,7 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           padding-top: 0 !important;
         }
         /* 标签栏头部包装器 - 包含滚动按钮 */
-        .page-tabs-header-wrapper {
+        .uni-tabs-header-wrapper {
           display: flex;
           align-items: center;
           position: relative;
@@ -1043,20 +1044,20 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           pointer-events: none;
         }
         /* 允许按钮和标签栏接收点击事件 */
-        .page-tabs-header-wrapper .page-tabs-scroll-button,
-        .page-tabs-header-wrapper .page-tabs-container {
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button,
+        .uni-tabs-header-wrapper .uni-tabs-container {
           pointer-events: auto;
         }
-        /* 滚动按钮样式 - 默认主题色（可点击时）统一大小和padding，正方形按钮 */
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]),
-        .page-tabs-header-wrapper button.page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
-        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
-        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
-          width: 40px !important; /* 正方形，与高度一致 */
+        /* 滚动按钮样式 - 默认主题色（可点击时）统一大小和padding */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
+          width: 24px !important; /* 图标14px + 左右padding各5px = 24px */
           height: 40px !important; /* 总高40px */
-          padding: 13px !important; /* 四周padding相等，图标14px居中 */
+          padding: 13px 5px !important; /* 上下13px，左右5px，图标14px居中 */
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -1075,39 +1076,39 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           line-height: 1 !important;
         }
         /* 按钮图标颜色 - 可点击时使用主题色 */
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg {
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg {
           color: ${token.colorPrimary} !important;
           fill: ${token.colorPrimary} !important;
         }
         /* 去掉按钮的所有伪元素和边框 */
-        .page-tabs-header-wrapper .page-tabs-scroll-button::before,
-        .page-tabs-header-wrapper .page-tabs-scroll-button::after {
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button::before,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button::after {
           display: none !important;
         }
-        /* 无法点击时：浅灰色 - 覆盖所有可能的样式，统一大小和padding，正方形按钮 */
-        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled,
-        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled],
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:disabled,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn.ant-btn-disabled,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:disabled,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text.ant-btn-disabled,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-disabled,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button[disabled] {
-          width: 40px !important; /* 正方形，与高度一致 */
+        /* 无法点击时：浅灰色 - 覆盖所有可能的样式，统一大小和padding */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled],
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn.ant-btn-disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text.ant-btn-disabled,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:disabled,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn-disabled,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button[disabled] {
+          width: 24px !important; /* 图标14px + 左右padding各5px = 24px */
           height: 40px !important; /* 总高40px */
-          padding: 13px !important; /* 四周padding相等，图标14px居中 */
+          padding: 13px 5px !important; /* 上下13px，左右5px，图标14px居中 */
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -1125,47 +1126,47 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           margin-top: 0 !important;
           line-height: 1 !important;
         }
-        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled .ant-btn-icon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled span.anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled .ant-btn-icon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled span.anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled] .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled] .ant-btn-icon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button[disabled] span.anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:disabled .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn.ant-btn-disabled .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:disabled .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text.ant-btn-disabled .anticon,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled .anticon,
-        .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled svg,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:disabled svg {
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled] .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled] .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled] span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn.ant-btn-disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text.ant-btn-disabled .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:disabled .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:disabled svg,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled svg {
           color: rgba(0, 0, 0, 0.25) !important;
           fill: rgba(0, 0, 0, 0.25) !important;
         }
         /* 可以点击时：主题色（默认状态，hover 时加深） */
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover {
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover {
           color: var(--ant-colorPrimaryHover) !important;
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
         }
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .ant-btn-icon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover span.anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
-        .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon {
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon {
           color: var(--ant-colorPrimaryHover) !important;
         }
         /* 按钮容器样式 - 高度与按钮一致，宽度等于按钮宽度 */
-        .page-tabs-scroll-button-wrapper {
+        .uni-tabs-scroll-button-wrapper {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 40px; /* 按钮宽度 40px，容器宽度也设置为 40px */
+          width: 24px; /* 按钮宽度 24px，容器宽度也设置为 24px */
           height: 40px; /* 与按钮高度一致 */
           padding-bottom: 0 !important;
           padding-top: 0 !important;
@@ -1175,71 +1176,71 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           flex-shrink: 0; /* 防止被压缩 */
         }
         /* 左按钮容器 - 右侧分割线 */
-        .page-tabs-scroll-button-left {
+        .uni-tabs-scroll-button-left {
           margin-right: 0;
           position: relative;
           z-index: 2;
         }
-        .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-left)::after {
+        .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after {
           content: '';
           position: absolute;
           right: 0;
           top: -1px;
+          bottom: 0; /* 确保分割线到底部 */
           width: 1px;
-          height: 40px !important; /* 固定高度，占满标签栏容器 */
           background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
           z-index: 1;
           opacity: 1 !important;
         }
         /* 深色模式下的分割线颜色 */
-        html[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-left)::after,
-        body[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-left)::after {
+        html[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after,
+        body[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after {
           background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
         }
         /* 左侧阴影 - 显示在左按钮右侧，当可以向左滚动时显示 */
-        .page-tabs-header-wrapper.can-scroll-left::before {
+        .uni-tabs-header-wrapper.can-scroll-left::before {
           content: '';
           position: absolute;
-          left: 40px; /* 按钮宽度 40px，适配新按钮尺寸 */
-          top: -1px; /* 与分割线对齐 */
+          left: 24px; /* 按钮宽度 24px，适配新按钮尺寸 */
+          top: 0;
+          bottom: 0; /* 与右侧阴影保持一致，确保对称 */
           width: 20px;
-          height: 40px !important; /* 固定高度，占满标签栏容器 */
           background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent) !important; /* 提高不透明度，确保可见 */
           pointer-events: none;
-          z-index: 10; /* 提高 z-index，确保显示在 Tabs 容器上方 */
+          z-index: 1; /* 与右侧阴影一致，确保不遮挡标签文字 */
         }
         /* 深色模式下的左侧阴影 */
-        html[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-left::before,
-        body[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-left::before {
+        html[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-left::before,
+        body[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-left::before {
           background: linear-gradient(to right, rgba(255, 255, 255, 0.08), transparent) !important; /* 提高不透明度，确保可见 */
         }
         /* 右按钮容器 - 左侧分割线（移除右侧分割线避免重复） */
-        .page-tabs-scroll-button-right {
+        .uni-tabs-scroll-button-right {
           margin-left: 0;
           position: relative;
           z-index: 2;
         }
-        .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-right)::before {
+        .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before {
           content: '';
           position: absolute;
           left: 0;
           top: -1px;
+          bottom: 0; /* 确保分割线到底部 */
           width: 1px;
-          height: 40px !important; /* 固定高度，占满标签栏容器 */
           background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
           z-index: 1;
           opacity: 1 !important;
         }
         /* 深色模式下的分割线颜色 */
-        html[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-right)::before,
-        body[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-right)::before {
+        html[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before,
+        body[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before {
           background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
         }
         /* 右侧阴影 - 显示在小箭头按钮左侧，固定位置不随滚动移动 */
-        .page-tabs-header-wrapper.can-scroll-right::after {
+        .uni-tabs-header-wrapper.can-scroll-right::after {
           content: '';
           position: absolute;
-          right: 40px; /* 按钮宽度 40px，适配新按钮尺寸 */
+          right: 24px; /* 按钮宽度 24px，适配新按钮尺寸 */
           top: 0;
           bottom: 0;
           width: 20px;
@@ -1248,68 +1249,82 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           z-index: 1;
         }
         /* 深色模式下的右侧阴影 */
-        html[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-right::after,
-        body[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-right::after {
+        html[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-right::after,
+        body[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-right::after {
           background: linear-gradient(to left, rgba(255, 255, 255, 0.06), transparent);
         }
-        /* 如果有全屏按钮，右侧阴影需要向右偏移 */
-        .page-tabs-header-wrapper.can-scroll-right:has(.page-tabs-fullscreen-button-wrapper)::after {
-          right: 80px; /* 右按钮 40px + 全屏按钮 40px */
+        /* 如果有全屏按钮且没有右按钮，右侧阴影直接在全屏按钮左侧 */
+        .uni-tabs-header-wrapper.can-scroll-right:has(.uni-tabs-fullscreen-button-wrapper):not(:has(.uni-tabs-scroll-button-right))::after {
+          right: 40px; /* 全屏按钮 40px */
         }
-        /* 全屏按钮容器样式 - 统一大小和padding */
-        .page-tabs-fullscreen-button-wrapper {
+        /* 如果有全屏按钮且有右按钮，右侧阴影需要向右偏移 */
+        .uni-tabs-header-wrapper.can-scroll-right:has(.uni-tabs-fullscreen-button-wrapper):has(.uni-tabs-scroll-button-right)::after {
+          right: 64px; /* 右按钮 24px + 全屏按钮 40px */
+        }
+        /* 全屏按钮容器样式 - 统一大小和padding，与按钮宽度高度一致 */
+        .uni-tabs-fullscreen-button-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px; /* 按钮宽度 40px，容器宽度也设置为 40px */
+          height: 40px; /* 与按钮高度一致 */
           margin-left: 0;
+          padding-bottom: 0 !important;
+          padding-top: 0 !important;
+          border-bottom: none !important;
           position: relative;
+          overflow: visible; /* 确保分割线可以显示 */
+          flex-shrink: 0; /* 防止被压缩 */
           z-index: 2;
         }
         /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，等高 */
-        .page-tabs-fullscreen-button-wrapper::before {
+        .uni-tabs-fullscreen-button-wrapper::before {
           content: '';
           position: absolute;
           left: 0;
           top: -1px;
+          bottom: 0; /* 确保分割线到底部 */
           width: 1px;
-          height: 40px !important; /* 固定高度，占满标签栏容器 */
           background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
           z-index: 1;
           opacity: 1 !important;
         }
         /* 深色模式下的分割线颜色 */
-        html[data-theme='dark'] .page-tabs-fullscreen-button-wrapper::before,
-        body[data-theme='dark'] .page-tabs-fullscreen-button-wrapper::before {
+        html[data-theme='dark'] .uni-tabs-fullscreen-button-wrapper::before,
+        body[data-theme='dark'] .uni-tabs-fullscreen-button-wrapper::before {
           background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
         }
-        /* 全屏按钮样式 - 统一大小和padding，覆盖滚动按钮的padding设置，正方形按钮 */
-        .page-tabs-header-wrapper .page-tabs-fullscreen-button,
-        .page-tabs-header-wrapper .page-tabs-fullscreen-button.ant-btn,
-        .page-tabs-header-wrapper .page-tabs-fullscreen-button.ant-btn-text,
-        .page-tabs-header-wrapper button.page-tabs-fullscreen-button,
-        .page-tabs-header-wrapper button.page-tabs-fullscreen-button.ant-btn,
-        .page-tabs-header-wrapper button.page-tabs-fullscreen-button.ant-btn-text {
+        /* 全屏按钮样式 - 单独设置，保持左右padding为13px（与左右按钮不同） */
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn-text {
           width: 40px !important; /* 正方形，与高度一致 */
           height: 40px !important; /* 总高40px */
-          padding: 13px !important; /* 四周padding相等，图标14px居中 */
+          padding: 13px !important; /* 四周padding相等（左右13px），图标14px居中 */
         }
         /* 标签栏容器 - 允许横向滚动，底部允许溢出显示外圆角 */
-        .page-tabs-container {
+        .uni-tabs-container {
           flex: 1;
           overflow-x: hidden;
           overflow-y: visible;
           position: relative;
           z-index: 1;
         }
-        .page-tabs-container .ant-tabs-nav {
+        .uni-tabs-container .ant-tabs-nav {
           overflow-x: auto;
           overflow-y: visible;
           padding-bottom: 0 !important;
           margin-bottom: 0 !important;
         }
-        .page-tabs-container .ant-tabs-nav-list {
+        .uni-tabs-container .ant-tabs-nav-list {
           overflow: visible !important;
           padding-bottom: 0 !important;
           margin-bottom: 0 !important;
         }
-        .page-tabs-container .ant-tabs-tab {
+        .uni-tabs-container .ant-tabs-tab {
           overflow: visible !important;
         }
           .ant-tabs-nav-more{
@@ -1317,44 +1332,46 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
             box-shadow: none !important;
           }
         /* 移除所有可能移动的阴影效果和分隔线 */
-        .page-tabs-container .ant-tabs-nav-more {
+        .uni-tabs-container .ant-tabs-nav-more {
           box-shadow: none !important;
         }
-        .page-tabs-container .ant-tabs-nav-operations {
+        .uni-tabs-container .ant-tabs-nav-operations {
           box-shadow: none !important;
         }
         /* 移除 nav-operations 的伪元素分隔线 */
-        .page-tabs-container .ant-tabs-nav-operations::before,
-        .page-tabs-container .ant-tabs-nav-operations::after {
+        .uni-tabs-container .ant-tabs-nav-operations::before,
+        .uni-tabs-container .ant-tabs-nav-operations::after {
           display: none !important;
           box-shadow: none !important;
         }
         /* 禁用 Ant Design 原生右侧阴影，使用自定义阴影适配小箭头按钮 */
-        .page-tabs-container .ant-tabs-nav-wrap::after {
+        .uni-tabs-container .ant-tabs-nav-wrap::after {
           display: none !important;
         }
         /* 移除 nav-list 的分隔线 */
-        .page-tabs-container .ant-tabs-nav-list::after {
+        .uni-tabs-container .ant-tabs-nav-list::after {
           display: none !important;
         }
       `}</style>
-      <div className="page-tabs-wrapper">
-        <div className="page-tabs-header">
+      <div className="uni-tabs-wrapper">
+        <div className="uni-tabs-header">
           <div 
-            className={`page-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
+            className={`uni-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
             ref={tabsNavRef}
           >
-            {/* 左侧滚动箭头 */}
-            <div className="page-tabs-scroll-button-wrapper">
-              <Button
-                type="text"
-                size="small"
-                icon={<CaretLeftFilled />}
-                onClick={() => scrollTabs('left')}
-                disabled={!canScrollLeft}
-                className="page-tabs-scroll-button page-tabs-scroll-button-left"
-              />
-            </div>
+            {/* 左侧滚动箭头 - 仅在需要时显示 */}
+            {canScrollLeft && (
+              <div className="uni-tabs-scroll-button-wrapper">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CaretLeftFilled />}
+                  onClick={() => scrollTabs('left')}
+                  disabled={!canScrollLeft}
+                  className="uni-tabs-scroll-button uni-tabs-scroll-button-left"
+                />
+              </div>
+            )}
             <Tabs
               activeKey={activeKey}
               onChange={handleTabChange}
@@ -1400,36 +1417,38 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
                 closable: tab.closable && !tab.pinned, // 固定标签不可关闭
               }))}
               size="small"
-              className="page-tabs-container"
+              className="uni-tabs-container"
             />
-            {/* 右侧滚动箭头 */}
-            <div className="page-tabs-scroll-button-wrapper">
-              <Button
-                type="text"
-                size="small"
-                icon={<CaretRightFilled />}
-                onClick={() => scrollTabs('right')}
-                disabled={!canScrollRight}
-                className="page-tabs-scroll-button page-tabs-scroll-button-right"
-              />
-            </div>
+            {/* 右侧滚动箭头 - 仅在需要时显示 */}
+            {canScrollRight && (
+              <div className="uni-tabs-scroll-button-wrapper">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CaretRightFilled />}
+                  onClick={() => scrollTabs('right')}
+                  disabled={!canScrollRight}
+                  className="uni-tabs-scroll-button uni-tabs-scroll-button-right"
+                />
+              </div>
+            )}
             {/* 全屏按钮 */}
             {onToggleFullscreen && (
-              <div className="page-tabs-scroll-button-wrapper page-tabs-fullscreen-button-wrapper">
+              <div className="uni-tabs-scroll-button-wrapper uni-tabs-fullscreen-button-wrapper">
                 <Tooltip title={isFullscreen ? '退出全屏' : '全屏'} placement="left">
                   <Button
                     type="text"
                     size="small"
                     icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
                     onClick={onToggleFullscreen}
-                    className="page-tabs-scroll-button page-tabs-fullscreen-button"
+                    className="uni-tabs-scroll-button uni-tabs-fullscreen-button"
                   />
                 </Tooltip>
               </div>
             )}
           </div>
         </div>
-        <div className="page-tabs-content" key={`content-${activeKey}-${refreshKey}`}>
+        <div className="uni-tabs-content" key={`content-${activeKey}-${refreshKey}`}>
           {children}
         </div>
       </div>
