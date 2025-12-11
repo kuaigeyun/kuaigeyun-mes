@@ -756,6 +756,9 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           outline: none !important;
           background: var(--ant-colorBgContainer) !important;
         }
+          .ant-tabs{
+            padding-top: 2px;
+          }
         /* 覆盖 Ant Design Tabs 原生下边框样式 */
         .page-tabs-container .ant-tabs-nav {
           margin: 0 !important;
@@ -775,10 +778,11 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           overflow-x: auto !important;
           /* 不设置 overflow-y，避免与 overflow-x: auto 冲突导致 visible 被计算为 auto */
           height: 38px !important;
-          clip-path: none !important;
+          /* 移除 clip-path: none，允许 Ant Design 原生阴影显示 */
           padding-bottom: 0 !important;
           margin-bottom: 0 !important;
           box-sizing: border-box !important;
+          position: relative; /* 为阴影定位提供参考 */
           /* 隐藏滚动条且不占用高度 */
           scrollbar-width: none !important; /* Firefox */
           -ms-overflow-style: none !important; /* IE/Edge */
@@ -789,6 +793,8 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           width: 0 !important;
           height: 0 !important;
         }
+        /* 禁用 Ant Design 原生左侧阴影，使用自定义阴影适配小箭头按钮 */
+        /* 注意：当 can-scroll-left 时，会通过更具体的选择器覆盖此规则显示阴影 */
         .page-tabs-container .ant-tabs-nav-wrap::before {
           display: none !important;
           border-bottom: none !important;
@@ -971,7 +977,6 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         .page-tabs-header {
           background: var(--ant-colorBgContainer) !important;
           flex-shrink: 0;
-          padding-top: 2px;
           padding-bottom: 0;
           margin-bottom: 0;
           position: sticky;
@@ -1042,16 +1047,16 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         .page-tabs-header-wrapper .page-tabs-container {
           pointer-events: auto;
         }
-        /* 滚动按钮样式 - 默认主题色（可点击时） */
+        /* 滚动按钮样式 - 默认主题色（可点击时）统一大小和padding，正方形按钮 */
         .page-tabs-header-wrapper .page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .page-tabs-header-wrapper button.page-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
-          width: 24px !important;
-          height: 30px !important;
-          padding: 0 !important;
+          width: 40px !important; /* 正方形，与高度一致 */
+          height: 40px !important; /* 总高40px */
+          padding: 13px !important; /* 四周padding相等，图标14px居中 */
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -1089,7 +1094,7 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         .page-tabs-header-wrapper .page-tabs-scroll-button::after {
           display: none !important;
         }
-        /* 无法点击时：浅灰色 - 覆盖所有可能的样式 */
+        /* 无法点击时：浅灰色 - 覆盖所有可能的样式，统一大小和padding，正方形按钮 */
         .page-tabs-header-wrapper .page-tabs-scroll-button:disabled,
         .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-disabled,
         .page-tabs-header-wrapper .page-tabs-scroll-button[disabled],
@@ -1100,9 +1105,9 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         .page-tabs-header-wrapper button.page-tabs-scroll-button:disabled,
         .page-tabs-header-wrapper button.page-tabs-scroll-button.ant-btn-disabled,
         .page-tabs-header-wrapper button.page-tabs-scroll-button[disabled] {
-          width: 24px !important;
-          height: 30px !important;
-          padding: 0 !important;
+          width: 40px !important; /* 正方形，与高度一致 */
+          height: 40px !important; /* 总高40px */
+          padding: 13px !important; /* 四周padding相等，图标14px居中 */
           display: flex !important;
           align-items: center !important;
           justify-content: center !important;
@@ -1155,56 +1160,135 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
         .page-tabs-header-wrapper .page-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon {
           color: var(--ant-colorPrimaryHover) !important;
         }
-        /* 按钮容器样式 - 高度与 ant-tabs 一致 */
+        /* 按钮容器样式 - 高度与按钮一致，宽度等于按钮宽度 */
         .page-tabs-scroll-button-wrapper {
           display: flex;
           align-items: center;
           justify-content: center;
-          height: 38px;
+          width: 40px; /* 按钮宽度 40px，容器宽度也设置为 40px */
+          height: 40px; /* 与按钮高度一致 */
           padding-bottom: 0 !important;
           padding-top: 0 !important;
           border-bottom: none !important;
+          position: relative;
+          overflow: visible; /* 确保分割线可以显示 */
+          flex-shrink: 0; /* 防止被压缩 */
         }
+        /* 左按钮容器 - 右侧分割线 */
         .page-tabs-scroll-button-left {
-          margin-right: 4px;
+          margin-right: 0;
           position: relative;
           z-index: 2;
         }
+        .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-left)::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          top: -1px;
+          width: 1px;
+          height: 40px !important; /* 固定高度，占满标签栏容器 */
+          background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 深色模式下的分割线颜色 */
+        html[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-left)::after,
+        body[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-left)::after {
+          background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
+        }
+        /* 左侧阴影 - 显示在左按钮右侧，当可以向左滚动时显示 */
+        .page-tabs-header-wrapper.can-scroll-left::before {
+          content: '';
+          position: absolute;
+          left: 40px; /* 按钮宽度 40px，适配新按钮尺寸 */
+          top: -1px; /* 与分割线对齐 */
+          width: 20px;
+          height: 40px !important; /* 固定高度，占满标签栏容器 */
+          background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent) !important; /* 提高不透明度，确保可见 */
+          pointer-events: none;
+          z-index: 10; /* 提高 z-index，确保显示在 Tabs 容器上方 */
+        }
+        /* 深色模式下的左侧阴影 */
+        html[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-left::before,
+        body[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-left::before {
+          background: linear-gradient(to right, rgba(255, 255, 255, 0.08), transparent) !important; /* 提高不透明度，确保可见 */
+        }
+        /* 右按钮容器 - 左侧分割线（移除右侧分割线避免重复） */
         .page-tabs-scroll-button-right {
-          margin-left: 4px;
+          margin-left: 0;
           position: relative;
           z-index: 2;
         }
-        /* 全屏按钮容器样式 */
+        .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-right)::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: -1px;
+          width: 1px;
+          height: 40px !important; /* 固定高度，占满标签栏容器 */
+          background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 深色模式下的分割线颜色 */
+        html[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-right)::before,
+        body[data-theme='dark'] .page-tabs-scroll-button-wrapper:has(.page-tabs-scroll-button-right)::before {
+          background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
+        }
+        /* 右侧阴影 - 显示在小箭头按钮左侧，固定位置不随滚动移动 */
+        .page-tabs-header-wrapper.can-scroll-right::after {
+          content: '';
+          position: absolute;
+          right: 40px; /* 按钮宽度 40px，适配新按钮尺寸 */
+          top: 0;
+          bottom: 0;
+          width: 20px;
+          background: linear-gradient(to left, rgba(0, 0, 0, 0.06), transparent);
+          pointer-events: none;
+          z-index: 1;
+        }
+        /* 深色模式下的右侧阴影 */
+        html[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-right::after,
+        body[data-theme='dark'] .page-tabs-header-wrapper.can-scroll-right::after {
+          background: linear-gradient(to left, rgba(255, 255, 255, 0.06), transparent);
+        }
+        /* 如果有全屏按钮，右侧阴影需要向右偏移 */
+        .page-tabs-header-wrapper.can-scroll-right:has(.page-tabs-fullscreen-button-wrapper)::after {
+          right: 80px; /* 右按钮 40px + 全屏按钮 40px */
+        }
+        /* 全屏按钮容器样式 - 统一大小和padding */
         .page-tabs-fullscreen-button-wrapper {
-          margin-left: 4px;
+          margin-left: 0;
           position: relative;
           z-index: 2;
-          padding-left: 4px;
-          padding-right: 4px;
         }
-        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致 */
+        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，等高 */
         .page-tabs-fullscreen-button-wrapper::before {
           content: '';
           position: absolute;
           left: 0;
-          top: 50%;
-          transform: translateY(-50%);
+          top: -1px;
           width: 1px;
-          height: 16px;
-          background: rgba(0, 0, 0, 0.16) !important;
+          height: 40px !important; /* 固定高度，占满标签栏容器 */
+          background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
           z-index: 1;
           opacity: 1 !important;
         }
-        /* 全屏按钮样式 - 覆盖滚动按钮的padding设置 */
+        /* 深色模式下的分割线颜色 */
+        html[data-theme='dark'] .page-tabs-fullscreen-button-wrapper::before,
+        body[data-theme='dark'] .page-tabs-fullscreen-button-wrapper::before {
+          background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
+        }
+        /* 全屏按钮样式 - 统一大小和padding，覆盖滚动按钮的padding设置，正方形按钮 */
         .page-tabs-header-wrapper .page-tabs-fullscreen-button,
         .page-tabs-header-wrapper .page-tabs-fullscreen-button.ant-btn,
         .page-tabs-header-wrapper .page-tabs-fullscreen-button.ant-btn-text,
         .page-tabs-header-wrapper button.page-tabs-fullscreen-button,
         .page-tabs-header-wrapper button.page-tabs-fullscreen-button.ant-btn,
         .page-tabs-header-wrapper button.page-tabs-fullscreen-button.ant-btn-text {
-          padding-left: 4px !important;
-          padding-right: 4px !important;
+          width: 40px !important; /* 正方形，与高度一致 */
+          height: 40px !important; /* 总高40px */
+          padding: 13px !important; /* 四周padding相等，图标14px居中 */
         }
         /* 标签栏容器 - 允许横向滚动，底部允许溢出显示外圆角 */
         .page-tabs-container {
@@ -1245,7 +1329,7 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
           display: none !important;
           box-shadow: none !important;
         }
-        /* 移除 nav-wrap 的分隔线 */
+        /* 禁用 Ant Design 原生右侧阴影，使用自定义阴影适配小箭头按钮 */
         .page-tabs-container .ant-tabs-nav-wrap::after {
           display: none !important;
         }
@@ -1256,7 +1340,10 @@ export default function PageTabs({ menuConfig, children, isFullscreen = false, o
       `}</style>
       <div className="page-tabs-wrapper">
         <div className="page-tabs-header">
-          <div className="page-tabs-header-wrapper" ref={tabsNavRef}>
+          <div 
+            className={`page-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
+            ref={tabsNavRef}
+          >
             {/* 左侧滚动箭头 */}
             <div className="page-tabs-scroll-button-wrapper">
               <Button
