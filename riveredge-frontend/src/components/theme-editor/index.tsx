@@ -421,7 +421,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
           console.log('已保存到后端和本地存储:', tabsPersistenceValue, '验证:', localStorage.getItem('riveredge_tabs_persistence'));
 
-          // 触发用户偏好更新事件，通知 PageTabs 组件更新配置
+          // 触发用户偏好更新事件，通知 UniTabs 组件更新配置
           console.log('触发用户偏好更新事件:', updatedPreferences);
           window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
             detail: { preferences: updatedPreferences }

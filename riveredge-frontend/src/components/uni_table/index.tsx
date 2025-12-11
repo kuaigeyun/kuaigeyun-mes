@@ -512,7 +512,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       const tableTopOffset = tableContainerRect.top;
 
       // 获取标签栏高度
-      const tabBar = document.querySelector('.page-tabs-header') as HTMLElement;
+      const tabBar = document.querySelector('.uni-tabs-header') as HTMLElement;
       const tabBarHeight = tabBar?.offsetHeight || 0;
 
       // 计算表格头部和工具栏的高度（包括搜索栏、工具栏等）

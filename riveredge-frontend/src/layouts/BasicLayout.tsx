@@ -52,7 +52,7 @@ import type { MenuProps } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import TenantSelector from '../components/tenant_selector';
-import PageTabs from '../components/page_tabs';
+import UniTabs from '../components/uni_tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import ThemeEditor from '../components/theme-editor';
 import { getCurrentUser } from '../services/auth';
@@ -1933,10 +1933,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         body.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .ant-pro-page-container,
         html.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-content .ant-pro-page-container,
         body.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-content .ant-pro-page-container,
-        html.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .page-tabs-wrapper,
-        body.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .page-tabs-wrapper,
-        html.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-content .page-tabs-wrapper,
-        body.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-content .page-tabs-wrapper,
+        html.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .uni-tabs-wrapper,
+        body.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .uni-tabs-wrapper,
+        html.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-content .uni-tabs-wrapper,
+        body.riveredge-fullscreen-mode .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-content .uni-tabs-wrapper,
         /* 覆盖所有可能的布局容器 */
         html.riveredge-fullscreen-mode .ant-pro-layout-container .ant-pro-layout-content,
         body.riveredge-fullscreen-mode .ant-pro-layout-container .ant-pro-layout-content,
@@ -1949,16 +1949,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           left: 0 !important;
         }
         /* 标签栏固定在顶部 */
-        html.riveredge-fullscreen-mode .page-tabs-header,
-        body.riveredge-fullscreen-mode .page-tabs-header {
+        html.riveredge-fullscreen-mode .uni-tabs-header,
+        body.riveredge-fullscreen-mode .uni-tabs-header {
           top: 0 !important;
           position: sticky !important;
           z-index: 10 !important;
           padding-top: 2px !important;
         }
         /* 标签栏和内容区域容器占据全屏 */
-        html.riveredge-fullscreen-mode .page-tabs-wrapper,
-        body.riveredge-fullscreen-mode .page-tabs-wrapper {
+        html.riveredge-fullscreen-mode .uni-tabs-wrapper,
+        body.riveredge-fullscreen-mode .uni-tabs-wrapper {
           height: 100vh !important;
           min-height: 100vh !important;
           max-height: 100vh !important;
@@ -1973,8 +1973,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           right: 0 !important;
         }
         /* 内容区域占据剩余空间 */
-        html.riveredge-fullscreen-mode .page-tabs-content,
-        body.riveredge-fullscreen-mode .page-tabs-content {
+        html.riveredge-fullscreen-mode .uni-tabs-content,
+        body.riveredge-fullscreen-mode .uni-tabs-content {
           flex: 1 !important;
           overflow: auto !important;
           height: calc(100vh - 40px) !important;
@@ -2004,7 +2004,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0 !important;
         }
         /* 全局页面边距：16px */
-        .page-tabs-content .ant-pro-table {
+        .uni-tabs-content .ant-pro-table {
           padding: 16px !important;
         }
         /* 侧边栏收起时，确保内容区域左边距正确 - 只在侧边栏收起时生效 */
@@ -2055,15 +2055,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           margin-left: 0 !important;
           padding-left: 0 !important;
         }
-        /* 确保 PageTabs 组件在侧边栏收起时也没有左边距 */
-        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .page-tabs-wrapper,
-        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed ~ .ant-pro-layout-content .page-tabs-wrapper,
-        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed ~ .ant-pro-layout-content .page-tabs-wrapper {
+        /* 确保 UniTabs 组件在侧边栏收起时也没有左边距 */
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-layout-content .uni-tabs-wrapper,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed ~ .ant-pro-layout-content .uni-tabs-wrapper,
+        .ant-pro-layout.ant-pro-layout-has-mix .ant-layout-sider-collapsed ~ .ant-pro-layout-content .uni-tabs-wrapper {
           margin-left: 0 !important;
           padding-left: 0 !important;
         }
         /* 文件管理页面无边距（覆盖全局规则） */
-        .page-tabs-content .file-management-page .ant-pro-table {
+        .uni-tabs-content .file-management-page .ant-pro-table {
           padding: 0 !important;
         }
         .pro-table-button-container {
@@ -2945,7 +2945,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 但这里不使用 key，因为会导致标签丢失
         // 内容区域样式
         contentStyle={{
-          // 始终设置 padding: 0，因为我们使用 PageTabs 组件来管理内容区域的 padding
+          // 始终设置 padding: 0，因为我们使用 UniTabs 组件来管理内容区域的 padding
           padding: 0,
           background: token.colorBgLayout,
           // 全屏时：确保内容区域占据全屏，覆盖 ProLayout 的默认 padding-inline: 40px
@@ -2961,7 +2961,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           } : {
             // 退出全屏时：保持 padding: 0，但让 ProLayout 的 padding-inline 生效
             // 注意：padding: 0 会覆盖 padding-inline，所以需要明确设置 padding-inline
-            // 但实际上，我们不需要 padding-inline，因为我们使用 PageTabs 来管理间距
+            // 但实际上，我们不需要 padding-inline，因为我们使用 UniTabs 来管理间距
             paddingInline: 0,
             paddingInlineStart: 0,
             paddingInlineEnd: 0,
@@ -3307,13 +3307,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         </div>
       )}
     >
-      <PageTabs 
+      <UniTabs 
         menuConfig={menuConfig}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
       >
         {children}
-      </PageTabs>
+      </UniTabs>
     </ProLayout>
     
     {/* 技术栈信息弹窗 */}
