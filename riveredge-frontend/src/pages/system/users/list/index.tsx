@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -512,21 +513,21 @@ const UserListPage: React.FC = () => {
             label="手机号"
             placeholder="请输入手机号"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="department_uuid"
             label="部门"
             placeholder="请选择部门"
             options={departmentOptions}
             allowClear
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="position_uuid"
             label="职位"
             placeholder="请选择职位"
             options={positionOptions}
             allowClear
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="role_uuids"
             label="角色"
             placeholder="请选择角色（可多选）"

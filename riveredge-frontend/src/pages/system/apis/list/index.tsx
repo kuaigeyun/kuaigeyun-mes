@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -521,7 +522,7 @@ const APIListPage: React.FC = () => {
             rules={[{ required: true, message: '请输入接口路径' }]}
             placeholder="请输入接口路径（如：/api/v1/users 或 https://api.example.com/users）"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="method"
             label="请求方法"
             rules={[{ required: true, message: '请选择请求方法' }]}

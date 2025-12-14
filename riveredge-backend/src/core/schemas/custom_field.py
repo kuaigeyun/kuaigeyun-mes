@@ -137,6 +137,18 @@ class CustomFieldValueResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CustomFieldListResponse(BaseModel):
+    """
+    自定义字段列表响应 Schema
+    
+    用于返回自定义字段列表，包含分页信息。
+    """
+    items: List[CustomFieldResponse] = Field(..., description="自定义字段列表")
+    total: int = Field(..., description="总记录数")
+    page: int = Field(..., description="当前页码")
+    page_size: int = Field(..., description="每页数量")
+
+
 class BatchSetFieldValuesRequest(BaseModel):
     """
     批量设置字段值请求 Schema

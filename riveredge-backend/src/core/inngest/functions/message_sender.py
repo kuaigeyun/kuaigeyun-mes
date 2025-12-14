@@ -14,6 +14,8 @@ from core.inngest.client import inngest_client
 from core.models.message_log import MessageLog
 from core.models.message_config import MessageConfig
 from core.services.message_config_service import MessageConfigService
+from core.utils.inngest_tenant_isolation import with_tenant_isolation
+from infra.domain.tenant_context import get_current_tenant_id
 
 
 @inngest_client.create_function(
@@ -22,6 +24,7 @@ from core.services.message_config_service import MessageConfigService
     trigger=TriggerEvent(event="message/send"),
     retries=3,
 )
+@with_tenant_isolation  # 添加租户隔离装饰器
 async def message_sender_function(event: Event) -> Dict[str, Any]:
     """
     消息发送器工作流函数
@@ -29,14 +32,18 @@ async def message_sender_function(event: Event) -> Dict[str, Any]:
     监听 message/send 事件，根据消息类型发送消息。
     支持邮件、短信、站内信、推送通知等消息类型。
     
+    租户隔离已由装饰器自动处理，可以直接使用 get_current_tenant_id() 获取租户ID。
+    
     Args:
         event: Inngest 事件对象
         
     Returns:
         Dict[str, Any]: 发送结果
     """
+    # 从上下文获取 tenant_id（装饰器已验证和设置）
+    tenant_id = get_current_tenant_id()
+    
     data = event.data or {}
-    tenant_id = data.get("tenant_id")
     message_log_uuid = data.get("message_log_uuid")
     message_type = data.get("message_type")
     recipient = data.get("recipient")
@@ -44,10 +51,10 @@ async def message_sender_function(event: Event) -> Dict[str, Any]:
     content = data.get("content")
     config_uuid = data.get("config_uuid")
     
-    if not tenant_id or not message_log_uuid:
+    if not message_log_uuid:
         return {
             "success": False,
-            "error": "缺少必要参数：tenant_id 或 message_log_uuid"
+            "error": "缺少必要参数：message_log_uuid"
         }
     
     # 获取消息日志记录

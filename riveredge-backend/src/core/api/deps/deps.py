@@ -18,19 +18,22 @@ from infra.domain.tenant_context import get_current_tenant_id as get_tenant_id_f
 from infra.domain.security.platform_superadmin_security import get_platform_superadmin_token_payload
 
 
-async def get_current_user() -> User:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     """
     获取当前登录用户
-    
+
     复用 soil 模块的 get_current_user 函数。
-    
+
+    Args:
+        token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
+
     Returns:
         User: 当前用户对象
-        
+
     Raises:
         HTTPException: 当认证失败时抛出
     """
-    return await soil_get_current_user()
+    return await soil_get_current_user(token)
 
 
 async def get_current_tenant(

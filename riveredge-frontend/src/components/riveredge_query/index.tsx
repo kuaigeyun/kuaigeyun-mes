@@ -6,7 +6,8 @@
 
 import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, forwardRef } from 'react';
 import type { ActionType, ProFormInstance, ProColumns } from '@ant-design/pro-components';
-import { ProForm, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDateRangePicker } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
+import { ProForm, ProFormText, ProFormDatePicker, ProFormDateRangePicker } from '@ant-design/pro-components';
 import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, MenuProps, theme, Tabs, Tag, Divider } from 'antd';
 import { SaveOutlined, DeleteOutlined, DownOutlined, EditOutlined, PushpinOutlined, PushpinFilled, MoreOutlined, ReloadOutlined, SearchOutlined, ShareAltOutlined, HolderOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { AutoCompleteProps } from 'antd';
@@ -714,7 +715,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     // 选择框
     if (valueType === 'select' && valueEnum) {
       return (
-        <ProFormSelect
+        <SafeProFormSelect
           key={dataIndex as string}
           name={dataIndex as string}
           label={title as string}

@@ -107,6 +107,8 @@ async def get_menu_tree(
             # 自动扫描并注册插件（只扫描，不阻塞主流程）
             # 如果菜单配置有变化，会自动同步菜单
             await ApplicationService.scan_and_register_plugins(tenant_id=tenant_id)
+            # 扫描完成后，清除菜单缓存，确保返回最新数据
+            await MenuService._clear_menu_cache(tenant_id)
         except Exception as e:
             # 扫描失败不影响菜单获取
             print(f"⚠️ 开发环境自动扫描插件失败（不影响菜单获取）: {e}")

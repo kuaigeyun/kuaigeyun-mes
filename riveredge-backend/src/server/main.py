@@ -73,6 +73,9 @@ from core.api.online_users.online_users import router as online_users_router
 from core.api.data_backups.data_backups import router as data_backups_router
 from core.api.help_documents.help_documents import router as help_documents_router
 
+# 导入应用级 API 路由（apps）
+from apps.master_data.api.router import router as master_data_router
+
 # Inngest 集成
 from core.inngest.client import inngest_client
 from inngest.fast_api import serve as inngest_serve
@@ -231,13 +234,35 @@ app.mount("/static", StaticFiles(directory="src/static"), name="static")
 # 注册 Inngest 服务
 # 导入 Inngest 函数（确保函数被注册）
 from core.inngest.functions.test_function import test_integration_function
+from core.inngest.functions import (
+    message_sender_function,
+    scheduled_task_executor_function,
+    scheduled_task_scheduler_function,
+    approval_workflow_function,
+    approval_action_workflow_function,
+    data_backup_executor_function,
+    scheduled_backup_scheduler_function,
+    sop_execution_workflow_function,
+    sop_node_complete_workflow_function,
+)
 
 # 挂载 Inngest 服务端点
 # serve() 函数需要 app, client, 和 functions 参数
 inngest_serve(
     app,
     inngest_client,
-    [test_integration_function]
+    [
+        test_integration_function,
+        message_sender_function,
+        scheduled_task_executor_function,
+        scheduled_task_scheduler_function,
+        approval_workflow_function,
+        approval_action_workflow_function,
+        data_backup_executor_function,
+        scheduled_backup_scheduler_function,
+        sop_execution_workflow_function,
+        sop_node_complete_workflow_function,
+    ]
 )
 
 # 健康检查端点
@@ -342,6 +367,9 @@ app.include_router(login_logs_router, prefix="/api/v1/system")
 app.include_router(online_users_router, prefix="/api/v1/system")
 app.include_router(data_backups_router, prefix="/api/v1/system")
 app.include_router(help_documents_router, prefix="/api/v1/system")
+
+# 应用级功能路由 (App Level APIs)
+app.include_router(master_data_router, prefix="/api/v1")
 
 # Inngest 测试端点
 @app.post("/api/v1/test/inngest")

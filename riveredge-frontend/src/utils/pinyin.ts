@@ -58,7 +58,6 @@ async function initPinyinLib(): Promise<any> {
       const pinyinPro = await import('pinyin-pro');
       pinyinLib = pinyinPro; // 保存整个模块
       pinyinLibLoaded = true;
-      console.log('pinyin-pro 库加载成功');
     } catch (error) {
       // 输出警告，方便调试
       console.warn('pinyin-pro 库加载失败，拼音搜索功能将不可用:', error);

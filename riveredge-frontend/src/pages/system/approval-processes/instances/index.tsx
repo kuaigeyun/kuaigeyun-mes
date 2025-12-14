@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Tabs } from 'antd';
 import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import KanbanView from './kanban-view';
@@ -353,7 +354,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             },
           }}
         >
-          <ProFormSelect
+          <SafeProFormSelect
             name="process_uuid"
             label="审批流程"
             rules={[{ required: true, message: '请选择审批流程' }]}

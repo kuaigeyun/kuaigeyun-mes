@@ -17,6 +17,10 @@ from core.inngest.functions.data_backup_executor import (
     data_backup_executor_function,
     scheduled_backup_scheduler_function
 )
+from apps.master_data.inngest.functions.sop_execution_workflow import (
+    sop_execution_workflow_function,
+    sop_node_complete_workflow_function
+)
 
 __all__ = [
     "test_integration_function",
@@ -27,5 +31,7 @@ __all__ = [
     "approval_action_workflow_function",
     "data_backup_executor_function",
     "scheduled_backup_scheduler_function",
+    "sop_execution_workflow_function",
+    "sop_node_complete_workflow_function",
 ]
 

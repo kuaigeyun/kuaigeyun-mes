@@ -112,6 +112,8 @@ export const ManufacturingIcons = {
   assembly: Settings,
   conveyorBelt: Settings,
   production: TrendingUp,
+  workflow: Workflow, // 工作流/工艺路线
+  process: Workflow, // 工艺管理
   
   // 仓储和物流
   warehouse: Warehouse,

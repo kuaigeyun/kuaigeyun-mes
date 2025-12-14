@@ -296,43 +296,32 @@ export default function LockScreenPage() {
       const userInfo = getUserInfo();
       let avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
       
-      console.log('🔍 锁屏界面 - 加载头像:', {
-        currentUser: currentUser,
-        userInfo: userInfo,
-        avatarUuid: avatarUuid,
-      });
-      
       // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
       if (!avatarUuid && currentUser) {
         try {
           const { getUserProfile } = await import('../../services/userProfile');
           const profile = await getUserProfile();
           if (profile.avatar) {
-            console.log('✅ 锁屏界面 - 从个人资料获取头像 UUID:', profile.avatar);
             avatarUuid = profile.avatar;
           }
         } catch (error) {
-          console.warn('⚠️ 锁屏界面 - 从个人资料获取头像失败:', error);
+          // 静默失败，不影响其他功能
         }
       }
       
       if (avatarUuid) {
-        console.log('✅ 锁屏界面 - 检测到头像 UUID:', avatarUuid);
         try {
           const url = await getAvatarUrl(avatarUuid);
-          console.log('✅ 锁屏界面 - 获取头像 URL 成功:', url);
           if (url) {
             setAvatarUrl(url);
           } else {
-            console.warn('⚠️ 锁屏界面 - 获取头像 URL 返回 undefined');
             setAvatarUrl(undefined);
           }
         } catch (error) {
-          console.error('❌ 锁屏界面 - 加载头像 URL 失败:', error);
+          console.error('加载头像 URL 失败:', error);
           setAvatarUrl(undefined);
         }
       } else {
-        console.warn('⚠️ 锁屏界面 - 未找到头像 UUID');
         setAvatarUrl(undefined);
       }
     };

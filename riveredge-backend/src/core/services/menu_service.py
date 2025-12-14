@@ -649,6 +649,7 @@ class MenuService:
             parent_uuid: Optional[str] = None,
             parent_id: Optional[int] = None
         ) -> Optional[Menu]:
+            nonlocal created_count  # 允许修改外部函数的变量
             """
             递归创建或更新菜单项
             
@@ -662,8 +663,8 @@ class MenuService:
             """
             # 提取菜单项信息
             menu_uuid = menu_item.get("uuid")  # 如果配置中有UUID，使用它
-            # 兼容 title 和 name 字段（manifest.json 使用 title）
-            menu_name = menu_item.get("name") or menu_item.get("title", "")
+            # 兼容 title 和 name 字段（manifest.json 使用 title，优先使用 title）
+            menu_name = menu_item.get("title") or menu_item.get("name", "")
             menu_path = menu_item.get("path")
             menu_icon = menu_item.get("icon")
             menu_component = menu_item.get("component")

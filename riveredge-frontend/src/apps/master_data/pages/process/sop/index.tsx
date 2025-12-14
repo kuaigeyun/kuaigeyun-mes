@@ -1,0 +1,512 @@
+/**
+ * 标准作业程序（SOP）管理页面
+ * 
+ * 提供SOP的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ */
+
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
+import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { UniTable } from '@/components/uni_table';
+import { sopApi, operationApi } from '../../../services/process';
+import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
+
+/**
+ * SOP管理列表页面组件
+ */
+const SOPPage: React.FC = () => {
+  const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<ProFormInstance>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [currentSOPUuid, setCurrentSOPUuid] = useState<string | null>(null);
+  const [sopDetail, setSopDetail] = useState<SOP | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  
+  // Modal 相关状态（创建/编辑SOP）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  
+  // 工序列表（用于下拉选择）
+  const [operations, setOperations] = useState<Operation[]>([]);
+  const [operationsLoading, setOperationsLoading] = useState(false);
+
+  /**
+   * 加载工序列表
+   */
+  useEffect(() => {
+    const loadOperations = async () => {
+      try {
+        setOperationsLoading(true);
+        const result = await operationApi.list({ limit: 1000, isActive: true });
+        setOperations(result);
+      } catch (error: any) {
+        console.error('加载工序列表失败:', error);
+      } finally {
+        setOperationsLoading(false);
+      }
+    };
+    loadOperations();
+  }, []);
+
+  /**
+   * 处理新建SOP
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentSOPUuid(null);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({
+      isActive: true,
+    });
+  };
+
+  /**
+   * 处理编辑SOP
+   */
+  const handleEdit = async (record: SOP) => {
+    try {
+      setIsEdit(true);
+      setCurrentSOPUuid(record.uuid);
+      setModalVisible(true);
+      
+      // 获取SOP详情
+      const detail = await sopApi.get(record.uuid);
+      formRef.current?.setFieldsValue({
+        code: detail.code,
+        name: detail.name,
+        operationId: detail.operationId,
+        version: detail.version,
+        content: detail.content,
+        isActive: detail.isActive,
+      });
+      // 注意：attachments 是 JSON 字段，这里暂时不处理，后续可以扩展为文件上传组件
+    } catch (error: any) {
+      messageApi.error(error.message || '获取SOP详情失败');
+    }
+  };
+
+  /**
+   * 处理删除SOP
+   */
+  const handleDelete = async (record: SOP) => {
+    try {
+      await sopApi.delete(record.uuid);
+      messageApi.success('删除成功');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  /**
+   * 处理打开详情
+   */
+  const handleOpenDetail = async (record: SOP) => {
+    try {
+      setCurrentSOPUuid(record.uuid);
+      setDrawerVisible(true);
+      setDetailLoading(true);
+      
+      const detail = await sopApi.get(record.uuid);
+      setSopDetail(detail);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取SOP详情失败');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  /**
+   * 处理关闭详情
+   */
+  const handleCloseDetail = () => {
+    setDrawerVisible(false);
+    setCurrentSOPUuid(null);
+    setSopDetail(null);
+  };
+
+  /**
+   * 处理提交表单（创建/更新SOP）
+   */
+  const handleSubmit = async (values: any) => {
+    try {
+      setFormLoading(true);
+      
+      if (isEdit && currentSOPUuid) {
+        // 更新SOP
+        await sopApi.update(currentSOPUuid, values as SOPUpdate);
+        messageApi.success('更新成功');
+      } else {
+        // 创建SOP
+        await sopApi.create(values as SOPCreate);
+        messageApi.success('创建成功');
+      }
+      
+      setModalVisible(false);
+      formRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理关闭 Modal
+   */
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    formRef.current?.resetFields();
+  };
+
+  /**
+   * 获取工序名称
+   */
+  const getOperationName = (operationId?: number): string => {
+    if (!operationId) return '-';
+    const operation = operations.find(o => o.id === operationId);
+    return operation ? `${operation.code} - ${operation.name}` : `工序ID: ${operationId}`;
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns: ProColumns<SOP>[] = [
+    {
+      title: 'SOP编码',
+      dataIndex: 'code',
+      width: 150,
+      fixed: 'left',
+    },
+    {
+      title: 'SOP名称',
+      dataIndex: 'name',
+      width: 200,
+    },
+    {
+      title: '关联工序',
+      dataIndex: 'operationId',
+      width: 200,
+      hideInSearch: true,
+      render: (_, record) => getOperationName(record.operationId),
+    },
+    {
+      title: '版本号',
+      dataIndex: 'version',
+      width: 120,
+      hideInSearch: true,
+    },
+    {
+      title: '内容',
+      dataIndex: 'content',
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => record.content ? `${record.content.substring(0, 50)}...` : '-',
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      width: 100,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: '启用', status: 'Success' },
+        false: { text: '禁用', status: 'Default' },
+      },
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 200,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => handleOpenDetail(record)}
+          >
+            详情
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<ApartmentOutlined />}
+            onClick={() => navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}`)}
+          >
+            设计流程
+          </Button>
+          <Popconfirm
+            title="确定要删除这个SOP吗？"
+            onConfirm={() => handleDelete(record)}
+          >
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <UniTable<SOP>
+        actionRef={actionRef}
+        columns={columns}
+        request={async (params, sort, _filter, searchFormValues) => {
+          // 处理搜索参数
+          const apiParams: any = {
+            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+            limit: params.pageSize || 20,
+          };
+          
+          // 启用状态筛选
+          if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
+            apiParams.isActive = searchFormValues.isActive;
+          }
+          
+          // 工序筛选
+          if (searchFormValues?.operationId !== undefined && searchFormValues.operationId !== '' && searchFormValues.operationId !== null) {
+            apiParams.operationId = searchFormValues.operationId;
+          }
+          
+          try {
+            const result = await sopApi.list(apiParams);
+            return {
+              data: result,
+              success: true,
+              total: result.length,
+            };
+          } catch (error: any) {
+            console.error('获取SOP列表失败:', error);
+            messageApi.error(error?.message || '获取SOP列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        rowKey="uuid"
+        showAdvancedSearch={true}
+        pagination={{
+          defaultPageSize: 20,
+          showSizeChanger: true,
+        }}
+        toolBarRender={() => [
+          <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            新建SOP
+          </Button>,
+        ]}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+      />
+
+      {/* 详情 Drawer */}
+      <Drawer
+        title="SOP详情"
+        size={720}
+        open={drawerVisible}
+        onClose={handleCloseDetail}
+      >
+        <ProDescriptions<SOP>
+          dataSource={sopDetail}
+          loading={detailLoading}
+          column={2}
+          columns={[
+            {
+              title: 'SOP编码',
+              dataIndex: 'code',
+            },
+            {
+              title: 'SOP名称',
+              dataIndex: 'name',
+            },
+            {
+              title: '关联工序',
+              dataIndex: 'operationId',
+              render: (_, record) => getOperationName(record.operationId),
+            },
+            {
+              title: '版本号',
+              dataIndex: 'version',
+            },
+            {
+              title: 'SOP内容',
+              dataIndex: 'content',
+              span: 2,
+            },
+            {
+              title: '启用状态',
+              dataIndex: 'isActive',
+              render: (_, record) => (
+                <Tag color={record.isActive ? 'success' : 'default'}>
+                  {record.isActive ? '启用' : '禁用'}
+                </Tag>
+              ),
+            },
+            {
+              title: '创建时间',
+              dataIndex: 'createdAt',
+              valueType: 'dateTime',
+            },
+            {
+              title: '更新时间',
+              dataIndex: 'updatedAt',
+              valueType: 'dateTime',
+            },
+          ]}
+        />
+      </Drawer>
+
+      {/* 创建/编辑SOP Modal */}
+      <Modal
+        title={isEdit ? '编辑SOP' : '新建SOP'}
+        open={modalVisible}
+        onCancel={handleCloseModal}
+        footer={null}
+        width={800}
+        destroyOnHidden
+      >
+        <ProForm
+          formRef={formRef}
+          loading={formLoading}
+          onFinish={handleSubmit}
+          submitter={{
+            searchConfig: {
+              submitText: isEdit ? '更新' : '创建',
+              resetText: '取消',
+            },
+            resetButtonProps: {
+              onClick: handleCloseModal,
+            },
+          }}
+          initialValues={{
+            isActive: true,
+          }}
+          layout="vertical"
+          grid={true}
+          rowProps={{ gutter: 16 }}
+        >
+          <SafeProFormSelect
+            name="operationId"
+            label="关联工序"
+            placeholder="请选择关联工序（可选）"
+            colProps={{ span: 12 }}
+            options={operations.map(o => ({
+              label: `${o.code} - ${o.name}`,
+              value: o.id,
+            }))}
+            fieldProps={{
+              loading: operationsLoading,
+              showSearch: true,
+              allowClear: true,
+              filterOption: (input, option) => {
+                const label = option?.label as string || '';
+                return label.toLowerCase().includes(input.toLowerCase());
+              },
+            }}
+          />
+          <ProFormText
+            name="code"
+            label="SOP编码"
+            placeholder="请输入SOP编码"
+            colProps={{ span: 12 }}
+            rules={[
+              { required: true, message: '请输入SOP编码' },
+              { max: 50, message: 'SOP编码不能超过50个字符' },
+            ]}
+            fieldProps={{
+              style: { textTransform: 'uppercase' },
+            }}
+          />
+          <ProFormText
+            name="name"
+            label="SOP名称"
+            placeholder="请输入SOP名称"
+            colProps={{ span: 12 }}
+            rules={[
+              { required: true, message: '请输入SOP名称' },
+              { max: 200, message: 'SOP名称不能超过200个字符' },
+            ]}
+          />
+          <ProFormText
+            name="version"
+            label="版本号"
+            placeholder="请输入版本号（如：v1.0）"
+            colProps={{ span: 12 }}
+            rules={[
+              { max: 20, message: '版本号不能超过20个字符' },
+            ]}
+          />
+          <ProFormTextArea
+            name="content"
+            label="SOP内容"
+            placeholder="请输入SOP内容（支持富文本）"
+            colProps={{ span: 24 }}
+            fieldProps={{
+              rows: 8,
+              maxLength: 5000,
+            }}
+          />
+          <ProFormSwitch
+            name="isActive"
+            label="是否启用"
+            colProps={{ span: 12 }}
+          />
+          <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, gridColumn: '1 / -1' }}>
+            <div style={{ color: '#666', fontSize: 12 }}>
+              提示：附件（attachments）字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
+            </div>
+          </div>
+        </ProForm>
+      </Modal>
+    </>
+  );
+};
+
+export default SOPPage;

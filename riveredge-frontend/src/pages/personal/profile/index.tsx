@@ -50,9 +50,6 @@ const UserProfilePage: React.FC = () => {
         if (userInfo?.tenant_id) {
           setTenantId(userInfo.tenant_id);
           tenantId = userInfo.tenant_id; // 立即更新本地变量
-          console.log('✅ 个人资料页面：从 user_info 中恢复 tenant_id:', userInfo.tenant_id);
-        } else {
-          console.warn('⚠️ 个人资料页面：无法获取 tenant_id，可能导致头像加载失败');
         }
       }
 
@@ -88,21 +85,15 @@ const UserProfilePage: React.FC = () => {
         contact_address: data.contact_info?.address || '',
       });
       
-      // 设置头像预览 URL（简化逻辑）
-      console.log('🔍 加载个人资料 - avatar 字段:', data.avatar);
-      console.log('🔍 avatar 字段类型:', typeof data.avatar);
-      console.log('🔍 avatar 字段是否为空字符串:', data.avatar === '');
+      // 设置头像预览 URL
       if (data.avatar && data.avatar.trim() !== '') {
-        console.log('✅ 检测到头像 UUID:', data.avatar);
         try {
           const previewUrl = await getAvatarUrl(data.avatar);
-          console.log('🔍 getAvatarUrl 返回结果:', previewUrl);
           // 只有当成功获取到预览 URL 时才设置，否则保留当前头像（如果有）
           if (previewUrl) {
-            console.log('✅ 设置头像预览 URL:', previewUrl);
             setAvatarUrl(previewUrl);
             
-            // 设置文件列表 - 添加重试逻辑
+            // 设置文件列表
             try {
               const fileInfo = await getFileByUuid(data.avatar);
               setAvatarFileList([{
@@ -113,7 +104,6 @@ const UserProfilePage: React.FC = () => {
               }]);
             } catch (error) {
               // 如果获取文件信息失败，可能是组织上下文问题，记录但不影响头像显示
-              console.warn('⚠️ 获取头像文件信息失败（可能需要重新登录以刷新组织上下文）:', error);
               // 仍然设置文件列表，但使用基本信息
               setAvatarFileList([{
                 uid: data.avatar,
@@ -122,16 +112,9 @@ const UserProfilePage: React.FC = () => {
                 url: previewUrl,
               }]);
             }
-          } else {
-            console.warn('⚠️ 加载头像 URL 返回 undefined，保留当前头像（如果有）');
-            // 如果获取失败，不清空头像，保留当前显示
           }
         } catch (error) {
-          console.error('❌ 加载头像 URL 失败:', error);
-          // 如果是组织上下文错误，提示用户重新登录
-          if (error instanceof Error && error.message.includes('组织上下文')) {
-            console.warn('⚠️ 头像加载失败：组织上下文未设置，建议重新登录');
-          }
+          console.error('加载头像 URL 失败:', error);
           // 如果加载失败，不清空头像，保留当前显示（如果有）
           // 只有在确实没有头像时才清空
           if (!avatarUrl) {
@@ -140,7 +123,6 @@ const UserProfilePage: React.FC = () => {
           }
         }
       } else {
-        console.log('⚠️ 个人资料中没有 avatar 字段');
         // 只有在确实没有头像时才清空
         setAvatarUrl(undefined);
         setAvatarFileList([]);
@@ -162,7 +144,6 @@ const UserProfilePage: React.FC = () => {
       // 先使用本地文件创建预览 URL（立即显示）
       const localPreviewUrl = URL.createObjectURL(file as File);
       setAvatarUrl(localPreviewUrl);
-      console.log('✅ 使用本地预览 URL（临时）:', localPreviewUrl);
       
       const response: FileUploadResponse = await uploadFile(file as File, {
         category: 'avatar',
@@ -186,19 +167,10 @@ const UserProfilePage: React.FC = () => {
             URL.revokeObjectURL(localPreviewUrl);
             // 使用服务器预览 URL
             setAvatarUrl(previewUrl);
-            console.log('✅ 头像预览 URL 获取成功:', previewUrl);
           } catch (error) {
-            console.warn('⚠️ 获取预览 URL 失败，继续使用本地预览:', error);
-            // 如果是组织上下文错误，记录详细信息
-            if (error instanceof Error && error.message.includes('组织上下文')) {
-              console.warn('⚠️ 头像预览失败：组织上下文未设置，但不影响上传');
-            }
             // 如果获取预览 URL 失败，继续使用本地预览 URL
             // 不释放本地 URL，保持显示
           }
-        } else {
-          // 非图片文件，继续使用本地预览
-          console.warn('⚠️ 上传的文件不是图片类型:', fileType);
         }
         
         // 更新头像文件列表
@@ -212,9 +184,8 @@ const UserProfilePage: React.FC = () => {
         // 立即保存头像到后端
         try {
           await updateUserProfile({ avatar: response.uuid });
-          console.log('✅ 头像已保存到后端');
         } catch (error: any) {
-          console.error('⚠️ 保存头像到后端失败:', error);
+          console.error('保存头像到后端失败:', error);
           messageApi.warning('头像上传成功，但保存到后端失败，请稍后重试');
         }
         
@@ -380,14 +351,12 @@ const UserProfilePage: React.FC = () => {
             if (previewUrl) {
               setAvatarUrl(previewUrl);
             } else {
-              console.warn('⚠️ 获取头像预览 URL 返回 undefined，保留当前预览');
               // 如果获取失败，保留之前保存的头像 URL
               if (savedAvatarUrl) {
                 setAvatarUrl(savedAvatarUrl);
               }
             }
           } catch (error) {
-            console.warn('⚠️ 重新加载头像失败，保留当前预览:', error);
             // 如果加载失败，保留之前保存的头像 URL
             if (savedAvatarUrl) {
               setAvatarUrl(savedAvatarUrl);
@@ -398,7 +367,6 @@ const UserProfilePage: React.FC = () => {
           setAvatarUrl(savedAvatarUrl);
         }
       } catch (error: any) {
-        console.warn('⚠️ 重新加载个人资料失败:', error);
         // 如果加载失败，至少保留当前的头像预览
         if (savedAvatarUrl) {
           setAvatarUrl(savedAvatarUrl);

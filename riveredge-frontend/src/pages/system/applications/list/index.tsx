@@ -26,6 +26,7 @@ import {
   CloudOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
+import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
 import {
   getApplicationList,
   getApplicationByUuid,
@@ -37,17 +38,28 @@ import {
 } from '../../../../services/application';
 
 /**
- * 根据应用代码获取图标组件
+ * 根据应用代码和图标配置获取图标组件
+ * 
+ * @param code - 应用代码
+ * @param icon - 图标配置（可以是图片路径或 lucide 图标名称）
+ * @returns React 图标组件
  */
 const getApplicationIcon = (code: string, icon?: string | null) => {
-  // 如果有自定义图标 URL，使用图片
-  if (icon) {
+  // 如果 icon 是图片路径（以 / 或 http 开头），使用图片
+  if (icon && (icon.startsWith('/') || icon.startsWith('http'))) {
     return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+  }
+  
+  // 如果 icon 是 lucide 图标名称，使用 ManufacturingIcons
+  if (icon && ManufacturingIcons[icon as keyof typeof ManufacturingIcons]) {
+    const IconComponent = ManufacturingIcons[icon as keyof typeof ManufacturingIcons];
+    return React.createElement(IconComponent, { size: 72 });
   }
   
   // 根据应用代码返回默认图标
   const iconMap: Record<string, React.ReactNode> = {
-    kuaimes: <DatabaseOutlined />, // 快格轻MES
+    kuaimes: React.createElement(ManufacturingIcons.production, { size: 72 }), // 快格轻MES
+    'master-data': React.createElement(ManufacturingIcons.database, { size: 72 }), // 主数据管理
     crm: <UserOutlined />,
     erp: <ShopOutlined />,
     mes: <DatabaseOutlined />,
@@ -298,25 +310,20 @@ const ApplicationListPage: React.FC = () => {
               borderBottom: '1px solid #f0f0f0',
             }}
           >
-            {application.icon ? (
-              <img 
-                src={application.icon} 
-                alt={application.name} 
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'cover',
-                  opacity: application.is_active && application.is_installed ? 1 : 0.5,
-                }} 
-              />
-            ) : (
-              React.cloneElement(getApplicationIcon(application.code, application.icon) as React.ReactElement, {
+            {(() => {
+              const iconElement = getApplicationIcon(application.code, application.icon);
+              // 如果是图片，直接返回
+              if (React.isValidElement(iconElement) && iconElement.type === 'img') {
+                return iconElement;
+              }
+              // 如果是图标组件，应用样式
+              return React.cloneElement(iconElement as React.ReactElement, {
                 style: {
                   fontSize: 72,
                   color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
                 },
-              })
-            )}
+              });
+            })()}
           </div>
         }
         actions={[

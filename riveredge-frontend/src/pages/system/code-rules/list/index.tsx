@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Radio, Divider, Collapse } from 'antd';
 import { SearchOutlined, DatabaseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
@@ -918,7 +919,7 @@ const CodeRuleListPage: React.FC = () => {
                         fieldProps={{ min: 1 }}
                         width="md"
                       />
-                      <ProFormSelect
+                      <SafeProFormSelect
                         name="seq_reset_rule"
                         label="序号重置规则"
                         options={[

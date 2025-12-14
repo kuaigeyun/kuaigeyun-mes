@@ -1,0 +1,235 @@
+{
+    "name": "基础数据管理",
+    "code": "master-data",
+    "version": "1.0.0",
+    "description": "统一管理工厂、仓库、物料、工艺、供应链、绩效等基础数据",
+    "icon": "database",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/master_data/index.tsx",
+    "route_path": "/apps/master-data",
+    "menu_config": {
+        "title": "基础数据管理",
+        "icon": "database",
+        "path": "/apps/master-data",
+        "children": [
+            {
+                "title": "工厂数据",
+                "path": "/apps/master-data/factory",
+                "icon": "factory",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "车间",
+                        "path": "/apps/master-data/factory/workshops",
+                        "permission": "master-data:factory:workshop:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "产线",
+                        "path": "/apps/master-data/factory/production-lines",
+                        "permission": "master-data:factory:production-line:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "工位",
+                        "path": "/apps/master-data/factory/workstations",
+                        "permission": "master-data:factory:workstation:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "仓库数据",
+                "path": "/apps/master-data/warehouse",
+                "icon": "warehouse",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "仓库",
+                        "path": "/apps/master-data/warehouse/warehouses",
+                        "permission": "master-data:warehouse:warehouse:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "库区",
+                        "path": "/apps/master-data/warehouse/storage-areas",
+                        "permission": "master-data:warehouse:storage-area:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "库位",
+                        "path": "/apps/master-data/warehouse/storage-locations",
+                        "permission": "master-data:warehouse:storage-location:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "物料数据",
+                "path": "/apps/master-data/materials",
+                "icon": "package",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "物料管理",
+                        "path": "/apps/master-data/materials/list",
+                        "permission": "master-data:material:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "BOM",
+                        "path": "/apps/master-data/materials/bom",
+                        "permission": "master-data:material:bom:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "工艺数据",
+                "path": "/apps/master-data/process",
+                "icon": "workflow",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "不良品",
+                        "path": "/apps/master-data/process/defect-types",
+                        "permission": "master-data:process:defect-type:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "工序",
+                        "path": "/apps/master-data/process/operations",
+                        "permission": "master-data:process:operation:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "工艺路线",
+                        "path": "/apps/master-data/process/routes",
+                        "permission": "master-data:process:route:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "作业程序",
+                        "path": "/apps/master-data/process/sop",
+                        "permission": "master-data:process:sop:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "供应链数据",
+                "path": "/apps/master-data/supply-chain",
+                "icon": "truck",
+                "sort_order": 5,
+                "children": [
+                    {
+                        "title": "客户",
+                        "path": "/apps/master-data/supply-chain/customers",
+                        "permission": "master-data:supply-chain:customer:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "供应商",
+                        "path": "/apps/master-data/supply-chain/suppliers",
+                        "permission": "master-data:supply-chain:supplier:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "绩效数据",
+                "path": "/apps/master-data/performance",
+                "icon": "analytics",
+                "sort_order": 6,
+                "children": [
+                    {
+                        "title": "假期",
+                        "path": "/apps/master-data/performance/holidays",
+                        "permission": "master-data:performance:holiday:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "技能",
+                        "path": "/apps/master-data/performance/skills",
+                        "permission": "master-data:performance:skill:view",
+                        "sort_order": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "master-data:factory:workshop:view",
+        "master-data:factory:workshop:create",
+        "master-data:factory:workshop:update",
+        "master-data:factory:workshop:delete",
+        "master-data:factory:production-line:view",
+        "master-data:factory:production-line:create",
+        "master-data:factory:production-line:update",
+        "master-data:factory:production-line:delete",
+        "master-data:factory:workstation:view",
+        "master-data:factory:workstation:create",
+        "master-data:factory:workstation:update",
+        "master-data:factory:workstation:delete",
+        "master-data:warehouse:warehouse:view",
+        "master-data:warehouse:warehouse:create",
+        "master-data:warehouse:warehouse:update",
+        "master-data:warehouse:warehouse:delete",
+        "master-data:warehouse:storage-area:view",
+        "master-data:warehouse:storage-area:create",
+        "master-data:warehouse:storage-area:update",
+        "master-data:warehouse:storage-area:delete",
+        "master-data:warehouse:storage-location:view",
+        "master-data:warehouse:storage-location:create",
+        "master-data:warehouse:storage-location:update",
+        "master-data:warehouse:storage-location:delete",
+        "master-data:material:group:view",
+        "master-data:material:group:create",
+        "master-data:material:group:update",
+        "master-data:material:group:delete",
+        "master-data:material:view",
+        "master-data:material:create",
+        "master-data:material:update",
+        "master-data:material:delete",
+        "master-data:material:bom:view",
+        "master-data:material:bom:create",
+        "master-data:material:bom:update",
+        "master-data:material:bom:delete",
+        "master-data:process:defect-type:view",
+        "master-data:process:defect-type:create",
+        "master-data:process:defect-type:update",
+        "master-data:process:defect-type:delete",
+        "master-data:process:operation:view",
+        "master-data:process:operation:create",
+        "master-data:process:operation:update",
+        "master-data:process:operation:delete",
+        "master-data:process:route:view",
+        "master-data:process:route:create",
+        "master-data:process:route:update",
+        "master-data:process:route:delete",
+        "master-data:process:sop:view",
+        "master-data:process:sop:create",
+        "master-data:process:sop:update",
+        "master-data:process:sop:delete",
+        "master-data:supply-chain:customer:view",
+        "master-data:supply-chain:customer:create",
+        "master-data:supply-chain:customer:update",
+        "master-data:supply-chain:customer:delete",
+        "master-data:supply-chain:supplier:view",
+        "master-data:supply-chain:supplier:create",
+        "master-data:supply-chain:supplier:update",
+        "master-data:supply-chain:supplier:delete",
+        "master-data:performance:holiday:view",
+        "master-data:performance:holiday:create",
+        "master-data:performance:holiday:update",
+        "master-data:performance:holiday:delete",
+        "master-data:performance:skill:view",
+        "master-data:performance:skill:create",
+        "master-data:performance:skill:update",
+        "master-data:performance:skill:delete"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

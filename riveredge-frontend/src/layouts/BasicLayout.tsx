@@ -308,7 +308,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     '平台管理': ManufacturingIcons.quality, // 使用质量图标表示管理
     
     // MES 相关菜单 - 使用工厂图标，增强工业关联度
-    '快格轻MES': ManufacturingIcons.mesSystem, // 使用工厂图标，更符合制造执行系统
+    '快格轻MES': ManufacturingIcons.production, // 使用生产图标，更符合制造执行系统
     '生产计划': ManufacturingIcons.checklist, // 使用清单图标，更符合生产计划场景
     '生产执行': ManufacturingIcons.production, // 使用生产趋势图标，更符合生产执行场景
     '物料管理': ManufacturingIcons.warehouse, // 使用仓库图标，更符合工业物料管理场景
@@ -374,7 +374,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/platform/admin': ManufacturingIcons.quality,
       
       // MES 相关路径
-      '/apps/kuaimes': ManufacturingIcons.mesSystem, // MES 制造执行系统
+      '/apps/kuaimes': ManufacturingIcons.production, // MES 制造执行系统（生产图标）
       '/apps/kuaimes/planning': ManufacturingIcons.checklist, // 生产计划 - 清单图标
       '/apps/kuaimes/execution': ManufacturingIcons.production, // 生产执行 - 生产趋势图标
       '/apps/kuaimes/material': ManufacturingIcons.warehouse, // 物料管理 - 仓库图标
@@ -746,29 +746,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const userInfo = getUserInfo();
       const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
       
-      console.log('🔍 顶栏 - 加载头像:', {
-        currentUser: currentUser,
-        userInfo: userInfo,
-        avatarUuid: avatarUuid,
-      });
-      
       if (avatarUuid) {
-        console.log('✅ 顶栏 - 检测到头像 UUID:', avatarUuid);
         try {
           const url = await getAvatarUrl(avatarUuid);
-          console.log('✅ 顶栏 - 获取头像 URL 成功:', url);
           if (url) {
             setAvatarUrl(url);
           } else {
-            console.warn('⚠️ 顶栏 - 获取头像 URL 返回 undefined');
             setAvatarUrl(undefined);
           }
         } catch (error) {
-          console.error('❌ 顶栏 - 加载头像 URL 失败:', error);
+          console.error('加载头像 URL 失败:', error);
           setAvatarUrl(undefined);
         }
       } else {
-        console.warn('⚠️ 顶栏 - 未找到头像 UUID');
         // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
         let foundAvatar = false;
         if (currentUser) {
@@ -776,18 +766,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const { getUserProfile } = await import('../services/userProfile');
             const profile = await getUserProfile();
             if (profile.avatar) {
-              console.log('✅ 顶栏 - 从个人资料获取头像 UUID:', profile.avatar);
               const url = await getAvatarUrl(profile.avatar);
               if (url) {
-                console.log('✅ 顶栏 - 从个人资料获取头像 URL 成功:', url);
                 setAvatarUrl(url);
                 foundAvatar = true;
-              } else {
-                console.warn('⚠️ 顶栏 - 从个人资料获取头像 URL 返回 undefined');
               }
             }
           } catch (error) {
-            console.warn('⚠️ 顶栏 - 从个人资料获取头像失败:', error);
+            // 静默失败，不影响其他功能
           }
         }
         
@@ -835,46 +821,55 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
     
-    // 优先尝试使用 Lucide 图标（根据菜单名称和路径）
-    if (menu.name) {
-      iconElement = getMenuIcon(menu.name, menu.path);
-    } else if (menu.path) {
-      iconElement = getMenuIcon('', menu.path);
+    // 优先使用 menu.icon 字段（如果存在）
+    if (menu.icon) {
+      // 首先尝试直接使用 lucide 图标名称（如 "database", "warehouse" 等）
+      if (ManufacturingIcons[menu.icon as keyof typeof ManufacturingIcons]) {
+        const IconComponent = ManufacturingIcons[menu.icon as keyof typeof ManufacturingIcons];
+        iconElement = React.createElement(IconComponent, { size: 16 });
+      } else {
+        // 如果不是 lucide 图标名称，尝试映射 Ant Design 图标名称
+        const lucideIconMap: Record<string, React.ComponentType<any>> = {
+          'DashboardOutlined': ManufacturingIcons.dashboard,
+          'UserOutlined': ManufacturingIcons.user,
+          'TeamOutlined': ManufacturingIcons.team,
+          'ApartmentOutlined': ManufacturingIcons.building,
+          'CrownOutlined': ManufacturingIcons.crown,
+          'AppstoreOutlined': ManufacturingIcons.appstore,
+          'ControlOutlined': ManufacturingIcons.control,
+          'ShopOutlined': ManufacturingIcons.shop,
+          'FileTextOutlined': ManufacturingIcons.fileCode,
+          'DatabaseOutlined': ManufacturingIcons.database,
+          'MonitorOutlined': ManufacturingIcons.monitor,
+          'GlobalOutlined': ManufacturingIcons.global,
+          'ApiOutlined': ManufacturingIcons.api,
+          'CodeOutlined': ManufacturingIcons.code,
+          'PrinterOutlined': ManufacturingIcons.printer,
+          'HistoryOutlined': ManufacturingIcons.history,
+          'UnorderedListOutlined': ManufacturingIcons.list,
+          'CalendarOutlined': ManufacturingIcons.calendar,
+          'PlayCircleOutlined': ManufacturingIcons.playCircle,
+          'InboxOutlined': ManufacturingIcons.inbox,
+          'SafetyOutlined': ManufacturingIcons.safety,
+          'ShoppingOutlined': ManufacturingIcons.shop,
+          'UserSwitchOutlined': ManufacturingIcons.userSwitch,
+          'SettingOutlined': ManufacturingIcons.mdSettings,
+          'BellOutlined': ManufacturingIcons.bell,
+          'LoginOutlined': ManufacturingIcons.login,
+        };
+        const IconComponent = lucideIconMap[menu.icon];
+        if (IconComponent) {
+          iconElement = React.createElement(IconComponent, { size: 16 });
+        }
+      }
     }
     
-    // 如果菜单有 icon 字段，也尝试映射到 Lucide 图标
-    if (!iconElement && menu.icon) {
-      const lucideIconMap: Record<string, React.ComponentType<any>> = {
-        'DashboardOutlined': ManufacturingIcons.dashboard,
-        'UserOutlined': ManufacturingIcons.user,
-        'TeamOutlined': ManufacturingIcons.team,
-        'ApartmentOutlined': ManufacturingIcons.building,
-        'CrownOutlined': ManufacturingIcons.crown,
-        'AppstoreOutlined': ManufacturingIcons.appstore,
-        'ControlOutlined': ManufacturingIcons.control,
-        'ShopOutlined': ManufacturingIcons.shop,
-        'FileTextOutlined': ManufacturingIcons.fileCode,
-        'DatabaseOutlined': ManufacturingIcons.database,
-        'MonitorOutlined': ManufacturingIcons.monitor,
-        'GlobalOutlined': ManufacturingIcons.global,
-        'ApiOutlined': ManufacturingIcons.api,
-        'CodeOutlined': ManufacturingIcons.code,
-        'PrinterOutlined': ManufacturingIcons.printer,
-        'HistoryOutlined': ManufacturingIcons.history,
-        'UnorderedListOutlined': ManufacturingIcons.list,
-        'CalendarOutlined': ManufacturingIcons.calendar,
-        'PlayCircleOutlined': ManufacturingIcons.playCircle,
-        'InboxOutlined': ManufacturingIcons.inbox,
-        'SafetyOutlined': ManufacturingIcons.safety,
-        'ShoppingOutlined': ManufacturingIcons.shop,
-        'UserSwitchOutlined': ManufacturingIcons.userSwitch,
-        'SettingOutlined': ManufacturingIcons.mdSettings,
-        'BellOutlined': ManufacturingIcons.bell,
-        'LoginOutlined': ManufacturingIcons.login,
-      };
-      const IconComponent = lucideIconMap[menu.icon];
-      if (IconComponent) {
-        iconElement = React.createElement(IconComponent, { size: 16 });
+    // 如果 menu.icon 不存在或未匹配到图标，再尝试根据菜单名称和路径获取图标
+    if (!iconElement) {
+      if (menu.name) {
+        iconElement = getMenuIcon(menu.name, menu.path);
+      } else if (menu.path) {
+        iconElement = getMenuIcon('', menu.path);
       }
     }
     
@@ -1146,6 +1141,47 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const menuConfig = useMemo(() => getMenuConfig(t), [t]);
 
   /**
+   * 将路径片段转换为中文名称（作为后备方案）
+   */
+  const translatePathSegmentToChinese = (segment: string): string => {
+    const pathMap: Record<string, string> = {
+      // 工厂数据
+      'workshops': '车间',
+      'production-lines': '产线',
+      'workstations': '工位',
+      'factory': '工厂数据',
+      // 仓库数据
+      'warehouses': '仓库',
+      'storage-areas': '库区',
+      'storage-locations': '库位',
+      'warehouse': '仓库数据',
+      // 物料数据
+      'groups': '物料分组',
+      'materials': '物料',
+      'bom': 'BOM',
+      // 工艺数据
+      'defect-types': '不良品',
+      'operations': '工序',
+      'routes': '工艺路线',
+      'sop': '作业程序',
+      'process': '工艺数据',
+      // 供应链数据
+      'customers': '客户',
+      'suppliers': '供应商',
+      'supply-chain': '供应链数据',
+      // 绩效数据
+      'holidays': '假期',
+      'skills': '技能',
+      'performance': '绩效数据',
+      // 应用路径
+      'master-data': '基础数据管理',
+      'apps': '应用',
+    };
+    
+    return pathMap[segment] || segment;
+  };
+
+  /**
    * 根据当前路径和菜单配置生成面包屑
    */
   const generateBreadcrumb = useMemo(() => {
@@ -1319,12 +1355,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
       });
     } else {
-      // 如果没有找到匹配的菜单项，使用路径作为面包屑
+      // 如果没有找到匹配的菜单项，使用路径作为面包屑，并转换为中文
       const pathSegments = location.pathname.split('/').filter(Boolean);
       pathSegments.forEach((segment, index) => {
         const path = '/' + pathSegments.slice(0, index + 1).join('/');
+        // 将路径片段转换为中文名称
+        const chineseTitle = translatePathSegmentToChinese(segment);
         breadcrumbItems.push({
-          title: segment,
+          title: chineseTitle,
           path: path,
         });
       });
@@ -1576,6 +1614,54 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const merged = [...new Set([...autoOpenKeys, ...userOpenKeys])];
     return merged;
   }, [requiredOpenKeys, userOpenKeys, userClosedKeys]);
+
+  /**
+   * 计算应该选中的菜单 key（只选中精确匹配的路径，不选中父级菜单）
+   * 
+   * @param menuItems - 菜单项数组
+   * @param currentPath - 当前路径
+   * @returns 应该选中的菜单 key 数组
+   */
+  const calculateSelectedKeys = React.useCallback((menuItems: MenuDataItem[], currentPath: string): string[] => {
+    const selectedKeys: string[] = [];
+    
+    /**
+     * 递归查找精确匹配当前路径的菜单项
+     * 
+     * @param items - 菜单项数组
+     * @param path - 当前路径
+     * @returns 是否找到匹配的菜单项
+     */
+    const findExactMatch = (items: MenuDataItem[], path: string): boolean => {
+      for (const item of items) {
+        const itemKey = item.key || item.path;
+        if (!itemKey) continue;
+        
+        // 精确匹配：只有路径完全相等时才选中
+        if (item.path === path) {
+          selectedKeys.push(itemKey as string);
+          return true;
+        }
+        
+        // 如果菜单项有子菜单，递归查找
+        if (item.children && item.children.length > 0) {
+          const hasMatch = findExactMatch(item.children, path);
+          if (hasMatch) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    
+    findExactMatch(menuItems, currentPath);
+    return selectedKeys;
+  }, []);
+
+  // 计算应该选中的菜单 key（只选中精确匹配的路径）
+  const selectedKeys = useMemo(() => {
+    return calculateSelectedKeys(filteredMenuData, location.pathname);
+  }, [filteredMenuData, location.pathname, calculateSelectedKeys]);
 
   // 当路径变化时，如果新路径需要展开之前手动收起的菜单，则清除这些菜单的收起状态
   // 这样可以确保当用户导航到新页面时，相关的菜单会自动展开
@@ -2059,6 +2145,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 动态注入主题色到 CSS 变量 */
         :root {
           --riveredge-menu-primary-color: ${token.colorPrimary};
+          --ant-colorPrimary: ${token.colorPrimary};
           --ant-colorBgLayout: ${token.colorBgLayout};
         }
         /* ==================== PageContainer 相关 ==================== */
@@ -2158,8 +2245,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-sider-menu .ant-menu-item-group[class*="app-group-"] .ant-menu-item-group-title,
         .ant-pro-sider-menu .ant-menu-item-group[class*="menu-group-title-app"] .ant-menu-item-group-title {
           font-size: 12px !important;
-          color: var(--ant-colorTextSecondary) !important;
-          font-weight: 500 !important;
+          color: var(--ant-colorPrimary) !important;
+          font-weight: 700 !important;
           padding: 2px 16px 2px 0 !important;
           margin: 0 !important;
           line-height: 1.2 !important;
@@ -3279,6 +3366,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menuProps={{
         mode: 'inline',
         openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
+        selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
         onOpenChange: (keys) => {
           // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单
           // 1. 计算哪些菜单被收起了（从 requiredOpenKeys 中移除的）
@@ -3318,7 +3406,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               className="menu-group-title-app"
               style={{
                 fontSize: '12px',
-                color: 'var(--ant-colorTextSecondary)',
+                color: 'var(--ant-colorPrimary)',
                 fontWeight: 500,
                 padding: '0', // 减小上下 padding
                 margin: 0,

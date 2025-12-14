@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Table, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -458,7 +459,7 @@ const LanguageListPage: React.FC = () => {
           submitter={false}
           layout="vertical"
         >
-          <ProFormSelect
+          <SafeProFormSelect
             name="code"
             label="语言代码"
             rules={[{ required: true, message: '请选择语言代码' }]}

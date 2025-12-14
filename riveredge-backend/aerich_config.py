@@ -54,73 +54,52 @@ if str(src_path) not in sys.path:
 # ============================================
 # 第四步：加载配置（需要临时切换 platform 为项目包）
 # ============================================
-# 创建命名空间，让 database.py 可以导入 platform.config
-_platform_ns = type(sys)('platform')
-_platform_config_ns = type(sys)('platform.config')
-sys.modules['platform.config'] = _platform_config_ns
+# 创建命名空间，让 database.py 可以导入 infra.config
+_infra_ns = type(sys)('infra')
+_infra_config_ns = type(sys)('infra.config')
+sys.modules['infra'] = _infra_ns
+sys.modules['infra.config'] = _infra_config_ns
 
-# 加载 platform.config.platform_config 模块
+# 加载 infra.config.platform_config 模块
 config_spec = importlib.util.spec_from_file_location(
     "platform_config",
-    src_path / "platform" / "config" / "platform_config.py"
+    src_path / "infra" / "config" / "platform_config.py"
 )
 config_module = importlib.util.module_from_spec(config_spec)
-sys.modules['platform.config.platform_config'] = config_module
+sys.modules['infra.config.platform_config'] = config_module
 
-# 在执行模块前，临时设置 platform 命名空间
-_original_platform = sys.modules['platform']
-sys.modules['platform'] = _platform_ns
+# 在执行模块前，临时设置 infra 命名空间
 try:
     config_spec.loader.exec_module(config_module)
-finally:
-    # 恢复内置 platform 模块
-    sys.modules['platform'] = _original_platform
+except Exception as e:
+    print(f"Warning: Failed to load config module: {e}")
 
-# 创建 platform.infrastructure 命名空间
-_platform_infrastructure_ns = type(sys)('platform.infrastructure')
-_platform_infrastructure_database_ns = type(sys)('platform.infrastructure.database')
-sys.modules['platform.infrastructure'] = _platform_infrastructure_ns
-sys.modules['platform.infrastructure.database'] = _platform_infrastructure_database_ns
+# 创建 infra.infrastructure 命名空间
+_infra_infrastructure_ns = type(sys)('infra.infrastructure')
+_infra_infrastructure_database_ns = type(sys)('infra.infrastructure.database')
+sys.modules['infra.infrastructure'] = _infra_infrastructure_ns
+sys.modules['infra.infrastructure.database'] = _infra_infrastructure_database_ns
 
 # 加载 database 模块
 database_spec = importlib.util.spec_from_file_location(
     "database_module",
-    src_path / "platform" / "infrastructure" / "database" / "database.py"
+    src_path / "infra" / "infrastructure" / "database" / "database.py"
 )
 database_module = importlib.util.module_from_spec(database_spec)
 
-# 在执行模块前，临时设置 platform 命名空间
-sys.modules['platform'] = _platform_ns
+# 在执行模块前，临时设置 infra 命名空间
 try:
     database_spec.loader.exec_module(database_module)
-finally:
-    # 恢复内置 platform 模块
-    sys.modules['platform'] = _original_platform
+except Exception as e:
+    print(f"Warning: Failed to load database module: {e}")
 
 # 获取 TORTOISE_ORM
 TORTOISE_ORM = database_module.TORTOISE_ORM
 
 # ============================================
-# 第五步：恢复项目 platform 包（Tortoise ORM 需要它）
+# 第五步：确保 infra 命名空间正确
 # ============================================
-# 清除所有 platform 相关的模块缓存（除了我们创建的命名空间和已加载的 asyncpg）
-_modules_to_remove = [k for k in list(sys.modules.keys()) 
-                     if k == 'platform' or (k.startswith('platform.') and k not in ['platform.config', 'platform.config.platform_config', 'platform.infrastructure', 'platform.infrastructure.database'])]
-for mod_name in _modules_to_remove:
-    sys.modules.pop(mod_name, None)
-
-# 现在导入项目的 platform 包
-try:
-    import platform as _our_platform
-    sys.modules['platform'] = _our_platform
-except ImportError:
-    # 如果导入失败，保持内置 platform
-    sys.modules['platform'] = _original_platform
-
-# 最终：确保 platform 是项目包（Tortoise ORM 需要）
-# asyncpg 已经在导入时使用了内置 platform，所以现在可以安全地切换
-if '_our_platform' in locals() and _our_platform:
-    sys.modules['platform'] = _our_platform
+# infra 命名空间已经创建，不需要额外处理
 
 # 导出给 Aerich 使用
 __all__ = ['TORTOISE_ORM']

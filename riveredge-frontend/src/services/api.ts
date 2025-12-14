@@ -206,11 +206,9 @@ export async function apiRequest<T = any>(
   if (needsTenantContext) {
     if (currentTenantId) {
       headers['X-Tenant-ID'] = currentTenantId;
-      console.log('✅ 添加 X-Tenant-ID 请求头:', currentTenantId, 'URL:', url);
     } else if (isPlatformSuperAdmin) {
       // 平台超级管理员即使没有 tenant_id，也允许发送请求
       // 后端会检测到是平台超级管理员，并使用默认租户
-      console.log('ℹ️ 平台超级管理员请求，后端将使用默认租户，URL:', url);
     } else {
       // 非平台超级管理员且没有 tenant_id，输出详细错误信息
       console.error('❌ 组织上下文未设置，无法添加 X-Tenant-ID 请求头:', {
@@ -460,4 +458,46 @@ export async function apiRequest<T = any>(
     throw wrappedError;
   }
 }
+
+/**
+ * API 便捷对象
+ * 
+ * 提供 get、post、put、delete 等便捷方法，内部调用 apiRequest
+ */
+export const api = {
+  /**
+   * GET 请求
+   */
+  get: <T = any>(url: string, options?: { params?: Record<string, any>; headers?: Record<string, string> }): Promise<T> => {
+    return apiRequest<T>(url, { ...options, method: 'GET' });
+  },
+
+  /**
+   * POST 请求
+   */
+  post: <T = any>(url: string, data?: any, options?: { params?: Record<string, any>; headers?: Record<string, string> }): Promise<T> => {
+    return apiRequest<T>(url, { ...options, method: 'POST', data });
+  },
+
+  /**
+   * PUT 请求
+   */
+  put: <T = any>(url: string, data?: any, options?: { params?: Record<string, any>; headers?: Record<string, string> }): Promise<T> => {
+    return apiRequest<T>(url, { ...options, method: 'PUT', data });
+  },
+
+  /**
+   * DELETE 请求
+   */
+  delete: <T = any>(url: string, options?: { params?: Record<string, any>; headers?: Record<string, string> }): Promise<T> => {
+    return apiRequest<T>(url, { ...options, method: 'DELETE' });
+  },
+
+  /**
+   * PATCH 请求
+   */
+  patch: <T = any>(url: string, data?: any, options?: { params?: Record<string, any>; headers?: Record<string, string> }): Promise<T> => {
+    return apiRequest<T>(url, { ...options, method: 'PATCH', data });
+  },
+};
 

@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -484,7 +485,7 @@ const ScheduledTaskListPage: React.FC = () => {
             placeholder="请输入任务代码（唯一标识，如：daily_report）"
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="任务类型"
             rules={[{ required: true, message: '请选择任务类型' }]}
@@ -494,7 +495,7 @@ const ScheduledTaskListPage: React.FC = () => {
             ]}
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="trigger_type"
             label="触发器类型"
             rules={[{ required: true, message: '请选择触发器类型' }]}

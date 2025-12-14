@@ -13,6 +13,8 @@ from core.inngest.client import inngest_client
 from core.models.data_backup import DataBackup
 from core.services.data_backup_service import DataBackupService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.inngest_tenant_isolation import with_tenant_isolation
+from infra.domain.tenant_context import get_current_tenant_id
 
 
 @inngest_client.create_function(
@@ -21,6 +23,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
     trigger=TriggerEvent(event="backup/execute"),
     retries=3,
 )
+@with_tenant_isolation  # 添加租户隔离装饰器
 async def data_backup_executor_function(event: Event) -> Dict[str, Any]:
     """
     数据备份执行器工作流函数
@@ -28,21 +31,25 @@ async def data_backup_executor_function(event: Event) -> Dict[str, Any]:
     监听 backup/execute 事件，执行数据备份。
     支持全量备份、增量备份等备份类型。
     
+    租户隔离已由装饰器自动处理，可以直接使用 get_current_tenant_id() 获取租户ID。
+    
     Args:
         event: Inngest 事件对象
         
     Returns:
         Dict[str, Any]: 备份执行结果
     """
+    # 从上下文获取 tenant_id（装饰器已验证和设置）
+    tenant_id = get_current_tenant_id()
+    
     data = event.data or {}
-    tenant_id = data.get("tenant_id")
     backup_uuid = data.get("backup_uuid")
     inngest_run_id = getattr(event, "id", None)
     
-    if not tenant_id or not backup_uuid:
+    if not backup_uuid:
         return {
             "success": False,
-            "error": "缺少必要参数：tenant_id 或 backup_uuid"
+            "error": "缺少必要参数：backup_uuid"
         }
     
     try:

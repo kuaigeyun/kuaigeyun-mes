@@ -101,6 +101,15 @@ TORTOISE_ORM = {
                 "aerich.models",
                 # 插件模型（从 src/apps 目录加载）
                 "apps.kuaimes.models.order",  # 快格轻MES 订单模型
+                # 主数据管理模型
+                "apps.master_data.models.factory",  # 工厂数据模型（车间、产线、工位）
+                "apps.master_data.models.warehouse",  # 仓库数据模型（仓库、库区、库位）
+                "apps.master_data.models.material",  # 物料数据模型（物料分组、物料、BOM）
+                "apps.master_data.models.process",  # 工艺数据模型（不良品、工序、工艺路线、SOP）
+                "apps.master_data.models.customer",  # 供应链数据模型（客户）
+                "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
+                "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
+                "apps.master_data.models.product",  # 产品模型
             ],
             "default_connection": "default",
         },

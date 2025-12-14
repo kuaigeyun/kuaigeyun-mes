@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react';
 import { ProTable, ProColumns, ProForm, ProFormText, ProFormSelect } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Tabs } from 'antd';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from './card-view';
@@ -361,7 +362,7 @@ const DataBackupsPage: React.FC = () => {
             rules={[{ required: true, message: '请输入备份名称' }]}
             placeholder="请输入备份名称"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="backup_type"
             label="备份类型"
             rules={[{ required: true, message: '请选择备份类型' }]}
@@ -371,7 +372,7 @@ const DataBackupsPage: React.FC = () => {
             ]}
             placeholder="请选择备份类型"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="backup_scope"
             label="备份范围"
             rules={[{ required: true, message: '请选择备份范围' }]}

@@ -109,7 +109,21 @@ function getPluginBuildPath(entryPoint: string): string {
  */
 async function loadPluginInDevelopment(application: Application): Promise<PluginRoute[]> {
   const pluginCode = application.code;
-  const sourcePath = getPluginSourcePath(pluginCode);
+  
+  // 优先使用 entry_point，如果不存在则使用 code 生成路径
+  let sourcePath: string;
+  if (application.entry_point) {
+    // 如果 entry_point 是相对路径，直接使用
+    if (application.entry_point.startsWith('../') || application.entry_point.startsWith('./')) {
+      sourcePath = application.entry_point;
+    } else {
+      // 如果是绝对路径或其他格式，使用 getPluginBuildPath 转换
+      sourcePath = getPluginBuildPath(application.entry_point);
+    }
+  } else {
+    // 如果没有 entry_point，使用 code 生成路径
+    sourcePath = getPluginSourcePath(pluginCode);
+  }
   
   // 使用重试机制加载插件
   const pluginModule = await withRetry(
