@@ -4,14 +4,17 @@
  * 提供车间的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, List, Typography } from 'antd';
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProFormDigit, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, List, Typography, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '@/components/uni_table';
 import { workshopApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, WorkshopUpdate } from '../../../types/factory';
 import { batchImport } from '@/utils/batchOperations';
+import { generateCode } from '@/services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '@/utils/codeRulePage';
+import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '@/services/customField';
 
 /**
  * 车间管理列表页面组件
@@ -32,18 +35,62 @@ const WorkshopsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  
+  // 自定义字段相关状态
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+
+  /**
+   * 加载自定义字段
+   */
+  useEffect(() => {
+    const loadCustomFields = async () => {
+      try {
+        const fields = await getCustomFieldsByTable('master_data_factory_workshops', true);
+        setCustomFields(fields);
+      } catch (error) {
+        console.error('加载自定义字段失败:', error);
+      }
+    };
+    loadCustomFields();
+  }, []);
 
   /**
    * 处理新建车间
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentWorkshopUuid(null);
     setModalVisible(true);
+    setCustomFieldValues({});
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+    
+    // 检查是否启用自动编码
+    if (isAutoGenerateEnabled('master-data-factory-workshop')) {
+      const ruleCode = getPageRuleCode('master-data-factory-workshop');
+      if (ruleCode) {
+        try {
+          const codeResponse = await generateCode({ rule_code: ruleCode });
+          formRef.current?.setFieldsValue({
+            code: codeResponse.code,
+            isActive: true,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          formRef.current?.setFieldsValue({
+            isActive: true,
+          });
+        }
+      } else {
+        formRef.current?.setFieldsValue({
+          isActive: true,
+        });
+      }
+    } else {
+      formRef.current?.setFieldsValue({
+        isActive: true,
+      });
+    }
   };
 
   /**
@@ -63,6 +110,18 @@ const WorkshopsPage: React.FC = () => {
         description: detail.description,
         isActive: detail.isActive,
       });
+      
+      // 加载自定义字段值
+      try {
+        const fieldValues = await getFieldValues('master_data_factory_workshops', detail.id);
+        setCustomFieldValues(fieldValues);
+        // 将自定义字段值设置到表单
+        Object.keys(fieldValues).forEach(fieldCode => {
+          formRef.current?.setFieldValue(`custom_${fieldCode}`, fieldValues[fieldCode]);
+        });
+      } catch (error) {
+        console.error('加载自定义字段值失败:', error);
+      }
     } catch (error: any) {
       messageApi.error(error.message || '获取车间详情失败');
     }
@@ -79,6 +138,15 @@ const WorkshopsPage: React.FC = () => {
       
       const detail = await workshopApi.get(record.uuid);
       setWorkshopDetail(detail);
+      
+      // 加载自定义字段值
+      try {
+        const fieldValues = await getFieldValues('master_data_factory_workshops', detail.id);
+        setCustomFieldValues(fieldValues);
+      } catch (error) {
+        console.error('加载自定义字段值失败:', error);
+        setCustomFieldValues({});
+      }
     } catch (error: any) {
       messageApi.error(error.message || '获取车间详情失败');
     } finally {
@@ -115,24 +183,171 @@ const WorkshopsPage: React.FC = () => {
     try {
       setFormLoading(true);
       
+      // 分离自定义字段值和标准字段值
+      const customFieldData: Record<string, any> = {};
+      const standardValues: any = {};
+      
+      Object.keys(values).forEach(key => {
+        if (key.startsWith('custom_')) {
+          const fieldCode = key.replace('custom_', '');
+          customFieldData[fieldCode] = values[key];
+        } else {
+          standardValues[key] = values[key];
+        }
+      });
+      
+      let workshopId: number;
+      
       if (isEdit && currentWorkshopUuid) {
         // 更新车间
-        await workshopApi.update(currentWorkshopUuid, values as WorkshopUpdate);
+        const updated = await workshopApi.update(currentWorkshopUuid, standardValues as WorkshopUpdate);
+        workshopId = updated.id;
         messageApi.success('更新成功');
       } else {
         // 创建车间
-        await workshopApi.create(values as WorkshopCreate);
+        const created = await workshopApi.create(standardValues as WorkshopCreate);
+        workshopId = created.id;
         messageApi.success('创建成功');
+      }
+      
+      // 保存自定义字段值
+      if (Object.keys(customFieldData).length > 0) {
+        try {
+          const fieldValues = Object.keys(customFieldData).map(fieldCode => {
+            const field = customFields.find(f => f.code === fieldCode);
+            return field ? {
+              field_uuid: field.uuid,
+              value: customFieldData[fieldCode],
+            } : null;
+          }).filter(Boolean);
+          
+          if (fieldValues.length > 0) {
+            await batchSetFieldValues({
+              record_id: workshopId,
+              record_table: 'master_data_factory_workshops',
+              values: fieldValues as any[],
+            });
+          }
+        } catch (error) {
+          console.error('保存自定义字段值失败:', error);
+          // 不阻止表单提交，只记录错误
+        }
       }
       
       setModalVisible(false);
       formRef.current?.resetFields();
+      setCustomFieldValues({});
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
     } finally {
       setFormLoading(false);
     }
+  };
+  
+  /**
+   * 渲染自定义字段表单项
+   */
+  const renderCustomFields = () => {
+    if (customFields.length === 0) return null;
+    
+    return customFields
+      .filter(field => field.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(field => {
+        const fieldName = `custom_${field.code}`;
+        const label = field.label || field.name;
+        const placeholder = field.placeholder || `请输入${label}`;
+        
+        switch (field.field_type) {
+          case 'text':
+            return (
+              <ProFormText
+                key={field.uuid}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                colProps={{ span: 12 }}
+                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
+                fieldProps={{
+                  maxLength: field.config?.maxLength,
+                }}
+                initialValue={customFieldValues[field.code] || field.config?.default}
+              />
+            );
+          case 'number':
+            return (
+              <ProFormDigit
+                key={field.uuid}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                colProps={{ span: 12 }}
+                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
+                fieldProps={{
+                  min: field.config?.min,
+                  max: field.config?.max,
+                }}
+                initialValue={customFieldValues[field.code] || field.config?.default}
+              />
+            );
+          case 'date':
+            return (
+              <ProFormDatePicker
+                key={field.uuid}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                colProps={{ span: 12 }}
+                rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
+                fieldProps={{
+                  format: field.config?.format || 'YYYY-MM-DD',
+                }}
+                initialValue={customFieldValues[field.code] || field.config?.default}
+              />
+            );
+          case 'select':
+            return (
+              <ProFormSelect
+                key={field.uuid}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                colProps={{ span: 12 }}
+                rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
+                options={field.config?.options || []}
+                initialValue={customFieldValues[field.code] || field.config?.default}
+              />
+            );
+          case 'textarea':
+            return (
+              <ProFormTextArea
+                key={field.uuid}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                colProps={{ span: 24 }}
+                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
+                fieldProps={{
+                  rows: field.config?.rows || 4,
+                }}
+                initialValue={customFieldValues[field.code] || field.config?.default}
+              />
+            );
+          default:
+            return (
+              <ProFormText
+                key={field.uuid}
+                name={fieldName}
+                label={label}
+                placeholder={placeholder}
+                colProps={{ span: 12 }}
+                rules={field.is_required ? [{ required: true, message: `请输入${label}` }] : []}
+                initialValue={customFieldValues[field.code] || field.config?.default}
+              />
+            );
+        }
+      });
   };
 
   /**
@@ -391,6 +606,39 @@ const WorkshopsPage: React.FC = () => {
   };
 
   /**
+   * 生成自定义字段列
+   */
+  const generateCustomFieldColumns = (): ProColumns<Workshop>[] => {
+    return customFields
+      .filter(field => field.is_active) // 只显示启用的自定义字段
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(field => ({
+        title: field.label || field.name,
+        dataIndex: `custom_${field.code}`,
+        width: 150,
+        hideInSearch: !field.is_searchable,
+        sorter: field.is_sortable,
+        render: (value: any) => {
+          if (value === null || value === undefined || value === '') {
+            return <Typography.Text type="secondary">-</Typography.Text>;
+          }
+          // 根据字段类型格式化显示
+          if (field.field_type === 'date' && value) {
+            return new Date(value).toLocaleDateString('zh-CN');
+          }
+          if (field.field_type === 'datetime' && value) {
+            return new Date(value).toLocaleString('zh-CN');
+          }
+          if (field.field_type === 'select' && field.config?.options) {
+            const option = field.config.options.find((opt: any) => opt.value === value);
+            return option ? option.label : String(value);
+          }
+          return String(value);
+        },
+      }));
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<Workshop>[] = [
@@ -426,6 +674,8 @@ const WorkshopsPage: React.FC = () => {
         </Tag>
       ),
     },
+    // 插入自定义字段列
+    ...generateCustomFieldColumns(),
     {
       title: '创建时间',
       dataIndex: 'createdAt',
@@ -503,7 +753,7 @@ const WorkshopsPage: React.FC = () => {
           'isActive': 'isActive',
           'is_active': 'isActive',
         }}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -517,6 +767,44 @@ const WorkshopsPage: React.FC = () => {
           
           try {
             const result = await workshopApi.list(apiParams);
+            
+            // 批量加载自定义字段值
+            if (customFields.length > 0 && result.length > 0) {
+              try {
+                // 为每条记录加载自定义字段值
+                const recordsWithCustomFields = await Promise.all(
+                  result.map(async (record: Workshop) => {
+                    try {
+                      const fieldValues = await getFieldValues('master_data_factory_workshops', record.id);
+                      // 将自定义字段值合并到记录中
+                      const recordWithCustomFields: any = { ...record };
+                      Object.keys(fieldValues).forEach(fieldCode => {
+                        recordWithCustomFields[`custom_${fieldCode}`] = fieldValues[fieldCode];
+                      });
+                      return recordWithCustomFields;
+                    } catch (error) {
+                      console.error(`加载记录 ${record.id} 的自定义字段值失败:`, error);
+                      return record;
+                    }
+                  })
+                );
+                
+                return {
+                  data: recordsWithCustomFields,
+                  success: true,
+                  total: result.length, // 注意：后端需要返回总数，这里暂时使用数组长度
+                };
+              } catch (error) {
+                console.error('批量加载自定义字段值失败:', error);
+                // 如果加载失败，返回原始数据
+                return {
+                  data: result,
+                  success: true,
+                  total: result.length,
+                };
+              }
+            }
+            
             return {
               data: result,
               success: true,
@@ -600,6 +888,30 @@ const WorkshopsPage: React.FC = () => {
             },
           ]}
         />
+        
+        {/* 自定义字段 */}
+        {customFields.length > 0 && Object.keys(customFieldValues).length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <Typography.Title level={5}>自定义字段</Typography.Title>
+            <ProDescriptions
+              column={2}
+              dataSource={customFieldValues}
+              columns={customFields
+                .filter(field => field.is_active && customFieldValues[field.code] !== undefined)
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map(field => ({
+                  title: field.label || field.name,
+                  dataIndex: field.code,
+                  render: (value: any) => {
+                    if (value === null || value === undefined || value === '') {
+                      return <Typography.Text type="secondary">-</Typography.Text>;
+                    }
+                    return String(value);
+                  },
+                }))}
+            />
+          </div>
+        )}
       </Drawer>
 
       {/* 创建/编辑车间 Modal */}
@@ -634,7 +946,7 @@ const WorkshopsPage: React.FC = () => {
           <ProFormText
             name="code"
             label="车间编码"
-            placeholder="请输入车间编码"
+            placeholder="请输入车间编码（如启用自动编码，将自动生成）"
             colProps={{ span: 12 }}
             rules={[
               { required: true, message: '请输入车间编码' },
@@ -643,6 +955,12 @@ const WorkshopsPage: React.FC = () => {
             fieldProps={{
               style: { textTransform: 'uppercase' },
             }}
+            extra={
+              isAutoGenerateEnabled('master-data-factory-workshop')
+                ? '已启用自动编码，编码将根据规则自动生成'
+                : undefined
+            }
+            disabled={!isEdit && isAutoGenerateEnabled('master-data-factory-workshop')}
           />
           <ProFormText
             name="name"
@@ -669,6 +987,20 @@ const WorkshopsPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
+          
+          {/* 自定义字段分割线 */}
+          {customFields.length > 0 && (
+            <>
+              <div style={{ gridColumn: 'span 24', marginTop: 16, marginBottom: 8, width: '100%' }}>
+                <Divider style={{ margin: 0, fontSize: 12 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12, padding: '0 8px' }}>
+                    自定义字段
+                  </Typography.Text>
+                </Divider>
+              </div>
+              {renderCustomFields()}
+            </>
+          )}
         </ProForm>
       </Modal>
     </>
