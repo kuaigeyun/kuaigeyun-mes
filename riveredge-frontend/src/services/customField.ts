@@ -15,7 +15,7 @@ export interface CustomField {
   name: string;
   code: string;
   table_name: string;
-  field_type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'json';
+  field_type: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json';
   config?: Record<string, any>;
   label?: string;
   placeholder?: string;
@@ -54,7 +54,7 @@ export interface CreateCustomFieldData {
   name: string;
   code: string;
   table_name: string;
-  field_type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'json';
+  field_type: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json';
   config?: Record<string, any>;
   label?: string;
   placeholder?: string;
@@ -70,7 +70,7 @@ export interface CreateCustomFieldData {
  */
 export interface UpdateCustomFieldData {
   name?: string;
-  field_type?: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'json';
+  field_type?: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json';
   config?: Record<string, any>;
   label?: string;
   placeholder?: string;
