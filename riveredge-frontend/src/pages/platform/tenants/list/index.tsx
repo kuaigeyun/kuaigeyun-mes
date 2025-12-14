@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -1412,7 +1413,7 @@ const SuperAdminTenantList: React.FC = () => {
             { pattern: /^[a-z0-9-]+$/, message: '域名只能包含小写字母、数字和连字符' },
           ]}
         />
-        <ProFormSelect
+        <SafeProFormSelect
           name="status"
           label="组织状态"
           placeholder="请选择组织状态"
@@ -1424,7 +1425,7 @@ const SuperAdminTenantList: React.FC = () => {
             { label: '已暂停', value: TenantStatus.SUSPENDED },
           ]}
         />
-        <ProFormSelect
+        <SafeProFormSelect
           name="plan"
           label="组织套餐"
           placeholder="请选择组织套餐"

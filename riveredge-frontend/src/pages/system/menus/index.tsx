@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
@@ -438,7 +439,7 @@ const MenuListPage: React.FC = () => {
             label="前端组件路径"
             placeholder="请输入前端组件路径（可选）"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="application_uuid"
             label="关联应用"
             options={applications}

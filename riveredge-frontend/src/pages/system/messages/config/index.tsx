@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -378,7 +379,7 @@ const MessageConfigListPage: React.FC = () => {
             placeholder="请输入配置代码（唯一标识，如：email_default）"
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="消息类型"
             rules={[{ required: true, message: '请选择消息类型' }]}

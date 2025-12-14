@@ -42,7 +42,7 @@ export interface UniImportProps {
    */
   title?: string;
   /**
-   * 弹窗宽度（默认：'90%'）
+   * 弹窗宽度（默认：1200）
    */
   width?: string | number;
   /**
@@ -83,7 +83,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   onCancel,
   onConfirm,
   title = '导入数据',
-  width = '90%',
+  width = 1200,
   height = 600,
   showConfirmButton = true,
   showCancelButton = true,
@@ -757,7 +757,7 @@ export const UniImport: React.FC<UniImportProps> = ({
         title={title}
         open={visible}
         onCancel={onCancel}
-        size={width}
+        width={width}
         footer={
           <Space>
             {showCancelButton && (

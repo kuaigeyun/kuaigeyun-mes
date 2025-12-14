@@ -527,8 +527,9 @@ class ApplicationService:
                         data=update_data
                     )
                     
-                    # 如果菜单配置变更，确保菜单已同步（update_application 已经会同步，但这里明确确保）
-                    if menu_config_changed and application.menu_config and application.is_installed:
+                    # 如果应用已安装且有菜单配置，确保菜单已同步
+                    # 注意：即使菜单配置没有变化，也要同步，因为可能之前同步失败或菜单被删除
+                    if application.menu_config and application.is_installed:
                         from core.services.menu_service import MenuService
                         await MenuService.sync_menus_from_application_config(
                             tenant_id=tenant_id,
@@ -550,6 +551,14 @@ class ApplicationService:
                 import traceback
                 traceback.print_exc()
                 continue
+        
+        # 所有应用注册完成后，统一清除菜单缓存，确保菜单一次性刷新
+        if registered_apps:
+            try:
+                from core.services.menu_service import MenuService
+                await MenuService._clear_menu_cache(tenant_id)
+            except Exception as e:
+                print(f"⚠️ 清除菜单缓存失败（不影响应用注册）: {e}")
         
         return registered_apps
 

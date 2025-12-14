@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Form } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -461,7 +462,7 @@ const ScriptListPage: React.FC = () => {
             disabled={isEdit}
             tooltip="脚本代码用于程序识别，创建后不可修改"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="脚本类型"
             rules={[{ required: true, message: '请选择脚本类型' }]}

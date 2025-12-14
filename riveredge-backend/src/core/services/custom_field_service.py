@@ -4,7 +4,7 @@
 提供自定义字段的 CRUD 操作和字段值管理。
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 
@@ -123,7 +123,7 @@ class CustomFieldService:
         skip: int = 0,
         limit: int = 100,
         is_active: Optional[bool] = None
-    ) -> List[CustomField]:
+    ) -> Tuple[List[CustomField], int]:
         """
         获取字段列表
         
@@ -135,7 +135,7 @@ class CustomFieldService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[CustomField]: 字段列表
+            Tuple[List[CustomField], int]: (字段列表, 总记录数)
         """
         query = CustomField.filter(
             tenant_id=tenant_id,
@@ -148,7 +148,13 @@ class CustomFieldService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        return await query.offset(skip).limit(limit).order_by("sort_order", "id")
+        # 获取总数
+        total = await query.count()
+        
+        # 获取分页数据
+        items = await query.offset(skip).limit(limit).order_by("sort_order", "id")
+        
+        return items, total
     
     @staticmethod
     async def get_fields_by_table(

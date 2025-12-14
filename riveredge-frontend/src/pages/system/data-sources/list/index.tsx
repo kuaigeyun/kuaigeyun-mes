@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, ThunderboltOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
@@ -461,7 +462,7 @@ const DataSourceListPage: React.FC = () => {
             placeholder="请输入数据源代码（唯一标识，如：main_db）"
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="数据源类型"
             rules={[{ required: true, message: '请选择数据源类型' }]}

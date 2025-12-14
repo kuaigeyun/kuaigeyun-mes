@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
@@ -478,7 +479,7 @@ const PrintTemplateListPage: React.FC = () => {
             disabled={isEdit}
             tooltip="模板代码用于程序识别，创建后不可修改"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="模板类型"
             rules={[{ required: true, message: '请选择模板类型' }]}
@@ -565,7 +566,7 @@ const PrintTemplateListPage: React.FC = () => {
             }}
             tooltip="模板数据，JSON 格式，用于替换模板中的变量"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="output_format"
             label="输出格式"
             options={[

@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, CheckCircleOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
@@ -528,7 +529,7 @@ const PrintDeviceListPage: React.FC = () => {
             disabled={isEdit}
             tooltip="设备代码用于程序识别，创建后不可修改"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="设备类型"
             rules={[{ required: true, message: '请选择设备类型' }]}

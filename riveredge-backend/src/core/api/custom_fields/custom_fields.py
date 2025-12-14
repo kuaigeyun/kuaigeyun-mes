@@ -11,6 +11,7 @@ from core.schemas.custom_field import (
     CustomFieldCreate,
     CustomFieldUpdate,
     CustomFieldResponse,
+    CustomFieldListResponse,
     CustomFieldValueRequest,
     CustomFieldValueResponse,
     BatchSetFieldValuesRequest,
@@ -55,10 +56,10 @@ async def create_field(
         )
 
 
-@router.get("", response_model=List[CustomFieldResponse])
+@router.get("", response_model=CustomFieldListResponse)
 async def list_fields(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    page: int = Query(1, ge=1, description="页码（从1开始）"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页数量（最大1000）"),
     table_name: Optional[str] = Query(None, description="表名（可选，用于筛选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
@@ -69,23 +70,29 @@ async def list_fields(
     获取当前组织的自定义字段列表，支持分页和筛选。
     
     Args:
-        skip: 跳过数量（默认 0）
-        limit: 限制数量（默认 100，最大 1000）
+        page: 页码（从1开始，默认 1）
+        page_size: 每页数量（默认 20，最大 1000）
         table_name: 表名（可选，用于筛选）
         is_active: 是否启用（可选）
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
-        List[CustomFieldResponse]: 自定义字段列表
+        CustomFieldListResponse: 自定义字段列表响应（包含分页信息）
     """
-    fields = await CustomFieldService.list_fields(
+    skip = (page - 1) * page_size
+    fields, total = await CustomFieldService.list_fields(
         tenant_id=tenant_id,
         table_name=table_name,
         skip=skip,
-        limit=limit,
+        limit=page_size,
         is_active=is_active
     )
-    return [CustomFieldResponse.model_validate(f) for f in fields]
+    return CustomFieldListResponse(
+        items=[CustomFieldResponse.model_validate(f) for f in fields],
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
 @router.get("/by-table/{table_name}", response_model=List[CustomFieldResponse])

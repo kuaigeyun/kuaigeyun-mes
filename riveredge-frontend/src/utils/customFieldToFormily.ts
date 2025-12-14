@@ -99,7 +99,7 @@ function getComponentProps(field: CustomField): Record<string, any> {
       props.rows = field.config?.rows || 4;
       break;
     case 'select':
-      if (field.config?.options) {
+      if (field.config?.options && Array.isArray(field.config.options)) {
         props.options = field.config.options;
       }
       break;

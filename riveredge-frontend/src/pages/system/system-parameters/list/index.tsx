@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import GroupedFormView from '../grouped-form-view';
@@ -473,7 +474,7 @@ const SystemParameterListPage: React.FC = () => {
             placeholder="请输入参数键（唯一标识）"
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="参数类型"
             rules={[{ required: true, message: '请选择参数类型' }]}

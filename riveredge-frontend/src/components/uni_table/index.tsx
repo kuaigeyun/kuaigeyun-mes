@@ -563,18 +563,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const actionRef = externalActionRef || hookActionRef || internalActionRef;
   const formRef = externalFormRef || hookFormRef || internalFormRef;
   
-  // 调试：确认 searchParamsRef 状态（开发环境）
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && showAdvancedSearch) {
-      console.log('🔍 UniTable - searchParamsRef 状态:', {
-        hasSearchParamsRef: !!searchParamsRef,
-        searchParamsRefCurrent: searchParamsRef?.current,
-        location: window.location.pathname,
-        isSystemLevel: window.location.pathname.startsWith('/system/'),
-        isPlatformLevel: window.location.pathname.startsWith('/platform/'),
-      });
-    }
-  }, [showAdvancedSearch, searchParamsRef]);
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -677,16 +665,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     // searchParamsRef.current 可能为空对象 {}（表示清空搜索条件），这是有效的
     // 只有当 searchParamsRef.current 是 undefined 时，才回退到 formValues
     const searchFormValues = searchParamsRef.current !== undefined ? searchParamsRef.current : formValues;
-    
-    // 调试日志（开发环境）
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 搜索参数:', {
-        hasSearchParamsRef: searchParamsRef.current !== undefined,
-        searchParamsRef: searchParamsRef.current,
-        formValues,
-        finalSearchFormValues: searchFormValues,
-      });
-    }
     
     // 调用用户提供的 request 函数，传递搜索表单值
     const result = await request(params, sort, filter, searchFormValues);

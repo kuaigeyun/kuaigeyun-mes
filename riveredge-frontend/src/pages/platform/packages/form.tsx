@@ -5,6 +5,7 @@
  */
 
 import { ProForm, ProFormText, ProFormDigit, ProFormSwitch, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { message } from 'antd';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPackage, updatePackage, type PackageCreate, type PackageUpdate } from '../../../services/tenant';
@@ -103,7 +104,7 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
         rules={[{ required: true, message: '请输入套餐名称' }]}
       />
 
-      <ProFormSelect
+      <SafeProFormSelect
         name="plan"
         label="套餐类型"
         options={planOptions}

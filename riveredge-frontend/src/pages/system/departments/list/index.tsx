@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col, Input, Divider, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
@@ -779,7 +780,7 @@ const DepartmentListPage: React.FC = () => {
             label="描述"
             placeholder="请输入部门描述"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="parent_uuid"
             label="父部门"
             placeholder="请选择父部门（不选则为根部门）"

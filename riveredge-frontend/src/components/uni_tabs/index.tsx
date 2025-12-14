@@ -24,6 +24,47 @@ export interface TabItem {
 }
 
 /**
+ * 将路径片段转换为中文名称（作为后备方案）
+ */
+const translatePathToChinese = (pathSegment: string): string => {
+  const pathMap: Record<string, string> = {
+    // 工厂数据
+    'workshops': '车间',
+    'production-lines': '产线',
+    'workstations': '工位',
+    'factory': '工厂数据',
+    // 仓库数据
+    'warehouses': '仓库',
+    'storage-areas': '库区',
+    'storage-locations': '库位',
+    'warehouse': '仓库数据',
+    // 物料数据
+    'groups': '物料分组',
+    'materials': '物料',
+    'bom': 'BOM',
+    'material': '物料数据',
+    // 工艺数据
+    'defect-types': '不良品',
+    'operations': '工序',
+    'routes': '工艺路线',
+    'sop': '作业程序',
+    'process': '工艺数据',
+    // 供应链数据
+    'customers': '客户',
+    'suppliers': '供应商',
+    'supply-chain': '供应链数据',
+    // 绩效数据
+    'holidays': '假期',
+    'skills': '技能',
+    'performance': '绩效数据',
+    // 应用路径
+    'master-data': '基础数据管理',
+  };
+  
+  return pathMap[pathSegment] || pathSegment;
+};
+
+/**
  * 从菜单配置中查找页面标题
  */
 const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
@@ -49,10 +90,19 @@ const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
 
   // 防御性检查：如果 menuConfig 为空或未定义，直接返回路径的最后一部分
   if (!menuConfig || !Array.isArray(menuConfig) || menuConfig.length === 0) {
-    return path.split('/').pop() || '未命名页面';
+    // 如果路径匹配应用路由，尝试从路径中提取中文名称
+    const pathSegment = path.split('/').pop() || '';
+    return translatePathToChinese(pathSegment) || '未命名页面';
   }
 
-  return findInMenu(menuConfig) || path.split('/').pop() || '未命名页面';
+  const menuTitle = findInMenu(menuConfig);
+  if (menuTitle) {
+    return menuTitle;
+  }
+  
+  // 如果没有找到菜单项，尝试从路径中提取中文名称
+  const pathSegment = path.split('/').pop() || '';
+  return translatePathToChinese(pathSegment) || '未命名页面';
 };
 
 /**
@@ -223,10 +273,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   useEffect(() => {
     const loadTabsPersistence = async () => {
       try {
-        console.log('UniTabs开始加载标签持久化配置');
         // 优先从用户偏好设置读取
         const userPreference = await getUserPreference().catch(() => null);
-        console.log('UniTabs读取用户偏好设置结果:', userPreference);
 
         if (userPreference?.preferences?.tabs_persistence !== undefined) {
           const persistence = userPreference.preferences.tabs_persistence;
@@ -318,7 +366,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // 如果未启用持久化，直接标记为已初始化，不恢复任何标签
     // 只保留工作台标签（会在路由监听中自动添加）
     if (!finalTabsPersistence) {
-      console.log('标签持久化未启用，只保留基础标签');
       setIsInitialized(true);
       return;
     }

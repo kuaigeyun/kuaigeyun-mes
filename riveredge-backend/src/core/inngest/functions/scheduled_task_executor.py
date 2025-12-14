@@ -13,6 +13,8 @@ from loguru import logger
 from core.inngest.client import inngest_client
 from core.models.scheduled_task import ScheduledTask
 from core.services.scheduled_task_service import ScheduledTaskService
+from core.utils.inngest_tenant_isolation import with_tenant_isolation
+from infra.domain.tenant_context import get_current_tenant_id
 
 
 @inngest_client.create_function(
@@ -21,6 +23,7 @@ from core.services.scheduled_task_service import ScheduledTaskService
     trigger=TriggerEvent(event="scheduled-task/execute"),
     retries=3,
 )
+@with_tenant_isolation  # 添加租户隔离装饰器
 async def scheduled_task_executor_function(event: Event) -> Dict[str, Any]:
     """
     定时任务执行器工作流函数
@@ -28,21 +31,25 @@ async def scheduled_task_executor_function(event: Event) -> Dict[str, Any]:
     监听 scheduled-task/execute 事件，执行定时任务。
     支持多种任务类型：python_script、api_call 等。
     
+    租户隔离已由装饰器自动处理，可以直接使用 get_current_tenant_id() 获取租户ID。
+    
     Args:
         event: Inngest 事件对象
         
     Returns:
         Dict[str, Any]: 执行结果
     """
+    # 从上下文获取 tenant_id（装饰器已验证和设置）
+    tenant_id = get_current_tenant_id()
+    
     data = event.data or {}
-    tenant_id = data.get("tenant_id")
     task_uuid = data.get("task_uuid")
     inngest_run_id = getattr(event, "id", None)
     
-    if not tenant_id or not task_uuid:
+    if not task_uuid:
         return {
             "success": False,
-            "error": "缺少必要参数：tenant_id 或 task_uuid"
+            "error": "缺少必要参数：task_uuid"
         }
     
     # 获取定时任务

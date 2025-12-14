@@ -14,6 +14,8 @@ from core.models.approval_instance import ApprovalInstance
 from core.models.approval_process import ApprovalProcess
 from core.services.approval_instance_service import ApprovalInstanceService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.inngest_tenant_isolation import with_tenant_isolation
+from infra.domain.tenant_context import get_current_tenant_id
 
 
 @inngest_client.create_function(
@@ -22,11 +24,14 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
     trigger=TriggerEvent(event="approval/submit"),
     retries=3,
 )
+@with_tenant_isolation  # 添加租户隔离装饰器
 async def approval_workflow_function(event: Event) -> Dict[str, Any]:
     """
     审批流程工作流函数
     
     监听 approval/submit 事件，启动审批流程工作流。
+    
+    租户隔离已由装饰器自动处理，可以直接使用 get_current_tenant_id() 获取租户ID。
     
     Args:
         event: Inngest 事件对象
@@ -34,16 +39,18 @@ async def approval_workflow_function(event: Event) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: 工作流执行结果
     """
+    # 从上下文获取 tenant_id（装饰器已验证和设置）
+    tenant_id = get_current_tenant_id()
+    
     data = event.data or {}
-    tenant_id = data.get("tenant_id")
     approval_id = data.get("approval_id")
     process_id = data.get("process_id")
     inngest_run_id = getattr(event, "id", None)
     
-    if not tenant_id or not approval_id or not process_id:
+    if not approval_id or not process_id:
         return {
             "success": False,
-            "error": "缺少必要参数：tenant_id、approval_id 或 process_id"
+            "error": "缺少必要参数：approval_id 或 process_id"
         }
     
     try:
@@ -114,11 +121,14 @@ async def approval_workflow_function(event: Event) -> Dict[str, Any]:
     trigger=TriggerEvent(event="approval/action"),
     retries=3,
 )
+@with_tenant_isolation  # 添加租户隔离装饰器
 async def approval_action_workflow_function(event: Event) -> Dict[str, Any]:
     """
     审批操作工作流函数
     
     监听 approval/action 事件，处理审批操作（同意、拒绝、取消、转交）。
+    
+    租户隔离已由装饰器自动处理，可以直接使用 get_current_tenant_id() 获取租户ID。
     
     Args:
         event: Inngest 事件对象
@@ -126,18 +136,20 @@ async def approval_action_workflow_function(event: Event) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: 工作流执行结果
     """
+    # 从上下文获取 tenant_id（装饰器已验证和设置）
+    tenant_id = get_current_tenant_id()
+    
     data = event.data or {}
-    tenant_id = data.get("tenant_id")
     approval_id = data.get("approval_id")
     action = data.get("action")
     user_id = data.get("user_id")
     comment = data.get("comment")
     transfer_to_user_id = data.get("transfer_to_user_id")
     
-    if not tenant_id or not approval_id or not action:
+    if not approval_id or not action:
         return {
             "success": False,
-            "error": "缺少必要参数：tenant_id、approval_id 或 action"
+            "error": "缺少必要参数：approval_id 或 action"
         }
     
     try:

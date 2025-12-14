@@ -18,27 +18,21 @@ import { getFilePreview, getFileDownloadUrl } from '../services/file';
  */
 export async function getAvatarUrl(avatarUuid: string | undefined): Promise<string | undefined> {
   if (!avatarUuid) {
-    console.log('⚠️ getAvatarUrl: avatarUuid 为空');
     return undefined;
   }
   
-  console.log('🔍 getAvatarUrl: 开始获取预览 URL，UUID:', avatarUuid);
   try {
     const previewInfo = await getFilePreview(avatarUuid);
-    console.log('✅ getAvatarUrl: 获取预览信息成功:', previewInfo);
     const previewUrl = previewInfo.preview_url;
-    console.log('✅ getAvatarUrl: 预览 URL:', previewUrl);
     
     // 验证预览 URL 格式（应该是包含 token 的下载 URL）
     if (previewUrl && previewUrl.includes('/download?token=')) {
       return previewUrl;
     } else {
-      console.warn('⚠️ getAvatarUrl: 预览 URL 格式异常:', previewUrl);
       return previewUrl; // 仍然返回，让浏览器尝试加载
     }
   } catch (error) {
-    console.error('❌ getAvatarUrl: 获取头像预览 URL 失败:', error);
-    console.error('❌ 错误详情:', error instanceof Error ? error.message : String(error));
+    console.error('获取头像预览 URL 失败:', error);
     
     // 如果预览 API 失败（通常是组织上下文问题），尝试获取文件信息后构造下载 URL
     // 但这种方式需要 token，而预览 API 失败通常意味着权限问题

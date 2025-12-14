@@ -4,8 +4,18 @@
  * 提供车间的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProFormDigit, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
+
+// 安全处理 options 的工具函数
+const safeOptions = (options: any): any[] => {
+  if (Array.isArray(options)) {
+    return options;
+  }
+  console.warn('ProFormSelect options 不是数组:', options);
+  return [];
+};
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, List, Typography, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '@/components/uni_table';
@@ -47,6 +57,12 @@ const WorkshopsPage: React.FC = () => {
     const loadCustomFields = async () => {
       try {
         const fields = await getCustomFieldsByTable('master_data_factory_workshops', true);
+        console.log('加载的自定义字段:', fields);
+        fields.forEach(field => {
+          if (field.field_type === 'select') {
+            console.log(`字段 ${field.code} 的 config:`, field.config);
+          }
+        });
         setCustomFields(fields);
       } catch (error) {
         console.error('加载自定义字段失败:', error);
@@ -54,6 +70,18 @@ const WorkshopsPage: React.FC = () => {
     };
     loadCustomFields();
   }, []);
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      // 延迟刷新，确保列定义已更新
+      setTimeout(() => {
+        actionRef.current?.reload();
+      }, 200);
+    }
+  }, [customFields.length]);
 
   /**
    * 处理新建车间
@@ -308,14 +336,14 @@ const WorkshopsPage: React.FC = () => {
             );
           case 'select':
             return (
-              <ProFormSelect
-                key={field.uuid}
+              <SafeProFormSelect
+                key={`${field.uuid}-${JSON.stringify(safeOptions(field.config?.options))}`}
                 name={fieldName}
                 label={label}
                 placeholder={placeholder}
                 colProps={{ span: 12 }}
                 rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
-                options={field.config?.options || []}
+                options={safeOptions(field.config?.options)}
                 initialValue={customFieldValues[field.code] || field.config?.default}
               />
             );
@@ -629,7 +657,7 @@ const WorkshopsPage: React.FC = () => {
           if (field.field_type === 'datetime' && value) {
             return new Date(value).toLocaleString('zh-CN');
           }
-          if (field.field_type === 'select' && field.config?.options) {
+          if (field.field_type === 'select' && field.config?.options && Array.isArray(field.config.options)) {
             const option = field.config.options.find((opt: any) => opt.value === value);
             return option ? option.label : String(value);
           }
@@ -639,9 +667,11 @@ const WorkshopsPage: React.FC = () => {
   };
 
   /**
-   * 表格列定义
+   * 表格列定义（使用 useMemo 确保 customFields 变化时重新计算）
    */
-  const columns: ProColumns<Workshop>[] = [
+  const columns: ProColumns<Workshop>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: '车间编码',
       dataIndex: 'code',
@@ -675,7 +705,7 @@ const WorkshopsPage: React.FC = () => {
       ),
     },
     // 插入自定义字段列
-    ...generateCustomFieldColumns(),
+    ...customFieldColumns,
     {
       title: '创建时间',
       dataIndex: 'createdAt',
@@ -723,7 +753,8 @@ const WorkshopsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields]);
 
   return (
     <>

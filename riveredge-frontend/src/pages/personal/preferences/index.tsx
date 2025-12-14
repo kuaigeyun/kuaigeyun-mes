@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Card, message } from 'antd';
 import {
   getUserPreference,
@@ -144,7 +145,7 @@ const UserPreferencesPage: React.FC = () => {
           layout="vertical"
         >
           <ProFormGroup title="主题设置">
-            <ProFormSelect
+            <SafeProFormSelect
               name="theme"
               label="主题"
               valueEnum={{
@@ -157,7 +158,7 @@ const UserPreferencesPage: React.FC = () => {
           </ProFormGroup>
           
           <ProFormGroup title="语言设置">
-            <ProFormSelect
+            <SafeProFormSelect
               name="language"
               label="语言"
               valueEnum={
@@ -211,7 +212,7 @@ const UserPreferencesPage: React.FC = () => {
           </ProFormGroup>
           
           <ProFormGroup title="界面设置">
-            <ProFormSelect
+            <SafeProFormSelect
               name="layout"
               label="布局"
               valueEnum={{
@@ -221,7 +222,7 @@ const UserPreferencesPage: React.FC = () => {
               }}
               placeholder="请选择布局"
             />
-            <ProFormSelect
+            <SafeProFormSelect
               name="font_size"
               label="字体大小"
               valueEnum={{

@@ -199,12 +199,15 @@ html body ::-webkit-scrollbar-track,
   height: 26px !important;
   line-height: 16px !important;
   
+  /* 设置默认颜色为主题色 */
+  color: var(--ant-colorPrimary) !important;
+  
   /* 完全禁用容器的 hover 效果 */
   &:hover,
   &:focus,
   &:active {
     background-color: transparent !important;
-    color: var(--ant-colorTextSecondary) !important;
+    color: var(--ant-colorPrimary) !important;
     box-shadow: none !important;
     border: none !important;
     
@@ -218,14 +221,14 @@ html body ::-webkit-scrollbar-track,
   /* 禁用选中状态 */
   &.ant-menu-item-selected {
     background-color: transparent !important;
-    color: var(--ant-colorTextSecondary) !important;
+    color: var(--ant-colorPrimary) !important;
   }
   
   /* 禁用所有可能的 hover 效果 */
   &:hover .ant-menu-title-content,
   &:hover .menu-group-title-app {
     background-color: transparent !important;
-    color: var(--ant-colorTextSecondary) !important;
+    color: var(--ant-colorPrimary) !important;
   }
   
   /* 确保内部内容区域也没有 padding */

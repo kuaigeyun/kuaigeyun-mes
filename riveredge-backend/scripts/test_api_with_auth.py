@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from platform.config.platform_config import platform_settings
+from infra.config.platform_config import platform_settings
 
 def generate_test_token(user_id: int = 1, tenant_id: int = 1) -> str:
     """生成测试JWT Token"""
@@ -65,5 +65,41 @@ async def test_department_api():
         except Exception as e:
             print(f"❌ 请求异常: {e}")
 
+async def test_workshops_api():
+    """测试车间API"""
+    import aiohttp
+
+    token = generate_test_token()
+    print(f"生成的测试Token: {token[:50]}...")
+
+    async with aiohttp.ClientSession() as session:
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+
+        try:
+            # 测试车间列表API
+            print("\n=== 测试车间列表API ===")
+            async with session.get(
+                'http://localhost:9000/api/v1/apps/master-data/factory/workshops?skip=0&limit=20',
+                headers=headers
+            ) as response:
+                print(f"状态码: {response.status}")
+                if response.status == 200:
+                    data = await response.json()
+                    print("✅ 车间API调用成功!")
+                    print(f"返回数据类型: {type(data)}")
+                    print(f"车间数量: {len(data) if isinstance(data, list) else 'N/A'}")
+                    if isinstance(data, list) and data:
+                        print(f"第一个车间: {data[0].get('name', 'N/A') if isinstance(data[0], dict) else data[0]}")
+                else:
+                    error_text = await response.text()
+                    print(f"❌ 车间API调用失败: {error_text}")
+
+        except Exception as e:
+            print(f"❌ 请求异常: {e}")
+
 if __name__ == "__main__":
     asyncio.run(test_department_api())
+    asyncio.run(test_workshops_api())

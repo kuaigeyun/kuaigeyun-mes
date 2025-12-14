@@ -118,7 +118,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'master-data-material-group',
     pageName: '物料分组',
-    pagePath: '/apps/master-data/materials/groups',
+    pagePath: '/apps/master-data/materials',
     codeField: 'code',
     codeFieldLabel: '分组编码',
     module: '主数据管理',
@@ -128,7 +128,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'master-data-material',
     pageName: '物料管理',
-    pagePath: '/apps/master-data/materials/materials',
+    pagePath: '/apps/master-data/materials',
     codeField: 'code',
     codeFieldLabel: '物料编码',
     module: '主数据管理',

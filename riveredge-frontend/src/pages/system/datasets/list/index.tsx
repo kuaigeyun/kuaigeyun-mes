@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -461,7 +462,7 @@ const DatasetListPage: React.FC = () => {
             placeholder="请输入数据集代码（唯一标识，如：user_list）"
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="data_source_uuid"
             label="数据源"
             rules={[{ required: true, message: '请选择数据源' }]}
@@ -471,7 +472,7 @@ const DatasetListPage: React.FC = () => {
             }))}
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="query_type"
             label="查询类型"
             rules={[{ required: true, message: '请选择查询类型' }]}

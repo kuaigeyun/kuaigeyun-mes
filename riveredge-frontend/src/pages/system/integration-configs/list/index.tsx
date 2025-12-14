@@ -7,6 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
@@ -456,7 +457,7 @@ const IntegrationConfigListPage: React.FC = () => {
             placeholder="请输入集成代码（唯一标识，如：wechat_oauth）"
             disabled={isEdit}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="type"
             label="集成类型"
             rules={[{ required: true, message: '请选择集成类型' }]}

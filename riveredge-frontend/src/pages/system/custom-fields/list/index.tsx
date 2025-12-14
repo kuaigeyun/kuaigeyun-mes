@@ -10,10 +10,10 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormJsonSchema, ProTable } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../components/uni_table';
 import {
   getCustomFieldList,
   getCustomFieldByUuid,
@@ -30,6 +30,55 @@ import {
   getCustomFieldModules,
   CustomFieldPageConfig,
 } from '../../../../config/customFieldPages';
+
+/**
+ * 获取所有可用的表名选项（用于关联表名选择框）
+ */
+const getTableNameOptions = () => {
+  // 去重，获取所有唯一的表名
+  const tableMap = new Map<string, { label: string; value: string }>();
+  CUSTOM_FIELD_PAGES.forEach(page => {
+    if (!tableMap.has(page.tableName)) {
+      tableMap.set(page.tableName, {
+        label: `${page.tableNameLabel} (${page.tableName})`,
+        value: page.tableName,
+      });
+    }
+  });
+  return Array.from(tableMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+};
+
+/**
+ * 获取表的常用字段选项（用于关联字段名选择框）
+ * 
+ * @param tableName - 表名（可选，如果提供则尝试从配置中获取特定字段）
+ * @returns 字段选项列表
+ */
+const getTableFieldOptions = (tableName?: string): { label: string; value: string }[] => {
+  // 如果没有提供表名，返回空数组
+  if (!tableName) {
+    return [];
+  }
+
+  // 通用字段列表（大多数表都有的字段）
+  const commonFields = [
+    { label: 'ID (id)', value: 'id' },
+    { label: '名称 (name)', value: 'name' },
+    { label: '代码 (code)', value: 'code' },
+    { label: '标题 (title)', value: 'title' },
+    { label: '标签 (label)', value: 'label' },
+    { label: '描述 (description)', value: 'description' },
+  ];
+
+  // 如果提供了表名，尝试从配置中获取特定字段
+  const page = CUSTOM_FIELD_PAGES.find(p => p.tableName === tableName);
+  if (page) {
+    // 可以根据表名添加特定字段，这里先返回通用字段
+    // 后续可以根据实际需求扩展
+  }
+
+  return commonFields;
+};
 
 
 /**
@@ -128,22 +177,15 @@ const CustomFieldListPage: React.FC = () => {
    * 处理新建字段
    */
   const handleCreate = () => {
-    if (!selectedPage) {
-      messageApi.warning('请先选择一个功能页面');
-      return;
-    }
     setIsEdit(false);
     setCurrentFieldUuid(null);
     setFieldType('text');
     setConfigForm({});
     setModalVisible(true);
-    // 先设置表名，再重置其他字段
-    formRef.current?.setFieldsValue({
-      table_name: selectedPage.tableName, // 自动填充表名
-    });
+    // 重置表单并设置默认值
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
-      table_name: selectedPage.tableName, // 确保表名被设置
+      table_name: selectedPage?.tableName || undefined, // 如果有选中的页面，自动填充表名
       field_type: 'text',
       is_required: false,
       is_searchable: true,
@@ -535,19 +577,35 @@ const CustomFieldListPage: React.FC = () => {
       case 'associated_object':
         return (
           <>
-            <ProFormText
+            <SafeProFormSelect
               name="associated_table"
               label="关联表名"
-              placeholder="例如：sys_users"
-              rules={[{ required: true, message: '请输入关联表名' }]}
-              extra="关联的数据表名称"
+              rules={[{ required: true, message: '请选择关联表名' }]}
+              options={getTableNameOptions()}
+              placeholder="请选择关联的数据表"
+              extra="选择要关联的数据表"
+              fieldProps={{
+                onChange: (value: string) => {
+                  // 当关联表名改变时，清空关联字段名
+                  formRef.current?.setFieldsValue({
+                    associated_field: undefined,
+                  });
+                },
+              }}
             />
-            <ProFormText
+            <SafeProFormSelect
               name="associated_field"
               label="关联字段名"
-              placeholder="例如：name"
-              rules={[{ required: true, message: '请输入关联字段名' }]}
-              extra="用于显示的字段名称"
+              rules={[{ required: true, message: '请选择关联字段名' }]}
+              dependencies={['associated_table']}
+              options={({ associated_table }) => {
+                if (!associated_table) {
+                  return [];
+                }
+                return getTableFieldOptions(associated_table);
+              }}
+              placeholder="请选择用于显示的字段"
+              extra="选择用于显示的字段名称"
             />
           </>
         );
@@ -925,10 +983,10 @@ const CustomFieldListPage: React.FC = () => {
 
                 {/* 字段列表 */}
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-                  <UniTable<CustomField>
+                  <ProTable<CustomField>
                     actionRef={actionRef}
                     columns={columns}
-                    request={async (params, sort, _filter, searchFormValues) => {
+                    request={async (params, sort, _filter) => {
                       // 处理搜索参数
                       const apiParams: any = {
                         page: params.current || 1,
@@ -937,21 +995,21 @@ const CustomFieldListPage: React.FC = () => {
                       };
                       
                       // 状态筛选
-                      if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-                        apiParams.is_active = searchFormValues.is_active;
+                      if (params.is_active !== undefined && params.is_active !== '' && params.is_active !== null) {
+                        apiParams.is_active = params.is_active;
                       }
                       
                       // 类型筛选
-                      if (searchFormValues?.field_type) {
-                        apiParams.field_type = searchFormValues.field_type;
+                      if (params.field_type) {
+                        apiParams.field_type = params.field_type;
                       }
                       
                       // 搜索条件处理：name 和 code 使用模糊搜索
-                      if (searchFormValues?.name) {
-                        apiParams.name = searchFormValues.name as string;
+                      if (params.name) {
+                        apiParams.name = params.name as string;
                       }
-                      if (searchFormValues?.code) {
-                        apiParams.code = searchFormValues.code as string;
+                      if (params.code) {
+                        apiParams.code = params.code as string;
                       }
                       
                       try {
@@ -972,7 +1030,9 @@ const CustomFieldListPage: React.FC = () => {
                       }
                     }}
                     rowKey="uuid"
-                    showAdvancedSearch={true}
+                    search={{
+                      labelWidth: 'auto',
+                    }}
                     pagination={{
                       defaultPageSize: 20,
                       showSizeChanger: true,
@@ -1038,7 +1098,7 @@ const CustomFieldListPage: React.FC = () => {
             initialValue={selectedPage?.tableName || ''}
             extra={isEdit ? "关联表名，创建后不可修改" : "关联表名，根据选中的功能页面自动填充"}
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="field_type"
             label="字段类型"
             rules={[{ required: true, message: '请选择字段类型' }]}

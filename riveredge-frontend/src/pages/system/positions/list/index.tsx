@@ -7,6 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni_table';
@@ -352,7 +353,7 @@ const PositionListPage: React.FC = () => {
             label="描述"
             placeholder="请输入职位描述"
           />
-          <ProFormSelect
+          <SafeProFormSelect
             name="department_uuid"
             label="所属部门"
             placeholder="请选择所属部门（可选）"
