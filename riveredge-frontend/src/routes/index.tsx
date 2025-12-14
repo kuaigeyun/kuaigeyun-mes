@@ -131,7 +131,7 @@ const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) =>
  * 
  * 加载并返回插件路由配置
  */
-const usePluginRoutes = (): React.ReactNode[] => {
+const usePluginRoutes = (): { routes: React.ReactNode[]; loading: boolean } => {
   const [pluginRoutes, setPluginRoutes] = useState<React.ReactNode[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -174,8 +174,13 @@ const usePluginRoutes = (): React.ReactNode[] => {
                 );
               }
             } catch (error) {
-              // 插件加载失败时，静默处理（可能是插件文件不存在或未构建）
-              console.warn(`加载插件 ${app.code} 失败（可能插件文件未构建）:`, error);
+              // 插件加载失败时，输出详细错误信息以便调试
+              console.error(`加载插件 ${app.code} 失败:`, error);
+              console.error(`插件信息:`, {
+                code: app.code,
+                entry_point: app.entry_point,
+                route_path: app.route_path,
+              });
             }
           }
         }
@@ -192,7 +197,7 @@ const usePluginRoutes = (): React.ReactNode[] => {
     loadPlugins();
   }, []);
 
-  return loading ? [] : pluginRoutes;
+  return { routes: pluginRoutes, loading };
 };
 
 /**
@@ -208,7 +213,7 @@ const usePluginRoutes = (): React.ReactNode[] => {
  */
 const AppRoutes: React.FC = () => {
   // 加载插件路由
-  const pluginRoutes = usePluginRoutes();
+  const { routes: pluginRoutes, loading: pluginRoutesLoading } = usePluginRoutes();
 
   return (
     <Routes>
@@ -644,7 +649,19 @@ const AppRoutes: React.FC = () => {
       <Route path="/platform-superadmin" element={<Navigate to="/platform/admin" replace />} />
 
       {/* ==================== 插件应用路由（动态加载） ==================== */}
-      {pluginRoutes}
+      {pluginRoutesLoading ? (
+        // 路由加载中时，为 /apps/* 路径提供加载占位符，避免显示 404
+        <Route
+          path="/apps/*"
+          element={
+            <LayoutWrapper>
+              <LoadingFallback />
+            </LayoutWrapper>
+          }
+        />
+      ) : (
+        pluginRoutes
+      )}
 
       {/* 404页面 */}
       <Route path="*" element={<NotFoundPage />} />
