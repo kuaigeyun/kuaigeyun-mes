@@ -1,184 +1,61 @@
-# 基础数据管理最佳实践总览
+# 快格轻工厂全流程管理系统 - 模块最佳实践
 
 ## 📋 概述
 
-本文档汇总了基础数据管理应用所有菜单模块的开发最佳实践，结合 RiverEdge SaaS 框架规范和 DDD 应用层设计规范。
+本文档集合包含各业务模块的最佳实践设计，基于**"小快轻准"**设计原则，结合行业最佳实践，为各模块提供详细的设计指导。
 
-## 📚 最佳实践文档
+## 🎯 设计原则
 
-### 1. 工厂数据最佳实践
+所有模块遵循以下设计原则：
 
-**路径**：`1.工厂数据最佳实践.md`
+1. **小（Small）**：功能精简，聚焦核心
+2. **快（Fast）**：快速响应，敏捷开发
+3. **轻（Light）**：轻量级，避免过度设计
+4. **准（Precise）**：精准定位，准确满足需求
 
-**模块说明**：
-- 车间（Workshop）
-- 产线（Production Line）
-- 工位（Workstation）
+## 📁 文档结构
 
-**特点**：
-- 三级层级结构（车间 → 产线 → 工位）
-- 外键关联关系
-- 组织内编码唯一
+### 基础模块
+- [主数据管理最佳实践](./主数据库管理/README.md) - 数据管理统一归口
 
-**相关表**：
-- `seed_master_data_workshops`
-- `seed_master_data_production_lines`
-- `seed_master_data_workstations`
+### 核心业务模块（1-15）
+- [CRM - 销售管理最佳实践](./CRM最佳实践.md)
+- [PDM - 研发管理最佳实践](./PDM最佳实践.md)
+- [MRP - 物料需求最佳实践](./MRP最佳实践.md)
+- [SRM - 采购管理最佳实践](./SRM最佳实践.md)
+- [SCM - 供应链协同最佳实践](./SCM最佳实践.md)
+- [WMS - 仓库管理最佳实践](./WMS最佳实践.md)
+- [APS - 排产管理最佳实践](./APS最佳实践.md)
+- [MES - 制造执行最佳实践](./MES最佳实践.md)
+- [QMS - 质量管理最佳实践](./QMS最佳实践.md)
+- [EAM - 设备管理最佳实践](./EAM最佳实践.md)
+- [IOT - 数据采集最佳实践](./IOT最佳实践.md)
+- [MI - 制造智能最佳实践](./MI最佳实践.md)
+- [EMS - 能源管理最佳实践](./EMS最佳实践.md)
+- [LIMS - 实验管理最佳实践](./LIMS最佳实践.md)
+- [TMS - 运输管理最佳实践](./TMS最佳实践.md)
 
----
+### 核心支撑模块（16-17）
+- [财务 - 财务管理最佳实践](./财务最佳实践.md)
+- [HRM - 人力资源管理最佳实践](./HRM最佳实践.md)
 
-### 2. 仓库数据最佳实践
+### 重要补充模块（18-19）
+- [PM - 项目管理最佳实践](./PM最佳实践.md)
+- [EHS - 环境健康安全管理最佳实践](./EHS最佳实践.md)
 
-**路径**：`2.仓库数据最佳实践.md`
+### 增强功能模块（20-22）
+- [EPM - 企业绩效管理最佳实践](./EPM最佳实践.md)
+- [OA - 协同办公最佳实践](./OA最佳实践.md)
+- [认证 - 企业认证与评审最佳实践](./认证最佳实践.md)
 
-**模块说明**：
-- 仓库（Warehouse）
-- 库区（Storage Area）
-- 库位（Storage Location）
+## 📝 文档说明
 
-**特点**：
-- 三级层级结构（仓库 → 库区 → 库位）
-- 外键关联关系
-- 组织内编码唯一
+- **系统级模块（system）**：已在框架层实现，无需单独文档
+- **主数据管理**：已有详细的最佳实践文档集合
+- **业务模块**：每个模块独立文档，包含设计原则、核心实践、技术建议等
 
-**相关表**：
-- `seed_master_data_warehouses`
-- `seed_master_data_storage_areas`
-- `seed_master_data_storage_locations`
+## 🔄 更新说明
 
----
-
-### 3. 物料数据最佳实践
-
-**路径**：`3.物料数据最佳实践.md`
-
-**模块说明**：
-- 物料分组（Material Group）
-- 物料（Material）
-- BOM（Bill of Materials）
-
-**特点**：
-- 物料分组支持层级结构（parent_id）
-- 物料支持多单位、批号、变体管理（JSON格式）
-- BOM支持替代料管理
-- 树形结构查询
-
-**相关表**：
-- `seed_master_data_material_groups`
-- `seed_master_data_materials`
-- `seed_master_data_bom`
-
----
-
-### 4. 工艺数据最佳实践
-
-**路径**：`4.工艺数据最佳实践.md`
-
-**模块说明**：
-- 不良品（Defect Type）
-- 工序（Operation）
-- 工艺路线（Process Route）
-- 作业程序（SOP）
-
-**特点**：
-- 工艺路线支持工序序列（JSON格式）
-- SOP支持富文本内容和附件（JSON格式）
-- 分类管理
-
-**相关表**：
-- `seed_master_data_defect_types`
-- `seed_master_data_operations`
-- `seed_master_data_process_routes`
-- `seed_master_data_sop`
-
----
-
-### 5. 供应链数据最佳实践
-
-**路径**：`5.供应链数据最佳实践.md`
-
-**模块说明**：
-- 客户（Customer）
-- 供应商（Supplier）
-
-**特点**：
-- 客户和供应商结构相似
-- 联系信息管理
-- 分类管理
-
-**相关表**：
-- `seed_master_data_customers`
-- `seed_master_data_suppliers`
-
----
-
-### 6. 绩效数据最佳实践
-
-**路径**：`6.绩效数据最佳实践.md`
-
-**模块说明**：
-- 假期（Holiday）
-- 技能（Skill）
-
-**特点**：
-- 假期使用 DATE 类型存储日期
-- 技能支持分类管理
-- 假期不需要编码（使用日期作为唯一标识）
-
-**相关表**：
-- `seed_master_data_holidays`
-- `seed_master_data_skills`
-
----
-
-## 🎯 通用规范
-
-### 数据库规范
-
-所有表必须包含以下字段：
-
-1. **组织隔离字段**
-   - `tenant_id INTEGER NOT NULL` - 租户ID（必须）
-
-2. **唯一标识字段**
-   - `uuid VARCHAR(36) NOT NULL UNIQUE` - UUID（必须）
-   - `id SERIAL PRIMARY KEY` - 自增主键（必须）
-
-3. **编码字段**（除假期表外）
-   - `code VARCHAR(50) NOT NULL` - 编码（必须，组织内唯一）
-   - `UNIQUE(tenant_id, code)` - 组织内编码唯一约束（必须）
-
-4. **标准时间字段**
-   - `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - 创建时间（必须）
-   - `updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` - 更新时间（必须）
-   - `deleted_at TIMESTAMP NULL` - 删除时间（软删除，可选）
-
-5. **状态字段**
-   - `is_active BOOLEAN DEFAULT TRUE` - 是否启用（必须）
-
-### 命名规范
-
-- ✅ **表名**：`snake_case`，包含模块前缀（如 `seed_master_data_workshops`）
-- ✅ **字段名**：`snake_case`（如 `workshop_id`、`tenant_id`）
-- ✅ **类名**：`PascalCase`（如 `Workshop`、`ProductionLine`）
-- ✅ **函数名**：`snake_case`，动词开头（如 `create_workshop`、`get_workshop_by_id`）
-
-### 开发规范
-
-1. **所有查询必须包含 `tenant_id` 过滤**
-2. **所有表必须包含标准字段**
-3. **所有编码字段必须组织内唯一**
-4. **编写完整的注释（中文）**
-5. **编写单元测试（覆盖率 > 80%）**
-
-## 📖 相关文档
-
-- [主数据管理APP开发计划](../主数据管理APP开发计划.md)
-- [DDD应用层设计规范](../DDD应用层设计规范.md)
-- [Apps共享部分设计规范](../Apps共享部分设计规范.md)
-- [AI助手开发规范](../../2.rules/AGENTS.md)
-
----
-
-**最后更新**：2025-01-11
-
+- 文档基于模块功能表持续更新
+- 结合实施经验不断完善
+- 遵循"小快轻准"设计原则

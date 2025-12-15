@@ -7,9 +7,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, message, Space, Drawer, Form, Input, TextArea } from 'antd';
+import { Button, Card, message, Space, Drawer, Form, Input } from 'antd';
 import { SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { App } from 'antd';
+
+const { TextArea } = Input;
 import { FlowView, FlowStoreProvider, useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge, NodeProps } from '@ant-design/pro-flow';
 import { ReactFlowProvider, Handle, Position } from 'reactflow';

@@ -6,13 +6,13 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { App, Card, Steps, Button, Space, message, Spin, Typography, Tag, Divider } from 'antd';
+import { App, Card, Steps, Button, Space, message, Spin, Typography, Tag, Divider, InputNumber } from 'antd';
 import { CheckOutlined, PlayCircleOutlined, PauseOutlined, CloseOutlined } from '@ant-design/icons';
-import { createForm, FormProvider, createSchemaField } from '@formily/react';
+import { createForm } from '@formily/core';
+import { FormProvider, createSchemaField } from '@formily/react';
 import {
   FormItem,
   Input,
-  InputNumber,
   DatePicker,
   Select,
   FormLayout,

@@ -453,7 +453,7 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                         },
                       },
                     ]}
-                    tooltip="格式: [{\"label\": \"选项1\", \"value\": \"value1\"}, {\"label\": \"选项2\", \"value\": \"value2\"}]"
+                    tooltip='格式: [{"label": "选项1", "value": "value1"}, {"label": "选项2", "value": "value2"}]'
                   >
                     <TextArea
                       rows={4}

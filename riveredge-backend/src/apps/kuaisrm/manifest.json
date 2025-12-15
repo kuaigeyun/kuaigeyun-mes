@@ -1,0 +1,152 @@
+{
+    "name": "快格轻SRM",
+    "code": "kuaisrm",
+    "version": "1.0.0",
+    "description": "采购管理 - 采购订单、委外订单、供应商协同、供应商评估",
+    "icon": "shopping",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaisrm/index.tsx",
+    "route_path": "/apps/kuaisrm",
+    "sort_order": 4,
+    "menu_config": {
+        "title": "快格轻SRM",
+        "icon": "shopping",
+        "path": "/apps/kuaisrm",
+        "children": [{
+                "title": "采购订单",
+                "path": "/apps/kuaisrm/purchase",
+                "icon": "shopping-cart",
+                "sort_order": 1,
+                "children": [{
+                        "title": "订单列表",
+                        "path": "/apps/kuaisrm/purchase/orders",
+                        "permission": "kuaisrm:purchase:order:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "订单创建",
+                        "path": "/apps/kuaisrm/purchase/create",
+                        "permission": "kuaisrm:purchase:order:create",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "订单跟踪",
+                        "path": "/apps/kuaisrm/purchase/tracking",
+                        "permission": "kuaisrm:purchase:order:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "委外订单",
+                "path": "/apps/kuaisrm/outsourcing",
+                "icon": "export",
+                "sort_order": 2,
+                "children": [{
+                        "title": "委外订单",
+                        "path": "/apps/kuaisrm/outsourcing/orders",
+                        "permission": "kuaisrm:outsourcing:order:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "委外跟踪",
+                        "path": "/apps/kuaisrm/outsourcing/tracking",
+                        "permission": "kuaisrm:outsourcing:order:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "委外进度",
+                        "path": "/apps/kuaisrm/outsourcing/progress",
+                        "permission": "kuaisrm:outsourcing:order:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "供应商协同",
+                "path": "/apps/kuaisrm/collaboration",
+                "icon": "team",
+                "sort_order": 3,
+                "children": [{
+                        "title": "供应商门户",
+                        "path": "/apps/kuaisrm/collaboration/portal",
+                        "permission": "kuaisrm:collaboration:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "预测共享",
+                        "path": "/apps/kuaisrm/collaboration/forecast",
+                        "permission": "kuaisrm:collaboration:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "协同计划",
+                        "path": "/apps/kuaisrm/collaboration/plan",
+                        "permission": "kuaisrm:collaboration:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "供应商评估",
+                "path": "/apps/kuaisrm/evaluation",
+                "icon": "star",
+                "sort_order": 4,
+                "children": [{
+                        "title": "评估管理",
+                        "path": "/apps/kuaisrm/evaluation/manage",
+                        "permission": "kuaisrm:evaluation:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "评估报告",
+                        "path": "/apps/kuaisrm/evaluation/reports",
+                        "permission": "kuaisrm:evaluation:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "采购分析",
+                "path": "/apps/kuaisrm/analysis",
+                "icon": "bar-chart",
+                "sort_order": 5,
+                "children": [{
+                        "title": "成本分析",
+                        "path": "/apps/kuaisrm/analysis/cost",
+                        "permission": "kuaisrm:analysis:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "供应商分析",
+                        "path": "/apps/kuaisrm/analysis/supplier",
+                        "permission": "kuaisrm:analysis:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "委外分析",
+                        "path": "/apps/kuaisrm/analysis/outsourcing",
+                        "permission": "kuaisrm:analysis:view",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaisrm:purchase:order:view",
+        "kuaisrm:purchase:order:create",
+        "kuaisrm:purchase:order:update",
+        "kuaisrm:purchase:order:delete",
+        "kuaisrm:outsourcing:order:view",
+        "kuaisrm:outsourcing:order:create",
+        "kuaisrm:outsourcing:order:update",
+        "kuaisrm:collaboration:view",
+        "kuaisrm:evaluation:view",
+        "kuaisrm:analysis:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

@@ -7,6 +7,7 @@
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+from core.models.approval_history import ApprovalHistory
 
 from tortoise.exceptions import IntegrityError
 
@@ -252,19 +253,40 @@ class ApprovalInstanceService:
         if approval_instance.current_approver_id != user_id:
             raise ValidationError("您不是当前审批人，无法操作")
         
+        # 获取审批流程
+        await approval_instance.fetch_related('process')
+        process = approval_instance.process
+        
+        # 记录操作前的状态
+        old_node = approval_instance.current_node
+        old_approver_id = approval_instance.current_approver_id
+        
         # 执行操作
         if action.action == "approve":
-            # TODO: 判断是否有下一个节点
-            # 如果有下一个节点，更新 current_node 和 current_approver_id
-            # 如果没有下一个节点，更新 status 为 "approved" 并设置 completed_at
-            approval_instance.status = "approved"
-            approval_instance.completed_at = datetime.now()
+            # 判断是否有下一个节点
+            next_node = ApprovalInstanceService._get_next_node(process.nodes, approval_instance.current_node)
+            
+            if next_node:
+                # 进入下一个节点
+                approval_instance.current_node = next_node.get("id")
+                approval_instance.current_approver_id = ApprovalInstanceService._get_node_approver(next_node, approval_instance)
+                approval_instance.status = "pending"  # 保持待审批状态
+            else:
+                # 没有下一个节点，审批完成
+                approval_instance.status = "approved"
+                approval_instance.completed_at = datetime.now()
+                approval_instance.current_node = None
+                approval_instance.current_approver_id = None
         elif action.action == "reject":
             approval_instance.status = "rejected"
             approval_instance.completed_at = datetime.now()
+            approval_instance.current_node = None
+            approval_instance.current_approver_id = None
         elif action.action == "cancel":
             approval_instance.status = "cancelled"
             approval_instance.completed_at = datetime.now()
+            approval_instance.current_node = None
+            approval_instance.current_approver_id = None
         elif action.action == "transfer":
             if not action.transfer_to_user_id:
                 raise ValidationError("转交操作必须指定目标用户")
@@ -274,6 +296,26 @@ class ApprovalInstanceService:
         old_current_approver_id = approval_instance.current_approver_id
         
         await approval_instance.save()
+        
+        # 记录审批历史
+        await ApprovalInstanceService._create_approval_history(
+            tenant_id=tenant_id,
+            approval_instance_id=approval_instance.id,
+            action=action.action,
+            action_by=user_id,
+            comment=action.comment,
+            from_node=old_node,
+            to_node=approval_instance.current_node,
+            from_approver_id=old_approver_id,
+            to_approver_id=approval_instance.current_approver_id
+        )
+        
+        # 如果审批完成（approved/rejected），触发业务回调
+        if approval_instance.status in ["approved", "rejected"]:
+            await ApprovalInstanceService._handle_approval_completion(
+                tenant_id=tenant_id,
+                approval_instance=approval_instance
+            )
         
         # 异步发送消息通知
         import asyncio
@@ -481,4 +523,220 @@ class ApprovalInstanceService:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"发送审批操作通知失败: {str(e)}")
+    
+    @staticmethod
+    def _get_start_node(nodes: dict) -> Optional[dict]:
+        """
+        获取起始节点
+        
+        Args:
+            nodes: 流程节点配置
+            
+        Returns:
+            Optional[dict]: 起始节点配置
+        """
+        if not nodes:
+            return None
+        
+        # 查找起始节点（通常节点类型为 "start" 或第一个节点）
+        for node_id, node_config in nodes.items():
+            if isinstance(node_config, dict):
+                node_type = node_config.get("type", "")
+                if node_type == "start" or node_id == "start":
+                    return {"id": node_id, **node_config}
+        
+        # 如果没有找到起始节点，返回第一个节点
+        if nodes:
+            first_node_id = list(nodes.keys())[0]
+            first_node = nodes[first_node_id]
+            if isinstance(first_node, dict):
+                return {"id": first_node_id, **first_node}
+        
+        return None
+    
+    @staticmethod
+    def _get_next_node(nodes: dict, current_node_id: Optional[str]) -> Optional[dict]:
+        """
+        获取下一个节点
+        
+        Args:
+            nodes: 流程节点配置
+            current_node_id: 当前节点ID
+            
+        Returns:
+            Optional[dict]: 下一个节点配置，如果没有则返回None
+        """
+        if not nodes or not current_node_id:
+            return None
+        
+        current_node = nodes.get(current_node_id)
+        if not isinstance(current_node, dict):
+            return None
+        
+        # 获取当前节点的出边（edges）
+        edges = current_node.get("edges", [])
+        if not edges:
+            return None
+        
+        # 获取第一个出边指向的节点
+        first_edge = edges[0] if isinstance(edges, list) else None
+        if not first_edge:
+            return None
+        
+        next_node_id = first_edge.get("target") if isinstance(first_edge, dict) else None
+        if not next_node_id:
+            return None
+        
+        next_node = nodes.get(next_node_id)
+        if isinstance(next_node, dict):
+            return {"id": next_node_id, **next_node}
+        
+        return None
+    
+    @staticmethod
+    def _get_node_approver(node: dict, approval_instance: ApprovalInstance) -> Optional[int]:
+        """
+        获取节点审批人
+        
+        Args:
+            node: 节点配置
+            approval_instance: 审批实例
+            
+        Returns:
+            Optional[int]: 审批人ID
+        """
+        if not isinstance(node, dict):
+            return None
+        
+        # 从节点配置中获取审批人
+        approver_config = node.get("approver", {})
+        if isinstance(approver_config, dict):
+            # 支持多种审批人配置方式
+            if "user_id" in approver_config:
+                return approver_config["user_id"]
+            elif "role_id" in approver_config:
+                # TODO: 根据角色获取用户
+                pass
+            elif "department_id" in approver_config:
+                # TODO: 根据部门获取用户
+                pass
+        
+        # 如果节点配置中没有审批人，使用提交人作为默认审批人（临时方案）
+        return approval_instance.submitter_id
+    
+    @staticmethod
+    async def _create_approval_history(
+        tenant_id: int,
+        approval_instance_id: int,
+        action: str,
+        action_by: int,
+        comment: Optional[str] = None,
+        from_node: Optional[str] = None,
+        to_node: Optional[str] = None,
+        from_approver_id: Optional[int] = None,
+        to_approver_id: Optional[int] = None
+    ) -> None:
+        """
+        创建审批历史记录
+        
+        Args:
+            tenant_id: 组织ID
+            approval_instance_id: 审批实例ID
+            action: 操作类型
+            action_by: 操作人ID
+            comment: 审批意见
+            from_node: 来源节点
+            to_node: 目标节点
+            from_approver_id: 原审批人ID
+            to_approver_id: 新审批人ID
+        """
+        try:
+            await ApprovalHistory.create(
+                tenant_id=tenant_id,
+                approval_instance_id=approval_instance_id,
+                action=action,
+                action_by=action_by,
+                action_at=datetime.now(),
+                comment=comment,
+                from_node=from_node,
+                to_node=to_node,
+                from_approver_id=from_approver_id,
+                to_approver_id=to_approver_id
+            )
+        except Exception as e:
+            # 记录历史失败不影响审批操作
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"创建审批历史记录失败: {str(e)}")
+    
+    @staticmethod
+    async def _handle_approval_completion(
+        tenant_id: int,
+        approval_instance: ApprovalInstance
+    ) -> None:
+        """
+        处理审批完成后的业务回调
+        
+        Args:
+            tenant_id: 组织ID
+            approval_instance: 审批实例
+        """
+        try:
+            # 从审批数据中获取业务对象信息
+            data = approval_instance.data or {}
+            
+            # 处理销售订单审批完成
+            if "order_uuid" in data:
+                await ApprovalInstanceService._handle_sales_order_approval(
+                    tenant_id=tenant_id,
+                    approval_instance=approval_instance,
+                    order_uuid=data["order_uuid"]
+                )
+            
+            # TODO: 可以添加其他业务对象的审批回调
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"处理审批完成回调失败: {str(e)}")
+    
+    @staticmethod
+    async def _handle_sales_order_approval(
+        tenant_id: int,
+        approval_instance: ApprovalInstance,
+        order_uuid: str
+    ) -> None:
+        """
+        处理销售订单审批完成
+        
+        Args:
+            tenant_id: 组织ID
+            approval_instance: 审批实例
+            order_uuid: 订单UUID
+        """
+        try:
+            from apps.kuaicrm.models.sales_order import SalesOrder
+            
+            order = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                uuid=order_uuid,
+                deleted_at__isnull=True
+            ).first()
+            
+            if not order:
+                return
+            
+            # 更新订单审批状态
+            order.approval_status = approval_instance.status
+            
+            # 根据审批结果更新订单状态
+            if approval_instance.status == "approved":
+                order.status = "已审批"
+            elif approval_instance.status == "rejected":
+                order.status = "已关闭"
+            
+            await order.save()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"处理销售订单审批完成失败: {str(e)}")
 

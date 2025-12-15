@@ -75,6 +75,14 @@ from core.api.help_documents.help_documents import router as help_documents_rout
 
 # 导入应用级 API 路由（apps）
 from apps.master_data.api.router import router as master_data_router
+from apps.kuaicrm.api.router import router as kuaicrm_router
+from apps.kuaipdm.api.router import router as kuaipdm_router
+from apps.kuaimrp.api.router import router as kuaimrp_router
+from apps.kuaisrm.api.router import router as kuaisrm_router
+from apps.kuaiwms.api.router import router as kuaiwms_router
+from apps.kuaimes.api.router import router as kuaimes_router
+from apps.kuaiqms.api.router import router as kuaiqms_router
+from apps.kuaieam.api.router import router as kuaieam_router
 
 # Inngest 集成
 from core.inngest.client import inngest_client
@@ -370,6 +378,14 @@ app.include_router(help_documents_router, prefix="/api/v1/system")
 
 # 应用级功能路由 (App Level APIs)
 app.include_router(master_data_router, prefix="/api/v1")
+app.include_router(kuaicrm_router, prefix="/api/v1")
+app.include_router(kuaipdm_router, prefix="/api/v1")
+app.include_router(kuaimrp_router, prefix="/api/v1")
+app.include_router(kuaisrm_router, prefix="/api/v1")
+app.include_router(kuaiwms_router, prefix="/api/v1")
+app.include_router(kuaimes_router, prefix="/api/v1")
+app.include_router(kuaiqms_router, prefix="/api/v1")
+app.include_router(kuaieam_router, prefix="/api/v1")
 
 # Inngest 测试端点
 @app.post("/api/v1/test/inngest")

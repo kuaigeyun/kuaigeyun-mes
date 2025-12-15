@@ -5,13 +5,13 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
 import SafeProFormSelect from '@/components/SafeProFormSelect';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Input } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '@/components/uni_table';
 import { bomApi, materialApi } from '../../../services/material';
-import type { BOM, BOMCreate, BOMUpdate, Material } from '../../../types/material';
+import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate } from '../../../types/material';
 
 /**
  * BOM管理列表页面组件
@@ -32,6 +32,12 @@ const BOMPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  
+  // 审核Modal状态
+  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
+  const [approvalBomUuid, setApprovalBomUuid] = useState<string | null>(null);
+  const [approvalComment, setApprovalComment] = useState<string>('');
+  const [approvalLoading, setApprovalLoading] = useState(false);
   
   // 物料列表（用于下拉选择）
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -81,20 +87,92 @@ const BOMPage: React.FC = () => {
       
       // 获取BOM详情
       const detail = await bomApi.get(record.uuid);
+      // 编辑时使用单个BOM项格式
       formRef.current?.setFieldsValue({
         materialId: detail.materialId,
-        componentId: detail.componentId,
-        quantity: detail.quantity,
-        unit: detail.unit,
-        isAlternative: detail.isAlternative,
-        alternativeGroupId: detail.alternativeGroupId,
-        priority: detail.priority,
+        version: detail.version,
+        bomCode: detail.bomCode,
+        effectiveDate: detail.effectiveDate,
+        expiryDate: detail.expiryDate,
+        approvalStatus: detail.approvalStatus,
+        items: [{
+          componentId: detail.componentId,
+          quantity: detail.quantity,
+          unit: detail.unit,
+          isAlternative: detail.isAlternative,
+          alternativeGroupId: detail.alternativeGroupId,
+          priority: detail.priority,
+          description: detail.description,
+          remark: detail.remark,
+        }],
         description: detail.description,
+        remark: detail.remark,
         isActive: detail.isActive,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取BOM详情失败');
     }
+  };
+  
+  /**
+   * 处理复制BOM
+   */
+  const handleCopy = async (record: BOM) => {
+    try {
+      const newBom = await bomApi.copy(record.uuid);
+      messageApi.success('BOM复制成功，已创建新版本');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '复制BOM失败');
+    }
+  };
+  
+  /**
+   * 处理打开审核Modal
+   */
+  const handleOpenApproval = (record: BOM) => {
+    setApprovalBomUuid(record.uuid);
+    setApprovalComment('');
+    setApprovalModalVisible(true);
+  };
+  
+  /**
+   * 处理审核BOM
+   */
+  const handleApprove = async (approved: boolean) => {
+    if (!approvalBomUuid) return;
+    
+    try {
+      setApprovalLoading(true);
+      await bomApi.approve(approvalBomUuid, approved, approvalComment || undefined);
+      messageApi.success(approved ? 'BOM审核通过' : 'BOM审核已拒绝');
+      setApprovalModalVisible(false);
+      setApprovalComment('');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '审核失败');
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+  
+  /**
+   * 获取审核状态标签
+   */
+  const getApprovalStatusTag = (status: string) => {
+    const statusMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
+      draft: { color: 'default', text: '草稿', icon: <ClockCircleOutlined /> },
+      pending: { color: 'processing', text: '待审核', icon: <ClockCircleOutlined /> },
+      approved: { color: 'success', text: '已审核', icon: <CheckCircleOutlined /> },
+      rejected: { color: 'error', text: '已拒绝', icon: <CloseCircleOutlined /> },
+    };
+    
+    const statusInfo = statusMap[status] || statusMap.draft;
+    return (
+      <Tag color={statusInfo.color} icon={statusInfo.icon}>
+        {statusInfo.text}
+      </Tag>
+    );
   };
 
   /**
@@ -145,13 +223,69 @@ const BOMPage: React.FC = () => {
       setFormLoading(true);
       
       if (isEdit && currentBOMUuid) {
-        // 更新BOM
-        await bomApi.update(currentBOMUuid, values as BOMUpdate);
+        // 更新BOM（单个）- 从items中取第一个
+        if (!values.items || values.items.length === 0) {
+          messageApi.error('请至少添加一个子物料');
+          return;
+        }
+        
+        const firstItem = values.items[0];
+        const updateData: BOMUpdate = {
+          materialId: values.materialId,
+          componentId: firstItem.componentId,
+          quantity: firstItem.quantity,
+          unit: firstItem.unit,
+          version: values.version,
+          bomCode: values.bomCode,
+          effectiveDate: values.effectiveDate,
+          expiryDate: values.expiryDate,
+          approvalStatus: values.approvalStatus,
+          isAlternative: firstItem.isAlternative,
+          alternativeGroupId: firstItem.alternativeGroupId,
+          priority: firstItem.priority,
+          description: values.description || firstItem.description,
+          remark: values.remark || firstItem.remark,
+          isActive: values.isActive,
+        };
+        
+        await bomApi.update(currentBOMUuid, updateData);
         messageApi.success('更新成功');
       } else {
-        // 创建BOM
-        await bomApi.create(values as BOMCreate);
-        messageApi.success('创建成功');
+        // 批量创建BOM
+        if (!values.materialId) {
+          messageApi.error('请选择主物料');
+          return;
+        }
+        
+        if (!values.items || values.items.length === 0) {
+          messageApi.error('请至少添加一个子物料');
+          return;
+        }
+        
+        const batchData: BOMBatchCreate = {
+          materialId: values.materialId,
+          items: values.items.map((item: any) => ({
+            componentId: item.componentId,
+            quantity: item.quantity,
+            unit: item.unit,
+            isAlternative: item.isAlternative || false,
+            alternativeGroupId: item.alternativeGroupId,
+            priority: item.priority || 0,
+            description: item.description,
+            remark: item.remark,
+          })),
+          version: values.version || '1.0',
+          bomCode: values.bomCode,
+          effectiveDate: values.effectiveDate,
+          expiryDate: values.expiryDate,
+          approvalStatus: values.approvalStatus || 'draft',
+          description: values.description,
+          remark: values.remark,
+          isActive: values.isActive !== false,
+        };
+        
+        await bomApi.create(batchData);
+        messageApi.success(`成功创建 ${batchData.items.length} 个BOM项`);
       }
       
       setModalVisible(false);
@@ -184,6 +318,33 @@ const BOMPage: React.FC = () => {
    * 表格列定义
    */
   const columns: ProColumns<BOM>[] = [
+    {
+      title: 'BOM编码',
+      dataIndex: 'bomCode',
+      width: 150,
+      hideInSearch: true,
+      render: (_, record) => record.bomCode || '-',
+    },
+    {
+      title: '版本',
+      dataIndex: 'version',
+      width: 80,
+      hideInSearch: true,
+      render: (_, record) => <Tag>{record.version}</Tag>,
+    },
+    {
+      title: '审核状态',
+      dataIndex: 'approvalStatus',
+      width: 120,
+      valueType: 'select',
+      valueEnum: {
+        draft: { text: '草稿', status: 'Default' },
+        pending: { text: '待审核', status: 'Processing' },
+        approved: { text: '已审核', status: 'Success' },
+        rejected: { text: '已拒绝', status: 'Error' },
+      },
+      render: (_, record) => getApprovalStatusTag(record.approvalStatus),
+    },
     {
       title: '主物料',
       dataIndex: 'materialId',
@@ -265,7 +426,7 @@ const BOMPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 150,
+      width: 250,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -284,6 +445,23 @@ const BOMPage: React.FC = () => {
           >
             编辑
           </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<CopyOutlined />}
+            onClick={() => handleCopy(record)}
+          >
+            复制
+          </Button>
+          {record.approvalStatus !== 'approved' && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleOpenApproval(record)}
+            >
+              审核
+            </Button>
+          )}
           <Popconfirm
             title="确定要删除这个BOM项吗？"
             onConfirm={() => handleDelete(record)}
@@ -322,6 +500,11 @@ const BOMPage: React.FC = () => {
           // 替代料筛选
           if (searchFormValues?.isAlternative !== undefined && searchFormValues.isAlternative !== '' && searchFormValues.isAlternative !== null) {
             apiParams.isAlternative = searchFormValues.isAlternative;
+          }
+          
+          // 审核状态筛选
+          if (searchFormValues?.approvalStatus !== undefined && searchFormValues.approvalStatus !== '' && searchFormValues.approvalStatus !== null) {
+            apiParams.approvalStatus = searchFormValues.approvalStatus;
           }
           
           // 主物料筛选
@@ -381,6 +564,21 @@ const BOMPage: React.FC = () => {
           column={2}
           columns={[
             {
+              title: 'BOM编码',
+              dataIndex: 'bomCode',
+              render: (_, record) => record.bomCode || '-',
+            },
+            {
+              title: '版本',
+              dataIndex: 'version',
+              render: (_, record) => <Tag>{record.version}</Tag>,
+            },
+            {
+              title: '审核状态',
+              dataIndex: 'approvalStatus',
+              render: (_, record) => getApprovalStatusTag(record.approvalStatus),
+            },
+            {
               title: '主物料',
               dataIndex: 'materialId',
               render: (_, record) => getMaterialName(record.materialId),
@@ -399,6 +597,18 @@ const BOMPage: React.FC = () => {
               dataIndex: 'unit',
             },
             {
+              title: '生效日期',
+              dataIndex: 'effectiveDate',
+              valueType: 'dateTime',
+              render: (_, record) => record.effectiveDate || '-',
+            },
+            {
+              title: '失效日期',
+              dataIndex: 'expiryDate',
+              valueType: 'dateTime',
+              render: (_, record) => record.expiryDate || '-',
+            },
+            {
               title: '替代料',
               dataIndex: 'isAlternative',
               render: (_, record) => (
@@ -415,6 +625,28 @@ const BOMPage: React.FC = () => {
               title: '描述',
               dataIndex: 'description',
               span: 2,
+            },
+            {
+              title: '备注',
+              dataIndex: 'remark',
+              span: 2,
+            },
+            {
+              title: '审核人',
+              dataIndex: 'approvedBy',
+              render: (_, record) => record.approvedBy ? `用户ID: ${record.approvedBy}` : '-',
+            },
+            {
+              title: '审核时间',
+              dataIndex: 'approvedAt',
+              valueType: 'dateTime',
+              render: (_, record) => record.approvedAt || '-',
+            },
+            {
+              title: '审核意见',
+              dataIndex: 'approvalComment',
+              span: 2,
+              render: (_, record) => record.approvalComment || '-',
             },
             {
               title: '启用状态',
@@ -441,12 +673,12 @@ const BOMPage: React.FC = () => {
 
       {/* 创建/编辑BOM Modal */}
       <Modal
-        title={isEdit ? '编辑BOM' : '新建BOM'}
+        title={isEdit ? '编辑BOM' : '新建BOM（支持批量添加子物料）'}
         open={modalVisible}
         onCancel={handleCloseModal}
         footer={null}
-        width={800}
-        destroyOnHidden
+        width={1000}
+        destroyOnClose
       >
         <ProForm
           formRef={formRef}
@@ -463,8 +695,9 @@ const BOMPage: React.FC = () => {
           }}
           initialValues={{
             isActive: true,
-            isAlternative: false,
-            priority: 0,
+            version: '1.0',
+            approvalStatus: 'draft',
+            items: [{ isAlternative: false, priority: 0 }],
           }}
           layout="vertical"
           grid={true}
@@ -491,85 +724,251 @@ const BOMPage: React.FC = () => {
               },
             }}
           />
-          <SafeProFormSelect
-            name="componentId"
-            label="子物料"
-            placeholder="请选择子物料"
+          <ProFormText
+            name="bomCode"
+            label="BOM编码"
+            placeholder="留空则自动生成"
             colProps={{ span: 12 }}
-            options={materials.map(m => ({
-              label: `${m.code} - ${m.name}`,
-              value: m.id,
-            }))}
-            rules={[
-              { required: true, message: '请选择子物料' },
-            ]}
             fieldProps={{
-              loading: materialsLoading,
-              showSearch: true,
-              filterOption: (input, option) => {
-                const label = option?.label as string || '';
-                return label.toLowerCase().includes(input.toLowerCase());
-              },
-            }}
-          />
-          <ProFormDigit
-            name="quantity"
-            label="用量"
-            placeholder="请输入用量"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入用量' },
-              { type: 'number', min: 0.0001, message: '用量必须大于0' },
-            ]}
-            fieldProps={{
-              precision: 4,
-              style: { width: '100%' },
+              maxLength: 100,
             }}
           />
           <ProFormText
-            name="unit"
-            label="单位"
-            placeholder="请输入单位"
-            colProps={{ span: 12 }}
+            name="version"
+            label="版本号"
+            placeholder="请输入版本号"
+            colProps={{ span: 6 }}
             rules={[
-              { required: true, message: '请输入单位' },
-              { max: 20, message: '单位不能超过20个字符' },
+              { required: true, message: '请输入版本号' },
+              { max: 50, message: '版本号不能超过50个字符' },
             ]}
+            initialValue="1.0"
           />
-          <ProFormSwitch
-            name="isAlternative"
-            label="是否为替代料"
-            colProps={{ span: 12 }}
-          />
-          <ProFormDigit
-            name="priority"
-            label="优先级"
-            placeholder="请输入优先级（数字越小优先级越高）"
-            colProps={{ span: 12 }}
-            rules={[
-              { type: 'number', min: 0, message: '优先级必须大于等于0' },
+          <ProFormSelect
+            name="approvalStatus"
+            label="审核状态"
+            colProps={{ span: 6 }}
+            options={[
+              { label: '草稿', value: 'draft' },
+              { label: '待审核', value: 'pending' },
+              { label: '已审核', value: 'approved' },
+              { label: '已拒绝', value: 'rejected' },
             ]}
+            initialValue="draft"
+          />
+          <ProFormDateTimePicker
+            name="effectiveDate"
+            label="生效日期"
+            colProps={{ span: 6 }}
             fieldProps={{
-              precision: 0,
+              style: { width: '100%' },
+            }}
+          />
+          <ProFormDateTimePicker
+            name="expiryDate"
+            label="失效日期"
+            colProps={{ span: 6 }}
+            fieldProps={{
               style: { width: '100%' },
             }}
           />
           <ProFormTextArea
             name="description"
-            label="描述"
-            placeholder="请输入描述"
+            label="BOM描述"
+            placeholder="请输入BOM描述（可选）"
             colProps={{ span: 24 }}
             fieldProps={{
-              rows: 4,
+              rows: 2,
               maxLength: 500,
             }}
           />
+          <ProFormTextArea
+            name="remark"
+            label="备注"
+            placeholder="请输入备注（可选）"
+            colProps={{ span: 24 }}
+            fieldProps={{
+              rows: 2,
+              maxLength: 500,
+            }}
+          />
+          
+          <ProFormList
+            name="items"
+            label="子物料列表"
+            min={1}
+            copyIconProps={false}
+            deleteIconProps={{
+              Icon: MinusCircleOutlined,
+            }}
+            creatorButtonProps={{
+              creatorButtonText: '添加子物料',
+              icon: <PlusOutlined />,
+              type: 'dashed',
+              style: { width: '100%' },
+            }}
+            itemRender={({ listDom, action }, { index }) => (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  marginBottom: 16,
+                  padding: 16,
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 4,
+                  backgroundColor: '#fafafa',
+                }}
+              >
+                <div style={{ flex: 1 }}>{listDom}</div>
+                <div style={{ marginLeft: 8 }}>{action}</div>
+              </div>
+            )}
+            rules={[
+              { required: true, message: '请至少添加一个子物料' },
+            ]}
+          >
+            {(f, index, action) => {
+              return (
+                <div style={{ width: '100%' }}>
+                  <SafeProFormSelect
+                    {...f}
+                    name={[f.name, 'componentId']}
+                    label="子物料"
+                    placeholder="请选择子物料"
+                    colProps={{ span: 24 }}
+                    options={materials.map(m => ({
+                      label: `${m.code} - ${m.name}`,
+                      value: m.id,
+                    }))}
+                    rules={[
+                      { required: true, message: '请选择子物料' },
+                    ]}
+                    fieldProps={{
+                      loading: materialsLoading,
+                      showSearch: true,
+                      filterOption: (input, option) => {
+                        const label = option?.label as string || '';
+                        return label.toLowerCase().includes(input.toLowerCase());
+                      },
+                    }}
+                  />
+                  <ProFormDigit
+                    {...f}
+                    name={[f.name, 'quantity']}
+                    label="用量"
+                    placeholder="请输入用量"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { required: true, message: '请输入用量' },
+                      { type: 'number', min: 0.0001, message: '用量必须大于0' },
+                    ]}
+                    fieldProps={{
+                      precision: 4,
+                      style: { width: '100%' },
+                    }}
+                  />
+                  <ProFormText
+                    {...f}
+                    name={[f.name, 'unit']}
+                    label="单位"
+                    placeholder="请输入单位"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { required: true, message: '请输入单位' },
+                      { max: 20, message: '单位不能超过20个字符' },
+                    ]}
+                  />
+                  <ProFormSwitch
+                    {...f}
+                    name={[f.name, 'isAlternative']}
+                    label="是否为替代料"
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormDigit
+                    {...f}
+                    name={[f.name, 'priority']}
+                    label="优先级"
+                    placeholder="请输入优先级（数字越小优先级越高）"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { type: 'number', min: 0, message: '优先级必须大于等于0' },
+                    ]}
+                    fieldProps={{
+                      precision: 0,
+                      style: { width: '100%' },
+                    }}
+                  />
+                  <ProFormTextArea
+                    {...f}
+                    name={[f.name, 'description']}
+                    label="描述"
+                    placeholder="请输入描述（可选）"
+                    colProps={{ span: 12 }}
+                    fieldProps={{
+                      rows: 2,
+                      maxLength: 500,
+                    }}
+                  />
+                  <ProFormTextArea
+                    {...f}
+                    name={[f.name, 'remark']}
+                    label="备注"
+                    placeholder="请输入备注（可选）"
+                    colProps={{ span: 12 }}
+                    fieldProps={{
+                      rows: 2,
+                      maxLength: 500,
+                    }}
+                  />
+                </div>
+              );
+            }}
+          </ProFormList>
+          
           <ProFormSwitch
             name="isActive"
             label="是否启用"
-            colProps={{ span: 12 }}
           />
         </ProForm>
+      </Modal>
+
+      {/* 审核Modal */}
+      <Modal
+        title="审核BOM"
+        open={approvalModalVisible}
+        onCancel={() => {
+          setApprovalModalVisible(false);
+          setApprovalComment('');
+        }}
+        footer={[
+          <Button
+            key="reject"
+            danger
+            loading={approvalLoading}
+            onClick={() => handleApprove(false)}
+          >
+            拒绝
+          </Button>,
+          <Button
+            key="approve"
+            type="primary"
+            loading={approvalLoading}
+            onClick={() => handleApprove(true)}
+          >
+            通过
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8 }}>审核意见（可选）：</div>
+          <Input.TextArea
+            rows={4}
+            value={approvalComment}
+            onChange={(e) => setApprovalComment(e.target.value)}
+            placeholder="请输入审核意见"
+            maxLength={500}
+          />
+        </div>
       </Modal>
     </>
   );

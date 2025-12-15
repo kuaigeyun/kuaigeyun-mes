@@ -152,12 +152,26 @@ const usePluginRoutes = (): { routes: React.ReactNode[]; loading: boolean } => {
         // 获取已安装且启用的应用列表
         const applications = await getInstalledApplicationList({ is_active: true });
         
+        console.log('📦 已安装的应用列表:', applications.map(app => ({
+          code: app.code,
+          name: app.name,
+          entry_point: app.entry_point,
+          route_path: app.route_path,
+          is_active: app.is_active,
+          is_installed: app.is_installed,
+        })));
+        
         // 加载所有插件
         const routes: React.ReactNode[] = [];
         for (const app of applications) {
           if (app.entry_point && app.route_path) {
             try {
+              console.log(`🔄 正在加载插件: ${app.code}`, {
+                entry_point: app.entry_point,
+                route_path: app.route_path,
+              });
               const pluginRouteConfigs = await loadPlugin(app);
+              console.log(`✅ 插件 ${app.code} 加载成功:`, pluginRouteConfigs);
               for (const routeConfig of pluginRouteConfigs) {
                 routes.push(
                   <Route
@@ -175,20 +189,27 @@ const usePluginRoutes = (): { routes: React.ReactNode[]; loading: boolean } => {
               }
             } catch (error) {
               // 插件加载失败时，输出详细错误信息以便调试
-              console.error(`加载插件 ${app.code} 失败:`, error);
+              console.error(`❌ 加载插件 ${app.code} 失败:`, error);
               console.error(`插件信息:`, {
                 code: app.code,
                 entry_point: app.entry_point,
                 route_path: app.route_path,
               });
             }
+          } else {
+            console.warn(`⚠️ 插件 ${app.code} 缺少 entry_point 或 route_path:`, {
+              code: app.code,
+              entry_point: app.entry_point,
+              route_path: app.route_path,
+            });
           }
         }
         
+        console.log(`✅ 共注册 ${routes.length} 个插件路由`);
         setPluginRoutes(routes);
       } catch (error) {
-        // 获取应用列表失败时，静默处理（可能是未登录或权限问题）
-        console.warn('加载插件列表失败（可能未登录）:', error);
+        // 获取应用列表失败时，输出详细错误信息
+        console.error('❌ 加载插件列表失败:', error);
       } finally {
         setLoading(false);
       }
