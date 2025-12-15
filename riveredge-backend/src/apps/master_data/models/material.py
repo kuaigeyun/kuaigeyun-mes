@@ -187,6 +187,9 @@ class BOM(BaseModel):
             ("component_id",),
             ("uuid",),
             ("alternative_group_id",),
+            ("bom_code",),
+            ("version",),
+            ("approval_status",),
         ]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
@@ -196,6 +199,24 @@ class BOM(BaseModel):
     quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="用量")
     unit = fields.CharField(max_length=20, description="单位")
     
+    # 版本控制
+    version = fields.CharField(max_length=50, default="1.0", description="BOM版本号")
+    bom_code = fields.CharField(max_length=100, null=True, description="BOM编码（同一主物料的不同版本使用相同编码）")
+    
+    # 有效期管理
+    effective_date = fields.DatetimeField(null=True, description="生效日期")
+    expiry_date = fields.DatetimeField(null=True, description="失效日期")
+    
+    # 审核管理
+    approval_status = fields.CharField(
+        max_length=20,
+        default="draft",
+        description="审核状态：draft(草稿), pending(待审核), approved(已审核), rejected(已拒绝)"
+    )
+    approved_by = fields.IntField(null=True, description="审核人ID")
+    approved_at = fields.DatetimeField(null=True, description="审核时间")
+    approval_comment = fields.TextField(null=True, description="审核意见")
+    
     # 替代料管理
     is_alternative = fields.BooleanField(default=False, description="是否为替代料")
     alternative_group_id = fields.IntField(null=True, description="替代料组ID（同一组的替代料互斥）")
@@ -203,6 +224,7 @@ class BOM(BaseModel):
     
     # 扩展信息
     description = fields.TextField(null=True, description="描述")
+    remark = fields.TextField(null=True, description="备注")
     
     # 关联关系（ForeignKeyField 会自动创建 material_id 和 component_id 字段）
     material = fields.ForeignKeyField(

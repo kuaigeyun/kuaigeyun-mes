@@ -13,7 +13,7 @@ from apps.master_data.services.material_service import MaterialService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
-    BOMCreate, BOMUpdate, BOMResponse
+    BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -127,7 +127,225 @@ async def delete_material_group(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# ==================== BOM相关接口 ====================
+# 注意：BOM 路由必须在物料详情路由之前，避免 /bom 被 /{material_uuid} 匹配
+
+@router.post("/bom", response_model=List[BOMResponse], summary="创建BOM（支持批量创建）")
+async def create_bom(
+    data: BOMBatchCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建BOM（支持为一个主物料批量添加多个子物料）
+    
+    - **material_id**: 主物料ID（必填）
+    - **items**: 子物料项列表（必填，至少一个）
+      - **component_id**: 子物料ID（必填）
+      - **quantity**: 用量（必填，必须大于0）
+      - **unit**: 单位（必填）
+      - **is_alternative**: 是否为替代料（默认：false）
+      - **alternative_group_id**: 替代料组ID（可选）
+      - **priority**: 优先级（默认：0，数字越小优先级越高）
+      - **description**: 描述（可选）
+    - **is_active**: 是否启用（默认：true）
+    """
+    try:
+        return await MaterialService.create_bom_batch(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/bom", response_model=List[BOMResponse], summary="获取BOM列表")
+async def list_bom(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    material_id: Optional[int] = Query(None, description="主物料ID（过滤）"),
+    is_active: Optional[bool] = Query(None, description="是否启用")
+):
+    """
+    获取BOM列表
+    
+    - **skip**: 跳过数量（默认：0）
+    - **limit**: 限制数量（默认：100，最大：1000）
+    - **material_id**: 主物料ID（可选，用于过滤）
+    - **is_active**: 是否启用（可选）
+    """
+    return await MaterialService.list_bom(tenant_id, skip, limit, material_id, is_active)
+
+
+@router.get("/bom/{bom_uuid}", response_model=BOMResponse, summary="获取BOM详情")
+async def get_bom(
+    bom_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据UUID获取BOM详情
+    
+    - **bom_uuid**: BOM UUID
+    """
+    try:
+        return await MaterialService.get_bom_by_uuid(tenant_id, bom_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/bom/{bom_uuid}", response_model=BOMResponse, summary="更新BOM")
+async def update_bom(
+    bom_uuid: str,
+    data: BOMUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新BOM
+    
+    - **bom_uuid**: BOM UUID
+    - **material_id**: 主物料ID（可选）
+    - **component_id**: 子物料ID（可选）
+    - **quantity**: 用量（可选，必须大于0）
+    - **unit**: 单位（可选）
+    - **is_alternative**: 是否为替代料（可选）
+    - **alternative_group_id**: 替代料组ID（可选）
+    - **priority**: 优先级（可选）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（可选）
+    """
+    try:
+        return await MaterialService.update_bom(tenant_id, bom_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/bom/{bom_uuid}", summary="删除BOM")
+async def delete_bom(
+    bom_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除BOM（软删除）
+    
+    - **bom_uuid**: BOM UUID
+    """
+    try:
+        await MaterialService.delete_bom(tenant_id, bom_uuid)
+        return {"message": "BOM删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/bom/{bom_uuid}/approve", response_model=BOMResponse, summary="审核BOM")
+async def approve_bom(
+    bom_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    approved: bool = Query(True, description="是否通过审核"),
+    approval_comment: Optional[str] = Query(None, description="审核意见")
+):
+    """
+    审核BOM
+    
+    - **bom_uuid**: BOM UUID
+    - **approved**: 是否通过（true=通过，false=拒绝）
+    - **approval_comment**: 审核意见（可选）
+    """
+    try:
+        return await MaterialService.approve_bom(
+            tenant_id=tenant_id,
+            bom_uuid=bom_uuid,
+            approved_by=current_user.id,
+            approval_comment=approval_comment,
+            approved=approved
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/bom/{bom_uuid}/copy", response_model=BOMResponse, summary="复制BOM（创建新版本）")
+async def copy_bom(
+    bom_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    new_version: Optional[str] = Query(None, description="新版本号（可选）")
+):
+    """
+    复制BOM（创建新版本）
+    
+    - **bom_uuid**: 源BOM UUID
+    - **new_version**: 新版本号（可选，如果不提供则自动递增）
+    """
+    try:
+        return await MaterialService.copy_bom(
+            tenant_id=tenant_id,
+            bom_uuid=bom_uuid,
+            new_version=new_version
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/bom/material/{material_id}", response_model=List[BOMResponse], summary="根据主物料获取BOM列表")
+async def get_bom_by_material(
+    material_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    version: Optional[str] = Query(None, description="版本号（可选）"),
+    only_active: bool = Query(True, description="是否只返回已审核的BOM")
+):
+    """
+    根据主物料获取BOM列表
+    
+    - **material_id**: 主物料ID
+    - **version**: 版本号（可选）
+    - **only_active**: 是否只返回已审核的BOM（默认：true）
+    """
+    try:
+        return await MaterialService.get_bom_by_material(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=version,
+            only_active=only_active
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/bom/versions/{bom_code}", response_model=List[BOMResponse], summary="获取BOM所有版本")
+async def get_bom_versions(
+    bom_code: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取指定BOM编码的所有版本
+    
+    - **bom_code**: BOM编码
+    """
+    try:
+        return await MaterialService.get_bom_versions(
+            tenant_id=tenant_id,
+            bom_code=bom_code
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 # ==================== 物料相关接口 ====================
+# 注意：物料详情路由必须在 BOM 路由之后，避免 /bom 被 /{material_uuid} 匹配
 
 @router.post("", response_model=MaterialResponse, summary="创建物料")
 async def create_material(
@@ -248,115 +466,4 @@ async def delete_material(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-# ==================== BOM相关接口 ====================
-
-@router.post("/bom", response_model=BOMResponse, summary="创建BOM")
-async def create_bom(
-    data: BOMCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    创建BOM
-    
-    - **material_id**: 主物料ID（必填）
-    - **component_id**: 子物料ID（必填）
-    - **quantity**: 用量（必填，必须大于0）
-    - **unit**: 单位（必填）
-    - **is_alternative**: 是否为替代料（默认：false）
-    - **alternative_group_id**: 替代料组ID（可选）
-    - **priority**: 优先级（默认：0，数字越小优先级越高）
-    - **description**: 描述（可选）
-    - **is_active**: 是否启用（默认：true）
-    """
-    try:
-        return await MaterialService.create_bom(tenant_id, data)
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.get("/bom", response_model=List[BOMResponse], summary="获取BOM列表")
-async def list_bom(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    material_id: Optional[int] = Query(None, description="主物料ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
-):
-    """
-    获取BOM列表
-    
-    - **skip**: 跳过数量（默认：0）
-    - **limit**: 限制数量（默认：100，最大：1000）
-    - **material_id**: 主物料ID（可选，用于过滤）
-    - **is_active**: 是否启用（可选）
-    """
-    return await MaterialService.list_bom(tenant_id, skip, limit, material_id, is_active)
-
-
-@router.get("/bom/{bom_uuid}", response_model=BOMResponse, summary="获取BOM详情")
-async def get_bom(
-    bom_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    根据UUID获取BOM详情
-    
-    - **bom_uuid**: BOM UUID
-    """
-    try:
-        return await MaterialService.get_bom_by_uuid(tenant_id, bom_uuid)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-@router.put("/bom/{bom_uuid}", response_model=BOMResponse, summary="更新BOM")
-async def update_bom(
-    bom_uuid: str,
-    data: BOMUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    更新BOM
-    
-    - **bom_uuid**: BOM UUID
-    - **material_id**: 主物料ID（可选）
-    - **component_id**: 子物料ID（可选）
-    - **quantity**: 用量（可选，必须大于0）
-    - **unit**: 单位（可选）
-    - **is_alternative**: 是否为替代料（可选）
-    - **alternative_group_id**: 替代料组ID（可选）
-    - **priority**: 优先级（可选）
-    - **description**: 描述（可选）
-    - **is_active**: 是否启用（可选）
-    """
-    try:
-        return await MaterialService.update_bom(tenant_id, bom_uuid, data)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/bom/{bom_uuid}", summary="删除BOM")
-async def delete_bom(
-    bom_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    删除BOM（软删除）
-    
-    - **bom_uuid**: BOM UUID
-    """
-    try:
-        await MaterialService.delete_bom(tenant_id, bom_uuid)
-        return {"message": "BOM删除成功"}
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

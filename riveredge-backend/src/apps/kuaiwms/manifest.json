@@ -1,0 +1,198 @@
+{
+    "name": "快格轻WMS",
+    "code": "kuaiwms",
+    "version": "1.0.0",
+    "description": "仓库管理 - 库存管理、入库出库、库位管理、内部物流配送",
+    "icon": "warehouse",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaiwms/index.tsx",
+    "route_path": "/apps/kuaiwms",
+    "sort_order": 6,
+    "menu_config": {
+        "title": "快格轻WMS",
+        "icon": "warehouse",
+        "path": "/apps/kuaiwms",
+        "children": [{
+                "title": "库存管理",
+                "path": "/apps/kuaiwms/inventory",
+                "icon": "database",
+                "sort_order": 1,
+                "children": [{
+                        "title": "实时库存",
+                        "path": "/apps/kuaiwms/inventory/realtime",
+                        "permission": "kuaiwms:inventory:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "库存调整",
+                        "path": "/apps/kuaiwms/inventory/adjustment",
+                        "permission": "kuaiwms:inventory:adjust",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "库存盘点",
+                        "path": "/apps/kuaiwms/inventory/stocktake",
+                        "permission": "kuaiwms:inventory:stocktake",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "入库管理",
+                "path": "/apps/kuaiwms/inbound",
+                "icon": "import",
+                "sort_order": 2,
+                "children": [{
+                        "title": "采购入库",
+                        "path": "/apps/kuaiwms/inbound/purchase",
+                        "permission": "kuaiwms:inbound:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "生产入库",
+                        "path": "/apps/kuaiwms/inbound/production",
+                        "permission": "kuaiwms:inbound:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "委外入库",
+                        "path": "/apps/kuaiwms/inbound/outsourcing",
+                        "permission": "kuaiwms:inbound:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "入库质检",
+                        "path": "/apps/kuaiwms/inbound/inspection",
+                        "permission": "kuaiwms:inbound:inspection",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "出库管理",
+                "path": "/apps/kuaiwms/outbound",
+                "icon": "export",
+                "sort_order": 3,
+                "children": [{
+                        "title": "销售出库",
+                        "path": "/apps/kuaiwms/outbound/sales",
+                        "permission": "kuaiwms:outbound:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "生产领料",
+                        "path": "/apps/kuaiwms/outbound/production",
+                        "permission": "kuaiwms:outbound:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "委外发料",
+                        "path": "/apps/kuaiwms/outbound/outsourcing",
+                        "permission": "kuaiwms:outbound:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "出库拣货",
+                        "path": "/apps/kuaiwms/outbound/picking",
+                        "permission": "kuaiwms:outbound:picking",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "委外物料",
+                "path": "/apps/kuaiwms/outsourcing-material",
+                "icon": "swap",
+                "sort_order": 4,
+                "children": [{
+                        "title": "委外发料",
+                        "path": "/apps/kuaiwms/outsourcing-material/issue",
+                        "permission": "kuaiwms:outsourcing-material:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "委外回收",
+                        "path": "/apps/kuaiwms/outsourcing-material/return",
+                        "permission": "kuaiwms:outsourcing-material:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "委外余料",
+                        "path": "/apps/kuaiwms/outsourcing-material/residual",
+                        "permission": "kuaiwms:outsourcing-material:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "库位管理",
+                "path": "/apps/kuaiwms/location",
+                "icon": "environment",
+                "sort_order": 5,
+                "children": [{
+                        "title": "库位分配",
+                        "path": "/apps/kuaiwms/location/allocation",
+                        "permission": "kuaiwms:location:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "库位优化",
+                        "path": "/apps/kuaiwms/location/optimization",
+                        "permission": "kuaiwms:location:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "库位盘点",
+                        "path": "/apps/kuaiwms/location/stocktake",
+                        "permission": "kuaiwms:location:stocktake",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "内部物流",
+                "path": "/apps/kuaiwms/logistics",
+                "icon": "car",
+                "sort_order": 6,
+                "children": [{
+                        "title": "配送计划",
+                        "path": "/apps/kuaiwms/logistics/plan",
+                        "permission": "kuaiwms:logistics:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "配送执行",
+                        "path": "/apps/kuaiwms/logistics/execution",
+                        "permission": "kuaiwms:logistics:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "Line Feeding",
+                        "path": "/apps/kuaiwms/logistics/line-feeding",
+                        "permission": "kuaiwms:logistics:view",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaiwms:inventory:view",
+        "kuaiwms:inventory:adjust",
+        "kuaiwms:inventory:stocktake",
+        "kuaiwms:inbound:view",
+        "kuaiwms:inbound:create",
+        "kuaiwms:inbound:inspection",
+        "kuaiwms:outbound:view",
+        "kuaiwms:outbound:create",
+        "kuaiwms:outbound:picking",
+        "kuaiwms:outsourcing-material:view",
+        "kuaiwms:location:view",
+        "kuaiwms:location:stocktake",
+        "kuaiwms:logistics:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

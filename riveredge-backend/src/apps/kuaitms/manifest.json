@@ -1,0 +1,128 @@
+{
+    "name": "快格轻TMS",
+    "code": "kuaitms",
+    "version": "1.0.0",
+    "description": "运输管理 - 运输计划、车辆调度、运输执行、运费结算",
+    "icon": "car",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaitms/index.tsx",
+    "route_path": "/apps/kuaitms",
+    "sort_order": 15,
+    "menu_config": {
+        "title": "快格轻TMS",
+        "icon": "car",
+        "path": "/apps/kuaitms",
+        "children": [{
+                "title": "运输计划",
+                "path": "/apps/kuaitms/planning",
+                "icon": "calendar",
+                "sort_order": 1,
+                "children": [{
+                        "title": "运输需求",
+                        "path": "/apps/kuaitms/planning/demand",
+                        "permission": "kuaitms:planning:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "运输计划",
+                        "path": "/apps/kuaitms/planning/plan",
+                        "permission": "kuaitms:planning:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "路线优化",
+                        "path": "/apps/kuaitms/planning/route",
+                        "permission": "kuaitms:planning:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "车辆调度",
+                "path": "/apps/kuaitms/dispatch",
+                "icon": "cluster",
+                "sort_order": 2,
+                "children": [{
+                        "title": "调度计划",
+                        "path": "/apps/kuaitms/dispatch/plan",
+                        "permission": "kuaitms:dispatch:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "调度执行",
+                        "path": "/apps/kuaitms/dispatch/execution",
+                        "permission": "kuaitms:dispatch:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "车辆状态",
+                        "path": "/apps/kuaitms/dispatch/status",
+                        "permission": "kuaitms:dispatch:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "运输执行",
+                "path": "/apps/kuaitms/execution",
+                "icon": "car",
+                "sort_order": 3,
+                "children": [{
+                        "title": "装车管理",
+                        "path": "/apps/kuaitms/execution/loading",
+                        "permission": "kuaitms:execution:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "在途跟踪",
+                        "path": "/apps/kuaitms/execution/tracking",
+                        "permission": "kuaitms:execution:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "签收管理",
+                        "path": "/apps/kuaitms/execution/sign",
+                        "permission": "kuaitms:execution:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "运费结算",
+                "path": "/apps/kuaitms/settlement",
+                "icon": "dollar",
+                "sort_order": 4,
+                "children": [{
+                        "title": "运费计算",
+                        "path": "/apps/kuaitms/settlement/calculate",
+                        "permission": "kuaitms:settlement:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "运费结算",
+                        "path": "/apps/kuaitms/settlement/process",
+                        "permission": "kuaitms:settlement:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "运费分析",
+                        "path": "/apps/kuaitms/settlement/analysis",
+                        "permission": "kuaitms:settlement:view",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaitms:planning:view",
+        "kuaitms:planning:create",
+        "kuaitms:dispatch:view",
+        "kuaitms:execution:view",
+        "kuaitms:settlement:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

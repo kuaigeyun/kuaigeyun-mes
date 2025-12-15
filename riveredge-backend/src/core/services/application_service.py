@@ -490,6 +490,11 @@ class ApplicationService:
                 # 如果应用已存在，保持现有的 is_active 状态；否则默认启用
                 is_active = existing_app.is_active if existing_app else True
                 
+                # 系统内置应用（如 master-data）应该自动安装
+                # 这些应用在 src/apps 目录下，是系统的一部分
+                builtin_apps = ['master-data', 'kuaimes']  # 系统内置应用列表
+                should_auto_install = code in builtin_apps
+                
                 app_data = ApplicationCreate(
                     name=manifest.get('name', code),
                     code=code,
@@ -507,6 +512,11 @@ class ApplicationService:
                 
                 if existing_app:
                     # 更新现有应用（保留 is_active 和 is_installed 状态）
+                    # 但是，如果是系统内置应用且未安装，自动安装
+                    if should_auto_install and not existing_app.is_installed:
+                        existing_app.is_installed = True
+                        await existing_app.save()
+                    
                     # 检查菜单配置是否变更
                     menu_config_changed = existing_app.menu_config != app_data.menu_config
                     
@@ -543,6 +553,21 @@ class ApplicationService:
                         tenant_id=tenant_id,
                         data=app_data
                     )
+                    
+                    # 如果是系统内置应用，自动安装
+                    if should_auto_install:
+                        application.is_installed = True
+                        await application.save()
+                        
+                        # 自动同步菜单配置
+                        if application.menu_config:
+                            from core.services.menu_service import MenuService
+                            await MenuService.sync_menus_from_application_config(
+                                tenant_id=tenant_id,
+                                application_uuid=str(application.uuid),
+                                menu_config=application.menu_config,
+                                is_active=application.is_active
+                            )
                 
                 registered_apps.append(application)
                 

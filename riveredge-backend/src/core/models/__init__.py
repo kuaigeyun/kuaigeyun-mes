@@ -71,6 +71,7 @@ from .scheduled_task import ScheduledTask
 # 审批流程模型
 from .approval_process import ApprovalProcess
 from .approval_instance import ApprovalInstance
+from .approval_history import ApprovalHistory
 
 # 脚本管理模型
 from .script import Script

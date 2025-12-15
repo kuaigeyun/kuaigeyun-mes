@@ -1,40 +1,49 @@
 /**
- * 快格轻MES 插件入口
- *
- * 导出插件路由配置和组件
+ * 快格轻MES APP 入口文件
  */
 
 import React from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 
-// 懒加载页面组件
-const OrderListPage = React.lazy(() => import('./pages/orders/list'));
-const WorkOrderListPage = React.lazy(() => import('./pages/workorders/list'));
-const ProgressPage = React.lazy(() => import('./pages/progress'));
+// 生产订单页面
+import OrdersPage from './pages/orders';
 
-/**
- * 插件路由配置
- */
-export const KuaimesRoutes: React.FC = () => {
+// 工单页面
+import WorkOrdersPage from './pages/workorders';
+
+// 生产报工页面
+import ProductionReportsPage from './pages/production-reports';
+
+// 生产追溯页面
+import TraceabilitiesPage from './pages/traceabilities';
+
+// 返修工单页面
+import ReworkOrdersPage from './pages/rework-orders';
+
+// 进度跟踪页面
+import ProgressPage from './pages/progress';
+
+const KuaimesApp: React.FC = () => {
   return (
     <Routes>
-      <Route path="/orders" element={<OrderListPage />} />
-      <Route path="/workorders" element={<WorkOrderListPage />} />
-      <Route path="/progress" element={<ProgressPage />} />
+      {/* 生产订单 */}
+      <Route path="planning/workorders" element={<WorkOrdersPage />} />
+      <Route path="planning/scheduling" element={<OrdersPage />} />
+      
+      {/* 生产执行 */}
+      <Route path="execution/reporting" element={<ProductionReportsPage />} />
+      <Route path="execution/progress" element={<ProgressPage />} />
+      
+      {/* 质量管控 */}
+      <Route path="quality/traceability" element={<TraceabilitiesPage />} />
+      <Route path="quality/defects" element={<ReworkOrdersPage />} />
+      
+      {/* 默认路由 */}
+      <Route index element={<div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>快格轻MES</div>} />
+      <Route path="*" element={<div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>页面未找到</div>} />
     </Routes>
   );
 };
 
-/**
- * 插件元数据
- */
-export const pluginMetadata = {
-  name: '快格轻MES',
-  code: 'kuaimes',
-  version: '1.0.0',
-  routePath: '/apps/kuaimes',
-};
-
-// 默认导出（ES Module 格式）
-export default KuaimesRoutes;
+export default KuaimesApp;
 

@@ -105,10 +105,32 @@ export const materialApi = {
  */
 export const bomApi = {
   /**
-   * 创建BOM
+   * 创建BOM（支持批量创建）
    */
-  create: async (data: BOMCreate): Promise<BOM> => {
+  create: async (data: BOMBatchCreate): Promise<BOM[]> => {
     return api.post('/apps/master-data/materials/bom', data);
+  },
+  
+  /**
+   * 创建单个BOM（兼容旧接口）
+   */
+  createSingle: async (data: BOMCreate): Promise<BOM> => {
+    // 转换为批量创建格式
+    const batchData: BOMBatchCreate = {
+      materialId: data.materialId,
+      items: [{
+        componentId: data.componentId,
+        quantity: data.quantity,
+        unit: data.unit,
+        isAlternative: data.isAlternative,
+        alternativeGroupId: data.alternativeGroupId,
+        priority: data.priority,
+        description: data.description,
+      }],
+      isActive: data.isActive,
+    };
+    const result = await api.post('/apps/master-data/materials/bom', batchData);
+    return result[0];
   },
 
   /**
@@ -137,6 +159,44 @@ export const bomApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/materials/bom/${uuid}`);
+  },
+  
+  /**
+   * 审核BOM
+   */
+  approve: async (uuid: string, approved: boolean, approvalComment?: string): Promise<BOM> => {
+    const params: Record<string, any> = { approved };
+    if (approvalComment) {
+      params.approval_comment = approvalComment;
+    }
+    return api.post(`/apps/master-data/materials/bom/${uuid}/approve`, null, { params });
+  },
+  
+  /**
+   * 复制BOM（创建新版本）
+   */
+  copy: async (uuid: string, newVersion?: string): Promise<BOM> => {
+    const params: Record<string, any> = {};
+    if (newVersion) {
+      params.new_version = newVersion;
+    }
+    return api.post(`/apps/master-data/materials/bom/${uuid}/copy`, null, { params });
+  },
+  
+  /**
+   * 根据主物料获取BOM列表
+   */
+  getByMaterial: async (materialId: number, version?: string, onlyActive?: boolean): Promise<BOM[]> => {
+    return api.get(`/apps/master-data/materials/bom/material/${materialId}`, {
+      params: { version, only_active: onlyActive },
+    });
+  },
+  
+  /**
+   * 获取BOM所有版本
+   */
+  getVersions: async (bomCode: string): Promise<BOM[]> => {
+    return api.get(`/apps/master-data/materials/bom/versions/${bomCode}`);
   },
 };
 

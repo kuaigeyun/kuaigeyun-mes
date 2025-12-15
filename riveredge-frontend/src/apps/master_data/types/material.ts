@@ -110,10 +110,24 @@ export interface BOM {
   componentId: number;
   quantity: number;
   unit: string;
+  // 版本控制
+  version: string;
+  bomCode?: string;
+  // 有效期管理
+  effectiveDate?: string;
+  expiryDate?: string;
+  // 审核管理
+  approvalStatus: 'draft' | 'pending' | 'approved' | 'rejected';
+  approvedBy?: number;
+  approvedAt?: string;
+  approvalComment?: string;
+  // 替代料管理
   isAlternative: boolean;
   alternativeGroupId?: number;
   priority: number;
+  // 扩展信息
   description?: string;
+  remark?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -148,6 +162,34 @@ export interface BOMListParams {
   skip?: number;
   limit?: number;
   materialId?: number;
+  isActive?: boolean;
+}
+
+export interface BOMItemCreate {
+  componentId: number;
+  quantity: number;
+  unit: string;
+  isAlternative?: boolean;
+  alternativeGroupId?: number;
+  priority?: number;
+  description?: string;
+  remark?: string;
+}
+
+export interface BOMBatchCreate {
+  materialId: number;
+  items: BOMItemCreate[];
+  // 版本控制
+  version?: string;
+  bomCode?: string;
+  // 有效期管理
+  effectiveDate?: string;
+  expiryDate?: string;
+  // 审核管理
+  approvalStatus?: 'draft' | 'pending' | 'approved' | 'rejected';
+  // 扩展信息
+  description?: string;
+  remark?: string;
   isActive?: boolean;
 }
 

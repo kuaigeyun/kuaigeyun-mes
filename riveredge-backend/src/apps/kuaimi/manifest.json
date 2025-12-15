@@ -1,0 +1,171 @@
+{
+    "name": "快格轻MI",
+    "code": "kuaimi",
+    "version": "1.0.0",
+    "description": "制造智能 - 实时生产看板、OEE分析、工艺优化、质量预测、系统应用绩效",
+    "icon": "dashboard",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaimi/index.tsx",
+    "route_path": "/apps/kuaimi",
+    "sort_order": 12,
+    "menu_config": {
+        "title": "快格轻MI",
+        "icon": "dashboard",
+        "path": "/apps/kuaimi",
+        "children": [{
+                "title": "生产看板",
+                "path": "/apps/kuaimi/dashboard",
+                "icon": "dashboard",
+                "sort_order": 1,
+                "children": [{
+                        "title": "Andon系统",
+                        "path": "/apps/kuaimi/dashboard/andon",
+                        "permission": "kuaimi:dashboard:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "生产状态",
+                        "path": "/apps/kuaimi/dashboard/status",
+                        "permission": "kuaimi:dashboard:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "异常预警",
+                        "path": "/apps/kuaimi/dashboard/alert",
+                        "permission": "kuaimi:dashboard:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "OEE分析",
+                "path": "/apps/kuaimi/oee",
+                "icon": "line-chart",
+                "sort_order": 2,
+                "children": [{
+                        "title": "OEE计算",
+                        "path": "/apps/kuaimi/oee/calculate",
+                        "permission": "kuaimi:oee:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "OEE分析",
+                        "path": "/apps/kuaimi/oee/analysis",
+                        "permission": "kuaimi:oee:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "设备利用率",
+                        "path": "/apps/kuaimi/oee/utilization",
+                        "permission": "kuaimi:oee:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "设备性能",
+                        "path": "/apps/kuaimi/oee/performance",
+                        "permission": "kuaimi:oee:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "工艺优化",
+                "path": "/apps/kuaimi/process",
+                "icon": "experiment",
+                "sort_order": 3,
+                "children": [{
+                        "title": "参数分析",
+                        "path": "/apps/kuaimi/process/parameter",
+                        "permission": "kuaimi:process:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "优化建议",
+                        "path": "/apps/kuaimi/process/optimization",
+                        "permission": "kuaimi:process:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "工艺改进",
+                        "path": "/apps/kuaimi/process/improvement",
+                        "permission": "kuaimi:process:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "质量预测",
+                "path": "/apps/kuaimi/quality",
+                "icon": "safety-certificate",
+                "sort_order": 4,
+                "children": [{
+                        "title": "趋势预测",
+                        "path": "/apps/kuaimi/quality/trend",
+                        "permission": "kuaimi:quality:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "质量预警",
+                        "path": "/apps/kuaimi/quality/alert",
+                        "permission": "kuaimi:quality:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "根因分析",
+                        "path": "/apps/kuaimi/quality/root-cause",
+                        "permission": "kuaimi:quality:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "系统绩效",
+                "path": "/apps/kuaimi/performance",
+                "icon": "trophy",
+                "sort_order": 5,
+                "children": [{
+                        "title": "使用效果",
+                        "path": "/apps/kuaimi/performance/usage",
+                        "permission": "kuaimi:performance:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "流程改善",
+                        "path": "/apps/kuaimi/performance/improvement",
+                        "permission": "kuaimi:performance:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "ROI分析",
+                        "path": "/apps/kuaimi/performance/roi",
+                        "permission": "kuaimi:performance:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "价值评估",
+                        "path": "/apps/kuaimi/performance/value",
+                        "permission": "kuaimi:performance:view",
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "优化建议",
+                        "path": "/apps/kuaimi/performance/suggestions",
+                        "permission": "kuaimi:performance:view",
+                        "sort_order": 5
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaimi:dashboard:view",
+        "kuaimi:oee:view",
+        "kuaimi:process:view",
+        "kuaimi:quality:view",
+        "kuaimi:performance:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}
