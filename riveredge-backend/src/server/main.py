@@ -83,6 +83,9 @@ from apps.kuaiwms.api.router import router as kuaiwms_router
 from apps.kuaimes.api.router import router as kuaimes_router
 from apps.kuaiqms.api.router import router as kuaiqms_router
 from apps.kuaieam.api.router import router as kuaieam_router
+from apps.kuaitms.api.router import router as kuaitms_router
+from apps.kuaiacc.api.router import router as kuaiacc_router
+from apps.kuaihrm.api.router import router as kuaihrm_router
 
 # Inngest 集成
 from core.inngest.client import inngest_client
@@ -386,6 +389,9 @@ app.include_router(kuaiwms_router, prefix="/api/v1")
 app.include_router(kuaimes_router, prefix="/api/v1")
 app.include_router(kuaiqms_router, prefix="/api/v1")
 app.include_router(kuaieam_router, prefix="/api/v1")
+app.include_router(kuaitms_router, prefix="/api/v1")
+app.include_router(kuaiacc_router, prefix="/api/v1")
+app.include_router(kuaihrm_router, prefix="/api/v1")
 
 # Inngest 测试端点
 @app.post("/api/v1/test/inngest")
