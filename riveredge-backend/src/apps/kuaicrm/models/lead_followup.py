@@ -32,7 +32,7 @@ class LeadFollowUp(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_lead_followups"
+        table = "apps_kuaicrm_lead_followups"
         indexes = [
             ("tenant_id",),
             ("lead_id",),

@@ -35,7 +35,7 @@ class Stocktake(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiwms_stocktakes"
+        table = "apps_kuaiwms_stocktakes"
         indexes = [
             ("tenant_id",),
             ("stocktake_no",),

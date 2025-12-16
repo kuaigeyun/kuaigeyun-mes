@@ -45,7 +45,7 @@ class OEEAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimi_oee_analyses"
+        table = "apps_kuaimi_oee_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),

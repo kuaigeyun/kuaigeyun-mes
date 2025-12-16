@@ -38,7 +38,7 @@ class DataInterface(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaaiot_data_interfaces"
+        table = "apps_kuaaiot_data_interfaces"
         indexes = [
             ("tenant_id",),
             ("interface_no",),

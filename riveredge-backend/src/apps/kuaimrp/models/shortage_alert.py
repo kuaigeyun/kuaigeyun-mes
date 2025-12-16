@@ -36,7 +36,7 @@ class ShortageAlert(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimrp_shortage_alerts"
+        table = "apps_kuaimrp_shortage_alerts"
         indexes = [
             ("tenant_id",),
             ("alert_no",),

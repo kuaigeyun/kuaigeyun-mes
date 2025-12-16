@@ -38,7 +38,7 @@ class Lead(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_leads"
+        table = "apps_kuaicrm_leads"
         indexes = [
             ("tenant_id",),
             ("lead_no",),

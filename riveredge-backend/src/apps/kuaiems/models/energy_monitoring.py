@@ -43,7 +43,7 @@ class EnergyMonitoring(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiems_energy_monitorings"
+        table = "apps_kuaiems_energy_monitorings"
         indexes = [
             ("tenant_id",),
             ("monitoring_no",),

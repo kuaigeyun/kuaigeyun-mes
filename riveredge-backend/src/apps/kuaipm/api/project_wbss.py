@@ -15,7 +15,7 @@ from apps.kuaipm.schemas.project_wbs_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/project-wbs", tags=["项目WBS"])
+router = APIRouter(prefix="/project-wbs", tags=["Project WBS"])
 
 
 @router.post("", response_model=ProjectWBSResponse, summary="创建项目WBS")

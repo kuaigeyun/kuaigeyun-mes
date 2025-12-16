@@ -40,7 +40,7 @@ class Voucher(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_vouchers"
+        table = "apps_kuaiacc_vouchers"
         indexes = [
             ("tenant_id",),
             ("voucher_no",),
@@ -111,7 +111,7 @@ class VoucherEntry(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_voucher_entries"
+        table = "apps_kuaiacc_voucher_entries"
         indexes = [
             ("tenant_id",),
             ("voucher_id",),

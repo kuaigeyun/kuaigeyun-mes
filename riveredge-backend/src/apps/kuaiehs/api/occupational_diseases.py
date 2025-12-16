@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.occupational_disease_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/occupational-disease", tags=["职业病"])
+router = APIRouter(prefix="/occupational-disease", tags=["Occupational Diseases"])
 
 
 @router.post("", response_model=OccupationalDiseaseResponse, summary="创建职业病")

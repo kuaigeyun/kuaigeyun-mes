@@ -17,7 +17,7 @@ from apps.kuaiacc.api.actual_costs import router as actual_costs_router
 from apps.kuaiacc.api.cost_centers import router as cost_centers_router
 from apps.kuaiacc.api.financial_reports import router as financial_reports_router
 
-router = APIRouter(prefix="/kuaiacc", tags=["财务"])
+router = APIRouter(prefix="/kuaiacc", tags=["Finance"])
 
 # 注册子路由
 router.include_router(account_subjects_router)

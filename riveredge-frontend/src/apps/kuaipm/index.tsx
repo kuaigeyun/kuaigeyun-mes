@@ -15,12 +15,12 @@ import ProjectTasksPage from './pages/project-tasks';
 import ProjectResourcesPage from './pages/project-resources';
 
 // 项目执行页面
-import ProjectProgressPage from './pages/project-progresss';
+import ProjectProgressPage from './pages/project-progresses';
 import ProjectCostsPage from './pages/project-costs';
 
 // 项目监控页面
 import ProjectRisksPage from './pages/project-risks';
-import ProjectQualitysPage from './pages/project-qualitys';
+import ProjectQualitiesPage from './pages/project-qualities';
 
 const KuaipmApp: React.FC = () => {
   return (
@@ -35,12 +35,12 @@ const KuaipmApp: React.FC = () => {
       <Route path="project-resources" element={<ProjectResourcesPage />} />
       
       {/* 项目执行 */}
-      <Route path="project-progresss" element={<ProjectProgressPage />} />
+      <Route path="project-progresses" element={<ProjectProgressPage />} />
       <Route path="project-costs" element={<ProjectCostsPage />} />
       
       {/* 项目监控 */}
       <Route path="project-risks" element={<ProjectRisksPage />} />
-      <Route path="project-qualitys" element={<ProjectQualitysPage />} />
+      <Route path="project-qualities" element={<ProjectQualitiesPage />} />
       
       {/* 默认路由 */}
       <Route index element={<div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>快格轻PM</div>} />

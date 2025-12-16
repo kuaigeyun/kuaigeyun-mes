@@ -31,7 +31,7 @@ class Workshop(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_workshops"
+        table = "apps_master_data_workshops"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -82,7 +82,7 @@ class ProductionLine(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_production_lines"
+        table = "apps_master_data_production_lines"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -141,7 +141,7 @@ class Workstation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_workstations"
+        table = "apps_master_data_workstations"
         indexes = [
             ("tenant_id",),
             ("code",),

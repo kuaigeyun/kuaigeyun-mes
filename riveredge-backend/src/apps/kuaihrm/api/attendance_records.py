@@ -16,7 +16,7 @@ from apps.kuaihrm.schemas.attendance_record_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/attendance-records", tags=["打卡记录"])
+router = APIRouter(prefix="/attendance-records", tags=["Attendance Records"])
 
 
 @router.post("", response_model=AttendanceRecordResponse, summary="创建打卡记录")

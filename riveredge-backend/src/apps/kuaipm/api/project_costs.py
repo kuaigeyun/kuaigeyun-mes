@@ -15,7 +15,7 @@ from apps.kuaipm.schemas.project_cost_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/project-cost", tags=["项目成本"])
+router = APIRouter(prefix="/project-cost", tags=["Project Costs"])
 
 
 @router.post("", response_model=ProjectCostResponse, summary="创建项目成本")

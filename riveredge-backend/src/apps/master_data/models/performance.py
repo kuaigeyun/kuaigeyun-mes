@@ -32,7 +32,7 @@ class Holiday(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_holidays"
+        table = "apps_master_data_holidays"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -84,7 +84,7 @@ class Skill(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_skills"
+        table = "apps_master_data_skills"
         indexes = [
             ("tenant_id",),
             ("code",),

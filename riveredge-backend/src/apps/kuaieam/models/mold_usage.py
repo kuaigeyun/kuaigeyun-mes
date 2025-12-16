@@ -42,7 +42,7 @@ class MoldUsage(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_mold_usages"
+        table = "apps_kuaieam_mold_usages"
         indexes = [
             ("tenant_id",),
             ("usage_no",),

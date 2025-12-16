@@ -12,9 +12,9 @@ import type { ProxyOptions } from 'vite'
 // src 目录路径（当前目录）
 const srcPath = resolve(__dirname, '.')
 
-// public 目录路径（指向根目录的 public）
-// 从 src/ 到 public/：../ -> riveredge-frontend/, ../public -> public/
-const publicDir = resolve(__dirname, '../public')
+// static 目录路径（指向根目录的 static）
+// 从 src/ 到 static/：../ -> riveredge-frontend/, ../static -> static/
+const publicDir = resolve(__dirname, '../static')
 
 // Vite 插件：处理 src 文件中的 @ 别名（支持静态和动态导入）
 const srcAliasPlugin = () => {
@@ -64,21 +64,23 @@ const srcAliasPlugin = () => {
 export default defineConfig({
   // ⚠️ 关键修复：明确设置根目录，防止 Vite 监听父目录（包括后端目录）
   root: __dirname, // 限制 Vite 只监听当前目录（src），不监听父目录
-  // 指定 public 目录（指向根目录的 public）
+  // 指定 static 目录（指向根目录的 static，与后端保持一致）
   publicDir: publicDir,
   // 服务器配置 - 优化稳定性
   server: {
     // Windows 兼容性：在 Windows 上使用 127.0.0.1 而不是 0.0.0.0 或 localhost
     // localhost 在 Windows 上可能解析为 IPv6 的 ::1，导致 EACCES 权限错误
-    host: platform() === 'win32' ? '127.0.0.1' : '0.0.0.0', // Windows 使用 IPv4，其他系统允许外部访问
-    port: 3000, // 主入口端口（8000 在 Windows 保留端口范围内，改用 3000）
+    // 主机和端口从环境变量读取
+    host: process.env.VITE_HOST || (platform() === 'win32' ? '127.0.0.1' : '0.0.0.0'), // 从环境变量读取，Windows 默认使用 IPv4
+    port: parseInt(process.env.VITE_PORT || '8100', 10), // 从环境变量读取前端端口
     strictPort: false, // 如果端口被占用，自动寻找下一个可用端口
     open: false, // 不自动打开浏览器
     cors: true, // 启用CORS
     // ⚠️ 稳定性优化：代理配置（关键修复：添加错误处理，防止后端重启导致前端崩溃）
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:9000', // 强制使用IPv4地址，避免IPv6连接问题
+        // 后端服务地址从环境变量读取
+        target: process.env.VITE_API_TARGET || `http://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8200'}`,
         changeOrigin: true,
         secure: false,
         // ⚠️ 关键修复：增加超时时间，防止后端重启时连接超时
@@ -102,7 +104,7 @@ export default defineConfig({
       overlay: true, // 显示错误覆盖层
       // 启用 HMR，使用 WebSocket
       protocol: 'ws',
-      host: 'localhost',
+      host: process.env.VITE_HMR_HOST || 'localhost', // 从环境变量读取 HMR 主机
       // 不指定固定端口，让 Vite 自动选择（避免端口冲突）
       clientPort: undefined,
       // ⚠️ 稳定性优化：增加 HMR 超时时间

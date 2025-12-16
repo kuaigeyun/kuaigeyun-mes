@@ -39,7 +39,7 @@ class AttendanceRule(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_attendance_rules"
+        table = "apps_kuaihrm_attendance_rules"
         indexes = [
             ("tenant_id",),
             ("rule_code",),
@@ -116,7 +116,7 @@ class AttendanceRecord(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_attendance_records"
+        table = "apps_kuaihrm_attendance_records"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -195,7 +195,7 @@ class LeaveApplication(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_leave_applications"
+        table = "apps_kuaihrm_leave_applications"
         indexes = [
             ("tenant_id",),
             ("application_no",),
@@ -267,7 +267,7 @@ class OvertimeApplication(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_overtime_applications"
+        table = "apps_kuaihrm_overtime_applications"
         indexes = [
             ("tenant_id",),
             ("application_no",),
@@ -336,7 +336,7 @@ class AttendanceStatistics(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_attendance_statistics"
+        table = "apps_kuaihrm_attendance_statistics"
         indexes = [
             ("tenant_id",),
             ("uuid",),

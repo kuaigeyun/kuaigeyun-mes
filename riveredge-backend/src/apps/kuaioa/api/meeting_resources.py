@@ -15,7 +15,7 @@ from apps.kuaioa.schemas.meeting_resource_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/meeting-resource", tags=["会议资源"])
+router = APIRouter(prefix="/meeting-resource", tags=["Meeting Resources"])
 
 
 @router.post("", response_model=MeetingResourceResponse, summary="创建会议资源")

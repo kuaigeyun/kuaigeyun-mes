@@ -9,7 +9,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 def setup_logger() -> None:

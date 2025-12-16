@@ -47,7 +47,7 @@ class FailureHandling(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_failure_handlings"
+        table = "apps_kuaieam_failure_handlings"
         indexes = [
             ("tenant_id",),
             ("handling_no",),

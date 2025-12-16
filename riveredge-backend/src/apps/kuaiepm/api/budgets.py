@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.budget_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/budget", tags=["预算"])
+router = APIRouter(prefix="/budget", tags=["Budgets"])
 
 
 @router.post("", response_model=BudgetResponse, summary="创建预算")

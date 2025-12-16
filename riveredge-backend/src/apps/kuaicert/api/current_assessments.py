@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.current_assessment_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/current-assessment", tags=["现状评估"])
+router = APIRouter(prefix="/current-assessment", tags=["Current Assessments"])
 
 
 @router.post("", response_model=CurrentAssessmentResponse, summary="创建现状评估")

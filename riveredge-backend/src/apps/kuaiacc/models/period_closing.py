@@ -38,7 +38,7 @@ class PeriodClosing(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_period_closings"
+        table = "apps_kuaiacc_period_closings"
         indexes = [
             ("tenant_id",),
             ("closing_no",),

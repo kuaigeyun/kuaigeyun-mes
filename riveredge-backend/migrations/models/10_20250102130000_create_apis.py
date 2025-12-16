@@ -30,6 +30,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "root_apis" IS '接口表';
         
         -- 创建接口表索引
         CREATE INDEX IF NOT EXISTS "idx_root_apis_tenant_id" ON "root_apis" ("tenant_id");

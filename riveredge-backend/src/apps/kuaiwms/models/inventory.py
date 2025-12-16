@@ -40,7 +40,7 @@ class Inventory(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiwms_inventories"
+        table = "apps_kuaiwms_inventories"
         indexes = [
             ("tenant_id",),
             ("material_id",),

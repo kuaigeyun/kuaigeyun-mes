@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.occupational_health_check_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/occupational-health-check", tags=["职业健康检查"])
+router = APIRouter(prefix="/occupational-health-check", tags=["Occupational Health Checks"])
 
 
 @router.post("", response_model=OccupationalHealthCheckResponse, summary="创建职业健康检查")

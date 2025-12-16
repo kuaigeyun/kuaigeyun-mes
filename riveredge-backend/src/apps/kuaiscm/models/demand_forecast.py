@@ -44,7 +44,7 @@ class DemandForecast(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiscm_demand_forecasts"
+        table = "apps_kuaiscm_demand_forecasts"
         indexes = [
             ("tenant_id",),
             ("forecast_no",),

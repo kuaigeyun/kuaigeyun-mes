@@ -20,8 +20,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     
-    /* Path mapping */
-    "baseUrl": ".",
+    /* Path mapping - TypeScript 6.0+ 推荐方式 */
+    /* 注意：使用 moduleResolution: "bundler" 时，可以直接使用 paths 而不需要 baseUrl */
     "paths": {
       "@/*": ["./src/*"]
     }

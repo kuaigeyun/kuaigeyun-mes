@@ -6,7 +6,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { receiptApi } from '../../services/process';
 import type { Receipt, ReceiptCreate } from '../../types/process';
 

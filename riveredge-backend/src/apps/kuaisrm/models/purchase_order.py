@@ -37,7 +37,7 @@ class PurchaseOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaisrm_purchase_orders"
+        table = "apps_kuaisrm_purchase_orders"
         indexes = [
             ("tenant_id",),
             ("order_no",),

@@ -8,7 +8,7 @@ import psycopg2
 import psycopg2.extras
 from typing import Optional, Dict, Any, List
 from contextlib import contextmanager
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -97,15 +97,15 @@ def authenticate_user(username: str, password: str, tenant_id: Optional[int] = N
                 # 优先查找超级管理员
                 if username == "superadmin":
                     cur.execute("""
-                        SELECT id, username, email, password_hash::text, is_platform_admin, is_active, tenant_id
+                        SELECT id, username, email, password_hash::text, is_infra_admin, is_active, tenant_id
                         FROM core_users
-                        WHERE username = %s AND tenant_id IS NULL AND is_platform_admin = true
+                        WHERE username = %s AND tenant_id IS NULL AND is_infra_admin = true
                     """, (username,))
 
                 else:
                     # 查找普通用户
                     cur.execute("""
-                        SELECT id, username, email, password_hash::text, is_platform_admin, is_active, tenant_id, is_tenant_admin
+                        SELECT id, username, email, password_hash::text, is_infra_admin, is_active, tenant_id, is_tenant_admin
                         FROM core_users
                         WHERE username = %s AND tenant_id = %s
                     """, (username, tenant_id or 1))

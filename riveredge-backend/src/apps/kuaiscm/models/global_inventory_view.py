@@ -44,7 +44,7 @@ class GlobalInventoryView(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiscm_global_inventory_views"
+        table = "apps_kuaiscm_global_inventory_views"
         indexes = [
             ("tenant_id",),
             ("view_no",),

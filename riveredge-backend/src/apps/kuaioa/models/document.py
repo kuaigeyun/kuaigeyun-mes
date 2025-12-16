@@ -40,7 +40,7 @@ class Document(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_documents"
+        table = "apps_kuaioa_documents"
         indexes = [
             ("tenant_id",),
             ("document_no",),
@@ -110,7 +110,7 @@ class DocumentVersion(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_document_versions"
+        table = "apps_kuaioa_document_versions"
         indexes = [
             ("tenant_id",),
             ("version_no",),

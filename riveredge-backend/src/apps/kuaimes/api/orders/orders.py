@@ -1,100 +1,101 @@
 """
-生产订单 API 路由
+生产订单 API 模块
 
-提供生产订单的 CRUD 操作。
+提供生产订单的 RESTful API 接口，支持多组织隔离。
+注意：参数顺序为 路径参数 → Depends参数 → Query参数
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import List, Optional, Annotated
 
-from apps.kuaimes.schemas.order import OrderCreate, OrderUpdate, OrderResponse
+from core.api.deps.deps import get_current_user, get_current_tenant
+from infra.models.user import User
 from apps.kuaimes.services.order_service import OrderService
-from core.api.deps.deps import get_current_tenant
+from apps.kuaimes.schemas.order_schemas import (
+    OrderCreate, OrderUpdate, OrderResponse
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/kuaimes/orders", tags=["Kuaimes Orders"])
+router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED, summary="创建生产订单")
 async def create_order(
     data: OrderCreate,
-    tenant_id: int = Depends(get_current_tenant),
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
-    """
-    创建生产订单
-    
-    Args:
-        data: 订单创建数据
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        OrderResponse: 创建的订单对象
-    """
+    """创建生产订单"""
     try:
-        order = await OrderService.create_order(
-            tenant_id=tenant_id,
-            data=data
-        )
-        return OrderResponse.model_validate(order)
+        return await OrderService.create_order(tenant_id, data)
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("", response_model=List[OrderResponse])
+@router.get("", response_model=List[OrderResponse], summary="获取生产订单列表")
 async def list_orders(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    tenant_id: int = Depends(get_current_tenant),
+    status: Optional[str] = Query(None, description="订单状态（过滤）"),
+    order_type: Optional[str] = Query(None, description="订单类型（过滤）"),
+    product_id: Optional[int] = Query(None, description="产品ID（过滤）")
 ):
-    """
-    获取生产订单列表
-    
-    Args:
-        skip: 跳过数量
-        limit: 限制数量
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        List[OrderResponse]: 订单列表
-    """
-    orders = await OrderService.list_orders(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit
-    )
-    return [OrderResponse.model_validate(order) for order in orders]
+    """获取生产订单列表"""
+    return await OrderService.list_orders(tenant_id, skip, limit, status, order_type, product_id)
 
 
-@router.get("/{uuid}", response_model=OrderResponse)
+@router.get("/{order_uuid}", response_model=OrderResponse, summary="获取生产订单详情")
 async def get_order(
-    uuid: str,
-    tenant_id: int = Depends(get_current_tenant),
+    order_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
-    """
-    获取生产订单详情
-    
-    Args:
-        uuid: 订单UUID
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        OrderResponse: 订单对象
-        
-    Raises:
-        HTTPException: 当订单不存在时抛出
-    """
+    """根据UUID获取生产订单详情"""
     try:
-        order = await OrderService.get_order_by_uuid(
-            tenant_id=tenant_id,
-            uuid=uuid
-        )
-        return OrderResponse.model_validate(order)
+        return await OrderService.get_order_by_uuid(tenant_id, order_uuid)
     except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
+
+@router.put("/{order_uuid}", response_model=OrderResponse, summary="更新生产订单")
+async def update_order(
+    order_uuid: str,
+    data: OrderUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """更新生产订单"""
+    try:
+        return await OrderService.update_order(tenant_id, order_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{order_uuid}", status_code=status.HTTP_204_NO_CONTENT, summary="删除生产订单")
+async def delete_order(
+    order_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """删除生产订单（软删除）"""
+    try:
+        await OrderService.delete_order(tenant_id, order_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{order_uuid}/confirm", response_model=OrderResponse, summary="确认生产订单")
+async def confirm_order(
+    order_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """确认生产订单（下发到车间）"""
+    try:
+        return await OrderService.confirm_order(tenant_id, order_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

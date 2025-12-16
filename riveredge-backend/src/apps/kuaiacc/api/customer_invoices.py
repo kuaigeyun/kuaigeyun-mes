@@ -16,7 +16,7 @@ from apps.kuaiacc.schemas.customer_invoice_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/customer-invoices", tags=["客户发票"])
+router = APIRouter(prefix="/customer-invoices", tags=["Customer Invoices"])
 
 
 @router.post("", response_model=CustomerInvoiceResponse, summary="创建客户发票")

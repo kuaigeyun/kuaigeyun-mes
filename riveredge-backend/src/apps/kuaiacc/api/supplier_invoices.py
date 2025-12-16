@@ -16,7 +16,7 @@ from apps.kuaiacc.schemas.supplier_invoice_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/supplier-invoices", tags=["供应商发票"])
+router = APIRouter(prefix="/supplier-invoices", tags=["Supplier Invoices"])
 
 
 @router.post("", response_model=SupplierInvoiceResponse, summary="创建供应商发票")

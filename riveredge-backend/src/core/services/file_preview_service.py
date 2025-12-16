@@ -4,7 +4,7 @@
 提供文件预览功能，支持简单预览和 kkFileView 预览两种模式。
 """
 
-import jwt
+from jose import JWTError, jwt
 import httpx
 import random
 from typing import Dict, Any, Optional, List
@@ -13,7 +13,7 @@ from loguru import logger
 
 from core.models.file import File
 from core.services.system_parameter_service import SystemParameterService
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 from infra.infrastructure.cache.cache_manager import cache_manager
 
 
@@ -25,9 +25,9 @@ class FilePreviewService:
     """
     
     # kkFileView 服务地址（从配置读取）
-    KKFILEVIEW_URL = getattr(settings, "KKFILEVIEW_URL", "http://localhost:8012")
-    # JWT 密钥（从配置读取）
-    TOKEN_SECRET = getattr(settings, "SECRET_KEY", "your-secret-key")
+    KKFILEVIEW_URL = getattr(settings, "KKFILEVIEW_URL", "http://localhost:8400")
+    # JWT 密钥（从配置读取，使用 JWT_SECRET_KEY）
+    TOKEN_SECRET = getattr(settings, "JWT_SECRET_KEY", getattr(settings, "SECRET_KEY", "your-secret-key"))
     # Token 过期时间（秒）
     TOKEN_EXPIRES_IN = 3600  # 1小时
     
@@ -91,10 +91,13 @@ class FilePreviewService:
                 algorithms=["HS256"]
             )
             return payload
-        except jwt.ExpiredSignatureError:
-            raise ValueError("预览token已过期")
-        except jwt.InvalidTokenError:
-            raise ValueError("预览token无效")
+        except JWTError as e:
+            # python-jose 的 JWTError 包含所有 JWT 相关错误（过期、无效等）
+            error_msg = str(e).lower()
+            if "expired" in error_msg or "exp" in error_msg:
+                raise ValueError("预览token已过期")
+            else:
+                raise ValueError("预览token无效")
     
     @staticmethod
     async def _get_kkfileview_enabled(tenant_id: int) -> bool:
@@ -341,10 +344,11 @@ class FilePreviewService:
         
         # 方式2：文件在私有存储，通过代理URL访问
         # 生成文件下载代理URL（包含权限验证）
-        base_url = getattr(settings, "BASE_URL", "http://localhost:9000")
+        # 从配置获取 BASE_URL（自动从 HOST 和 PORT 生成）
+        base_url = settings.BASE_URL
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
         proxy_url = (
-            f"{base_url}/api/v1/system/files/{file_uuid}/download"
+            f"{base_url}/api/v1/core/files/{file_uuid}/download"
             f"?token={token}"
         )
         
@@ -367,11 +371,12 @@ class FilePreviewService:
         Returns:
             str: 预览URL
         """
-        base_url = getattr(settings, "BASE_URL", "http://localhost:9000")
+        # 从配置获取 BASE_URL（自动从 HOST 和 PORT 生成）
+        base_url = settings.BASE_URL
         # 生成文件访问URL（包含权限验证token）
         token = FilePreviewService._generate_preview_token(file_uuid, tenant_id)
         preview_url = (
-            f"{base_url}/api/v1/system/files/{file_uuid}/download"
+            f"{base_url}/api/v1/core/files/{file_uuid}/download"
             f"?token={token}"
         )
         return preview_url

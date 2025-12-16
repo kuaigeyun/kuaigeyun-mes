@@ -148,7 +148,7 @@ async def get_current_user_info(
         tenant_id=current_user.tenant_id,
         tenant_name=tenant_name,  # ⚠️ 关键修复：返回租户名称
         is_active=current_user.is_active,
-        is_platform_admin=current_user.is_platform_admin,
+        is_infra_admin=current_user.is_infra_admin,
         is_tenant_admin=current_user.is_tenant_admin,
     )
 

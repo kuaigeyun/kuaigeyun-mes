@@ -17,7 +17,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.file import File
 from core.schemas.file import FileCreate, FileUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 class FileService:

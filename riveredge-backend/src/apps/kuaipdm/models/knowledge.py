@@ -38,7 +38,7 @@ class Knowledge(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipdm_knowledges"
+        table = "apps_kuaipdm_knowledges"
         indexes = [
             ("tenant_id",),
             ("knowledge_no",),

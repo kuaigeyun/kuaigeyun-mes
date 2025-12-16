@@ -7,7 +7,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
 import { App, Drawer } from 'antd';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { inventoryApi } from '../../services/process';
 import type { Inventory } from '../../types/process';
 

@@ -43,7 +43,7 @@ class NonconformingProduct(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_nonconforming_products"
+        table = "apps_kuaiqms_nonconforming_products"
         indexes = [
             ("tenant_id",),
             ("record_no",),

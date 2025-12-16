@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.scoring_rule_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/scoring-rule", tags=["评分规则"])
+router = APIRouter(prefix="/scoring-rule", tags=["Scoring Rules"])
 
 
 @router.post("", response_model=ScoringRuleResponse, summary="创建评分规则")

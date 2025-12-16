@@ -47,7 +47,7 @@ class ReworkOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimes_rework_orders"
+        table = "apps_kuaimes_rework_orders"
         indexes = [
             ("tenant_id",),
             ("rework_order_no",),

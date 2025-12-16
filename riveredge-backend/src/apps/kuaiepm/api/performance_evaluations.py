@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.performance_evaluation_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/performance-evaluation", tags=["绩效评估"])
+router = APIRouter(prefix="/performance-evaluation", tags=["Performance Evaluations"])
 
 
 @router.post("", response_model=PerformanceEvaluationResponse, summary="创建绩效评估")

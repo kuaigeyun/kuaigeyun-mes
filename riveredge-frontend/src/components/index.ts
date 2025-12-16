@@ -4,16 +4,16 @@
  * 统一导出所有公共组件
  */
 
-export { default as TenantSelector } from './tenant_selector';
-export { default as TenantSelectionModal } from './tenant_selection_modal';
-export { default as TermsModal } from './terms_modal';
-export { QuerySearchButton, QuerySearchModal } from './riveredge_query';
-export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni_table';
-export type { UniTableProps } from './uni_table';
-export { default as UniImport } from './uni_import';
-export type { UniImportProps } from './uni_import';
-export { default as UniTabs } from './uni_tabs';
-export type { TabItem } from './uni_tabs';
+export { default as TenantSelector } from './tenant-selector';
+export { default as TenantSelectionModal } from './tenant-selection-modal';
+export { default as TermsModal } from './terms-modal';
+export { QuerySearchButton, QuerySearchModal } from './riveredge-query';
+export { UniTable, default as UniTableDefault, generateImportConfigFromColumns } from './uni-table';
+export type { UniTableProps } from './uni-table';
+export { default as UniImport } from './uni-import';
+export type { UniImportProps } from './uni-import';
+export { default as UniTabs } from './uni-tabs';
+export type { TabItem } from './uni-tabs';
 export { default as FileUploadComponent } from './file-upload';
 export type { FileUploadComponentProps } from './file-upload';
 export { default as VirtualList } from './virtual-list';

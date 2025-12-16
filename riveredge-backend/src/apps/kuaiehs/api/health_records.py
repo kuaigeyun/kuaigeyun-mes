@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.health_record_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/health-record", tags=["健康档案"])
+router = APIRouter(prefix="/health-record", tags=["Health Records"])
 
 
 @router.post("", response_model=HealthRecordResponse, summary="创建健康档案")

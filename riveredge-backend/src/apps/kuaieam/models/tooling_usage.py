@@ -42,7 +42,7 @@ class ToolingUsage(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_tooling_usages"
+        table = "apps_kuaieam_tooling_usages"
         indexes = [
             ("tenant_id",),
             ("usage_no",),

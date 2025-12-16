@@ -32,6 +32,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_root_applic_tenant__a1b2c3" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "root_applications" IS '应用表';
         
         -- 创建应用表索引
         CREATE INDEX IF NOT EXISTS "idx_root_applic_tenant__a1b2c3" ON "root_applications" ("tenant_id");

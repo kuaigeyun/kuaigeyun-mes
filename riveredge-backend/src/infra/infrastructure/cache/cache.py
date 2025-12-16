@@ -10,7 +10,7 @@ from loguru import logger
 from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
 
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 class Cache:

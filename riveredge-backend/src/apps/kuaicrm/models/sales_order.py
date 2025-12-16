@@ -36,7 +36,7 @@ class SalesOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_sales_orders"
+        table = "apps_kuaicrm_sales_orders"
         indexes = [
             ("tenant_id",),
             ("order_no",),

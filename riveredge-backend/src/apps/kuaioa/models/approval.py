@@ -32,7 +32,7 @@ class ApprovalProcess(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_approval_processes"
+        table = "apps_kuaioa_approval_processes"
         indexes = [
             ("tenant_id",),
             ("process_no",),
@@ -87,7 +87,7 @@ class ApprovalInstance(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_approval_instances"
+        table = "apps_kuaioa_approval_instances"
         indexes = [
             ("tenant_id",),
             ("instance_no",),
@@ -154,7 +154,7 @@ class ApprovalNode(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_approval_nodes"
+        table = "apps_kuaioa_approval_nodes"
         indexes = [
             ("tenant_id",),
             ("node_no",),

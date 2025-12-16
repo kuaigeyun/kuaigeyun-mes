@@ -15,7 +15,7 @@ from apps.master_data.api.supply_chain import router as supply_chain_router
 from apps.master_data.api.performance import router as performance_router
 
 # 创建主路由
-router = APIRouter(prefix="/apps/master-data", tags=["主数据管理"])
+router = APIRouter(prefix="/apps/master-data", tags=["Master Data Management"])
 
 # 注意：路由前缀使用 master-data（带连字符），因为这是 URL 路径
 # 但目录名使用 master_data（下划线），因为 Python 模块名不能有连字符

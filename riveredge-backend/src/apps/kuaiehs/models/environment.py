@@ -39,7 +39,7 @@ class EnvironmentMonitoring(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_environment_monitorings"
+        table = "apps_kuaiehs_environment_monitorings"
         indexes = [
             ("tenant_id",),
             ("monitoring_no",),
@@ -102,7 +102,7 @@ class EmissionManagement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_emission_managements"
+        table = "apps_kuaiehs_emission_managements"
         indexes = [
             ("tenant_id",),
             ("emission_no",),
@@ -163,7 +163,7 @@ class EnvironmentalCompliance(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_environmental_compliances"
+        table = "apps_kuaiehs_environmental_compliances"
         indexes = [
             ("tenant_id",),
             ("compliance_no",),
@@ -231,7 +231,7 @@ class EnvironmentalIncident(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_environmental_incidents"
+        table = "apps_kuaiehs_environmental_incidents"
         indexes = [
             ("tenant_id",),
             ("incident_no",),

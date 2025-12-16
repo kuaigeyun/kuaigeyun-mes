@@ -49,7 +49,7 @@ class DataManagement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuailims_data_managements"
+        table = "apps_kuailims_data_managements"
         indexes = [
             ("tenant_id",),
             ("data_no",),

@@ -40,7 +40,7 @@ class OccupationalHealthCheck(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_occupational_health_checks"
+        table = "apps_kuaiehs_occupational_health_checks"
         indexes = [
             ("tenant_id",),
             ("check_no",),
@@ -109,7 +109,7 @@ class OccupationalDisease(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_occupational_diseases"
+        table = "apps_kuaiehs_occupational_diseases"
         indexes = [
             ("tenant_id",),
             ("disease_no",),
@@ -178,7 +178,7 @@ class HealthRecord(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_health_records"
+        table = "apps_kuaiehs_health_records"
         indexes = [
             ("tenant_id",),
             ("record_no",),

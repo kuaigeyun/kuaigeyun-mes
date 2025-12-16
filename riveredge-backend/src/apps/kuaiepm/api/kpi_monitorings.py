@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.kpi_monitoring_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/kpi-monitoring", tags=["KPI监控"])
+router = APIRouter(prefix="/kpi-monitoring", tags=["KPI Monitoring"])
 
 
 @router.post("", response_model=KPIMonitoringResponse, summary="创建KPI监控")

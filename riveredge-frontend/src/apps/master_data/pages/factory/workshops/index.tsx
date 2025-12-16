@@ -18,7 +18,7 @@ const safeOptions = (options: any): any[] => {
 };
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, List, Typography, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { workshopApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, WorkshopUpdate } from '../../../types/factory';
 import { batchImport } from '@/utils/batchOperations';

@@ -47,7 +47,7 @@ class ReportManagement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuailims_report_managements"
+        table = "apps_kuailims_report_managements"
         indexes = [
             ("tenant_id",),
             ("report_no",),

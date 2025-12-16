@@ -45,7 +45,7 @@ class EnergySavingManagement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiems_energy_saving_managements"
+        table = "apps_kuaiems_energy_saving_managements"
         indexes = [
             ("tenant_id",),
             ("management_no",),

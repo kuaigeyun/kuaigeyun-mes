@@ -39,7 +39,7 @@ class SupplyChainNetwork(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiscm_supply_chain_networks"
+        table = "apps_kuaiscm_supply_chain_networks"
         indexes = [
             ("tenant_id",),
             ("network_no",),

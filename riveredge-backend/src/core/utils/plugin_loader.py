@@ -31,7 +31,7 @@ class PluginLoader:
         """
         try:
             # 构建插件模块路径
-            plugin_module_path = f"seed_{plugin_path.replace('/', '_').replace('-', '_')}"
+            plugin_module_path = f"apps_{plugin_path.replace('/', '_').replace('-', '_')}"
             
             # 构建插件 API 路径
             plugin_api_path = Path(__file__).parent.parent.parent.parent / "riveredge-apps" / plugin_path / "backend" / "src" / "api"
@@ -46,7 +46,7 @@ class PluginLoader:
             
             # 尝试导入插件路由
             # 这里需要根据实际插件结构来导入
-            # 例如：from seed_kuaimes.api.orders.orders import router as kuaimes_orders_router
+            # 例如：from apps_kuaimes.api.orders.orders import router as kuaimes_orders_router
             
             return None
         except Exception as e:
@@ -68,7 +68,7 @@ class PluginLoader:
         """
         try:
             # 构建插件模块路径
-            plugin_module_name = f"seed_{plugin_code}"
+            plugin_module_name = f"apps_{plugin_code}"
             
             # 构建插件后端路径
             plugin_backend_path = Path(__file__).parent.parent.parent.parent / "riveredge-apps" / plugin_path / "backend" / "src"
@@ -82,7 +82,7 @@ class PluginLoader:
             
             # 动态导入插件 API 路由
             # 这里需要根据实际插件结构来导入
-            # 例如：from seed_kuaimes.api.orders.orders import router as kuaimes_orders_router
+            # 例如：from apps_kuaimes.api.orders.orders import router as kuaimes_orders_router
             
             # 注册路由
             # app.include_router(kuaimes_orders_router, prefix="/api/v1")

@@ -47,7 +47,7 @@ class Project(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_projects"
+        table = "apps_kuaipm_projects"
         indexes = [
             ("tenant_id",),
             ("project_no",),
@@ -132,7 +132,7 @@ class ProjectApplication(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_applications"
+        table = "apps_kuaipm_project_applications"
         indexes = [
             ("tenant_id",),
             ("application_no",),
@@ -206,7 +206,7 @@ class ProjectWBS(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_wbs"
+        table = "apps_kuaipm_project_wbs"
         indexes = [
             ("tenant_id",),
             ("wbs_code",),
@@ -283,7 +283,7 @@ class ProjectTask(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_tasks"
+        table = "apps_kuaipm_project_tasks"
         indexes = [
             ("tenant_id",),
             ("task_no",),
@@ -369,7 +369,7 @@ class ProjectResource(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_resources"
+        table = "apps_kuaipm_project_resources"
         indexes = [
             ("tenant_id",),
             ("resource_no",),
@@ -445,7 +445,7 @@ class ProjectProgress(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_progresses"
+        table = "apps_kuaipm_project_progresses"
         indexes = [
             ("tenant_id",),
             ("progress_no",),
@@ -511,7 +511,7 @@ class ProjectCost(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_costs"
+        table = "apps_kuaipm_project_costs"
         indexes = [
             ("tenant_id",),
             ("cost_no",),
@@ -580,7 +580,7 @@ class ProjectRisk(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_risks"
+        table = "apps_kuaipm_project_risks"
         indexes = [
             ("tenant_id",),
             ("risk_no",),
@@ -657,7 +657,7 @@ class ProjectQuality(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipm_project_qualities"
+        table = "apps_kuaipm_project_qualities"
         indexes = [
             ("tenant_id",),
             ("quality_no",),

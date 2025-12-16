@@ -14,7 +14,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.api import API
 from core.schemas.api import APICreate, APIUpdate, APITestRequest
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 class APIService:

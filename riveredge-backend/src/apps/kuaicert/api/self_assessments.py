@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.self_assessment_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/self-assessment", tags=["自评打分"])
+router = APIRouter(prefix="/self-assessment", tags=["Self Assessments"])
 
 
 @router.post("", response_model=SelfAssessmentResponse, summary="创建自评打分")

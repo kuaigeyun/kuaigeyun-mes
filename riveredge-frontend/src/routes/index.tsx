@@ -15,10 +15,10 @@
  *   - /system/users - 账户管理
  * - 平台级路由（/platform/*）：平台超管登录后访问
  *   - /platform/operation - 平台运营看板
- *   - /platform/tenants - 租户管理
- *   - /platform/packages - 套餐管理
- *   - /platform/monitoring - 监控管理
- *   - /platform/admin - 平台超级管理员管理
+ *   - /infra/tenants - 租户管理
+ *   - /infra/packages - 套餐管理
+ *   - /infra/monitoring - 监控管理
+ *   - /infra/admin - 平台超级管理员管理
  */
 
 import React, { Suspense, lazy, useEffect, useState } from 'react';
@@ -111,7 +111,7 @@ const DataBackupsPage = lazy(() => import('../pages/system/data-backups'));
 const PlatformDashboardPage = lazy(() => import('../pages/platform/operation'));
 const TenantListPage = lazy(() => import('../pages/platform/tenants/list'));
 const TenantDetailPage = lazy(() => import('../pages/platform/tenants/detail'));
-const PlatformSuperAdminPage = lazy(() => import('../pages/platform'));
+const InfraSuperAdminPage = lazy(() => import('../pages/platform'));
 const PackageManagementPage = lazy(() => import('../pages/platform/packages'));
 const MonitoringPage = lazy(() => import('../pages/platform/monitoring'));
 
@@ -537,7 +537,7 @@ const AppRoutes: React.FC = () => {
       />
       {/* Inngest Dashboard */}
       <Route
-        path="/platform/inngest"
+        path="/infra/inngest"
         element={
           <LayoutWrapper>
             <InngestDashboardPage />
@@ -584,7 +584,7 @@ const AppRoutes: React.FC = () => {
       {/* ==================== 平台级路由（平台超管登录后访问） ==================== */}
       {/* 平台运营看板 */}
       <Route
-        path="/platform/operation"
+        path="/infra/operation"
         element={
           <LayoutWrapper>
             <PlatformDashboardPage />
@@ -593,7 +593,7 @@ const AppRoutes: React.FC = () => {
       />
       {/* 租户管理 */}
       <Route
-        path="/platform/tenants"
+        path="/infra/tenants"
         element={
           <LayoutWrapper>
             <TenantListPage />
@@ -601,7 +601,7 @@ const AppRoutes: React.FC = () => {
         }
       />
       <Route
-        path="/platform/tenants/detail"
+        path="/infra/tenants/detail"
         element={
           <LayoutWrapper>
             <TenantDetailPage />
@@ -610,7 +610,7 @@ const AppRoutes: React.FC = () => {
       />
       {/* 套餐管理 */}
       <Route
-        path="/platform/packages"
+        path="/infra/packages"
         element={
           <LayoutWrapper>
             <PackageManagementPage />
@@ -619,7 +619,7 @@ const AppRoutes: React.FC = () => {
       />
       {/* 监控管理 */}
       <Route
-        path="/platform/monitoring"
+        path="/infra/monitoring"
         element={
           <LayoutWrapper>
             <MonitoringPage />
@@ -628,10 +628,10 @@ const AppRoutes: React.FC = () => {
       />
       {/* 平台超级管理员管理 */}
       <Route
-        path="/platform/admin"
+        path="/infra/admin"
         element={
           <LayoutWrapper>
-            <PlatformSuperAdminPage />
+            <InfraSuperAdminPage />
           </LayoutWrapper>
         }
       />
@@ -662,12 +662,12 @@ const AppRoutes: React.FC = () => {
       <Route path="/system/positions/list" element={<Navigate to="/system/positions" replace />} />
       
       {/* 旧的平台级路由重定向 */}
-      <Route path="/platform/dashboard" element={<Navigate to="/platform/operation" replace />} />
-      <Route path="/platform/p_dashboard" element={<Navigate to="/platform/operation" replace />} />
-      <Route path="/platform/login" element={<Navigate to="/platform" replace />} />
-      <Route path="/platform/platform/organization_manager" element={<Navigate to="/platform/tenants" replace />} />
-      <Route path="/platform/platform/organization_manager/detail" element={<Navigate to="/platform/tenants/detail" replace />} />
-      <Route path="/platform-superadmin" element={<Navigate to="/platform/admin" replace />} />
+      <Route path="/infra/dashboard" element={<Navigate to="/infra/operation" replace />} />
+      <Route path="/infra/p_dashboard" element={<Navigate to="/infra/operation" replace />} />
+      <Route path="/infra/login" element={<Navigate to="/platform" replace />} />
+      <Route path="/infra/platform/organization_manager" element={<Navigate to="/infra/tenants" replace />} />
+      <Route path="/infra/platform/organization_manager/detail" element={<Navigate to="/infra/tenants/detail" replace />} />
+      <Route path="/platform-superadmin" element={<Navigate to="/infra/admin" replace />} />
 
       {/* ==================== 插件应用路由（动态加载） ==================== */}
       {pluginRoutesLoading ? (

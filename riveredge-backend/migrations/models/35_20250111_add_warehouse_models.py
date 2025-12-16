@@ -10,7 +10,7 @@ from tortoise import BaseDBAsyncClient
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
         -- 创建仓库表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_warehouses" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_warehouses" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -22,14 +22,15 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_warehouses_tenant_code" ON "seed_master_data_warehouses" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_warehouses_tenant_id" ON "seed_master_data_warehouses" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_warehouses_code" ON "seed_master_data_warehouses" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_warehouses_uuid" ON "seed_master_data_warehouses" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_warehouses_created_at" ON "seed_master_data_warehouses" ("created_at");
+COMMENT ON TABLE "apps_master_data_warehouses" IS '仓库表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_warehouses_tenant_code" ON "apps_master_data_warehouses" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_warehouses_tenant_id" ON "apps_master_data_warehouses" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_warehouses_code" ON "apps_master_data_warehouses" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_warehouses_uuid" ON "apps_master_data_warehouses" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_warehouses_created_at" ON "apps_master_data_warehouses" ("created_at");
 
         -- 创建库区表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_storage_areas" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_storage_areas" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -42,17 +43,18 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_storage_areas_tenant_code" ON "seed_master_data_storage_areas" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_areas_tenant_id" ON "seed_master_data_storage_areas" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_areas_code" ON "seed_master_data_storage_areas" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_areas_uuid" ON "seed_master_data_storage_areas" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_areas_warehouse_id" ON "seed_master_data_storage_areas" ("warehouse_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_areas_created_at" ON "seed_master_data_storage_areas" ("created_at");
+COMMENT ON TABLE "apps_master_data_storage_areas" IS '存储区域表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_storage_areas_tenant_code" ON "apps_master_data_storage_areas" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_areas_tenant_id" ON "apps_master_data_storage_areas" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_areas_code" ON "apps_master_data_storage_areas" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_areas_uuid" ON "apps_master_data_storage_areas" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_areas_warehouse_id" ON "apps_master_data_storage_areas" ("warehouse_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_areas_created_at" ON "apps_master_data_storage_areas" ("created_at");
         -- 添加外键约束
-        ALTER TABLE "seed_master_data_storage_areas" ADD CONSTRAINT "fk_seed_master_data_storage_areas_warehouse_id" FOREIGN KEY ("warehouse_id") REFERENCES "seed_master_data_warehouses" ("id") ON DELETE RESTRICT;
+        ALTER TABLE "apps_master_data_storage_areas" ADD CONSTRAINT "fk_apps_master_data_storage_areas_warehouse_id" FOREIGN KEY ("warehouse_id") REFERENCES "apps_master_data_warehouses" ("id") ON DELETE RESTRICT;
 
         -- 创建库位表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_storage_locations" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_storage_locations" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -65,26 +67,27 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_storage_locations_tenant_code" ON "seed_master_data_storage_locations" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_locations_tenant_id" ON "seed_master_data_storage_locations" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_locations_code" ON "seed_master_data_storage_locations" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_locations_uuid" ON "seed_master_data_storage_locations" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_locations_storage_area_id" ON "seed_master_data_storage_locations" ("storage_area_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_storage_locations_created_at" ON "seed_master_data_storage_locations" ("created_at");
+COMMENT ON TABLE "apps_master_data_storage_locations" IS '存储位置表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_storage_locations_tenant_code" ON "apps_master_data_storage_locations" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_locations_tenant_id" ON "apps_master_data_storage_locations" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_locations_code" ON "apps_master_data_storage_locations" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_locations_uuid" ON "apps_master_data_storage_locations" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_locations_storage_area_id" ON "apps_master_data_storage_locations" ("storage_area_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_storage_locations_created_at" ON "apps_master_data_storage_locations" ("created_at");
         -- 添加外键约束
-        ALTER TABLE "seed_master_data_storage_locations" ADD CONSTRAINT "fk_seed_master_data_storage_locations_storage_area_id" FOREIGN KEY ("storage_area_id") REFERENCES "seed_master_data_storage_areas" ("id") ON DELETE RESTRICT;
+        ALTER TABLE "apps_master_data_storage_locations" ADD CONSTRAINT "fk_apps_master_data_storage_locations_storage_area_id" FOREIGN KEY ("storage_area_id") REFERENCES "apps_master_data_storage_areas" ("id") ON DELETE RESTRICT;
     """
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
         -- 删除库位表
-        DROP TABLE IF EXISTS "seed_master_data_storage_locations" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_storage_locations" CASCADE;
 
         -- 删除库区表
-        DROP TABLE IF EXISTS "seed_master_data_storage_areas" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_storage_areas" CASCADE;
 
         -- 删除仓库表
-        DROP TABLE IF EXISTS "seed_master_data_warehouses" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_warehouses" CASCADE;
     """
 

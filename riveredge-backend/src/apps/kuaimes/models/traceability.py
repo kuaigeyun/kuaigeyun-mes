@@ -42,7 +42,7 @@ class Traceability(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimes_traceabilities"
+        table = "apps_kuaimes_traceabilities"
         indexes = [
             ("tenant_id",),
             ("trace_no",),

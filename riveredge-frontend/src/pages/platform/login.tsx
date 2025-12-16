@@ -9,7 +9,7 @@ import { Card, Form, Input, Button, message, App, ConfigProvider } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { platformSuperAdminLogin } from '../../services/platformAdmin';
+import { infraSuperAdminLogin } from '../../services/platformAdmin';
 import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { theme } from 'antd';
@@ -36,14 +36,14 @@ export default function PlatformLoginPage() {
 
   // 登录请求
   const loginMutation = useMutation({
-    mutationFn: (data: LoginFormData) => platformSuperAdminLogin(data),
+    mutationFn: (data: LoginFormData) => infraSuperAdminLogin(data),
     onSuccess: (response) => {
       // 保存认证信息
       setToken(response.access_token);
 
       setUserInfo({
         ...response.user,
-        user_type: 'platform_superadmin',
+        user_type: 'infra_superadmin',
       });
 
       // 设置默认租户 ID（如果返回了默认租户）
@@ -57,14 +57,14 @@ export default function PlatformLoginPage() {
         username: response.user.username,
         email: response.user.email,
         full_name: response.user.full_name,
-        is_platform_admin: true, // 平台超级管理员始终是平台管理
+        is_infra_admin: true, // 平台超级管理员始终是平台管理
         is_tenant_admin: false,
         tenant_id: response.default_tenant_id, // 使用默认租户 ID
       });
 
       messageApi.success('登录成功');
       // 登录成功后跳转到平台运营看板
-      navigate('/platform/operation', { replace: true });
+      navigate('/infra/operation', { replace: true });
     },
     onError: (error: any) => {
       messageApi.error(error?.message || '登录失败，请检查用户名和密码');

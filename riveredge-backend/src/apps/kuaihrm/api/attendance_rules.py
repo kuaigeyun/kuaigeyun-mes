@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.attendance_rule_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/attendance-rules", tags=["考勤规则"])
+router = APIRouter(prefix="/attendance-rules", tags=["Attendance Rules"])
 
 
 @router.post("", response_model=AttendanceRuleResponse, summary="创建考勤规则")

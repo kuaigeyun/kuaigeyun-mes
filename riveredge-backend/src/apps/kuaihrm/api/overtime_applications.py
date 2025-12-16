@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.overtime_application_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/overtime-applications", tags=["加班申请"])
+router = APIRouter(prefix="/overtime-applications", tags=["Overtime Applications"])
 
 
 @router.post("", response_model=OvertimeApplicationResponse, summary="创建加班申请")

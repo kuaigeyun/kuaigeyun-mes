@@ -28,6 +28,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_root_integra_tenant__b1c2d3" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "root_integration_configs" IS '集成配置表';
         
         -- 创建集成配置表索引
         CREATE INDEX IF NOT EXISTS "idx_root_integra_tenant__b1c2d3" ON "root_integration_configs" ("tenant_id");

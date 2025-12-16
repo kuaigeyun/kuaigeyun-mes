@@ -39,7 +39,7 @@ class SupplierEvaluation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaisrm_supplier_evaluations"
+        table = "apps_kuaisrm_supplier_evaluations"
         indexes = [
             ("tenant_id",),
             ("evaluation_no",),

@@ -36,7 +36,7 @@ class Budget(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_budgets"
+        table = "apps_kuaiepm_budgets"
         indexes = [
             ("tenant_id",),
             ("budget_no",),
@@ -101,7 +101,7 @@ class BudgetVariance(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_budget_variances"
+        table = "apps_kuaiepm_budget_variances"
         indexes = [
             ("tenant_id",),
             ("variance_no",),
@@ -173,7 +173,7 @@ class BudgetForecast(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_budget_forecasts"
+        table = "apps_kuaiepm_budget_forecasts"
         indexes = [
             ("tenant_id",),
             ("forecast_no",),

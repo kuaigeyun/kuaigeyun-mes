@@ -36,7 +36,7 @@ class InboundOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiwms_inbound_orders"
+        table = "apps_kuaiwms_inbound_orders"
         indexes = [
             ("tenant_id",),
             ("order_no",),

@@ -45,7 +45,7 @@ class MaintenanceWorkOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_maintenance_workorders"
+        table = "apps_kuaieam_maintenance_workorders"
         indexes = [
             ("tenant_id",),
             ("workorder_no",),

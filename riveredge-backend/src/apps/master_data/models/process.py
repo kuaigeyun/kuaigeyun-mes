@@ -32,7 +32,7 @@ class DefectType(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_defect_types"
+        table = "apps_master_data_defect_types"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -75,7 +75,7 @@ class SOPExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_sop_executions"
+        table = "apps_master_data_sop_executions"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -166,7 +166,7 @@ class Operation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_operations"
+        table = "apps_master_data_operations"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -207,7 +207,7 @@ class SOPExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_sop_executions"
+        table = "apps_master_data_sop_executions"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -299,7 +299,7 @@ class ProcessRoute(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_process_routes"
+        table = "apps_master_data_process_routes"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -343,7 +343,7 @@ class SOPExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_sop_executions"
+        table = "apps_master_data_sop_executions"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -437,7 +437,7 @@ class SOP(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_sop"
+        table = "apps_master_data_sop"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -497,7 +497,7 @@ class SOPExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_sop_executions"
+        table = "apps_master_data_sop_executions"
         indexes = [
             ("tenant_id",),
             ("uuid",),

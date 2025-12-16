@@ -39,7 +39,7 @@ class SensorConfiguration(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiiot_sensor_configurations"
+        table = "apps_kuaiiot_sensor_configurations"
         indexes = [
             ("tenant_id",),
             ("config_no",),

@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.certification_certificate_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/certification-certificate", tags=["认证证书"])
+router = APIRouter(prefix="/certification-certificate", tags=["Certification Certificates"])
 
 
 @router.post("", response_model=CertificationCertificateResponse, summary="创建认证证书")

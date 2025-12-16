@@ -51,12 +51,12 @@ import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadc
 import type { MenuProps } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import TenantSelector from '../components/tenant_selector';
-import UniTabs from '../components/uni_tabs';
+import TenantSelector from '../components/tenant-selector';
+import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import ThemeEditor from '../components/theme-editor';
 import { getCurrentUser } from '../services/auth';
-import { getCurrentPlatformSuperAdmin } from '../services/platformAdmin';
+import { getCurrentInfraSuperAdmin } from '../services/platformAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
@@ -74,14 +74,14 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 检查用户类型（平台超级管理员还是系统级用户）
   const userInfo = getUserInfo();
-  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin';
+  const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
 
   // 检查是否访问系统级页面
   const isSystemPage = location.pathname.startsWith('/system/');
   const currentTenantId = getTenantId();
 
   // 如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
-  if (isPlatformSuperAdmin && isSystemPage && !currentTenantId) {
+  if (isInfraSuperAdmin && isSystemPage && !currentTenantId) {
     message.warning('请先选择要管理的组织');
     // 重定向到平台首页，让用户先选择组织
     return <Navigate to="/platform" replace />;
@@ -95,20 +95,20 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 根据用户类型调用不同的接口
   const { data: userData, isLoading, error } = useQuery({
-    queryKey: ['currentUser', isPlatformSuperAdmin],
+    queryKey: ['currentUser', isInfraSuperAdmin],
     queryFn: async () => {
       // 优先使用 userInfo 判断用户类型
-      const shouldUsePlatformAPI = isPlatformSuperAdmin;
+      const shouldUsePlatformAPI = isInfraSuperAdmin;
 
       if (shouldUsePlatformAPI) {
         // 平台超级管理员：调用平台接口
-        const platformUser = await getCurrentPlatformSuperAdmin();
+        const platformUser = await getCurrentInfraSuperAdmin();
         return {
           id: platformUser.id,
           username: platformUser.username,
           email: platformUser.email,
           full_name: platformUser.full_name,
-          is_platform_admin: true, // 平台超级管理员始终是平台管理
+          is_infra_admin: true, // 平台超级管理员始终是平台管理
           is_tenant_admin: false,
           tenant_id: undefined,
         };
@@ -133,14 +133,14 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           username: savedUserInfo.username || 'admin',
           email: savedUserInfo.email,
           full_name: savedUserInfo.full_name,
-          is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
+          is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
         };
         setCurrentUser(restoredUser);
 
         // 如果是平台超级管理员，但后端接口失败，记录警告但不阻止访问
-        if (savedUserInfo.user_type === 'platform_superadmin') {
+        if (savedUserInfo.user_type === 'infra_superadmin') {
           console.warn('⚠️ 获取平台超级管理员信息失败，使用本地缓存:', error);
         } else {
           console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
@@ -176,7 +176,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
   const publicPaths = ['/login'];
   // 平台登录页是公开的，但其他平台页面需要登录
-  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
+  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/infra/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
 
   // 如果正在加载，显示加载状态
@@ -211,11 +211,11 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // 如果是公开页面且已登录，根据用户类型重定向
   if (isPublicPath && currentUser) {
     // 平台超管登录后，如果访问的是登录页，重定向到平台运营看板
-    if (isPlatformLoginPage && currentUser.is_platform_admin) {
-      return <Navigate to="/platform/operation" replace />;
+    if (isPlatformLoginPage && currentUser.is_infra_admin) {
+      return <Navigate to="/infra/operation" replace />;
     }
     // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
-    if (location.pathname === '/login' && !currentUser.is_platform_admin) {
+    if (location.pathname === '/login' && !currentUser.is_infra_admin) {
       return <Navigate to="/system/dashboard" replace />;
     }
   }
@@ -367,11 +367,11 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/online-users': ManufacturingIcons.safety,
       '/system/data-backups': ManufacturingIcons.warehouse,
       '/platform': ManufacturingIcons.operationsCenter, // 运营中心
-      '/platform/tenants': ManufacturingIcons.building,
-      '/platform/packages': ManufacturingIcons.shoppingBag,
-      '/platform/monitoring': ManufacturingIcons.analytics,
-      '/platform/inngest': ManufacturingIcons.automation,
-      '/platform/admin': ManufacturingIcons.quality,
+      '/infra/tenants': ManufacturingIcons.building,
+      '/infra/packages': ManufacturingIcons.shoppingBag,
+      '/infra/monitoring': ManufacturingIcons.analytics,
+      '/infra/inngest': ManufacturingIcons.automation,
+      '/infra/admin': ManufacturingIcons.quality,
       
       // MES 相关路径
       '/apps/kuaimes': ManufacturingIcons.production, // MES 制造执行系统（生产图标）
@@ -683,34 +683,34 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
     icon: getMenuIcon('运营中心', '/platform'),
     children: [
       {
-        path: '/platform/operation',
+        path: '/infra/operation',
         name: '运营看板',
-        icon: getMenuIcon('运营看板', '/platform/operation'),
+        icon: getMenuIcon('运营看板', '/infra/operation'),
       },
       {
-        path: '/platform/tenants',
+        path: '/infra/tenants',
         name: '组织管理',
-        icon: getMenuIcon('组织管理', '/platform/tenants'),
+        icon: getMenuIcon('组织管理', '/infra/tenants'),
       },
       {
-        path: '/platform/packages',
+        path: '/infra/packages',
         name: '套餐管理',
-        icon: getMenuIcon('套餐管理', '/platform/packages'),
+        icon: getMenuIcon('套餐管理', '/infra/packages'),
       },
       {
-        path: '/platform/monitoring',
+        path: '/infra/monitoring',
         name: t('menu.platform.monitoring') || '系统监控',
-        icon: getMenuIcon(t('menu.platform.monitoring') || '系统监控', '/platform/monitoring'),
+        icon: getMenuIcon(t('menu.platform.monitoring') || '系统监控', '/infra/monitoring'),
       },
       {
-        path: '/platform/inngest',
+        path: '/infra/inngest',
         name: t('menu.platform.inngest') || '流程后台',
-        icon: getMenuIcon(t('menu.platform.inngest') || '流程后台', '/platform/inngest'),
+        icon: getMenuIcon(t('menu.platform.inngest') || '流程后台', '/infra/inngest'),
       },
       {
-        path: '/platform/admin',
+        path: '/infra/admin',
         name: t('menu.platform.admin') || '平台管理',
-        icon: getMenuIcon(t('menu.platform.admin') || '平台管理', '/platform/admin'),
+        icon: getMenuIcon(t('menu.platform.admin') || '平台管理', '/infra/admin'),
       },
     ],
   },
@@ -1590,7 +1590,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     // 【第四组】运营中心：仅平台级管理员可见
-    if (!currentUser.is_platform_admin) {
+    if (!currentUser.is_infra_admin) {
       menuItems = menuItems.filter(item => item.path !== '/platform');
     }
 

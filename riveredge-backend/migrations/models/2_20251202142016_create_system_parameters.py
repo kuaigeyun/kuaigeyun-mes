@@ -25,6 +25,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_system_tenant__c9d4e5" UNIQUE ("tenant_id", "key")
         );
+        COMMENT ON TABLE "sys_system_parameters" IS '系统参数表';
         
         -- 创建系统参数表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_system_tenant__c9d4e5" ON "sys_system_parameters" ("tenant_id");

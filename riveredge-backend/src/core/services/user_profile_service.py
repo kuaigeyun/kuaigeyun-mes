@@ -9,7 +9,7 @@ from typing import Optional
 from uuid import UUID
 
 from infra.models.user import User
-from infra.models.platform_superadmin import PlatformSuperAdmin
+from infra.models.infra_superadmin import InfraSuperAdmin
 from core.schemas.user_profile import UserProfileUpdate, UserProfileResponse
 from core.services.file_service import FileService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, ValidationError
@@ -47,7 +47,7 @@ class UserProfileService:
         return UserProfileResponse.model_validate(user)
     
     @staticmethod
-    async def get_platform_superadmin_profile(
+    async def get_infra_superadmin_profile(
         admin_id: int
     ) -> UserProfileResponse:
         """
@@ -62,7 +62,7 @@ class UserProfileService:
         Raises:
             NotFoundError: 当平台超级管理员不存在时抛出
         """
-        admin = await PlatformSuperAdmin.get_or_none(id=admin_id)
+        admin = await InfraSuperAdmin.get_or_none(id=admin_id)
         
         if not admin:
             raise NotFoundError("平台超级管理员不存在")
@@ -71,7 +71,7 @@ class UserProfileService:
         # 注意：平台超级管理员没有 UUID，使用 id 转换为字符串
         from uuid import uuid5, NAMESPACE_DNS
         # 使用固定的命名空间和 admin.id 生成一个稳定的 UUID
-        admin_uuid = uuid5(NAMESPACE_DNS, f"platform_superadmin_{admin.id}")
+        admin_uuid = uuid5(NAMESPACE_DNS, f"infra_superadmin_{admin.id}")
         
         return UserProfileResponse(
             uuid=admin_uuid,
@@ -86,7 +86,7 @@ class UserProfileService:
         )
     
     @staticmethod
-    async def update_platform_superadmin_profile(
+    async def update_infra_superadmin_profile(
         admin_id: int,
         data: UserProfileUpdate,
         tenant_id: Optional[int] = None
@@ -105,7 +105,7 @@ class UserProfileService:
         Raises:
             NotFoundError: 当平台超级管理员不存在时抛出
         """
-        admin = await PlatformSuperAdmin.get_or_none(id=admin_id)
+        admin = await InfraSuperAdmin.get_or_none(id=admin_id)
         
         if not admin:
             raise NotFoundError("平台超级管理员不存在")
@@ -122,7 +122,7 @@ class UserProfileService:
             if new_username and new_username.strip():
                 new_username = new_username.strip()
                 # 检查全局是否已有其他平台超级管理员使用该用户名
-                existing_admin = await PlatformSuperAdmin.filter(
+                existing_admin = await InfraSuperAdmin.filter(
                     username=new_username
                 ).exclude(id=admin.id).first()
                 
@@ -159,7 +159,7 @@ class UserProfileService:
         
         # 构建响应
         from uuid import uuid5, NAMESPACE_DNS
-        admin_uuid = uuid5(NAMESPACE_DNS, f"platform_superadmin_{admin.id}")
+        admin_uuid = uuid5(NAMESPACE_DNS, f"infra_superadmin_{admin.id}")
         
         return UserProfileResponse(
             uuid=admin_uuid,

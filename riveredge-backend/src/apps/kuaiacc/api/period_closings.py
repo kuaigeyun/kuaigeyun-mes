@@ -15,7 +15,7 @@ from apps.kuaiacc.schemas.period_closing_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/period-closings", tags=["期末结账"])
+router = APIRouter(prefix="/period-closings", tags=["Period Closings"])
 
 
 @router.post("", response_model=PeriodClosingResponse, summary="创建期末结账")

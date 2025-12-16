@@ -25,6 +25,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        COMMENT ON TABLE "soil_platform_superadmin" IS '平台超级管理员表';
         CREATE INDEX IF NOT EXISTS "idx_soil_platfo_tenant__281c88" ON "soil_platform_superadmin" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_soil_platfo_usernam_84921b" ON "soil_platform_superadmin" ("username");
 
@@ -44,6 +45,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+COMMENT ON TABLE "soil_packages" IS '套餐表';
         CREATE INDEX IF NOT EXISTS "idx_soil_packag_tenant__e2698a" ON "soil_packages" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_soil_packag_plan_493a83" ON "soil_packages" ("plan");
 
@@ -63,6 +65,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+COMMENT ON TABLE "tree_tenants" IS '租户表';
         CREATE INDEX IF NOT EXISTS "idx_tree_tenant_tenant__481a89" ON "tree_tenants" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_tree_tenant_domain_4aeb51" ON "tree_tenants" ("domain");
         CREATE INDEX IF NOT EXISTS "idx_tree_tenant_status_51be99" ON "tree_tenants" ("status");
@@ -80,6 +83,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT "uid_tree_tenant_tenant__547f3d" UNIQUE ("tenant_id", "config_key")
         );
+COMMENT ON TABLE "tree_tenant_configs" IS '租户配置表';
         CREATE INDEX IF NOT EXISTS "idx_tree_tenant_tenant__77fa49" ON "tree_tenant_configs" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_tree_tenant_config__a223f6" ON "tree_tenant_configs" ("config_key");
         CREATE INDEX IF NOT EXISTS "idx_tree_tenant_tenant__547f3d" ON "tree_tenant_configs" ("tenant_id", "config_key");
@@ -107,6 +111,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT "uid_sys_users_tenant__26aebd" UNIQUE ("tenant_id", "username")
         );
+COMMENT ON TABLE "sys_users" IS '用户表';
         CREATE INDEX IF NOT EXISTS "idx_sys_users_tenant__9fa158" ON "sys_users" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_users_usernam_04037b" ON "sys_users" ("username");
         CREATE INDEX IF NOT EXISTS "idx_sys_users_tenant__26aebd" ON "sys_users" ("tenant_id", "username");
@@ -131,6 +136,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "sys_departments" IS '部门表';
         CREATE INDEX IF NOT EXISTS "idx_sys_departm_tenant__b7794b" ON "sys_departments" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_departm_parent__1ec8f4" ON "sys_departments" ("parent_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_departm_manager_1b2230" ON "sys_departments" ("manager_id");
@@ -152,6 +158,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "sys_positions" IS '职位表';
         CREATE INDEX IF NOT EXISTS "idx_sys_positio_tenant__057e59" ON "sys_positions" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_positio_departm_89df25" ON "sys_positions" ("department_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_positio_code_a7df81" ON "sys_positions" ("code");
@@ -173,6 +180,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_roles_tenant__bbcd54" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "sys_roles" IS '角色表';
         CREATE INDEX IF NOT EXISTS "idx_sys_roles_tenant__45a7bd" ON "sys_roles" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_roles_code_903f2f" ON "sys_roles" ("code");
         CREATE INDEX IF NOT EXISTS "idx_sys_roles_created_e0843d" ON "sys_roles" ("created_at");
@@ -193,6 +201,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_permiss_tenant__a6de52" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "sys_permissions" IS '权限表';
         CREATE INDEX IF NOT EXISTS "idx_sys_permiss_tenant__99f233" ON "sys_permissions" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_permiss_code_b35ea3" ON "sys_permissions" ("code");
         CREATE INDEX IF NOT EXISTS "idx_sys_permiss_resourc_941e0b" ON "sys_permissions" ("resource");
@@ -207,6 +216,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT "uid_sys_role_pe_role_id_97b31f" UNIQUE ("role_id", "permission_id")
         );
+COMMENT ON TABLE "sys_role_permissions" IS '角色权限关联表';
         CREATE INDEX IF NOT EXISTS "idx_sys_role_pe_role_id_fbd949" ON "sys_role_permissions" ("role_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_role_pe_permiss_fa70a0" ON "sys_role_permissions" ("permission_id");
 
@@ -219,6 +229,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CONSTRAINT "uid_sys_user_ro_user_id_472051" UNIQUE ("user_id", "role_id")
         );
+COMMENT ON TABLE "sys_user_roles" IS '用户角色关联表';
         CREATE INDEX IF NOT EXISTS "idx_sys_user_ro_user_id_50e65a" ON "sys_user_roles" ("user_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_user_ro_role_id_d8cc81" ON "sys_user_roles" ("role_id");
 
@@ -236,6 +247,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+COMMENT ON TABLE "sys_saved_searches" IS '保存的搜索表';
         CREATE INDEX IF NOT EXISTS "idx_sys_saved_s_tenant__4d209f" ON "sys_saved_searches" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_saved_s_user_id_cf97e5" ON "sys_saved_searches" ("user_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_saved_s_page_pa_5ab101" ON "sys_saved_searches" ("page_path");

@@ -48,7 +48,7 @@ class ExperimentManagement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuailims_experiment_managements"
+        table = "apps_kuailims_experiment_managements"
         indexes = [
             ("tenant_id",),
             ("experiment_no",),

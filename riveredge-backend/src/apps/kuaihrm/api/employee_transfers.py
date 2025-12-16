@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.employee_transfer_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/employee-transfers", tags=["员工异动"])
+router = APIRouter(prefix="/employee-transfers", tags=["Employee Transfers"])
 
 
 @router.post("", response_model=EmployeeTransferResponse, summary="创建员工异动")

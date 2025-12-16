@@ -21,7 +21,7 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
-router = APIRouter(prefix="/departments", tags=["System Departments"])
+router = APIRouter(prefix="/departments", tags=["Core Departments"])
 
 
 @router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)

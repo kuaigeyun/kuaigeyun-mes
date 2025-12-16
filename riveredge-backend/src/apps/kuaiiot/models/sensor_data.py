@@ -38,7 +38,7 @@ class SensorData(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiiot_sensor_data"
+        table = "apps_kuaiiot_sensor_data"
         indexes = [
             ("tenant_id",),
             ("data_no",),

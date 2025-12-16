@@ -15,7 +15,7 @@ from apps.kuaiacc.schemas.actual_cost_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/actual-costs", tags=["实际成本"])
+router = APIRouter(prefix="/actual-costs", tags=["Actual Costs"])
 
 
 @router.post("", response_model=ActualCostResponse, summary="创建实际成本")

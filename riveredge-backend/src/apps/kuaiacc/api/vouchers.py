@@ -18,7 +18,7 @@ from apps.kuaiacc.schemas.voucher_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/vouchers", tags=["凭证"])
+router = APIRouter(prefix="/vouchers", tags=["Vouchers"])
 
 
 @router.post("", response_model=VoucherResponse, summary="创建凭证")

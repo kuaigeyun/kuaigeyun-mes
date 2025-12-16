@@ -24,7 +24,7 @@ class Department(BaseModel):
         name: 部门名称
         code: 部门代码（可选，用于程序识别）
         description: 部门描述
-        manager_id: 部门负责人ID（外键，关联 sys_users，可选）
+        manager_id: 部门负责人ID（外键，关联 core_users，可选）
         parent_id: 父部门ID（自关联，NULL 表示根部门）
         sort_order: 排序顺序（同级部门排序）
         is_active: 是否启用

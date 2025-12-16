@@ -15,7 +15,7 @@ from apps.kuaipm.schemas.project_risk_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/project-risk", tags=["项目风险"])
+router = APIRouter(prefix="/project-risk", tags=["Project Risks"])
 
 
 @router.post("", response_model=ProjectRiskResponse, summary="创建项目风险")

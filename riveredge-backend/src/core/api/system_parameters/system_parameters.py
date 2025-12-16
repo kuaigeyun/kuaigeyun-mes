@@ -16,7 +16,7 @@ from core.services.system_parameter_service import SystemParameterService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/system-parameters", tags=["System Parameters"])
+router = APIRouter(prefix="/system-parameters", tags=["Core Parameters"])
 
 
 @router.post("", response_model=SystemParameterResponse, status_code=status.HTTP_201_CREATED)

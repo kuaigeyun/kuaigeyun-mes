@@ -132,7 +132,7 @@ export async function superadminLogin(data: {
   username: string;
   password: string;
 }): Promise<{ token: string; token_type: string; expires_in: number; user: SuperAdmin }> {
-  return apiRequest<{ token: string; token_type: string; expires_in: number; user: SuperAdmin }>('/superadmin/auth/login', {
+  return apiRequest<{ token: string; token_type: string; expires_in: number; user: SuperAdmin }>('/infra/auth/login', {
     method: 'POST',
     data,
   });
@@ -144,7 +144,7 @@ export async function superadminLogin(data: {
  * @returns 当前超级管理员信息
  */
 export async function getCurrentSuperAdmin(): Promise<SuperAdmin> {
-  return apiRequest<SuperAdmin>('/superadmin/auth/me', {
+  return apiRequest<SuperAdmin>('/infra/auth/me', {
     method: 'GET',
   });
 }
@@ -155,7 +155,7 @@ export async function getCurrentSuperAdmin(): Promise<SuperAdmin> {
  * @returns 组织统计信息
  */
 export async function getTenantStatistics(): Promise<TenantStatistics> {
-  return apiRequest<TenantStatistics>('/platform/monitoring/tenants/statistics', {
+  return apiRequest<TenantStatistics>('/infra/monitoring/tenants/statistics', {
     method: 'GET',
   });
 }
@@ -170,7 +170,7 @@ export async function getTenantActivity(params?: {
   tenant_id?: number;
   days?: number;
 }): Promise<TenantActivity> {
-  return apiRequest<TenantActivity>('/platform/monitoring/tenants/activity', {
+  return apiRequest<TenantActivity>('/infra/monitoring/tenants/activity', {
     method: 'GET',
     params,
   });
@@ -185,7 +185,7 @@ export async function getTenantActivity(params?: {
 export async function getTenantResourceUsage(params?: {
   tenant_id?: number;
 }): Promise<TenantResourceUsage> {
-  return apiRequest<TenantResourceUsage>('/platform/monitoring/tenants/resource-usage', {
+  return apiRequest<TenantResourceUsage>('/infra/monitoring/tenants/resource-usage', {
     method: 'GET',
     params,
   });
@@ -200,7 +200,7 @@ export async function getTenantResourceUsage(params?: {
 export async function getTenantDataStatistics(params?: {
   tenant_id?: number;
 }): Promise<TenantDataStatistics> {
-  return apiRequest<TenantDataStatistics>('/platform/monitoring/tenants/data-statistics', {
+  return apiRequest<TenantDataStatistics>('/infra/monitoring/tenants/data-statistics', {
     method: 'GET',
     params,
   });
@@ -212,7 +212,7 @@ export async function getTenantDataStatistics(params?: {
  * @returns 系统运行状态
  */
 export async function getSystemStatus(): Promise<SystemStatus> {
-  return apiRequest<SystemStatus>('/platform/monitoring/system/status', {
+  return apiRequest<SystemStatus>('/infra/monitoring/system/status', {
     method: 'GET',
   });
 }
@@ -223,7 +223,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
  * @returns 系统资源使用情况
  */
 export async function getSystemResources(): Promise<SystemResources> {
-  return apiRequest<SystemResources>('/platform/monitoring/system/resources', {
+  return apiRequest<SystemResources>('/infra/monitoring/system/resources', {
     method: 'GET',
   });
 }
@@ -234,7 +234,7 @@ export async function getSystemResources(): Promise<SystemResources> {
  * @returns 系统性能指标
  */
 export async function getSystemPerformance(): Promise<SystemPerformance> {
-  return apiRequest<SystemPerformance>('/platform/monitoring/system/performance', {
+  return apiRequest<SystemPerformance>('/infra/monitoring/system/performance', {
     method: 'GET',
   });
 }
@@ -245,7 +245,7 @@ export async function getSystemPerformance(): Promise<SystemPerformance> {
  * @returns 系统异常告警列表
  */
 export async function getSystemAlerts(): Promise<any[]> {
-  return apiRequest<any[]>('/platform/monitoring/system/alerts', {
+  return apiRequest<any[]>('/infra/monitoring/system/alerts', {
     method: 'GET',
   });
 }
@@ -302,7 +302,7 @@ export interface SystemInfo {
  * @returns 系统环境信息
  */
 export async function getSystemInfo(): Promise<SystemInfo> {
-  return apiRequest<SystemInfo>('/platform/monitoring/system/info', {
+  return apiRequest<SystemInfo>('/infra/monitoring/system/info', {
     method: 'GET',
   });
 }

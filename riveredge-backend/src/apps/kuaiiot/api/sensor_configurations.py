@@ -15,7 +15,7 @@ from apps.kuaiiot.schemas.sensor_configuration_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/sensor-configurations", tags=["传感器配置"])
+router = APIRouter(prefix="/sensor-configurations", tags=["Sensor Configurations"])
 
 
 @router.post("", response_model=SensorConfigurationResponse, summary="创建传感器配置")

@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.social_security_tax_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/social-security-taxes", tags=["社保个税"])
+router = APIRouter(prefix="/social-security-taxes", tags=["Social Security Taxes"])
 
 
 @router.post("", response_model=SocialSecurityTaxResponse, summary="创建社保个税")

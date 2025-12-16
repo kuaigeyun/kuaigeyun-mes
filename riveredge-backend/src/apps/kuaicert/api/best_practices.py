@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.best_practice_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/best-practice", tags=["最佳实践"])
+router = APIRouter(prefix="/best-practice", tags=["Best Practices"])
 
 
 @router.post("", response_model=BestPracticeResponse, summary="创建最佳实践")

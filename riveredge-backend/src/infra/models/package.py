@@ -50,7 +50,7 @@ class Package(BaseModel):
         """
         模型元数据
         """
-        table = "platform_packages"  # 表名必须包含模块前缀（soil_ - 平台级）
+        table = "infra_packages"  # 表名必须包含模块前缀（infra_ - 平台级，对应 infra/ 文件夹）
         indexes = [
             ("plan",),  # 套餐类型索引
         ]

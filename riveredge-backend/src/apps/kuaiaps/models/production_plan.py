@@ -47,7 +47,7 @@ class ProductionPlan(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiaps_production_plans"
+        table = "apps_kuaiaps_production_plans"
         indexes = [
             ("tenant_id",),
             ("plan_no",),

@@ -39,7 +39,7 @@ class NonconformingHandling(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_nonconforming_handlings"
+        table = "apps_kuaiqms_nonconforming_handlings"
         indexes = [
             ("tenant_id",),
             ("handling_no",),

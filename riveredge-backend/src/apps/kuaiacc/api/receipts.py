@@ -16,7 +16,7 @@ from apps.kuaiacc.schemas.receipt_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/receipts", tags=["收款"])
+router = APIRouter(prefix="/receipts", tags=["Receipts"])
 
 
 @router.post("", response_model=ReceiptResponse, summary="创建收款")

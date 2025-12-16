@@ -15,7 +15,7 @@ from apps.kuaiacc.schemas.account_subject_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/account-subjects", tags=["会计科目"])
+router = APIRouter(prefix="/account-subjects", tags=["Account Subjects"])
 
 
 @router.post("", response_model=AccountSubjectResponse, summary="创建会计科目")

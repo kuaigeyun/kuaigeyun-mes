@@ -235,14 +235,14 @@ export interface UpdateTenantData {
  * 获取组织列表
  *
  * @param params - 查询参数
- * @param isSuperAdmin - 是否为平台超级管理员接口（默认 false，使用 /tenants；true 时使用 /platform/tenants）
+ * @param isSuperAdmin - 是否为平台超级管理员接口（默认 false，使用 /tenants；true 时使用 /infra/tenants）
  * @returns 组织列表响应数据
  */
 export async function getTenantList(
   params: TenantListParams,
   isSuperAdmin: boolean = false
 ): Promise<TenantListResponse> {
-  const endpoint = isSuperAdmin ? '/platform/tenants' : '/tenants';
+  const endpoint = isSuperAdmin ? '/infra/tenants' : '/tenants';
   return apiRequest<TenantListResponse>(endpoint, {
     method: 'GET',
     params,
@@ -265,7 +265,7 @@ export async function getPackageList(params: {
   sort?: string;
   order?: string;
 }): Promise<PackageListResponse> {
-  return apiRequest<PackageListResponse>('/platform/packages', {
+  return apiRequest<PackageListResponse>('/infra/packages', {
     method: 'GET',
     params,
   });
@@ -278,7 +278,7 @@ export async function getPackageList(params: {
  * @returns 创建的套餐
  */
 export async function createPackage(data: PackageCreate): Promise<Package> {
-  return apiRequest<Package>('/platform/packages', {
+  return apiRequest<Package>('/infra/packages', {
     method: 'POST',
     data,
   });
@@ -292,7 +292,7 @@ export async function createPackage(data: PackageCreate): Promise<Package> {
  * @returns 更新后的套餐
  */
 export async function updatePackage(packageId: number, data: PackageUpdate): Promise<Package> {
-  return apiRequest<Package>(`/platform/packages/${packageId}`, {
+  return apiRequest<Package>(`/infra/packages/${packageId}`, {
     method: 'PUT',
     data,
   });
@@ -304,7 +304,7 @@ export async function updatePackage(packageId: number, data: PackageUpdate): Pro
  * @param packageId - 套餐ID
  */
 export async function deletePackage(packageId: number): Promise<void> {
-  return apiRequest<void>(`/platform/packages/${packageId}`, {
+  return apiRequest<void>(`/infra/packages/${packageId}`, {
     method: 'DELETE',
   });
 }
@@ -315,7 +315,7 @@ export async function deletePackage(packageId: number): Promise<void> {
  * @returns 组织统计信息
  */
 export async function getTenantStatistics(): Promise<TenantStatistics> {
-  return apiRequest<TenantStatistics>('/platform/monitoring/tenants/statistics', {
+  return apiRequest<TenantStatistics>('/infra/monitoring/tenants/statistics', {
     method: 'GET',
   });
 }
@@ -326,7 +326,7 @@ export async function getTenantStatistics(): Promise<TenantStatistics> {
  * @returns 系统监控信息
  */
 export async function getSystemInfo(): Promise<SystemInfo> {
-  return apiRequest<SystemInfo>('/platform/monitoring/system/info', {
+  return apiRequest<SystemInfo>('/infra/monitoring/system/info', {
     method: 'GET',
   });
 }
@@ -335,11 +335,11 @@ export async function getSystemInfo(): Promise<SystemInfo> {
  * 获取组织详情
  * 
  * @param tenantId - 组织 ID
- * @param isSuperAdmin - 是否为平台超级管理员接口（默认 false，使用 /tenants；true 时使用 /platform/tenants）
+ * @param isSuperAdmin - 是否为平台超级管理员接口（默认 false，使用 /tenants；true 时使用 /infra/tenants）
  * @returns 组织详情
  */
 export async function getTenantById(tenantId: number, isSuperAdmin: boolean = false): Promise<Tenant> {
-  const endpoint = isSuperAdmin ? `/platform/tenants/${tenantId}` : `/tenants/${tenantId}`;
+  const endpoint = isSuperAdmin ? `/infra/tenants/${tenantId}` : `/tenants/${tenantId}`;
   return apiRequest<Tenant>(endpoint, {
     method: 'GET',
   });
@@ -389,7 +389,7 @@ export async function deleteTenant(tenantId: number): Promise<void> {
  * @param tenantId - 组织 ID
  */
 export async function deleteTenantBySuperAdmin(tenantId: number): Promise<void> {
-  return apiRequest<void>(`/platform/tenants/${tenantId}`, {
+  return apiRequest<void>(`/infra/tenants/${tenantId}`, {
     method: 'DELETE',
   });
 }
@@ -407,7 +407,7 @@ export async function deleteTenantBySuperAdmin(tenantId: number): Promise<void> 
  * @returns 更新后的组织
  */
 export async function activateTenant(tenantId: number): Promise<Tenant> {
-  return apiRequest<Tenant>(`/platform/tenants/${tenantId}/activate`, {
+  return apiRequest<Tenant>(`/infra/tenants/${tenantId}/activate`, {
     method: 'POST',
   });
 }
@@ -419,7 +419,7 @@ export async function activateTenant(tenantId: number): Promise<Tenant> {
  * @returns 更新后的组织
  */
 export async function deactivateTenant(tenantId: number): Promise<Tenant> {
-  return apiRequest<Tenant>(`/platform/tenants/${tenantId}/deactivate`, {
+  return apiRequest<Tenant>(`/infra/tenants/${tenantId}/deactivate`, {
     method: 'POST',
   });
 }
@@ -436,7 +436,7 @@ export async function deactivateTenant(tenantId: number): Promise<Tenant> {
  */
 export async function getPackageConfigs(): Promise<AllPackageConfigs> {
   try {
-    return await apiRequest<AllPackageConfigs>('/platform/packages/config', {
+    return await apiRequest<AllPackageConfigs>('/infra/packages/config', {
       method: 'GET',
     });
   } catch (error: any) {
@@ -494,7 +494,7 @@ function getDefaultPackageConfigs(): AllPackageConfigs {
  * @returns 套餐配置
  */
 export async function getPackageConfig(plan: TenantPlan): Promise<PackageConfig> {
-  return apiRequest<PackageConfig>(`/platform/packages/${plan}/config`, {
+  return apiRequest<PackageConfig>(`/infra/packages/${plan}/config`, {
     method: 'GET',
   });
 }

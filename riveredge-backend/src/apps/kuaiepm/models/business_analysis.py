@@ -32,7 +32,7 @@ class BusinessDashboard(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_business_dashboards"
+        table = "apps_kuaiepm_business_dashboards"
         indexes = [
             ("tenant_id",),
             ("dashboard_no",),
@@ -87,7 +87,7 @@ class BusinessDataAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_business_data_analyses"
+        table = "apps_kuaiepm_business_data_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),
@@ -153,7 +153,7 @@ class TrendAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_trend_analyses"
+        table = "apps_kuaiepm_trend_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),
@@ -224,7 +224,7 @@ class ComparisonAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_comparison_analyses"
+        table = "apps_kuaiepm_comparison_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),

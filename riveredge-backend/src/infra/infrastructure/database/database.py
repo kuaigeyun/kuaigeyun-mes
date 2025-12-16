@@ -9,7 +9,7 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import OperationalError
 from loguru import logger
 
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 # Tortoise ORM 配置
@@ -57,7 +57,7 @@ TORTOISE_ORM = {
                 "infra.models.tenant_config",
                 "infra.models.tenant_activity_log",
                 "infra.models.user",
-                "infra.models.platform_superadmin",  # 平台超级管理员模型
+                "infra.models.infra_superadmin",  # 平台超级管理员模型
                 "infra.models.package",
                 "infra.models.saved_search",  # 保存搜索条件模型
                 # 系统级模型（core）
@@ -208,7 +208,7 @@ def register_db(app) -> None:
         app: FastAPI 应用实例
     """
     # 设置 Tortoise ORM 时区环境变量（统一格式）
-    from infra.config.platform_config import setup_tortoise_timezone_env
+    from infra.config.infra_config import setup_tortoise_timezone_env
     setup_tortoise_timezone_env()
     
     # 确保配置字典中的时区设置与 Settings 一致（动态更新，支持运行时配置变更）

@@ -23,6 +23,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "root_data_backups" IS '数据备份表';
         CREATE INDEX IF NOT EXISTS "idx_root_data_backups_tenant_id" ON "root_data_backups" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_root_data_backups_uuid" ON "root_data_backups" ("uuid");
         CREATE INDEX IF NOT EXISTS "idx_root_data_backups_backup_type" ON "root_data_backups" ("backup_type");

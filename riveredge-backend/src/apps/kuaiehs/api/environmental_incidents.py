@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.environmental_incident_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/environmental-incident", tags=["环境事故"])
+router = APIRouter(prefix="/environmental-incident", tags=["Environmental Incidents"])
 
 
 @router.post("", response_model=EnvironmentalIncidentResponse, summary="创建环境事故")

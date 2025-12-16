@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.employee_resignation_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/employee-resignations", tags=["员工离职"])
+router = APIRouter(prefix="/employee-resignations", tags=["Employee Resignations"])
 
 
 @router.post("", response_model=EmployeeResignationResponse, summary="创建员工离职")

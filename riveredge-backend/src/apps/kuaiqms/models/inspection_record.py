@@ -47,7 +47,7 @@ class InspectionRecord(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_inspection_records"
+        table = "apps_kuaiqms_inspection_records"
         indexes = [
             ("tenant_id",),
             ("record_no",),

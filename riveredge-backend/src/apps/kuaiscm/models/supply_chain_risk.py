@@ -41,7 +41,7 @@ class SupplyChainRisk(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiscm_supply_chain_risks"
+        table = "apps_kuaiscm_supply_chain_risks"
         indexes = [
             ("tenant_id",),
             ("risk_no",),

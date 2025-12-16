@@ -78,7 +78,7 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const approveTenant = async (tenantId: number) => {
     try {
-      await apiRequest(`/platform/tenants/${tenantId}/approve`, {
+      await apiRequest(`/infra/tenants/${tenantId}/approve`, {
         method: 'POST',
       });
       message.success('审核通过成功');
@@ -97,7 +97,7 @@ const SuperAdminTenantList: React.FC = () => {
    */
   const rejectTenant = async (tenantId: number, reason?: string) => {
     try {
-      await apiRequest(`/platform/tenants/${tenantId}/reject`, {
+      await apiRequest(`/infra/tenants/${tenantId}/reject`, {
         method: 'POST',
         data: { reason },
       });
@@ -358,7 +358,7 @@ const SuperAdminTenantList: React.FC = () => {
 
       try {
         // 使用平台超级管理员接口创建组织
-        const tenant = await apiRequest<Tenant>('/platform/tenants', {
+        const tenant = await apiRequest<Tenant>('/infra/tenants', {
           method: 'POST',
           data: item.data,
         });
@@ -461,7 +461,7 @@ const SuperAdminTenantList: React.FC = () => {
     setDetailLoading(true);
     try {
       // 使用平台超级管理员接口获取组织详情
-      const data = await apiRequest<Tenant>(`/platform/tenants/${tenantId}`, {
+      const data = await apiRequest<Tenant>(`/infra/tenants/${tenantId}`, {
         method: 'GET',
       });
       setTenantDetail(data);
@@ -650,7 +650,7 @@ const SuperAdminTenantList: React.FC = () => {
       
       try {
         // 使用平台超级管理员接口获取组织详情
-        const data = await apiRequest<Tenant>(`/platform/tenants/${tenantId}`, {
+        const data = await apiRequest<Tenant>(`/infra/tenants/${tenantId}`, {
           method: 'GET',
         });
         setSelectedPlan(data.plan);
@@ -706,7 +706,7 @@ const SuperAdminTenantList: React.FC = () => {
           expires_at: values.expires_at,
         };
         // 使用平台超级管理员接口更新组织
-        await apiRequest<Tenant>(`/platform/tenants/${currentTenantId}`, {
+        await apiRequest<Tenant>(`/infra/tenants/${currentTenantId}`, {
           method: 'PUT',
           data: updateData,
         });
@@ -722,7 +722,7 @@ const SuperAdminTenantList: React.FC = () => {
           expires_at: values.expires_at,
         };
         // 使用平台超级管理员接口创建组织
-        await apiRequest<Tenant>('/platform/tenants', {
+        await apiRequest<Tenant>('/infra/tenants', {
           method: 'POST',
           data: createData,
         });
@@ -1197,7 +1197,7 @@ const SuperAdminTenantList: React.FC = () => {
                   title="确定要审核通过此组织吗？"
                   onConfirm={async () => {
                     try {
-                      await apiRequest(`/platform/tenants/${currentTenantId}/approve`, {
+                      await apiRequest(`/infra/tenants/${currentTenantId}/approve`, {
                         method: 'POST',
                       });
                       message.success('审核通过成功');
@@ -1214,7 +1214,7 @@ const SuperAdminTenantList: React.FC = () => {
                   title="确定要拒绝此组织注册吗？"
                   onConfirm={async () => {
                     try {
-                      await apiRequest(`/platform/tenants/${currentTenantId}/reject`, {
+                      await apiRequest(`/infra/tenants/${currentTenantId}/reject`, {
                         method: 'POST',
                       });
                       message.success('审核拒绝成功');

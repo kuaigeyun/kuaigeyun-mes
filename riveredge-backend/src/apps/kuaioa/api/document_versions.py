@@ -15,7 +15,7 @@ from apps.kuaioa.schemas.document_version_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/document-version", tags=["文档版本"])
+router = APIRouter(prefix="/document-version", tags=["Document Versions"])
 
 
 @router.post("", response_model=DocumentVersionResponse, summary="创建文档版本")

@@ -41,7 +41,7 @@ class FailureReport(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_failure_reports"
+        table = "apps_kuaieam_failure_reports"
         indexes = [
             ("tenant_id",),
             ("report_no",),

@@ -32,7 +32,7 @@ class MaterialGroup(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_material_groups"
+        table = "apps_master_data_material_groups"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -100,7 +100,7 @@ class Material(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_materials"
+        table = "apps_master_data_materials"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -180,7 +180,7 @@ class BOM(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_bom"
+        table = "apps_master_data_bom"
         indexes = [
             ("tenant_id",),
             ("material_id",),

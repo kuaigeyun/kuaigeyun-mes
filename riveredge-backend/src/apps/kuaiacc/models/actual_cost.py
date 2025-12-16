@@ -46,7 +46,7 @@ class ActualCost(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_actual_costs"
+        table = "apps_kuaiacc_actual_costs"
         indexes = [
             ("tenant_id",),
             ("cost_no",),

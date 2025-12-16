@@ -13,7 +13,7 @@ import TweenOne from 'rc-tween-one';
 import { useGlobalStore } from '../../stores';
 import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/auth';
 import { login } from '../../services/auth';
-import { platformSuperAdminLogin } from '../../services/platformAdmin';
+import { infraSuperAdminLogin } from '../../services/platformAdmin';
 import { setToken } from '../../utils/auth';
 import { theme } from 'antd';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../utils/avatar';
@@ -347,13 +347,13 @@ export default function LockScreenPage() {
     try {
       // 检查用户类型（平台超级管理员还是系统级用户）
       const userInfo = getUserInfo();
-      const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin';
+      const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
 
       let response;
 
-      if (isPlatformSuperAdmin) {
+      if (isInfraSuperAdmin) {
         // 平台超级管理员：使用平台登录接口
-        const platformResponse = await platformSuperAdminLogin({
+        const platformResponse = await infraSuperAdminLogin({
           username: currentUser.username,
           password: password,
         });
@@ -364,7 +364,7 @@ export default function LockScreenPage() {
         // 更新用户信息和租户ID
         setUserInfo({
           ...platformResponse.user,
-          user_type: 'platform_superadmin',
+          user_type: 'infra_superadmin',
         });
 
         // 设置默认租户 ID（如果返回了默认租户）
@@ -379,7 +379,7 @@ export default function LockScreenPage() {
           username: platformResponse.user.username,
           email: platformResponse.user.email,
           full_name: platformResponse.user.full_name,
-          is_platform_admin: true,
+          is_infra_admin: true,
           is_tenant_admin: false,
           tenant_id: platformResponse.default_tenant_id,
         });
@@ -409,8 +409,8 @@ export default function LockScreenPage() {
           navigate(lockedPath, { replace: true });
         } else {
           // 根据用户类型导航到不同的默认页面
-          if (isPlatformSuperAdmin) {
-            navigate('/platform/operation', { replace: true });
+          if (isInfraSuperAdmin) {
+            navigate('/infra/operation', { replace: true });
           } else {
             navigate('/system/dashboard/workplace', { replace: true });
           }

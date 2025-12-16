@@ -20,14 +20,7 @@ export const API_BASE_URL = '/api/v1';
  */
 function getAuthToken(): string | null {
   const token = localStorage.getItem('token');
-  // 调试信息：检查 Token 是否存在
-  if (!token) {
-    console.warn('⚠️ localStorage 中没有 token，当前 localStorage 内容:', {
-      token: localStorage.getItem('token'),
-      user_info: localStorage.getItem('user_info'),
-      tenant_id: localStorage.getItem('tenant_id'),
-    });
-  }
+  // 注意：不在这里输出警告，警告在 apiRequest 中统一处理（区分公开接口和需要认证的接口）
   return token;
 }
 
@@ -133,33 +126,34 @@ export async function apiRequest<T = any>(
     }
   }
 
-  // 获取认证 Token
-  const token = getAuthToken();
-  
   // 检查是否是公开接口（登录、注册等接口不应该携带 token）
   const isPublicEndpoint = 
     url.includes('/auth/login') || 
+    url.includes('/auth/guest-login') ||  // 免注册体验登录接口
     url.includes('/login') ||
     url.includes('/auth/register') ||
     url.includes('/register') ||
     url.includes('/tenants/search') ||
     url.includes('/tenants/check-domain');
   
+  // 获取认证 Token
+  const token = getAuthToken();
+  
   // 检查 Token 是否存在（公开接口除外）
   if (!token && !isPublicEndpoint) {
     console.warn(`⚠️ API 请求 ${url} 没有 Token`);
   }
   
-  // 获取当前选择的组织ID
-  const currentTenantId = getCurrentTenantId();
+  // 获取当前选择的组织ID（公开接口不需要组织上下文）
+  const currentTenantId = isPublicEndpoint ? null : getCurrentTenantId();
   
   // 检查是否是平台超级管理员（从 user_info 中获取）
-  let isPlatformSuperAdmin = false;
+  let isInfraSuperAdmin = false;
   try {
     const userInfoStr = localStorage.getItem('user_info');
     if (userInfoStr) {
       const userInfo = JSON.parse(userInfoStr);
-      isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin' || userInfo?.is_platform_admin === true;
+      isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin' || userInfo?.is_infra_admin === true;
     }
   } catch (error) {
     // 忽略解析错误
@@ -170,16 +164,16 @@ export async function apiRequest<T = any>(
   
   // 判断是否需要组织上下文（系统级API和个人中心API需要）
   const needsTenantContext = url.startsWith('/system/') || 
-    url.startsWith('/api/v1/system/') || 
+    url.startsWith('/api/v1/core/') || 
     url.startsWith('/personal/') || 
     url.startsWith('/api/v1/personal/');
   
   // 如果需要组织上下文但没有 tenant_id，输出警告（平台超级管理员除外，后端会处理默认租户）
-  if (needsTenantContext && !currentTenantId && !isPlatformSuperAdmin) {
+  if (needsTenantContext && !currentTenantId && !isInfraSuperAdmin) {
     console.error('⚠️ 组织上下文未设置:', {
       url,
       tenantId: currentTenantId,
-      isPlatformSuperAdmin,
+      isInfraSuperAdmin,
       localStorage_tenant_id: localStorage.getItem('tenant_id'),
       user_info: localStorage.getItem('user_info'),
     });
@@ -206,7 +200,7 @@ export async function apiRequest<T = any>(
   if (needsTenantContext) {
     if (currentTenantId) {
       headers['X-Tenant-ID'] = currentTenantId;
-    } else if (isPlatformSuperAdmin) {
+    } else if (isInfraSuperAdmin) {
       // 平台超级管理员即使没有 tenant_id，也允许发送请求
       // 后端会检测到是平台超级管理员，并使用默认租户
     } else {
@@ -214,7 +208,7 @@ export async function apiRequest<T = any>(
       console.error('❌ 组织上下文未设置，无法添加 X-Tenant-ID 请求头:', {
         url,
         currentTenantId,
-        isPlatformSuperAdmin,
+        isInfraSuperAdmin,
         localStorage_tenant_id: localStorage.getItem('tenant_id'),
         user_info: localStorage.getItem('user_info'),
         needsTenantContext,
@@ -283,7 +277,7 @@ export async function apiRequest<T = any>(
         hasFile: fetchOptions.body instanceof FormData,
         headers: headers,
         tenantId: currentTenantId,
-        isPlatformSuperAdmin,
+        isInfraSuperAdmin,
         allHeaders: Object.keys(headers),
         xTenantIdHeader: headers['X-Tenant-ID'],
         fetchOptionsHeaders: fetchOptions.headers,
@@ -333,6 +327,7 @@ export async function apiRequest<T = any>(
         // ⚠️ 关键修复：区分公开接口和其他接口的错误处理
         const isPublicEndpoint = 
           url.includes('/auth/login') || 
+          url.includes('/auth/guest-login') ||  // 免注册体验登录接口
           url.includes('/login') ||
           url.includes('/auth/register') ||
           url.includes('/register') ||

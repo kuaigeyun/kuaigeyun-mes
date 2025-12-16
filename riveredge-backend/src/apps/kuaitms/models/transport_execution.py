@@ -45,7 +45,7 @@ class TransportExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaitms_transport_executions"
+        table = "apps_kuaitms_transport_executions"
         indexes = [
             ("tenant_id",),
             ("execution_no",),

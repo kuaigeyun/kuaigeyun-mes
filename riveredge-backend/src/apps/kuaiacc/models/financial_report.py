@@ -40,7 +40,7 @@ class FinancialReport(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_financial_reports"
+        table = "apps_kuaiacc_financial_reports"
         indexes = [
             ("tenant_id",),
             ("report_no",),

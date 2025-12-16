@@ -39,7 +39,7 @@ class SafetyTraining(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_safety_trainings"
+        table = "apps_kuaiehs_safety_trainings"
         indexes = [
             ("tenant_id",),
             ("training_no",),
@@ -108,7 +108,7 @@ class SafetyInspection(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_safety_inspections"
+        table = "apps_kuaiehs_safety_inspections"
         indexes = [
             ("tenant_id",),
             ("inspection_no",),
@@ -180,7 +180,7 @@ class SafetyHazard(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_safety_hazards"
+        table = "apps_kuaiehs_safety_hazards"
         indexes = [
             ("tenant_id",),
             ("hazard_no",),
@@ -256,7 +256,7 @@ class SafetyIncident(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_safety_incidents"
+        table = "apps_kuaiehs_safety_incidents"
         indexes = [
             ("tenant_id",),
             ("incident_no",),

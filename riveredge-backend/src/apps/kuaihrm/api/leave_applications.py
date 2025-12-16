@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.leave_application_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/leave-applications", tags=["请假申请"])
+router = APIRouter(prefix="/leave-applications", tags=["Leave Applications"])
 
 
 @router.post("", response_model=LeaveApplicationResponse, summary="创建请假申请")

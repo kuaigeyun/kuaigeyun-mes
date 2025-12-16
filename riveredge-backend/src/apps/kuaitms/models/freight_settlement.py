@@ -42,7 +42,7 @@ class FreightSettlement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaitms_freight_settlements"
+        table = "apps_kuaitms_freight_settlements"
         indexes = [
             ("tenant_id",),
             ("settlement_no",),

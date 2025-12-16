@@ -26,6 +26,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_languag_tenant__u9v4w5" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "sys_languages" IS '语言表';
         
         -- 创建语言表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_languag_tenant__u9v4w5" ON "sys_languages" ("tenant_id");

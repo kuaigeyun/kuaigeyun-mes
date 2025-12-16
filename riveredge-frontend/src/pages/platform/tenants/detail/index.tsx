@@ -81,7 +81,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   const handleApprove = async () => {
     if (!tenantId) return;
     try {
-      await apiRequest(`/platform/tenants/${tenantId}/approve`, {
+      await apiRequest(`/infra/tenants/${tenantId}/approve`, {
         method: 'POST',
       });
       message.success('审核通过成功');
@@ -97,7 +97,7 @@ const SuperAdminTenantDetail: React.FC = () => {
   const handleReject = async () => {
     if (!tenantId) return;
     try {
-      await apiRequest(`/platform/tenants/${tenantId}/reject`, {
+      await apiRequest(`/infra/tenants/${tenantId}/reject`, {
         method: 'POST',
       });
       message.success('审核拒绝成功');

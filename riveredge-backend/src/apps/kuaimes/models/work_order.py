@@ -47,7 +47,7 @@ class WorkOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimes_work_orders"
+        table = "apps_kuaimes_work_orders"
         indexes = [
             ("tenant_id",),
             ("work_order_no",),

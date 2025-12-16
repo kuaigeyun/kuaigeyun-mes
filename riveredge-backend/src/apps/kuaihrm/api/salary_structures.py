@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.salary_structure_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/salary-structures", tags=["薪资结构"])
+router = APIRouter(prefix="/salary-structures", tags=["Salary Structures"])
 
 
 @router.post("", response_model=SalaryStructureResponse, summary="创建薪资结构")

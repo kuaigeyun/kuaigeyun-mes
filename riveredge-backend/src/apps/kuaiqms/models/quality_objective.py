@@ -41,7 +41,7 @@ class QualityObjective(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_quality_objectives"
+        table = "apps_kuaiqms_quality_objectives"
         indexes = [
             ("tenant_id",),
             ("objective_no",),

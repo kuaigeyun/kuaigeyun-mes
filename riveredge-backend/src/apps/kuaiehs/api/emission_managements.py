@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.emission_management_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/emission-management", tags=["排放管理"])
+router = APIRouter(prefix="/emission-management", tags=["Emission Management"])
 
 
 @router.post("", response_model=EmissionManagementResponse, summary="创建排放管理")

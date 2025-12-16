@@ -569,7 +569,7 @@ class UserService:
             raise NotFoundError(f"用户不存在: {user_uuid}")
         
         # 验证：平台管理员不可删除
-        if user.is_platform_admin:
+        if user.is_infra_admin:
             raise ValidationError("平台管理员不可删除")
         
         # 验证：当前登录用户不可删除自己
