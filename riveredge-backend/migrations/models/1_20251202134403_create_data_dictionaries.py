@@ -24,6 +24,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_data_di_tenant__a8b3c4" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "sys_data_dictionaries" IS '数据字典表';
         
         -- 创建数据字典表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_data_di_tenant__a8b3c4" ON "sys_data_dictionaries" ("tenant_id");
@@ -55,6 +56,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_sys_dictio_diction_c9d4e5" ON "sys_dictionary_items" ("dictionary_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_dictio_sort_or_d9e4f5" ON "sys_dictionary_items" ("sort_order");
         CREATE INDEX IF NOT EXISTS "idx_sys_dictio_created_e9f4g5" ON "sys_dictionary_items" ("created_at");
+        COMMENT ON TABLE "sys_dictionary_items" IS '数据字典项表';
         
         -- 添加外键约束
         ALTER TABLE "sys_dictionary_items" ADD CONSTRAINT "fk_sys_dictio_diction_c9d4e5" FOREIGN KEY ("dictionary_id") REFERENCES "sys_data_dictionaries" ("id") ON DELETE CASCADE;

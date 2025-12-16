@@ -55,7 +55,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           username: savedUserInfo.username || 'admin',
           email: savedUserInfo.email,
           full_name: savedUserInfo.full_name,
-          is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
+          is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
           tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
@@ -75,7 +75,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // ⚠️ 关键修复：先定义公开页面判断，避免在 shouldFetchUser 中使用未定义的变量
   const publicPaths = ['/login'];
   // 平台登录页是公开的，但其他平台页面需要登录
-  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/platform/login';
+  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/infra/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
 
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
@@ -114,7 +114,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           username: savedUserInfo.username || 'admin',
           email: savedUserInfo.email,
           full_name: savedUserInfo.full_name,
-          is_platform_admin: savedUserInfo.user_type === 'platform_superadmin' || savedUserInfo.is_platform_admin || false,
+          is_infra_admin: savedUserInfo.user_type === 'infra_superadmin' || savedUserInfo.is_infra_admin || false,
           is_tenant_admin: savedUserInfo.is_tenant_admin || false,
           tenant_id: savedUserInfo.tenant_id,
           tenant_name: savedUserInfo.tenant_name, // ⚠️ 关键修复：恢复租户名称
@@ -129,7 +129,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           id: 1,
           username: 'admin',
           email: 'admin@example.com',
-          is_platform_admin: true,
+          is_infra_admin: true,
           is_tenant_admin: true,
           tenant_id: 1,
         });
@@ -173,11 +173,11 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // 如果是公开页面且已登录，重定向到对应的仪表盘
     if (isPublicPath && isAuthenticated) {
       // 平台超管登录后，如果访问的是登录页，重定向到平台运营看板
-      if (isPlatformLoginPage && currentUser.is_platform_admin) {
-        return '/platform/operation';
+      if (isPlatformLoginPage && currentUser.is_infra_admin) {
+        return '/infra/operation';
       }
       // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
-      if (location.pathname === '/login' && !currentUser.is_platform_admin) {
+      if (location.pathname === '/login' && !currentUser.is_infra_admin) {
         return '/system/dashboard';
       }
     }

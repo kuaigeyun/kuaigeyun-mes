@@ -32,7 +32,7 @@ class StrategyMap(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_strategy_maps"
+        table = "apps_kuaiepm_strategy_maps"
         indexes = [
             ("tenant_id",),
             ("map_no",),
@@ -91,7 +91,7 @@ class Objective(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_objectives"
+        table = "apps_kuaiepm_objectives"
         indexes = [
             ("tenant_id",),
             ("objective_no",),
@@ -166,7 +166,7 @@ class PerformanceEvaluation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_performance_evaluations"
+        table = "apps_kuaiepm_performance_evaluations"
         indexes = [
             ("tenant_id",),
             ("evaluation_no",),

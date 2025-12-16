@@ -32,7 +32,7 @@ class Complaint(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_complaints"
+        table = "apps_kuaicrm_complaints"
         indexes = [
             ("tenant_id",),
             ("complaint_no",),

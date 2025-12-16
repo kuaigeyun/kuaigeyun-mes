@@ -11,10 +11,10 @@ import { EditOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  getPlatformSuperAdmin, 
-  updatePlatformSuperAdmin,
-  type PlatformSuperAdmin,
-  type PlatformSuperAdminUpdateRequest
+  getInfraSuperAdmin, 
+  updateInfraSuperAdmin,
+  type InfraSuperAdmin,
+  type InfraSuperAdminUpdateRequest
 } from '../../services/platformAdmin';
 import { clearAuth } from '../../utils/auth';
 import { useNavigate } from 'react-router-dom';
@@ -24,28 +24,28 @@ import { useGlobalStore } from '../../stores';
 /**
  * 平台超级管理员管理页面组件
  */
-export default function PlatformSuperAdminPage() {
+export default function InfraSuperAdminPage() {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setCurrentUser } = useGlobalStore();
   // const [editModalVisible, setEditModalVisible] = useState(false);
-  // const [editFormData, setEditFormData] = useState<PlatformSuperAdminUpdateRequest | null>(null);
+  // const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);
 
   // 获取平台超级管理员信息
   const { data: admin, isLoading } = useQuery({
-    queryKey: ['platformSuperAdmin'],
-    queryFn: getPlatformSuperAdmin,
+    queryKey: ['infraSuperAdmin'],
+    queryFn: getInfraSuperAdmin,
   });
 
   // 更新平台超级管理员信息
   const updateMutation = useMutation({
-    mutationFn: (data: PlatformSuperAdminUpdateRequest) => updatePlatformSuperAdmin(data),
+    mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
     onSuccess: () => {
       messageApi.success('更新成功');
       setEditModalVisible(false);
       setEditFormData(null);
-      queryClient.invalidateQueries({ queryKey: ['platformSuperAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
     },
     onError: (error: any) => {
       messageApi.error(error?.message || '更新失败');
@@ -69,7 +69,7 @@ export default function PlatformSuperAdminPage() {
   /**
    * 处理保存
    */
-  const handleSave = async (values: PlatformSuperAdminUpdateRequest) => {
+  const handleSave = async (values: InfraSuperAdminUpdateRequest) => {
     await updateMutation.mutateAsync(values);
   };
 
@@ -89,7 +89,7 @@ export default function PlatformSuperAdminPage() {
         queryClient.clear();
         messageApi.success('已退出登录');
         // ⚠️ 关键修复：使用 navigate 跳转，避免页面刷新
-        navigate('/platform/login', { replace: true });
+        navigate('/infra/login', { replace: true });
       },
     });
   };
@@ -119,7 +119,7 @@ export default function PlatformSuperAdminPage() {
         loading={isLoading}
       >
         {admin && (
-          <ProDescriptions<PlatformSuperAdmin>
+          <ProDescriptions<InfraSuperAdmin>
             column={2}
             dataSource={admin}
             columns={[

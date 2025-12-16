@@ -40,7 +40,7 @@ class Receipt(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_receipts"
+        table = "apps_kuaiacc_receipts"
         indexes = [
             ("tenant_id",),
             ("receipt_no",),
@@ -105,7 +105,7 @@ class ReceiptSettlement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_receipt_settlements"
+        table = "apps_kuaiacc_receipt_settlements"
         indexes = [
             ("tenant_id",),
             ("receipt_id",),

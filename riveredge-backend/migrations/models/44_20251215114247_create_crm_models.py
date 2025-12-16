@@ -39,17 +39,17 @@ COMMENT ON COLUMN "core_approval_histories"."from_node" IS '来源节点';
 COMMENT ON COLUMN "core_approval_histories"."to_node" IS '目标节点';
 COMMENT ON COLUMN "core_approval_histories"."from_approver_id" IS '原审批人ID';
 COMMENT ON COLUMN "core_approval_histories"."to_approver_id" IS '新审批人ID';
-COMMENT ON TABLE "core_approval_histories" IS '审批历史记录模型';;
-        ALTER TABLE "seed_kuaicrm_sales_orders" ADD "approval_status" VARCHAR(20);
-        ALTER TABLE "seed_kuaicrm_sales_orders" ADD "approval_instance_id" INT;
-        CREATE INDEX "idx_seed_kuaicr_approva_5fc27f" ON "seed_kuaicrm_sales_orders" ("approval_status");
-        CREATE INDEX "idx_seed_kuaicr_approva_c5f1a0" ON "seed_kuaicrm_sales_orders" ("approval_instance_id");"""
+COMMENT ON TABLE "core_approval_histories" IS '核心 Approval_hitorie表';;
+        ALTER TABLE "apps_kuaicrm_sales_orders" ADD "approval_status" VARCHAR(20);
+        ALTER TABLE "apps_kuaicrm_sales_orders" ADD "approval_instance_id" INT;
+        CREATE INDEX "idx_apps_kuaicr_approva_5fc27f" ON "apps_kuaicrm_sales_orders" ("approval_status");
+        CREATE INDEX "idx_apps_kuaicr_approva_c5f1a0" ON "apps_kuaicrm_sales_orders" ("approval_instance_id");"""
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
-        DROP INDEX "idx_seed_kuaicr_approva_c5f1a0";
-        DROP INDEX "idx_seed_kuaicr_approva_5fc27f";
-        ALTER TABLE "seed_kuaicrm_sales_orders" DROP COLUMN "approval_status";
-        ALTER TABLE "seed_kuaicrm_sales_orders" DROP COLUMN "approval_instance_id";
+        DROP INDEX "idx_apps_kuaicr_approva_c5f1a0";
+        DROP INDEX "idx_apps_kuaicr_approva_5fc27f";
+        ALTER TABLE "apps_kuaicrm_sales_orders" DROP COLUMN "approval_status";
+        ALTER TABLE "apps_kuaicrm_sales_orders" DROP COLUMN "approval_instance_id";
         DROP TABLE IF EXISTS "core_approval_histories";"""

@@ -38,7 +38,7 @@ class Opportunity(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_opportunities"
+        table = "apps_kuaicrm_opportunities"
         indexes = [
             ("tenant_id",),
             ("oppo_no",),

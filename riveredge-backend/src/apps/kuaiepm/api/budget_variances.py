@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.budget_variance_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/budget-variance", tags=["预算差异"])
+router = APIRouter(prefix="/budget-variance", tags=["Budget Variances"])
 
 
 @router.post("", response_model=BudgetVarianceResponse, summary="创建预算差异")

@@ -54,7 +54,7 @@ class Product(BaseModel):
         """
         模型元数据
         """
-        table = "seed_master_data_products"
+        table = "apps_master_data_products"
         unique_together = [("tenant_id", "code")]
         indexes = [
             ("tenant_id",),

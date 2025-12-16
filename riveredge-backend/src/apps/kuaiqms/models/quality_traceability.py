@@ -35,7 +35,7 @@ class QualityTraceability(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_quality_traceabilities"
+        table = "apps_kuaiqms_quality_traceabilities"
         indexes = [
             ("tenant_id",),
             ("trace_no",),

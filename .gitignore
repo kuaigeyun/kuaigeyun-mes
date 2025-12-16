@@ -37,6 +37,11 @@ ENV/
 .idea/
 *.swp
 *.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 *~
 
 # 环境变量
@@ -89,12 +94,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+lerna-debug.log*
 
 # 构建输出
 dist/
 build/
 .next/
 out/
+
+# Vite (前端构建工具)
+.vite/
 
 # TypeScript
 *.tsbuildinfo
@@ -104,4 +113,4 @@ Thumbs.db
 .DS_Store
 
 # 开发计划和设计规范目录（本地文档，不提交到仓库）
-Farming Plan/
+plans/

@@ -13,7 +13,7 @@ from core.services.user_profile_service import UserProfileService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
-from infra.models.platform_superadmin import PlatformSuperAdmin
+from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/user-profile", tags=["UserProfile"])
@@ -34,7 +34,7 @@ async def get_user_profile(
     获取当前用户个人资料
     
     支持平台超级管理员 Token：
-    - 平台超级管理员使用独立的个人资料存储（存储在 PlatformSuperAdmin 模型中）
+    - 平台超级管理员使用独立的个人资料存储（存储在 InfraSuperAdmin 模型中）
     - 普通用户使用租户级个人资料存储（存储在 User 模型中）
     
     Args:
@@ -49,12 +49,12 @@ async def get_user_profile(
     """
     try:
         # 检查是否是平台超级管理员
-        is_platform_superadmin = getattr(current_user, '_is_platform_superadmin', False)
+        is_infra_superadmin = getattr(current_user, '_is_infra_superadmin', False)
         
-        if is_platform_superadmin:
+        if is_infra_superadmin:
             # 平台超级管理员：使用独立的个人资料存储
-            admin_id = getattr(current_user, '_platform_superadmin_id', current_user.id)
-            return await UserProfileService.get_platform_superadmin_profile(admin_id)
+            admin_id = getattr(current_user, '_infra_superadmin_id', current_user.id)
+            return await UserProfileService.get_infra_superadmin_profile(admin_id)
         else:
             # 普通用户：直接使用当前用户的 UUID
             return await UserProfileService.get_user_profile(str(current_user.uuid))
@@ -80,7 +80,7 @@ async def update_user_profile(
     更新当前用户个人资料
     
     支持平台超级管理员 Token：
-    - 平台超级管理员使用独立的个人资料存储（存储在 PlatformSuperAdmin 模型中）
+    - 平台超级管理员使用独立的个人资料存储（存储在 InfraSuperAdmin 模型中）
     - 普通用户使用租户级个人资料存储（存储在 User 模型中）
     
     Args:
@@ -96,12 +96,12 @@ async def update_user_profile(
     """
     try:
         # 检查是否是平台超级管理员
-        is_platform_superadmin = getattr(current_user, '_is_platform_superadmin', False)
+        is_infra_superadmin = getattr(current_user, '_is_infra_superadmin', False)
         
-        if is_platform_superadmin:
+        if is_infra_superadmin:
             # 平台超级管理员：使用独立的个人资料存储
-            admin_id = getattr(current_user, '_platform_superadmin_id', current_user.id)
-            return await UserProfileService.update_platform_superadmin_profile(
+            admin_id = getattr(current_user, '_infra_superadmin_id', current_user.id)
+            return await UserProfileService.update_infra_superadmin_profile(
                 admin_id,
                 data,
                 tenant_id=tenant_id
@@ -135,7 +135,7 @@ async def change_password(
     修改当前用户密码
     
     支持平台超级管理员 Token：
-    - 平台超级管理员使用 PlatformSuperAdmin 模型
+    - 平台超级管理员使用 InfraSuperAdmin 模型
     - 普通用户使用 User 模型
     
     Args:
@@ -151,12 +151,12 @@ async def change_password(
     """
     try:
         # 检查是否是平台超级管理员
-        is_platform_superadmin = getattr(current_user, '_is_platform_superadmin', False)
+        is_infra_superadmin = getattr(current_user, '_is_infra_superadmin', False)
         
-        if is_platform_superadmin:
-            # 平台超级管理员：使用 PlatformSuperAdmin 模型
-            admin_id = getattr(current_user, '_platform_superadmin_id', current_user.id)
-            admin = await PlatformSuperAdmin.get_or_none(id=admin_id)
+        if is_infra_superadmin:
+            # 平台超级管理员：使用 InfraSuperAdmin 模型
+            admin_id = getattr(current_user, '_infra_superadmin_id', current_user.id)
+            admin = await InfraSuperAdmin.get_or_none(id=admin_id)
             
             if not admin:
                 raise NotFoundError("平台超级管理员不存在")
@@ -169,7 +169,7 @@ async def change_password(
                 )
             
             # 更新密码
-            admin.password_hash = PlatformSuperAdmin.hash_password(data.new_password)
+            admin.password_hash = InfraSuperAdmin.hash_password(data.new_password)
             await admin.save()
         else:
             # 普通用户：使用 User 模型

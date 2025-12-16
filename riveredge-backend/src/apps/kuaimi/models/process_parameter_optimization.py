@@ -43,7 +43,7 @@ class ProcessParameterOptimization(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimi_process_parameter_optimizations"
+        table = "apps_kuaimi_process_parameter_optimizations"
         indexes = [
             ("tenant_id",),
             ("optimization_no",),

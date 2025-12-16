@@ -41,7 +41,7 @@ class SavedSearch(BaseModel):
         """
         模型元数据
         """
-        table = "core_saved_searches"  # 表名必须包含模块前缀（sys_ - 系统级后端，兼容历史数据）
+        table = "core_saved_searches"  # 表名必须包含模块前缀（core_ - 系统级后端，兼容历史数据）
         indexes = [
             ("user_id",),           # 用户 ID 索引
             ("page_path",),         # 页面路径索引

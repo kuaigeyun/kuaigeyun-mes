@@ -213,7 +213,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             Optional[str]: 操作模块
         """
         # 从路径中提取模块名称
-        # 例如：/api/v1/system/users -> users
+        # 例如：/api/v1/core/users -> users
         # 例如：/api/v1/personal/profile -> profile
         parts = path.split("/")
         if len(parts) >= 4:
@@ -237,7 +237,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             Optional[str]: 操作对象类型
         """
         # 从路径中提取对象类型
-        # 例如：/api/v1/system/users -> User
+        # 例如：/api/v1/core/users -> User
         # 例如：/api/v1/personal/profile -> UserProfile
         parts = path.split("/")
         if len(parts) >= 5:
@@ -259,8 +259,8 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             Optional[str]: 操作对象 UUID
         """
         # 从路径中提取 UUID（如果存在）
-        # 例如：/api/v1/system/users/{uuid} -> uuid
-        # 例如：/api/v1/system/users/{uuid}/roles -> uuid
+        # 例如：/api/v1/core/users/{uuid} -> uuid
+        # 例如：/api/v1/core/users/{uuid}/roles -> uuid
         import re
         # UUID 格式：8-4-4-4-12 十六进制字符
         uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'

@@ -97,7 +97,7 @@ export async function exampleHandleImport1(
 
   // 导入函数（单个数据项的导入逻辑）
   const importFn = async (data: any, rowIndex: number) => {
-    return await apiRequest('/platform/tenants', {
+    return await apiRequest('/infra/tenants', {
       method: 'POST',
       data,
     });
@@ -167,7 +167,7 @@ export async function exampleHandleImport2(
   };
 
   const importFn = async (data: any) => {
-    return await apiRequest('/platform/tenants', {
+    return await apiRequest('/infra/tenants', {
       method: 'POST',
       data,
     });
@@ -212,7 +212,7 @@ export async function exampleHandleImport3(
   const results = await batchImport(
     data,
     async (itemData) => {
-      return await apiRequest('/platform/tenants', {
+      return await apiRequest('/infra/tenants', {
         method: 'POST',
         data: itemData,
       });

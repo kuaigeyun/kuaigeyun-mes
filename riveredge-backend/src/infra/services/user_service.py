@@ -77,7 +77,7 @@ class UserService:
             password_hash=password_hash,
             full_name=data.full_name,
             is_active=data.is_active,
-            is_platform_admin=data.is_platform_admin,
+            is_infra_admin=data.is_infra_admin,
             is_tenant_admin=data.is_tenant_admin,
             source=data.source if hasattr(data, 'source') and data.source else None,  # 用户来源
         )

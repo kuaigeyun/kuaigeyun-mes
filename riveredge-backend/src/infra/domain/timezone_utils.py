@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 import pytz
 
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 # 统一时区：从 Settings 中读取，默认 Asia/Shanghai (UTC+8)

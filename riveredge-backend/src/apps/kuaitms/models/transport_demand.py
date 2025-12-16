@@ -45,7 +45,7 @@ class TransportDemand(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaitms_transport_demands"
+        table = "apps_kuaitms_transport_demands"
         indexes = [
             ("tenant_id",),
             ("demand_no",),

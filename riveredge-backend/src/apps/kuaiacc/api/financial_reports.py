@@ -15,7 +15,7 @@ from apps.kuaiacc.schemas.financial_report_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/financial-reports", tags=["财务报表"])
+router = APIRouter(prefix="/financial-reports", tags=["Financial Reports"])
 
 
 @router.post("", response_model=FinancialReportResponse, summary="创建财务报表")
@@ -89,10 +89,10 @@ async def delete_financial_report(
 
 @router.post("/generate", response_model=FinancialReportResponse, summary="生成财务报表")
 async def generate_report(
-    report_type: str = Query(..., description="报表类型"),
-    report_period: str = Query(..., description="报表期间"),
     current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    report_type: str = Query(..., description="报表类型"),
+    report_period: str = Query(..., description="报表期间")
 ):
     """生成财务报表"""
     try:

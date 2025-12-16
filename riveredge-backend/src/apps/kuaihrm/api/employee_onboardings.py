@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.employee_onboarding_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/employee-onboardings", tags=["员工入职"])
+router = APIRouter(prefix="/employee-onboardings", tags=["Employee Onboardings"])
 
 
 @router.post("", response_model=EmployeeOnboardingResponse, summary="创建员工入职")

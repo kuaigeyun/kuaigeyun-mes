@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 
 # 密码加密上下文（使用 pbkdf2，更好的跨平台兼容性）
@@ -140,7 +140,7 @@ def create_token_for_user(
     user_id: int,
     username: str,
     tenant_id: Optional[int],
-    is_platform_admin: bool = False,
+    is_infra_admin: bool = False,
     is_tenant_admin: bool = False,
     expires_delta: Optional[timedelta] = None
 ) -> str:
@@ -154,7 +154,7 @@ def create_token_for_user(
         user_id: 用户 ID
         username: 用户名
         tenant_id: 组织 ID（关键：用于多组织隔离，系统级超级管理员可为 None）
-        is_platform_admin: 是否为平台管理（系统级超级管理员）
+        is_infra_admin: 是否为平台管理（系统级超级管理员）
         is_tenant_admin: 是否为组织管理员
         expires_delta: 过期时间增量（可选）
         
@@ -166,7 +166,7 @@ def create_token_for_user(
         ...     user_id=1,
         ...     username="testuser",
         ...     tenant_id=1,
-        ...     is_platform_admin=False,
+        ...     is_infra_admin=False,
         ...     is_tenant_admin=True
         ... )
         >>> len(token) > 0
@@ -176,7 +176,7 @@ def create_token_for_user(
         "sub": str(user_id),  # 用户 ID（标准 JWT 字段）
         "username": username,
         "tenant_id": tenant_id,  # ⭐ 关键：组织 ID，用于多组织隔离（平台管理可为 None）
-        "is_platform_admin": is_platform_admin,
+        "is_infra_admin": is_infra_admin,
         "is_tenant_admin": is_tenant_admin,
     }
     
@@ -197,7 +197,7 @@ def get_token_payload(token: str) -> Optional[Dict[str, Any]]:
             - sub: 用户 ID
             - username: 用户名
             - tenant_id: 组织 ID
-            - is_platform_admin: 是否为平台管理
+            - is_infra_admin: 是否为平台管理
             - is_tenant_admin: 是否为组织管理员
             - exp: 过期时间
             - iat: 签发时间

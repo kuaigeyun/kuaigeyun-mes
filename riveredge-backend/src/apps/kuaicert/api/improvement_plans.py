@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.improvement_plan_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/improvement-plan", tags=["改进计划"])
+router = APIRouter(prefix="/improvement-plan", tags=["Improvement Plans"])
 
 
 @router.post("", response_model=ImprovementPlanResponse, summary="创建改进计划")

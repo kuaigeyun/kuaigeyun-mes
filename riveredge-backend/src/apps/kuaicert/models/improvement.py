@@ -35,7 +35,7 @@ class ImprovementSuggestion(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicert_improvement_suggestions"
+        table = "apps_kuaicert_improvement_suggestions"
         indexes = [
             ("tenant_id",),
             ("suggestion_no",),
@@ -98,7 +98,7 @@ class ImprovementPlan(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicert_improvement_plans"
+        table = "apps_kuaicert_improvement_plans"
         indexes = [
             ("tenant_id",),
             ("plan_no",),
@@ -171,7 +171,7 @@ class BestPractice(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicert_best_practices"
+        table = "apps_kuaicert_best_practices"
         indexes = [
             ("tenant_id",),
             ("practice_no",),

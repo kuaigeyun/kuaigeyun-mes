@@ -32,7 +32,7 @@ class OpportunityFollowUp(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_opportunity_followups"
+        table = "apps_kuaicrm_opportunity_followups"
         indexes = [
             ("tenant_id",),
             ("opportunity_id",),

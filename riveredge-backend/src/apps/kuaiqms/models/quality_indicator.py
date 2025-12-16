@@ -40,7 +40,7 @@ class QualityIndicator(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_quality_indicators"
+        table = "apps_kuaiqms_quality_indicators"
         indexes = [
             ("tenant_id",),
             ("indicator_no",),

@@ -43,7 +43,7 @@ class CapacityPlanning(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiaps_capacity_plannings"
+        table = "apps_kuaiaps_capacity_plannings"
         indexes = [
             ("tenant_id",),
             ("planning_no",),

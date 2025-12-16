@@ -8,7 +8,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { shortageAlertApi } from '../../services/process';
 import type { ShortageAlert } from '../../types/process';
 

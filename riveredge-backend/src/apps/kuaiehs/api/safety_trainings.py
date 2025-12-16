@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.safety_training_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/safety-training", tags=["安全培训"])
+router = APIRouter(prefix="/safety-training", tags=["Safety Trainings"])
 
 
 @router.post("", response_model=SafetyTrainingResponse, summary="创建安全培训")

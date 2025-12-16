@@ -38,7 +38,7 @@ class DesignChange(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipdm_design_changes"
+        table = "apps_kuaipdm_design_changes"
         indexes = [
             ("tenant_id",),
             ("change_no",),

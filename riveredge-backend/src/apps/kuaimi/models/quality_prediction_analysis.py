@@ -46,7 +46,7 @@ class QualityPredictionAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimi_quality_prediction_analyses"
+        table = "apps_kuaimi_quality_prediction_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),

@@ -35,7 +35,7 @@ class ResearchProcess(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipdm_research_processes"
+        table = "apps_kuaipdm_research_processes"
         indexes = [
             ("tenant_id",),
             ("process_no",),

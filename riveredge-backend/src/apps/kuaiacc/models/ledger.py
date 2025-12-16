@@ -42,7 +42,7 @@ class Ledger(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_ledgers"
+        table = "apps_kuaiacc_ledgers"
         indexes = [
             ("tenant_id",),
             ("subject_id",),
@@ -117,7 +117,7 @@ class LedgerDetail(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_ledger_details"
+        table = "apps_kuaiacc_ledger_details"
         indexes = [
             ("tenant_id",),
             ("subject_id",),

@@ -22,9 +22,9 @@ class User(BaseModel):
     
     用于管理 SaaS 多组织系统中的用户信息。
     用户权限分为三个层级：
-    1. **用户（普通用户）**：`is_platform_admin=False` 且 `is_tenant_admin=False` 且 `tenant_id` 不为空
-    2. **组织管理员**：`is_tenant_admin=True` 且 `tenant_id` 不为空（`is_platform_admin=False`）
-    3. **平台管理（系统级超级管理员）**：`is_platform_admin=True` 且 `tenant_id=None`（`is_tenant_admin=False`）
+    1. **用户（普通用户）**：`is_infra_admin=False` 且 `is_tenant_admin=False` 且 `tenant_id` 不为空
+    2. **组织管理员**：`is_tenant_admin=True` 且 `tenant_id` 不为空（`is_infra_admin=False`）
+    3. **平台管理（系统级超级管理员）**：`is_infra_admin=True` 且 `tenant_id=None`（`is_tenant_admin=False`）
     
     普通用户和组织管理员必须属于某个组织（tenant_id），实现多组织数据隔离。
     平台管理可以跨组织访问和管理数据。
@@ -38,7 +38,7 @@ class User(BaseModel):
         password_hash: 密码哈希值（使用 bcrypt 加密）
         full_name: 用户全名（可选）
         is_active: 是否激活
-        is_platform_admin: 是否为平台管理（系统级超级管理员，需 tenant_id=None）
+        is_infra_admin: 是否为平台管理（系统级超级管理员，需 tenant_id=None）
         is_tenant_admin: 是否为组织管理员（需 tenant_id 不为空）
         last_login: 最后登录时间（可选）
         created_at: 创建时间
@@ -52,7 +52,7 @@ class User(BaseModel):
     password_hash = fields.CharField(max_length=255, description="密码哈希值（使用 bcrypt 加密）")
     full_name = fields.CharField(max_length=100, null=True, description="用户全名（可选）")
     is_active = fields.BooleanField(default=True, description="是否激活")
-    is_platform_admin = fields.BooleanField(default=False, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
+    is_infra_admin = fields.BooleanField(default=False, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
     is_tenant_admin = fields.BooleanField(default=False, description="是否为组织管理员（需 tenant_id 不为空）")
     source = fields.CharField(max_length=50, null=True, description="用户来源（invite_code, personal, organization等）")
     last_login = fields.DatetimeField(null=True, description="最后登录时间（可选）")
@@ -110,7 +110,7 @@ class User(BaseModel):
             ("tenant_id",),           # 组织 ID 索引
             ("username",),            # 用户名索引
             ("tenant_id", "username"),  # 组织 ID + 用户名联合索引（组织内用户名唯一）
-            ("is_platform_admin",),       # 平台管理索引
+            ("is_infra_admin",),       # 平台管理索引
             ("department_id",),       # 部门 ID 索引（扩展字段）
             ("position_id",),         # 职位 ID 索引（扩展字段）
             ("phone",),               # 手机号索引（扩展字段）
@@ -170,16 +170,16 @@ class User(BaseModel):
         """
         return pwd_context.verify(password, self.password_hash)
     
-    def is_platform_admin_user(self) -> bool:
+    def is_infra_admin_user(self) -> bool:
         """
         判断是否为平台管理（系统级超级管理员）
         
-        平台管理：is_platform_admin=True 且 tenant_id=None
+        平台管理：is_infra_admin=True 且 tenant_id=None
         
         Returns:
             bool: 如果是平台管理返回 True，否则返回 False
         """
-        return self.is_platform_admin and self.tenant_id is None
+        return self.is_infra_admin and self.tenant_id is None
     
     def is_organization_admin(self) -> bool:
         """
@@ -196,10 +196,10 @@ class User(BaseModel):
         """
         判断是否为普通用户
         
-        普通用户：is_platform_admin=False 且 is_tenant_admin=False 且 tenant_id 不为空
+        普通用户：is_infra_admin=False 且 is_tenant_admin=False 且 tenant_id 不为空
         
         Returns:
             bool: 如果是普通用户返回 True，否则返回 False
         """
-        return not self.is_platform_admin and not self.is_tenant_admin and self.tenant_id is not None
+        return not self.is_infra_admin and not self.is_tenant_admin and self.tenant_id is not None
 

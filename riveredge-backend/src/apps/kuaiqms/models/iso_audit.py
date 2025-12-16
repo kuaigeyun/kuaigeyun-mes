@@ -38,7 +38,7 @@ class ISOAudit(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_iso_audits"
+        table = "apps_kuaiqms_iso_audits"
         indexes = [
             ("tenant_id",),
             ("audit_no",),

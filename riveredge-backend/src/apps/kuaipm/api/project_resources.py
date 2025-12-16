@@ -15,7 +15,7 @@ from apps.kuaipm.schemas.project_resource_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/project-resource", tags=["项目资源"])
+router = APIRouter(prefix="/project-resource", tags=["Project Resources"])
 
 
 @router.post("", response_model=ProjectResourceResponse, summary="创建项目资源")

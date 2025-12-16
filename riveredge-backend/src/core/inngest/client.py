@@ -8,9 +8,14 @@ import os
 from inngest import Inngest
 
 # 从环境变量获取 Inngest 配置
+# 优先使用 INNGEST_EVENT_API_URL，否则从 infra_settings 读取
+from infra.config.infra_config import infra_settings
+
+INNGEST_HOST = os.getenv("INNGEST_HOST", infra_settings.INNGEST_HOST)
+INNGEST_PORT = int(os.getenv("INNGEST_PORT", str(infra_settings.INNGEST_PORT)))
 INNGEST_EVENT_API_URL = os.getenv(
     "INNGEST_EVENT_API_URL",
-    "http://localhost:8288"
+    f"http://{INNGEST_HOST}:{INNGEST_PORT}"
 )
 INNGEST_APP_ID = os.getenv(
     "INNGEST_APP_ID",

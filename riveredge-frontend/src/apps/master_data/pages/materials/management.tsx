@@ -26,7 +26,7 @@ import type { MenuProps } from 'antd';
 
 // 导入现有组件
 import SafeProFormSelect from '@/components/SafeProFormSelect';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '@/apps/master_data/services/material';

@@ -27,7 +27,7 @@ export default function access(initialState: { currentUser?: CurrentUser } | und
     /**
      * 是否为平台管理
      */
-    isSuperAdmin: currentUser?.is_platform_admin === true,
+    isSuperAdmin: currentUser?.is_infra_admin === true,
     
     /**
      * 是否为组织管理员
@@ -37,12 +37,12 @@ export default function access(initialState: { currentUser?: CurrentUser } | und
     /**
      * 是否拥有用户管理权限
      */
-    canManageUsers: currentUser?.is_platform_admin === true || currentUser?.is_tenant_admin === true,
+    canManageUsers: currentUser?.is_infra_admin === true || currentUser?.is_tenant_admin === true,
     
     /**
      * 是否拥有角色管理权限
      */
-    canManageRoles: currentUser?.is_platform_admin === true || currentUser?.is_tenant_admin === true,
+    canManageRoles: currentUser?.is_infra_admin === true || currentUser?.is_tenant_admin === true,
   };
 }
 

@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.strategy_map_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/strategy-map", tags=["战略地图"])
+router = APIRouter(prefix="/strategy-map", tags=["Strategy Maps"])
 
 
 @router.post("", response_model=StrategyMapResponse, summary="创建战略地图")

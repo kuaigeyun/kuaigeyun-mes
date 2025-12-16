@@ -15,7 +15,7 @@ from apps.kuaiiot.schemas.data_alert_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/data-alerts", tags=["数据预警"])
+router = APIRouter(prefix="/data-alerts", tags=["Data Alerts"])
 
 
 @router.post("", response_model=DataAlertResponse, summary="创建数据预警")

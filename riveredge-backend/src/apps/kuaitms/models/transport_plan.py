@@ -40,7 +40,7 @@ class TransportPlan(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaitms_transport_plans"
+        table = "apps_kuaitms_transport_plans"
         indexes = [
             ("tenant_id",),
             ("plan_no",),

@@ -43,7 +43,7 @@ class CustomerInvoice(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_customer_invoices"
+        table = "apps_kuaiacc_customer_invoices"
         indexes = [
             ("tenant_id",),
             ("invoice_no",),

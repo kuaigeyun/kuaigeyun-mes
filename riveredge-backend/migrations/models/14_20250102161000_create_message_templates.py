@@ -26,6 +26,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "root_message_templates" IS '消息模板表';
         
         -- 创建消息模板表索引
         CREATE INDEX IF NOT EXISTS "idx_root_message_templates_tenant_id" ON "root_message_templates" ("tenant_id");

@@ -9,11 +9,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from infra.models.user import User
-from infra.models.platform_superadmin import PlatformSuperAdmin
+from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.domain.security.security import get_token_payload
 # 注意：SuperAdmin安全模块已移除
-from infra.domain.security.platform_superadmin_security import (
-    get_platform_superadmin_token_payload
+from infra.domain.security.infra_superadmin_security import (
+    get_infra_superadmin_token_payload
 )
 from infra.domain.tenant_context import set_current_tenant_id
 from infra.services.auth_service import AuthService
@@ -24,8 +24,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=F
 # 注意：SuperAdmin Auth已移除，使用Platform Admin Auth替代
 
 # 平台超级管理员 OAuth2 密码流（用于从请求头获取平台超级管理员 Token）
-platform_superadmin_oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/platform/auth/login",  # ⚠️ 修复：使用正确的登录路径
+infra_superadmin_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/infra/auth/login",  # 对应 infra/ 文件夹
     auto_error=False  # ⚠️ 改回 False，允许可选认证
 )
 
@@ -65,16 +65,16 @@ async def get_current_user(
         )
 
     # ⚠️ 关键修复：先尝试验证平台超级管理员 Token
-    platform_superadmin_payload = get_platform_superadmin_token_payload(token)
-    if platform_superadmin_payload:
+    infra_superadmin_payload = get_infra_superadmin_token_payload(token)
+    if infra_superadmin_payload:
         # 这是平台超级管理员 Token，允许全局访问
         # 创建一个虚拟的 User 对象，标记为平台超级管理员
         from loguru import logger
         logger.info(f"✅ 检测到平台超级管理员 Token，允许全局访问")
         
         # 获取平台超级管理员 ID
-        admin_id = int(platform_superadmin_payload.get("sub"))
-        admin = await PlatformSuperAdmin.get_or_none(id=admin_id)
+        admin_id = int(infra_superadmin_payload.get("sub"))
+        admin = await InfraSuperAdmin.get_or_none(id=admin_id)
         if not admin:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -102,8 +102,8 @@ async def get_current_user(
         setattr(virtual_user, 'password_hash', "")  # 虚拟用户不需要密码
         setattr(virtual_user, 'full_name', getattr(admin, 'full_name', admin.username))
         # 设置一个标记，表示这是平台超级管理员
-        setattr(virtual_user, '_is_platform_superadmin', True)
-        setattr(virtual_user, '_platform_superadmin_id', admin_id)
+        setattr(virtual_user, '_is_infra_superadmin', True)
+        setattr(virtual_user, '_infra_superadmin_id', admin_id)
         
         # 确保 id 属性可以直接访问
         if not hasattr(virtual_user, 'id') or virtual_user.id is None:
@@ -177,11 +177,11 @@ async def get_current_active_user(
     return current_user
 
 
-# 注意：get_current_superadmin 函数已移除，使用 get_current_platform_superadmin 替代
+# 注意：get_current_superadmin 函数已移除，使用 get_current_infra_superadmin 替代
 
-async def get_current_platform_superadmin(
-    token: Optional[str] = Depends(platform_superadmin_oauth2_scheme)
-) -> PlatformSuperAdmin:
+async def get_current_infra_superadmin(
+    token: Optional[str] = Depends(infra_superadmin_oauth2_scheme)
+) -> InfraSuperAdmin:
     """
     获取当前平台超级管理员依赖
     
@@ -192,7 +192,7 @@ async def get_current_platform_superadmin(
         token: JWT Token（从请求头 Authorization: Bearer <token> 中提取）
         
     Returns:
-        PlatformSuperAdmin: 当前平台超级管理员对象
+        InfraSuperAdmin: 当前平台超级管理员对象
         
     Raises:
         HTTPException: 当 Token 无效、平台超级管理员不存在或未激活时抛出
@@ -201,39 +201,39 @@ async def get_current_platform_superadmin(
         ```python
         @router.get("/platform-superadmin/protected")
         async def protected_route(
-            current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+            current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
         ):
             return {"admin_id": current_admin.id}
         ```
     """
     # 验证平台超级管理员 Token
     from loguru import logger
-    logger.info(f"🔍 [get_current_platform_superadmin] 开始验证平台超级管理员 Token，Token 类型: {type(token)}, Token 长度: {len(token) if token else 0}")
+    logger.info(f"🔍 [get_current_infra_superadmin] 开始验证平台超级管理员 Token，Token 类型: {type(token)}, Token 长度: {len(token) if token else 0}")
     
     # ⚠️ 关键修复：处理 token 为 None 的情况（当 auto_error=False 且没有 Token 时）
     if not token:
-        logger.warning(f"❌ [get_current_platform_superadmin] Token 为空或 None")
+        logger.warning(f"❌ [get_current_infra_superadmin] Token 为空或 None")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="未提供 Token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    payload = get_platform_superadmin_token_payload(token)
+    payload = get_infra_superadmin_token_payload(token)
     if not payload:
-        logger.warning(f"❌ [get_current_platform_superadmin] 平台超级管理员 Token 验证失败，Token 前10个字符: {token[:10] if token else 'None'}")
+        logger.warning(f"❌ [get_current_infra_superadmin] 平台超级管理员 Token 验证失败，Token 前10个字符: {token[:10] if token else 'None'}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的 Token（平台超级管理员）",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    logger.info(f"✅ [get_current_platform_superadmin] 平台超级管理员 Token 验证成功，admin_id: {payload.get('sub')}")
+    logger.info(f"✅ [get_current_infra_superadmin] 平台超级管理员 Token 验证成功，admin_id: {payload.get('sub')}")
     
     # 获取平台超级管理员 ID
     admin_id = int(payload.get("sub"))
     
     # 获取平台超级管理员
-    admin = await PlatformSuperAdmin.get_or_none(id=admin_id)
+    admin = await InfraSuperAdmin.get_or_none(id=admin_id)
     if not admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

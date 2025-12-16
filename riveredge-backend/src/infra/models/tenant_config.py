@@ -29,7 +29,7 @@ class TenantConfig(BaseModel):
     """
 
     id = fields.IntField(pk=True, description="配置 ID（主键）")
-    tenant_id = fields.IntField(description="组织 ID（外键，关联到 platform_tenants 表）")
+    tenant_id = fields.IntField(description="组织 ID（外键，关联到 infra_tenants 表）")
     config_key = fields.CharField(max_length=100, description="配置键（唯一标识配置项）")
     config_value = fields.JSONField(default=dict, description="配置值（JSONB 存储）")
     description = fields.TextField(null=True, description="配置描述（可选）")
@@ -38,7 +38,7 @@ class TenantConfig(BaseModel):
         """
         模型元数据
         """
-        table = "platform_tenant_configs"  # 表名必须包含模块前缀（platform_ - 平台级租户管理）
+        table = "infra_tenant_configs"  # 表名必须包含模块前缀（infra_ - 平台级租户管理）
         indexes = [
             ("tenant_id",),      # 组织 ID 索引
             ("config_key",),     # 配置键索引

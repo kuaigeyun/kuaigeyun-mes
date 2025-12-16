@@ -24,6 +24,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "fk_root_menus_parent" FOREIGN KEY ("parent_id") REFERENCES "root_menus" ("id") ON DELETE SET NULL
         );
+COMMENT ON TABLE "root_menus" IS '菜单表';
         CREATE INDEX IF NOT EXISTS "idx_root_menus_tenant_id" ON "root_menus" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_root_menus_parent_id" ON "root_menus" ("parent_id");
         CREATE INDEX IF NOT EXISTS "idx_root_menus_application_uuid" ON "root_menus" ("application_uuid");

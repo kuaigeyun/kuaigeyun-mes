@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.regulation_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/regulation", tags=["法规"])
+router = APIRouter(prefix="/regulation", tags=["Regulations"])
 
 
 @router.post("", response_model=RegulationResponse, summary="创建法规")

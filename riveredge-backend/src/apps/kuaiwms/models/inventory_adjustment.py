@@ -37,7 +37,7 @@ class InventoryAdjustment(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiwms_inventory_adjustments"
+        table = "apps_kuaiwms_inventory_adjustments"
         indexes = [
             ("tenant_id",),
             ("adjustment_no",),

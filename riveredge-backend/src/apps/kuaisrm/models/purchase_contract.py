@@ -39,7 +39,7 @@ class PurchaseContract(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaisrm_purchase_contracts"
+        table = "apps_kuaisrm_purchase_contracts"
         indexes = [
             ("tenant_id",),
             ("contract_no",),

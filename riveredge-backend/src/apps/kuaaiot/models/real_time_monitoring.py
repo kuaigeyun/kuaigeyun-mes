@@ -39,7 +39,7 @@ class RealTimeMonitoring(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaaiot_real_time_monitorings"
+        table = "apps_kuaaiot_real_time_monitorings"
         indexes = [
             ("tenant_id",),
             ("monitoring_no",),

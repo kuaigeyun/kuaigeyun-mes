@@ -7,14 +7,14 @@
 from apps.kuaicert.models.certification_type import (
     CertificationType,
     CertificationStandard,
-    ScoringRule,
 )
+from apps.kuaicert.models.scoring_rule import ScoringRule
 from apps.kuaicert.models.certification_assessment import (
     CertificationRequirement,
-    CurrentAssessment,
-    SelfAssessment,
-    AssessmentReport,
 )
+from apps.kuaicert.models.current_assessment import CurrentAssessment
+from apps.kuaicert.models.self_assessment import SelfAssessment
+from apps.kuaicert.models.assessment_report import AssessmentReport
 from apps.kuaicert.models.improvement import (
     ImprovementSuggestion,
     ImprovementPlan,

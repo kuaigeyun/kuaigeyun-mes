@@ -15,7 +15,7 @@ from apps.kuaioa.schemas.approval_node_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/approval-node", tags=["审批节点"])
+router = APIRouter(prefix="/approval-node", tags=["Approval Nodes"])
 
 
 @router.post("", response_model=ApprovalNodeResponse, summary="创建审批节点")

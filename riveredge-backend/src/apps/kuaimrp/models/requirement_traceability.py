@@ -33,7 +33,7 @@ class RequirementTraceability(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimrp_requirement_traceabilities"
+        table = "apps_kuaimrp_requirement_traceabilities"
         indexes = [
             ("tenant_id",),
             ("requirement_id",),

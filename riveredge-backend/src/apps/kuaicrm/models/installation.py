@@ -32,7 +32,7 @@ class Installation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_installations"
+        table = "apps_kuaicrm_installations"
         indexes = [
             ("tenant_id",),
             ("installation_no",),

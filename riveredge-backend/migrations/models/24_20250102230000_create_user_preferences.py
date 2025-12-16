@@ -18,6 +18,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+COMMENT ON TABLE "root_user_preferences" IS '用户偏好表';
         
         -- 创建唯一约束（user_id）
         CREATE UNIQUE INDEX IF NOT EXISTS "uk_root_user_preferences_user_id" ON "root_user_preferences" ("user_id");

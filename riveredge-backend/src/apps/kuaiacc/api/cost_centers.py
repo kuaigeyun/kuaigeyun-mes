@@ -15,7 +15,7 @@ from apps.kuaiacc.schemas.cost_center_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/cost-centers", tags=["成本中心"])
+router = APIRouter(prefix="/cost-centers", tags=["Cost Centers"])
 
 
 @router.post("", response_model=CostCenterResponse, summary="创建成本中心")

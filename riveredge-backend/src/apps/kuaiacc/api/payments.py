@@ -16,7 +16,7 @@ from apps.kuaiacc.schemas.payment_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/payments", tags=["付款"])
+router = APIRouter(prefix="/payments", tags=["Payments"])
 
 
 @router.post("", response_model=PaymentResponse, summary="创建付款")

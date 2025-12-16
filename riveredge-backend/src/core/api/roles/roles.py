@@ -50,7 +50,7 @@ def model_to_response(model_obj, response_class, **extra_fields):
 
     return response
 
-router = APIRouter(prefix="/roles", tags=["System Roles"])
+router = APIRouter(prefix="/roles", tags=["Core Roles"])
 
 
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)

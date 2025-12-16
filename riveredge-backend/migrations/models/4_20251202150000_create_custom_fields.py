@@ -31,6 +31,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_custom_tenant__i9j4k5" UNIQUE ("tenant_id", "table_name", "code")
         );
+COMMENT ON TABLE "sys_custom_fields" IS '自定义字段表';
         
         -- 创建自定义字段表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_custom_tenant__i9j4k5" ON "sys_custom_fields" ("tenant_id");
@@ -53,6 +54,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "sys_custom_field_values" IS '自定义字段值表';
         
         -- 创建自定义字段值表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_custom_v_custom__l9m4n5" ON "sys_custom_field_values" ("custom_field_id");

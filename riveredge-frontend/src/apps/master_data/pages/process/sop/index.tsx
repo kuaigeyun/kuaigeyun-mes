@@ -10,7 +10,7 @@ import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { sopApi, operationApi } from '../../../services/process';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 

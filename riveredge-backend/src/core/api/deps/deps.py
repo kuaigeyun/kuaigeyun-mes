@@ -15,7 +15,7 @@ from infra.api.deps.deps import (
 )
 from infra.models.user import User
 from infra.domain.tenant_context import get_current_tenant_id as get_tenant_id_from_context, set_current_tenant_id
-from infra.domain.security.platform_superadmin_security import get_platform_superadmin_token_payload
+from infra.domain.security.infra_superadmin_security import get_infra_superadmin_token_payload
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
@@ -63,11 +63,11 @@ async def get_current_tenant(
     logger.debug(f"🔍 get_current_tenant 调试信息: x_tenant_id={x_tenant_id}, all_headers={all_headers}")
     
     # ⚠️ 关键修复：检查是否为平台超级管理员 Token
-    is_platform_superadmin = False
+    is_infra_superadmin = False
     if token:
-        platform_superadmin_payload = get_platform_superadmin_token_payload(token)
-        if platform_superadmin_payload:
-            is_platform_superadmin = True
+        infra_superadmin_payload = get_infra_superadmin_token_payload(token)
+        if infra_superadmin_payload:
+            is_infra_superadmin = True
     
     tenant_id = None
 
@@ -87,7 +87,7 @@ async def get_current_tenant(
 
     # ⚠️ 关键修复：平台超级管理员允许 tenant_id 为 None（全局访问）
     if tenant_id is None:
-        if is_platform_superadmin:
+        if is_infra_superadmin:
             # 平台超级管理员可以访问所有租户，如果没有指定 tenant_id，使用默认租户
             from infra.services.tenant_service import TenantService
             try:

@@ -34,7 +34,7 @@ class SchedulingPlan(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_scheduling_plans"
+        table = "apps_kuaihrm_scheduling_plans"
         indexes = [
             ("tenant_id",),
             ("plan_no",),
@@ -96,7 +96,7 @@ class SchedulingExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_scheduling_executions"
+        table = "apps_kuaihrm_scheduling_executions"
         indexes = [
             ("tenant_id",),
             ("uuid",),

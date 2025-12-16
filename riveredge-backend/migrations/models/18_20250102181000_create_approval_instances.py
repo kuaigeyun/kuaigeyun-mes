@@ -30,6 +30,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             FOREIGN KEY ("process_id") REFERENCES "root_approval_processes" ("id") ON DELETE RESTRICT
         );
+COMMENT ON TABLE "root_approval_instances" IS '审批实例表';
         
         -- 创建审批实例表索引
         CREATE INDEX IF NOT EXISTS "idx_root_approval_instances_tenant_id" ON "root_approval_instances" ("tenant_id");

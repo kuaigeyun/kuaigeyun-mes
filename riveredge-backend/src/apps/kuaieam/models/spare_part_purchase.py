@@ -45,7 +45,7 @@ class SparePartPurchase(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_spare_part_purchases"
+        table = "apps_kuaieam_spare_part_purchases"
         indexes = [
             ("tenant_id",),
             ("purchase_no",),

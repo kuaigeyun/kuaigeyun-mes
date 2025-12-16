@@ -13,7 +13,7 @@ import redis.asyncio as redis
 from core.models.system_parameter import SystemParameter
 from core.schemas.system_parameter import SystemParameterCreate, SystemParameterUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.config.platform_config import platform_settings as settings
+from infra.config.infra_config import infra_settings as settings
 
 # Redis 客户端（全局单例）
 _redis_client: Optional[redis.Redis] = None

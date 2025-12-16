@@ -40,7 +40,7 @@ class KPI(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_kpis"
+        table = "apps_kuaiepm_kpis"
         indexes = [
             ("tenant_id",),
             ("kpi_code",),
@@ -105,7 +105,7 @@ class KPIMonitoring(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_kpi_monitorings"
+        table = "apps_kuaiepm_kpi_monitorings"
         indexes = [
             ("tenant_id",),
             ("monitoring_no",),
@@ -165,7 +165,7 @@ class KPIAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_kpi_analyses"
+        table = "apps_kuaiepm_kpi_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),
@@ -236,7 +236,7 @@ class KPIAlert(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiepm_kpi_alerts"
+        table = "apps_kuaiepm_kpi_alerts"
         indexes = [
             ("tenant_id",),
             ("alert_no",),

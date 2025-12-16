@@ -25,6 +25,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "root_approval_processes" IS '审批流程表';
         
         -- 创建审批流程表索引
         CREATE INDEX IF NOT EXISTS "idx_root_approval_processes_tenant_id" ON "root_approval_processes" ("tenant_id");

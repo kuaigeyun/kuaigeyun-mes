@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.improvement_suggestion_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/improvement-suggestion", tags=["改进建议"])
+router = APIRouter(prefix="/improvement-suggestion", tags=["Improvement Suggestions"])
 
 
 @router.post("", response_model=ImprovementSuggestionResponse, summary="创建改进建议")

@@ -42,7 +42,7 @@ class Payment(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_payments"
+        table = "apps_kuaiacc_payments"
         indexes = [
             ("tenant_id",),
             ("payment_no",),
@@ -113,7 +113,7 @@ class PaymentSettlement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_payment_settlements"
+        table = "apps_kuaiacc_payment_settlements"
         indexes = [
             ("tenant_id",),
             ("payment_id",),

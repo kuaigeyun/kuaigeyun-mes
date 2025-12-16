@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.kpi_alert_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/kpi-alert", tags=["KPI预警"])
+router = APIRouter(prefix="/kpi-alert", tags=["KPI Alerts"])
 
 
 @router.post("", response_model=KPIAlertResponse, summary="创建KPI预警")

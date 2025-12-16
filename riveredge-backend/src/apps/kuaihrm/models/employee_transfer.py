@@ -36,7 +36,7 @@ class EmployeeOnboarding(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_employee_onboardings"
+        table = "apps_kuaihrm_employee_onboardings"
         indexes = [
             ("tenant_id",),
             ("onboarding_no",),
@@ -99,7 +99,7 @@ class EmployeeResignation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_employee_resignations"
+        table = "apps_kuaihrm_employee_resignations"
         indexes = [
             ("tenant_id",),
             ("resignation_no",),
@@ -166,7 +166,7 @@ class EmployeeTransfer(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_employee_transfers"
+        table = "apps_kuaihrm_employee_transfers"
         indexes = [
             ("tenant_id",),
             ("transfer_no",),

@@ -45,7 +45,7 @@ class PlanAdjustment(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiaps_plan_adjustments"
+        table = "apps_kuaiaps_plan_adjustments"
         indexes = [
             ("tenant_id",),
             ("adjustment_no",),

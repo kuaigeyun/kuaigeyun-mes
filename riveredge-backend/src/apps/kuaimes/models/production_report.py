@@ -45,7 +45,7 @@ class ProductionReport(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimes_production_reports"
+        table = "apps_kuaimes_production_reports"
         indexes = [
             ("tenant_id",),
             ("report_no",),

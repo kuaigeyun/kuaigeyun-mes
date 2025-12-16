@@ -255,7 +255,7 @@ export async function getFilePreview(fileUuid: string): Promise<FilePreviewRespo
  */
 export function getFileDownloadUrl(fileUuid: string): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-  return `${baseUrl}/api/v1/system/files/${fileUuid}/download`;
+  return `${baseUrl}/api/v1/core/files/${fileUuid}/download`;
 }
 
 /**

@@ -49,7 +49,7 @@ class SystemPerformanceAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimi_system_performance_analyses"
+        table = "apps_kuaimi_system_performance_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),

@@ -15,7 +15,7 @@ from apps.kuaiiot.schemas.real_time_monitoring_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/real-time-monitorings", tags=["实时监控"])
+router = APIRouter(prefix="/real-time-monitorings", tags=["Real Time Monitoring"])
 
 
 @router.post("", response_model=RealTimeMonitoringResponse, summary="创建实时监控")

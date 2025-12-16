@@ -38,7 +38,7 @@ class VehicleDispatch(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaitms_vehicle_dispatches"
+        table = "apps_kuaitms_vehicle_dispatches"
         indexes = [
             ("tenant_id",),
             ("dispatch_no",),

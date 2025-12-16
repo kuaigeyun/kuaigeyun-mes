@@ -36,7 +36,7 @@ class CostCenter(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_cost_centers"
+        table = "apps_kuaiacc_cost_centers"
         indexes = [
             ("tenant_id",),
             ("center_code",),

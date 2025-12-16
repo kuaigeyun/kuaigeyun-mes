@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.objective_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/objective", tags=["目标"])
+router = APIRouter(prefix="/objective", tags=["Objectives"])
 
 
 @router.post("", response_model=ObjectiveResponse, summary="创建目标")

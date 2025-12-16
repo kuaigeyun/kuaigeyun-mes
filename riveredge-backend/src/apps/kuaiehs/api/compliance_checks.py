@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.compliance_check_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/compliance-check", tags=["合规检查"])
+router = APIRouter(prefix="/compliance-check", tags=["Compliance Checks"])
 
 
 @router.post("", response_model=ComplianceCheckResponse, summary="创建合规检查")

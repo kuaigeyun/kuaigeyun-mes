@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.scheduling_execution_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/scheduling-executions", tags=["排班执行"])
+router = APIRouter(prefix="/scheduling-executions", tags=["Scheduling Executions"])
 
 
 @router.post("", response_model=SchedulingExecutionResponse, summary="创建排班执行")

@@ -6,7 +6,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { projectRiskApi } from '../../services/process';
 import type { ProjectRisk, ProjectRiskCreate, ProjectRiskUpdate } from '../../types/process';
 

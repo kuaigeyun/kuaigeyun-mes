@@ -34,7 +34,7 @@ class MRPPlan(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimrp_mrp_plans"
+        table = "apps_kuaimrp_mrp_plans"
         indexes = [
             ("tenant_id",),
             ("plan_no",),

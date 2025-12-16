@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.salary_calculation_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/salary-calculations", tags=["薪资计算"])
+router = APIRouter(prefix="/salary-calculations", tags=["Salary Calculations"])
 
 
 @router.post("", response_model=SalaryCalculationResponse, summary="创建薪资计算")

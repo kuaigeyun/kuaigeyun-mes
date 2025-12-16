@@ -43,7 +43,7 @@ class CAPA(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_capas"
+        table = "apps_kuaiqms_capas"
         indexes = [
             ("tenant_id",),
             ("capa_no",),

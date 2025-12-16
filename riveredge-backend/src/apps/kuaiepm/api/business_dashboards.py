@@ -15,7 +15,7 @@ from apps.kuaiepm.schemas.business_dashboard_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/business-dashboard", tags=["经营仪表盘"])
+router = APIRouter(prefix="/business-dashboard", tags=["Business Dashboards"])
 
 
 @router.post("", response_model=BusinessDashboardResponse, summary="创建经营仪表盘")

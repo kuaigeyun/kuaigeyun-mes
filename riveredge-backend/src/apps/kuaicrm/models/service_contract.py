@@ -33,7 +33,7 @@ class ServiceContract(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_service_contracts"
+        table = "apps_kuaicrm_service_contracts"
         indexes = [
             ("tenant_id",),
             ("contract_no",),

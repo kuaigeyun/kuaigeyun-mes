@@ -6,7 +6,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormInstance, ProDescriptions, Button as ProButton } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { financialReportApi } from '../../services/process';
 import type { FinancialReport, FinancialReportCreate } from '../../types/process';
 

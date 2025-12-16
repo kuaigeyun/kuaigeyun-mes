@@ -41,7 +41,7 @@ class SparePartDemand(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_spare_part_demands"
+        table = "apps_kuaieam_spare_part_demands"
         indexes = [
             ("tenant_id",),
             ("demand_no",),

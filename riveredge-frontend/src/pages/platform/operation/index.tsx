@@ -74,7 +74,7 @@ export default function OperationsDashboard() {
   // 检查是否有 Token 和平台超级管理员权限
   const hasToken = !!getToken();
   const userInfo = getUserInfo();
-  const isPlatformSuperAdmin = userInfo?.user_type === 'platform_superadmin';
+  const isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin';
   
   // 根据当前语言设置 dayjs locale
   useEffect(() => {
@@ -145,7 +145,7 @@ export default function OperationsDashboard() {
       const data = await getTenantStatistics();
       return data;
     },
-    enabled: hasToken && isPlatformSuperAdmin, // 只有登录的平台超级管理员才能获取数据
+    enabled: hasToken && isInfraSuperAdmin, // 只有登录的平台超级管理员才能获取数据
     staleTime: 60000, // 数据在 60 秒内视为新鲜
     gcTime: 300000, // 缓存保留 5 分钟
     retry: false, // 401 错误不重试
@@ -163,7 +163,7 @@ export default function OperationsDashboard() {
    * 数据预加载：在组件挂载时预加载数据（如果用户有权限）
    */
   useEffect(() => {
-    if (hasToken && isPlatformSuperAdmin) {
+    if (hasToken && isInfraSuperAdmin) {
       // 预加载默认时间范围的数据
       queryClient.prefetchQuery({
         queryKey: ['tenantStatistics', 'today', null],
@@ -174,7 +174,7 @@ export default function OperationsDashboard() {
         staleTime: 60000,
       });
     }
-  }, [hasToken, isPlatformSuperAdmin, queryClient]);
+  }, [hasToken, isInfraSuperAdmin, queryClient]);
   
   /**
    * 自动刷新逻辑
@@ -396,7 +396,7 @@ export default function OperationsDashboard() {
       ]}
     >
       {/* 未登录或权限不足提示 */}
-      {(!hasToken || !isPlatformSuperAdmin) && (
+      {(!hasToken || !isInfraSuperAdmin) && (
         <Card style={{ marginBottom: 24 }}>
           <Empty
             description={
@@ -421,7 +421,7 @@ export default function OperationsDashboard() {
       )}
       
       {/* 错误提示（如果有缓存数据，显示警告而不是错误） */}
-      {error && hasToken && isPlatformSuperAdmin && (
+      {error && hasToken && isInfraSuperAdmin && (
         <Card style={{ marginBottom: 24 }}>
           {hasCachedData ? (
             <Space direction="vertical" size="small" align="center" style={{ width: '100%' }}>
@@ -454,7 +454,7 @@ export default function OperationsDashboard() {
       )}
       
       {/* 加载状态 */}
-      {loading && !displayStatistics && hasToken && isPlatformSuperAdmin ? (
+      {loading && !displayStatistics && hasToken && isInfraSuperAdmin ? (
         <Row gutter={[16, 16]}>
           {[1, 2, 3, 4].map((i) => (
             <Col xs={24} sm={12} lg={6} key={i}>
@@ -608,7 +608,7 @@ export default function OperationsDashboard() {
       )}
       
       {/* 有权限但无数据 */}
-      {!loading && !error && !displayStatistics && hasToken && isPlatformSuperAdmin && (
+      {!loading && !error && !displayStatistics && hasToken && isInfraSuperAdmin && (
         <Card>
           <Empty description="暂无数据" />
         </Card>

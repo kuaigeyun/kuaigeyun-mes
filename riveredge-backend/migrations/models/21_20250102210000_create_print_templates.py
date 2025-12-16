@@ -29,6 +29,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "root_print_templates" IS '打印模板表';
         
         -- 创建打印模板表索引
         CREATE INDEX IF NOT EXISTS "idx_root_print_templates_tenant_id" ON "root_print_templates" ("tenant_id");

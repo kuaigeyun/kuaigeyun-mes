@@ -33,7 +33,7 @@ class Warranty(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_warranties"
+        table = "apps_kuaicrm_warranties"
         indexes = [
             ("tenant_id",),
             ("warranty_no",),

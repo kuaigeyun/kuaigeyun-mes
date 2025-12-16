@@ -45,7 +45,7 @@ class InspectionTask(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_inspection_tasks"
+        table = "apps_kuaiqms_inspection_tasks"
         indexes = [
             ("tenant_id",),
             ("task_no",),

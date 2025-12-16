@@ -9,7 +9,7 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormS
 import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import type { StorageArea, StorageAreaCreate, StorageAreaUpdate, Warehouse } from '../../../types/warehouse';
 

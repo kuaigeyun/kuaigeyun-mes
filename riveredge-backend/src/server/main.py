@@ -6,6 +6,7 @@ RiverEdge App - SaaS平台主服务
 
 import os
 import sys
+import asyncio
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
@@ -26,8 +27,8 @@ from infra.api.tenants.tenants import router as tenants_router
 from infra.api.tenants.public import router as tenants_public_router
 from infra.api.packages.packages_config import router as packages_config_router
 from infra.api.packages.packages import router as packages_router
-from infra.api.platform_superadmin.platform_superadmin import router as platform_superadmin_router
-from infra.api.platform_superadmin.auth import router as platform_superadmin_auth_router
+from infra.api.infra_superadmin.infra_superadmin import router as infra_superadmin_router
+from infra.api.infra_superadmin.auth import router as infra_superadmin_auth_router
 from infra.api.auth.auth import router as auth_router
 from infra.api.monitoring.statistics import router as monitoring_statistics_router
 from infra.api.saved_searches.saved_searches import router as saved_searches_router
@@ -109,16 +110,9 @@ MODE = os.getenv("MODE", "saas")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时初始化
-    from tortoise import Tortoise
-    from infra.infrastructure.database.database import TORTOISE_ORM
-    
-    # 先注册到 FastAPI（用于自动管理连接池）
+    # 注册到 FastAPI（register_tortoise 会自动初始化 Tortoise ORM 和连接池）
+    # register_tortoise 会在应用启动时通过 FastAPI 的 startup 事件自动初始化
     register_db(app)
-    
-    # 确保 Tortoise ORM 已初始化（显式初始化，避免路由器问题）
-    if not Tortoise._inited:
-        await Tortoise.init(config=TORTOISE_ORM)
     
     # 自动扫描并注册插件应用（为所有租户注册）
     # 注意：插件应用会在系统启动时自动扫描并注册，菜单也会自动同步
@@ -143,6 +137,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # 关闭时清理
+    from tortoise import Tortoise
     await Tortoise.close_connections()
 
 # 创建FastAPI应用
@@ -155,13 +150,14 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# 配置CORS
+# 配置CORS（从配置文件读取）
+from infra.config.infra_config import infra_settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该限制为具体域名
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=infra_settings.get_cors_origins(),  # 从环境变量配置读取
+    allow_credentials=infra_settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=infra_settings.CORS_ALLOW_METHODS,
+    allow_headers=infra_settings.CORS_ALLOW_HEADERS,
 )
 
 # 注册统一异常处理中间件（应该在其他中间件之前注册）
@@ -251,7 +247,7 @@ def load_plugin_routes():
 load_plugin_routes()
 
 # 挂载静态文件目录
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 注册 Inngest 服务
 # 导入 Inngest 函数（确保函数被注册）
@@ -341,54 +337,54 @@ app.include_router(auth_router, prefix="/api/v1")
 # 公开的组织接口（不需要认证，用于注册等功能）
 app.include_router(tenants_public_router, prefix="/api/v1")
 
-# 平台级功能路由 (Platform Level APIs)
-app.include_router(packages_config_router, prefix="/api/v1/platform")
-app.include_router(packages_router, prefix="/api/v1/platform")
-app.include_router(monitoring_statistics_router, prefix="/api/v1/platform")
-# 注意：SuperAdmin Auth路由已移除，使用Platform Admin Auth (/api/v1/platform/auth) 替代
-app.include_router(tenants_router, prefix="/api/v1/platform")
-app.include_router(platform_superadmin_auth_router, prefix="/api/v1/platform")
-app.include_router(platform_superadmin_router, prefix="/api/v1/platform")
+# 平台级功能路由 (Platform Level APIs) - 对应 infra/ 文件夹
+app.include_router(packages_config_router, prefix="/api/v1/infra")
+app.include_router(packages_router, prefix="/api/v1/infra")
+app.include_router(monitoring_statistics_router, prefix="/api/v1/infra")
+# 注意：SuperAdmin Auth路由已移除，使用Platform Admin Auth (/api/v1/infra/auth) 替代
+app.include_router(tenants_router, prefix="/api/v1/infra")
+app.include_router(infra_superadmin_auth_router, prefix="/api/v1/infra")
+app.include_router(infra_superadmin_router, prefix="/api/v1/infra")
 app.include_router(saved_searches_router, prefix="/api/v1")
 
-# 系统级功能路由 (System Level APIs)
-app.include_router(users_router, prefix="/api/v1/system")
-app.include_router(roles_router, prefix="/api/v1/system")
-app.include_router(permissions_router, prefix="/api/v1/system")
-app.include_router(departments_router, prefix="/api/v1/system")
-app.include_router(positions_router, prefix="/api/v1/system")
-app.include_router(data_dictionaries_router, prefix="/api/v1/system")
-app.include_router(system_parameters_router, prefix="/api/v1/system")
-app.include_router(code_rules_router, prefix="/api/v1/system")
-app.include_router(custom_fields_router, prefix="/api/v1/system")
-app.include_router(site_settings_router, prefix="/api/v1/system")
-app.include_router(invitation_codes_router, prefix="/api/v1/system")
-app.include_router(languages_router, prefix="/api/v1/system")
-app.include_router(applications_router, prefix="/api/v1/system")
-app.include_router(menus_router, prefix="/api/v1/system")
-app.include_router(integration_configs_router, prefix="/api/v1/system")
-app.include_router(files_router, prefix="/api/v1/system")
-app.include_router(apis_router, prefix="/api/v1/system")
-app.include_router(data_sources_router, prefix="/api/v1/system")
-app.include_router(datasets_router, prefix="/api/v1/system")
-app.include_router(message_configs_router, prefix="/api/v1/system")
-app.include_router(message_templates_router, prefix="/api/v1/system")
-app.include_router(messages_router, prefix="/api/v1/system")
-app.include_router(scheduled_tasks_router, prefix="/api/v1/system")
-app.include_router(approval_processes_router, prefix="/api/v1/system")
-app.include_router(approval_instances_router, prefix="/api/v1/system")
-app.include_router(scripts_router, prefix="/api/v1/system")
-app.include_router(print_templates_router, prefix="/api/v1/system")
-app.include_router(print_devices_router, prefix="/api/v1/system")
+# 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
+app.include_router(users_router, prefix="/api/v1/core")
+app.include_router(roles_router, prefix="/api/v1/core")
+app.include_router(permissions_router, prefix="/api/v1/core")
+app.include_router(departments_router, prefix="/api/v1/core")
+app.include_router(positions_router, prefix="/api/v1/core")
+app.include_router(data_dictionaries_router, prefix="/api/v1/core")
+app.include_router(system_parameters_router, prefix="/api/v1/core")
+app.include_router(code_rules_router, prefix="/api/v1/core")
+app.include_router(custom_fields_router, prefix="/api/v1/core")
+app.include_router(site_settings_router, prefix="/api/v1/core")
+app.include_router(invitation_codes_router, prefix="/api/v1/core")
+app.include_router(languages_router, prefix="/api/v1/core")
+app.include_router(applications_router, prefix="/api/v1/core")
+app.include_router(menus_router, prefix="/api/v1/core")
+app.include_router(integration_configs_router, prefix="/api/v1/core")
+app.include_router(files_router, prefix="/api/v1/core")
+app.include_router(apis_router, prefix="/api/v1/core")
+app.include_router(data_sources_router, prefix="/api/v1/core")
+app.include_router(datasets_router, prefix="/api/v1/core")
+app.include_router(message_configs_router, prefix="/api/v1/core")
+app.include_router(message_templates_router, prefix="/api/v1/core")
+app.include_router(messages_router, prefix="/api/v1/core")
+app.include_router(scheduled_tasks_router, prefix="/api/v1/core")
+app.include_router(approval_processes_router, prefix="/api/v1/core")
+app.include_router(approval_instances_router, prefix="/api/v1/core")
+app.include_router(scripts_router, prefix="/api/v1/core")
+app.include_router(print_templates_router, prefix="/api/v1/core")
+app.include_router(print_devices_router, prefix="/api/v1/core")
 app.include_router(user_profile_router, prefix="/api/v1/personal")
 app.include_router(user_preferences_router, prefix="/api/v1/personal")
 app.include_router(user_messages_router, prefix="/api/v1/personal")
 app.include_router(user_tasks_router, prefix="/api/v1/personal")
-app.include_router(operation_logs_router, prefix="/api/v1/system")
-app.include_router(login_logs_router, prefix="/api/v1/system")
-app.include_router(online_users_router, prefix="/api/v1/system")
-app.include_router(data_backups_router, prefix="/api/v1/system")
-app.include_router(help_documents_router, prefix="/api/v1/system")
+app.include_router(operation_logs_router, prefix="/api/v1/core")
+app.include_router(login_logs_router, prefix="/api/v1/core")
+app.include_router(online_users_router, prefix="/api/v1/core")
+app.include_router(data_backups_router, prefix="/api/v1/core")
+app.include_router(help_documents_router, prefix="/api/v1/core")
 
 # 应用级功能路由 (App Level APIs)
 app.include_router(master_data_router, prefix="/api/v1")
@@ -451,10 +447,11 @@ async def test_inngest_integration(message: str = "Hello from RiverEdge!"):
 
 if __name__ == "__main__":
     import uvicorn
+    from infra.config.infra_config import infra_settings
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=9000,
+        host=infra_settings.HOST,  # 从环境变量读取
+        port=infra_settings.PORT,  # 从环境变量读取
         reload=True,
         reload_dirs=["src"]
     )

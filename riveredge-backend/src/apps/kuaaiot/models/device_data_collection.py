@@ -41,7 +41,7 @@ class DeviceDataCollection(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaaiot_device_data_collections"
+        table = "apps_kuaaiot_device_data_collections"
         indexes = [
             ("tenant_id",),
             ("collection_no",),

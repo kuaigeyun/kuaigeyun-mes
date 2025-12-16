@@ -45,7 +45,7 @@ class MaintenanceExecution(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_maintenance_executions"
+        table = "apps_kuaieam_maintenance_executions"
         indexes = [
             ("tenant_id",),
             ("execution_no",),

@@ -42,7 +42,7 @@ class MaintenancePlan(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaieam_maintenance_plans"
+        table = "apps_kuaieam_maintenance_plans"
         indexes = [
             ("tenant_id",),
             ("plan_no",),

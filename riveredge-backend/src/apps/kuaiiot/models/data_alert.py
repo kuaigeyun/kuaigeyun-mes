@@ -42,7 +42,7 @@ class DataAlert(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiiot_data_alerts"
+        table = "apps_kuaiiot_data_alerts"
         indexes = [
             ("tenant_id",),
             ("alert_no",),

@@ -33,7 +33,7 @@ class LRPBatch(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimrp_lrp_batches"
+        table = "apps_kuaimrp_lrp_batches"
         indexes = [
             ("tenant_id",),
             ("batch_no",),

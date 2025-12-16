@@ -23,7 +23,7 @@ class Position(BaseModel):
         name: 职位名称
         code: 职位代码（可选，用于程序识别）
         description: 职位描述
-        department_id: 所属部门ID（外键，关联 sys_departments，可选）
+        department_id: 所属部门ID（外键，关联 core_departments，可选）
         sort_order: 排序顺序
         is_active: 是否启用
         created_at: 创建时间

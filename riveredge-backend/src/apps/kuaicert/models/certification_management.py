@@ -35,7 +35,7 @@ class CertificationApplication(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicert_certification_applications"
+        table = "apps_kuaicert_certification_applications"
         indexes = [
             ("tenant_id",),
             ("application_no",),
@@ -95,7 +95,7 @@ class CertificationProgress(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicert_certification_progresses"
+        table = "apps_kuaicert_certification_progresses"
         indexes = [
             ("tenant_id",),
             ("progress_no",),
@@ -158,7 +158,7 @@ class CertificationCertificate(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicert_certification_certificates"
+        table = "apps_kuaicert_certification_certificates"
         indexes = [
             ("tenant_id",),
             ("certificate_no",),

@@ -10,7 +10,7 @@ import { apiRequest } from './api';
 /**
  * 平台超级管理员信息接口
  */
-export interface PlatformSuperAdmin {
+export interface InfraSuperAdmin {
   id: number;
   uuid: string;
   username: string;
@@ -25,7 +25,7 @@ export interface PlatformSuperAdmin {
 /**
  * 平台超级管理员登录请求接口
  */
-export interface PlatformSuperAdminLoginRequest {
+export interface InfraSuperAdminLoginRequest {
   username: string;
   password: string;
 }
@@ -33,18 +33,18 @@ export interface PlatformSuperAdminLoginRequest {
 /**
  * 平台超级管理员登录响应接口
  */
-export interface PlatformSuperAdminLoginResponse {
+export interface InfraSuperAdminLoginResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
-  user: PlatformSuperAdmin;
+  user: InfraSuperAdmin;
   default_tenant_id?: number; // 默认租户 ID（可选，用于设置默认组织上下文）
 }
 
 /**
  * 平台超级管理员创建请求接口
  */
-export interface PlatformSuperAdminCreateRequest {
+export interface InfraSuperAdminCreateRequest {
   username: string;
   email?: string;
   password: string;
@@ -55,7 +55,7 @@ export interface PlatformSuperAdminCreateRequest {
 /**
  * 平台超级管理员更新请求接口
  */
-export interface PlatformSuperAdminUpdateRequest {
+export interface InfraSuperAdminUpdateRequest {
   email?: string;
   full_name?: string;
   is_active?: boolean;
@@ -68,10 +68,10 @@ export interface PlatformSuperAdminUpdateRequest {
  * @param data - 登录数据
  * @returns 登录响应数据
  */
-export async function platformSuperAdminLogin(
-  data: PlatformSuperAdminLoginRequest
-): Promise<PlatformSuperAdminLoginResponse> {
-  return apiRequest<PlatformSuperAdminLoginResponse>('/platform/auth/login', {
+export async function infraSuperAdminLogin(
+  data: InfraSuperAdminLoginRequest
+): Promise<InfraSuperAdminLoginResponse> {
+  return apiRequest<InfraSuperAdminLoginResponse>('/infra/auth/login', {
     method: 'POST',
     data,
   });
@@ -82,8 +82,8 @@ export async function platformSuperAdminLogin(
  * 
  * @returns 当前平台超级管理员信息
  */
-export async function getCurrentPlatformSuperAdmin(): Promise<PlatformSuperAdmin> {
-  return apiRequest<PlatformSuperAdmin>('/platform/auth/me', {
+export async function getCurrentInfraSuperAdmin(): Promise<InfraSuperAdmin> {
+  return apiRequest<InfraSuperAdmin>('/infra/auth/me', {
     method: 'GET',
   });
 }
@@ -93,8 +93,8 @@ export async function getCurrentPlatformSuperAdmin(): Promise<PlatformSuperAdmin
  * 
  * @returns 平台超级管理员信息
  */
-export async function getPlatformSuperAdmin(): Promise<PlatformSuperAdmin> {
-  return apiRequest<PlatformSuperAdmin>('/platform/admin', {
+export async function getInfraSuperAdmin(): Promise<InfraSuperAdmin> {
+  return apiRequest<InfraSuperAdmin>('/infra/admin', {
     method: 'GET',
   });
 }
@@ -105,10 +105,10 @@ export async function getPlatformSuperAdmin(): Promise<PlatformSuperAdmin> {
  * @param data - 创建数据
  * @returns 创建的平台超级管理员信息
  */
-export async function createPlatformSuperAdmin(
-  data: PlatformSuperAdminCreateRequest
-): Promise<PlatformSuperAdmin> {
-  return apiRequest<PlatformSuperAdmin>('/platform/admin', {
+export async function createInfraSuperAdmin(
+  data: InfraSuperAdminCreateRequest
+): Promise<InfraSuperAdmin> {
+  return apiRequest<InfraSuperAdmin>('/infra/admin', {
     method: 'POST',
     data,
   });
@@ -120,10 +120,10 @@ export async function createPlatformSuperAdmin(
  * @param data - 更新数据
  * @returns 更新后的平台超级管理员信息
  */
-export async function updatePlatformSuperAdmin(
-  data: PlatformSuperAdminUpdateRequest
-): Promise<PlatformSuperAdmin> {
-  return apiRequest<PlatformSuperAdmin>('/platform/admin', {
+export async function updateInfraSuperAdmin(
+  data: InfraSuperAdminUpdateRequest
+): Promise<InfraSuperAdmin> {
+  return apiRequest<InfraSuperAdmin>('/infra/admin', {
     method: 'PUT',
     data,
   });

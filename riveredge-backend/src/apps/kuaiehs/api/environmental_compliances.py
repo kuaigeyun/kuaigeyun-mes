@@ -15,7 +15,7 @@ from apps.kuaiehs.schemas.environmental_compliance_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/environmental-compliance", tags=["环保合规"])
+router = APIRouter(prefix="/environmental-compliance", tags=["Environmental Compliance"])
 
 
 @router.post("", response_model=EnvironmentalComplianceResponse, summary="创建环保合规")

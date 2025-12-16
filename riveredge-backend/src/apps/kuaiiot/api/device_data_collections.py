@@ -15,7 +15,7 @@ from apps.kuaiiot.schemas.device_data_collection_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/device-data-collections", tags=["设备数据采集"])
+router = APIRouter(prefix="/device-data-collections", tags=["Device Data Collections"])
 
 
 @router.post("", response_model=DeviceDataCollectionResponse, summary="创建设备数据采集")

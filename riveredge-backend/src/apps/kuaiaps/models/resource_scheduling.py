@@ -45,7 +45,7 @@ class ResourceScheduling(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiaps_resource_schedulings"
+        table = "apps_kuaiaps_resource_schedulings"
         indexes = [
             ("tenant_id",),
             ("scheduling_no",),

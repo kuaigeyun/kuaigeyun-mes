@@ -15,7 +15,7 @@ from apps.kuaioa.schemas.notification_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/notification", tags=["通知"])
+router = APIRouter(prefix="/notification", tags=["Notifications"])
 
 
 @router.post("", response_model=NotificationResponse, summary="创建通知")

@@ -10,7 +10,7 @@ from tortoise import BaseDBAsyncClient
 async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
         -- 创建物料表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_materials" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_materials" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -27,15 +27,16 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_materials_tenant_code" ON "seed_master_data_materials" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_materials_tenant_id" ON "seed_master_data_materials" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_materials_code" ON "seed_master_data_materials" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_materials_uuid" ON "seed_master_data_materials" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_materials_category" ON "seed_master_data_materials" ("category");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_materials_created_at" ON "seed_master_data_materials" ("created_at");
+COMMENT ON TABLE "apps_master_data_materials" IS '物料表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_materials_tenant_code" ON "apps_master_data_materials" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_materials_tenant_id" ON "apps_master_data_materials" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_materials_code" ON "apps_master_data_materials" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_materials_uuid" ON "apps_master_data_materials" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_materials_category" ON "apps_master_data_materials" ("category");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_materials_created_at" ON "apps_master_data_materials" ("created_at");
 
         -- 创建客户表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_customers" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_customers" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -52,15 +53,16 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_customers_tenant_code" ON "seed_master_data_customers" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_customers_tenant_id" ON "seed_master_data_customers" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_customers_code" ON "seed_master_data_customers" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_customers_uuid" ON "seed_master_data_customers" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_customers_category" ON "seed_master_data_customers" ("category");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_customers_created_at" ON "seed_master_data_customers" ("created_at");
+COMMENT ON TABLE "apps_master_data_customers" IS '客户表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_customers_tenant_code" ON "apps_master_data_customers" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_customers_tenant_id" ON "apps_master_data_customers" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_customers_code" ON "apps_master_data_customers" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_customers_uuid" ON "apps_master_data_customers" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_customers_category" ON "apps_master_data_customers" ("category");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_customers_created_at" ON "apps_master_data_customers" ("created_at");
 
         -- 创建供应商表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_suppliers" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_suppliers" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -77,15 +79,16 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_suppliers_tenant_code" ON "seed_master_data_suppliers" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_suppliers_tenant_id" ON "seed_master_data_suppliers" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_suppliers_code" ON "seed_master_data_suppliers" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_suppliers_uuid" ON "seed_master_data_suppliers" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_suppliers_category" ON "seed_master_data_suppliers" ("category");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_suppliers_created_at" ON "seed_master_data_suppliers" ("created_at");
+COMMENT ON TABLE "apps_master_data_suppliers" IS '供应商表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_suppliers_tenant_code" ON "apps_master_data_suppliers" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_suppliers_tenant_id" ON "apps_master_data_suppliers" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_suppliers_code" ON "apps_master_data_suppliers" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_suppliers_uuid" ON "apps_master_data_suppliers" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_suppliers_category" ON "apps_master_data_suppliers" ("category");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_suppliers_created_at" ON "apps_master_data_suppliers" ("created_at");
 
         -- 创建产品表
-        CREATE TABLE IF NOT EXISTS "seed_master_data_products" (
+        CREATE TABLE IF NOT EXISTS "apps_master_data_products" (
             "id" SERIAL NOT NULL PRIMARY KEY,
             "uuid" VARCHAR(36) NOT NULL UNIQUE,
             "tenant_id" INT NOT NULL,
@@ -100,27 +103,28 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "idx_seed_master_data_products_tenant_code" ON "seed_master_data_products" ("tenant_id", "code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_products_tenant_id" ON "seed_master_data_products" ("tenant_id");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_products_code" ON "seed_master_data_products" ("code");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_products_uuid" ON "seed_master_data_products" ("uuid");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_products_version" ON "seed_master_data_products" ("version");
-        CREATE INDEX IF NOT EXISTS "idx_seed_master_data_products_created_at" ON "seed_master_data_products" ("created_at");
+COMMENT ON TABLE "apps_master_data_products" IS '产品表';
+        CREATE UNIQUE INDEX IF NOT EXISTS "idx_apps_master_data_products_tenant_code" ON "apps_master_data_products" ("tenant_id", "code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_products_tenant_id" ON "apps_master_data_products" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_products_code" ON "apps_master_data_products" ("code");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_products_uuid" ON "apps_master_data_products" ("uuid");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_products_version" ON "apps_master_data_products" ("version");
+        CREATE INDEX IF NOT EXISTS "idx_apps_master_data_products_created_at" ON "apps_master_data_products" ("created_at");
     """
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
         -- 删除产品表
-        DROP TABLE IF EXISTS "seed_master_data_products" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_products" CASCADE;
 
         -- 删除供应商表
-        DROP TABLE IF EXISTS "seed_master_data_suppliers" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_suppliers" CASCADE;
 
         -- 删除客户表
-        DROP TABLE IF EXISTS "seed_master_data_customers" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_customers" CASCADE;
 
         -- 删除物料表
-        DROP TABLE IF EXISTS "seed_master_data_materials" CASCADE;
+        DROP TABLE IF EXISTS "apps_master_data_materials" CASCADE;
     """
 

@@ -34,7 +34,7 @@ class ServiceWorkOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaicrm_service_workorders"
+        table = "apps_kuaicrm_service_workorders"
         indexes = [
             ("tenant_id",),
             ("workorder_no",),

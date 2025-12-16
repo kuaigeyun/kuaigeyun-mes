@@ -80,7 +80,7 @@ class Tenant(BaseModel):
         """
         模型元数据
         """
-        table = "platform_tenants"  # 表名必须包含模块前缀（platform_ - 平台级租户管理）
+        table = "infra_tenants"  # 表名必须包含模块前缀（infra_ - 平台级租户管理，对应 infra/ 文件夹）
         indexes = [
             ("domain",),  # 域名索引
             ("status",),  # 状态索引

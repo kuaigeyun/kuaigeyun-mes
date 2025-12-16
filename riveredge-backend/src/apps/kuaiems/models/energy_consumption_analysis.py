@@ -44,7 +44,7 @@ class EnergyConsumptionAnalysis(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiems_energy_consumption_analyses"
+        table = "apps_kuaiems_energy_consumption_analyses"
         indexes = [
             ("tenant_id",),
             ("analysis_no",),

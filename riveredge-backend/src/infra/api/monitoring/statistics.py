@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from tortoise.functions import Count
 from tortoise.expressions import Q
 
-from infra.api.deps.deps import get_current_platform_superadmin
-from infra.models.platform_superadmin import PlatformSuperAdmin
+from infra.api.deps.deps import get_current_infra_superadmin
+from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
 import psutil
 import sys
@@ -23,7 +23,7 @@ from infra.domain.package_config import get_all_package_configs
 from typing import Dict, Any
 
 # 创建路由器
-router = APIRouter(prefix="/monitoring", tags=["Platform Monitoring"])
+router = APIRouter(prefix="/monitoring", tags=["Infra Monitoring"])
 
 # 响应模型
 class TenantStatisticsResponse:
@@ -36,7 +36,7 @@ class TenantStatisticsResponse:
 
 @router.get("/system/info")
 async def get_system_info(
-    current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
 ):
     """
     获取系统监控信息
@@ -85,7 +85,7 @@ async def get_system_info(
         system_info = {
             "hostname": std_platform.node(),
             "platform": std_platform.system(),
-            "platform_version": std_platform.version(),
+            "infra_version": std_platform.version(),
             "architecture": std_platform.machine(),
             "python_version": std_platform.python_version(),
             "uptime": int(psutil.boot_time()),
@@ -103,7 +103,7 @@ async def get_system_info(
         return {
             "hostname": "riveredge-server",
             "platform": "Linux",
-            "platform_version": "5.4.0",
+            "infra_version": "5.4.0",
             "architecture": "x86_64",
             "python_version": "3.11.0",
             "uptime": 86400 * 7,
@@ -138,7 +138,7 @@ async def get_system_info(
 
 @router.get("/tenants/statistics")
 async def get_tenant_statistics(
-    current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
 ):
     """
     获取组织统计信息

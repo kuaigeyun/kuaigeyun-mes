@@ -10,7 +10,7 @@ from infra.models.tenant import Tenant, TenantStatus, TenantPlan
 from infra.models.tenant_config import TenantConfig
 from infra.models.tenant_activity_log import TenantActivityLog
 from infra.models.package import Package
-from infra.models.platform_superadmin import PlatformSuperAdmin
+from infra.models.infra_superadmin import InfraSuperAdmin
 
 __all__ = [
     "BaseModel",
@@ -21,6 +21,6 @@ __all__ = [
     "TenantConfig",
     "TenantActivityLog",
     "Package",
-    "PlatformSuperAdmin",
+    "InfraSuperAdmin",
 ]
 

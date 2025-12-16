@@ -11,13 +11,13 @@ from loguru import logger
 from infra.schemas.package import PackageResponse, PackageListResponse, PackageCreate, PackageUpdate
 from infra.services.package_service import PackageService
 from infra.models.tenant import TenantPlan
-from infra.models.platform_superadmin import PlatformSuperAdmin
-from infra.api.deps.deps import get_current_platform_superadmin
+from infra.models.infra_superadmin import InfraSuperAdmin
+from infra.api.deps.deps import get_current_infra_superadmin
 from infra.domain.package_config import get_package_config, get_all_package_configs
 from typing import Dict, Any
 
 # 创建路由 - 测试专用，只包含公开接口
-router = APIRouter(prefix="/packages", tags=["Platform Packages"])
+router = APIRouter(prefix="/packages", tags=["Infra Packages"])
 
 
 @router.get("/config", response_model=Dict[str, Any])
@@ -136,7 +136,7 @@ async def list_packages(
 @router.get("/{package_id}", response_model=PackageResponse)
 async def get_package_detail(
     package_id: int,
-    current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
 ):
     """
     获取套餐详情（超级管理员）
@@ -167,7 +167,7 @@ async def get_package_detail(
 @router.post("", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
 async def create_package(
     data: PackageCreate,
-    current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
 ):
     """
     创建套餐（超级管理员）
@@ -201,7 +201,7 @@ async def create_package(
 async def update_package(
     package_id: int,
     data: PackageUpdate,
-    current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
 ):
     """
     更新套餐（超级管理员）
@@ -234,7 +234,7 @@ async def update_package(
 @router.delete("/{package_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_package(
     package_id: int,
-    current_admin: PlatformSuperAdmin = Depends(get_current_platform_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
 ):
     """
     删除套餐（超级管理员）

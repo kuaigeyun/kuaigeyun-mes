@@ -4,15 +4,15 @@
 提供数据库连接配置
 """
 
-from infra.config.platform_config import platform_settings
+from infra.config.infra_config import infra_settings
 
 # 数据库配置（从平台级配置读取）
-DB_HOST = platform_settings.DB_HOST
-DB_PORT = platform_settings.DB_PORT
-DB_USER = platform_settings.DB_USER
-DB_PASSWORD = platform_settings.DB_PASSWORD
-DB_NAME = platform_settings.DB_NAME
-DB_URL = platform_settings.DB_URL
+DB_HOST = infra_settings.DB_HOST
+DB_PORT = infra_settings.DB_PORT
+DB_USER = infra_settings.DB_USER
+DB_PASSWORD = infra_settings.DB_PASSWORD
+DB_NAME = infra_settings.DB_NAME
+DB_URL = infra_settings.DB_URL
 
 # Tortoise ORM 配置
 # 注意：使用 127.0.0.1 而不是 localhost，避免 DNS 解析问题
@@ -46,7 +46,7 @@ TORTOISE_ORM = {
             "default_connection": "default",
         },
     },
-    "use_tz": platform_settings.USE_TZ,
-    "timezone": platform_settings.TIMEZONE,
+    "use_tz": infra_settings.USE_TZ,
+    "timezone": infra_settings.TIMEZONE,
 }
 

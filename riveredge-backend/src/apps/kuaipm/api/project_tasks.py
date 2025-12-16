@@ -15,7 +15,7 @@ from apps.kuaipm.schemas.project_task_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/project-task", tags=["项目任务"])
+router = APIRouter(prefix="/project-task", tags=["Project Tasks"])
 
 
 @router.post("", response_model=ProjectTaskResponse, summary="创建项目任务")

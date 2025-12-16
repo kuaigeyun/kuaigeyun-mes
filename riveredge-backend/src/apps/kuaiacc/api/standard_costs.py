@@ -15,7 +15,7 @@ from apps.kuaiacc.schemas.standard_cost_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/standard-costs", tags=["标准成本"])
+router = APIRouter(prefix="/standard-costs", tags=["Standard Costs"])
 
 
 @router.post("", response_model=StandardCostResponse, summary="创建标准成本")

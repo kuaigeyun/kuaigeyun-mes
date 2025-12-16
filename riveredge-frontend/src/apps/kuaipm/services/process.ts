@@ -154,19 +154,19 @@ export const projectResourceApi = {
  */
 export const projectProgressApi = {
   create: async (data: ProjectProgressCreate): Promise<ProjectProgress> => {
-    return api.post('/kuaipm/project-progresss', data);
+    return api.post('/kuaipm/project-progresses', data);
   },
   list: async (params?: ProjectProgressListParams): Promise<ProjectProgress[]> => {
-    return api.get('/kuaipm/project-progresss', { params });
+    return api.get('/kuaipm/project-progresses', { params });
   },
   get: async (uuid: string): Promise<ProjectProgress> => {
-    return api.get(`/kuaipm/project-progresss/${uuid}`);
+    return api.get(`/kuaipm/project-progresses/${uuid}`);
   },
   update: async (uuid: string, data: ProjectProgressUpdate): Promise<ProjectProgress> => {
-    return api.put(`/kuaipm/project-progresss/${uuid}`, data);
+    return api.put(`/kuaipm/project-progresses/${uuid}`, data);
   },
   delete: async (uuid: string): Promise<void> => {
-    return api.delete(`/kuaipm/project-progresss/${uuid}`);
+    return api.delete(`/kuaipm/project-progresses/${uuid}`);
   },
 };
 
@@ -217,19 +217,19 @@ export const projectRiskApi = {
  */
 export const projectQualityApi = {
   create: async (data: ProjectQualityCreate): Promise<ProjectQuality> => {
-    return api.post('/kuaipm/project-qualitys', data);
+    return api.post('/kuaipm/project-qualities', data);
   },
   list: async (params?: ProjectQualityListParams): Promise<ProjectQuality[]> => {
-    return api.get('/kuaipm/project-qualitys', { params });
+    return api.get('/kuaipm/project-qualities', { params });
   },
   get: async (uuid: string): Promise<ProjectQuality> => {
-    return api.get(`/kuaipm/project-qualitys/${uuid}`);
+    return api.get(`/kuaipm/project-qualities/${uuid}`);
   },
   update: async (uuid: string, data: ProjectQualityUpdate): Promise<ProjectQuality> => {
-    return api.put(`/kuaipm/project-qualitys/${uuid}`, data);
+    return api.put(`/kuaipm/project-qualities/${uuid}`, data);
   },
   delete: async (uuid: string): Promise<void> => {
-    return api.delete(`/kuaipm/project-qualitys/${uuid}`);
+    return api.delete(`/kuaipm/project-qualities/${uuid}`);
   },
 };
 

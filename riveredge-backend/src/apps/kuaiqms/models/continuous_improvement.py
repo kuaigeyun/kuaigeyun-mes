@@ -42,7 +42,7 @@ class ContinuousImprovement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiqms_continuous_improvements"
+        table = "apps_kuaiqms_continuous_improvements"
         indexes = [
             ("tenant_id",),
             ("improvement_no",),

@@ -28,11 +28,13 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_code_r_tenant__d9e4f5" UNIQUE ("tenant_id", "code")
         );
+COMMENT ON TABLE "sys_code_rules" IS '编码规则表';
         
         -- 创建编码规则表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_code_r_tenant__d9e4f5" ON "sys_code_rules" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_code_r_code_e9f4g5" ON "sys_code_rules" ("code");
         CREATE INDEX IF NOT EXISTS "idx_sys_code_r_created_f9g4h5" ON "sys_code_rules" ("created_at");
+        
         
         -- 创建编码序号表
         CREATE TABLE IF NOT EXISTS "sys_code_sequences" (
@@ -47,10 +49,12 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_code_s_code_ru_g9h4i5" UNIQUE ("code_rule_id", "tenant_id")
         );
+COMMENT ON TABLE "sys_code_sequences" IS '编码序号表';
         
         -- 创建编码序号表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_code_s_code_ru_g9h4i5" ON "sys_code_sequences" ("code_rule_id");
         CREATE INDEX IF NOT EXISTS "idx_sys_code_s_tenant__h9i4j5" ON "sys_code_sequences" ("tenant_id");
+        
         
         -- 添加外键约束
         ALTER TABLE "sys_code_sequences" ADD CONSTRAINT "fk_sys_code_s_code_ru_g9h4i5" FOREIGN KEY ("code_rule_id") REFERENCES "sys_code_rules" ("id") ON DELETE CASCADE;

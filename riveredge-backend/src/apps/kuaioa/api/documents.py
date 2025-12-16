@@ -15,7 +15,7 @@ from apps.kuaioa.schemas.document_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/document", tags=["文档"])
+router = APIRouter(prefix="/document", tags=["Documents"])
 
 
 @router.post("", response_model=DocumentResponse, summary="创建文档")

@@ -442,6 +442,13 @@
 - ✅ `UserListResponse` - 用户列表响应接口
 - ❌ `user`、`userListResponse` - 错误
 
+**目录命名**：优先使用 `kebab-case`，兼容 `snake_case`（保持现有代码一致性）
+- ✅ 功能模块：`user/`, `role/`, `dashboard/`（单数形式，推荐 kebab-case）
+- ✅ 功能集合：`components/`, `services/`, `stores/`（复数形式，推荐 kebab-case）
+- ✅ 组件目录：`uni-table/`, `tenant-selector/`（推荐 kebab-case，兼容 snake_case）
+- ✅ 页面目录：`user-profile/`, `order-list/`（推荐 kebab-case，兼容 snake_case）
+- 📖 **迁移建议**：新代码优先使用 `kebab-case`，现有代码可以保持 `snake_case`，逐步迁移
+
 **避免 TypeScript/JavaScript 关键字**：
 - ❌ 禁止使用 TypeScript/JavaScript 关键字作为变量名、函数名、参数名、类型名等
 - ✅ 使用替代命名：`class` → `className`、`function` → `functionName`、`const` → `constantValue`、`let` → `letValue`、`var` → `varValue`、`if` → `condition`、`else` → `alternative`、`for` → `loopItem`、`while` → `whileCondition`、`try` → `attempt`、`catch` → `catchBlock`、`finally` → `finallyBlock`、`switch` → `switchValue`、`case` → `caseValue`、`default` → `defaultValue`、`break` → `breakPoint`、`continue` → `continueFlag`、`return` → `returnValue`、`yield` → `yieldValue`、`async` → `asyncFlag`、`await` → `awaitResult`、`import` → `importPath`、`export` → `exportName`、`from` → `fromLocation`、`as` → `alias`、`new` → `newInstance`、`this` → `thisContext`、`super` → `superClass`、`extends` → `extendsClass`、`implements` → `implementsInterface`、`interface` → `interfaceName`、`type` → `typeName`、`enum` → `enumName`、`namespace` → `namespaceName`、`module` → `moduleName`、`declare` → `declaration`、`abstract` → `abstractClass`、`static` → `staticValue`、`readonly` → `readonlyValue`、`public` → `publicAccess`、`private` → `privateAccess`、`protected` → `protectedAccess`、`get` → `getValue`、`set` → `setValue`、`constructor` → `constructorName`、`null` → `nullValue`、`undefined` → `undefinedValue`、`true` → `trueValue`、`false` → `falseValue`、`NaN` → `nanValue`、`Infinity` → `infinityValue`
@@ -627,6 +634,38 @@ export async function getUserList(params: {
 ## 📖 FastAPI 文档生成规范（必须严格遵循）
 
 > **详细规范请参考**：[6.API设计规范.md](./6.API设计规范.md) - FastAPI 文档生成规范章节
+
+### API 路径规范
+
+**规则**：所有 API 路径必须以 `/api/v1/` 开头，按层级组织，使用 **kebab-case**（连字符分隔）
+
+> **最佳实践说明**：RESTful API 路径使用 kebab-case 是业界标准，符合 URL 规范，更易读且跨平台兼容性好。
+
+**路径前缀规则**：
+- 平台级：`/api/v1/platform/`（如 `/api/v1/platform/tenants`）
+- 系统级：`/api/v1/system/`（如 `/api/v1/system/users`）
+- 应用级：`/api/v1/apps/插件名/`（如 `/api/v1/apps/kuaimes/orders`）
+
+**API 路径示例**：
+```python
+# ✅ 正确：使用 kebab-case
+GET /api/v1/platform/tenants
+POST /api/v1/platform/tenants
+GET /api/v1/system/users
+GET /api/v1/system/user-roles  # 多个单词使用连字符
+GET /api/v1/system/data-dictionaries  # 多个单词使用连字符
+GET /api/v1/system/system-parameters  # 多个单词使用连字符
+GET /api/v1/apps/kuaimes/orders
+GET /api/v1/apps/kuaimes/order-items  # 多个单词使用连字符
+
+# ❌ 错误：使用 snake_case
+GET /api/v1/system/user_roles
+GET /api/v1/system/data_dictionaries
+```
+
+**路径参数命名**：
+- ✅ `{user_id}` - 使用 snake_case（Python 后端约定）
+- ✅ `{order_id}` - 使用 snake_case（Python 后端约定）
 
 ### API Tags 规范
 
@@ -959,7 +998,7 @@ from schemas.{model_name}_schema import {ModelName}Create, {ModelName}Update, {M
 from services.{model_name}_service import {ModelName}Service
 from api.deps import get_current_user, get_current_tenant_id
 
-router = APIRouter(prefix="/{api_path}", tags=["{ModelName}"])  # Tags 必须使用英文，如 "Users", "Roles", "Authentication"
+router = APIRouter(prefix="/{api_path}", tags=["{ModelName}"])  # API 路径使用 kebab-case，Tags 必须使用英文，如 "Users", "Roles", "Authentication"
 
 
 @router.post("", response_model={ModelName}Response)
@@ -1080,7 +1119,7 @@ export async function get{ModelName}List(params: {
   pageSize: number;
   keyword?: string;
 }): Promise<{ModelName}ListResponse> {
-  return request('/api/v1/{api_path}', { params });
+  return request('/api/v1/{api_path}', { params });  // API 路径使用 kebab-case
 }
 
 /**
@@ -1090,7 +1129,7 @@ export async function get{ModelName}List(params: {
  * @returns 创建的{模型名称}
  */
 export async function create{ModelName}(data: {ModelName}Create): Promise<{ModelName}> {
-  return request('/api/v1/{api_path}', {
+  return request('/api/v1/{api_path}', {  // API 路径使用 kebab-case
     method: 'POST',
     data,
   });
@@ -1181,9 +1220,10 @@ export async function create{ModelName}(data: {ModelName}Create): Promise<{Model
 ### 命名禁止
 
 - ❌ **禁止使用驼峰命名（Python 后端）**（必须使用 snake_case）
-- ❌ **禁止使用下划线命名（TypeScript 前端）**（必须使用 camelCase）
+- ❌ **禁止使用下划线命名（TypeScript 前端变量、函数）**（必须使用 camelCase）
+- ❌ **禁止 API 路径使用 snake_case**（必须使用 kebab-case，多个单词使用连字符分隔）
 - ❌ **禁止使用单数表名**（必须使用复数形式）
-- ❌ **禁止表名缺少模块前缀**（必须包含 `core_` 或 `seed_插件名_` 前缀，符合框架命名哲学）
+- ❌ **禁止表名缺少模块前缀**（必须包含 `platform_`、`core_` 或 `seed_插件名_` 前缀，符合框架命名哲学）
 - ❌ **禁止省略 `tenant_id` 字段**（所有表必须包含）
 
 ### 注释禁止
@@ -1195,7 +1235,8 @@ export async function create{ModelName}(data: {ModelName}Create): Promise<{Model
 
 ### API 文档禁止
 
-- ❌ **禁止使用中文 Tags**（API 路由的 tags 必须使用英文，如 `Authentication`, `Users`, `Roles`）
+- ❌ **禁止 API 路径使用 snake_case**（必须使用 kebab-case，多个单词使用连字符分隔）
+- ❌ **禁止使用中文 Tags**（API 路由的 tags 必须使用英文，如 `Authentication`, `Users`, `Roles`，多个单词使用空格分隔）
 - ❌ **禁止使用英文描述**（API 路由的描述必须使用中文，函数文档字符串）
 
 ## ✅ 代码生成检查清单
@@ -1229,6 +1270,7 @@ export async function create{ModelName}(data: {ModelName}Create): Promise<{Model
 - [ ] 类命名是否符合规范？
 - [ ] 函数命名是否符合规范？
 - [ ] 变量命名是否符合规范？
+- [ ] **目录命名是否符合规范？**（前端目录优先使用 kebab-case，兼容 snake_case）
 - [ ] **是否避免了 Python 关键字？** ⭐ **重要**（禁止使用 `class`、`def`、`import`、`from`、`if`、`else`、`for`、`while`、`try`、`except`、`finally`、`with`、`as`、`pass`、`return`、`yield`、`break`、`continue`、`lambda`、`None`、`True`、`False`、`and`、`or`、`not`、`in`、`is`、`del`、`global`、`nonlocal`、`assert`、`async`、`await` 等作为变量名、函数名、参数名）
 - [ ] **是否避免了 TypeScript/JavaScript 关键字？** ⭐ **重要**（禁止使用 `class`、`function`、`const`、`let`、`var`、`if`、`else`、`for`、`while`、`try`、`catch`、`finally`、`switch`、`case`、`default`、`break`、`continue`、`return`、`yield`、`async`、`await`、`import`、`export`、`from`、`as`、`new`、`this`、`super`、`extends`、`implements`、`interface`、`type`、`enum`、`namespace`、`module`、`declare`、`abstract`、`static`、`readonly`、`public`、`private`、`protected`、`get`、`set`、`constructor`、`null`、`undefined`、`true`、`false`、`NaN`、`Infinity` 等作为变量名、函数名、参数名、类型名）
 - [ ] **是否避免了数据库关键字？** ⭐ **重要**（禁止使用 `CREATE`、`DROP`、`ALTER`、`TABLE`、`INDEX`、`SELECT`、`INSERT`、`UPDATE`、`DELETE`、`FROM`、`WHERE`、`JOIN`、`ORDER`、`BY`、`GROUP`、`HAVING`、`LIMIT`、`OFFSET`、`PRIMARY`、`KEY`、`FOREIGN`、`REFERENCES`、`UNIQUE`、`NOT`、`NULL`、`DEFAULT`、`CHECK`、`CONSTRAINT`、`AND`、`OR`、`NOT`、`IN`、`EXISTS`、`BETWEEN`、`LIKE`、`IS`、`CASE`、`WHEN`、`THEN`、`ELSE`、`END`、`TRUE`、`FALSE` 等作为表名、字段名、索引名）
@@ -1237,7 +1279,8 @@ export async function create{ModelName}(data: {ModelName}Create): Promise<{Model
 ### 代码质量检查
 
 - [ ] 是否包含完整的注释（中文）？
-- [ ] **API Tags 是否使用英文？**（如 `Authentication`, `Users`, `Roles`, `Permissions`）
+- [ ] **API 路径是否使用 kebab-case？**（多个单词使用连字符分隔）
+- [ ] **API Tags 是否使用英文？**（如 `Authentication`, `Users`, `Roles`, `Permissions`，多个单词使用空格分隔）
 - [ ] **API 描述是否使用中文？**（函数文档字符串）
 - [ ] **表名是否包含模块前缀？**（核心系统：`core_`，应用插件：`seed_插件名_`，符合框架命名哲学）
 - [ ] **索引名中的表名是否包含模块前缀？**

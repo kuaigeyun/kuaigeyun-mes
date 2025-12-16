@@ -36,7 +36,7 @@ class DesignReview(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaipdm_design_reviews"
+        table = "apps_kuaipdm_design_reviews"
         indexes = [
             ("tenant_id",),
             ("review_no",),

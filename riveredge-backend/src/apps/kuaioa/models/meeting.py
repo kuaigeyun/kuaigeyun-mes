@@ -40,7 +40,7 @@ class Meeting(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_meetings"
+        table = "apps_kuaioa_meetings"
         indexes = [
             ("tenant_id",),
             ("meeting_no",),
@@ -112,7 +112,7 @@ class MeetingMinutes(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_meeting_minutes"
+        table = "apps_kuaioa_meeting_minutes"
         indexes = [
             ("tenant_id",),
             ("minutes_no",),
@@ -178,7 +178,7 @@ class MeetingResource(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaioa_meeting_resources"
+        table = "apps_kuaioa_meeting_resources"
         indexes = [
             ("tenant_id",),
             ("resource_no",),

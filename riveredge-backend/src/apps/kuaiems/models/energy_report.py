@@ -44,7 +44,7 @@ class EnergyReport(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiems_energy_reports"
+        table = "apps_kuaiems_energy_reports"
         indexes = [
             ("tenant_id",),
             ("report_no",),

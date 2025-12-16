@@ -38,7 +38,7 @@ class SalaryStructure(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_salary_structures"
+        table = "apps_kuaihrm_salary_structures"
         indexes = [
             ("tenant_id",),
             ("structure_code",),
@@ -109,7 +109,7 @@ class SalaryCalculation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_salary_calculations"
+        table = "apps_kuaihrm_salary_calculations"
         indexes = [
             ("tenant_id",),
             ("calculation_no",),
@@ -191,7 +191,7 @@ class SocialSecurityTax(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_social_security_taxes"
+        table = "apps_kuaihrm_social_security_taxes"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -266,7 +266,7 @@ class SalaryPayment(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaihrm_salary_payments"
+        table = "apps_kuaihrm_salary_payments"
         indexes = [
             ("tenant_id",),
             ("payment_no",),

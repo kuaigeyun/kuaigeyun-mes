@@ -606,7 +606,7 @@ class DatasetService:
                 url = api.path
                 if not url.startswith("http://") and not url.startswith("https://"):
                     # 相对路径，需要添加基础URL
-                    from infra.config.platform_config import platform_settings as settings
+                    from infra.config.infra_config import infra_settings as settings
                     base_url = getattr(settings, "BASE_URL", "http://localhost:8000")
                     url = f"{base_url}{url}"
                 

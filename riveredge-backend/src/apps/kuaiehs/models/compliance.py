@@ -37,7 +37,7 @@ class Regulation(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_regulations"
+        table = "apps_kuaiehs_regulations"
         indexes = [
             ("tenant_id",),
             ("regulation_no",),
@@ -105,7 +105,7 @@ class ComplianceCheck(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_compliance_checks"
+        table = "apps_kuaiehs_compliance_checks"
         indexes = [
             ("tenant_id",),
             ("check_no",),
@@ -185,7 +185,7 @@ class ComplianceReport(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiehs_compliance_reports"
+        table = "apps_kuaiehs_compliance_reports"
         indexes = [
             ("tenant_id",),
             ("report_no",),

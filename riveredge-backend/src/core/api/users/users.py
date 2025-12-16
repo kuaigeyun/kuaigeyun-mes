@@ -49,7 +49,7 @@ def model_to_response(model_obj, response_class, **extra_fields):
 
     return response
 
-router = APIRouter(prefix="/users", tags=["System Users"])
+router = APIRouter(prefix="/users", tags=["Core Users"])
 
 
 class UserImportRequest(BaseModel):
@@ -171,9 +171,9 @@ async def get_user_list(
     # ⚠️ 关键修复：处理平台超级管理员的虚拟User对象
     current_user_id = None
     try:
-        if hasattr(current_user, '_is_platform_superadmin') and getattr(current_user, '_is_platform_superadmin', False):
-            # 平台超级管理员使用platform_superadmin_id
-            current_user_id = getattr(current_user, '_platform_superadmin_id', None)
+        if hasattr(current_user, '_is_infra_superadmin') and getattr(current_user, '_is_infra_superadmin', False):
+            # 平台超级管理员使用infra_superadmin_id
+            current_user_id = getattr(current_user, '_infra_superadmin_id', None)
             if current_user_id is None:
                 current_user_id = getattr(current_user, 'id', None)
         else:

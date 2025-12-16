@@ -15,7 +15,7 @@ from apps.kuaipm.schemas.project_application_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/project-application", tags=["项目申请"])
+router = APIRouter(prefix="/project-application", tags=["Project Applications"])
 
 
 @router.post("", response_model=ProjectApplicationResponse, summary="创建项目申请")

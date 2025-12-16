@@ -254,7 +254,7 @@ export default function LoginPage() {
               username: loginResponse.user.username,
               email: loginResponse.user.email,
               full_name: loginResponse.user.full_name,
-              is_platform_admin: loginResponse.user.is_platform_admin,
+              is_infra_admin: loginResponse.user.is_infra_admin,
               is_tenant_admin: loginResponse.user.is_tenant_admin,
               tenant_id: tenantId,
               tenant_name: tenantName,
@@ -343,7 +343,7 @@ export default function LoginPage() {
               username: loginResponse.user.username,
               email: loginResponse.user.email,
               full_name: loginResponse.user.full_name,
-              is_platform_admin: loginResponse.user.is_platform_admin,
+              is_infra_admin: loginResponse.user.is_infra_admin,
               is_tenant_admin: loginResponse.user.is_tenant_admin,
               tenant_id: tenantId,
               tenant_name: tenantName,
@@ -408,7 +408,7 @@ export default function LoginPage() {
 
     // 判断组织数量
     const tenants = response.tenants || [];
-    const isPlatformAdmin = response.user?.is_platform_admin || false;
+    const isPlatformAdmin = response.user?.is_infra_admin || false;
 
     // 平台管理：直接进入
     if (isPlatformAdmin) {
@@ -428,11 +428,11 @@ export default function LoginPage() {
         username: response.user.username,
         email: response.user.email,
         full_name: response.user.full_name,
-        is_platform_admin: response.user.is_platform_admin,
+        is_infra_admin: response.user.is_infra_admin,
         is_tenant_admin: response.user.is_tenant_admin,
         tenant_id: response.default_tenant_id,
         tenant_name: tenantName,
-        user_type: 'platform_superadmin',
+        user_type: 'infra_superadmin',
       };
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
@@ -471,7 +471,7 @@ export default function LoginPage() {
         username: response.user.username,
         email: response.user.email,
         full_name: response.user.full_name,
-        is_platform_admin: response.user.is_platform_admin,
+        is_infra_admin: response.user.is_infra_admin,
         is_tenant_admin: response.user.is_tenant_admin,
         tenant_id: selectedTenantId,
         tenant_name: tenantName,
@@ -871,7 +871,7 @@ export default function LoginPage() {
             username: response.user.username,
             email: response.user.email,
             full_name: response.user.full_name,
-            is_platform_admin: response.user.is_platform_admin,
+            is_infra_admin: response.user.is_infra_admin,
             is_tenant_admin: response.user.is_tenant_admin,
             tenant_id: tenantId,
             tenant_name: tenantName,
@@ -954,7 +954,7 @@ export default function LoginPage() {
           username: response.user.username,
           email: response.user.email,
           full_name: response.user.full_name,
-          is_platform_admin: response.user.is_platform_admin,
+          is_infra_admin: response.user.is_infra_admin,
           is_tenant_admin: response.user.is_tenant_admin,
           tenant_id: selectedTenantId,
           tenant_name: tenantName,
@@ -1606,7 +1606,7 @@ export default function LoginPage() {
           setRegisterDrawerVisible(false);
           setRegisterType('select');
         }}
-        width="50%"
+        size="large"
         placement="right"
         maskClosable={true}
         closable={true}

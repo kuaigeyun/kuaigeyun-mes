@@ -16,10 +16,10 @@ from apps.kuaicert.api.improvement_suggestions import router as improvement_sugg
 from apps.kuaicert.api.improvement_plans import router as improvement_plans_router
 from apps.kuaicert.api.best_practices import router as best_practices_router
 from apps.kuaicert.api.certification_applications import router as certification_applications_router
-from apps.kuaicert.api.certification_progresss import router as certification_progresss_router
+from apps.kuaicert.api.certification_progresses import router as certification_progresses_router
 from apps.kuaicert.api.certification_certificates import router as certification_certificates_router
 
-router = APIRouter(prefix="/kuaicert", tags=["认证"])
+router = APIRouter(prefix="/kuaicert", tags=["Certification"])
 
 # 注册子路由
 router.include_router(certification_types_router)
@@ -33,5 +33,5 @@ router.include_router(improvement_suggestions_router)
 router.include_router(improvement_plans_router)
 router.include_router(best_practices_router)
 router.include_router(certification_applications_router)
-router.include_router(certification_progresss_router)
+router.include_router(certification_progresses_router)
 router.include_router(certification_certificates_router)

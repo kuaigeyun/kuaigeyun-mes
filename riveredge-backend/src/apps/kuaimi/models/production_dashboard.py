@@ -47,7 +47,7 @@ class ProductionDashboard(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimi_production_dashboards"
+        table = "apps_kuaimi_production_dashboards"
         indexes = [
             ("tenant_id",),
             ("dashboard_no",),

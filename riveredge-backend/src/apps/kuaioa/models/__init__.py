@@ -18,10 +18,8 @@ from apps.kuaioa.models.meeting import (
     MeetingMinutes,
     MeetingResource,
 )
-from apps.kuaioa.models.notice import (
-    Notice,
-    Notification,
-)
+from apps.kuaioa.models.notice import Notice
+from apps.kuaioa.models.notification import Notification
 
 __all__ = [
     "ApprovalProcess",

@@ -35,7 +35,7 @@ class AccountSubject(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_account_subjects"
+        table = "apps_kuaiacc_account_subjects"
         indexes = [
             ("tenant_id",),
             ("subject_code",),

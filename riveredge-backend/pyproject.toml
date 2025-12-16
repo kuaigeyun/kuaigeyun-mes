@@ -9,14 +9,16 @@ description = "RiverEdge SaaS 多组织框架 - 后端 Monorepo"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-    "fastapi>=0.115.0,<0.116.0",  # ⭐ FIR 核心，主流稳定版
+    "fastapi>=0.115.0,<0.116.0",
     "uvicorn[standard]>=0.32.0,<0.33.0",  # 主流稳定版
     "pydantic>=2.9.0,<2.10.0",  # 主流稳定版
     "pydantic-settings>=2.6.0,<2.7.0",  # 主流稳定版
-    "tortoise-orm==0.21.1",  # 主流稳定版，与FastAPI 0.115+完美兼容
-    "aerich>=0.7.1",  # 主流稳定版，Tortoise ORM 数据库迁移工具
-    "asyncpg>=0.29.0",  # PostgreSQL 异步驱动，Python 3.11+ 预编译包
-    "redis[hiredis]>=5.0.1",  # redis-py，使用 redis.asyncio 异步接口，支持 hiredis
+    "email-validator>=2.0.0",  # Pydantic EmailStr 类型验证所需
+    "tortoise-orm==0.21.1",  # 主流稳定版,与FastAPI 0.115+完美兼容
+    "aerich>=0.7.1",  # 主流稳定版,Tortoise ORM 数据库迁移工具
+    "asyncpg>=0.29.0",  # PostgreSQL 异步驱动,Python 3.11+ 预编译包
+    "psycopg2-binary>=2.9.9",  # PostgreSQL 同步驱动,用于 Windows 环境下的同步数据库操作
+    "redis[hiredis]>=5.0.1",  # redis-py,使用 redis.asyncio 异步接口,支持 hiredis
     "python-jose[cryptography]>=3.3.0",  # JWT 认证
     "httpx>=0.27.0,<0.28.0",  # 主流稳定版
     "loguru>=0.7.3,<0.8.0",  # 主流稳定版
@@ -25,14 +27,14 @@ dependencies = [
     "psutil>=5.9.8",  # 系统资源监控
     "python-dotenv>=1.0.0",
     "pypinyin>=0.51.0",
-    "aiofiles>=23.2.1",  # 异步文件操作库，用于文件上传、下载等操作
-    "inngest>=0.3.0",  # 工作流引擎 ⭐ FIR 核心，必需，已集成到核心系统
+    "aiofiles>=23.2.1",  # 异步文件操作库,用于文件上传、下载等操作
+    "inngest>=0.3.0",  # 工作流引擎
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",  # 测试框架，主流稳定版
-    "pytest-asyncio>=0.23.0",  # 异步测试支持，主流稳定版
+    "pytest>=8.0.0",  # 测试框架,主流稳定版
+    "pytest-asyncio>=0.23.0",  # 异步测试支持,主流稳定版
     "pytest-cov==4.1.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
@@ -99,6 +101,8 @@ asyncio_mode = "auto"
 addopts = "-v --strict-markers --tb=short"
 
 [tool.aerich]
-tortoise_orm = "aerich_config.TORTOISE_ORM"
+tortoise_orm = "migrations.aerich_config.TORTOISE_ORM"
 location = "./migrations"
 src_folder = "./src"
+
+[tool.uv]

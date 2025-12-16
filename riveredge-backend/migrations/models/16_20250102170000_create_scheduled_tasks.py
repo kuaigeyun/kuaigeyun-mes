@@ -31,6 +31,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "root_scheduled_tasks" IS '定时任务表';
         
         -- 创建定时任务表索引
         CREATE INDEX IF NOT EXISTS "idx_root_scheduled_tasks_tenant_id" ON "root_scheduled_tasks" ("tenant_id");

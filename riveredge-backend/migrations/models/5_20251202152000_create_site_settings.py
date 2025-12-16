@@ -20,6 +20,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "deleted_at" TIMESTAMPTZ,
             CONSTRAINT "uid_sys_site_s_tenant__p9q4r5" UNIQUE ("tenant_id")
         );
+COMMENT ON TABLE "sys_site_settings" IS '站点设置表';
         
         -- 创建站点设置表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_site_s_tenant__p9q4r5" ON "sys_site_settings" ("tenant_id");
@@ -41,6 +42,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "deleted_at" TIMESTAMPTZ
         );
+COMMENT ON TABLE "sys_invitation_codes" IS '邀请码表';
         
         -- 创建邀请码表索引
         CREATE INDEX IF NOT EXISTS "idx_sys_invita_tenant__r9s4t5" ON "sys_invitation_codes" ("tenant_id");

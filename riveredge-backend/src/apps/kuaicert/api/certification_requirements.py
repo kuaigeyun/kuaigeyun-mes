@@ -15,7 +15,7 @@ from apps.kuaicert.schemas.certification_requirement_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/certification-requirement", tags=["认证要求"])
+router = APIRouter(prefix="/certification-requirement", tags=["Certification Requirements"])
 
 
 @router.post("", response_model=CertificationRequirementResponse, summary="创建认证要求")

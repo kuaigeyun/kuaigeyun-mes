@@ -9,7 +9,7 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormS
 import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni_table';
+import { UniTable } from '@/components/uni-table';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate } from '../../../types/material';
 

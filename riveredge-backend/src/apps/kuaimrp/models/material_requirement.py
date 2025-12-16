@@ -40,7 +40,7 @@ class MaterialRequirement(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaimrp_material_requirements"
+        table = "apps_kuaimrp_material_requirements"
         indexes = [
             ("tenant_id",),
             ("requirement_no",),

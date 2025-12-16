@@ -38,7 +38,7 @@ class OutsourcingOrder(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaisrm_outsourcing_orders"
+        table = "apps_kuaisrm_outsourcing_orders"
         indexes = [
             ("tenant_id",),
             ("order_no",),

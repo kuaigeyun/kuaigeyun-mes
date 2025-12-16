@@ -15,7 +15,7 @@ from apps.kuaihrm.schemas.salary_payment_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/salary-payments", tags=["薪资发放"])
+router = APIRouter(prefix="/salary-payments", tags=["Salary Payments"])
 
 
 @router.post("", response_model=SalaryPaymentResponse, summary="创建薪资发放")

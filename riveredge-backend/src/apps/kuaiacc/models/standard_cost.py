@@ -43,7 +43,7 @@ class StandardCost(BaseModel):
         """
         模型元数据
         """
-        table = "seed_kuaiacc_standard_costs"
+        table = "apps_kuaiacc_standard_costs"
         indexes = [
             ("tenant_id",),
             ("cost_no",),

@@ -26,6 +26,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "request_path" VARCHAR(500),
             "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+COMMENT ON TABLE "root_operation_logs" IS '操作日志表';
         CREATE INDEX IF NOT EXISTS "idx_root_operation_logs_tenant_id" ON "root_operation_logs" ("tenant_id");
         CREATE INDEX IF NOT EXISTS "idx_root_operation_logs_uuid" ON "root_operation_logs" ("uuid");
         CREATE INDEX IF NOT EXISTS "idx_root_operation_logs_user_id" ON "root_operation_logs" ("user_id");
