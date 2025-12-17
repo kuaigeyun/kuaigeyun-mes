@@ -13,7 +13,7 @@ import TweenOne from 'rc-tween-one';
 import { useGlobalStore } from '../../stores';
 import { getToken, getUserInfo, setUserInfo, setTenantId } from '../../utils/auth';
 import { login } from '../../services/auth';
-import { infraSuperAdminLogin } from '../../services/platformAdmin';
+import { infraSuperAdminLogin } from '../../services/infraAdmin';
 import { setToken } from '../../utils/auth';
 import { theme } from 'antd';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../../utils/avatar';
@@ -353,38 +353,38 @@ export default function LockScreenPage() {
 
       if (isInfraSuperAdmin) {
         // 平台超级管理员：使用平台登录接口
-        const platformResponse = await infraSuperAdminLogin({
+        const infraResponse = await infraSuperAdminLogin({
           username: currentUser.username,
           password: password,
         });
 
         // 验证成功，更新 token
-        setToken(platformResponse.access_token);
+        setToken(infraResponse.access_token);
 
         // 更新用户信息和租户ID
         setUserInfo({
-          ...platformResponse.user,
+          ...infraResponse.user,
           user_type: 'infra_superadmin',
         });
 
         // 设置默认租户 ID（如果返回了默认租户）
-        if (platformResponse.default_tenant_id) {
-          setTenantId(platformResponse.default_tenant_id);
+        if (infraResponse.default_tenant_id) {
+          setTenantId(infraResponse.default_tenant_id);
         }
 
         // 更新全局用户状态
         const { setCurrentUser } = useGlobalStore.getState();
         setCurrentUser({
-          id: platformResponse.user.id,
-          username: platformResponse.user.username,
-          email: platformResponse.user.email,
-          full_name: platformResponse.user.full_name,
+          id: infraResponse.user.id,
+          username: infraResponse.user.username,
+          email: infraResponse.user.email,
+          full_name: infraResponse.user.full_name,
           is_infra_admin: true,
           is_tenant_admin: false,
-          tenant_id: platformResponse.default_tenant_id,
+          tenant_id: infraResponse.default_tenant_id,
         });
 
-        response = platformResponse;
+        response = infraResponse;
       } else {
         // 系统级用户：使用系统登录接口
         const systemResponse = await login({

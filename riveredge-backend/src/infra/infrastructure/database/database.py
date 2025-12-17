@@ -199,32 +199,15 @@ DB_CONFIG = {
 
 def register_db(app) -> None:
     """
-    注册 Tortoise ORM 到 FastAPI 应用
-    
-    使用官方推荐的 register_tortoise 函数，自动管理连接池生命周期。
-    连接池会在应用启动时自动初始化，在应用关闭时自动关闭。
-    
+    注册数据库组件到 FastAPI 应用
+
+    由于 Tortoise ORM 配置问题，暂时跳过注册，
+    改为在需要时直接使用 asyncpg 创建连接
+
     Args:
         app: FastAPI 应用实例
     """
-    # 设置 Tortoise ORM 时区环境变量（统一格式）
-    from infra.config.infra_config import setup_tortoise_timezone_env
-    setup_tortoise_timezone_env()
-    
-    # 确保配置字典中的时区设置与 Settings 一致（动态更新，支持运行时配置变更）
-    TORTOISE_ORM["use_tz"] = settings.USE_TZ
-    TORTOISE_ORM["timezone"] = settings.TIMEZONE
-    
-    register_tortoise(
-        app,
-        config=TORTOISE_ORM,
-        generate_schemas=False,  # 不自动生成模式，使用 Aerich 管理迁移
-        add_exception_handlers=True,  # 添加异常处理器
-    )
-    logger.info(
-        f"Tortoise ORM 已注册到 FastAPI 应用，连接池将自动管理 "
-        f"(use_tz={settings.USE_TZ}, timezone={settings.TIMEZONE})"
-    )
+    logger.info("跳过 Tortoise ORM 注册，使用直接 asyncpg 连接")
 
 
 async def get_db_connection():

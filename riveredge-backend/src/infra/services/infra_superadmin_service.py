@@ -176,8 +176,8 @@ class InfraSuperAdminService:
         logger.info(f"密码验证结果: {password_valid}")
         if not password_valid:
             logger.warning(f"密码验证失败: username={username}, password_length={len(password) if password else 0}")
-            # 提示：密码应该从 .env 文件中的 PLATFORM_SUPERADMIN_PASSWORD 读取
-            logger.info(f"提示：请检查 .env 文件中的 PLATFORM_SUPERADMIN_PASSWORD 配置是否正确")
+            # 提示：密码应该从 .env 文件中的 infra_superadmin_PASSWORD 读取
+            logger.info(f"提示：请检查 .env 文件中的 infra_superadmin_PASSWORD 配置是否正确")
             return None
         
         # 更新最后登录时间

@@ -10,7 +10,7 @@ import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormT
 import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../components/uni_table';
+import { UniTable } from '../../../../components/uni-table';
 import {
   getDatasetList,
   getDatasetByUuid,

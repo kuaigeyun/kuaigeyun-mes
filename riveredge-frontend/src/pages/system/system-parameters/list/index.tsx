@@ -11,7 +11,7 @@ import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import GroupedFormView from '../grouped-form-view';
-import { UniTable } from '../../../../components/uni_table';
+import { UniTable } from '../../../../components/uni-table';
 import {
   getSystemParameterList,
   getSystemParameterByUuid,

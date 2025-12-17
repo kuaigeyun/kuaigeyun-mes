@@ -9,7 +9,7 @@ import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPackageList, deletePackage, type Package, TenantPlan } from '../../../services/tenant';
-import { UniTable } from '../../../components/uni_table';
+import { UniTable } from '../../../components/uni-table';
 import PackageForm from './form';
 import type { ActionType } from '@ant-design/pro-components';
 

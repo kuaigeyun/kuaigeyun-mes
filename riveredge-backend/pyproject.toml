@@ -1,6 +1,6 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+# 注意：本项目不发布包，使用 UV 静态版本管理（uv.lock）
+# 已移除 build-system 配置，避免生成 egg-info 目录
+# UV 通过 [project] 部分管理依赖，通过 uv.lock 锁定版本
 
 [project]
 name = "riveredge-backend"
@@ -14,7 +14,7 @@ dependencies = [
     "pydantic>=2.9.0,<2.10.0",  # 主流稳定版
     "pydantic-settings>=2.6.0,<2.7.0",  # 主流稳定版
     "email-validator>=2.0.0",  # Pydantic EmailStr 类型验证所需
-    "tortoise-orm==0.21.1",  # 主流稳定版,与FastAPI 0.115+完美兼容
+    "tortoise-orm==0.21.1",  # 回退到原来稳定版本
     "aerich>=0.7.1",  # 主流稳定版,Tortoise ORM 数据库迁移工具
     "asyncpg>=0.29.0",  # PostgreSQL 异步驱动,Python 3.11+ 预编译包
     "psycopg2-binary>=2.9.9",  # PostgreSQL 同步驱动,用于 Windows 环境下的同步数据库操作
@@ -106,3 +106,6 @@ location = "./migrations"
 src_folder = "./src"
 
 [tool.uv]
+# UV 静态版本管理配置
+# 使用 uv.lock 锁定依赖版本，不发布包，不生成 egg-info
+# 通过 uv sync --no-install-project 同步依赖，避免安装项目本身

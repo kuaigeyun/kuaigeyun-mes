@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Drawer } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../components/uni_table';
+import { UniTable } from '../../../../components/uni-table';
 import {
   getPermissionList,
   getPermissionByUuid,

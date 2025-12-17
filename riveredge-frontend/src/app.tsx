@@ -75,8 +75,8 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // ⚠️ 关键修复：先定义公开页面判断，避免在 shouldFetchUser 中使用未定义的变量
   const publicPaths = ['/login'];
   // 平台登录页是公开的，但其他平台页面需要登录
-  const isPlatformLoginPage = location.pathname === '/platform' || location.pathname === '/infra/login';
-  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isPlatformLoginPage;
+  const isInfraLoginPage = location.pathname === '/infra/login';
+  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage;
 
   // 使用 useMemo 计算是否应该获取用户信息，避免重复计算
   // ⚠️ 关键修复：在公开页面（如登录页）不应该尝试获取用户信息，避免后端未运行时出现连接错误
@@ -173,7 +173,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // 如果是公开页面且已登录，重定向到对应的仪表盘
     if (isPublicPath && isAuthenticated) {
       // 平台超管登录后，如果访问的是登录页，重定向到平台运营看板
-      if (isPlatformLoginPage && currentUser.is_infra_admin) {
+      if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
       // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
@@ -186,15 +186,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // 有 token = 已登录，允许访问所有页面（包括功能菜单）
     if (!isPublicPath && !hasToken) {
       // 平台级路由重定向到平台登录页
-      if (location.pathname.startsWith('/platform')) {
-        return '/platform';
+      if (location.pathname.startsWith('/infra')) {
+        return '/infra/login';
       }
       // 系统级路由重定向到用户登录页
       return '/login';
     }
     
     return null;
-  }, [isPublicPath, currentUser, isPlatformLoginPage, location.pathname, hasToken]);
+  }, [isPublicPath, currentUser, isInfraLoginPage, location.pathname, hasToken]);
 
   // 如果需要重定向，执行重定向
   if (redirectTarget) {

@@ -82,7 +82,7 @@ async def list_applications(
         is_installed=is_installed,
         is_active=is_active
     )
-    return [ApplicationResponse.model_validate(app) for app in applications]
+    return [ApplicationResponse(**app) for app in applications]
 
 
 @router.get("/installed", response_model=List[ApplicationResponse])

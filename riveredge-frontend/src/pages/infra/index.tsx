@@ -15,11 +15,11 @@ import {
   updateInfraSuperAdmin,
   type InfraSuperAdmin,
   type InfraSuperAdminUpdateRequest
-} from '../../services/platformAdmin';
+} from '../../services/infraAdmin';
 import { clearAuth } from '../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../stores';
-// import PlatformSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
+// import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
 /**
  * 平台超级管理员管理页面组件
@@ -29,8 +29,8 @@ export default function InfraSuperAdminPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setCurrentUser } = useGlobalStore();
-  // const [editModalVisible, setEditModalVisible] = useState(false);
-  // const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);
 
   // 获取平台超级管理员信息
   const { data: admin, isLoading } = useQuery({
@@ -43,8 +43,8 @@ export default function InfraSuperAdminPage() {
     mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
     onSuccess: () => {
       messageApi.success('更新成功');
-      setEditModalVisible(false);
-      setEditFormData(null);
+      // setEditModalVisible(false);
+      // setEditFormData(null);
       queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
     },
     onError: (error: any) => {
@@ -180,7 +180,7 @@ export default function InfraSuperAdminPage() {
         size={600}
       >
         {editFormData && (
-          <PlatformSuperAdminForm
+          <InfraSuperAdminForm
             initialValues={editFormData}
             onSubmit={handleSave}
             onCancel={() => {

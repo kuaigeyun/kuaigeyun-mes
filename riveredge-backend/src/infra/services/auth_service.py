@@ -10,6 +10,9 @@ from starlette.requests import Request
 from typing import Optional
 import asyncio
 
+from tortoise import Tortoise
+from infra.infrastructure.database.database import TORTOISE_ORM
+
 from infra.models.user import User
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
 from infra.schemas.auth import LoginRequest, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest
@@ -21,6 +24,21 @@ from infra.domain.security.security import (
 )
 from infra.domain.tenant_context import set_current_tenant_id
 from infra.services.tenant_service import TenantService
+
+
+async def _ensure_db_connection():
+    """
+    确保数据库连接已初始化
+
+    由于跳过 register_tortoise，我们需要在需要时手动初始化
+    """
+    try:
+        # 检查是否已初始化
+        Tortoise.get_connection("default")
+    except:
+        # 未初始化，尝试初始化
+        await Tortoise.init(config=TORTOISE_ORM)
+        logger.debug("Tortoise ORM 手动初始化成功")
 
 
 class AuthService:
@@ -338,6 +356,10 @@ class AuthService:
             >>> "access_token" in result
             True
         """
+        # 确保数据库连接已初始化
+        await _ensure_db_connection()
+
+        logger.info(f"开始登录: username={data.username}, tenant_id={getattr(data, 'tenant_id', None)}")
         # 查找用户（仅支持用户名登录，符合中国用户使用习惯）
         # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
         # 如果提供了 tenant_id，同时过滤组织，避免多组织用户名冲突
@@ -628,19 +650,33 @@ class AuthService:
         Raises:
             HTTPException: 当创建体验账户失败时抛出
         """
+        # 确保数据库连接已初始化
+        await _ensure_db_connection()
+
         from infra.schemas.tenant import TenantCreate
         from infra.schemas.user import UserCreate
-        
+
         tenant_service = TenantService()
         from infra.services.user_service import UserService
         user_service = UserService()
         
         try:
             # 1. 获取或创建默认组织（domain="default"）
-            default_tenant = await tenant_service.get_tenant_by_domain(
-                "default",
-                skip_tenant_filter=True
-            )
+            logger.info("开始查找默认组织...")
+            try:
+                logger.info("调用 tenant_service.get_tenant_by_domain...")
+                default_tenant = await tenant_service.get_tenant_by_domain(
+                    "default",
+                    skip_tenant_filter=True
+                )
+                logger.info(f"默认组织查找结果: {default_tenant}")
+                if default_tenant:
+                    logger.info(f"默认组织详情: id={default_tenant.id}, name={default_tenant.name}")
+            except Exception as e:
+                logger.error(f"查找默认组织时出错: {e}")
+                import traceback
+                logger.error(f"详细错误: {traceback.format_exc()}")
+                raise
             
             if not default_tenant:
                 # 如果默认组织不存在，创建它
@@ -662,16 +698,29 @@ class AuthService:
                     raise ValueError("创建默认组织失败：create_tenant 返回 None")
                 await tenant_service.initialize_tenant_data(default_tenant.id)
             
+            # 确保 default_tenant 不为 None（双重验证）
+            if not default_tenant:
+                raise ValueError("默认组织不存在或创建失败")
+
+            logger.info(f"默认组织验证通过: id={default_tenant.id}, name={default_tenant.name}")
+
+            # 设置组织上下文（确保后续操作使用正确的组织上下文）
+            set_current_tenant_id(default_tenant.id)
+            logger.info(f"组织上下文已设置: tenant_id={default_tenant.id}")
+            
             # 2. 获取或创建预设的体验账户（username="guest"）
             guest_username = "guest"
             guest_password = "guest123"  # 预设密码，体验账户使用固定密码
             
+            logger.info(f"查找体验账户: username={guest_username}, tenant_id={default_tenant.id}")
             guest_user = await User.get_or_none(
                 username=guest_username,
                 tenant_id=default_tenant.id
             )
-            
+            logger.info(f"体验账户查找结果: {guest_user.id if guest_user else 'None'}")
+
             if not guest_user:
+                logger.info("体验账户不存在，开始创建...")
                 # 如果体验账户不存在，创建它
                 user_data = UserCreate(
                     username=guest_username,
@@ -684,12 +733,14 @@ class AuthService:
                     is_tenant_admin=False,  # 体验账户不是组织管理员
                 )
                 guest_user = await user_service.create_user(user_data, tenant_id=default_tenant.id)
-            
+                logger.info(f"体验账户创建结果: {guest_user.id if guest_user else 'None'}")
+
             # 验证 guest_user 是否创建成功
             if not guest_user:
                 raise ValueError("创建体验账户失败：user_service.create_user 返回 None")
             
             # 3. 生成 Token（包含 tenant_id）
+            logger.info(f"开始生成 Token: user_id={guest_user.id}, username={guest_user.username}, tenant_id={default_tenant.id}")
             access_token = create_token_for_user(
                 user_id=guest_user.id,
                 username=guest_user.username,
@@ -697,6 +748,7 @@ class AuthService:
                 is_infra_admin=guest_user.is_infra_admin,
                 is_tenant_admin=guest_user.is_tenant_admin,
             )
+            logger.info(f"Token 生成成功: length={len(access_token) if access_token else 0}")
             
             # 计算过期时间（秒）
             from infra.config.infra_config import infra_settings as settings
@@ -716,38 +768,16 @@ class AuthService:
                 "is_tenant_admin": guest_user.is_tenant_admin,
             }
             
-            # 构建 tenants 列表（包含默认组织信息，用于前端显示）
-            # 确保 default_tenant 不为 None
+            # 确保 default_tenant 不为 None（双重验证）
             if not default_tenant:
                 raise ValueError("默认组织不存在或创建失败")
-            
-            # 安全地获取 status 值（处理可能为 None 的情况）
-            # 注意：status 是枚举类型，直接访问 .value 即可
-            try:
-                tenant_status = default_tenant.status.value if default_tenant.status else "inactive"
-            except (AttributeError, TypeError):
-                # 如果 status 为 None 或不是枚举类型，使用默认值
-                tenant_status = "inactive"
-            
-            # 安全地获取 uuid（处理可能为 None 的情况）
-            tenant_uuid = str(default_tenant.uuid) if default_tenant.uuid else None
-            
-            tenants_list = [
-                {
-                    "id": default_tenant.id,
-                    "uuid": tenant_uuid,
-                    "name": default_tenant.name,
-                    "domain": default_tenant.domain,
-                    "status": tenant_status,
-                }
-            ]
             
             return {
                 "access_token": access_token,
                 "token_type": "bearer",
                 "expires_in": expires_in,
                 "user": user_info_dict,
-                "tenants": tenants_list,  # 返回包含默认组织的列表，格式与 login 方法一致
+                "tenants": None,  # 体验账户只有一个组织，不需要选择（与历史版本保持一致）
                 "default_tenant_id": default_tenant.id,
                 "requires_tenant_selection": False,
             }
@@ -757,11 +787,11 @@ class AuthService:
             error_trace = traceback.format_exc()
             logger.error(f"免注册体验登录失败: {e}")
             logger.error(f"错误堆栈:\n{error_trace}")
-            # 输出更详细的调试信息
-            logger.error(f"调试信息: default_tenant={default_tenant}, guest_user={guest_user if 'guest_user' in locals() else '未定义'}")
+
+            # 简化错误处理，避免编码问题
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"免注册体验登录失败: {str(e)}"
+                detail="免注册体验登录失败，请联系管理员"
             )
     
     async def get_current_user(

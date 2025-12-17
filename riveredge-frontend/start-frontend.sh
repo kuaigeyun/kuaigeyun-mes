@@ -42,6 +42,14 @@ cd src || {
 # 设置运行模式为 SaaS 模式（默认）
 export MODE=saas
 
+# 设置 Inngest 配置环境变量
+export VITE_INNGEST_HOST="${VITE_INNGEST_HOST:-127.0.0.1}"
+export VITE_INNGEST_PORT="${VITE_INNGEST_PORT:-8300}"
+
+# 设置后端配置环境变量
+export VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}"
+export VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-8200}"
+
 # 从环境变量获取端口和主机（如果未设置则使用默认值）
 FRONTEND_HOST="${VITE_HOST:-}"
 FRONTEND_PORT="${VITE_PORT:-8100}"
@@ -62,5 +70,9 @@ echo ""
 echo "启动开发服务器..."
 echo ""
 
-# 启动开发服务器
+# 启动开发服务器，确保环境变量传递给 Vite
+VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}" \
+VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-8200}" \
+VITE_INNGEST_HOST="${VITE_INNGEST_HOST:-127.0.0.1}" \
+VITE_INNGEST_PORT="${VITE_INNGEST_PORT:-8300}" \
 npm run dev

@@ -110,35 +110,14 @@ MODE = os.getenv("MODE", "saas")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 注册到 FastAPI（register_tortoise 会自动初始化 Tortoise ORM 和连接池）
-    # register_tortoise 会在应用启动时通过 FastAPI 的 startup 事件自动初始化
-    register_db(app)
-    
-    # 自动扫描并注册插件应用（为所有租户注册）
-    # 注意：插件应用会在系统启动时自动扫描并注册，菜单也会自动同步
-    try:
-        from core.services.application_service import ApplicationService
-        from infra.models.tenant import Tenant
-        
-        # 获取所有租户
-        tenants = await Tenant.all()
-        for tenant in tenants:
-            try:
-                apps = await ApplicationService.scan_and_register_plugins(tenant_id=tenant.id)
-                if apps:
-                    print(f"✅ 为租户 {tenant.name} (ID: {tenant.id}) 自动注册了 {len(apps)} 个插件应用，菜单已自动同步")
-            except Exception as e:
-                print(f"⚠️ 为租户 {tenant.id} 扫描插件失败: {e}")
-    except Exception as e:
-        print(f"⚠️ 自动扫描插件失败: {e}")
-        import traceback
-        traceback.print_exc()
+    # 暂时跳过数据库注册，避免 Tortoise ORM 配置问题
+    # 改为在需要时直接使用 asyncpg 连接
+    print("ℹ️ 跳过 Tortoise ORM 注册，避免配置问题")
+    print("ℹ️ 应用服务将使用直接 asyncpg 连接")
     
     yield
 
-    # 关闭时清理
-    from tortoise import Tortoise
-    await Tortoise.close_connections()
+    # 无需清理，因为没有初始化 Tortoise ORM
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -423,8 +402,8 @@ async def test_inngest_integration(message: str = "Hello from RiverEdge!"):
     
     try:
         # 发送测试事件
-        result = await inngest_client.send_event(
-            event=Event(
+        result = await inngest_client.send(
+            Event(
                 name="test/integration",
                 data={
                     "message": message,

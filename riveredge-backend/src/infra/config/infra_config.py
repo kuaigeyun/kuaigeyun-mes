@@ -199,19 +199,19 @@ class InfraSettings(BaseSettings):
     TIMEZONE: str = Field(default="UTC", description="默认时区（Tortoise ORM）")
     
     # 平台超级管理员配置
-    PLATFORM_SUPERADMIN_USERNAME: str = Field(
+    infra_superadmin_USERNAME: str = Field(
         default="infra_admin",
         description="平台超级管理员用户名"
     )
-    PLATFORM_SUPERADMIN_PASSWORD: str = Field(
+    infra_superadmin_PASSWORD: str = Field(
         default="",
         description="平台超级管理员密码（必须设置，建议使用强密码）"
     )
-    PLATFORM_SUPERADMIN_EMAIL: str = Field(
+    infra_superadmin_EMAIL: str = Field(
         default="infra_admin@riveredge.cn",
         description="平台超级管理员邮箱"
     )
-    PLATFORM_SUPERADMIN_FULL_NAME: str = Field(
+    infra_superadmin_FULL_NAME: str = Field(
         default="平台超级管理员",
         description="平台超级管理员全名"
     )

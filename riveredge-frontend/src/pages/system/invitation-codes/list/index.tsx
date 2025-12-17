@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSwitch, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../components/uni_table';
+import { UniTable } from '../../../../components/uni-table';
 import {
   getInvitationCodeList,
   getInvitationCodeByUuid,

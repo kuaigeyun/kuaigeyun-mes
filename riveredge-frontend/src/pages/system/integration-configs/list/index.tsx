@@ -11,7 +11,7 @@ import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
-import { UniTable } from '../../../../components/uni_table';
+import { UniTable } from '../../../../components/uni-table';
 import {
   getIntegrationConfigList,
   getIntegrationConfigByUuid,

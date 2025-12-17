@@ -20,7 +20,7 @@ class TenantConfig(BaseModel):
     
     Attributes:
         id: 配置 ID（主键）
-        tenant_id: 组织 ID（外键，关联到 core_tenants 表）
+        tenant_id: 组织 ID（外键，关联到 infra_tenants 表）
         config_key: 配置键（唯一标识配置项）
         config_value: 配置值（JSONB 存储，支持复杂数据结构）
         description: 配置描述（可选）

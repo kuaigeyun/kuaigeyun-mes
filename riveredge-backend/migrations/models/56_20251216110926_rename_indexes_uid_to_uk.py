@@ -4,8 +4,12 @@
 将 uid_ 前缀的唯一索引统一重命名为 uk_ 前缀，符合命名规范。
 """
 
+from tortoise import BaseDBAsyncClient
 
-def upgrade():
+RUN_IN_TRANSACTION = True
+
+
+async def upgrade(db: BaseDBAsyncClient) -> str:
     """
     升级：重命名索引
     """
@@ -79,10 +83,9 @@ ALTER INDEX IF EXISTS "uid_core_site_s_tenant__p9q4r5" RENAME TO "uk_core_site_s
 ALTER INDEX IF EXISTS "uid_core_system_tenant__c9d4e5" RENAME TO "uk_core_system_tenant__c9d4e5";
 ALTER INDEX IF EXISTS "uid_core_users_tenant__26aebd" RENAME TO "uk_core_users_tenant__26aebd";
 """
-    pass
 
 
-def downgrade():
+async def downgrade(db: BaseDBAsyncClient) -> str:
     """
     降级：恢复索引名称
     """
@@ -155,4 +158,3 @@ ALTER INDEX IF EXISTS "uk_core_site_s_tenant__p9q4r5" RENAME TO "uid_core_site_s
 ALTER INDEX IF EXISTS "uk_core_system_tenant__c9d4e5" RENAME TO "uid_core_system_tenant__c9d4e5";
 ALTER INDEX IF EXISTS "uk_core_users_tenant__26aebd" RENAME TO "uid_core_users_tenant__26aebd";
 """
-    pass

@@ -39,7 +39,7 @@ class SavedSearchService:
             >>> service = SavedSearchService()
             >>> saved_search = await service.create_saved_search(
             ...     SavedSearchCreate(
-            ...         page_path="/platform/packages",
+            ...         page_path="/infra/packages",
             ...         name="我的搜索",
             ...         search_params={"name": "test"}
             ...     ),

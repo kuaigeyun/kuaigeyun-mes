@@ -6,6 +6,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
+from loguru import logger
 
 from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse
 from infra.services.auth_service import AuthService
@@ -45,9 +46,19 @@ async def login(
         }
         ```
     """
-    service = AuthService()
-    result = await service.login(data, request)
-    return LoginResponse(**result)
+    print(f"=== API LOGIN: 收到登录请求: username={data.username} ===")
+    try:
+        service = AuthService()
+        print(f"=== API LOGIN: 创建 AuthService 成功 ===")
+        result = await service.login(data, request)
+        print(f"=== API LOGIN: 登录成功: username={data.username} ===")
+        return LoginResponse(**result)
+    except Exception as e:
+        print(f"=== API LOGIN: 登录失败: username={data.username}, error={type(e).__name__}: {e} ===")
+        import traceback
+        print(f"=== API LOGIN: 错误详情 ===")
+        print(traceback.format_exc())
+        raise
 
 
 @router.post("/register", response_model=dict)
@@ -100,19 +111,27 @@ async def refresh_token(token: str):
 async def guest_login():
     """
     免注册体验登录接口
-    
+
     获取或创建默认组织和预设的体验账户，直接返回登录响应。
     体验账户只有浏览权限（只读权限），无新建、编辑、删除权限。
-    
+
     Returns:
         LoginResponse: 登录成功的响应数据
-        
+
     Raises:
         HTTPException: 当创建体验账户失败时抛出
     """
-    service = AuthService()
-    result = await service.guest_login()
-    return LoginResponse(**result)
+    try:
+        service = AuthService()
+        result = await service.guest_login()
+        return LoginResponse(**result)
+    except Exception as e:
+        logger.error(f"体验登录失败: {e}")
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"体验登录失败: {str(e)}"
+        )
 
 
 @router.get("/me", response_model=CurrentUserResponse)

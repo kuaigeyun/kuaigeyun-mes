@@ -199,7 +199,7 @@ async def get_current_infra_superadmin(
         
     Example:
         ```python
-        @router.get("/platform-superadmin/protected")
+        @router.get("/infra-superadmin/protected")
         async def protected_route(
             current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
         ):

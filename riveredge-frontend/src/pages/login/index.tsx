@@ -1486,7 +1486,7 @@ export default function LoginPage() {
                   color: fixedThemeColor,
                 }}
               >
-                免注册体验
+                体验登录
               </Button>
             </div>
 

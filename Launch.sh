@@ -800,16 +800,36 @@ start_backend() {
     # 进入后端目录并启动
     cd riveredge-backend
 
+    # 设置环境变量：强制 egg-info 生成到 startlogs 目录（如果必须生成）
+    export SETUPTOOLS_EGG_INFO_DIR="$(cd .. && pwd)/startlogs"
+
+    # 清理可能存在的 egg-info 目录（严禁在 src 目录下产生）
+    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    if [ -d "src/riveredge_backend.egg-info" ]; then
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
+        mkdir -p "../startlogs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+    fi
+
     # 检查并同步 UV 虚拟环境（如果不存在或依赖有变化）
+    # 使用 --no-install-project 避免安装项目本身，防止生成 egg-info 目录
     if [ ! -d ".venv" ] || [ "pyproject.toml" -nt ".venv" ] || [ "uv.lock" -nt ".venv" ]; then
         log_info "同步 UV 依赖..."
-        uv sync
+        uv sync --no-install-project
         if [ $? -ne 0 ]; then
             log_error "UV 依赖同步失败"
             cd ..
             return 1
         fi
         log_success "UV 依赖同步完成"
+    fi
+    
+    # 再次检查并清理（防止在同步过程中意外生成）
+    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    if [ -d "src/riveredge_backend.egg-info" ]; then
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
+        mkdir -p "../startlogs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
     fi
 
     # 设置环境变量
@@ -1093,15 +1113,47 @@ start_inngest() {
     # 创建日志文件（确保存在）
     touch "$script_dir/startlogs/inngest.log" 2>/dev/null || true
     
+    # 动态更新配置文件中的端口（确保使用传入的端口参数）
+    # 使用 Python 更新配置文件中的端口
+    local temp_config="$script_dir/bin/inngest.config.tmp.json"
+    if command -v python &> /dev/null; then
+        python -c "
+import json
+import sys
+try:
+    with open('$config_file', 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    config['event_api']['port'] = $port
+    with open('$temp_config', 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=4, ensure_ascii=False)
+except Exception as e:
+    print('Error updating config:', e, file=sys.stderr)
+    sys.exit(1)
+" 2>> "$script_dir/startlogs/inngest.log" || {
+            log_warn "无法更新 Inngest 配置文件端口，使用原始配置文件"
+            temp_config="$config_file"
+        }
+    else
+        log_warn "未找到 Python，无法动态更新端口配置，使用原始配置文件"
+        temp_config="$config_file"
+    fi
+    
     # Windows Git Bash 兼容：使用不同的启动方式
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
         # Windows: 直接后台启动，重定向输出
-        ("$inngest_exe" dev --config "$config_file" >> "$script_dir/startlogs/inngest.log" 2>&1) &
+        # 使用 --port 参数直接设置端口，而不是依赖配置文件
+        ("$inngest_exe" dev --port "$port" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1) &
         local inngest_pid=$!
     else
         # Linux/Mac: 使用 nohup
-        nohup "$inngest_exe" dev --config "$config_file" >> "$script_dir/startlogs/inngest.log" 2>&1 &
+        # 使用 --port 参数直接设置端口，而不是依赖配置文件
+        nohup "$inngest_exe" dev --port "$port" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1 &
         local inngest_pid=$!
+    fi
+    
+    # 清理临时配置文件（延迟删除，确保进程已启动）
+    if [ "$temp_config" != "$config_file" ]; then
+        (sleep 10 && rm -f "$temp_config" 2>/dev/null) &
     fi
     
     # 等待一下确保进程启动
@@ -1573,11 +1625,24 @@ main() {
     fi
 
     # 同步 UV 依赖（如果虚拟环境不存在或依赖有变化）
+    # 使用 --no-install-project 避免安装项目本身，防止生成 egg-info 目录
     log_info "检查并同步 UV 依赖..."
     cd riveredge-backend
+    
+    # 设置环境变量：强制 egg-info 生成到 startlogs 目录（如果必须生成）
+    export SETUPTOOLS_EGG_INFO_DIR="$(cd .. && pwd)/startlogs"
+    
+    # 清理可能存在的 egg-info 目录（严禁在 src 目录下产生）
+    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    if [ -d "src/riveredge_backend.egg-info" ]; then
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
+        mkdir -p "../startlogs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+    fi
+    
     if [ ! -d ".venv" ] || [ "pyproject.toml" -nt ".venv" ] || [ "uv.lock" -nt ".venv" ]; then
         log_info "同步 UV 依赖..."
-        uv sync || {
+        uv sync --no-install-project || {
             log_error "UV 依赖同步失败"
             cd ..
             exit 1
@@ -1586,6 +1651,15 @@ main() {
     else
         log_success "UV 依赖已是最新 ✓"
     fi
+    
+    # 再次检查并清理（防止在同步过程中意外生成）
+    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    if [ -d "src/riveredge_backend.egg-info" ]; then
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
+        mkdir -p "../startlogs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+    fi
+    
     cd ..
 
     # 停止现有服务
