@@ -53,6 +53,7 @@ ENV/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.example
 
 # 日志文件和进程文件
 logs/
