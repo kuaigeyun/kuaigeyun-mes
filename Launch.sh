@@ -1167,12 +1167,12 @@ except Exception as e:
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
         # Windows: 直接后台启动，重定向输出
         # 使用 --port 参数直接设置端口，而不是依赖配置文件
-        ("$inngest_exe" dev --port "$port" -u "http://localhost:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1) &
+        ("$inngest_exe" dev --port "$port" -u "http://127.0.0.1:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1) &
         local inngest_pid=$!
     else
         # Linux/Mac: 使用 nohup
         # 使用 --port 参数直接设置端口，而不是依赖配置文件
-        nohup "$inngest_exe" dev --port "$port" -u "http://localhost:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1 &
+        nohup "$inngest_exe" dev --port "$port" -u "http://127.0.0.1:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1 &
         local inngest_pid=$!
     fi
     
