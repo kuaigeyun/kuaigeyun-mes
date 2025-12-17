@@ -86,6 +86,9 @@ coverage/
 *.bak
 *.cache
 
+# 上传文件目录
+**/uploads/
+
 # 归档文件
 *.zip
 *.tar.gz
