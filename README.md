@@ -333,18 +333,13 @@ kubectl get services
 - [PostgreSQL](https://www.postgresql.org/) - 数据库
 - [Redis](https://redis.io/) - 缓存数据库
 
-## 📞 联系我们
 
-- **官方网站**: [www.riveredge.com](https://www.riveredge.com)
-- **文档中心**: [docs.riveredge.com](https://docs.riveredge.com)
-- **技术支持**: support@riveredge.com
-- **商务合作**: business@riveredge.com
 
 ---
 
 <div align="center">
 
-**RiverEdge SaaS 多组织框架** © 2024. 由 [无锡快格信息技术有限公司](https://www.kuai-ge.com) 开发并维护。
+**RiverEdge SaaS 多组织框架** © 2025. 由 [无锡快格信息技术有限公司](https://www.kuaige.com.cn) 开发并维护。
 
 [![Star History Chart](https://api.star-history.com/svg?repos=your-org/riveredge&type=Date)](https://star-history.com/#your-org/riveredge&Date)
 
