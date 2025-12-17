@@ -37,6 +37,7 @@ ENV/
 !.vscode/settings.json  # 允许提交 settings.json
 !.vscode/extensions.json  # 允许提交 extensions.json（推荐扩展列表）
 .idea/
+.cursorrules
 *.swp
 *.swo
 *.suo
