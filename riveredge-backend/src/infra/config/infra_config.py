@@ -213,8 +213,28 @@ class InfraSettings(BaseSettings):
     )
     infra_superadmin_FULL_NAME: str = Field(
         default="平台超级管理员",
-        description="平台超级管理员全名"
+        description="平台超级管理员姓名"
     )
+
+    # 邮件配置 (SMTP)
+    SMTP_HOST: str = Field(default="smtp.qq.com", description="SMTP服务器地址")
+    SMTP_PORT: int = Field(default=587, description="SMTP服务器端口")
+    SMTP_USER: str = Field(default="", description="SMTP用户名")
+    SMTP_PASSWORD: str = Field(default="", description="SMTP密码")
+    SMTP_TLS: bool = Field(default=True, description="是否启用TLS")
+    SMTP_SSL: bool = Field(default=False, description="是否启用SSL")
+    EMAIL_FROM: str = Field(default="noreply@riveredge.cn", description="发件人邮箱")
+    EMAIL_FROM_NAME: str = Field(default="RiverEdge", description="发件人姓名")
+
+    # 验证码配置
+    VERIFICATION_CODE_EXPIRE_MINUTES: int = Field(default=10, description="验证码过期时间（分钟）")
+    VERIFICATION_CODE_LENGTH: int = Field(default=6, description="验证码长度")
+
+    # 短信配置 (阿里云短信服务)
+    SMS_ACCESS_KEY_ID: str = Field(default="", description="阿里云AccessKey ID")
+    SMS_ACCESS_KEY_SECRET: str = Field(default="", description="阿里云AccessKey Secret")
+    SMS_SIGN_NAME: str = Field(default="RiverEdge", description="短信签名")
+    SMS_TEMPLATE_CODE: str = Field(default="SMS_123456789", description="短信模板CODE")
     
     # 文件管理配置（第三阶段）
     FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")

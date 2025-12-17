@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
 from loguru import logger
 
-from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse
+from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse, SendVerificationCodeRequest, SendVerificationCodeResponse
 from infra.services.auth_service import AuthService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -242,4 +242,64 @@ async def register_organization(data: OrganizationRegisterRequest):
         "tenant_id": result["tenant_id"],
         "user_id": result["user_id"]
     }
+
+
+@router.post("/send-verification-code", response_model=SendVerificationCodeResponse)
+async def send_verification_code(data: SendVerificationCodeRequest):
+    """
+    发送验证码接口
+
+    发送短信或邮箱验证码，用于注册验证。
+
+    Args:
+        data: 发送验证码请求数据（phone或email必填其一）
+
+    Returns:
+        SendVerificationCodeResponse: 发送结果响应
+
+    Raises:
+        HTTPException: 当参数无效或发送失败时抛出
+    """
+    if not data.phone and not data.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="手机号和邮箱至少提供一个"
+        )
+
+    service = AuthService()
+
+    try:
+        success = False
+        message = "验证码发送失败"
+
+        if data.phone:
+            # 发送短信验证码
+            code = service.generate_verification_code()
+            success = await service.send_sms_verification_code(data.phone, code)
+            if success:
+                # 这里应该将验证码存储到Redis或缓存中，设置过期时间
+                # 暂时使用logger记录，实际项目中需要实现缓存存储
+                logger.info(f"短信验证码已生成并发送: {data.phone} -> {code}")
+                message = "短信验证码发送成功"
+        elif data.email:
+            # 发送邮箱验证码
+            code = service.generate_verification_code()
+            success = await service.send_email_verification_code(data.email, code)
+            if success:
+                # 这里应该将验证码存储到Redis或缓存中，设置过期时间
+                # 暂时使用logger记录，实际项目中需要实现缓存存储
+                logger.info(f"邮箱验证码已生成并发送: {data.email} -> {code}")
+                message = "邮箱验证码发送成功"
+
+        return {
+            "success": success,
+            "message": message
+        }
+
+    except Exception as e:
+        logger.error(f"发送验证码异常: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="验证码发送失败，请稍后重试"
+        )
 

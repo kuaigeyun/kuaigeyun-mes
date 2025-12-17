@@ -2,9 +2,22 @@
  * 统一错误处理工具
  * 
  * 提供统一的错误处理函数，确保所有错误都按照统一格式处理。
+ * 
+ * ⚠️ 注意：Ant Design 6.0 要求使用 App.useApp() 获取 message 实例，
+ * 但工具函数无法使用 hooks，因此使用全局 message 实例。
  */
 
-import { message } from 'antd';
+import { App } from 'antd';
+
+// 使用全局 message 实例（通过 window.__ANTD_MESSAGE__ 设置）
+const getMessage = () => {
+  if (typeof window !== 'undefined' && (window as any).__ANTD_MESSAGE__) {
+    return (window as any).__ANTD_MESSAGE__;
+  }
+  // 降级方案：如果全局实例不存在，使用静态 API（会有警告，但不影响功能）
+  const { message } = require('antd');
+  return message;
+};
 
 /**
  * 错误响应接口
@@ -27,6 +40,8 @@ export interface ErrorResponse {
  * @returns 错误消息字符串
  */
 export function handleError(error: any, defaultMessage: string = '操作失败'): string {
+  const message = getMessage();
+  
   // 如果是 ErrorResponse 格式
   if (error?.response?.data) {
     const errorData = error.response.data;
@@ -71,6 +86,7 @@ export function handleError(error: any, defaultMessage: string = '操作失败')
  * @param msg - 成功消息
  */
 export function handleSuccess(msg: string = '操作成功'): void {
+  const message = getMessage();
   message.success(msg);
 }
 
@@ -80,6 +96,7 @@ export function handleSuccess(msg: string = '操作成功'): void {
  * @param msg - 警告消息
  */
 export function handleWarning(msg: string): void {
+  const message = getMessage();
   message.warning(msg);
 }
 
@@ -89,6 +106,7 @@ export function handleWarning(msg: string): void {
  * @param msg - 信息消息
  */
 export function handleInfo(msg: string): void {
+  const message = getMessage();
   message.info(msg);
 }
 

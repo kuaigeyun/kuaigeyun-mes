@@ -68,7 +68,7 @@ export interface MenuOrderItem {
  * 创建菜单
  */
 export async function createMenu(data: CreateMenuData): Promise<Menu> {
-  return apiRequest<Menu>('/system/menus', {
+  return apiRequest<Menu>('/core/menus', {
     method: 'POST',
     data,
   });
@@ -84,7 +84,7 @@ export async function getMenus(params?: {
   application_uuid?: string;
   is_active?: boolean;
 }): Promise<Menu[]> {
-  return apiRequest<Menu[]>('/system/menus', {
+  return apiRequest<Menu[]>('/core/menus', {
     params,
   });
 }
@@ -97,7 +97,7 @@ export async function getMenuTree(params?: {
   application_uuid?: string;
   is_active?: boolean;
 }): Promise<MenuTree[]> {
-  return apiRequest<MenuTree[]>('/system/menus/tree', {
+  return apiRequest<MenuTree[]>('/core/menus/tree', {
     params,
   });
 }
@@ -106,14 +106,14 @@ export async function getMenuTree(params?: {
  * 获取菜单详情
  */
 export async function getMenuDetail(uuid: string): Promise<Menu> {
-  return apiRequest<Menu>(`/system/menus/${uuid}`);
+  return apiRequest<Menu>(`/core/menus/${uuid}`);
 }
 
 /**
  * 更新菜单
  */
 export async function updateMenu(uuid: string, data: UpdateMenuData): Promise<Menu> {
-  return apiRequest<Menu>(`/system/menus/${uuid}`, {
+  return apiRequest<Menu>(`/core/menus/${uuid}`, {
     method: 'PUT',
     data,
   });
@@ -123,7 +123,7 @@ export async function updateMenu(uuid: string, data: UpdateMenuData): Promise<Me
  * 删除菜单
  */
 export async function deleteMenu(uuid: string): Promise<void> {
-  return apiRequest<void>(`/system/menus/${uuid}`, {
+  return apiRequest<void>(`/core/menus/${uuid}`, {
     method: 'DELETE',
   });
 }
@@ -132,7 +132,7 @@ export async function deleteMenu(uuid: string): Promise<void> {
  * 更新菜单排序
  */
 export async function updateMenuOrder(menuOrders: MenuOrderItem[]): Promise<{ success: boolean; message: string }> {
-  return apiRequest<{ success: boolean; message: string }>('/system/menus/update-order', {
+  return apiRequest<{ success: boolean; message: string }>('/core/menus/update-order', {
     method: 'POST',
     data: menuOrders,
   });

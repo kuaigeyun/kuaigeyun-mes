@@ -16,6 +16,7 @@ from infra.domain.tenant_context import get_current_tenant_id
     name="测试集成",
     trigger=TriggerEvent(event="test/integration"),
 )
+# @with_tenant_isolation_optional  # 暂时移除装饰器进行调试
 async def test_integration_function(event: Event) -> Dict[str, Any]:
     """
     测试 Inngest 集成的工作流函数

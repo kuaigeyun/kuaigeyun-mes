@@ -9,9 +9,9 @@
 import { ProForm, ProFormText, ProFormGroup } from '@ant-design/pro-components';
 import { App, Typography, Button, Space, Tooltip, ConfigProvider, Card, Row, Col, Drawer, Alert, AutoComplete, Input } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
-import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, UserAddOutlined, ApartmentOutlined, ArrowLeftOutlined, MailOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, UserAddOutlined, ApartmentOutlined, ArrowLeftOutlined, MailOutlined, MobileOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
-import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest } from '../../services/register';
+import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
@@ -56,6 +56,7 @@ export default function LoginPage() {
   // 注册抽屉状态
   const [registerDrawerVisible, setRegisterDrawerVisible] = useState(false);
   const [registerType, setRegisterType] = useState<'select' | 'personal' | 'organization'>('select');
+
   
   // 个人注册表单状态
   const [tenantCheckResult, setTenantCheckResult] = useState<TenantCheckResponse | null>(null);
@@ -112,6 +113,8 @@ export default function LoginPage() {
    */
   interface PersonalRegisterFormData {
     username: string;
+    phone: string;
+    phone_verification_code: string;
     email?: string;
     password: string;
     confirm_password: string;
@@ -215,12 +218,26 @@ export default function LoginPage() {
       }
       // 如果不填写组织代码，tenant_id 为 undefined，将注册到默认组织
 
+      // 临时跳过验证码验证（待短信服务完全接入后启用）
+      // TODO: 实现真实的验证码验证逻辑
+      if (!values.phone_verification_code || values.phone_verification_code.trim() === '') {
+        console.log('验证码为空，跳过验证');
+      } else {
+        console.log('验证码输入:', values.phone_verification_code);
+        // 这里可以添加简单的格式验证
+        if (!/^\d{6}$/.test(values.phone_verification_code)) {
+          message.error('验证码格式不正确，应为6位数字');
+          return;
+        }
+      }
+
       // 提交个人注册
       const registerResponse = await registerPersonal({
         username: values.username,
-        email: values.email,
+        phone: values.phone,
+        email: values.email && values.email.trim() !== '' ? values.email : undefined,
         password: values.password,
-        full_name: values.full_name,
+        full_name: values.full_name && values.full_name.trim() !== '' ? values.full_name : undefined,
         tenant_id: tenant_id,
         invite_code: values.invite_code,
       });
@@ -1802,7 +1819,46 @@ export default function LoginPage() {
                 font-size: 14px !important;
               }
             `}</style>
+            {/* 注册进度指示器 */}
             <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: '#52c41a',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                  marginRight: 8
+                }}>
+                  1
+                </div>
+                <div style={{ flex: 1, height: 2, backgroundColor: '#52c41a', marginRight: 8 }}></div>
+                <div style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: '#d9d9d9',
+                  color: '#666',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 12,
+                  fontWeight: 'bold',
+                  marginRight: 8
+                }}>
+                  2
+                </div>
+                <div style={{ flex: 1, height: 2, backgroundColor: '#d9d9d9' }}></div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, color: '#52c41a', fontWeight: 500 }}>填写信息</Text>
+                <Text style={{ fontSize: 12, color: '#666' }}>验证邮箱</Text>
+              </div>
               <Text type="secondary" style={{ fontSize: 14 }}>
                 填写以下信息创建您的个人账户
               </Text>
@@ -1842,12 +1898,23 @@ export default function LoginPage() {
                     width: '100%',
                     height: '40px',
                   },
+                  loading: false,
                 },
               }}
               size="large"
               grid={true}
               rowProps={{ gutter: 16 }}
               className="register-form"
+              onKeyDown={(e) => {
+                // 支持 Ctrl+Enter 快速提交
+                if (e.ctrlKey && e.key === 'Enter') {
+                  e.preventDefault();
+                  const form = e.currentTarget as any;
+                  if (form && form.submit) {
+                    form.submit();
+                  }
+                }
+              }}
             >
               <ProFormGroup title="用户信息">
                 <ProFormText
@@ -1857,6 +1924,10 @@ export default function LoginPage() {
                   rules={[
                     { required: true, message: '请输入用户名' },
                     { min: 3, max: 50, message: '用户名长度为 3-50 个字符' },
+                    {
+                      pattern: /^[a-zA-Z0-9_-]+$/,
+                      message: '用户名只能包含字母、数字、下划线和连字符'
+                    },
                   ]}
                   fieldProps={{
                     size: 'large',
@@ -1866,8 +1937,96 @@ export default function LoginPage() {
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      这是您登录时使用的账号，注册后无法修改，请谨慎填写
+                      <div>这是您登录时使用的账号，注册后无法修改，请谨慎填写</div>
                     </div>
+                  }
+                />
+
+                <ProFormText
+                  name="phone"
+                  label="手机号"
+                  colProps={{ span: 12 }}
+                  rules={[
+                    { required: true, message: '请输入手机号' },
+                    {
+                      pattern: /^1[3-9]\d{9}$/,
+                      message: '请输入有效的11位手机号'
+                    }
+                  ]}
+                  fieldProps={{
+                    size: 'large',
+                    prefix: <MobileOutlined />,
+                    placeholder: '请输入11位手机号',
+                    autoComplete: 'tel',
+                    maxLength: 11,
+                  }}
+                  extra={
+                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
+                      <div>手机号用于接收短信验证码，保障账户安全</div>
+                      <div style={{ marginTop: 4, color: '#52c41a' }}>
+                        ✅ 支持中国大陆手机号
+                      </div>
+                    </div>
+                  }
+                />
+
+                  <ProFormText
+                    name="phone_verification_code"
+                    label="短信验证码"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { required: false, message: '请输入短信验证码' }, // 临时设为非必填
+                      { pattern: /^\d{6}$/, message: '验证码格式不正确' },
+                    ]}
+                    fieldProps={{
+                      size: 'large',
+                      placeholder: '请输入6位验证码（暂未接入）',
+                      maxLength: 6,
+                    addonAfter: (
+                  <Button
+                        type="link"
+                        style={{ padding: '0 8px', height: '100%' }}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                      // 获取手机号值
+                      const form = document.querySelector('.register-form') as any;
+                      if (form && form.getFieldsValue) {
+                        const values = form.getFieldsValue();
+                        const phone = values.phone;
+
+                        if (!phone) {
+                          message.warning('请先输入手机号');
+                          return;
+                        }
+
+                        if (!/^1[3-9]\d{9}$/.test(phone)) {
+                          message.warning('请输入有效的手机号');
+                          return;
+                        }
+
+                        try {
+                          const result = await sendVerificationCode({ phone });
+                          if (result.success) {
+                            message.success(result.message);
+                          } else {
+                            message.error(result.message);
+                          }
+                        } catch (error) {
+                          message.error('验证码发送失败，请稍后重试');
+                        }
+                      }
+                    }}
+                  >
+                    获取验证码
+                  </Button>
+                    ),
+                  }}
+                  extra={
+                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
+                      <div style={{ color: '#faad14' }}>⚠️ 验证码服务暂未完全接入，可留空跳过</div>
+                      <div>输入手机号后点击"获取验证码"按钮接收短信验证码</div>
+                </div>
                   }
                 />
 
@@ -1875,7 +2034,22 @@ export default function LoginPage() {
                   name="email"
                   label="邮箱（可选）"
                   colProps={{ span: 12 }}
-                  rules={[{ type: 'email', message: '请输入有效的邮箱地址' }]}
+                  rules={[
+                    {
+                      validator: (_, value) => {
+                        // 如果为空，则通过验证（非必填）
+                        if (!value || value.trim() === '') {
+                          return Promise.resolve();
+                        }
+                        // 如果有值，则验证邮箱格式
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (emailRegex.test(value)) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error('请输入有效的邮箱地址格式'));
+                      }
+                    }
+                  ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <MailOutlined />,
@@ -1884,7 +2058,10 @@ export default function LoginPage() {
                   }}
                   extra={
                     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      填写邮箱后，可以接收重要通知，也可以在忘记密码时找回账户
+                      <div>邮箱用于接收重要通知和密码找回，可选填</div>
+                      <div style={{ marginTop: 4, color: '#1890ff' }}>
+                        💡 支持 Gmail、Outlook、QQ、163 等主流邮箱
+                      </div>
                     </div>
                   }
                 />

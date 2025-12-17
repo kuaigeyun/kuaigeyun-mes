@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from apps.kuaicrm.api.leads import router as leads_router
 from apps.kuaicrm.api.opportunities import router as opportunities_router
 from apps.kuaicrm.api.sales_orders import router as sales_orders_router
+from apps.kuaicrm.api.quotations import router as quotations_router
 from apps.kuaicrm.api.service_workorders import router as service_workorders_router
 from apps.kuaicrm.api.warranties import router as warranties_router
 from apps.kuaicrm.api.complaints import router as complaints_router
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/apps/kuaicrm", tags=["CRM"])
 router.include_router(leads_router)
 router.include_router(opportunities_router)
 router.include_router(sales_orders_router)
+router.include_router(quotations_router)
 router.include_router(service_workorders_router)
 router.include_router(warranties_router)
 router.include_router(complaints_router)

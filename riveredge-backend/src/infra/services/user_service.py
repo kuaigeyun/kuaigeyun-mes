@@ -73,6 +73,7 @@ class UserService:
         user = await User.create(
             tenant_id=tenant_id,  # ⭐ 关键：自动设置组织 ID
             username=data.username,
+            phone=data.phone if hasattr(data, 'phone') and data.phone else None,  # 手机号（如果存在）
             email=data.email if data.email else None,  # 邮箱可选，符合中国用户使用习惯
             password_hash=password_hash,
             full_name=data.full_name,

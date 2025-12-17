@@ -13,7 +13,8 @@ from apps.master_data.services.warehouse_service import WarehouseService
 from apps.master_data.schemas.warehouse_schemas import (
     WarehouseCreate, WarehouseUpdate, WarehouseResponse,
     StorageAreaCreate, StorageAreaUpdate, StorageAreaResponse,
-    StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse
+    StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse,
+    WarehouseTreeResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -331,4 +332,50 @@ async def delete_storage_location(
         return {"message": "库位删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 级联查询接口 ====================
+
+@router.get("/tree", response_model=List[WarehouseTreeResponse], response_model_by_alias=True, summary="获取仓库数据树形结构")
+async def get_warehouse_tree(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）")
+):
+    """
+    获取仓库数据树形结构（仓库→库区→库位）
+    
+    返回完整的仓库层级结构，用于级联选择等场景。
+    
+    - **is_active**: 是否只查询启用的数据（可选）
+    
+    返回结构：
+    ```json
+    [
+      {
+        "id": 1,
+        "uuid": "...",
+        "code": "WH001",
+        "name": "仓库1",
+        "storageAreas": [
+          {
+            "id": 1,
+            "uuid": "...",
+            "code": "SA001",
+            "name": "库区1",
+            "storageLocations": [
+              {
+                "id": 1,
+                "uuid": "...",
+                "code": "SL001",
+                "name": "库位1"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+    ```
+    """
+    return await WarehouseService.get_warehouse_tree(tenant_id, is_active)
 

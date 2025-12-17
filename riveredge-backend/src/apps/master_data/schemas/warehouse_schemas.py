@@ -4,8 +4,8 @@
 定义仓库数据的 Pydantic Schema（仓库、库区、库位），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, validator
-from typing import Optional
+from pydantic import BaseModel, Field, validator, ConfigDict
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -65,13 +65,17 @@ class WarehouseResponse(WarehouseBase):
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
 
 
 class StorageAreaBase(BaseModel):
@@ -132,13 +136,18 @@ class StorageAreaResponse(StorageAreaBase):
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    warehouse_id: int = Field(..., alias="warehouseId", description="所属仓库ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
 
 
 class StorageLocationBase(BaseModel):
@@ -199,11 +208,47 @@ class StorageLocationResponse(StorageLocationBase):
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    storage_area_id: int = Field(..., alias="storageAreaId", description="所属库区ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+# ==================== 级联查询响应 Schema ====================
+
+class StorageLocationTreeResponse(StorageLocationResponse):
+    """库位树形响应 Schema（用于级联查询）"""
+    pass
+
+
+class StorageAreaTreeResponse(StorageAreaResponse):
+    """库区树形响应 Schema（用于级联查询）"""
+    
+    storage_locations: List[StorageLocationTreeResponse] = Field(default_factory=list, alias="storageLocations", description="库位列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class WarehouseTreeResponse(WarehouseResponse):
+    """仓库树形响应 Schema（用于级联查询）"""
+    
+    storage_areas: List[StorageAreaTreeResponse] = Field(default_factory=list, alias="storageAreas", description="库区列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
 

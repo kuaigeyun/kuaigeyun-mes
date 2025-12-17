@@ -11,21 +11,14 @@ import EmployeeResignationsPage from './pages/employee-resignations';
 import EmployeeTransfersPage from './pages/employee-transfers';
 
 // 考勤管理页面
-import AttendanceRulesPage from './pages/attendance-rules';
-import AttendanceRecordsPage from './pages/attendance-records';
-import LeaveApplicationsPage from './pages/leave-applications';
-import OvertimeApplicationsPage from './pages/overtime-applications';
-import AttendanceStatisticsPage from './pages/attendance-statistics';
+import AttendanceRulesPage from './pages/attendance/rules';
 
-// 薪资管理页面
-import SalaryStructuresPage from './pages/salary-structures';
-import SalaryCalculationsPage from './pages/salary-calculations';
-import SocialSecurityTaxesPage from './pages/social-security-taxes';
-import SalaryPaymentsPage from './pages/salary-payments';
-
-// 排班管理页面
-import SchedulingPlansPage from './pages/scheduling-plans';
-import SchedulingExecutionsPage from './pages/scheduling-executions';
+// 占位符组件（用于尚未实现的页面）
+const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
+  <div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>
+    {title} 页面开发中...
+  </div>
+);
 
 const KuaihrmApp: React.FC = () => {
   return (
@@ -37,35 +30,35 @@ const KuaihrmApp: React.FC = () => {
       
       {/* 考勤管理 */}
       <Route path="attendance/rules" element={<AttendanceRulesPage />} />
-      <Route path="attendance/records" element={<AttendanceRecordsPage />} />
-      <Route path="attendance/leave-overtime" element={<LeaveApplicationsPage />} />
-      <Route path="attendance/statistics" element={<AttendanceStatisticsPage />} />
+      <Route path="attendance/records" element={<PlaceholderPage title="考勤记录" />} />
+      <Route path="attendance/leave-overtime" element={<PlaceholderPage title="请假加班申请" />} />
+      <Route path="attendance/statistics" element={<PlaceholderPage title="考勤统计" />} />
       
       {/* 薪资管理 */}
-      <Route path="salary/structure" element={<SalaryStructuresPage />} />
-      <Route path="salary/calculate" element={<SalaryCalculationsPage />} />
-      <Route path="salary/social-tax" element={<SocialSecurityTaxesPage />} />
-      <Route path="salary/payment" element={<SalaryPaymentsPage />} />
+      <Route path="salary/structure" element={<PlaceholderPage title="薪资结构" />} />
+      <Route path="salary/calculate" element={<PlaceholderPage title="薪资计算" />} />
+      <Route path="salary/social-tax" element={<PlaceholderPage title="社保税费" />} />
+      <Route path="salary/payment" element={<PlaceholderPage title="薪资发放" />} />
       
       {/* 排班管理 */}
-      <Route path="scheduling/plan" element={<SchedulingPlansPage />} />
-      <Route path="scheduling/execution" element={<SchedulingExecutionsPage />} />
+      <Route path="scheduling/plan" element={<PlaceholderPage title="排班计划" />} />
+      <Route path="scheduling/execution" element={<PlaceholderPage title="排班执行" />} />
       
       {/* 兼容路由（直接访问） */}
       <Route path="employee-onboardings" element={<EmployeeOnboardingsPage />} />
       <Route path="employee-resignations" element={<EmployeeResignationsPage />} />
       <Route path="employee-transfers" element={<EmployeeTransfersPage />} />
       <Route path="attendance-rules" element={<AttendanceRulesPage />} />
-      <Route path="attendance-records" element={<AttendanceRecordsPage />} />
-      <Route path="leave-applications" element={<LeaveApplicationsPage />} />
-      <Route path="overtime-applications" element={<OvertimeApplicationsPage />} />
-      <Route path="attendance-statistics" element={<AttendanceStatisticsPage />} />
-      <Route path="salary-structures" element={<SalaryStructuresPage />} />
-      <Route path="salary-calculations" element={<SalaryCalculationsPage />} />
-      <Route path="social-security-taxes" element={<SocialSecurityTaxesPage />} />
-      <Route path="salary-payments" element={<SalaryPaymentsPage />} />
-      <Route path="scheduling-plans" element={<SchedulingPlansPage />} />
-      <Route path="scheduling-executions" element={<SchedulingExecutionsPage />} />
+      <Route path="attendance-records" element={<PlaceholderPage title="考勤记录" />} />
+      <Route path="leave-applications" element={<PlaceholderPage title="请假申请" />} />
+      <Route path="overtime-applications" element={<PlaceholderPage title="加班申请" />} />
+      <Route path="attendance-statistics" element={<PlaceholderPage title="考勤统计" />} />
+      <Route path="salary-structures" element={<PlaceholderPage title="薪资结构" />} />
+      <Route path="salary-calculations" element={<PlaceholderPage title="薪资计算" />} />
+      <Route path="social-security-taxes" element={<PlaceholderPage title="社保税费" />} />
+      <Route path="salary-payments" element={<PlaceholderPage title="薪资发放" />} />
+      <Route path="scheduling-plans" element={<PlaceholderPage title="排班计划" />} />
+      <Route path="scheduling-executions" element={<PlaceholderPage title="排班执行" />} />
       
       {/* 默认路由 */}
       <Route index element={<div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>快格轻HRM</div>} />

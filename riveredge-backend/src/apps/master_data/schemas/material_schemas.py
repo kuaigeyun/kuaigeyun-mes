@@ -4,7 +4,7 @@
 定义物料数据的 Pydantic Schema（物料分组、物料、BOM），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from decimal import Decimal
@@ -68,13 +68,18 @@ class MaterialGroupResponse(MaterialGroupBase):
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    parent_id: Optional[int] = Field(None, alias="parentId", description="父分组ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
 
 
 class MaterialBase(BaseModel):
@@ -165,13 +170,38 @@ class MaterialResponse(MaterialBase):
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    group_id: Optional[int] = Field(None, alias="groupId", description="物料分组ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+# ==================== 级联查询响应 Schema ====================
+
+class MaterialTreeResponse(MaterialResponse):
+    """物料树形响应 Schema（用于级联查询）"""
+    pass
+
+
+class MaterialGroupTreeResponse(MaterialGroupResponse):
+    """物料分组树形响应 Schema（用于级联查询）"""
+    
+    children: List["MaterialGroupTreeResponse"] = Field(default_factory=list, alias="children", description="子分组列表")
+    materials: List[MaterialTreeResponse] = Field(default_factory=list, alias="materials", description="物料列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
 
 
 class BOMBase(BaseModel):

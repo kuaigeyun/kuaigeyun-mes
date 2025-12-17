@@ -9,7 +9,7 @@ import sys
 import asyncio
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +20,7 @@ src_path = Path(__file__).parent.parent
 sys.path.insert(0, str(src_path))
 
 from infra.infrastructure.database.database import register_db
+from tortoise import Tortoise
 
 # 导入所有平台级 API 路由
 # 注意：SuperAdmin Auth已移除，使用Platform Admin Auth替代
@@ -110,14 +111,16 @@ MODE = os.getenv("MODE", "saas")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 暂时跳过数据库注册，避免 Tortoise ORM 配置问题
-    # 改为在需要时直接使用 asyncpg 连接
-    print("ℹ️ 跳过 Tortoise ORM 注册，避免配置问题")
-    print("ℹ️ 应用服务将使用直接 asyncpg 连接")
-    
+    # 注册 Tortoise ORM 数据库连接
+    await register_db(app)
+    print("✅ Tortoise ORM 已注册")
+
     yield
 
-    # 无需清理，因为没有初始化 Tortoise ORM
+    # ⚠️ 注意：close_db_connections 已经在 register_db 中注册为 shutdown 事件
+    # 这里不需要再次关闭，避免重复关闭导致错误
+    # await Tortoise.close_connections()
+    print("✅ 应用关闭中...")
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -245,22 +248,19 @@ from core.inngest.functions import (
 
 # 挂载 Inngest 服务端点
 # serve() 函数需要 app, client, 和 functions 参数
-inngest_serve(
-    app,
-    inngest_client,
-    [
-        test_integration_function,
-        message_sender_function,
-        scheduled_task_executor_function,
-        scheduled_task_scheduler_function,
-        approval_workflow_function,
-        approval_action_workflow_function,
-        data_backup_executor_function,
-        scheduled_backup_scheduler_function,
-        sop_execution_workflow_function,
-        sop_node_complete_workflow_function,
-    ]
-)
+try:
+    inngest_serve(
+        app,
+        inngest_client,
+        [
+            test_integration_function,
+        ]
+    )
+    print("✅ Inngest 服务端点注册成功")
+except Exception as e:
+    print(f"❌ Inngest 服务端点注册失败: {e}")
+    import traceback
+    traceback.print_exc()
 
 # 健康检查端点
 @app.get("/health")

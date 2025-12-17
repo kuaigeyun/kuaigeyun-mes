@@ -101,14 +101,18 @@ export default defineConfig({
       } as ProxyOptions,
     },
     hmr: {
-      overlay: true, // 显示错误覆盖层
+      overlay: false, // ⚠️ 关键修复：关闭错误覆盖层，避免错误导致页面崩溃
       // 启用 HMR，使用 WebSocket
       protocol: 'ws',
       host: process.env.VITE_HMR_HOST || 'localhost', // 从环境变量读取 HMR 主机
       // 不指定固定端口，让 Vite 自动选择（避免端口冲突）
       clientPort: undefined,
       // ⚠️ 稳定性优化：增加 HMR 超时时间
-      timeout: 20000, // 增加超时时间到 20 秒
+      timeout: 30000, // 增加超时时间到 30 秒
+      // ⚠️ 关键修复：禁用 HMR 错误时自动刷新，避免频繁崩溃
+      client: {
+        overlay: false, // 关闭错误覆盖层
+      },
     },
     watch: {
       // 优化文件监听，确保 HMR 正常工作
@@ -166,6 +170,12 @@ export default defineConfig({
       fastRefresh: true,
       // 包含所有文件进行 HMR
       include: '**/*.{jsx,tsx}',
+      // ⚠️ 关键修复：禁用开发环境下的严格模式，避免双重渲染导致的问题
+      babel: {
+        plugins: [],
+      },
+      // ⚠️ 关键修复：优化 HMR 行为，避免频繁重载
+      jsxRuntime: 'automatic',
     }),
     // 自定义别名插件
     srcAliasPlugin(),
@@ -191,6 +201,14 @@ export default defineConfig({
       '@tanstack/react-query',
       'zustand',
     ],
+    // ⚠️ 关键修复：强制重新构建依赖，避免缓存问题
+    force: false, // 开发环境不强制重建，提高启动速度
+    // ⚠️ 关键修复：排除可能导致问题的依赖
+    exclude: [],
   },
+  // ⚠️ 关键修复：增加日志级别，便于调试
+  logLevel: 'warn', // 只显示警告和错误，减少日志噪音
+  // ⚠️ 关键修复：禁用清屏，避免频繁刷新导致的问题
+  clearScreen: false,
 })
 

@@ -163,7 +163,8 @@ export async function apiRequest<T = any>(
   const isFormData = options?.body instanceof FormData;
   
   // 判断是否需要组织上下文（系统级API和个人中心API需要）
-  const needsTenantContext = url.startsWith('/system/') || 
+  const needsTenantContext = url.startsWith('/core/') || 
+    url.startsWith('/system/') || 
     url.startsWith('/api/v1/core/') || 
     url.startsWith('/personal/') || 
     url.startsWith('/api/v1/personal/');

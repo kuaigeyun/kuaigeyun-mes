@@ -90,7 +90,7 @@ export interface TranslationGetResponse {
  * @returns 语言列表响应数据
  */
 export async function getLanguageList(params?: LanguageListParams): Promise<LanguageListResponse> {
-  return apiRequest<LanguageListResponse>('/system/languages', {
+  return apiRequest<LanguageListResponse>('/core/languages', {
     params,
   });
 }
@@ -104,7 +104,7 @@ export async function getLanguageList(params?: LanguageListParams): Promise<Lang
  * @returns 语言信息
  */
 export async function getLanguageByUuid(languageUuid: string): Promise<Language> {
-  return apiRequest<Language>(`/system/languages/${languageUuid}`);
+  return apiRequest<Language>(`/core/languages/${languageUuid}`);
 }
 
 /**
@@ -116,7 +116,7 @@ export async function getLanguageByUuid(languageUuid: string): Promise<Language>
  * @returns 创建的语言信息
  */
 export async function createLanguage(data: CreateLanguageData): Promise<Language> {
-  return apiRequest<Language>('/system/languages', {
+  return apiRequest<Language>('/core/languages', {
     method: 'POST',
     data,
   });
@@ -132,7 +132,7 @@ export async function createLanguage(data: CreateLanguageData): Promise<Language
  * @returns 更新后的语言信息
  */
 export async function updateLanguage(languageUuid: string, data: UpdateLanguageData): Promise<Language> {
-  return apiRequest<Language>(`/system/languages/${languageUuid}`, {
+  return apiRequest<Language>(`/core/languages/${languageUuid}`, {
     method: 'PUT',
     data,
   });
@@ -147,7 +147,7 @@ export async function updateLanguage(languageUuid: string, data: UpdateLanguageD
  * @param languageUuid - 语言 UUID
  */
 export async function deleteLanguage(languageUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/languages/${languageUuid}`, {
+  return apiRequest<void>(`/core/languages/${languageUuid}`, {
     method: 'DELETE',
   });
 }
@@ -162,7 +162,7 @@ export async function deleteLanguage(languageUuid: string): Promise<void> {
  * @returns 翻译内容
  */
 export async function getTranslations(code: string): Promise<TranslationGetResponse> {
-  return apiRequest<TranslationGetResponse>(`/system/languages/code/${code}/translations`);
+  return apiRequest<TranslationGetResponse>(`/core/languages/code/${code}/translations`);
 }
 
 /**
@@ -173,7 +173,7 @@ export async function getTranslations(code: string): Promise<TranslationGetRespo
  * @returns 更新后的语言信息
  */
 export async function updateTranslations(languageUuid: string, data: TranslationUpdateRequest): Promise<Language> {
-  return apiRequest<Language>(`/system/languages/${languageUuid}/translations`, {
+  return apiRequest<Language>(`/core/languages/${languageUuid}/translations`, {
     method: 'PUT',
     data,
   });

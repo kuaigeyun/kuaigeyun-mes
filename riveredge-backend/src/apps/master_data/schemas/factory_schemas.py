@@ -221,3 +221,33 @@ class WorkstationResponse(WorkstationBase):
         by_alias=True  # 序列化时使用别名（camelCase）
     )
 
+
+# ==================== 级联查询响应 Schema ====================
+
+class WorkstationTreeResponse(WorkstationResponse):
+    """工位树形响应 Schema（用于级联查询）"""
+    pass
+
+
+class ProductionLineTreeResponse(ProductionLineResponse):
+    """产线树形响应 Schema（用于级联查询）"""
+    
+    workstations: List[WorkstationTreeResponse] = Field(default_factory=list, alias="workstations", description="工位列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class WorkshopTreeResponse(WorkshopResponse):
+    """车间树形响应 Schema（用于级联查询）"""
+    
+    production_lines: List[ProductionLineTreeResponse] = Field(default_factory=list, alias="productionLines", description="产线列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )

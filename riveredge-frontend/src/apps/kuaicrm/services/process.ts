@@ -18,6 +18,10 @@ import type {
   SalesOrderCreate,
   SalesOrderUpdate,
   SalesOrderListParams,
+  Quotation,
+  QuotationCreate,
+  QuotationUpdate,
+  QuotationListParams,
   FunnelView,
   FunnelForecast,
   ApprovalStatus,
@@ -230,6 +234,53 @@ export const salesOrderApi = {
    */
   cancelApproval: async (uuid: string): Promise<SalesOrder> => {
     return api.post(`/apps/kuaicrm/sales-orders/${uuid}/cancel-approval`);
+  },
+};
+
+/**
+ * 报价单 API 服务
+ */
+export const quotationApi = {
+  /**
+   * 创建报价单
+   */
+  create: async (data: QuotationCreate): Promise<Quotation> => {
+    return api.post('/apps/kuaicrm/quotations', data);
+  },
+
+  /**
+   * 获取报价单列表
+   */
+  list: async (params?: QuotationListParams): Promise<Quotation[]> => {
+    return api.get('/apps/kuaicrm/quotations', { params });
+  },
+
+  /**
+   * 获取报价单详情
+   */
+  get: async (uuid: string): Promise<Quotation> => {
+    return api.get(`/apps/kuaicrm/quotations/${uuid}`);
+  },
+
+  /**
+   * 更新报价单
+   */
+  update: async (uuid: string, data: QuotationUpdate): Promise<Quotation> => {
+    return api.put(`/apps/kuaicrm/quotations/${uuid}`, data);
+  },
+
+  /**
+   * 删除报价单
+   */
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/kuaicrm/quotations/${uuid}`);
+  },
+
+  /**
+   * 将报价单转化为销售订单
+   */
+  convertToOrder: async (uuid: string, orderData?: Partial<SalesOrderCreate>): Promise<{ quotation: Quotation; order: SalesOrder }> => {
+    return api.post(`/apps/kuaicrm/quotations/${uuid}/convert-to-order`, orderData);
   },
 };
 

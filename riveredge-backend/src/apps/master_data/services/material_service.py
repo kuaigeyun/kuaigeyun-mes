@@ -4,7 +4,7 @@
 提供物料数据的业务逻辑处理（物料分组、物料、BOM），支持多组织隔离。
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from decimal import Decimal
 
 from apps.master_data.models.material import MaterialGroup, Material, BOM
@@ -14,6 +14,12 @@ from apps.master_data.schemas.material_schemas import (
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+if TYPE_CHECKING:
+    from apps.master_data.schemas.material_schemas import (
+        MaterialGroupTreeResponse,
+        MaterialTreeResponse
+    )
 
 
 class MaterialService:
@@ -937,4 +943,90 @@ class MaterialService:
         ).order_by("-version").all()
         
         return [BOMResponse.model_validate(b) for b in bom_list]
+    
+    # ==================== 级联查询相关方法 ====================
+    
+    @staticmethod
+    async def get_material_group_tree(
+        tenant_id: int,
+        is_active: Optional[bool] = None
+    ) -> List["MaterialGroupTreeResponse"]:
+        """
+        获取物料分组树形结构（物料分组→物料）
+        
+        返回完整的物料分组层级结构，支持多级分组，用于级联选择等场景。
+        
+        Args:
+            tenant_id: 租户ID
+            is_active: 是否只查询启用的数据（可选）
+            
+        Returns:
+            List[MaterialGroupTreeResponse]: 物料分组树形列表，每个分组包含子分组列表和物料列表
+        """
+        # 延迟导入避免循环依赖
+        from apps.master_data.schemas.material_schemas import (
+            MaterialGroupTreeResponse,
+            MaterialTreeResponse
+        )
+        
+        # 查询所有物料分组
+        group_query = MaterialGroup.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            group_query = group_query.filter(is_active=is_active)
+        
+        groups = await group_query.order_by("code").all()
+        
+        # 查询所有物料
+        material_query = Material.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            material_query = material_query.filter(is_active=is_active)
+        
+        materials = await material_query.prefetch_related("group").order_by("code").all()
+        
+        # 构建物料映射（按分组ID分组）
+        material_map: dict[Optional[int], List[MaterialTreeResponse]] = {}
+        for material in materials:
+            group_id = material.group_id
+            if group_id not in material_map:
+                material_map[group_id] = []
+            material_map[group_id].append(MaterialTreeResponse.model_validate(material))
+        
+        # 构建分组映射（按父分组ID分组）
+        group_map: dict[Optional[int], List[MaterialGroupTreeResponse]] = {}
+        for group in groups:
+            parent_id = group.parent_id
+            if parent_id not in group_map:
+                group_map[parent_id] = []
+            
+            # 获取该分组的物料列表
+            group_materials = material_map.get(group.id, [])
+            
+            # 创建分组响应对象（包含物料列表，子分组稍后添加）
+            group_response = MaterialGroupTreeResponse.model_validate(group)
+            group_response.materials = group_materials
+            group_response.children = []  # 先初始化为空，稍后递归填充
+            group_map[parent_id].append(group_response)
+        
+        # 递归构建分组树形结构
+        def build_tree(parent_id: Optional[int]) -> List[MaterialGroupTreeResponse]:
+            """递归构建分组树"""
+            result: List[MaterialGroupTreeResponse] = []
+            if parent_id not in group_map:
+                return result
+            
+            for group_response in group_map[parent_id]:
+                # 递归获取子分组
+                group_response.children = build_tree(group_response.id)
+                result.append(group_response)
+            
+            return result
+        
+        # 从根分组（parent_id 为 None）开始构建树
+        return build_tree(None)
 

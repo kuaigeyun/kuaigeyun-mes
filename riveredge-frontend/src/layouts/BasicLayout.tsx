@@ -3339,7 +3339,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     }}
                   >
                     {/* 优先显示全名，如果全名为空则显示用户名 */}
-                    {currentUser.full_name || currentUser.username}
+                    {(currentUser.full_name && currentUser.full_name.trim() !== '') ? currentUser.full_name : currentUser.username}
                   </span>
                 </Space>
               </Dropdown>

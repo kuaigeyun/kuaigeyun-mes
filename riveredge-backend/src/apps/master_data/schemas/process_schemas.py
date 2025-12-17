@@ -208,6 +208,28 @@ class ProcessRouteResponse(ProcessRouteBase):
         from_attributes = True
 
 
+# ==================== 级联查询相关 Schema ====================
+
+class OperationTreeResponse(OperationResponse):
+    """工序树形响应 Schema（用于级联查询）"""
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+        by_alias = True
+
+
+class ProcessRouteTreeResponse(ProcessRouteResponse):
+    """工艺路线树形响应 Schema（包含工序列表）"""
+    
+    operations: List[OperationTreeResponse] = Field(default_factory=list, description="工序列表（按序列顺序）")
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+        by_alias = True
+
+
 class SOPBase(BaseModel):
     """作业程序（SOP）基础 Schema"""
     

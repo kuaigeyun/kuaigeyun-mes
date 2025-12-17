@@ -4,7 +4,7 @@
 提供工厂数据的业务逻辑处理（车间、产线、工位），支持多组织隔离。
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 
 from apps.master_data.models.factory import Workshop, ProductionLine, Workstation
@@ -14,6 +14,13 @@ from apps.master_data.schemas.factory_schemas import (
     WorkstationCreate, WorkstationUpdate, WorkstationResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+if TYPE_CHECKING:
+    from apps.master_data.schemas.factory_schemas import (
+        WorkshopTreeResponse,
+        ProductionLineTreeResponse,
+        WorkstationTreeResponse
+    )
 
 
 class FactoryService:
@@ -640,4 +647,96 @@ class FactoryService:
         from tortoise import timezone
         workstation.deleted_at = timezone.now()
         await workstation.save()
+    
+    # ==================== 级联查询相关方法 ====================
+    
+    @staticmethod
+    async def get_factory_tree(
+        tenant_id: int,
+        is_active: Optional[bool] = None
+    ) -> List["WorkshopTreeResponse"]:
+        """
+        获取工厂数据树形结构（车间→产线→工位）
+        
+        返回完整的工厂层级结构，用于级联选择等场景。
+        
+        Args:
+            tenant_id: 租户ID
+            is_active: 是否只查询启用的数据（可选）
+            
+        Returns:
+            List[WorkshopTreeResponse]: 车间树形列表，每个车间包含产线列表，每个产线包含工位列表
+        """
+        # 延迟导入避免循环依赖
+        from apps.master_data.schemas.factory_schemas import (
+            WorkshopTreeResponse,
+            ProductionLineTreeResponse,
+            WorkstationTreeResponse
+        )
+        
+        # 查询所有车间
+        workshop_query = Workshop.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            workshop_query = workshop_query.filter(is_active=is_active)
+        
+        workshops = await workshop_query.order_by("code").all()
+        
+        # 查询所有产线
+        production_line_query = ProductionLine.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            production_line_query = production_line_query.filter(is_active=is_active)
+        
+        production_lines = await production_line_query.prefetch_related("workshop").order_by("code").all()
+        
+        # 查询所有工位
+        workstation_query = Workstation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            workstation_query = workstation_query.filter(is_active=is_active)
+        
+        workstations = await workstation_query.prefetch_related("production_line").order_by("code").all()
+        
+        # 构建工位映射（按产线ID分组）
+        workstation_map: dict[int, List[WorkstationTreeResponse]] = {}
+        for workstation in workstations:
+            line_id = workstation.production_line_id
+            if line_id not in workstation_map:
+                workstation_map[line_id] = []
+            workstation_map[line_id].append(WorkstationTreeResponse.model_validate(workstation))
+        
+        # 构建产线映射（按车间ID分组）
+        production_line_map: dict[int, List[ProductionLineTreeResponse]] = {}
+        for production_line in production_lines:
+            workshop_id = production_line.workshop_id
+            if workshop_id not in production_line_map:
+                production_line_map[workshop_id] = []
+            
+            # 获取该产线的工位列表
+            line_workstations = workstation_map.get(production_line.id, [])
+            
+            # 创建产线响应对象（包含工位列表）
+            line_response = ProductionLineTreeResponse.model_validate(production_line)
+            line_response.workstations = line_workstations
+            production_line_map[workshop_id].append(line_response)
+        
+        # 构建车间树形结构
+        result: List[WorkshopTreeResponse] = []
+        for workshop in workshops:
+            # 获取该车间的产线列表
+            workshop_production_lines = production_line_map.get(workshop.id, [])
+            
+            # 创建车间响应对象（包含产线列表）
+            workshop_response = WorkshopTreeResponse.model_validate(workshop)
+            workshop_response.production_lines = workshop_production_lines
+            result.append(workshop_response)
+        
+        return result
 
