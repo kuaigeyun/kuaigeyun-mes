@@ -9,7 +9,7 @@ import { Card, Form, Input, Button, message, App, ConfigProvider } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { infraSuperAdminLogin } from '../../services/platformAdmin';
+import { infraSuperAdminLogin } from '../../services/infraAdmin';
 import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { theme } from 'antd';

@@ -2,17 +2,22 @@
 应用管理服务模块
 
 提供应用的 CRUD 操作和安装/卸载功能。
+使用直接的 asyncpg 连接，避免 Tortoise ORM 配置问题。
 """
 
 import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-from tortoise.exceptions import IntegrityError
+from datetime import datetime
+import asyncpg
 
-from core.models.application import Application
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.infrastructure.database.database import get_db_connection
+
+# 由于使用直接 asyncpg 连接，类型注解使用 Dict[str, Any]
+ApplicationDict = Dict[str, Any]
 
 
 class ApplicationService:
@@ -26,7 +31,7 @@ class ApplicationService:
     async def create_application(
         tenant_id: int,
         data: ApplicationCreate
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         创建应用
         
@@ -40,21 +45,44 @@ class ApplicationService:
         Raises:
             ValidationError: 当应用代码已存在时抛出
         """
+        conn = await get_db_connection()
         try:
-            application = Application(
-                tenant_id=tenant_id,
-                **data.model_dump()
+            # 检查应用代码是否已存在
+            existing = await conn.fetchval(
+                "SELECT id FROM core_applications WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL",
+                tenant_id, data.code
             )
-            await application.save()
-            return application
-        except IntegrityError:
-            raise ValidationError(f"应用代码 {data.code} 已存在")
+            if existing:
+                raise ValidationError(f"应用代码 {data.code} 已存在")
+
+            # 插入新应用
+            app_data = data.model_dump()
+            app_data['tenant_id'] = tenant_id
+            app_data['uuid'] = str(UUID())  # 生成UUID
+            app_data['created_at'] = datetime.utcnow()
+            app_data['updated_at'] = datetime.utcnow()
+
+            columns = list(app_data.keys())
+            placeholders = [f"${i+1}" for i in range(len(columns))]
+            values = list(app_data.values())
+
+            query = f"""
+                INSERT INTO core_applications ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
+                RETURNING *
+            """
+
+            row = await conn.fetchrow(query, *values)
+            return dict(row)
+
+        finally:
+            await conn.close()
     
     @staticmethod
     async def get_application_by_uuid(
         tenant_id: int,
         uuid: str
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         根据UUID获取应用
         
@@ -83,7 +111,7 @@ class ApplicationService:
     async def get_application_by_code(
         tenant_id: int,
         code: str
-    ) -> Optional[Application]:
+    ) -> Optional[ApplicationDict]:
         """
         根据代码获取应用
         
@@ -107,39 +135,72 @@ class ApplicationService:
         limit: int = 100,
         is_installed: Optional[bool] = None,
         is_active: Optional[bool] = None
-    ) -> List[Application]:
+    ) -> List[Dict[str, Any]]:
         """
         获取应用列表
-        
+
         Args:
             tenant_id: 组织ID
             skip: 跳过数量
             limit: 限制数量
             is_installed: 是否已安装（可选）
             is_active: 是否启用（可选）
-            
+
         Returns:
-            List[Application]: 应用列表
+            List[Dict[str, Any]]: 应用列表
         """
-        query = Application.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-        
-        if is_installed is not None:
-            query = query.filter(is_installed=is_installed)
-        
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        
-        return await query.offset(skip).limit(limit).order_by("sort_order", "id")
+        conn = await get_db_connection()
+        try:
+            # 构建查询条件
+            conditions = ["tenant_id = $1", "deleted_at IS NULL"]
+            params = [tenant_id]
+            param_index = 2
+
+            if is_installed is not None:
+                conditions.append(f"is_installed = ${param_index}")
+                params.append(is_installed)
+                param_index += 1
+
+            if is_active is not None:
+                conditions.append(f"is_active = ${param_index}")
+                params.append(is_active)
+                param_index += 1
+
+            where_clause = " AND ".join(conditions)
+
+            query = f"""
+                SELECT * FROM core_applications
+                WHERE {where_clause}
+                ORDER BY sort_order, id
+                OFFSET ${param_index} LIMIT ${param_index + 1}
+            """
+            params.extend([skip, limit])
+
+            rows = await conn.fetch(query, *params)
+
+            # 转换结果为字典列表
+            applications = []
+            for row in rows:
+                app_dict = dict(row)
+                # 处理 JSON 字段
+                if 'menu_config' in app_dict and app_dict['menu_config']:
+                    try:
+                        app_dict['menu_config'] = json.loads(app_dict['menu_config'])
+                    except:
+                        app_dict['menu_config'] = None
+                applications.append(app_dict)
+
+            return applications
+
+        finally:
+            await conn.close()
     
     @staticmethod
     async def update_application(
         tenant_id: int,
         uuid: str,
         data: ApplicationUpdate
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         更新应用
         
@@ -223,7 +284,7 @@ class ApplicationService:
     async def install_application(
         tenant_id: int,
         uuid: str
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         安装应用
         
@@ -262,7 +323,7 @@ class ApplicationService:
     async def uninstall_application(
         tenant_id: int,
         uuid: str
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         卸载应用
         
@@ -300,7 +361,7 @@ class ApplicationService:
     async def enable_application(
         tenant_id: int,
         uuid: str
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         启用应用
         
@@ -343,7 +404,7 @@ class ApplicationService:
     async def disable_application(
         tenant_id: int,
         uuid: str
-    ) -> Application:
+    ) -> ApplicationDict:
         """
         禁用应用
         
@@ -375,7 +436,7 @@ class ApplicationService:
     async def get_installed_applications(
         tenant_id: int,
         is_active: Optional[bool] = None
-    ) -> List[Application]:
+    ) -> List[ApplicationDict]:
         """
         获取已安装的应用列表
         
@@ -456,23 +517,26 @@ class ApplicationService:
         return plugins
     
     @staticmethod
-    async def scan_and_register_plugins(tenant_id: int) -> List[Application]:
+    async def scan_and_register_plugins(tenant_id: int) -> List[ApplicationDict]:
         """
         扫描插件目录并自动注册插件应用
-        
+
         从 src/apps 目录扫描所有插件的 manifest.json 文件，
         自动在数据库中创建或更新应用记录。
-        
+
         Args:
             tenant_id: 组织ID
-            
+
         Returns:
             List[Application]: 已注册的应用列表
         """
         plugins = ApplicationService._scan_plugin_manifests()
+        print(f"扫描到 {len(plugins)} 个插件清单")
+        print(f"插件清单内容: {plugins}")
         registered_apps = []
-        
+
         for manifest in plugins:
+            print(f"处理插件: {manifest.get('name', 'unknown')} (code: {manifest.get('code', 'unknown')})")
             try:
                 # 从 manifest.json 提取应用信息
                 code = manifest.get('code')
@@ -575,6 +639,8 @@ class ApplicationService:
                 print(f"错误: 注册插件 {manifest.get('name', 'unknown')} 失败: {e}")
                 import traceback
                 traceback.print_exc()
+                # 暂时不跳过，继续处理下一个插件
+                print(f"继续处理下一个插件...")
                 continue
         
         # 所有应用注册完成后，统一清除菜单缓存，确保菜单一次性刷新

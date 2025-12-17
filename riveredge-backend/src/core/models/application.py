@@ -69,6 +69,8 @@ class Application(BaseModel):
         模型元数据
         """
         table = "core_applications"
+        app = "models"  # 指定应用标签
+        default_connection = "default"  # 明确指定默认连接
         unique_together = [("tenant_id", "code")]
         indexes = [
             ("tenant_id",),

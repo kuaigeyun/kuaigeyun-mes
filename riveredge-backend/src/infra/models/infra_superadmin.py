@@ -108,7 +108,7 @@ class InfraSuperAdmin(BaseModel):
         """
         模型元数据
         """
-        table = "infra_superadmin"  # 表名必须包含模块前缀（soil_ - 平台级后端）
+        table = "infra_superadmin"  # 表名必须包含模块前缀（infra_ - 平台级后端）
         indexes = [
             ("username",),  # 用户名索引（已通过 unique=True 保证唯一性）
         ]

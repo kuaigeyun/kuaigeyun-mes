@@ -5,7 +5,7 @@
  */
 
 import { handleImport, ImportConfig } from './import';
-import { generateImportConfigFromColumns } from '../components/uni_table';
+import { generateImportConfigFromColumns } from '../components/uni-table';
 import { ProColumns } from '@ant-design/pro-components';
 import { apiRequest } from '../services/api';
 import { ActionType } from '@ant-design/pro-components';

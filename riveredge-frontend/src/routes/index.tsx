@@ -46,7 +46,7 @@ const LoadingFallback: React.FC = () => (
 import IndexPage from '../pages';
 import LoginPage from '../pages/login';
 import NotFoundPage from '../pages/404';
-import PlatformLoginPage from '../pages/platform/login';
+import InfraLoginPage from '../pages/infra/login';
 import LockScreenPage from '../pages/lock-screen';
 
 // 懒加载系统级页面（按功能模块分组）
@@ -108,12 +108,12 @@ const OnlineUsersPage = lazy(() => import('../pages/system/online-users'));
 const DataBackupsPage = lazy(() => import('../pages/system/data-backups'));
 
 // 平台级页面（懒加载）
-const PlatformDashboardPage = lazy(() => import('../pages/platform/operation'));
-const TenantListPage = lazy(() => import('../pages/platform/tenants/list'));
-const TenantDetailPage = lazy(() => import('../pages/platform/tenants/detail'));
-const InfraSuperAdminPage = lazy(() => import('../pages/platform'));
-const PackageManagementPage = lazy(() => import('../pages/platform/packages'));
-const MonitoringPage = lazy(() => import('../pages/platform/monitoring'));
+const InfraDashboardPage = lazy(() => import('../pages/infra/operation'));
+const TenantListPage = lazy(() => import('../pages/infra/tenants/list'));
+const TenantDetailPage = lazy(() => import('../pages/infra/tenants/detail'));
+const InfraSuperAdminPage = lazy(() => import('../pages/infra'));
+const PackageManagementPage = lazy(() => import('../pages/infra/packages'));
+const MonitoringPage = lazy(() => import('../pages/infra/monitoring'));
 
 // 布局包装组件（支持懒加载）
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -245,7 +245,7 @@ const AppRoutes: React.FC = () => {
       {/* 用户登录（包含注册功能，通过 Drawer 实现） */}
       <Route path="/login" element={<LoginPage />} />
       {/* 平台超管登录 */}
-      <Route path="/platform" element={<PlatformLoginPage />} />
+      <Route path="/infra/login" element={<InfraLoginPage />} />
       {/* 锁屏页面 */}
       <Route path="/lock-screen" element={<LockScreenPage />} />
 
@@ -587,7 +587,7 @@ const AppRoutes: React.FC = () => {
         path="/infra/operation"
         element={
           <LayoutWrapper>
-            <PlatformDashboardPage />
+            <InfraDashboardPage />
           </LayoutWrapper>
         }
       />

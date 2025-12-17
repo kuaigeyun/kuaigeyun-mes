@@ -19,6 +19,8 @@ sdist/
 var/
 wheels/
 *.egg-info/
+# 允许 startlogs 目录下的 egg-info（如果需要保留）
+!startlogs/*.egg-info/
 .installed.cfg
 *.egg
 

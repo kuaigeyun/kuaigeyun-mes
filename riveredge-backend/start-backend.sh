@@ -35,16 +35,40 @@ export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 BACKEND_HOST="${HOST:-127.0.0.1}"
 BACKEND_PORT="${PORT:-8200}"
 
+# 设置 Inngest 配置环境变量
+export INNGEST_HOST="${INNGEST_HOST:-127.0.0.1}"
+export INNGEST_PORT="${INNGEST_PORT:-8300}"
+
 echo "启动后端服务..."
 echo "  访问地址：http://${BACKEND_HOST}:${BACKEND_PORT}"
 echo "  API 文档：http://${BACKEND_HOST}:${BACKEND_PORT}/docs"
 echo ""
 
+# 设置环境变量：强制 egg-info 生成到 startlogs 目录（如果必须生成）
+export SETUPTOOLS_EGG_INFO_DIR="../startlogs"
+
+# 清理可能存在的 egg-info 目录（严禁在 src 目录下产生）
+# 如果在 src 目录下发现，立即删除或移动到 startlogs
+if [ -d "src/riveredge_backend.egg-info" ]; then
+    echo "警告：检测到 src 目录下的 egg-info，正在移动到 startlogs..."
+    mkdir -p "../startlogs" 2>/dev/null || true
+    mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+fi
+
 # 检查并同步 UV 虚拟环境（如果不存在或依赖有变化）
+# 使用 --no-install-project 避免安装项目本身，防止生成 egg-info 目录
 if [ ! -d ".venv" ] || [ "pyproject.toml" -nt ".venv" ] || [ "uv.lock" -nt ".venv" ]; then
     echo "同步 UV 依赖..."
-    uv sync
+    uv sync --no-install-project
     echo ""
+fi
+
+# 再次检查并清理（防止在同步过程中意外生成）
+# 如果在 src 目录下发现，立即删除并移动到 startlogs（如果必须保留）
+if [ -d "src/riveredge_backend.egg-info" ]; then
+    echo "警告：检测到 src 目录下的 egg-info，正在移动到 startlogs..."
+    mkdir -p "../startlogs" 2>/dev/null || true
+    mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
 fi
 
 # 设置Python路径

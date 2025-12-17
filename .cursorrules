@@ -4,6 +4,25 @@
 
 ## 🚨 核心原则（绝对禁止违反）
 
+### 0. 严禁使用 SQL 迁移数据库 ⭐⭐⭐ **绝对禁止违反！**
+- ❌ **绝对禁止**使用 SQL 直接修改数据库结构（ALTER TABLE、CREATE TABLE、DROP TABLE 等）
+- ❌ **绝对禁止**使用 SQL 直接修改数据库字段（RENAME COLUMN、ALTER COLUMN 等）
+- ❌ **绝对禁止**使用 SQL 直接修改数据库索引（CREATE INDEX、DROP INDEX、ALTER INDEX 等）
+- ❌ **绝对禁止**使用 SQL 直接修改数据库约束（ADD CONSTRAINT、DROP CONSTRAINT 等）
+- ❌ **绝对禁止**使用 psql、pgAdmin 等工具直接执行 SQL 修改数据库
+- ❌ **绝对禁止**使用 Python 脚本直接执行 SQL 修改数据库（必须通过 Aerich 工具）
+- ✅ **必须使用** Aerich 工具进行所有数据库迁移操作
+- ✅ **必须使用** `aerich upgrade` 命令执行迁移
+- ✅ **必须使用** Tortoise ORM 的 `source_field` 参数映射字段名（如果数据库字段名与代码不一致）
+- ✅ **必须使用** Aerich 迁移文件（`migrations/models/` 目录下的 Python 文件）进行数据库结构变更
+- ✅ **必须使用** `aerich migrate` 命令生成迁移文件
+- ⚠️ **遇到 Aerich 问题时**：必须修复 Aerich 配置和迁移文件格式，严禁绕过 Aerich 工具
+- ⚠️ **唯一例外**：只有在 Aerich 无法完成的操作（如复杂的数据迁移、性能优化等），且经过明确授权后，才允许使用 SQL，但必须：
+  - 创建对应的 Aerich 迁移文件记录此次 SQL 操作
+  - 在迁移文件中添加详细注释说明为什么必须使用 SQL
+  - 在 AI_MEMORY.md 中记录此次例外操作的原因
+  - **仍然必须通过 `aerich upgrade` 执行迁移**
+
 ### 1. 禁止假设和猜测
 - ❌ **绝对禁止**假设代码行为
 - ❌ **绝对禁止**猜测用户需求  
@@ -167,15 +186,14 @@
 
 请参考以下文档获取完整的开发规范：
 - `plans/2.rules/AGENTS.md` - ⭐ **AI 助手开发规范（完整版）**
-- `plans/2.rules/1.框架命名哲学.md` - 框架模块命名哲学
-- `plans/2.rules/2.字段命名规范.md` - 统一命名规范（Python + TypeScript）
-- `plans/2.rules/3.数据库命名规范.md` - 数据库命名规范
-- `plans/2.rules/4.注释规范.md` - 完善注释规范
-- `plans/2.rules/5.项目结构规范.md` - 项目结构规范
-- `plans/2.rules/6.API设计规范.md` - API 设计规范
-- `plans/2.rules/7.错误处理规范.md` - 错误处理规范
-- `plans/2.rules/8.Git工作流规范.md` - Git 工作流规范
-- `plans/2.rules/10.第三方依赖管理规范.md` - 第三方依赖管理规范
+- `plans/2.rules/1.统一命名规范.md` - 统一命名规范（Python + TypeScript）
+- `plans/2.rules/2.注释规范.md` - 完善注释规范
+- `plans/2.rules/3.错误处理规范.md` - 错误处理规范
+- `plans/2.rules/4.Git工作流规范.md` - Git 工作流规范
+- `plans/2.rules/5.品牌VI一致性规范.md` - 品牌VI一致性规范
+- `plans/2.rules/6.第三方依赖管理规范.md` - 第三方依赖管理规范
+- `plans/2.rules/7.页面开发标准模板规范.md` - 页面开发标准模板规范
+- `plans/2.rules/8.Aerich数据库迁移规范.md` - ⭐ **Aerich 数据库迁移规范（严禁使用 SQL）**
 - `plans/2.rules/AI_MEMORY.md` - AI 助手记忆和教训记录
 
 ---

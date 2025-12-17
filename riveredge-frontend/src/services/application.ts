@@ -69,7 +69,7 @@ export async function getApplicationList(params?: {
   is_installed?: boolean;
   is_active?: boolean;
 }): Promise<Application[]> {
-  return apiRequest<Application[]>('/system/applications', {
+  return apiRequest<Application[]>('/core/applications', {
     params,
   });
 }
@@ -83,7 +83,7 @@ export async function getApplicationList(params?: {
 export async function getInstalledApplicationList(params?: {
   is_active?: boolean;
 }): Promise<Application[]> {
-  return apiRequest<Application[]>('/system/applications/installed', {
+  return apiRequest<Application[]>('/core/applications/installed', {
     params,
   });
 }
@@ -97,7 +97,7 @@ export async function getInstalledApplicationList(params?: {
  * @returns 应用信息
  */
 export async function getApplicationByUuid(applicationUuid: string): Promise<Application> {
-  return apiRequest<Application>(`/system/applications/${applicationUuid}`);
+  return apiRequest<Application>(`/core/applications/${applicationUuid}`);
 }
 
 /**
@@ -109,7 +109,7 @@ export async function getApplicationByUuid(applicationUuid: string): Promise<App
  * @returns 创建的应用信息
  */
 export async function createApplication(data: ApplicationCreate): Promise<Application> {
-  return apiRequest<Application>('/system/applications', {
+  return apiRequest<Application>('/core/applications', {
     method: 'POST',
     data,
   });
@@ -128,7 +128,7 @@ export async function updateApplication(
   applicationUuid: string,
   data: ApplicationUpdate
 ): Promise<Application> {
-  return apiRequest<Application>(`/system/applications/${applicationUuid}`, {
+  return apiRequest<Application>(`/core/applications/${applicationUuid}`, {
     method: 'PUT',
     data,
   });
@@ -143,7 +143,7 @@ export async function updateApplication(
  * @param applicationUuid - 应用 UUID
  */
 export async function deleteApplication(applicationUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/applications/${applicationUuid}`, {
+  return apiRequest<void>(`/core/applications/${applicationUuid}`, {
     method: 'DELETE',
   });
 }
@@ -155,7 +155,7 @@ export async function deleteApplication(applicationUuid: string): Promise<void> 
  * @returns 安装后的应用信息
  */
 export async function installApplication(applicationUuid: string): Promise<Application> {
-  return apiRequest<Application>(`/system/applications/${applicationUuid}/install`, {
+  return apiRequest<Application>(`/core/applications/${applicationUuid}/install`, {
     method: 'POST',
   });
 }
@@ -169,7 +169,7 @@ export async function installApplication(applicationUuid: string): Promise<Appli
  * @returns 卸载后的应用信息
  */
 export async function uninstallApplication(applicationUuid: string): Promise<Application> {
-  return apiRequest<Application>(`/system/applications/${applicationUuid}/uninstall`, {
+  return apiRequest<Application>(`/core/applications/${applicationUuid}/uninstall`, {
     method: 'POST',
   });
 }
@@ -181,7 +181,7 @@ export async function uninstallApplication(applicationUuid: string): Promise<App
  * @returns 启用后的应用信息
  */
 export async function enableApplication(applicationUuid: string): Promise<Application> {
-  return apiRequest<Application>(`/system/applications/${applicationUuid}/enable`, {
+  return apiRequest<Application>(`/core/applications/${applicationUuid}/enable`, {
     method: 'PUT',
   });
 }
@@ -193,7 +193,7 @@ export async function enableApplication(applicationUuid: string): Promise<Applic
  * @returns 禁用后的应用信息
  */
 export async function disableApplication(applicationUuid: string): Promise<Application> {
-  return apiRequest<Application>(`/system/applications/${applicationUuid}/disable`, {
+  return apiRequest<Application>(`/core/applications/${applicationUuid}/disable`, {
     method: 'PUT',
   });
 }
@@ -207,7 +207,7 @@ export async function disableApplication(applicationUuid: string): Promise<Appli
  * @returns 已注册的应用列表
  */
 export async function scanPlugins(): Promise<Application[]> {
-  return apiRequest<Application[]>('/system/applications/scan', {
+  return apiRequest<Application[]>('/core/applications/scan', {
     method: 'POST',
   });
 }

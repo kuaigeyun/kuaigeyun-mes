@@ -34,6 +34,51 @@
 
 ## 📋 具体教训记录
 
+### 教训：必须使用 Aerich 工具执行迁移，严禁使用 SQL 直接执行（2025-12-16）
+
+**核心原则**：
+- ✅ **必须使用 Aerich 工具执行迁移**（严禁使用 SQL 直接执行）
+- ✅ **遇到 Aerich 问题时，必须修复配置，而不是绕过它**
+- ✅ **迁移文件格式必须符合规范**
+
+**Aerich 常见问题及解决方案**：
+
+1. **"Old format of migration file detected" 错误**：
+   - 检查所有迁移文件是否使用统一格式
+   - 确保使用 `from tortoise import BaseDBAsyncClient`
+   - 确保使用 `async def upgrade(db: BaseDBAsyncClient) -> str:`
+   - 运行 `aerich fix-migrations` 修复格式
+   - 如果修复命令失败，手动批量修复所有文件
+
+2. **初始化失败**：
+   - 检查 `pyproject.toml` 中的 `[tool.aerich]` 配置
+   - 检查 `migrations/aerich_config.py` 是否正确导入配置
+   - 检查 Python 路径设置是否正确
+
+3. **版本兼容性问题**：
+   - 检查 Aerich 版本：`uv run python -c "import aerich; print(aerich.__version__)"`
+   - 固定 Aerich 版本到稳定版本
+   - 检查 Tortoise ORM 版本兼容性
+
+**正确做法**：
+- ✅ 必须使用 `aerich upgrade` 执行迁移
+- ✅ 迁移文件格式必须符合规范
+- ✅ SQL 语句必须符合 Aerich 规范（IF EXISTS、双引号、注释等）
+- ✅ 遇到问题时，必须修复 Aerich 配置，而不是绕过
+- ✅ 记录详细的错误信息，便于排查问题
+
+**错误做法**：
+- ❌ 使用 SQL 直接执行迁移（严重违反规范）
+- ❌ 绕过 Aerich 工具（违背使用 Aerich 的目的）
+- ❌ 不修复 Aerich 配置问题
+- ❌ 不统一迁移文件格式
+
+**预防措施**：
+1. 所有迁移必须创建符合规范的迁移文件
+2. 统一所有迁移文件格式（使用 `from tortoise import BaseDBAsyncClient`）
+3. 定期检查 Aerich 配置是否正确
+4. 遇到问题时，必须修复而不是绕过
+
 ### 教训 1：颜色设置必须完全一致（2025-01-XX）
 
 **问题：**

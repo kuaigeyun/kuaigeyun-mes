@@ -1,10 +1,6 @@
-"""
-初始迁移文件 - 清理后的数据库架构
-
-此迁移创建了所有经过字段重排序的表，符合自增ID + UUID混合方案
-"""
-
 from tortoise import BaseDBAsyncClient
+
+RUN_IN_TRANSACTION = True
 
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
@@ -267,12 +263,43 @@ COMMENT ON TABLE "sys_saved_searches" IS '保存的搜索表';
         ALTER TABLE "sys_user_roles" ADD CONSTRAINT "fk_sys_user_ro_role_id_d8cc81" FOREIGN KEY ("role_id") REFERENCES "sys_roles" ("id") ON DELETE CASCADE;
         ALTER TABLE "sys_saved_searches" ADD CONSTRAINT "fk_sys_saved_s_user_id_cf97e5" FOREIGN KEY ("user_id") REFERENCES "sys_users" ("id") ON DELETE CASCADE;
         ALTER TABLE "sys_saved_searches" ADD CONSTRAINT "fk_sys_saved_s_tenant__4d209f" FOREIGN KEY ("tenant_id") REFERENCES "tree_tenants" ("id");
-        ALTER TABLE "tree_tenant_configs" ADD CONSTRAINT "fk_tree_tenant_tenant__77fa49" FOREIGN KEY ("tenant_id") REFERENCES "tree_tenants" ("id") ON DELETE CASCADE;
-    """
+        ALTER TABLE "tree_tenant_configs" ADD CONSTRAINT "fk_tree_tenant_tenant__77fa49" FOREIGN KEY ("tenant_id") REFERENCES "tree_tenants" ("id") ON DELETE CASCADE;"""
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
         -- 此迁移不支持回滚
-        -- 如需重置，请删除所有表并重新运行初始化
+        -- 如需重置，请删除所有表并重新运行初始化"""
+
+
+MODELS_STATE = (
     """
+初始迁移文件 - 清理后的数据库架构
+
+此迁移创建了所有经过字段重排序的表，符合自增ID + UUID混合方案
+"""
+
+from tortoise import BaseDBAsyncClient
+
+
+async def upgrade(db: BaseDBAsyncClient) -> str:
+    return """
+        -- 创建所有表（按正确的字段顺序）
+
+        -- 1. 平台超级管理员表
+        CREATE TABLE IF NOT EXISTS "soil_platform_superadmin" (
+            "id" SERIAL NOT NULL PRIMARY KEY,
+            "uuid" VARCHAR(36) NOT NULL UNIQUE,
+            "tenant_id" INT,
+            "username" VARCHAR(50) NOT NULL UNIQUE,
+            "email" VARCHAR(255),
+            "password_hash" VARCHAR(255) NOT NULL,
+            "full_name" VARCHAR(100),
+            "is_active" BOOL NOT NULL DEFAULT True,
+            "last_login" TIMESTAMPTZ,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS "idx_soil_platfo_tenant__281c88" ON "soil_platform_superadmin" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_soil_platfo_userna
+)

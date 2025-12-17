@@ -11,7 +11,7 @@ import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Tabs } from 'antd';
 import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import KanbanView from './kanban-view';
-import { UniTable } from '../../../../components/uni_table';
+import { UniTable } from '../../../../components/uni-table';
 import {
   getApprovalInstanceList,
   getApprovalInstanceByUuid,
