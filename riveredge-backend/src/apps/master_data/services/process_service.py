@@ -566,6 +566,109 @@ class ProcessService:
         process_route.deleted_at = timezone.now()
         await process_route.save()
     
+    # ==================== 级联查询相关方法 ====================
+    
+    @staticmethod
+    async def get_process_route_tree(
+        tenant_id: int,
+        is_active: Optional[bool] = None
+    ) -> List["ProcessRouteTreeResponse"]:
+        """
+        获取工艺路线树形结构（工艺路线→工序）
+        
+        返回完整的工艺路线层级结构，每个工艺路线包含其工序序列中的工序信息。
+        用于级联选择等场景。
+        
+        Args:
+            tenant_id: 租户ID
+            is_active: 是否只查询启用的数据（可选）
+            
+        Returns:
+            List[ProcessRouteTreeResponse]: 工艺路线树形列表，每个工艺路线包含工序列表（按序列顺序）
+        """
+        # 延迟导入避免循环依赖
+        from apps.master_data.schemas.process_schemas import (
+            ProcessRouteTreeResponse,
+            OperationTreeResponse
+        )
+        
+        # 查询所有工艺路线
+        route_query = ProcessRoute.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            route_query = route_query.filter(is_active=is_active)
+        
+        process_routes = await route_query.order_by("code").all()
+        
+        # 查询所有工序（用于构建映射）
+        operation_query = Operation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            operation_query = operation_query.filter(is_active=is_active)
+        
+        operations = await operation_query.all()
+        
+        # 构建工序映射（按ID）
+        operation_map: Dict[int, Operation] = {op.id: op for op in operations}
+        
+        # 构建工艺路线树形结构
+        result: List[ProcessRouteTreeResponse] = []
+        for route in process_routes:
+            # 创建工艺路线响应对象
+            route_response = ProcessRouteTreeResponse.model_validate(route)
+            route_response.operations = []
+            
+            # 解析工序序列（JSON格式）
+            if route.operation_sequence:
+                # operation_sequence 可能是列表或字典格式
+                # 假设格式为: [{"operation_id": 1, "sequence": 1}, ...] 或 {"1": {"sequence": 1}, ...}
+                sequence_data = route.operation_sequence
+                
+                # 处理不同的JSON格式
+                operation_list = []
+                if isinstance(sequence_data, list):
+                    # 列表格式：[{"operation_id": 1, "sequence": 1}, ...]
+                    for item in sequence_data:
+                        if isinstance(item, dict):
+                            op_id = item.get("operation_id") or item.get("operationId")
+                            if op_id and op_id in operation_map:
+                                operation_list.append((item.get("sequence", 0), operation_map[op_id]))
+                elif isinstance(sequence_data, dict):
+                    # 字典格式：{"1": {"sequence": 1}, ...} 或 {"operation_ids": [1, 2, 3]}
+                    if "operation_ids" in sequence_data or "operationIds" in sequence_data:
+                        # 简单列表格式
+                        op_ids = sequence_data.get("operation_ids") or sequence_data.get("operationIds", [])
+                        for idx, op_id in enumerate(op_ids):
+                            if op_id in operation_map:
+                                operation_list.append((idx, operation_map[op_id]))
+                    else:
+                        # 键值对格式
+                        for key, value in sequence_data.items():
+                            if isinstance(value, dict):
+                                op_id = value.get("operation_id") or value.get("operationId") or int(key)
+                            else:
+                                op_id = int(key) if key.isdigit() else None
+                            
+                            if op_id and op_id in operation_map:
+                                seq = value.get("sequence", 0) if isinstance(value, dict) else 0
+                                operation_list.append((seq, operation_map[op_id]))
+                
+                # 按序列顺序排序
+                operation_list.sort(key=lambda x: x[0])
+                
+                # 构建工序响应列表
+                route_response.operations = [
+                    OperationTreeResponse.model_validate(op) for _, op in operation_list
+                ]
+            
+            result.append(route_response)
+        
+        return result
+    
     # ==================== 作业程序（SOP）相关方法 ====================
     
     @staticmethod

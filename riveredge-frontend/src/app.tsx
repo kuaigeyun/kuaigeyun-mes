@@ -21,9 +21,12 @@ import { getSiteSetting } from './services/siteSetting';
 import AppRoutes from './routes';
 import ErrorBoundary from './components/error-boundary';
 
-// 将 Ant Design message 实例注入到全局，供 api.ts 使用
+// ⚠️ 关键修复：将 Ant Design App 组件的 message 实例注入到全局，供工具函数使用
+// 这样可以避免 Ant Design 6.0 的警告："Static function can not consume context like dynamic theme"
+// 注意：这个实例会在 App 组件渲染后通过 useApp() hook 设置
 if (typeof window !== 'undefined') {
-  window.__ANTD_MESSAGE__ = message;
+  // 先设置一个占位符，实际实例会在 App 组件内部设置
+  (window as any).__ANTD_MESSAGE__ = null;
 }
 
 // 权限守卫组件
@@ -504,14 +507,31 @@ export default function App() {
     token: { colorPrimary: '#1890ff' },
   };
 
+  // ⚠️ 关键修复：创建内部组件来使用 App.useApp() hook，设置全局 message 实例
+  // 这样可以避免 Ant Design 6.0 的警告："Static function can not consume context like dynamic theme"
+  const AppContent: React.FC = () => {
+    const { message } = AntdApp.useApp();
+    
+    // 将 message 实例设置到全局，供工具函数使用
+    React.useEffect(() => {
+      if (typeof window !== 'undefined') {
+        (window as any).__ANTD_MESSAGE__ = message;
+      }
+    }, [message]);
+
   return (
-    <ConfigProvider theme={finalThemeConfig}>
-            <AntdApp>
               <ErrorBoundary>
                 <AuthGuard>
                   <AppRoutes />
                 </AuthGuard>
               </ErrorBoundary>
+    );
+  };
+
+  return (
+    <ConfigProvider theme={finalThemeConfig}>
+            <AntdApp>
+              <AppContent />
             </AntdApp>
     </ConfigProvider>
   );

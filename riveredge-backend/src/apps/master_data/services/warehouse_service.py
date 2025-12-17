@@ -4,7 +4,7 @@
 提供仓库数据的业务逻辑处理（仓库、库区、库位），支持多组织隔离。
 """
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
 from apps.master_data.schemas.warehouse_schemas import (
@@ -13,6 +13,13 @@ from apps.master_data.schemas.warehouse_schemas import (
     StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+if TYPE_CHECKING:
+    from apps.master_data.schemas.warehouse_schemas import (
+        WarehouseTreeResponse,
+        StorageAreaTreeResponse,
+        StorageLocationTreeResponse
+    )
 
 
 class WarehouseService:
@@ -622,4 +629,96 @@ class WarehouseService:
         from tortoise import timezone
         storage_location.deleted_at = timezone.now()
         await storage_location.save()
+    
+    # ==================== 级联查询相关方法 ====================
+    
+    @staticmethod
+    async def get_warehouse_tree(
+        tenant_id: int,
+        is_active: Optional[bool] = None
+    ) -> List["WarehouseTreeResponse"]:
+        """
+        获取仓库数据树形结构（仓库→库区→库位）
+        
+        返回完整的仓库层级结构，用于级联选择等场景。
+        
+        Args:
+            tenant_id: 租户ID
+            is_active: 是否只查询启用的数据（可选）
+            
+        Returns:
+            List[WarehouseTreeResponse]: 仓库树形列表，每个仓库包含库区列表，每个库区包含库位列表
+        """
+        # 延迟导入避免循环依赖
+        from apps.master_data.schemas.warehouse_schemas import (
+            WarehouseTreeResponse,
+            StorageAreaTreeResponse,
+            StorageLocationTreeResponse
+        )
+        
+        # 查询所有仓库
+        warehouse_query = Warehouse.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            warehouse_query = warehouse_query.filter(is_active=is_active)
+        
+        warehouses = await warehouse_query.order_by("code").all()
+        
+        # 查询所有库区
+        storage_area_query = StorageArea.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            storage_area_query = storage_area_query.filter(is_active=is_active)
+        
+        storage_areas = await storage_area_query.prefetch_related("warehouse").order_by("code").all()
+        
+        # 查询所有库位
+        storage_location_query = StorageLocation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if is_active is not None:
+            storage_location_query = storage_location_query.filter(is_active=is_active)
+        
+        storage_locations = await storage_location_query.prefetch_related("storage_area").order_by("code").all()
+        
+        # 构建库位映射（按库区ID分组）
+        storage_location_map: dict[int, List[StorageLocationTreeResponse]] = {}
+        for storage_location in storage_locations:
+            area_id = storage_location.storage_area_id
+            if area_id not in storage_location_map:
+                storage_location_map[area_id] = []
+            storage_location_map[area_id].append(StorageLocationTreeResponse.model_validate(storage_location))
+        
+        # 构建库区映射（按仓库ID分组）
+        storage_area_map: dict[int, List[StorageAreaTreeResponse]] = {}
+        for storage_area in storage_areas:
+            warehouse_id = storage_area.warehouse_id
+            if warehouse_id not in storage_area_map:
+                storage_area_map[warehouse_id] = []
+            
+            # 获取该库区的库位列表
+            area_storage_locations = storage_location_map.get(storage_area.id, [])
+            
+            # 创建库区响应对象（包含库位列表）
+            area_response = StorageAreaTreeResponse.model_validate(storage_area)
+            area_response.storage_locations = area_storage_locations
+            storage_area_map[warehouse_id].append(area_response)
+        
+        # 构建仓库树形结构
+        result: List[WarehouseTreeResponse] = []
+        for warehouse in warehouses:
+            # 获取该仓库的库区列表
+            warehouse_storage_areas = storage_area_map.get(warehouse.id, [])
+            
+            # 创建仓库响应对象（包含库区列表）
+            warehouse_response = WarehouseTreeResponse.model_validate(warehouse)
+            warehouse_response.storage_areas = warehouse_storage_areas
+            result.append(warehouse_response)
+        
+        return result
 

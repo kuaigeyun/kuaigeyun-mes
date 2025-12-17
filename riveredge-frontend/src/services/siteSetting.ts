@@ -32,7 +32,7 @@ export interface UpdateSiteSettingData {
  * @returns 站点设置信息
  */
 export async function getSiteSetting(): Promise<SiteSetting> {
-  return apiRequest<SiteSetting>('/system/site-settings');
+  return apiRequest<SiteSetting>('/core/site-settings');
 }
 
 /**
@@ -44,7 +44,7 @@ export async function getSiteSetting(): Promise<SiteSetting> {
  * @returns 更新后的站点设置信息
  */
 export async function updateSiteSetting(data: UpdateSiteSettingData): Promise<SiteSetting> {
-  return apiRequest<SiteSetting>('/system/site-settings', {
+  return apiRequest<SiteSetting>('/core/site-settings', {
     method: 'PUT',
     data,
   });

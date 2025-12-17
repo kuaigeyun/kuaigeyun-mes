@@ -6,7 +6,7 @@
 
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -96,23 +96,71 @@ class UserRegisterRequest(BaseModel):
 class PersonalRegisterRequest(BaseModel):
     """
     个人注册请求 Schema
-    
+
     用于个人注册的请求数据。
     如果提供了 tenant_id，则在指定组织中创建用户；否则在默认组织中创建用户。
-    
+
     Attributes:
         username: 用户名（必填，3-50 字符）
-        email: 用户邮箱（可选，符合中国用户使用习惯）
+        phone: 手机号（必填，用于短信验证，符合中国用户使用习惯）
+        email: 用户邮箱（可选，用于邮件通知）
         password: 密码（必填，最少 8 字符）
         full_name: 用户全名（可选）
         tenant_id: 组织 ID（可选，如果提供则在指定组织中创建用户，否则在默认组织中创建）
     """
-    
+
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，符合中国用户使用习惯）")
+    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
+    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，用于邮件通知）")
     password: str = Field(..., min_length=8, max_length=100, description="密码（最少 8 字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则在指定组织中创建用户，否则在默认组织中创建）")
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        """
+        验证邮箱字段
+        
+        如果邮箱为空字符串，则转换为 None（非必填字段）
+        
+        Args:
+            v: 邮箱值（可能是字符串、None 或其他类型）
+            
+        Returns:
+            None 或有效的邮箱字符串
+        """
+        if v is None or (isinstance(v, str) and v.strip() == ''):
+            return None
+        return v
+
+
+class SendVerificationCodeRequest(BaseModel):
+    """
+    发送验证码请求 Schema
+
+    用于发送短信或邮箱验证码的请求数据。
+
+    Attributes:
+        phone: 手机号（可选，用于短信验证码）
+        email: 邮箱地址（可选，用于邮箱验证码）
+    """
+    phone: Optional[str] = Field(None, pattern=r'^1[3-9]\d{9}$', description="手机号（可选，11位中国大陆手机号）")
+    email: Optional[EmailStr] = Field(None, description="邮箱地址（可选）")
+
+
+class SendVerificationCodeResponse(BaseModel):
+    """
+    发送验证码响应 Schema
+
+    发送验证码的响应数据。
+
+    Attributes:
+        success: 是否发送成功
+        message: 响应消息
+    """
+    success: bool = Field(..., description="是否发送成功")
+    message: str = Field(..., description="响应消息")
     invite_code: Optional[str] = Field(None, max_length=100, description="邀请码（可选，如果同时提供组织ID和邀请码，则直接注册成功）")
 
 

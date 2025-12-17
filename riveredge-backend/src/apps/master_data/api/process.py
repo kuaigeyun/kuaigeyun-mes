@@ -14,6 +14,7 @@ from apps.master_data.schemas.process_schemas import (
     DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse,
     OperationCreate, OperationUpdate, OperationResponse,
     ProcessRouteCreate, ProcessRouteUpdate, ProcessRouteResponse,
+    ProcessRouteTreeResponse,
     SOPCreate, SOPUpdate, SOPResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -326,6 +327,51 @@ async def delete_process_route(
         return {"message": "工艺路线删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 级联查询接口 ====================
+
+@router.get("/routes/tree", response_model=List[ProcessRouteTreeResponse], response_model_by_alias=True, summary="获取工艺路线树形结构")
+async def get_process_route_tree(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）")
+):
+    """
+    获取工艺路线树形结构（工艺路线→工序）
+    
+    返回完整的工艺路线层级结构，每个工艺路线包含其工序序列中的工序信息。
+    用于级联选择等场景。
+    
+    - **is_active**: 是否只查询启用的数据（可选）
+    
+    返回结构：
+    ```json
+    [
+      {
+        "id": 1,
+        "uuid": "...",
+        "code": "ROUTE001",
+        "name": "工艺路线1",
+        "operations": [
+          {
+            "id": 1,
+            "uuid": "...",
+            "code": "OP001",
+            "name": "工序1"
+          },
+          {
+            "id": 2,
+            "uuid": "...",
+            "code": "OP002",
+            "name": "工序2"
+          }
+        ]
+      }
+    ]
+    ```
+    """
+    return await ProcessService.get_process_route_tree(tenant_id, is_active)
 
 
 # ==================== 作业程序（SOP）相关接口 ====================

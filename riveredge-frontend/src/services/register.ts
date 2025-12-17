@@ -37,6 +37,7 @@ export interface TenantSearchResponse {
  */
 export interface PersonalRegisterRequest {
   username: string;
+  phone: string;
   email?: string;
   password: string;
   full_name?: string;
@@ -118,6 +119,35 @@ export interface OrganizationRegisterResponse {
  */
 export async function registerOrganization(data: OrganizationRegisterRequest): Promise<OrganizationRegisterResponse> {
   return apiRequest<OrganizationRegisterResponse>('/auth/register/organization', {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 发送验证码请求数据接口
+ */
+export interface SendVerificationCodeRequest {
+  phone?: string;
+  email?: string;
+}
+
+/**
+ * 发送验证码响应接口
+ */
+export interface SendVerificationCodeResponse {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * 发送验证码
+ *
+ * @param data - 发送验证码数据（phone或email必填其一）
+ * @returns 发送结果响应
+ */
+export async function sendVerificationCode(data: SendVerificationCodeRequest): Promise<SendVerificationCodeResponse> {
+  return apiRequest<SendVerificationCodeResponse>('/auth/send-verification-code', {
     method: 'POST',
     data,
   });

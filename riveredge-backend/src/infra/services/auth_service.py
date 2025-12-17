@@ -9,6 +9,14 @@ from loguru import logger
 from starlette.requests import Request
 from typing import Optional
 import asyncio
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import secrets
+import string
+import httpx
+import json
+from typing import Dict, Any
 
 from tortoise import Tortoise
 from infra.infrastructure.database.database import TORTOISE_ORM
@@ -35,10 +43,18 @@ async def _ensure_db_connection():
     try:
         # 检查是否已初始化
         Tortoise.get_connection("default")
-    except:
+    except Exception as e:
         # 未初始化，尝试初始化
-        await Tortoise.init(config=TORTOISE_ORM)
-        logger.debug("Tortoise ORM 手动初始化成功")
+        try:
+            # 确保配置中的 routers 字段存在且是列表
+            config = TORTOISE_ORM.copy()
+            if "routers" not in config or config["routers"] is None:
+                config["routers"] = []
+            await Tortoise.init(config=config)
+            logger.debug("Tortoise ORM 手动初始化成功")
+        except Exception as init_error:
+            logger.error(f"Tortoise ORM 初始化失败: {init_error}")
+            raise
 
 
 class AuthService:
@@ -118,6 +134,135 @@ class AuthService:
         
         return user
     
+    def generate_verification_code(self) -> str:
+        """
+        生成验证码
+
+        生成指定长度的数字验证码。
+
+        Returns:
+            str: 生成的验证码
+        """
+        from infra.config.infra_config import infra_settings
+        length = infra_settings.VERIFICATION_CODE_LENGTH
+        return ''.join(secrets.choice(string.digits) for _ in range(length))
+
+    async def send_sms_verification_code(self, phone: str, code: str) -> bool:
+        """
+        发送短信验证码
+
+        通过阿里云短信服务发送验证码。
+
+        Args:
+            phone: 手机号
+            code: 验证码
+
+        Returns:
+            bool: 发送成功返回True，否则返回False
+        """
+        try:
+            from infra.config.infra_config import infra_settings
+
+            # 如果没有配置短信服务，直接返回True（开发环境）
+            if not infra_settings.SMS_ACCESS_KEY_ID or not infra_settings.SMS_ACCESS_KEY_SECRET:
+                logger.warning("短信服务未配置，使用模拟发送")
+                logger.info(f"模拟发送验证码到 {phone}: {code}")
+                return True
+
+            # 阿里云短信发送逻辑（这里简化为HTTP请求示例）
+            # 实际实现需要根据阿里云SMS API文档进行调整
+            async with httpx.AsyncClient() as client:
+                # 这里是阿里云SMS API的示例调用
+                # 实际需要根据阿里云文档调整参数和URL
+                response = await client.post(
+                    "https://dysmsapi.aliyuncs.com/",
+                    data={
+                        "AccessKeyId": infra_settings.SMS_ACCESS_KEY_ID,
+                        "Action": "SendSms",
+                        "SignName": infra_settings.SMS_SIGN_NAME,
+                        "TemplateCode": infra_settings.SMS_TEMPLATE_CODE,
+                        "TemplateParam": json.dumps({"code": code}),
+                        "PhoneNumbers": phone,
+                        "Version": "2017-05-25",
+                        "Format": "JSON",
+                        "SignatureMethod": "HMAC-SHA1",
+                        "SignatureVersion": "1.0",
+                        "Timestamp": "",  # 需要生成时间戳
+                        "Signature": "",  # 需要生成签名
+                    }
+                )
+
+                result = response.json()
+                if result.get("Code") == "OK":
+                    logger.info(f"短信验证码发送成功: {phone}")
+                    return True
+                else:
+                    logger.error(f"短信验证码发送失败: {result}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"发送短信验证码异常: {e}")
+            return False
+
+    async def send_email_verification_code(self, email: str, code: str) -> bool:
+        """
+        发送邮箱验证码
+
+        通过SMTP发送验证码邮件。
+
+        Args:
+            email: 邮箱地址
+            code: 验证码
+
+        Returns:
+            bool: 发送成功返回True，否则返回False
+        """
+        try:
+            from infra.config.infra_config import infra_settings
+
+            # 如果没有配置邮件服务，直接返回True（开发环境）
+            if not infra_settings.SMTP_USER or not infra_settings.SMTP_PASSWORD:
+                logger.warning("邮件服务未配置，使用模拟发送")
+                logger.info(f"模拟发送验证码到 {email}: {code}")
+                return True
+
+            # 创建邮件内容
+            msg = MIMEMultipart()
+            msg['From'] = infra_settings.EMAIL_FROM
+            msg['To'] = email
+            msg['Subject'] = "RiverEdge 验证码"
+
+            # HTML邮件内容
+            html_content = f"""
+            <html>
+            <body>
+                <h2>RiverEdge 注册验证码</h2>
+                <p>您的验证码是：<strong style="font-size: 24px; color: #1890ff;">{code}</strong></p>
+                <p>验证码有效期为10分钟，请及时使用。</p>
+                <p>如果这不是您的操作，请忽略此邮件。</p>
+                <hr>
+                <p style="color: #666; font-size: 12px;">此邮件由系统自动发送，请勿回复。</p>
+            </body>
+            </html>
+            """
+
+            msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+
+            # 发送邮件
+            server = smtplib.SMTP(infra_settings.SMTP_HOST, infra_settings.SMTP_PORT)
+            if infra_settings.SMTP_TLS:
+                server.starttls()
+            server.login(infra_settings.SMTP_USER, infra_settings.SMTP_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+
+            logger.info(f"邮箱验证码发送成功: {email}")
+            return True
+
+        except Exception as e:
+            logger.error(f"发送邮箱验证码异常: {e}")
+            return False
+
     async def register_personal(
         self,
         data: PersonalRegisterRequest
@@ -137,6 +282,9 @@ class AuthService:
         Raises:
             HTTPException: 当组织不存在、用户名已存在或邀请码无效时抛出
         """
+        # 确保数据库连接已初始化
+        await _ensure_db_connection()
+        
         from infra.services.user_service import UserService
         from infra.services.tenant_service import TenantService
         
@@ -188,10 +336,11 @@ class AuthService:
             )
         
         # 如果提供了邀请码，验证邀请码（这里简化处理，实际应该从组织设置中读取邀请码）
-        if data.invite_code:
-            # TODO: 实现邀请码验证逻辑
-            # 如果邀请码有效，直接注册成功（免审核）
-            pass
+        # 注意：PersonalRegisterRequest 中暂未包含 invite_code 字段，后续需要添加
+        # if hasattr(data, 'invite_code') and data.invite_code:
+        #     # TODO: 实现邀请码验证逻辑
+        #     # 如果邀请码有效，直接注册成功（免审核）
+        #     pass
         
         # 检查组织内用户名是否已存在
         existing_username = await User.get_or_none(
@@ -208,6 +357,7 @@ class AuthService:
         from infra.schemas.user import UserCreate
         user_data = UserCreate(
             username=data.username,
+            phone=data.phone,
             email=data.email,
             password=data.password,
             full_name=data.full_name,
@@ -305,6 +455,7 @@ class AuthService:
         # 创建管理员用户
         user_data = UserCreate(
             username=data.username,
+            phone=data.phone,
             email=data.email,
             password=data.password,
             full_name=data.full_name,
@@ -724,6 +875,7 @@ class AuthService:
                 # 如果体验账户不存在，创建它
                 user_data = UserCreate(
                     username=guest_username,
+                    phone="13800000000",  # 体验用户手机号
                     email=None,
                     password=guest_password,
                     full_name="体验用户",

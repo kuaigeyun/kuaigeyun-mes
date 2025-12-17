@@ -4,7 +4,8 @@
  * 提供订单的 CRUD 功能，包括列表展示、创建、编辑、删除、审批等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormTextArea, ProFormDigit, ProFormDatePicker, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined } from '@ant-design/icons';
@@ -17,6 +18,8 @@ import type { SalesOrder, SalesOrderCreate, SalesOrderUpdate, ApprovalStatus } f
  */
 const SalesOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -37,6 +40,16 @@ const SalesOrdersPage: React.FC = () => {
   const [approvalStatusVisible, setApprovalStatusVisible] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null);
   const [approvalStatusLoading, setApprovalStatusLoading] = useState(false);
+  
+  // 根据路由路径自动打开创建 Modal
+  useEffect(() => {
+    if (location.pathname.endsWith('/create')) {
+      handleCreate();
+      // 清理 URL，避免刷新时重复打开
+      navigate(location.pathname.replace('/create', ''), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   /**
    * 处理新建订单

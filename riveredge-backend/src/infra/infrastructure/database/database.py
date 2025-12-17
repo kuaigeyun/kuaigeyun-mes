@@ -6,6 +6,7 @@
 """
 
 from tortoise.contrib.fastapi import register_tortoise
+from tortoise import Tortoise
 from tortoise.exceptions import OperationalError
 from loguru import logger
 
@@ -48,6 +49,8 @@ TORTOISE_ORM = {
             }
         },
     },
+    # 注意：Tortoise ORM 期望 routers 是一个列表，不能是 None
+    "routers": [],
     "apps": {
         "models": {
             "models": [
@@ -197,17 +200,82 @@ DB_CONFIG = {
 }
 
 
-def register_db(app) -> None:
+async def register_db(app) -> None:
     """
     注册数据库组件到 FastAPI 应用
 
-    由于 Tortoise ORM 配置问题，暂时跳过注册，
-    改为在需要时直接使用 asyncpg 创建连接
+    使用 Tortoise ORM 的 register_tortoise 方式管理连接池
 
     Args:
         app: FastAPI 应用实例
     """
-    logger.info("跳过 Tortoise ORM 注册，使用直接 asyncpg 连接")
+    logger.info("注册 Tortoise ORM 到 FastAPI 应用")
+
+    try:
+        # ⚠️ 关键修复：确保配置中的 routers 字段存在且是列表
+        # 创建一个新的配置字典，确保所有字段都正确设置
+        config = TORTOISE_ORM.copy()  # 复制原始配置
+        
+        # 确保 routers 字段存在且是列表（不能是 None）
+        if "routers" not in config or config["routers"] is None:
+            config["routers"] = []
+        
+        # 确保 use_tz 和 timezone 字段存在
+        if "use_tz" not in config:
+            config["use_tz"] = settings.USE_TZ if hasattr(settings, 'USE_TZ') else False
+        if "timezone" not in config:
+            config["timezone"] = settings.TIMEZONE if hasattr(settings, 'TIMEZONE') else "UTC"
+        
+        logger.debug(f"Tortoise ORM 配置: routers={config.get('routers')}, use_tz={config.get('use_tz')}, timezone={config.get('timezone')}")
+        
+        # ⚠️ 关键修复：直接使用 Tortoise.init() 而不是 register_tortoise
+        # register_tortoise 在某些情况下可能不会正确设置 router
+        # 先手动初始化 Tortoise ORM，确保 router 正确设置
+        await Tortoise.init(config=config)
+        logger.info("Tortoise ORM 初始化完成")
+        
+        # ⚠️ 关键修复：验证 Tortoise ORM 是否正确初始化
+        # 检查 router 是否正确设置
+        from tortoise import connections
+        from tortoise.router import TortoiseRouter
+        try:
+            # 尝试获取连接，验证配置是否正确
+            conn = connections.get("default")
+            logger.debug("Tortoise ORM 连接验证成功")
+            
+            # ⚠️ 关键修复：验证 router 是否正确设置
+            # 检查 Tortoise 的内部 router 是否正确初始化
+            if hasattr(Tortoise, '_router') and Tortoise._router is not None:
+                if hasattr(Tortoise._router, '_routers'):
+                    routers = Tortoise._router._routers
+                    if routers is None:
+                        logger.warning("⚠️ Tortoise ORM router._routers 是 None，尝试修复...")
+                        # 如果 routers 是 None，手动设置为空列表
+                        Tortoise._router._routers = []
+                        logger.info("✅ Tortoise ORM router._routers 已修复为空列表")
+                    else:
+                        logger.debug(f"Tortoise ORM router._routers 正确设置: {type(routers)}")
+                else:
+                    logger.warning("⚠️ Tortoise ORM router 没有 _routers 属性")
+            else:
+                logger.warning("⚠️ Tortoise ORM 没有 _router 属性或 _router 是 None")
+                
+        except Exception as conn_error:
+            logger.warning(f"Tortoise ORM 连接验证失败: {conn_error}")
+        
+        # ⚠️ 关键修复：注册关闭事件，确保应用关闭时数据库连接也关闭
+        @app.on_event("shutdown")
+        async def close_db_connections():
+            logger.info("关闭 Tortoise ORM 数据库连接...")
+            await Tortoise.close_connections()
+            logger.info("数据库连接已关闭")
+            
+    except Exception as e:
+        logger.error(f"Tortoise ORM 注册失败: {e}")
+        import traceback
+        logger.error(f"详细错误信息: {traceback.format_exc()}")
+        # 失败时不抛出异常，继续运行
+        pass
 
 
 async def get_db_connection():

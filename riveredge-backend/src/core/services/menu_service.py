@@ -350,6 +350,26 @@ class MenuService:
                     # 指定的父菜单，只返回该菜单及其子菜单
                     root_menus.append(menu_response)
         
+        # 第三遍：如果根菜单有关联应用，按应用的 sort_order 排序
+        # 需要导入 Application 模型
+        from core.models.application import Application
+        
+        # 获取所有应用及其 sort_order
+        applications = await Application.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).all()
+        
+        # 构建应用 UUID 到 sort_order 的映射
+        app_sort_order_map = {app.uuid: app.sort_order for app in applications}
+        
+        # 按应用的 sort_order 排序根菜单（如果有关联应用）
+        # 没有关联应用的菜单保持原顺序（按菜单的 sort_order）
+        root_menus.sort(key=lambda m: (
+            app_sort_order_map.get(m.application_uuid, 999999) if m.application_uuid else 999999,
+            m.sort_order
+        ))
+        
         # 缓存结果（序列化为字典列表，包含树形结构）
         if use_cache:
             try:

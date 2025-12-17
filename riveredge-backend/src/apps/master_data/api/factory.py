@@ -14,7 +14,8 @@ from apps.master_data.services.factory_service import FactoryService
 from apps.master_data.schemas.factory_schemas import (
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
-    WorkstationCreate, WorkstationUpdate, WorkstationResponse
+    WorkstationCreate, WorkstationUpdate, WorkstationResponse,
+    WorkshopTreeResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -340,4 +341,50 @@ async def delete_workstation(
         return {"message": "工位删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 级联查询接口 ====================
+
+@router.get("/tree", response_model=List[WorkshopTreeResponse], response_model_by_alias=True, summary="获取工厂数据树形结构")
+async def get_factory_tree(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）")
+):
+    """
+    获取工厂数据树形结构（车间→产线→工位）
+    
+    返回完整的工厂层级结构，用于级联选择等场景。
+    
+    - **is_active**: 是否只查询启用的数据（可选）
+    
+    返回结构：
+    ```json
+    [
+      {
+        "id": 1,
+        "uuid": "...",
+        "code": "WS001",
+        "name": "车间1",
+        "productionLines": [
+          {
+            "id": 1,
+            "uuid": "...",
+            "code": "PL001",
+            "name": "产线1",
+            "workstations": [
+              {
+                "id": 1,
+                "uuid": "...",
+                "code": "ST001",
+                "name": "工位1"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+    ```
+    """
+    return await FactoryService.get_factory_tree(tenant_id, is_active)
 

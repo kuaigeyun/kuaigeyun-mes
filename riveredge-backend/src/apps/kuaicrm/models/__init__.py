@@ -7,6 +7,7 @@ CRM 数据模型模块
 from apps.kuaicrm.models.lead import Lead
 from apps.kuaicrm.models.opportunity import Opportunity
 from apps.kuaicrm.models.sales_order import SalesOrder
+from apps.kuaicrm.models.quotation import Quotation
 from apps.kuaicrm.models.service_workorder import ServiceWorkOrder
 from apps.kuaicrm.models.warranty import Warranty
 from apps.kuaicrm.models.complaint import Complaint
@@ -19,6 +20,7 @@ __all__ = [
     "Lead",
     "Opportunity",
     "SalesOrder",
+    "Quotation",
     "ServiceWorkOrder",
     "Warranty",
     "Complaint",

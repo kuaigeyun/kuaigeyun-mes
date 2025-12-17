@@ -13,7 +13,8 @@ from apps.master_data.services.material_service import MaterialService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
-    BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate
+    BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
+    MaterialGroupTreeResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -466,4 +467,52 @@ async def delete_material(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ==================== 级联查询接口 ====================
+
+@router.get("/groups/tree", response_model=List[MaterialGroupTreeResponse], response_model_by_alias=True, summary="获取物料分组树形结构")
+async def get_material_group_tree(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）")
+):
+    """
+    获取物料分组树形结构（物料分组→物料）
+    
+    返回完整的物料分组层级结构，支持多级分组，用于级联选择等场景。
+    
+    - **is_active**: 是否只查询启用的数据（可选）
+    
+    返回结构：
+    ```json
+    [
+      {
+        "id": 1,
+        "uuid": "...",
+        "code": "MG001",
+        "name": "物料分组1",
+        "children": [
+          {
+            "id": 2,
+            "uuid": "...",
+            "code": "MG002",
+            "name": "子分组1",
+            "children": [],
+            "materials": [
+              {
+                "id": 1,
+                "uuid": "...",
+                "code": "MAT001",
+                "name": "物料1"
+              }
+            ]
+          }
+        ],
+        "materials": []
+      }
+    ]
+    ```
+    """
+    return await MaterialService.get_material_group_tree(tenant_id, is_active)
 

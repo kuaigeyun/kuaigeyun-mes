@@ -91,21 +91,34 @@ class ApplicationService:
             uuid: 应用UUID
             
         Returns:
-            Application: 应用对象
+            ApplicationDict: 应用字典对象
             
         Raises:
             NotFoundError: 当应用不存在时抛出
         """
-        application = await Application.filter(
-            tenant_id=tenant_id,
-            uuid=uuid,
-            deleted_at__isnull=True
-        ).first()
-        
-        if not application:
-            raise NotFoundError("应用不存在")
-        
-        return application
+        conn = await get_db_connection()
+        try:
+            query = """
+                SELECT * FROM core_applications
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                LIMIT 1
+            """
+            row = await conn.fetchrow(query, tenant_id, uuid)
+            
+            if not row:
+                raise NotFoundError("应用不存在")
+            
+            app_dict = dict(row)
+            # 处理 JSON 字段
+            if 'menu_config' in app_dict and app_dict['menu_config']:
+                try:
+                    app_dict['menu_config'] = json.loads(app_dict['menu_config'])
+                except:
+                    app_dict['menu_config'] = None
+            
+            return app_dict
+        finally:
+            await conn.close()
     
     @staticmethod
     async def get_application_by_code(
@@ -293,7 +306,7 @@ class ApplicationService:
             uuid: 应用UUID
             
         Returns:
-            Application: 安装后的应用对象
+            ApplicationDict: 安装后的应用对象
             
         Raises:
             NotFoundError: 当应用不存在时抛出
@@ -301,20 +314,32 @@ class ApplicationService:
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
         
-        if application.is_installed:
+        if application.get('is_installed'):
             raise ValidationError("应用已安装")
         
-        application.is_installed = True
-        await application.save()
+        # 更新数据库
+        conn = await get_db_connection()
+        try:
+            update_query = """
+                UPDATE core_applications
+                SET is_installed = TRUE, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+            """
+            await conn.execute(update_query, tenant_id, uuid)
+        finally:
+            await conn.close()
+        
+        # 更新本地字典
+        application['is_installed'] = True
         
         # 自动同步应用菜单配置到菜单管理（同步执行，确保菜单立即可用）
-        if application.menu_config:
+        if application.get('menu_config'):
             from core.services.menu_service import MenuService
             await MenuService.sync_menus_from_application_config(
                 tenant_id=tenant_id,
-                application_uuid=str(application.uuid),
-                menu_config=application.menu_config,
-                is_active=application.is_active
+                application_uuid=str(application['uuid']),
+                menu_config=application['menu_config'],
+                is_active=application.get('is_active', True)
             )
         
         return application
@@ -370,33 +395,50 @@ class ApplicationService:
             uuid: 应用UUID
             
         Returns:
-            Application: 启用后的应用对象
+            ApplicationDict: 启用后的应用对象
             
         Raises:
             NotFoundError: 当应用不存在时抛出
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
-        application.is_active = True
-        await application.save()
+        
+        # 更新数据库
+        conn = await get_db_connection()
+        try:
+            update_query = """
+                UPDATE core_applications
+                SET is_active = TRUE, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+            """
+            await conn.execute(update_query, tenant_id, uuid)
+        finally:
+            await conn.close()
+        
+        # 更新本地字典
+        application['is_active'] = True
         
         # 如果应用已安装且有菜单配置，确保菜单已同步并启用
-        if application.is_installed and application.menu_config:
+        if application.get('is_installed') and application.get('menu_config'):
             from core.services.menu_service import MenuService
             # 重新同步菜单，确保菜单状态与应用状态一致
             await MenuService.sync_menus_from_application_config(
                 tenant_id=tenant_id,
                 application_uuid=str(uuid),
-                menu_config=application.menu_config,
+                menu_config=application['menu_config'],
                 is_active=True
             )
         else:
             # 如果应用没有菜单配置，直接更新现有菜单状态
-            from core.models.menu import Menu
-            await Menu.filter(
-                tenant_id=tenant_id,
-                application_uuid=str(uuid),
-                deleted_at__isnull=True
-            ).update(is_active=True)
+            conn = await get_db_connection()
+            try:
+                menu_update_query = """
+                    UPDATE core_menus
+                    SET is_active = TRUE, updated_at = NOW()
+                    WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
+                """
+                await conn.execute(menu_update_query, tenant_id, str(uuid))
+            finally:
+                await conn.close()
         
         return application
     
@@ -413,22 +455,39 @@ class ApplicationService:
             uuid: 应用UUID
             
         Returns:
-            Application: 禁用后的应用对象
+            ApplicationDict: 禁用后的应用对象
             
         Raises:
             NotFoundError: 当应用不存在时抛出
         """
         application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
-        application.is_active = False
-        await application.save()
+        
+        # 更新数据库
+        conn = await get_db_connection()
+        try:
+            update_query = """
+                UPDATE core_applications
+                SET is_active = FALSE, updated_at = NOW()
+                WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+            """
+            await conn.execute(update_query, tenant_id, uuid)
+        finally:
+            await conn.close()
+        
+        # 更新本地字典
+        application['is_active'] = False
         
         # 自动更新关联菜单的状态
-        from core.models.menu import Menu
-        await Menu.filter(
-            tenant_id=tenant_id,
-            application_uuid=str(uuid),
-            deleted_at__isnull=True
-        ).update(is_active=False)
+        conn = await get_db_connection()
+        try:
+            menu_update_query = """
+                UPDATE core_menus
+                SET is_active = FALSE, updated_at = NOW()
+                WHERE tenant_id = $1 AND application_uuid = $2 AND deleted_at IS NULL
+            """
+            await conn.execute(menu_update_query, tenant_id, str(uuid))
+        finally:
+            await conn.close()
         
         return application
     
@@ -445,18 +504,39 @@ class ApplicationService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[Application]: 已安装的应用列表
+            List[ApplicationDict]: 已安装的应用列表
         """
-        query = Application.filter(
-            tenant_id=tenant_id,
-            is_installed=True,
-            deleted_at__isnull=True
-        )
-        
-        if is_active is not None:
-            query = query.filter(is_active=is_active)
-        
-        return await query.order_by("sort_order", "id")
+        # 使用直接数据库查询，避免 Tortoise ORM 配置问题
+        conn = await get_db_connection()
+        try:
+            # 构建 SQL 查询
+            sql = """
+                SELECT * FROM core_applications
+                WHERE tenant_id = $1 
+                  AND is_installed = TRUE 
+                  AND deleted_at IS NULL
+            """
+            params = [tenant_id]
+            
+            # 如果指定了 is_active，添加过滤条件
+            if is_active is not None:
+                sql += " AND is_active = $2"
+                params.append(is_active)
+            
+            # 添加排序
+            sql += " ORDER BY sort_order, id"
+            
+            # 执行查询
+            rows = await conn.fetch(sql, *params)
+            
+            # 转换为字典列表
+            result = []
+            for row in rows:
+                result.append(dict(row))
+            
+            return result
+        finally:
+            await conn.close()
     
     @staticmethod
     def _get_plugins_directory() -> Path:

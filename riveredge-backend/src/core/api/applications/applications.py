@@ -106,7 +106,22 @@ async def list_installed_applications(
         tenant_id=tenant_id,
         is_active=is_active
     )
-    return [ApplicationResponse.model_validate(app) for app in applications]
+    # ⚠️ 关键修复：get_installed_applications 现在返回字典列表，不是 ORM 对象
+    # 需要处理 JSON 字段（如 menu_config）从字符串转换为字典
+    result = []
+    for app in applications:
+        # 处理 JSON 字段：如果 menu_config 是字符串，需要解析为字典
+        if 'menu_config' in app and isinstance(app['menu_config'], str):
+            try:
+                import json
+                app['menu_config'] = json.loads(app['menu_config']) if app['menu_config'] else None
+            except (json.JSONDecodeError, TypeError):
+                app['menu_config'] = None
+        
+        # 处理其他可能的 JSON 字段
+        # 直接使用字典构建响应
+        result.append(ApplicationResponse(**app))
+    return result
 
 
 @router.get("/{uuid}", response_model=ApplicationResponse)
