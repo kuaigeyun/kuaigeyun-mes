@@ -309,135 +309,169 @@ check_port() {
     return 1  # 端口可用
 }
 
+# 通过进程名清理相关进程（高效版）
+kill_processes_by_name() {
+    local port=$1
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local log_dir="$script_dir/startlogs"
+    mkdir -p "$log_dir" 2>/dev/null || true
+
+    log_info "Windows: 通过进程名快速清理端口 $port 相关进程..."
+
+    # 根据端口类型清理对应的进程
+    case $port in
+        "$FRONTEND_PORT")
+            # 前端端口：清理 Node.js 相关进程
+            log_info "清理前端进程 (node.exe, npm.exe, vite相关)..."
+            taskkill /IM node.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+            taskkill /IM npm.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+            # 通过命令行清理vite进程
+            if command -v wmic &> /dev/null; then
+                wmic process where "CommandLine like '%vite%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            fi
+            ;;
+        "$BACKEND_PORT")
+            # 后端端口：清理 Python 相关进程
+            log_info "清理后端进程 (python.exe, uvicorn相关)..."
+            taskkill /IM python.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+            taskkill /IM pythonw.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+            # 通过命令行清理uvicorn进程
+            if command -v wmic &> /dev/null; then
+                wmic process where "CommandLine like '%uvicorn%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+                wmic process where "CommandLine like '%main:app%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            fi
+            ;;
+        "$INNGEST_PORT")
+            # Inngest端口：清理 inngest 相关进程
+            log_info "清理Inngest进程..."
+            if command -v wmic &> /dev/null; then
+                wmic process where "CommandLine like '%inngest%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            fi
+            ;;
+    esac
+
+    # 额外清理：终止所有可能残留的进程
+    taskkill /IM cmd.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true 2>/dev/null || true
+    sleep 1
+}
+
+# Linux/Mac 通过进程名清理
+kill_processes_by_name_linux() {
+    local port=$1
+    log_info "Linux/Mac: 通过进程名清理端口 $port 相关进程..."
+
+    case $port in
+        "$FRONTEND_PORT")
+            pkill -9 -f "vite" 2>/dev/null || true
+            pkill -9 -f "node.*vite" 2>/dev/null || true
+            ;;
+        "$BACKEND_PORT")
+            pkill -9 -f "uvicorn" 2>/dev/null || true
+            pkill -9 -f "python.*main:app" 2>/dev/null || true
+            ;;
+        "$INNGEST_PORT")
+            pkill -9 -f "inngest" 2>/dev/null || true
+            ;;
+    esac
+}
+
 # 全局清理所有相关进程（全面清理，不考虑端口）
 # 目标：终止所有可能阻碍启动的进程，确保服务能够正常启动
 cleanup_all_processes() {
     log_warn "执行全局清理：终止所有可能阻碍启动的进程..."
-    
+
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local log_dir="$script_dir/startlogs"
     mkdir -p "$log_dir" 2>/dev/null || true
-    
+
     # Windows 专用：终止所有相关进程
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v taskkill &> /dev/null; then
-        log_warn "Windows: 终止所有 node.exe 进程..."
-        taskkill /IM node.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
-        sleep 0.2
-        taskkill /IM node.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
-        
-        log_warn "Windows: 终止所有 npm.exe 进程..."
-        taskkill /IM npm.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
-        sleep 0.2
-        taskkill /IM npm.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
-        
-        log_warn "Windows: 终止所有 python.exe 进程..."
-        taskkill /IM python.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
-        sleep 0.3
-        taskkill /IM python.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
-        
-        log_warn "Windows: 终止所有 pythonw.exe 进程..."
-        taskkill /IM pythonw.exe /T /F >> "$log_dir/taskkill.log" 2>&1 || true
-        sleep 0.3
-        taskkill /IM pythonw.exe /F >> "$log_dir/taskkill.log" 2>&1 || true
-        
-        # 使用 wmic 彻底清理所有相关进程
+        log_warn "Windows: 终止所有相关进程..."
+
+        # 一次性终止所有关键进程
+        for proc in "node.exe" "npm.exe" "python.exe" "pythonw.exe" "cmd.exe"; do
+            taskkill /IM $proc /T /F >> "$log_dir/taskkill.log" 2>&1 || true
+        done
+
+        # 使用 wmic 清理特定进程
         if command -v wmic &> /dev/null; then
-            log_warn "Windows: 使用 wmic 彻底清理所有 vite 相关进程..."
-            wmic process where "CommandLine like '%vite%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
-            
-            log_warn "Windows: 使用 wmic 彻底清理所有 uvicorn 相关进程..."
-            wmic process where "CommandLine like '%uvicorn%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
-            
-            log_warn "Windows: 使用 wmic 彻底清理所有 main:app 相关进程..."
-            wmic process where "CommandLine like '%main:app%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
-            
-            log_warn "Windows: 使用 wmic 彻底清理所有 fastapi 相关进程..."
-            wmic process where "CommandLine like '%fastapi%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            for pattern in "vite" "uvicorn" "main:app" "fastapi" "inngest"; do
+                wmic process where "CommandLine like '%$pattern%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
+            done
         fi
     fi
-    
+
     # Linux/Mac: 使用 pkill 终止所有相关进程
     if command -v pkill &> /dev/null; then
-        log_warn "Linux/Mac: 终止所有 vite 相关进程..."
-        pkill -9 -f "vite" 2>/dev/null || true
-        pkill -9 -f "node.*vite" 2>/dev/null || true
-        pkill -9 -f "npm.*vite" 2>/dev/null || true
-        
-        log_warn "Linux/Mac: 终止所有 uvicorn 相关进程..."
-        pkill -9 -f "uvicorn" 2>/dev/null || true
-        pkill -9 -f "python.*uvicorn" 2>/dev/null || true
-        pkill -9 -f "python.*main:app" 2>/dev/null || true
+        for pattern in "vite" "uvicorn" "main:app" "fastapi" "inngest"; do
+            pkill -9 -f "$pattern" 2>/dev/null || true
+        done
     fi
-    
+
     # 等待进程完全终止
-    sleep 1
-    
+    sleep 2
+
     log_success "全局清理完成"
 }
 
 # 清理指定端口，直到成功
-# 持续清理直到端口真正释放（增强版：重试更多次以确保成功）
+# 持续清理直到端口真正释放（优化版：更高效的清理策略）
 clear_port() {
     local port=$1
-    local max_attempts=10  # 增加重试次数
+    local max_attempts=5  # 减少重试次数，提高效率
     local attempt=1
-    
-    log_info "清理端口 $port (最多尝试 $max_attempts 次，直到成功为止)..."
-    
+
+    log_info "清理端口 $port (最多尝试 $max_attempts 次)..."
+
+    # 首先检查端口是否已被占用
+    if ! check_port $port; then
+        log_success "端口 $port 未被占用，无需清理"
+        return 0
+    fi
+
     while [ $attempt -le $max_attempts ]; do
-        # 如果端口未被占用，直接返回成功
-        if ! check_port $port; then
-            log_success "端口 $port 未被占用，清理成功"
-            return 0
-        fi
-        
         log_info "尝试 $attempt/$max_attempts: 清理端口 $port..."
-        
-        # 先执行全局清理（每次尝试都清理）
-        if [ $attempt -eq 1 ] || [ $((attempt % 3)) -eq 0 ]; then
-            cleanup_all_processes
+
+        # 策略1: 快速进程名清理（最高效）
+        if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+            # Windows: 直接通过进程名清理
+            kill_processes_by_name $port
+        else
+            # Linux/Mac: 使用pkill
+            kill_processes_by_name_linux $port
         fi
-        
-        # 执行端口特定清理
-        terminate_process_on_port $port || true
-        
-        # 等待进程完全终止
-        sleep 1
-        
-        # 验证端口是否已释放
+
+        # 策略2: 端口特定清理
+        terminate_process_on_port $port
+
+        # 等待进程完全退出（增加等待时间）
+        sleep 2
+
+        # 立即验证端口是否释放
         if ! check_port $port; then
             log_success "端口 $port 已成功释放 (尝试 $attempt/$max_attempts)"
             return 0
         fi
-        
-        log_warn "端口 $port 仍被占用，继续尝试清理..."
+
+        log_warn "端口 $port 仍被占用，继续尝试..."
         attempt=$((attempt + 1))
-        
-        # 每次尝试之间等待
+
+        # 如果不是最后一次尝试，执行全局清理
         if [ $attempt -le $max_attempts ]; then
+            log_info "执行全局清理..."
+            cleanup_all_processes
             sleep 1
         fi
     done
-    
-    # 所有尝试都失败，执行最后一次清理尝试
-    log_error "端口 $port 清理失败，已尝试 $max_attempts 次，执行最后一次清理尝试..."
-    cleanup_all_processes
-    terminate_process_on_port $port || true
-    sleep 2
-    
-    # 最后一次检查
-    if ! check_port $port; then
-        log_success "端口 $port 在最后一次清理后已释放"
-        return 0
-    fi
-    
-    # 显示占用端口的进程信息
-    log_warn "显示占用端口 $port 的进程信息:"
-    if command -v netstat &> /dev/null; then
-        netstat -ano 2>/dev/null | grep ":$port " | head -10 || true
-    fi
-    
-    log_error "端口 $port 清理失败，已尝试 $max_attempts 次，请手动检查"
+
+    # 所有尝试都失败，提供手动清理指导
+    log_error "端口 $port 清理失败，已尝试 $max_attempts 次"
+    log_error ""
+    log_error "请手动清理："
+    log_error "1. 检查占用进程: netstat -ano | findstr :$port"
+    log_error "2. 终止进程: taskkill /PID <PID> /F /T"
+    log_error "3. 或重启计算机"
+
     return 1
 }
 
@@ -487,46 +521,37 @@ get_pid_by_port() {
 # 5. 多次尝试，确保彻底清理
 terminate_process_on_port() {
     local port=$1
-    log_warn "端口 $port 被占用，开始清理所有相关进程..."
-
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local log_dir="$script_dir/startlogs"
     mkdir -p "$log_dir" 2>/dev/null || true
 
-    # Windows 专用：使用 netstat 查找所有占用端口的进程（包括 LISTENING、ESTABLISHED 等所有状态）
-    if command -v netstat &> /dev/null && command -v taskkill &> /dev/null; then
-        log_info "Windows: 查找所有占用端口 $port 的进程..."
-        
-        # 查找所有占用端口的进程 PID（包括所有 TCP 状态）
-        local all_pids=$(netstat -ano 2>/dev/null | grep ":$port " | awk '{print $NF}' | sort -u | grep -v "^0$" | grep -v "^$")
-        
-        if [ ! -z "$all_pids" ]; then
-            log_info "发现占用端口 $port 的进程: $all_pids"
-            
-            # 逐个终止进程树（多次尝试，确保彻底）
-            for pid in $all_pids; do
+    log_info "查找并终止占用端口 $port 的进程..."
+
+    # Windows: 使用简化的进程查找和终止
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]] && command -v netstat &> /dev/null; then
+        # 查找所有占用端口的进程PID
+        local pids=$(netstat -ano 2>/dev/null | grep ":$port " | awk '{print $NF}' | sort -u | grep -v "^0$" | grep -v "^$")
+
+        if [ ! -z "$pids" ]; then
+            log_info "发现占用端口 $port 的进程: $pids"
+
+            # 逐个终止进程
+            for pid in $pids; do
                 if [ ! -z "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "-" ]; then
-                    log_warn "终止进程 PID: $pid (包括所有子进程)..."
-                    
-                    # 方法1: taskkill /F /T - 强制终止进程树（最彻底）
+                    log_info "终止进程 PID: $pid"
                     taskkill /PID $pid /T /F >> "$log_dir/taskkill.log" 2>&1 || true
-                    
-                    # 方法2: wmic 命令（如果可用，更彻底）
+
+                    # 使用wmic再次确认
                     if command -v wmic &> /dev/null; then
                         wmic process where "ProcessId=$pid" delete >> "$log_dir/taskkill.log" 2>&1 || true
-                        # 终止所有子进程
-                        wmic process where "ParentProcessId=$pid" delete >> "$log_dir/taskkill.log" 2>&1 || true
                     fi
-                    
-                    # 方法3: 再次尝试 taskkill（确保彻底）
-                    sleep 0.2
-                    taskkill /PID $pid /F >> "$log_dir/taskkill.log" 2>&1 || true
-                    
-                    # 方法4: 第三次尝试（确保彻底）
-                    sleep 0.2
-                    taskkill /PID $pid /T /F >> "$log_dir/taskkill.log" 2>&1 || true
                 fi
             done
+
+            # 等待进程终止
+            sleep 1
+        else
+            log_info "未找到占用端口 $port 的进程"
         fi
     fi
 
@@ -1142,12 +1167,12 @@ except Exception as e:
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
         # Windows: 直接后台启动，重定向输出
         # 使用 --port 参数直接设置端口，而不是依赖配置文件
-        ("$inngest_exe" dev --port "$port" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1) &
+        ("$inngest_exe" dev --port "$port" -u "http://localhost:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1) &
         local inngest_pid=$!
     else
         # Linux/Mac: 使用 nohup
         # 使用 --port 参数直接设置端口，而不是依赖配置文件
-        nohup "$inngest_exe" dev --port "$port" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1 &
+        nohup "$inngest_exe" dev --port "$port" -u "http://localhost:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1 &
         local inngest_pid=$!
     fi
     
