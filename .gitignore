@@ -116,5 +116,9 @@ Thumbs.db
 
 # 开发计划和设计规范目录（本地文档，不推送到远程仓库）
 # 注意：plans/ 目录包含重要项目文档，在本地保留但不推送到远程仓库
-# 本地开发时可通过 git add plans/ 临时添加特定文档
+# 如需临时推送特定文档，请使用以下命令：
+#   git add plans/specific-file.md
+#   git commit -m "docs: 添加特定文档说明"
+#   git push origin branch-name
+# 推送完成后可再次移除：git rm --cached plans/specific-file.md
 plans/
