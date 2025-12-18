@@ -127,3 +127,5 @@ Thumbs.db
 #   git push origin branch-name
 # 推送完成后可再次移除：git rm --cached plans/specific-file.md
 plans/
+riveredge-backend/scripts
+riveredge-frontend/scripts

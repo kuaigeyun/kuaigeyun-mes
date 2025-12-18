@@ -53,7 +53,7 @@ export interface RestoreBackupResponse {
  * 创建备份任务
  */
 export async function createBackup(data: CreateDataBackupData): Promise<DataBackup> {
-  return apiRequest<DataBackup>('/system/data-backups', {
+  return apiRequest<DataBackup>('/core/data-backups', {
     method: 'POST',
     data,
   });
@@ -69,7 +69,7 @@ export async function getBackups(params?: {
   backup_scope?: string;
   status?: string;
 }): Promise<DataBackupListResponse> {
-  return apiRequest<DataBackupListResponse>('/system/data-backups', {
+  return apiRequest<DataBackupListResponse>('/core/data-backups', {
     params,
   });
 }
@@ -78,14 +78,14 @@ export async function getBackups(params?: {
  * 获取备份详情
  */
 export async function getBackupDetail(uuid: string): Promise<DataBackup> {
-  return apiRequest<DataBackup>(`/system/data-backups/${uuid}`);
+  return apiRequest<DataBackup>(`/core/data-backups/${uuid}`);
 }
 
 /**
  * 恢复备份
  */
 export async function restoreBackup(uuid: string, confirm: boolean = true): Promise<RestoreBackupResponse> {
-  return apiRequest<RestoreBackupResponse>(`/system/data-backups/${uuid}/restore`, {
+  return apiRequest<RestoreBackupResponse>(`/core/data-backups/${uuid}/restore`, {
     method: 'POST',
     data: { confirm },
   });
@@ -95,7 +95,7 @@ export async function restoreBackup(uuid: string, confirm: boolean = true): Prom
  * 删除备份
  */
 export async function deleteBackup(uuid: string): Promise<void> {
-  return apiRequest<void>(`/system/data-backups/${uuid}`, {
+  return apiRequest<void>(`/core/data-backups/${uuid}`, {
     method: 'DELETE',
   });
 }

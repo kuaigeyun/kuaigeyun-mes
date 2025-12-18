@@ -114,7 +114,7 @@ export interface UpdateDictionaryItemData {
  * @returns 数据字典列表响应数据
  */
 export async function getDataDictionaryList(params?: DataDictionaryListParams): Promise<DataDictionaryListResponse> {
-  return apiRequest<DataDictionaryListResponse>('/system/data-dictionaries', {
+  return apiRequest<DataDictionaryListResponse>('/core/data-dictionaries', {
     params,
   });
 }
@@ -128,7 +128,7 @@ export async function getDataDictionaryList(params?: DataDictionaryListParams): 
  * @returns 数据字典信息
  */
 export async function getDataDictionaryByUuid(dictionaryUuid: string): Promise<DataDictionary> {
-  return apiRequest<DataDictionary>(`/system/data-dictionaries/${dictionaryUuid}`);
+  return apiRequest<DataDictionary>(`/core/data-dictionaries/${dictionaryUuid}`);
 }
 
 /**
@@ -138,7 +138,7 @@ export async function getDataDictionaryByUuid(dictionaryUuid: string): Promise<D
  * @returns 数据字典信息
  */
 export async function getDataDictionaryByCode(code: string): Promise<DataDictionary> {
-  return apiRequest<DataDictionary>(`/system/data-dictionaries/code/${code}`);
+  return apiRequest<DataDictionary>(`/core/data-dictionaries/code/${code}`);
 }
 
 /**
@@ -150,7 +150,7 @@ export async function getDataDictionaryByCode(code: string): Promise<DataDiction
  * @returns 创建的数据字典信息
  */
 export async function createDataDictionary(data: CreateDataDictionaryData): Promise<DataDictionary> {
-  return apiRequest<DataDictionary>('/system/data-dictionaries', {
+  return apiRequest<DataDictionary>('/core/data-dictionaries', {
     method: 'POST',
     data,
   });
@@ -166,7 +166,7 @@ export async function createDataDictionary(data: CreateDataDictionaryData): Prom
  * @returns 更新后的数据字典信息
  */
 export async function updateDataDictionary(dictionaryUuid: string, data: UpdateDataDictionaryData): Promise<DataDictionary> {
-  return apiRequest<DataDictionary>(`/system/data-dictionaries/${dictionaryUuid}`, {
+  return apiRequest<DataDictionary>(`/core/data-dictionaries/${dictionaryUuid}`, {
     method: 'PUT',
     data,
   });
@@ -181,7 +181,7 @@ export async function updateDataDictionary(dictionaryUuid: string, data: UpdateD
  * @param dictionaryUuid - 数据字典 UUID
  */
 export async function deleteDataDictionary(dictionaryUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/data-dictionaries/${dictionaryUuid}`, {
+  return apiRequest<void>(`/core/data-dictionaries/${dictionaryUuid}`, {
     method: 'DELETE',
   });
 }
@@ -200,7 +200,7 @@ export async function getDictionaryItemList(dictionaryUuid: string, is_active?: 
   if (is_active !== undefined) {
     params.is_active = is_active;
   }
-  return apiRequest<DictionaryItem[]>(`/system/data-dictionaries/${dictionaryUuid}/items`, {
+  return apiRequest<DictionaryItem[]>(`/core/data-dictionaries/${dictionaryUuid}/items`, {
     params,
   });
 }
@@ -213,7 +213,7 @@ export async function getDictionaryItemList(dictionaryUuid: string, is_active?: 
  * @returns 创建的字典项信息
  */
 export async function createDictionaryItem(dictionaryUuid: string, data: Omit<CreateDictionaryItemData, 'dictionary_uuid'>): Promise<DictionaryItem> {
-  return apiRequest<DictionaryItem>(`/system/data-dictionaries/${dictionaryUuid}/items`, {
+  return apiRequest<DictionaryItem>(`/core/data-dictionaries/${dictionaryUuid}/items`, {
     method: 'POST',
     data: {
       ...data,
@@ -230,7 +230,7 @@ export async function createDictionaryItem(dictionaryUuid: string, data: Omit<Cr
  * @returns 更新后的字典项信息
  */
 export async function updateDictionaryItem(itemUuid: string, data: UpdateDictionaryItemData): Promise<DictionaryItem> {
-  return apiRequest<DictionaryItem>(`/system/data-dictionaries/items/${itemUuid}`, {
+  return apiRequest<DictionaryItem>(`/core/data-dictionaries/items/${itemUuid}`, {
     method: 'PUT',
     data,
   });
@@ -242,7 +242,7 @@ export async function updateDictionaryItem(itemUuid: string, data: UpdateDiction
  * @param itemUuid - 字典项 UUID
  */
 export async function deleteDictionaryItem(itemUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/data-dictionaries/items/${itemUuid}`, {
+  return apiRequest<void>(`/core/data-dictionaries/items/${itemUuid}`, {
     method: 'DELETE',
   });
 }

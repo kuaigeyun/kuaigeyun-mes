@@ -59,7 +59,7 @@ export interface ApprovalInstanceActionData {
  * 获取审批实例列表
  */
 export async function getApprovalInstanceList(params?: ApprovalInstanceListParams): Promise<ApprovalInstance[]> {
-  return apiRequest<ApprovalInstance[]>('/system/approval-instances', {
+  return apiRequest<ApprovalInstance[]>('/core/approval-instances', {
     params,
   });
 }
@@ -68,14 +68,14 @@ export async function getApprovalInstanceList(params?: ApprovalInstanceListParam
  * 获取审批实例详情
  */
 export async function getApprovalInstanceByUuid(approvalInstanceUuid: string): Promise<ApprovalInstance> {
-  return apiRequest<ApprovalInstance>(`/system/approval-instances/${approvalInstanceUuid}`);
+  return apiRequest<ApprovalInstance>(`/core/approval-instances/${approvalInstanceUuid}`);
 }
 
 /**
  * 创建审批实例（提交审批）
  */
 export async function createApprovalInstance(data: CreateApprovalInstanceData): Promise<ApprovalInstance> {
-  return apiRequest<ApprovalInstance>('/system/approval-instances', {
+  return apiRequest<ApprovalInstance>('/core/approval-instances', {
     method: 'POST',
     data,
   });
@@ -85,7 +85,7 @@ export async function createApprovalInstance(data: CreateApprovalInstanceData): 
  * 更新审批实例
  */
 export async function updateApprovalInstance(approvalInstanceUuid: string, data: UpdateApprovalInstanceData): Promise<ApprovalInstance> {
-  return apiRequest<ApprovalInstance>(`/system/approval-instances/${approvalInstanceUuid}`, {
+  return apiRequest<ApprovalInstance>(`/core/approval-instances/${approvalInstanceUuid}`, {
     method: 'PUT',
     data,
   });
@@ -95,7 +95,7 @@ export async function updateApprovalInstance(approvalInstanceUuid: string, data:
  * 删除审批实例
  */
 export async function deleteApprovalInstance(approvalInstanceUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/approval-instances/${approvalInstanceUuid}`, {
+  return apiRequest<void>(`/core/approval-instances/${approvalInstanceUuid}`, {
     method: 'DELETE',
   });
 }
@@ -104,7 +104,7 @@ export async function deleteApprovalInstance(approvalInstanceUuid: string): Prom
  * 执行审批操作（同意、拒绝、取消、转交）
  */
 export async function performApprovalAction(approvalInstanceUuid: string, action: ApprovalInstanceActionData): Promise<ApprovalInstance> {
-  return apiRequest<ApprovalInstance>(`/system/approval-instances/${approvalInstanceUuid}/action`, {
+  return apiRequest<ApprovalInstance>(`/core/approval-instances/${approvalInstanceUuid}/action`, {
     method: 'POST',
     data: action,
   });

@@ -83,7 +83,7 @@ export interface UpdatePositionData {
  * @returns 职位列表响应数据
  */
 export async function getPositionList(params?: PositionListParams): Promise<PositionListResponse> {
-  return apiRequest<PositionListResponse>('/system/positions', {
+  return apiRequest<PositionListResponse>('/core/positions', {
     params,
   });
 }
@@ -97,7 +97,7 @@ export async function getPositionList(params?: PositionListParams): Promise<Posi
  * @returns 职位信息
  */
 export async function getPositionByUuid(positionUuid: string): Promise<Position> {
-  return apiRequest<Position>(`/system/positions/${positionUuid}`);
+  return apiRequest<Position>(`/core/positions/${positionUuid}`);
 }
 
 /**
@@ -109,7 +109,7 @@ export async function getPositionByUuid(positionUuid: string): Promise<Position>
  * @returns 创建的职位信息
  */
 export async function createPosition(data: CreatePositionData): Promise<Position> {
-  return apiRequest<Position>('/system/positions', {
+  return apiRequest<Position>('/core/positions', {
     method: 'POST',
     data,
   });
@@ -125,7 +125,7 @@ export async function createPosition(data: CreatePositionData): Promise<Position
  * @returns 更新后的职位信息
  */
 export async function updatePosition(positionUuid: string, data: UpdatePositionData): Promise<Position> {
-  return apiRequest<Position>(`/system/positions/${positionUuid}`, {
+  return apiRequest<Position>(`/core/positions/${positionUuid}`, {
     method: 'PUT',
     data,
   });
@@ -140,7 +140,7 @@ export async function updatePosition(positionUuid: string, data: UpdatePositionD
  * @param positionUuid - 职位 UUID
  */
 export async function deletePosition(positionUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/positions/${positionUuid}`, {
+  return apiRequest<void>(`/core/positions/${positionUuid}`, {
     method: 'DELETE',
   });
 }

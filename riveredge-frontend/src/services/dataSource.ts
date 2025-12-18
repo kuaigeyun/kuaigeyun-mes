@@ -71,7 +71,7 @@ export interface TestConnectionResponse {
  * @returns 数据源列表
  */
 export async function getDataSourceList(params?: DataSourceListParams): Promise<DataSourceListResponse> {
-  return apiRequest<DataSourceListResponse>('/system/data-sources', {
+  return apiRequest<DataSourceListResponse>('/core/data-sources', {
     params,
   });
 }
@@ -85,7 +85,7 @@ export async function getDataSourceList(params?: DataSourceListParams): Promise<
  * @returns 数据源信息
  */
 export async function getDataSourceByUuid(dataSourceUuid: string): Promise<DataSource> {
-  return apiRequest<DataSource>(`/system/data-sources/${dataSourceUuid}`);
+  return apiRequest<DataSource>(`/core/data-sources/${dataSourceUuid}`);
 }
 
 /**
@@ -97,7 +97,7 @@ export async function getDataSourceByUuid(dataSourceUuid: string): Promise<DataS
  * @returns 创建的数据源信息
  */
 export async function createDataSource(data: CreateDataSourceData): Promise<DataSource> {
-  return apiRequest<DataSource>('/system/data-sources', {
+  return apiRequest<DataSource>('/core/data-sources', {
     method: 'POST',
     data,
   });
@@ -113,7 +113,7 @@ export async function createDataSource(data: CreateDataSourceData): Promise<Data
  * @returns 更新后的数据源信息
  */
 export async function updateDataSource(dataSourceUuid: string, data: UpdateDataSourceData): Promise<DataSource> {
-  return apiRequest<DataSource>(`/system/data-sources/${dataSourceUuid}`, {
+  return apiRequest<DataSource>(`/core/data-sources/${dataSourceUuid}`, {
     method: 'PUT',
     data,
   });
@@ -127,7 +127,7 @@ export async function updateDataSource(dataSourceUuid: string, data: UpdateDataS
  * @param dataSourceUuid - 数据源 UUID
  */
 export async function deleteDataSource(dataSourceUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/data-sources/${dataSourceUuid}`, {
+  return apiRequest<void>(`/core/data-sources/${dataSourceUuid}`, {
     method: 'DELETE',
   });
 }
@@ -141,7 +141,7 @@ export async function deleteDataSource(dataSourceUuid: string): Promise<void> {
  * @returns 测试结果
  */
 export async function testDataSourceConnection(dataSourceUuid: string): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>(`/system/data-sources/${dataSourceUuid}/test`, {
+  return apiRequest<TestConnectionResponse>(`/core/data-sources/${dataSourceUuid}/test`, {
     method: 'POST',
   });
 }

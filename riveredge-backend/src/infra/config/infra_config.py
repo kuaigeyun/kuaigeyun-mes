@@ -246,8 +246,13 @@ class InfraSettings(BaseSettings):
         获取基础URL（用于生成文件下载链接）
         
         自动从服务器配置生成
+        注意：如果 HOST 是 0.0.0.0，则使用 localhost，因为浏览器无法访问 0.0.0.0
         """
-        return f"http://{self.HOST}:{self.PORT}"
+        # 如果 HOST 是 0.0.0.0，使用 localhost（浏览器可访问）
+        host = self.HOST
+        if host == "0.0.0.0":
+            host = "localhost"
+        return f"http://{host}:{self.PORT}"
     KKFILEVIEW_URL: str = Field(default="http://localhost:8400", description="kkFileView 服务地址")
     
     @property

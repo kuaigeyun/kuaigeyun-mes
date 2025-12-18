@@ -35,7 +35,7 @@ export interface OnlineUserStats {
 export async function getOnlineUsers(params?: {
   tenant_id?: number;
 }): Promise<OnlineUserListResponse> {
-  return apiRequest<OnlineUserListResponse>('/system/online-users', {
+  return apiRequest<OnlineUserListResponse>('/core/online-users', {
     params,
   });
 }
@@ -44,14 +44,14 @@ export async function getOnlineUsers(params?: {
  * 根据用户ID获取在线用户信息
  */
 export async function getOnlineUserByUserId(userId: number): Promise<OnlineUser> {
-  return apiRequest<OnlineUser>(`/system/online-users/${userId}`);
+  return apiRequest<OnlineUser>(`/core/online-users/${userId}`);
 }
 
 /**
  * 强制用户下线
  */
 export async function forceLogout(userId: number): Promise<void> {
-  return apiRequest<void>(`/system/online-users/${userId}`, {
+  return apiRequest<void>(`/core/online-users/${userId}`, {
     method: 'DELETE',
   });
 }
@@ -62,7 +62,7 @@ export async function forceLogout(userId: number): Promise<void> {
 export async function getOnlineUserStats(params?: {
   tenant_id?: number;
 }): Promise<OnlineUserStats> {
-  return apiRequest<OnlineUserStats>('/system/online-users/statistics', {
+  return apiRequest<OnlineUserStats>('/core/online-users/statistics', {
     params,
   });
 }

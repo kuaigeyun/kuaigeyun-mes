@@ -107,7 +107,7 @@ export interface BatchSetFieldValuesRequest {
  * @returns 自定义字段列表响应数据
  */
 export async function getCustomFieldList(params?: CustomFieldListParams): Promise<CustomFieldListResponse> {
-  return apiRequest<CustomFieldListResponse>('/system/custom-fields', {
+  return apiRequest<CustomFieldListResponse>('/core/custom-fields', {
     params,
   });
 }
@@ -124,7 +124,7 @@ export async function getCustomFieldsByTable(tableName: string, isActive?: boole
   if (isActive !== undefined) {
     params.is_active = isActive;
   }
-  return apiRequest<CustomField[]>(`/system/custom-fields/by-table/${tableName}`, {
+  return apiRequest<CustomField[]>(`/core/custom-fields/by-table/${tableName}`, {
     params,
   });
 }
@@ -138,7 +138,7 @@ export async function getCustomFieldsByTable(tableName: string, isActive?: boole
  * @returns 自定义字段信息
  */
 export async function getCustomFieldByUuid(fieldUuid: string): Promise<CustomField> {
-  return apiRequest<CustomField>(`/system/custom-fields/${fieldUuid}`);
+  return apiRequest<CustomField>(`/core/custom-fields/${fieldUuid}`);
 }
 
 /**
@@ -150,7 +150,7 @@ export async function getCustomFieldByUuid(fieldUuid: string): Promise<CustomFie
  * @returns 创建的自定义字段信息
  */
 export async function createCustomField(data: CreateCustomFieldData): Promise<CustomField> {
-  return apiRequest<CustomField>('/system/custom-fields', {
+  return apiRequest<CustomField>('/core/custom-fields', {
     method: 'POST',
     data,
   });
@@ -166,7 +166,7 @@ export async function createCustomField(data: CreateCustomFieldData): Promise<Cu
  * @returns 更新后的自定义字段信息
  */
 export async function updateCustomField(fieldUuid: string, data: UpdateCustomFieldData): Promise<CustomField> {
-  return apiRequest<CustomField>(`/system/custom-fields/${fieldUuid}`, {
+  return apiRequest<CustomField>(`/core/custom-fields/${fieldUuid}`, {
     method: 'PUT',
     data,
   });
@@ -180,7 +180,7 @@ export async function updateCustomField(fieldUuid: string, data: UpdateCustomFie
  * @param fieldUuid - 自定义字段 UUID
  */
 export async function deleteCustomField(fieldUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/custom-fields/${fieldUuid}`, {
+  return apiRequest<void>(`/core/custom-fields/${fieldUuid}`, {
     method: 'DELETE',
   });
 }
@@ -192,7 +192,7 @@ export async function deleteCustomField(fieldUuid: string): Promise<void> {
  * @returns 设置结果
  */
 export async function batchSetFieldValues(data: BatchSetFieldValuesRequest): Promise<{ success: boolean; count: number }> {
-  return apiRequest<{ success: boolean; count: number }>('/system/custom-fields/values', {
+  return apiRequest<{ success: boolean; count: number }>('/core/custom-fields/values', {
     method: 'POST',
     data,
   });
@@ -206,6 +206,6 @@ export async function batchSetFieldValues(data: BatchSetFieldValuesRequest): Pro
  * @returns 字段值字典（key 为字段代码，value 为字段值）
  */
 export async function getFieldValues(recordTable: string, recordId: number): Promise<Record<string, any>> {
-  return apiRequest<Record<string, any>>(`/system/custom-fields/values/${recordTable}/${recordId}`);
+  return apiRequest<Record<string, any>>(`/core/custom-fields/values/${recordTable}/${recordId}`);
 }
 

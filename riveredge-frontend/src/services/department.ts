@@ -75,7 +75,7 @@ export interface UpdateDepartmentData {
  * @returns 部门树形响应数据
  */
 export async function getDepartmentTree(): Promise<DepartmentTreeResponse> {
-  return apiRequest<DepartmentTreeResponse>('/system/departments/tree');
+  return apiRequest<DepartmentTreeResponse>('/core/departments/tree');
 }
 
 /**
@@ -87,7 +87,7 @@ export async function getDepartmentTree(): Promise<DepartmentTreeResponse> {
  * @returns 部门信息
  */
 export async function getDepartmentByUuid(departmentUuid: string): Promise<Department> {
-  return apiRequest<Department>(`/system/departments/${departmentUuid}`);
+  return apiRequest<Department>(`/core/departments/${departmentUuid}`);
 }
 
 /**
@@ -99,7 +99,7 @@ export async function getDepartmentByUuid(departmentUuid: string): Promise<Depar
  * @returns 创建的部门信息
  */
 export async function createDepartment(data: CreateDepartmentData): Promise<Department> {
-  return apiRequest<Department>('/system/departments', {
+  return apiRequest<Department>('/core/departments', {
     method: 'POST',
     data,
   });
@@ -115,7 +115,7 @@ export async function createDepartment(data: CreateDepartmentData): Promise<Depa
  * @returns 更新后的部门信息
  */
 export async function updateDepartment(departmentUuid: string, data: UpdateDepartmentData): Promise<Department> {
-  return apiRequest<Department>(`/system/departments/${departmentUuid}`, {
+  return apiRequest<Department>(`/core/departments/${departmentUuid}`, {
     method: 'PUT',
     data,
   });
@@ -130,7 +130,7 @@ export async function updateDepartment(departmentUuid: string, data: UpdateDepar
  * @param departmentUuid - 部门 UUID
  */
 export async function deleteDepartment(departmentUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/departments/${departmentUuid}`, {
+  return apiRequest<void>(`/core/departments/${departmentUuid}`, {
     method: 'DELETE',
   });
 }
@@ -145,7 +145,7 @@ export async function deleteDepartment(departmentUuid: string): Promise<void> {
 export async function updateDepartmentOrder(
   departmentOrders: Array<{ uuid: string; sort_order: number }>
 ): Promise<{ success: boolean; message: string }> {
-  return apiRequest<{ success: boolean; message: string }>('/system/departments/sort', {
+  return apiRequest<{ success: boolean; message: string }>('/core/departments/sort', {
     method: 'PUT',
     data: departmentOrders,
   });

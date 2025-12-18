@@ -50,7 +50,7 @@ export interface UpdateMessageConfigData {
  * 获取消息配置列表
  */
 export async function getMessageConfigList(params?: MessageConfigListParams): Promise<MessageConfig[]> {
-  return apiRequest<MessageConfig[]>('/system/message-configs', {
+  return apiRequest<MessageConfig[]>('/core/message-configs', {
     params,
   });
 }
@@ -59,14 +59,14 @@ export async function getMessageConfigList(params?: MessageConfigListParams): Pr
  * 获取消息配置详情
  */
 export async function getMessageConfigByUuid(messageConfigUuid: string): Promise<MessageConfig> {
-  return apiRequest<MessageConfig>(`/system/message-configs/${messageConfigUuid}`);
+  return apiRequest<MessageConfig>(`/core/message-configs/${messageConfigUuid}`);
 }
 
 /**
  * 创建消息配置
  */
 export async function createMessageConfig(data: CreateMessageConfigData): Promise<MessageConfig> {
-  return apiRequest<MessageConfig>('/system/message-configs', {
+  return apiRequest<MessageConfig>('/core/message-configs', {
     method: 'POST',
     data,
   });
@@ -76,7 +76,7 @@ export async function createMessageConfig(data: CreateMessageConfigData): Promis
  * 更新消息配置
  */
 export async function updateMessageConfig(messageConfigUuid: string, data: UpdateMessageConfigData): Promise<MessageConfig> {
-  return apiRequest<MessageConfig>(`/system/message-configs/${messageConfigUuid}`, {
+  return apiRequest<MessageConfig>(`/core/message-configs/${messageConfigUuid}`, {
     method: 'PUT',
     data,
   });
@@ -86,7 +86,7 @@ export async function updateMessageConfig(messageConfigUuid: string, data: Updat
  * 删除消息配置
  */
 export async function deleteMessageConfig(messageConfigUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/message-configs/${messageConfigUuid}`, {
+  return apiRequest<void>(`/core/message-configs/${messageConfigUuid}`, {
     method: 'DELETE',
   });
 }

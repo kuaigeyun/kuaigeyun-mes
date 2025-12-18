@@ -75,7 +75,7 @@ export interface FileUploadResponse {
  * @returns 文件列表
  */
 export async function getFileList(params?: FileListParams): Promise<FileListResponse> {
-  return apiRequest<FileListResponse>('/system/files', {
+  return apiRequest<FileListResponse>('/core/files', {
     params,
   });
 }
@@ -89,7 +89,7 @@ export async function getFileList(params?: FileListParams): Promise<FileListResp
  * @returns 文件信息
  */
 export async function getFileByUuid(fileUuid: string): Promise<File> {
-  return apiRequest<File>(`/system/files/${fileUuid}`);
+  return apiRequest<File>(`/core/files/${fileUuid}`);
 }
 
 /**
@@ -131,8 +131,8 @@ export async function uploadFile(
   }
   
   const url = queryParams.toString() 
-    ? `/system/files/upload?${queryParams.toString()}`
-    : '/system/files/upload';
+    ? `/core/files/upload?${queryParams.toString()}`
+    : '/core/files/upload';
   
   return apiRequest<FileUploadResponse>(url, {
     method: 'POST',
@@ -173,7 +173,7 @@ export async function uploadMultipleFiles(
     formData.append('category', options.category);
   }
   
-  return apiRequest<FileUploadResponse[]>('/system/files/upload/multiple', {
+  return apiRequest<FileUploadResponse[]>('/core/files/upload/multiple', {
     method: 'POST',
     body: formData,
     headers: {},
@@ -193,7 +193,7 @@ export async function updateFile(
   fileUuid: string,
   data: FileUpdate
 ): Promise<File> {
-  return apiRequest<File>(`/system/files/${fileUuid}`, {
+  return apiRequest<File>(`/core/files/${fileUuid}`, {
     method: 'PUT',
     data,
   });
@@ -207,7 +207,7 @@ export async function updateFile(
  * @param fileUuid - 文件 UUID
  */
 export async function deleteFile(fileUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/files/${fileUuid}`, {
+  return apiRequest<void>(`/core/files/${fileUuid}`, {
     method: 'DELETE',
   });
 }
@@ -221,7 +221,7 @@ export async function deleteFile(fileUuid: string): Promise<void> {
  * @returns 删除的文件数量
  */
 export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_count: number }> {
-  return apiRequest<{ deleted_count: number }>('/system/files/batch-delete', {
+  return apiRequest<{ deleted_count: number }>('/core/files/batch-delete', {
     method: 'POST',
     data: fileUuids,
   });
@@ -237,7 +237,7 @@ export async function batchDeleteFiles(fileUuids: string[]): Promise<{ deleted_c
  */
 export async function getFilePreview(fileUuid: string): Promise<FilePreviewResponse> {
   try {
-    const result = await apiRequest<FilePreviewResponse>(`/system/files/${fileUuid}/preview`);
+    const result = await apiRequest<FilePreviewResponse>(`/core/files/${fileUuid}/preview`);
     return result;
   } catch (error) {
     console.error('获取文件预览失败:', error);
@@ -268,6 +268,6 @@ export async function checkKKFileViewHealth(): Promise<{
   service: string;
   url: string;
 }> {
-  return apiRequest('/system/files/kkfileview/health');
+  return apiRequest('/core/files/kkfileview/health');
 }
 

@@ -82,7 +82,7 @@ export interface ExecuteQueryResponse {
  * @returns 数据集列表
  */
 export async function getDatasetList(params?: DatasetListParams): Promise<DatasetListResponse> {
-  return apiRequest<DatasetListResponse>('/system/datasets', {
+  return apiRequest<DatasetListResponse>('/core/datasets', {
     params,
   });
 }
@@ -96,7 +96,7 @@ export async function getDatasetList(params?: DatasetListParams): Promise<Datase
  * @returns 数据集信息
  */
 export async function getDatasetByUuid(datasetUuid: string): Promise<Dataset> {
-  return apiRequest<Dataset>(`/system/datasets/${datasetUuid}`);
+  return apiRequest<Dataset>(`/core/datasets/${datasetUuid}`);
 }
 
 /**
@@ -108,7 +108,7 @@ export async function getDatasetByUuid(datasetUuid: string): Promise<Dataset> {
  * @returns 创建的数据集信息
  */
 export async function createDataset(data: CreateDatasetData): Promise<Dataset> {
-  return apiRequest<Dataset>('/system/datasets', {
+  return apiRequest<Dataset>('/core/datasets', {
     method: 'POST',
     data,
   });
@@ -124,7 +124,7 @@ export async function createDataset(data: CreateDatasetData): Promise<Dataset> {
  * @returns 更新后的数据集信息
  */
 export async function updateDataset(datasetUuid: string, data: UpdateDatasetData): Promise<Dataset> {
-  return apiRequest<Dataset>(`/system/datasets/${datasetUuid}`, {
+  return apiRequest<Dataset>(`/core/datasets/${datasetUuid}`, {
     method: 'PUT',
     data,
   });
@@ -138,7 +138,7 @@ export async function updateDataset(datasetUuid: string, data: UpdateDatasetData
  * @param datasetUuid - 数据集 UUID
  */
 export async function deleteDataset(datasetUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/datasets/${datasetUuid}`, {
+  return apiRequest<void>(`/core/datasets/${datasetUuid}`, {
     method: 'DELETE',
   });
 }
@@ -156,7 +156,7 @@ export async function executeDatasetQuery(
   datasetUuid: string,
   executeRequest: ExecuteQueryRequest
 ): Promise<ExecuteQueryResponse> {
-  return apiRequest<ExecuteQueryResponse>(`/system/datasets/${datasetUuid}/execute`, {
+  return apiRequest<ExecuteQueryResponse>(`/core/datasets/${datasetUuid}/execute`, {
     method: 'POST',
     data: executeRequest,
   });
@@ -176,7 +176,7 @@ export async function queryDatasetByCode(
   datasetCode: string,
   executeRequest: ExecuteQueryRequest
 ): Promise<ExecuteQueryResponse> {
-  return apiRequest<ExecuteQueryResponse>(`/system/datasets/code/${datasetCode}/query`, {
+  return apiRequest<ExecuteQueryResponse>(`/core/datasets/code/${datasetCode}/query`, {
     method: 'POST',
     data: executeRequest,
   });

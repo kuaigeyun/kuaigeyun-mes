@@ -678,7 +678,7 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
   // ==================== 【第四组】运营中心 ====================
   // 可见范围：仅平台级管理员可见
   {
-    path: '/infra/operation',
+    // 父菜单不设置 path，避免与子菜单路径冲突
     name: '运营中心',
     icon: getMenuIcon('运营中心', '/infra/operation'),
     children: [
@@ -1591,7 +1591,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 【第四组】运营中心：仅平台级管理员可见
     if (!currentUser.is_infra_admin) {
-      menuItems = menuItems.filter(item => item.path !== '/infra/operation');
+      menuItems = menuItems.filter(item => item.name !== '运营中心');
     }
 
     // 注意：组织管理已从第三组移除，移至运营中心（第四组）

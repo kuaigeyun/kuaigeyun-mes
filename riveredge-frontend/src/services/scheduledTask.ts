@@ -59,7 +59,7 @@ export interface UpdateScheduledTaskData {
  * 获取定时任务列表
  */
 export async function getScheduledTaskList(params?: ScheduledTaskListParams): Promise<ScheduledTask[]> {
-  return apiRequest<ScheduledTask[]>('/system/scheduled-tasks', {
+  return apiRequest<ScheduledTask[]>('/core/scheduled-tasks', {
     params,
   });
 }
@@ -68,14 +68,14 @@ export async function getScheduledTaskList(params?: ScheduledTaskListParams): Pr
  * 获取定时任务详情
  */
 export async function getScheduledTaskByUuid(scheduledTaskUuid: string): Promise<ScheduledTask> {
-  return apiRequest<ScheduledTask>(`/system/scheduled-tasks/${scheduledTaskUuid}`);
+  return apiRequest<ScheduledTask>(`/core/scheduled-tasks/${scheduledTaskUuid}`);
 }
 
 /**
  * 创建定时任务
  */
 export async function createScheduledTask(data: CreateScheduledTaskData): Promise<ScheduledTask> {
-  return apiRequest<ScheduledTask>('/system/scheduled-tasks', {
+  return apiRequest<ScheduledTask>('/core/scheduled-tasks', {
     method: 'POST',
     data,
   });
@@ -85,7 +85,7 @@ export async function createScheduledTask(data: CreateScheduledTaskData): Promis
  * 更新定时任务
  */
 export async function updateScheduledTask(scheduledTaskUuid: string, data: UpdateScheduledTaskData): Promise<ScheduledTask> {
-  return apiRequest<ScheduledTask>(`/system/scheduled-tasks/${scheduledTaskUuid}`, {
+  return apiRequest<ScheduledTask>(`/core/scheduled-tasks/${scheduledTaskUuid}`, {
     method: 'PUT',
     data,
   });
@@ -95,7 +95,7 @@ export async function updateScheduledTask(scheduledTaskUuid: string, data: Updat
  * 删除定时任务
  */
 export async function deleteScheduledTask(scheduledTaskUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/scheduled-tasks/${scheduledTaskUuid}`, {
+  return apiRequest<void>(`/core/scheduled-tasks/${scheduledTaskUuid}`, {
     method: 'DELETE',
   });
 }
@@ -104,7 +104,7 @@ export async function deleteScheduledTask(scheduledTaskUuid: string): Promise<vo
  * 启动定时任务
  */
 export async function startScheduledTask(scheduledTaskUuid: string): Promise<ScheduledTask> {
-  return apiRequest<ScheduledTask>(`/system/scheduled-tasks/${scheduledTaskUuid}/start`, {
+  return apiRequest<ScheduledTask>(`/core/scheduled-tasks/${scheduledTaskUuid}/start`, {
     method: 'POST',
   });
 }
@@ -113,7 +113,7 @@ export async function startScheduledTask(scheduledTaskUuid: string): Promise<Sch
  * 停止定时任务
  */
 export async function stopScheduledTask(scheduledTaskUuid: string): Promise<ScheduledTask> {
-  return apiRequest<ScheduledTask>(`/system/scheduled-tasks/${scheduledTaskUuid}/stop`, {
+  return apiRequest<ScheduledTask>(`/core/scheduled-tasks/${scheduledTaskUuid}/stop`, {
     method: 'POST',
   });
 }

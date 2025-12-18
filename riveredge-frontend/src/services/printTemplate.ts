@@ -68,7 +68,7 @@ export interface PrintTemplateRenderResponse {
  * 获取打印模板列表
  */
 export async function getPrintTemplateList(params?: PrintTemplateListParams): Promise<PrintTemplate[]> {
-  return apiRequest<PrintTemplate[]>('/system/print-templates', {
+  return apiRequest<PrintTemplate[]>('/core/print-templates', {
     params,
   });
 }
@@ -77,14 +77,14 @@ export async function getPrintTemplateList(params?: PrintTemplateListParams): Pr
  * 获取打印模板详情
  */
 export async function getPrintTemplateByUuid(printTemplateUuid: string): Promise<PrintTemplate> {
-  return apiRequest<PrintTemplate>(`/system/print-templates/${printTemplateUuid}`);
+  return apiRequest<PrintTemplate>(`/core/print-templates/${printTemplateUuid}`);
 }
 
 /**
  * 创建打印模板
  */
 export async function createPrintTemplate(data: CreatePrintTemplateData): Promise<PrintTemplate> {
-  return apiRequest<PrintTemplate>('/system/print-templates', {
+  return apiRequest<PrintTemplate>('/core/print-templates', {
     method: 'POST',
     data,
   });
@@ -94,7 +94,7 @@ export async function createPrintTemplate(data: CreatePrintTemplateData): Promis
  * 更新打印模板
  */
 export async function updatePrintTemplate(printTemplateUuid: string, data: UpdatePrintTemplateData): Promise<PrintTemplate> {
-  return apiRequest<PrintTemplate>(`/system/print-templates/${printTemplateUuid}`, {
+  return apiRequest<PrintTemplate>(`/core/print-templates/${printTemplateUuid}`, {
     method: 'PUT',
     data,
   });
@@ -104,7 +104,7 @@ export async function updatePrintTemplate(printTemplateUuid: string, data: Updat
  * 删除打印模板
  */
 export async function deletePrintTemplate(printTemplateUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/print-templates/${printTemplateUuid}`, {
+  return apiRequest<void>(`/core/print-templates/${printTemplateUuid}`, {
     method: 'DELETE',
   });
 }
@@ -113,7 +113,7 @@ export async function deletePrintTemplate(printTemplateUuid: string): Promise<vo
  * 渲染打印模板
  */
 export async function renderPrintTemplate(printTemplateUuid: string, data: RenderPrintTemplateData): Promise<PrintTemplateRenderResponse> {
-  return apiRequest<PrintTemplateRenderResponse>(`/system/print-templates/${printTemplateUuid}/render`, {
+  return apiRequest<PrintTemplateRenderResponse>(`/core/print-templates/${printTemplateUuid}/render`, {
     method: 'POST',
     data,
   });
