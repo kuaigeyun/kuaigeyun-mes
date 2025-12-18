@@ -67,7 +67,7 @@ export interface ScriptExecuteResponse {
  * 获取脚本列表
  */
 export async function getScriptList(params?: ScriptListParams): Promise<Script[]> {
-  return apiRequest<Script[]>('/system/scripts', {
+  return apiRequest<Script[]>('/core/scripts', {
     params,
   });
 }
@@ -76,14 +76,14 @@ export async function getScriptList(params?: ScriptListParams): Promise<Script[]
  * 获取脚本详情
  */
 export async function getScriptByUuid(scriptUuid: string): Promise<Script> {
-  return apiRequest<Script>(`/system/scripts/${scriptUuid}`);
+  return apiRequest<Script>(`/core/scripts/${scriptUuid}`);
 }
 
 /**
  * 创建脚本
  */
 export async function createScript(data: CreateScriptData): Promise<Script> {
-  return apiRequest<Script>('/system/scripts', {
+  return apiRequest<Script>('/core/scripts', {
     method: 'POST',
     data,
   });
@@ -93,7 +93,7 @@ export async function createScript(data: CreateScriptData): Promise<Script> {
  * 更新脚本
  */
 export async function updateScript(scriptUuid: string, data: UpdateScriptData): Promise<Script> {
-  return apiRequest<Script>(`/system/scripts/${scriptUuid}`, {
+  return apiRequest<Script>(`/core/scripts/${scriptUuid}`, {
     method: 'PUT',
     data,
   });
@@ -103,7 +103,7 @@ export async function updateScript(scriptUuid: string, data: UpdateScriptData): 
  * 删除脚本
  */
 export async function deleteScript(scriptUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/scripts/${scriptUuid}`, {
+  return apiRequest<void>(`/core/scripts/${scriptUuid}`, {
     method: 'DELETE',
   });
 }
@@ -112,7 +112,7 @@ export async function deleteScript(scriptUuid: string): Promise<void> {
  * 执行脚本
  */
 export async function executeScript(scriptUuid: string, data: ExecuteScriptData): Promise<ScriptExecuteResponse> {
-  return apiRequest<ScriptExecuteResponse>(`/system/scripts/${scriptUuid}/execute`, {
+  return apiRequest<ScriptExecuteResponse>(`/core/scripts/${scriptUuid}/execute`, {
     method: 'POST',
     data,
   });

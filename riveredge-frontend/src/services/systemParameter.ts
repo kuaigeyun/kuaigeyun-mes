@@ -77,7 +77,7 @@ export interface BatchUpdateSystemParameterData {
  * @returns 系统参数列表响应数据
  */
 export async function getSystemParameterList(params?: SystemParameterListParams): Promise<SystemParameterListResponse> {
-  return apiRequest<SystemParameterListResponse>('/system/system-parameters', {
+  return apiRequest<SystemParameterListResponse>('/core/system-parameters', {
     params,
   });
 }
@@ -91,7 +91,7 @@ export async function getSystemParameterList(params?: SystemParameterListParams)
  * @returns 系统参数信息
  */
 export async function getSystemParameterByUuid(parameterUuid: string): Promise<SystemParameter> {
-  return apiRequest<SystemParameter>(`/system/system-parameters/${parameterUuid}`);
+  return apiRequest<SystemParameter>(`/core/system-parameters/${parameterUuid}`);
 }
 
 /**
@@ -101,7 +101,7 @@ export async function getSystemParameterByUuid(parameterUuid: string): Promise<S
  * @returns 系统参数信息
  */
 export async function getSystemParameterByKey(key: string): Promise<SystemParameter> {
-  return apiRequest<SystemParameter>(`/system/system-parameters/key/${key}`);
+  return apiRequest<SystemParameter>(`/core/system-parameters/key/${key}`);
 }
 
 /**
@@ -113,7 +113,7 @@ export async function getSystemParameterByKey(key: string): Promise<SystemParame
  * @returns 创建的系统参数信息
  */
 export async function createSystemParameter(data: CreateSystemParameterData): Promise<SystemParameter> {
-  return apiRequest<SystemParameter>('/system/system-parameters', {
+  return apiRequest<SystemParameter>('/core/system-parameters', {
     method: 'POST',
     data,
   });
@@ -129,7 +129,7 @@ export async function createSystemParameter(data: CreateSystemParameterData): Pr
  * @returns 更新后的系统参数信息
  */
 export async function updateSystemParameter(parameterUuid: string, data: UpdateSystemParameterData): Promise<SystemParameter> {
-  return apiRequest<SystemParameter>(`/system/system-parameters/${parameterUuid}`, {
+  return apiRequest<SystemParameter>(`/core/system-parameters/${parameterUuid}`, {
     method: 'PUT',
     data,
   });
@@ -144,7 +144,7 @@ export async function updateSystemParameter(parameterUuid: string, data: UpdateS
  * @param parameterUuid - 系统参数 UUID
  */
 export async function deleteSystemParameter(parameterUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/system-parameters/${parameterUuid}`, {
+  return apiRequest<void>(`/core/system-parameters/${parameterUuid}`, {
     method: 'DELETE',
   });
 }
@@ -156,7 +156,7 @@ export async function deleteSystemParameter(parameterUuid: string): Promise<void
  * @returns 更新后的系统参数列表
  */
 export async function batchUpdateSystemParameters(data: BatchUpdateSystemParameterData): Promise<SystemParameter[]> {
-  return apiRequest<SystemParameter[]>('/system/system-parameters/batch-update', {
+  return apiRequest<SystemParameter[]>('/core/system-parameters/batch-update', {
     method: 'POST',
     data,
   });

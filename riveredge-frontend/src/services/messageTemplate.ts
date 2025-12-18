@@ -53,7 +53,7 @@ export interface UpdateMessageTemplateData {
  * 获取消息模板列表
  */
 export async function getMessageTemplateList(params?: MessageTemplateListParams): Promise<MessageTemplate[]> {
-  return apiRequest<MessageTemplate[]>('/system/message-templates', {
+  return apiRequest<MessageTemplate[]>('/core/message-templates', {
     params,
   });
 }
@@ -62,14 +62,14 @@ export async function getMessageTemplateList(params?: MessageTemplateListParams)
  * 获取消息模板详情
  */
 export async function getMessageTemplateByUuid(messageTemplateUuid: string): Promise<MessageTemplate> {
-  return apiRequest<MessageTemplate>(`/system/message-templates/${messageTemplateUuid}`);
+  return apiRequest<MessageTemplate>(`/core/message-templates/${messageTemplateUuid}`);
 }
 
 /**
  * 创建消息模板
  */
 export async function createMessageTemplate(data: CreateMessageTemplateData): Promise<MessageTemplate> {
-  return apiRequest<MessageTemplate>('/system/message-templates', {
+  return apiRequest<MessageTemplate>('/core/message-templates', {
     method: 'POST',
     data,
   });
@@ -79,7 +79,7 @@ export async function createMessageTemplate(data: CreateMessageTemplateData): Pr
  * 更新消息模板
  */
 export async function updateMessageTemplate(messageTemplateUuid: string, data: UpdateMessageTemplateData): Promise<MessageTemplate> {
-  return apiRequest<MessageTemplate>(`/system/message-templates/${messageTemplateUuid}`, {
+  return apiRequest<MessageTemplate>(`/core/message-templates/${messageTemplateUuid}`, {
     method: 'PUT',
     data,
   });
@@ -89,7 +89,7 @@ export async function updateMessageTemplate(messageTemplateUuid: string, data: U
  * 删除消息模板
  */
 export async function deleteMessageTemplate(messageTemplateUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/message-templates/${messageTemplateUuid}`, {
+  return apiRequest<void>(`/core/message-templates/${messageTemplateUuid}`, {
     method: 'DELETE',
   });
 }

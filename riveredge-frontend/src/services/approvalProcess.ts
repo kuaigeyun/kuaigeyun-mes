@@ -48,7 +48,7 @@ export interface UpdateApprovalProcessData {
  * 获取审批流程列表
  */
 export async function getApprovalProcessList(params?: ApprovalProcessListParams): Promise<ApprovalProcess[]> {
-  return apiRequest<ApprovalProcess[]>('/system/approval-processes', {
+  return apiRequest<ApprovalProcess[]>('/core/approval-processes', {
     params,
   });
 }
@@ -57,14 +57,14 @@ export async function getApprovalProcessList(params?: ApprovalProcessListParams)
  * 获取审批流程详情
  */
 export async function getApprovalProcessByUuid(approvalProcessUuid: string): Promise<ApprovalProcess> {
-  return apiRequest<ApprovalProcess>(`/system/approval-processes/${approvalProcessUuid}`);
+  return apiRequest<ApprovalProcess>(`/core/approval-processes/${approvalProcessUuid}`);
 }
 
 /**
  * 创建审批流程
  */
 export async function createApprovalProcess(data: CreateApprovalProcessData): Promise<ApprovalProcess> {
-  return apiRequest<ApprovalProcess>('/system/approval-processes', {
+  return apiRequest<ApprovalProcess>('/core/approval-processes', {
     method: 'POST',
     data,
   });
@@ -74,7 +74,7 @@ export async function createApprovalProcess(data: CreateApprovalProcessData): Pr
  * 更新审批流程
  */
 export async function updateApprovalProcess(approvalProcessUuid: string, data: UpdateApprovalProcessData): Promise<ApprovalProcess> {
-  return apiRequest<ApprovalProcess>(`/system/approval-processes/${approvalProcessUuid}`, {
+  return apiRequest<ApprovalProcess>(`/core/approval-processes/${approvalProcessUuid}`, {
     method: 'PUT',
     data,
   });
@@ -84,7 +84,7 @@ export async function updateApprovalProcess(approvalProcessUuid: string, data: U
  * 删除审批流程
  */
 export async function deleteApprovalProcess(approvalProcessUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/approval-processes/${approvalProcessUuid}`, {
+  return apiRequest<void>(`/core/approval-processes/${approvalProcessUuid}`, {
     method: 'DELETE',
   });
 }

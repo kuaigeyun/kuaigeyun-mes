@@ -96,7 +96,7 @@ export interface CodeGenerationResponse {
  * @returns 编码规则列表响应数据
  */
 export async function getCodeRuleList(params?: CodeRuleListParams): Promise<CodeRuleListResponse> {
-  return apiRequest<CodeRuleListResponse>('/system/code-rules', {
+  return apiRequest<CodeRuleListResponse>('/core/code-rules', {
     params,
   });
 }
@@ -110,7 +110,7 @@ export async function getCodeRuleList(params?: CodeRuleListParams): Promise<Code
  * @returns 编码规则信息
  */
 export async function getCodeRuleByUuid(ruleUuid: string): Promise<CodeRule> {
-  return apiRequest<CodeRule>(`/system/code-rules/${ruleUuid}`);
+  return apiRequest<CodeRule>(`/core/code-rules/${ruleUuid}`);
 }
 
 /**
@@ -122,7 +122,7 @@ export async function getCodeRuleByUuid(ruleUuid: string): Promise<CodeRule> {
  * @returns 创建的编码规则信息
  */
 export async function createCodeRule(data: CreateCodeRuleData): Promise<CodeRule> {
-  return apiRequest<CodeRule>('/system/code-rules', {
+  return apiRequest<CodeRule>('/core/code-rules', {
     method: 'POST',
     data,
   });
@@ -138,7 +138,7 @@ export async function createCodeRule(data: CreateCodeRuleData): Promise<CodeRule
  * @returns 更新后的编码规则信息
  */
 export async function updateCodeRule(ruleUuid: string, data: UpdateCodeRuleData): Promise<CodeRule> {
-  return apiRequest<CodeRule>(`/system/code-rules/${ruleUuid}`, {
+  return apiRequest<CodeRule>(`/core/code-rules/${ruleUuid}`, {
     method: 'PUT',
     data,
   });
@@ -153,7 +153,7 @@ export async function updateCodeRule(ruleUuid: string, data: UpdateCodeRuleData)
  * @param ruleUuid - 编码规则 UUID
  */
 export async function deleteCodeRule(ruleUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/code-rules/${ruleUuid}`, {
+  return apiRequest<void>(`/core/code-rules/${ruleUuid}`, {
     method: 'DELETE',
   });
 }
@@ -165,7 +165,7 @@ export async function deleteCodeRule(ruleUuid: string): Promise<void> {
  * @returns 生成的编码
  */
 export async function generateCode(request: CodeGenerationRequest): Promise<CodeGenerationResponse> {
-  return apiRequest<CodeGenerationResponse>('/system/code-rules/generate', {
+  return apiRequest<CodeGenerationResponse>('/core/code-rules/generate', {
     method: 'POST',
     data: request,
   });
@@ -178,7 +178,7 @@ export async function generateCode(request: CodeGenerationRequest): Promise<Code
  * @returns 生成的编码（测试用）
  */
 export async function testGenerateCode(request: CodeGenerationRequest): Promise<CodeGenerationResponse> {
-  return apiRequest<CodeGenerationResponse>('/system/code-rules/test-generate', {
+  return apiRequest<CodeGenerationResponse>('/core/code-rules/test-generate', {
     method: 'POST',
     data: request,
   });

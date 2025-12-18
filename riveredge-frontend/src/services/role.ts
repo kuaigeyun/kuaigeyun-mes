@@ -96,7 +96,7 @@ export interface UpdateRoleData {
  * @returns 角色列表响应数据
  */
 export async function getRoleList(params?: RoleListParams): Promise<RoleListResponse> {
-  return apiRequest<RoleListResponse>('/system/roles', {
+  return apiRequest<RoleListResponse>('/core/roles', {
     params,
   });
 }
@@ -110,7 +110,7 @@ export async function getRoleList(params?: RoleListParams): Promise<RoleListResp
  * @returns 角色信息
  */
 export async function getRoleByUuid(roleUuid: string): Promise<Role> {
-  return apiRequest<Role>(`/system/roles/${roleUuid}`);
+  return apiRequest<Role>(`/core/roles/${roleUuid}`);
 }
 
 /**
@@ -122,7 +122,7 @@ export async function getRoleByUuid(roleUuid: string): Promise<Role> {
  * @returns 创建的角色信息
  */
 export async function createRole(data: CreateRoleData): Promise<Role> {
-  return apiRequest<Role>('/system/roles', {
+  return apiRequest<Role>('/core/roles', {
     method: 'POST',
     data,
   });
@@ -138,7 +138,7 @@ export async function createRole(data: CreateRoleData): Promise<Role> {
  * @returns 更新后的角色信息
  */
 export async function updateRole(roleUuid: string, data: UpdateRoleData): Promise<Role> {
-  return apiRequest<Role>(`/system/roles/${roleUuid}`, {
+  return apiRequest<Role>(`/core/roles/${roleUuid}`, {
     method: 'PUT',
     data,
   });
@@ -153,7 +153,7 @@ export async function updateRole(roleUuid: string, data: UpdateRoleData): Promis
  * @param roleId - 角色 ID
  */
 export async function deleteRole(roleUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/roles/${roleUuid}`, {
+  return apiRequest<void>(`/core/roles/${roleUuid}`, {
     method: 'DELETE',
   });
 }
@@ -168,7 +168,7 @@ export async function deleteRole(roleUuid: string): Promise<void> {
  * @returns 更新后的角色信息
  */
 export async function assignPermissions(roleUuid: string, permissionUuids: string[]): Promise<Role> {
-  return apiRequest<Role>(`/system/roles/${roleUuid}/permissions`, {
+  return apiRequest<Role>(`/core/roles/${roleUuid}/permissions`, {
     method: 'POST',
     data: {
       permission_uuids: permissionUuids, // 后端期望对象格式：{ permission_uuids: [...] }
@@ -185,7 +185,7 @@ export async function assignPermissions(roleUuid: string, permissionUuids: strin
  * @returns 权限列表
  */
 export async function getRolePermissions(roleUuid: string): Promise<Permission[]> {
-  return apiRequest<Permission[]>(`/system/roles/${roleUuid}/permissions`);
+  return apiRequest<Permission[]>(`/core/roles/${roleUuid}/permissions`);
 }
 
 /**
@@ -197,7 +197,7 @@ export async function getRolePermissions(roleUuid: string): Promise<Permission[]
  * @returns 权限列表响应数据
  */
 export async function getAllPermissions(params?: { page?: number; page_size?: number; keyword?: string }): Promise<PermissionListResponse> {
-  return apiRequest<PermissionListResponse>('/system/permissions', {
+  return apiRequest<PermissionListResponse>('/core/permissions', {
     params,
   });
 }

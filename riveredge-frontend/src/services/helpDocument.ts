@@ -30,7 +30,7 @@ export interface HelpDocument {
  * @returns 帮助文档内容
  */
 export async function getHelpDocument(documentKey: string): Promise<HelpDocument> {
-  return apiRequest<HelpDocument>(`/system/help-documents/${documentKey}`, {
+  return apiRequest<HelpDocument>(`/core/help-documents/${documentKey}`, {
     method: 'GET',
   });
 }
@@ -41,7 +41,7 @@ export async function getHelpDocument(documentKey: string): Promise<HelpDocument
  * @returns 帮助文档列表
  */
 export async function listHelpDocuments(): Promise<HelpDocument[]> {
-  return apiRequest<HelpDocument[]>('/system/help-documents', {
+  return apiRequest<HelpDocument[]>('/core/help-documents', {
     method: 'GET',
   });
 }

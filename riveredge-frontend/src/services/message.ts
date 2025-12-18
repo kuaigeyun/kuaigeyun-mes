@@ -53,7 +53,7 @@ export interface MessageLogListParams {
  * 发送消息
  */
 export async function sendMessage(data: SendMessageRequest): Promise<SendMessageResponse> {
-  return apiRequest<SendMessageResponse>('/system/messages/send', {
+  return apiRequest<SendMessageResponse>('/core/messages/send', {
     method: 'POST',
     data,
   });
@@ -63,7 +63,7 @@ export async function sendMessage(data: SendMessageRequest): Promise<SendMessage
  * 获取消息发送记录列表
  */
 export async function getMessageLogList(params?: MessageLogListParams): Promise<MessageLog[]> {
-  return apiRequest<MessageLog[]>('/system/messages/logs', {
+  return apiRequest<MessageLog[]>('/core/messages/logs', {
     params,
   });
 }

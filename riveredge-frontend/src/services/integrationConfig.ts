@@ -60,7 +60,7 @@ export async function getIntegrationConfigList(params?: {
   type?: string;
   is_active?: boolean;
 }): Promise<IntegrationConfig[]> {
-  return apiRequest<IntegrationConfig[]>('/system/integration-configs', {
+  return apiRequest<IntegrationConfig[]>('/core/integration-configs', {
     params,
   });
 }
@@ -74,7 +74,7 @@ export async function getIntegrationConfigList(params?: {
  * @returns 集成配置信息
  */
 export async function getIntegrationConfigByUuid(integrationUuid: string): Promise<IntegrationConfig> {
-  return apiRequest<IntegrationConfig>(`/system/integration-configs/${integrationUuid}`);
+  return apiRequest<IntegrationConfig>(`/core/integration-configs/${integrationUuid}`);
 }
 
 /**
@@ -86,7 +86,7 @@ export async function getIntegrationConfigByUuid(integrationUuid: string): Promi
  * @returns 创建的集成配置信息
  */
 export async function createIntegrationConfig(data: IntegrationConfigCreate): Promise<IntegrationConfig> {
-  return apiRequest<IntegrationConfig>('/system/integration-configs', {
+  return apiRequest<IntegrationConfig>('/core/integration-configs', {
     method: 'POST',
     data,
   });
@@ -105,7 +105,7 @@ export async function updateIntegrationConfig(
   integrationUuid: string,
   data: IntegrationConfigUpdate
 ): Promise<IntegrationConfig> {
-  return apiRequest<IntegrationConfig>(`/system/integration-configs/${integrationUuid}`, {
+  return apiRequest<IntegrationConfig>(`/core/integration-configs/${integrationUuid}`, {
     method: 'PUT',
     data,
   });
@@ -119,7 +119,7 @@ export async function updateIntegrationConfig(
  * @param integrationUuid - 集成配置 UUID
  */
 export async function deleteIntegrationConfig(integrationUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/integration-configs/${integrationUuid}`, {
+  return apiRequest<void>(`/core/integration-configs/${integrationUuid}`, {
     method: 'DELETE',
   });
 }
@@ -133,7 +133,7 @@ export async function deleteIntegrationConfig(integrationUuid: string): Promise<
  * @returns 连接测试结果
  */
 export async function testConnection(integrationUuid: string): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>(`/system/integration-configs/${integrationUuid}/test`, {
+  return apiRequest<TestConnectionResponse>(`/core/integration-configs/${integrationUuid}/test`, {
     method: 'POST',
   });
 }

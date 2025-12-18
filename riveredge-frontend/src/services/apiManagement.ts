@@ -92,7 +92,7 @@ export interface APITestResponse {
  * @returns 接口列表
  */
 export async function getAPIList(params?: APIListParams): Promise<APIListResponse> {
-  return apiRequest<APIListResponse>('/system/apis', {
+  return apiRequest<APIListResponse>('/core/apis', {
     params,
   });
 }
@@ -106,7 +106,7 @@ export async function getAPIList(params?: APIListParams): Promise<APIListRespons
  * @returns 接口信息
  */
 export async function getAPIByUuid(apiUuid: string): Promise<API> {
-  return apiRequest<API>(`/system/apis/${apiUuid}`);
+  return apiRequest<API>(`/core/apis/${apiUuid}`);
 }
 
 /**
@@ -118,7 +118,7 @@ export async function getAPIByUuid(apiUuid: string): Promise<API> {
  * @returns 创建的接口信息
  */
 export async function createAPI(data: CreateAPIData): Promise<API> {
-  return apiRequest<API>('/system/apis', {
+  return apiRequest<API>('/core/apis', {
     method: 'POST',
     data,
   });
@@ -134,7 +134,7 @@ export async function createAPI(data: CreateAPIData): Promise<API> {
  * @returns 更新后的接口信息
  */
 export async function updateAPI(apiUuid: string, data: UpdateAPIData): Promise<API> {
-  return apiRequest<API>(`/system/apis/${apiUuid}`, {
+  return apiRequest<API>(`/core/apis/${apiUuid}`, {
     method: 'PUT',
     data,
   });
@@ -149,7 +149,7 @@ export async function updateAPI(apiUuid: string, data: UpdateAPIData): Promise<A
  * @param apiUuid - 接口 UUID
  */
 export async function deleteAPI(apiUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/apis/${apiUuid}`, {
+  return apiRequest<void>(`/core/apis/${apiUuid}`, {
     method: 'DELETE',
   });
 }
@@ -169,7 +169,7 @@ export async function testAPI(
   testRequest: APITestRequest,
   timeout?: number
 ): Promise<APITestResponse> {
-  return apiRequest<APITestResponse>(`/system/apis/${apiUuid}/test`, {
+  return apiRequest<APITestResponse>(`/core/apis/${apiUuid}/test`, {
     method: 'POST',
     data: testRequest,
     params: timeout ? { timeout } : undefined,

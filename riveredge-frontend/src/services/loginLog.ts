@@ -48,7 +48,7 @@ export async function getLoginLogs(params?: {
   start_time?: string;
   end_time?: string;
 }): Promise<LoginLogListResponse> {
-  return apiRequest<LoginLogListResponse>('/system/login-logs', {
+  return apiRequest<LoginLogListResponse>('/core/login-logs', {
     params,
   });
 }
@@ -57,7 +57,7 @@ export async function getLoginLogs(params?: {
  * 获取登录日志详情
  */
 export async function getLoginLog(uuid: string): Promise<LoginLog> {
-  return apiRequest<LoginLog>(`/system/login-logs/${uuid}`, {
+  return apiRequest<LoginLog>(`/core/login-logs/${uuid}`, {
     method: 'GET',
   });
 }
@@ -66,7 +66,7 @@ export async function getLoginLog(uuid: string): Promise<LoginLog> {
  * 获取登录日志统计
  */
 export async function getLoginLogStats(): Promise<LoginLogStats> {
-  return apiRequest<LoginLogStats>('/system/login-logs/statistics', {
+  return apiRequest<LoginLogStats>('/core/login-logs/statistics', {
     method: 'GET',
   });
 }

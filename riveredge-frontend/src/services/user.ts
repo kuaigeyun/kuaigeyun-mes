@@ -109,7 +109,7 @@ export interface UpdateUserData {
  * @returns 用户列表响应数据
  */
 export async function getUserList(params?: UserListParams): Promise<UserListResponse> {
-  return apiRequest<UserListResponse>('/system/users', {
+  return apiRequest<UserListResponse>('/core/users', {
     params,
   });
 }
@@ -123,7 +123,7 @@ export async function getUserList(params?: UserListParams): Promise<UserListResp
  * @returns 用户信息
  */
 export async function getUserByUuid(userUuid: string): Promise<User> {
-  return apiRequest<User>(`/system/users/${userUuid}`);
+  return apiRequest<User>(`/core/users/${userUuid}`);
 }
 
 /**
@@ -135,7 +135,7 @@ export async function getUserByUuid(userUuid: string): Promise<User> {
  * @returns 创建的用户信息
  */
 export async function createUser(data: CreateUserData): Promise<User> {
-  return apiRequest<User>('/system/users', {
+  return apiRequest<User>('/core/users', {
     method: 'POST',
     data,
   });
@@ -151,7 +151,7 @@ export async function createUser(data: CreateUserData): Promise<User> {
  * @returns 更新后的用户信息
  */
 export async function updateUser(userUuid: string, data: UpdateUserData): Promise<User> {
-  return apiRequest<User>(`/system/users/${userUuid}`, {
+  return apiRequest<User>(`/core/users/${userUuid}`, {
     method: 'PUT',
     data,
   });
@@ -166,7 +166,7 @@ export async function updateUser(userUuid: string, data: UpdateUserData): Promis
  * @param userUuid - 用户 UUID
  */
 export async function deleteUser(userUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/users/${userUuid}`, {
+  return apiRequest<void>(`/core/users/${userUuid}`, {
     method: 'DELETE',
   });
 }
@@ -181,7 +181,7 @@ export async function deleteUser(userUuid: string): Promise<void> {
  * @returns 更新后的用户信息
  */
 export async function resetUserPassword(userUuid: string, newPassword?: string): Promise<User> {
-  return apiRequest<User>(`/system/users/${userUuid}/reset-password`, {
+  return apiRequest<User>(`/core/users/${userUuid}/reset-password`, {
     method: 'POST',
     data: newPassword ? { password: newPassword } : {},
   });
@@ -204,7 +204,7 @@ export async function importUsers(data: any[][]): Promise<{
     success_count: number;
     failure_count: number;
     errors: Array<{ row: number; message: string }>;
-  }>('/system/users/import', {
+  }>('/core/users/import', {
     method: 'POST',
     data: { data },
   });
@@ -259,7 +259,7 @@ export async function batchUpdateUsersStatus(userUuids: string[], isActive: bool
   return apiRequest<{
     success_count: number;
     failure_count: number;
-  }>('/system/users/batch/status', {
+  }>('/core/users/batch/status', {
     method: 'POST',
     data: {
       user_uuids: userUuids,
@@ -285,7 +285,7 @@ export async function batchDeleteUsers(userUuids: string[]): Promise<{
     success_count: number;
     failure_count: number;
     errors: Array<{ uuid: string; message: string }>;
-  }>('/system/users/batch/delete', {
+  }>('/core/users/batch/delete', {
     method: 'POST',
     data: {
       user_uuids: userUuids,

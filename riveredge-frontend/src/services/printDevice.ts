@@ -76,7 +76,7 @@ export interface PrintDevicePrintResponse {
  * 获取打印设备列表
  */
 export async function getPrintDeviceList(params?: PrintDeviceListParams): Promise<PrintDevice[]> {
-  return apiRequest<PrintDevice[]>('/system/print-devices', {
+  return apiRequest<PrintDevice[]>('/core/print-devices', {
     params,
   });
 }
@@ -85,14 +85,14 @@ export async function getPrintDeviceList(params?: PrintDeviceListParams): Promis
  * 获取打印设备详情
  */
 export async function getPrintDeviceByUuid(printDeviceUuid: string): Promise<PrintDevice> {
-  return apiRequest<PrintDevice>(`/system/print-devices/${printDeviceUuid}`);
+  return apiRequest<PrintDevice>(`/core/print-devices/${printDeviceUuid}`);
 }
 
 /**
  * 创建打印设备
  */
 export async function createPrintDevice(data: CreatePrintDeviceData): Promise<PrintDevice> {
-  return apiRequest<PrintDevice>('/system/print-devices', {
+  return apiRequest<PrintDevice>('/core/print-devices', {
     method: 'POST',
     data,
   });
@@ -102,7 +102,7 @@ export async function createPrintDevice(data: CreatePrintDeviceData): Promise<Pr
  * 更新打印设备
  */
 export async function updatePrintDevice(printDeviceUuid: string, data: UpdatePrintDeviceData): Promise<PrintDevice> {
-  return apiRequest<PrintDevice>(`/system/print-devices/${printDeviceUuid}`, {
+  return apiRequest<PrintDevice>(`/core/print-devices/${printDeviceUuid}`, {
     method: 'PUT',
     data,
   });
@@ -112,7 +112,7 @@ export async function updatePrintDevice(printDeviceUuid: string, data: UpdatePri
  * 删除打印设备
  */
 export async function deletePrintDevice(printDeviceUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/print-devices/${printDeviceUuid}`, {
+  return apiRequest<void>(`/core/print-devices/${printDeviceUuid}`, {
     method: 'DELETE',
   });
 }
@@ -121,7 +121,7 @@ export async function deletePrintDevice(printDeviceUuid: string): Promise<void> 
  * 测试打印设备连接
  */
 export async function testPrintDevice(printDeviceUuid: string, data?: TestPrintDeviceData): Promise<PrintDeviceTestResponse> {
-  return apiRequest<PrintDeviceTestResponse>(`/system/print-devices/${printDeviceUuid}/test`, {
+  return apiRequest<PrintDeviceTestResponse>(`/core/print-devices/${printDeviceUuid}/test`, {
     method: 'POST',
     data: data || {},
   });
@@ -131,7 +131,7 @@ export async function testPrintDevice(printDeviceUuid: string, data?: TestPrintD
  * 使用打印设备执行打印任务
  */
 export async function printWithDevice(printDeviceUuid: string, data: PrintDevicePrintData): Promise<PrintDevicePrintResponse> {
-  return apiRequest<PrintDevicePrintResponse>(`/system/print-devices/${printDeviceUuid}/print`, {
+  return apiRequest<PrintDevicePrintResponse>(`/core/print-devices/${printDeviceUuid}/print`, {
     method: 'POST',
     data,
   });

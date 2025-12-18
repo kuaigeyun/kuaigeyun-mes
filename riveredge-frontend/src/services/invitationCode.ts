@@ -88,7 +88,7 @@ export interface VerifyInvitationCodeResponse {
  * @returns 邀请码列表响应数据
  */
 export async function getInvitationCodeList(params?: InvitationCodeListParams): Promise<InvitationCodeListResponse> {
-  return apiRequest<InvitationCodeListResponse>('/system/invitation-codes', {
+  return apiRequest<InvitationCodeListResponse>('/core/invitation-codes', {
     params,
   });
 }
@@ -102,7 +102,7 @@ export async function getInvitationCodeList(params?: InvitationCodeListParams): 
  * @returns 邀请码信息
  */
 export async function getInvitationCodeByUuid(codeUuid: string): Promise<InvitationCode> {
-  return apiRequest<InvitationCode>(`/system/invitation-codes/${codeUuid}`);
+  return apiRequest<InvitationCode>(`/core/invitation-codes/${codeUuid}`);
 }
 
 /**
@@ -114,7 +114,7 @@ export async function getInvitationCodeByUuid(codeUuid: string): Promise<Invitat
  * @returns 创建的邀请码信息
  */
 export async function createInvitationCode(data: CreateInvitationCodeData): Promise<InvitationCode> {
-  return apiRequest<InvitationCode>('/system/invitation-codes', {
+  return apiRequest<InvitationCode>('/core/invitation-codes', {
     method: 'POST',
     data,
   });
@@ -130,7 +130,7 @@ export async function createInvitationCode(data: CreateInvitationCodeData): Prom
  * @returns 更新后的邀请码信息
  */
 export async function updateInvitationCode(codeUuid: string, data: UpdateInvitationCodeData): Promise<InvitationCode> {
-  return apiRequest<InvitationCode>(`/system/invitation-codes/${codeUuid}`, {
+  return apiRequest<InvitationCode>(`/core/invitation-codes/${codeUuid}`, {
     method: 'PUT',
     data,
   });
@@ -144,7 +144,7 @@ export async function updateInvitationCode(codeUuid: string, data: UpdateInvitat
  * @param codeUuid - 邀请码 UUID
  */
 export async function deleteInvitationCode(codeUuid: string): Promise<void> {
-  return apiRequest<void>(`/system/invitation-codes/${codeUuid}`, {
+  return apiRequest<void>(`/core/invitation-codes/${codeUuid}`, {
     method: 'DELETE',
   });
 }
@@ -156,7 +156,7 @@ export async function deleteInvitationCode(codeUuid: string): Promise<void> {
  * @returns 验证结果
  */
 export async function verifyInvitationCode(request: VerifyInvitationCodeRequest): Promise<VerifyInvitationCodeResponse> {
-  return apiRequest<VerifyInvitationCodeResponse>('/system/invitation-codes/verify', {
+  return apiRequest<VerifyInvitationCodeResponse>('/core/invitation-codes/verify', {
     method: 'POST',
     data: request,
   });
@@ -169,7 +169,7 @@ export async function verifyInvitationCode(request: VerifyInvitationCodeRequest)
  * @returns 邀请码信息
  */
 export async function useInvitationCode(request: VerifyInvitationCodeRequest): Promise<InvitationCode> {
-  return apiRequest<InvitationCode>('/system/invitation-codes/use', {
+  return apiRequest<InvitationCode>('/core/invitation-codes/use', {
     method: 'POST',
     data: request,
   });

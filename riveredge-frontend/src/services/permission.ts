@@ -54,7 +54,7 @@ export interface PermissionListResponse {
  * @returns 权限列表响应数据
  */
 export async function getPermissionList(params?: PermissionListParams): Promise<PermissionListResponse> {
-  return apiRequest<PermissionListResponse>('/system/permissions', {
+  return apiRequest<PermissionListResponse>('/core/permissions', {
     params,
   });
 }
@@ -68,6 +68,6 @@ export async function getPermissionList(params?: PermissionListParams): Promise<
  * @returns 权限信息
  */
 export async function getPermissionByUuid(permissionUuid: string): Promise<Permission> {
-  return apiRequest<Permission>(`/system/permissions/${permissionUuid}`);
+  return apiRequest<Permission>(`/core/permissions/${permissionUuid}`);
 }
 

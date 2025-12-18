@@ -49,7 +49,7 @@ export async function getOperationLogs(params?: {
   start_time?: string;
   end_time?: string;
 }): Promise<OperationLogListResponse> {
-  return apiRequest<OperationLogListResponse>('/system/operation-logs', {
+  return apiRequest<OperationLogListResponse>('/core/operation-logs', {
     params,
   });
 }
@@ -61,7 +61,7 @@ export async function getOperationLogStats(params?: {
   start_time?: string;
   end_time?: string;
 }): Promise<OperationLogStats> {
-  return apiRequest<OperationLogStats>('/system/operation-logs/stats', {
+  return apiRequest<OperationLogStats>('/core/operation-logs/stats', {
     params,
   });
 }
