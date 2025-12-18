@@ -5,8 +5,9 @@
     "description": "统一管理工厂、仓库、物料、工艺、供应链、绩效等基础数据",
     "icon": "database",
     "author": "RiverEdge Team",
-    "entry_point": "../apps/master_data/index.tsx",
+    "entry_point": "../apps/master-data/index.tsx",
     "route_path": "/apps/master-data",
+    "sort_order": 990,
     "menu_config": {
         "title": "基础数据管理",
         "icon": "database",

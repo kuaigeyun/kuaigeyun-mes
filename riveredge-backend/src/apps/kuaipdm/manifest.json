@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaipdm/index.tsx",
     "route_path": "/apps/kuaipdm",
-    "sort_order": 2,
+    "sort_order": 30,
     "menu_config": {
         "title": "快格轻PDM",
         "icon": "experiment",
         "path": "/apps/kuaipdm",
-        "children": [{
+        "children": [
+            {
                 "title": "设计变更",
                 "path": "/apps/kuaipdm/design-change",
                 "icon": "edit",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "变更申请",
                         "path": "/apps/kuaipdm/design-change/apply",
                         "permission": "kuaipdm:design-change:view",
@@ -40,9 +42,10 @@
             {
                 "title": "工程变更",
                 "path": "/apps/kuaipdm/engineering-change",
-                "icon": "tool",
+                "icon": "refresh-cw",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "变更申请",
                         "path": "/apps/kuaipdm/engineering-change/apply",
                         "permission": "kuaipdm:engineering-change:view",
@@ -59,9 +62,10 @@
             {
                 "title": "设计评审",
                 "path": "/apps/kuaipdm/review",
-                "icon": "audit",
+                "icon": "clipboard-check",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "评审计划",
                         "path": "/apps/kuaipdm/review/plan",
                         "permission": "kuaipdm:review:view",
@@ -86,7 +90,8 @@
                 "path": "/apps/kuaipdm/process",
                 "icon": "workflow",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "流程配置",
                         "path": "/apps/kuaipdm/process/config",
                         "permission": "kuaipdm:process:config:view",
@@ -111,7 +116,8 @@
                 "path": "/apps/kuaipdm/knowledge",
                 "icon": "book",
                 "sort_order": 5,
-                "children": [{
+                "children": [
+                    {
                         "title": "知识库",
                         "path": "/apps/kuaipdm/knowledge/library",
                         "permission": "kuaipdm:knowledge:view",

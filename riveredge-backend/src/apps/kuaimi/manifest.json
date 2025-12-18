@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaimi/index.tsx",
     "route_path": "/apps/kuaimi",
-    "sort_order": 12,
+    "sort_order": 150,
     "menu_config": {
         "title": "快格轻MI",
         "icon": "dashboard",
         "path": "/apps/kuaimi",
-        "children": [{
+        "children": [
+            {
                 "title": "生产看板",
                 "path": "/apps/kuaimi/dashboard",
-                "icon": "dashboard",
+                "icon": "list",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "Andon系统",
                         "path": "/apps/kuaimi/dashboard/andon",
                         "permission": "kuaimi:dashboard:view",
@@ -40,9 +42,10 @@
             {
                 "title": "OEE分析",
                 "path": "/apps/kuaimi/oee",
-                "icon": "line-chart",
+                "icon": "bar-chart-3",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "OEE计算",
                         "path": "/apps/kuaimi/oee/calculate",
                         "permission": "kuaimi:oee:view",
@@ -71,9 +74,10 @@
             {
                 "title": "工艺优化",
                 "path": "/apps/kuaimi/process",
-                "icon": "experiment",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "参数分析",
                         "path": "/apps/kuaimi/process/parameter",
                         "permission": "kuaimi:process:view",
@@ -96,9 +100,10 @@
             {
                 "title": "质量预测",
                 "path": "/apps/kuaimi/quality",
-                "icon": "safety-certificate",
+                "icon": "shield",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "趋势预测",
                         "path": "/apps/kuaimi/quality/trend",
                         "permission": "kuaimi:quality:view",
@@ -121,9 +126,10 @@
             {
                 "title": "系统绩效",
                 "path": "/apps/kuaimi/performance",
-                "icon": "trophy",
+                "icon": "layout",
                 "sort_order": 5,
-                "children": [{
+                "children": [
+                    {
                         "title": "使用效果",
                         "path": "/apps/kuaimi/performance/usage",
                         "permission": "kuaimi:performance:view",

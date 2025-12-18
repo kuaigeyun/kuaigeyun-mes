@@ -824,10 +824,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 优先使用 menu.icon 字段（如果存在）
     if (menu.icon) {
       // 首先尝试直接使用 lucide 图标名称（如 "database", "warehouse" 等）
-      if (ManufacturingIcons[menu.icon as keyof typeof ManufacturingIcons]) {
-        const IconComponent = ManufacturingIcons[menu.icon as keyof typeof ManufacturingIcons];
+      // 支持带连字符的图标名称（如 "arrow-down-circle", "map-pin" 等）
+      // 使用字符串索引访问，确保带连字符的键名也能正确访问
+      const iconKey = menu.icon as keyof typeof ManufacturingIcons;
+      const IconComponent = ManufacturingIcons[iconKey];
+      if (IconComponent) {
         iconElement = React.createElement(IconComponent, { size: 16 });
       } else {
+        // 调试：如果图标未找到，输出警告
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`图标未找到: ${menu.icon}，菜单: ${menu.name || menu.path}`);
+        }
         // 如果不是 lucide 图标名称，尝试映射 Ant Design 图标名称
         const lucideIconMap: Record<string, React.ComponentType<any>> = {
           'DashboardOutlined': ManufacturingIcons.dashboard,

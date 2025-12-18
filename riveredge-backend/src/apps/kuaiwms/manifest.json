@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiwms/index.tsx",
     "route_path": "/apps/kuaiwms",
-    "sort_order": 6,
+    "sort_order": 90,
     "menu_config": {
         "title": "快格轻WMS",
         "icon": "warehouse",
         "path": "/apps/kuaiwms",
-        "children": [{
+        "children": [
+            {
                 "title": "库存管理",
                 "path": "/apps/kuaiwms/inventory",
                 "icon": "database",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "实时库存",
                         "path": "/apps/kuaiwms/inventory/realtime",
                         "permission": "kuaiwms:inventory:view",
@@ -40,9 +42,10 @@
             {
                 "title": "入库管理",
                 "path": "/apps/kuaiwms/inbound",
-                "icon": "import",
+                "icon": "download",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "采购入库",
                         "path": "/apps/kuaiwms/inbound/purchase",
                         "permission": "kuaiwms:inbound:view",
@@ -71,9 +74,10 @@
             {
                 "title": "出库管理",
                 "path": "/apps/kuaiwms/outbound",
-                "icon": "export",
+                "icon": "upload",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "销售出库",
                         "path": "/apps/kuaiwms/outbound/sales",
                         "permission": "kuaiwms:outbound:view",
@@ -102,9 +106,10 @@
             {
                 "title": "委外物料",
                 "path": "/apps/kuaiwms/outsourcing-material",
-                "icon": "swap",
+                "icon": "refresh-cw",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "委外发料",
                         "path": "/apps/kuaiwms/outsourcing-material/issue",
                         "permission": "kuaiwms:outsourcing-material:view",
@@ -127,9 +132,10 @@
             {
                 "title": "库位管理",
                 "path": "/apps/kuaiwms/location",
-                "icon": "environment",
+                "icon": "map-pin",
                 "sort_order": 5,
-                "children": [{
+                "children": [
+                    {
                         "title": "库位分配",
                         "path": "/apps/kuaiwms/location/allocation",
                         "permission": "kuaiwms:location:view",
@@ -152,9 +158,10 @@
             {
                 "title": "内部物流",
                 "path": "/apps/kuaiwms/logistics",
-                "icon": "car",
+                "icon": "truck",
                 "sort_order": 6,
-                "children": [{
+                "children": [
+                    {
                         "title": "配送计划",
                         "path": "/apps/kuaiwms/logistics/plan",
                         "permission": "kuaiwms:logistics:view",

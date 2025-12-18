@@ -29,8 +29,8 @@ import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { UniTable } from '@/components/uni-table';
 
 // 导入服务和类型
-import { materialApi, materialGroupApi } from '@/apps/master_data/services/material';
-import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '@/apps/master_data/types/material';
+import { materialApi, materialGroupApi } from '@/apps/master-data/services/material';
+import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '@/apps/master-data/types/material';
 
 /**
  * 物料管理合并页面组件

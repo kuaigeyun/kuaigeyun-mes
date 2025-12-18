@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuailims/index.tsx",
     "route_path": "/apps/kuailims",
-    "sort_order": 14,
+    "sort_order": 110,
     "menu_config": {
         "title": "快格轻LIMS",
         "icon": "experiment",
         "path": "/apps/kuailims",
-        "children": [{
+        "children": [
+            {
                 "title": "样品管理",
                 "path": "/apps/kuailims/sample",
-                "icon": "inbox",
+                "icon": "settings",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "样品登记",
                         "path": "/apps/kuailims/sample/register",
                         "permission": "kuailims:sample:view",
@@ -40,9 +42,10 @@
             {
                 "title": "实验管理",
                 "path": "/apps/kuailims/experiment",
-                "icon": "experiment",
+                "icon": "list",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "实验计划",
                         "path": "/apps/kuailims/experiment/plan",
                         "permission": "kuailims:experiment:view",
@@ -65,9 +68,10 @@
             {
                 "title": "数据管理",
                 "path": "/apps/kuailims/data",
-                "icon": "database",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "数据录入",
                         "path": "/apps/kuailims/data/entry",
                         "permission": "kuailims:data:view",
@@ -90,9 +94,10 @@
             {
                 "title": "报告管理",
                 "path": "/apps/kuailims/report",
-                "icon": "file-text",
+                "icon": "layout",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "报告生成",
                         "path": "/apps/kuailims/report/generate",
                         "permission": "kuailims:report:view",

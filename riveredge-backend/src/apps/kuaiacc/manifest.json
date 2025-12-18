@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiacc/index.tsx",
     "route_path": "/apps/kuaiacc",
-    "sort_order": 16,
+    "sort_order": 170,
     "menu_config": {
         "title": "快格轻财务",
         "icon": "dollar",
         "path": "/apps/kuaiacc",
-        "children": [{
+        "children": [
+            {
                 "title": "总账管理",
                 "path": "/apps/kuaiacc/ledger",
-                "icon": "book",
+                "icon": "settings",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "会计科目",
                         "path": "/apps/kuaiacc/ledger/accounts",
                         "permission": "kuaiacc:ledger:view",
@@ -46,9 +48,10 @@
             {
                 "title": "应收应付",
                 "path": "/apps/kuaiacc/receivable-payable",
-                "icon": "transaction",
+                "icon": "list",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "客户发票",
                         "path": "/apps/kuaiacc/receivable-payable/customer-invoice",
                         "permission": "kuaiacc:receivable-payable:view",
@@ -77,9 +80,10 @@
             {
                 "title": "成本核算",
                 "path": "/apps/kuaiacc/cost",
-                "icon": "calculator",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "标准成本",
                         "path": "/apps/kuaiacc/cost/standard",
                         "permission": "kuaiacc:cost:view",
@@ -108,9 +112,10 @@
             {
                 "title": "财务报表",
                 "path": "/apps/kuaiacc/reports",
-                "icon": "file-text",
+                "icon": "layout",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "资产负债表",
                         "path": "/apps/kuaiacc/reports/balance-sheet",
                         "permission": "kuaiacc:reports:view",

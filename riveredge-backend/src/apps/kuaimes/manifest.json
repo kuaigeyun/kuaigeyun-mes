@@ -7,76 +7,121 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaimes/index.tsx",
     "route_path": "/apps/kuaimes",
+    "sort_order": 70,
     "menu_config": {
         "title": "快格轻MES",
         "icon": "production",
         "path": "/apps/kuaimes",
-        "children": [{
-                "title": "生产计划",
-                "path": "/apps/kuaimes/planning",
-                "icon": "checklist",
-                "children": [{
-                        "title": "工单管理",
-                        "path": "/apps/kuaimes/planning/workorders",
+        "children": [
+            {
+                "title": "生产订单",
+                "path": "/apps/kuaimes/orders",
+                "icon": "order",
+                "children": [
+                    {
+                        "title": "订单列表",
+                        "path": "/apps/kuaimes/orders/list",
+                        "permission": "kuaimes:order:view"
+                    },
+                    {
+                        "title": "创建订单",
+                        "path": "/apps/kuaimes/orders/create",
+                        "permission": "kuaimes:order:create"
+                    }
+                ]
+            },
+            {
+                "title": "工单管理",
+                "path": "/apps/kuaimes/work-orders",
+                "icon": "clipboard-list",
+                "children": [
+                    {
+                        "title": "工单列表",
+                        "path": "/apps/kuaimes/work-orders/list",
                         "permission": "kuaimes:workorder:view"
                     },
                     {
-                        "title": "生产排程",
-                        "path": "/apps/kuaimes/planning/scheduling",
-                        "permission": "kuaimes:scheduling:view"
+                        "title": "工单执行",
+                        "path": "/apps/kuaimes/work-orders/execution",
+                        "permission": "kuaimes:workorder:update"
+                    },
+                    {
+                        "title": "创建工单",
+                        "path": "/apps/kuaimes/work-orders/create",
+                        "permission": "kuaimes:workorder:create"
                     }
                 ]
             },
             {
-                "title": "生产执行",
-                "path": "/apps/kuaimes/execution",
-                "icon": "production",
-                "children": [{
-                        "title": "实时报工",
-                        "path": "/apps/kuaimes/execution/reporting",
-                        "permission": "kuaimes:reporting:view"
+                "title": "生产报工",
+                "path": "/apps/kuaimes/production-reports",
+                "icon": "clipboard-check",
+                "children": [
+                    {
+                        "title": "报工录入",
+                        "path": "/apps/kuaimes/production-reports/report",
+                        "permission": "kuaimes:production-report:create"
                     },
                     {
-                        "title": "进度跟踪",
-                        "path": "/apps/kuaimes/execution/progress",
-                        "permission": "kuaimes:progress:view"
+                        "title": "报工历史",
+                        "path": "/apps/kuaimes/production-reports/history",
+                        "permission": "kuaimes:production-report:view"
                     }
                 ]
             },
             {
-                "title": "物料管理",
-                "path": "/apps/kuaimes/material",
-                "icon": "warehouse",
-                "children": [{
-                        "title": "库存明细",
-                        "path": "/apps/kuaimes/material/inventory",
-                        "permission": "kuaimes:inventory:view"
+                "title": "质量追溯",
+                "path": "/apps/kuaimes/traceability",
+                "icon": "search",
+                "children": [
+                    {
+                        "title": "追溯查询",
+                        "path": "/apps/kuaimes/traceability/query",
+                        "permission": "kuaimes:traceability:view"
                     },
                     {
-                        "title": "出入库操作",
-                        "path": "/apps/kuaimes/material/stock",
-                        "permission": "kuaimes:stock:view"
+                        "title": "批次管理",
+                        "path": "/apps/kuaimes/traceability/batch",
+                        "permission": "kuaimes:traceability:view"
+                    },
+                    {
+                        "title": "追溯记录",
+                        "path": "/apps/kuaimes/traceability/records",
+                        "permission": "kuaimes:traceability:view"
                     }
                 ]
             },
             {
-                "title": "质量管控",
-                "path": "/apps/kuaimes/quality",
-                "icon": "quality",
-                "children": [{
-                        "title": "质检标准",
-                        "path": "/apps/kuaimes/quality/standards",
-                        "permission": "kuaimes:quality:standards:view"
+                "title": "返工管理",
+                "path": "/apps/kuaimes/rework-orders",
+                "icon": "history",
+                "children": [
+                    {
+                        "title": "返工列表",
+                        "path": "/apps/kuaimes/rework-orders/list",
+                        "permission": "kuaimes:rework-order:view"
                     },
                     {
-                        "title": "质量追溯",
-                        "path": "/apps/kuaimes/quality/traceability",
-                        "permission": "kuaimes:quality:traceability:view"
+                        "title": "创建返工",
+                        "path": "/apps/kuaimes/rework-orders/create",
+                        "permission": "kuaimes:rework-order:create"
+                    }
+                ]
+            },
+            {
+                "title": "资源分配",
+                "path": "/apps/kuaimes/resource-allocation",
+                "icon": "users",
+                "children": [
+                    {
+                        "title": "人机料法管理",
+                        "path": "/apps/kuaimes/resource-allocation/management",
+                        "permission": "kuaimes:resource-allocation:view"
                     },
                     {
-                        "title": "不良品处理",
-                        "path": "/apps/kuaimes/quality/defects",
-                        "permission": "kuaimes:quality:defects:view"
+                        "title": "资源调度",
+                        "path": "/apps/kuaimes/resource-allocation/scheduling",
+                        "permission": "kuaimes:resource-allocation:manage"
                     }
                 ]
             }

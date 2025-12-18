@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaitms/index.tsx",
     "route_path": "/apps/kuaitms",
-    "sort_order": 15,
+    "sort_order": 140,
     "menu_config": {
         "title": "快格轻TMS",
         "icon": "car",
         "path": "/apps/kuaitms",
-        "children": [{
+        "children": [
+            {
                 "title": "运输计划",
                 "path": "/apps/kuaitms/planning",
                 "icon": "calendar",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "运输需求",
                         "path": "/apps/kuaitms/planning/demand",
                         "permission": "kuaitms:planning:view",
@@ -40,9 +42,10 @@
             {
                 "title": "车辆调度",
                 "path": "/apps/kuaitms/dispatch",
-                "icon": "cluster",
+                "icon": "network",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "调度计划",
                         "path": "/apps/kuaitms/dispatch/plan",
                         "permission": "kuaitms:dispatch:view",
@@ -65,9 +68,10 @@
             {
                 "title": "运输执行",
                 "path": "/apps/kuaitms/execution",
-                "icon": "car",
+                "icon": "list",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "装车管理",
                         "path": "/apps/kuaitms/execution/loading",
                         "permission": "kuaitms:execution:view",
@@ -90,9 +94,10 @@
             {
                 "title": "运费结算",
                 "path": "/apps/kuaitms/settlement",
-                "icon": "dollar",
+                "icon": "grid",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "运费计算",
                         "path": "/apps/kuaitms/settlement/calculate",
                         "permission": "kuaitms:settlement:view",

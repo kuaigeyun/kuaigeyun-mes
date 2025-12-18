@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiems/index.tsx",
     "route_path": "/apps/kuaiems",
-    "sort_order": 13,
+    "sort_order": 160,
     "menu_config": {
         "title": "快格轻EMS",
         "icon": "thunderbolt",
         "path": "/apps/kuaiems",
-        "children": [{
+        "children": [
+            {
                 "title": "能源监测",
                 "path": "/apps/kuaiems/monitoring",
-                "icon": "monitor",
+                "icon": "list",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "能耗数据",
                         "path": "/apps/kuaiems/monitoring/data",
                         "permission": "kuaiems:monitoring:view",
@@ -40,9 +42,10 @@
             {
                 "title": "能耗分析",
                 "path": "/apps/kuaiems/analysis",
-                "icon": "bar-chart",
+                "icon": "bar-chart-3",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "能耗统计",
                         "path": "/apps/kuaiems/analysis/statistics",
                         "permission": "kuaiems:analysis:view",
@@ -65,9 +68,10 @@
             {
                 "title": "节能管理",
                 "path": "/apps/kuaiems/conservation",
-                "icon": "bulb",
+                "icon": "settings",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "节能目标",
                         "path": "/apps/kuaiems/conservation/target",
                         "permission": "kuaiems:conservation:view",
@@ -90,9 +94,10 @@
             {
                 "title": "能源报表",
                 "path": "/apps/kuaiems/reports",
-                "icon": "file-text",
+                "icon": "grid",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "能耗报表",
                         "path": "/apps/kuaiems/reports/consumption",
                         "permission": "kuaiems:reports:view",

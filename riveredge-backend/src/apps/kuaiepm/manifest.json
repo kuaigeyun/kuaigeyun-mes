@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiepm/index.tsx",
     "route_path": "/apps/kuaiepm",
-    "sort_order": 20,
+    "sort_order": 220,
     "menu_config": {
         "title": "快格轻EPM",
         "icon": "trophy",
         "path": "/apps/kuaiepm",
-        "children": [{
+        "children": [
+            {
                 "title": "KPI管理",
                 "path": "/apps/kuaiepm/kpi",
-                "icon": "line-chart",
+                "icon": "settings",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "KPI定义",
                         "path": "/apps/kuaiepm/kpi/definition",
                         "permission": "kuaiepm:kpi:view",
@@ -46,9 +48,10 @@
             {
                 "title": "平衡计分卡",
                 "path": "/apps/kuaiepm/bsc",
-                "icon": "dashboard",
+                "icon": "list",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "战略地图",
                         "path": "/apps/kuaiepm/bsc/strategy",
                         "permission": "kuaiepm:bsc:view",
@@ -71,9 +74,10 @@
             {
                 "title": "经营分析",
                 "path": "/apps/kuaiepm/business",
-                "icon": "bar-chart",
+                "icon": "bar-chart-3",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "经营仪表盘",
                         "path": "/apps/kuaiepm/business/dashboard",
                         "permission": "kuaiepm:business:view",
@@ -102,9 +106,10 @@
             {
                 "title": "预算分析",
                 "path": "/apps/kuaiepm/budget",
-                "icon": "calculator",
+                "icon": "grid",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "预算对比",
                         "path": "/apps/kuaiepm/budget/compare",
                         "permission": "kuaiepm:budget:view",

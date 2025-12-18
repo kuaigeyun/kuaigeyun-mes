@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiehs/index.tsx",
     "route_path": "/apps/kuaiehs",
-    "sort_order": 19,
+    "sort_order": 200,
     "menu_config": {
         "title": "快格轻EHS",
         "icon": "safety",
         "path": "/apps/kuaiehs",
-        "children": [{
+        "children": [
+            {
                 "title": "环境管理",
                 "path": "/apps/kuaiehs/environment",
-                "icon": "environment",
+                "icon": "settings",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "环境监测",
                         "path": "/apps/kuaiehs/environment/monitoring",
                         "permission": "kuaiehs:environment:view",
@@ -46,9 +48,10 @@
             {
                 "title": "健康管理",
                 "path": "/apps/kuaiehs/health",
-                "icon": "heart",
+                "icon": "list",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "职业健康检查",
                         "path": "/apps/kuaiehs/health/check",
                         "permission": "kuaiehs:health:view",
@@ -71,9 +74,10 @@
             {
                 "title": "安全管理",
                 "path": "/apps/kuaiehs/safety",
-                "icon": "safety-certificate",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "安全培训",
                         "path": "/apps/kuaiehs/safety/training",
                         "permission": "kuaiehs:safety:view",
@@ -102,9 +106,10 @@
             {
                 "title": "合规管理",
                 "path": "/apps/kuaiehs/compliance",
-                "icon": "audit",
+                "icon": "layout",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "法规识别",
                         "path": "/apps/kuaiehs/compliance/regulation",
                         "permission": "kuaiehs:compliance:view",
