@@ -53,7 +53,6 @@
 - ✅ **前端**: React 18 + TypeScript + Ant Design
 - ✅ **任务调度**: Inngest 工作流引擎
 - ✅ **缓存**: Redis 缓存提升性能
-- ✅ **部署**: Kubernetes
 
 ### 🏢 多组织架构
 - ✅ **多租户数据隔离**: 每个组织的数据完全隔离
@@ -284,19 +283,6 @@ npm run test
 - **Swagger UI**: http://localhost:8200/docs
 - **ReDoc**: http://localhost:8200/redoc
 - **OpenAPI Schema**: http://localhost:8200/openapi.json
-
-## 🚢 部署
-
-### Kubernetes 部署
-
-```bash
-# 应用部署
-kubectl apply -f k8s/
-
-# 查看服务状态
-kubectl get pods
-kubectl get services
-```
 
 ## 🤝 贡献指南
 
