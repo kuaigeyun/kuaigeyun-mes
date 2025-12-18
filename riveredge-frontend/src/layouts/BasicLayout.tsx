@@ -1187,8 +1187,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       'warehouse': '仓库数据',
       // 物料数据
       'groups': '物料分组',
-      'materials': '物料',
+      'materials': '物料数据',
       'bom': 'BOM',
+      'list': '物料管理',
       // 工艺数据
       'defect-types': '不良品',
       'operations': '工序',
@@ -1209,6 +1210,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
     
     return pathMap[segment] || segment;
+  };
+  
+  /**
+   * 根据完整路径转换为中文名称（更精确的匹配）
+   */
+  const translateFullPathToChinese = (path: string): string => {
+    const fullPathMap: Record<string, string> = {
+      '/apps/master-data/materials': '物料数据',
+      '/apps/master-data/materials/list': '物料管理',
+      '/apps/master-data/materials/bom': 'BOM',
+      '/apps/master-data/factory/workshops': '车间',
+      '/apps/master-data/factory/production-lines': '产线',
+      '/apps/master-data/factory/workstations': '工位',
+      '/apps/master-data/warehouse/warehouses': '仓库',
+      '/apps/master-data/warehouse/storage-areas': '库区',
+      '/apps/master-data/warehouse/storage-locations': '库位',
+    };
+    
+    return fullPathMap[path] || translatePathSegmentToChinese(path.split('/').pop() || '');
   };
 
   /**
@@ -1389,8 +1409,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const pathSegments = location.pathname.split('/').filter(Boolean);
       pathSegments.forEach((segment, index) => {
         const path = '/' + pathSegments.slice(0, index + 1).join('/');
-        // 将路径片段转换为中文名称
-        const chineseTitle = translatePathSegmentToChinese(segment);
+        // 优先使用完整路径匹配，如果失败则使用路径片段匹配
+        const chineseTitle = translateFullPathToChinese(path) || translatePathSegmentToChinese(segment);
         breadcrumbItems.push({
           title: chineseTitle,
           path: path,
