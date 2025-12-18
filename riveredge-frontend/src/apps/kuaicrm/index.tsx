@@ -27,7 +27,7 @@ import ServicePage from './pages/service';
 import AnalysisPage from './pages/analysis';
 
 // 客户管理页面（引用 master-data 的客户管理）
-import CustomersPage from '../master_data/pages/supply-chain/customers';
+import CustomersPage from '../master-data/pages/supply-chain/customers';
 
 const KuaicrmApp: React.FC = () => {
   return (

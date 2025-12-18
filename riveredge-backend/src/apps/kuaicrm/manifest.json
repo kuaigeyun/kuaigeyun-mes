@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaicrm/index.tsx",
     "route_path": "/apps/kuaicrm",
-    "sort_order": 1,
+    "sort_order": 20,
     "menu_config": {
         "title": "快格轻CRM",
         "icon": "customer-service",
         "path": "/apps/kuaicrm",
-        "children": [{
+        "children": [
+            {
                 "title": "线索管理",
                 "path": "/apps/kuaicrm/leads",
-                "icon": "user-add",
+                "icon": "user-plus",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "线索列表",
                         "path": "/apps/kuaicrm/leads/list",
                         "permission": "kuaicrm:lead:view",
@@ -64,9 +66,10 @@
             {
                 "title": "商机管理",
                 "path": "/apps/kuaicrm/opportunities",
-                "icon": "fund",
+                "icon": "trending-up",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "商机列表",
                         "path": "/apps/kuaicrm/opportunities/list",
                         "permission": "kuaicrm:opportunity:view",
@@ -113,9 +116,10 @@
             {
                 "title": "销售漏斗",
                 "path": "/apps/kuaicrm/funnel",
-                "icon": "funnel-plot",
+                "icon": "funnel",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "漏斗视图",
                         "path": "/apps/kuaicrm/funnel/view",
                         "permission": "kuaicrm:funnel:view",
@@ -146,7 +150,8 @@
                 "path": "/apps/kuaicrm/orders",
                 "icon": "shopping-cart",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "订单列表",
                         "path": "/apps/kuaicrm/orders/list",
                         "permission": "kuaicrm:order:view",
@@ -193,9 +198,10 @@
             {
                 "title": "客户服务",
                 "path": "/apps/kuaicrm/service",
-                "icon": "customer-service",
+                "icon": "headphones",
                 "sort_order": 5,
-                "children": [{
+                "children": [
+                    {
                         "title": "服务工单",
                         "path": "/apps/kuaicrm/service/workorders",
                         "permission": "kuaicrm:service:workorder:view",
@@ -236,9 +242,10 @@
             {
                 "title": "销售分析",
                 "path": "/apps/kuaicrm/analysis",
-                "icon": "bar-chart",
+                "icon": "bar-chart-3",
                 "sort_order": 6,
-                "children": [{
+                "children": [
+                    {
                         "title": "销售报表",
                         "path": "/apps/kuaicrm/analysis/reports",
                         "permission": "kuaicrm:analysis:report:view",

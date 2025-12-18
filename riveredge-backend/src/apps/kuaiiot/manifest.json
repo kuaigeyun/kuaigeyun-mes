@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiiot/index.tsx",
     "route_path": "/apps/kuaiiot",
-    "sort_order": 11,
+    "sort_order": 130,
     "menu_config": {
         "title": "快格轻IOT",
         "icon": "cloud-server",
         "path": "/apps/kuaiiot",
-        "children": [{
+        "children": [
+            {
                 "title": "设备数据",
                 "path": "/apps/kuaiiot/equipment",
-                "icon": "database",
+                "icon": "cog",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "实时采集",
                         "path": "/apps/kuaiiot/equipment/realtime",
                         "permission": "kuaiiot:equipment:view",
@@ -40,9 +42,10 @@
             {
                 "title": "传感器数据",
                 "path": "/apps/kuaiiot/sensor",
-                "icon": "radar-chart",
+                "icon": "list",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "传感器配置",
                         "path": "/apps/kuaiiot/sensor/config",
                         "permission": "kuaiiot:sensor:view",
@@ -65,9 +68,10 @@
             {
                 "title": "实时监控",
                 "path": "/apps/kuaiiot/monitoring",
-                "icon": "monitor",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "设备状态",
                         "path": "/apps/kuaiiot/monitoring/status",
                         "permission": "kuaiiot:monitoring:view",
@@ -90,9 +94,10 @@
             {
                 "title": "数据接口",
                 "path": "/apps/kuaiiot/api",
-                "icon": "api",
+                "icon": "layout",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "数据API",
                         "path": "/apps/kuaiiot/api/data",
                         "permission": "kuaiiot:api:view",

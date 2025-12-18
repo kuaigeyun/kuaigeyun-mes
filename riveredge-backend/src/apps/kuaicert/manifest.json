@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaicert/index.tsx",
     "route_path": "/apps/kuaicert",
-    "sort_order": 22,
+    "sort_order": 210,
     "menu_config": {
         "title": "快格轻认证",
         "icon": "certificate",
         "path": "/apps/kuaicert",
-        "children": [{
+        "children": [
+            {
                 "title": "认证类型",
                 "path": "/apps/kuaicert/types",
-                "icon": "appstore",
+                "icon": "list",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "类型管理",
                         "path": "/apps/kuaicert/types/manage",
                         "permission": "kuaicert:types:view",
@@ -40,9 +42,10 @@
             {
                 "title": "认证评估",
                 "path": "/apps/kuaicert/assessment",
-                "icon": "audit",
+                "icon": "grid",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "要求解读",
                         "path": "/apps/kuaicert/assessment/requirements",
                         "permission": "kuaicert:assessment:view",
@@ -71,9 +74,10 @@
             {
                 "title": "提升建议",
                 "path": "/apps/kuaicert/improvement",
-                "icon": "rise",
+                "icon": "layout",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "改进建议",
                         "path": "/apps/kuaicert/improvement/suggestions",
                         "permission": "kuaicert:improvement:view",
@@ -102,9 +106,10 @@
             {
                 "title": "认证管理",
                 "path": "/apps/kuaicert/management",
-                "icon": "file-text",
+                "icon": "settings",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "申请管理",
                         "path": "/apps/kuaicert/management/application",
                         "permission": "kuaicert:management:view",

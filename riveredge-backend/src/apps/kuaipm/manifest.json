@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaipm/index.tsx",
     "route_path": "/apps/kuaipm",
-    "sort_order": 18,
+    "sort_order": 190,
     "menu_config": {
         "title": "快格轻PM",
         "icon": "project",
         "path": "/apps/kuaipm",
-        "children": [{
+        "children": [
+            {
                 "title": "项目立项",
                 "path": "/apps/kuaipm/initiation",
-                "icon": "file-add",
+                "icon": "list",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "项目申请",
                         "path": "/apps/kuaipm/initiation/apply",
                         "permission": "kuaipm:initiation:view",
@@ -42,7 +44,8 @@
                 "path": "/apps/kuaipm/planning",
                 "icon": "calendar",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "WBS分解",
                         "path": "/apps/kuaipm/planning/wbs",
                         "permission": "kuaipm:planning:view",
@@ -71,9 +74,10 @@
             {
                 "title": "项目执行",
                 "path": "/apps/kuaipm/execution",
-                "icon": "play-circle",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "任务跟踪",
                         "path": "/apps/kuaipm/execution/tasks",
                         "permission": "kuaipm:execution:view",
@@ -102,9 +106,10 @@
             {
                 "title": "项目监控",
                 "path": "/apps/kuaipm/monitoring",
-                "icon": "monitor",
+                "icon": "layout",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "进度监控",
                         "path": "/apps/kuaipm/monitoring/progress",
                         "permission": "kuaipm:monitoring:view",

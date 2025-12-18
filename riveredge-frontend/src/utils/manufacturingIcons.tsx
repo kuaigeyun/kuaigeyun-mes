@@ -75,6 +75,83 @@ import {
   Layers,
   Package2,
   Boxes,
+  // 新增常用图标
+  Search,
+  Edit,
+  FileCheck,
+  RotateCcw,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  MapPin,
+  UserPlus,
+  Filter,
+  Headphones,
+  Pencil,
+  Book,
+  BookOpen,
+  RefreshCw,
+  FileSearch,
+  FileEdit,
+  FilePlus,
+  FileMinus,
+  Folder,
+  FolderOpen,
+  Grid,
+  Layout,
+  LayoutGrid,
+  Target,
+  Award,
+  Star,
+  Check,
+  X,
+  Plus,
+  Minus,
+  ArrowRight,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldOff,
+  AlertCircle,
+  Info,
+  HelpCircle,
+  CheckCircle,
+  Clock,
+  Timer,
+  CalendarDays,
+  Sun,
+  Moon,
+  Home,
+  Navigation,
+  Compass,
+  Map,
+  MapPinned,
+  Pin,
+  PinOff,
+  Flag,
+  SortAsc,
+  SortDesc,
+  MoreHorizontal,
+  MoreVertical,
+  Menu,
+  // WMS 相关图标
+  Download,
+  Upload,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  // 应用图标
+  DollarSign,
+  Phone,
+  Trophy,
+  Cloud,
+  Calculator,
+  FolderKanban,
+  Car,
 } from 'lucide-react';
 
 /**
@@ -231,6 +308,105 @@ export const ManufacturingIcons = {
   mesSystem: Factory, // MES 制造执行系统
   systemConfig: Cog, // 系统配置（齿轮）
   operationsCenter: Factory, // 运营中心（工厂）
+  
+  // 新增图标映射
+  search: Search,
+  edit: Edit,
+  'file-check': FileCheck,
+  'rotate-ccw': RotateCcw,
+  'arrow-down-circle': ArrowDownCircle,
+  'arrow-up-circle': ArrowUpCircle,
+  'map-pin': MapPin,
+  'user-plus': UserPlus,
+  funnel: Filter,
+  funnelPlot: Filter,
+  headphones: Headphones,
+  pencil: Pencil,
+  book: Book,
+  'book-open': BookOpen,
+  'refresh-cw': RefreshCw,
+  'rotate-cw': RotateCcw, // 顺时针旋转（委外物料）
+  download: Download,
+  upload: Upload,
+  'arrow-down-to-line': ArrowDownToLine, // 入库（向下箭头到线）
+  'arrow-up-from-line': ArrowUpFromLine, // 出库（向上箭头从线）
+  'file-search': FileSearch,
+  'file-edit': FileEdit,
+  'file-plus': FilePlus,
+  'file-minus': FileMinus,
+  folder: Folder,
+  'folder-open': FolderOpen,
+  grid: Grid,
+  layout: Layout,
+  'layout-grid': LayoutGrid,
+  target: Target,
+  award: Award,
+  star: Star,
+  check: Check,
+  x: X,
+  plus: Plus,
+  minus: Minus,
+  'arrow-right': ArrowRight,
+  'arrow-left': ArrowLeft,
+  'arrow-up': ArrowUp,
+  'arrow-down': ArrowDown,
+  eye: Eye,
+  'eye-off': EyeOff,
+  lock: Lock,
+  unlock: Unlock,
+  'shield-check': ShieldCheck,
+  'shield-alert': ShieldAlert,
+  'shield-off': ShieldOff,
+  'alert-circle': AlertCircle,
+  info: Info,
+  'help-circle': HelpCircle,
+  'check-circle': CheckCircle,
+  clock: Clock,
+  timer: Timer,
+  'calendar-days': CalendarDays,
+  sun: Sun,
+  moon: Moon,
+  home: Home,
+  home2: Home, // 使用 Home 替代 Home2
+  navigation: Navigation,
+  navigation2: Navigation, // 使用 Navigation 替代 Navigation2
+  compass: Compass,
+  map: Map,
+  'map-pinned': MapPinned,
+  location: MapPin, // 使用 MapPin 替代 Location
+  location2: MapPin, // 使用 MapPin 替代 Location2
+  pin: Pin,
+  'pin-off': PinOff,
+  flag: Flag,
+  filter: Filter,
+  'sort-asc': SortAsc,
+  'sort-desc': SortDesc,
+  'more-horizontal': MoreHorizontal,
+  'more-vertical': MoreVertical,
+  menu: Menu,
+  'menu-square': Menu, // 使用 Menu 替代 MenuSquare
+  
+  // 应用图标映射
+  dollar: DollarSign, // 财务
+  schedule: Calendar, // APS 排程
+  certificate: Award, // 认证
+  'customer-service': Phone, // CRM 客户服务
+  thunderbolt: Zap, // EMS 能源管理
+  trophy: Trophy, // EPM 企业绩效
+  'cloud-server': Cloud, // IOT 物联网
+  experiment: FlaskConical, // LIMS/PDM 实验/研发（使用已有的 FlaskConical）
+  calculator: Calculator, // MRP 物料需求计划
+  project: FolderKanban, // PM 项目管理
+  'safety-certificate': ShieldCheck, // QMS 质量认证（使用已有的 ShieldCheck）
+  apartment: Building2, // SCM 供应链（使用已有的 Building2）
+  shopping: ShoppingCart, // SRM 供应商关系（使用已有的 ShoppingCart）
+  car: Car, // TMS 运输管理
+  
+  // 兼容性映射（支持多种命名方式）
+  'bar-chart': BarChart3,
+  'line-chart': TrendingUp,
+  'pie-chart': PieChart,
+  'trending-down': TrendingUp, // 使用 TrendingUp 替代 TrendingDown（Lucide 没有 TrendingDown）
 } as const;
 
 /**

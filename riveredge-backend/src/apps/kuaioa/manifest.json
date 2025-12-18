@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaioa/index.tsx",
     "route_path": "/apps/kuaioa",
-    "sort_order": 21,
+    "sort_order": 230,
     "menu_config": {
         "title": "快格轻OA",
         "icon": "appstore",
         "path": "/apps/kuaioa",
-        "children": [{
+        "children": [
+            {
                 "title": "流程审批",
                 "path": "/apps/kuaioa/approval",
-                "icon": "check-circle",
+                "icon": "list",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "审批流程",
                         "path": "/apps/kuaioa/approval/process",
                         "permission": "kuaioa:approval:view",
@@ -46,9 +48,10 @@
             {
                 "title": "文档管理",
                 "path": "/apps/kuaioa/document",
-                "icon": "file-text",
+                "icon": "file-code",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "文档存储",
                         "path": "/apps/kuaioa/document/storage",
                         "permission": "kuaioa:document:view",
@@ -77,9 +80,10 @@
             {
                 "title": "会议管理",
                 "path": "/apps/kuaioa/meeting",
-                "icon": "team",
+                "icon": "settings",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "会议预约",
                         "path": "/apps/kuaioa/meeting/booking",
                         "permission": "kuaioa:meeting:view",
@@ -108,9 +112,10 @@
             {
                 "title": "公告通知",
                 "path": "/apps/kuaioa/notice",
-                "icon": "notification",
+                "icon": "grid",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "公告发布",
                         "path": "/apps/kuaioa/notice/announcement",
                         "permission": "kuaioa:notice:view",

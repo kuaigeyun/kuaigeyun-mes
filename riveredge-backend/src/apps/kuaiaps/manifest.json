@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiaps/index.tsx",
     "route_path": "/apps/kuaiaps",
-    "sort_order": 7,
+    "sort_order": 60,
     "menu_config": {
         "title": "快格轻APS",
         "icon": "schedule",
         "path": "/apps/kuaiaps",
-        "children": [{
+        "children": [
+            {
                 "title": "产能规划",
                 "path": "/apps/kuaiaps/capacity",
-                "icon": "dashboard",
+                "icon": "trending-up",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "产能计算",
                         "path": "/apps/kuaiaps/capacity/calculate",
                         "permission": "kuaiaps:capacity:view",
@@ -36,7 +38,8 @@
                 "path": "/apps/kuaiaps/planning",
                 "icon": "calendar",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "主生产计划",
                         "path": "/apps/kuaiaps/planning/mps",
                         "permission": "kuaiaps:planning:view",
@@ -59,9 +62,10 @@
             {
                 "title": "资源调度",
                 "path": "/apps/kuaiaps/resource",
-                "icon": "cluster",
+                "icon": "network",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "设备调度",
                         "path": "/apps/kuaiaps/resource/equipment",
                         "permission": "kuaiaps:resource:view",
@@ -92,7 +96,8 @@
                 "path": "/apps/kuaiaps/adjustment",
                 "icon": "edit",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "计划变更",
                         "path": "/apps/kuaiaps/adjustment/change",
                         "permission": "kuaiaps:adjustment:view",

@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaisrm/index.tsx",
     "route_path": "/apps/kuaisrm",
-    "sort_order": 4,
+    "sort_order": 40,
     "menu_config": {
         "title": "快格轻SRM",
         "icon": "shopping",
         "path": "/apps/kuaisrm",
-        "children": [{
+        "children": [
+            {
                 "title": "采购订单",
                 "path": "/apps/kuaisrm/purchase",
-                "icon": "shopping-cart",
+                "icon": "order",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "订单列表",
                         "path": "/apps/kuaisrm/purchase/orders",
                         "permission": "kuaisrm:purchase:order:view",
@@ -40,9 +42,10 @@
             {
                 "title": "委外订单",
                 "path": "/apps/kuaisrm/outsourcing",
-                "icon": "export",
+                "icon": "list",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "委外订单",
                         "path": "/apps/kuaisrm/outsourcing/orders",
                         "permission": "kuaisrm:outsourcing:order:view",
@@ -65,9 +68,10 @@
             {
                 "title": "供应商协同",
                 "path": "/apps/kuaisrm/collaboration",
-                "icon": "team",
+                "icon": "grid",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "供应商门户",
                         "path": "/apps/kuaisrm/collaboration/portal",
                         "permission": "kuaisrm:collaboration:view",
@@ -90,9 +94,10 @@
             {
                 "title": "供应商评估",
                 "path": "/apps/kuaisrm/evaluation",
-                "icon": "star",
+                "icon": "layout",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "评估管理",
                         "path": "/apps/kuaisrm/evaluation/manage",
                         "permission": "kuaisrm:evaluation:view",
@@ -109,9 +114,10 @@
             {
                 "title": "采购分析",
                 "path": "/apps/kuaisrm/analysis",
-                "icon": "bar-chart",
+                "icon": "bar-chart-3",
                 "sort_order": 5,
-                "children": [{
+                "children": [
+                    {
                         "title": "成本分析",
                         "path": "/apps/kuaisrm/analysis/cost",
                         "permission": "kuaisrm:analysis:view",

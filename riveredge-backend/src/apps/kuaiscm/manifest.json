@@ -7,17 +7,19 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaiscm/index.tsx",
     "route_path": "/apps/kuaiscm",
-    "sort_order": 5,
+    "sort_order": 80,
     "menu_config": {
         "title": "快格轻SCM",
         "icon": "apartment",
         "path": "/apps/kuaiscm",
-        "children": [{
+        "children": [
+            {
                 "title": "供应链网络",
                 "path": "/apps/kuaiscm/network",
-                "icon": "apartment",
+                "icon": "list",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "网络建模",
                         "path": "/apps/kuaiscm/network/modeling",
                         "permission": "kuaiscm:network:view",
@@ -34,9 +36,10 @@
             {
                 "title": "需求预测",
                 "path": "/apps/kuaiscm/forecast",
-                "icon": "line-chart",
+                "icon": "grid",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "预测共享",
                         "path": "/apps/kuaiscm/forecast/share",
                         "permission": "kuaiscm:forecast:view",
@@ -59,9 +62,10 @@
             {
                 "title": "风险预警",
                 "path": "/apps/kuaiscm/risk",
-                "icon": "warning",
+                "icon": "layout",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "风险识别",
                         "path": "/apps/kuaiscm/risk/identification",
                         "permission": "kuaiscm:risk:view",
@@ -86,7 +90,8 @@
                 "path": "/apps/kuaiscm/inventory",
                 "icon": "database",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "库存视图",
                         "path": "/apps/kuaiscm/inventory/view",
                         "permission": "kuaiscm:inventory:view",
