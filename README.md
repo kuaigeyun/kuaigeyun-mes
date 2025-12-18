@@ -1,4 +1,4 @@
-# RiverEdge SaaS 多组织框架 🚀
+# 快格云MES 制造执行系统
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://www.python.org/)
@@ -7,14 +7,53 @@
 [![FastAPI](https://img.shields.io/badge/fastapi-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-15+-blue.svg)](https://www.postgresql.org/)
 
-**RiverEdge** 是一个企业级的 **SaaS 多组织框架**，专为构建可扩展的多租户企业应用而设计。采用 **FIR 技术栈**（FastAPI + Inngest + React），提供完整的插件化架构，支持快速构建和管理多种类型的业务应用。
+**快格云MES** 是一个功能完整的**制造执行系统**（Manufacturing Execution System），专为制造业数字化转型设计。基于现代化的技术栈（FastAPI + React + PostgreSQL），提供生产计划、工单管理、质量追溯、设备监控等核心功能，支持私有化部署和 SaaS 多租户模式。
 
-## 🏗️ 架构特色
+## 🎯 核心功能
 
-### 🔥 FIR 技术栈组合
-- **F** - **FastAPI**: 高性能异步 Web 框架
-- **I** - **Inngest**: 现代化任务调度系统
-- **R** - **React**: 现代化前端框架
+### 🏭 MES 制造执行系统（核心功能）
+
+#### 📋 生产计划与排程
+- ✅ **生产计划制定**: 支持多工厂、多产线的生产计划制定
+- ✅ **动态排程**: 基于设备能力、物料库存的智能排程
+- ✅ **资源分配**: 设备、人员、物料等资源的优化分配
+- ✅ **计划调整**: 支持计划变更和紧急插单
+
+#### 🎯 工单管理
+- ✅ **工单下发**: 从生产计划自动生成工单
+- ✅ **工单跟踪**: 完整的工单生命周期管理（待开工、进行中、完工、暂停等）
+- ✅ **进度监控**: 实时跟踪工单执行进度
+- ✅ **异常处理**: 工单异常记录和处理流程
+
+#### 🔍 质量追溯
+- ✅ **正向追溯**: 从原材料到成品的完整追溯链
+- ✅ **反向追溯**: 从成品追溯到原材料批次
+- ✅ **质量记录**: 检验数据、不合格品处理记录
+- ✅ **批次管理**: 支持批次号、序列号管理
+
+#### 📊 生产看板
+- ✅ **实时监控**: 生产进度、设备状态、质量指标实时展示
+- ✅ **数据可视化**: 产量统计、效率分析、质量趋势图表
+- ✅ **多维度展示**: 支持按车间、产线、设备等维度查看
+
+#### 🔌 设备集成
+- ✅ **工业协议支持**: OPC UA、Modbus、MQTT 等主流工业协议
+- ✅ **设备数据采集**: 实时采集设备运行数据
+- ✅ **设备状态监控**: 设备运行、停机、故障等状态实时监控
+- ✅ **告警管理**: 设备异常告警和处理
+
+#### 📱 移动端支持
+- ✅ **现场数据采集**: 支持移动端扫码、数据录入
+- ✅ **工单查看**: 移动端查看工单信息和操作
+- ✅ **质量检验**: 移动端质量数据录入
+
+### 🛠️ 技术架构
+
+- ✅ **后端**: FastAPI + Tortoise ORM + PostgreSQL
+- ✅ **前端**: React 18 + TypeScript + Ant Design
+- ✅ **任务调度**: Inngest 工作流引擎
+- ✅ **缓存**: Redis 缓存提升性能
+- ✅ **部署**: Kubernetes
 
 ### 🏢 多组织架构
 - ✅ **多租户数据隔离**: 每个组织的数据完全隔离
@@ -23,49 +62,19 @@
 
 ### 🔌 插件化架构
 - ✅ **热插拔应用**: 支持应用动态安装/卸载
-- ✅ **应用市场**: 内置应用中心，支持应用管理
 - ✅ **扩展性**: 易于添加新的业务模块
 
-### 📱 现代化技术栈
-- ✅ **后端**: FastAPI + Tortoise ORM + PostgreSQL
-- ✅ **前端**: React 18 + TypeScript + Ant Design
-- ✅ **任务调度**: Inngest + Redis
-- ✅ **部署**: Docker + Kubernetes
+## 📦 其他业务模块
 
-## 📦 内置应用模块
+除核心 MES 功能外，还包含以下业务模块（持续优化中）：
 
-RiverEdge 内置了 **20+ 个专业业务模块**，涵盖制造业核心业务场景：
-
-### 🏭 生产制造
-- **快格轻MES** - 制造执行系统
-- **快格轻APS** - 高级排产系统
-- **快格轻QMS** - 质量管理系统
-- **快格轻EAM** - 设备资产管理
-- **快格轻MI** - 制造智能
-
-### 📊 业务管理
-- **快格轻CRM** - 客户关系管理
-- **快格轻SCM** - 供应链协同
-- **快格轻SRM** - 供应商关系管理
-- **快格轻WMS** - 仓库管理系统
-- **快格轻TMS** - 运输管理系统
-
-### 💼 企业管理
-- **快格轻HRM** - 人力资源管理
-- **快格轻OA** - 协同办公
-- **快格轻EHS** - 环境健康安全
-- **快格轻EPM** - 企业绩效管理
-- **快格轻PM** - 项目管理
-
-### 🔬 专业服务
-- **快格轻PDM** - 产品数据管理
-- **快格轻LIMS** - 实验室信息管理
-- **快格轻IoT** - 物联网数据采集
-- **快格轻认证** - 企业认证管理
-- **基础数据管理** - 主数据统一管理
-
-### 💰 财务管理
-- **快格轻财务** - 财务核算与报表
+- **APS** - 高级排产系统
+- **QMS** - 质量管理系统
+- **EAM** - 设备资产管理
+- **WMS** - 仓库管理系统
+- **CRM** - 客户关系管理
+- **SCM** - 供应链协同
+- 以及其他 10+ 业务模块
 
 ## 🚀 快速开始
 
@@ -74,14 +83,14 @@ RiverEdge 内置了 **20+ 个专业业务模块**，涵盖制造业核心业务�
 - **Python**: 3.11+
 - **Node.js**: 22.0+
 - **PostgreSQL**: 15+
-- **Redis**: 7+
+- **Redis**: 6.2.6+ (推荐 6.x 版本，BSD 3-Clause 许可证，完全免费商业使用)
 - **操作系统**: Windows 10+ / macOS / Linux
 
 ### ⚡ 一键启动
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-org/riveredge.git
+git clone https://gitee.com/riveredge/riveredge.git
 cd riveredge
 
 # 一键启动所有服务（推荐）
@@ -234,7 +243,7 @@ VITE_INNGEST_HOST=127.0.0.1
 VITE_INNGEST_PORT=8300
 ```
 
-## 🎨 功能特性
+## 🎨 其他功能特性
 
 ### 🔐 安全特性
 - ✅ **JWT 身份认证**: 安全的 Token 认证机制
@@ -246,19 +255,15 @@ VITE_INNGEST_PORT=8300
 - ✅ **响应式设计**: 支持桌面端和移动端
 - ✅ **国际化**: 中英文双语支持
 - ✅ **主题定制**: 深色/浅色主题切换
-- ✅ **个性化**: 用户偏好设置
 
 ### 📊 数据管理
 - ✅ **实时同步**: WebSocket 实时数据更新
 - ✅ **缓存优化**: Redis 缓存提升性能
-- ✅ **数据备份**: 自动备份和恢复
 - ✅ **数据导出**: 支持多种格式导出
 
 ### 🔄 工作流引擎
-- ✅ **事件驱动**: 基于事件的异步处理
 - ✅ **任务调度**: 灵活的任务调度系统
 - ✅ **流程编排**: 可视化流程设计
-- ✅ **状态管理**: 复杂业务流程管理
 
 ## 🧪 测试
 
@@ -281,16 +286,6 @@ npm run test
 - **OpenAPI Schema**: http://localhost:8200/openapi.json
 
 ## 🚢 部署
-
-### Docker 部署
-
-```bash
-# 构建镜像
-docker build -t riveredge .
-
-# 运行容器
-docker run -p 8100:8100 -p 8200:8200 riveredge
-```
 
 ### Kubernetes 部署
 
@@ -339,8 +334,6 @@ kubectl get services
 
 <div align="center">
 
-**RiverEdge SaaS 多组织框架** © 2025. 由 [无锡快格信息技术有限公司](https://www.kuaige.com.cn) 开发并维护。
-
-[![Star History Chart](https://api.star-history.com/svg?repos=your-org/riveredge&type=Date)](https://star-history.com/#your-org/riveredge&Date)
+**快格云MES 制造执行系统** © 2025. 由 [无锡快格信息技术有限公司](https://www.kuaige.com.cn) 开发并维护。
 
 </div>
