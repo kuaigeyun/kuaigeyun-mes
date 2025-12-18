@@ -1027,6 +1027,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-pro-table .ant-pro-table {
           margin: 0 !important;
         }
+        .uni-table-pro-table .ant-pro-card {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+          border-radius: ${token.borderRadius}px !important;
+        }
         .uni-table-pro-table .ant-pro-table-list-toolbar {
           padding: 16px 0 !important;
           margin: 0 !important;
@@ -1046,6 +1050,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
         .uni-table-pro-table .ant-table-wrapper {
           margin: 0 !important;
+          width: 100% !important;
+          overflow-x: auto !important;
+        }
+        .uni-table-pro-table .ant-table {
+          width: 100% !important;
+          min-width: 100% !important;
+        }
+        .uni-table-pro-table .ant-table-container {
+          width: 100% !important;
+          overflow-x: auto !important;
         }
         .uni-table-pro-table .ant-pro-table-list-toolbar-container {
           padding-bottom: 0px !important;
@@ -1067,7 +1081,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           border-radius: ${token.borderRadius}px !important;
           overflow: hidden !important;
           background-color: var(--ant-colorBgContainer) !important;
-          box-shadow: none !important;
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
         }
         /* 隐藏搜索按钮和图标 - 实时搜索不需要 */
         html body .uni-table-fuzzy-search .ant-input-search-button,
@@ -1133,6 +1147,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input::placeholder {
           color: var(--ant-colorTextPlaceholder) !important;
           opacity: 0.5 !important;
+        }
+        /* 统一按钮阴影：高级搜索按钮、重置按钮、钉住的条件、视图按钮 */
+        /* 高级搜索和重置按钮（QuerySearchButton 组件内的按钮） */
+        .pro-table-button-container .ant-btn[type="text"]:not(.ant-btn-dangerous):not(.ant-radio-button-wrapper) {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+          border-radius: ${token.borderRadius}px !important;
+        }
+        /* 钉住的条件容器（包含多个按钮的 div） */
+        .pro-table-button-container > div > div[style*="borderRadius"] {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+        }
+        /* 视图切换按钮组 */
+        .pro-table-button-container .ant-radio-group {
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+          border-radius: ${token.borderRadius}px !important;
         }
       `}</style>
       <div 
@@ -1254,7 +1283,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           pageSizeOptions: ['10', '20', '50', '100'],
         }}
         scroll={{
-          x: 'max-content', // 水平滚动：当列宽度超出容器时显示水平滚动条
+          x: '100%', // 水平滚动：限制表格宽度为容器宽度，超出时显示水平滚动条
           y: tableScrollY, // 垂直滚动：当行数超出容器高度时显示垂直滚动条
         }}
         {...(() => {

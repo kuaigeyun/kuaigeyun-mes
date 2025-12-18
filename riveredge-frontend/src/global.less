@@ -137,14 +137,26 @@ html body ::-webkit-scrollbar-track,
   }
 }
 
-/* Spin 容器 padding 优化 */
-.roles-permissions-tree, .file-manager-tree ,.department-tree{
+/* 左侧面板树组件统一 padding - 所有在 left-panel-scroll-container 内的树组件 */
+.left-panel-scroll-container .ant-tree {
   padding: 10px !important;
 }
 
-:where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-treenode {
-  padding: 4px 0 !important;
+/* 树节点上下间距优化 - 仅应用于左侧面板的树，排除弹窗中的树 */
+.left-panel-scroll-container .ant-tree .ant-tree-treenode {
+  height: 32px !important;
+  line-height: 32px !important;
+  margin: calc(var(--ant-padding-xs) / 2) !important;
 }
+/* 排除弹窗中的树组件 */
+.ant-popover .ant-tree .ant-tree-treenode,
+.ant-pro-table-column-setting-list .ant-tree .ant-tree-treenode,
+.ant-dropdown .ant-tree .ant-tree-treenode {
+  height: auto !important;
+  line-height: normal !important;
+  margin: 0 !important;
+}
+
 
 /* Spin 嵌套容器 padding 优化 */
 .ant-spin-nested-loading > .ant-spin-container {

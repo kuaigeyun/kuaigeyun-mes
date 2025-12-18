@@ -6,19 +6,14 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { App, Button, Space, Modal, Drawer, Popconfirm, Tag, Input, theme, Tree, Breadcrumb, Menu, message } from 'antd';
+import { App, Button, Space, Modal, Drawer, Popconfirm, Tag, Input, theme, Tree, Menu, message, Spin, Empty } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
-  EyeOutlined,
   PlusOutlined,
   SearchOutlined,
   FolderOutlined,
-  FolderOpenOutlined,
   ReloadOutlined,
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
-  UpOutlined,
 } from '@ant-design/icons';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import type { DataNode, TreeProps } from 'antd/es/tree';
@@ -27,6 +22,7 @@ import type { MenuProps } from 'antd';
 // 导入现有组件
 import SafeProFormSelect from '@/components/SafeProFormSelect';
 import { UniTable } from '@/components/uni-table';
+import { TwoColumnLayout } from '@/components/two-column-layout';
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '@/apps/master-data/services/material';
@@ -71,7 +67,6 @@ const MaterialsManagementPage: React.FC = () => {
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([]);
   const [materialGroupsLoading, setMaterialGroupsLoading] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
-  const [currentPath, setCurrentPath] = useState<string[]>(['全部物料']);
 
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -123,12 +118,9 @@ const MaterialsManagementPage: React.FC = () => {
 
       if (key === 'all') {
         setSelectedGroupId(null);
-        setCurrentPath(['全部物料']);
       } else {
         const groupId = parseInt(key);
         setSelectedGroupId(groupId);
-        const group = materialGroups.find(g => g.id === groupId);
-        setCurrentPath(['全部物料', group ? group.name : '分组']);
       }
 
       // 刷新物料列表
@@ -423,171 +415,111 @@ const MaterialsManagementPage: React.FC = () => {
   ];
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        height: 'calc(100vh - 96px)',
-        padding: '16px',
-        margin: 0,
-        boxSizing: 'border-box',
-        borderRadius: token.borderRadiusLG || token.borderRadius,
-        overflow: 'hidden',
-      }}
-    >
-      {/* 左侧物料分组树 */}
-      <div
-        style={{
-          width: '300px',
-          flexShrink: 0,
-          borderTop: `1px solid ${token.colorBorder}`,
-          borderBottom: `1px solid ${token.colorBorder}`,
-          borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: 'none',
-          backgroundColor: token.colorFillAlter || '#fafafa',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
-          borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* 搜索栏 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Input
-            placeholder="搜索分组"
-            prefix={<SearchOutlined />}
-            value={groupSearchValue}
-            onChange={(e) => setGroupSearchValue(e.target.value)}
-            allowClear
-            size="middle"
-          />
-        </div>
-
-        {/* 分组树 */}
-        <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          <Tree
-            className="material-group-tree"
-            treeData={filteredGroupTreeData.length > 0 || !groupSearchValue.trim() ? filteredGroupTreeData : groupTreeData}
-            selectedKeys={selectedGroupKeys}
-            expandedKeys={expandedKeys}
-            onSelect={handleGroupSelect}
-            onExpand={setExpandedKeys}
-            showIcon
-            blockNode
-            onRightClick={(info) => {
-              const key = info.node.key as string;
-              if (key !== 'all') {
-                const groupId = parseInt(key);
-                const group = materialGroups.find(g => g.id === groupId);
-                handleGroupContextMenu(info.event as any, group || null);
-              }
-            }}
-          />
-        </div>
-      </div>
-
-      {/* 右侧物料管理列表 */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: token.colorBgContainer,
-          borderTop: `1px solid ${token.colorBorder}`,
-          borderBottom: `1px solid ${token.colorBorder}`,
-          borderRight: `1px solid ${token.colorBorder}`,
-          borderLeft: 'none',
-          borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
-          borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
-          boxSizing: 'border-box',
-          minWidth: 0,
-        }}
-      >
-        {/* 顶部工具栏 */}
-        <div
-          style={{
-            borderBottom: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} disabled />
-            <Button icon={<ArrowRightOutlined />} disabled />
-            <Button icon={<UpOutlined />} disabled />
-            <Button icon={<ReloadOutlined />} onClick={() => actionRef.current?.reload()} />
-          </Space>
-
-          {/* 地址栏 */}
-          <Breadcrumb
-            style={{ flex: 1 }}
-            items={currentPath.map((path, index) => ({
-              title: index === currentPath.length - 1 ? (
-                <span style={{ fontWeight: 500 }}>{path}</span>
-              ) : (
-                <a
-                  onClick={() => {
-                    if (index === 0) {
-                      setSelectedGroupKeys(['all']);
-                      setSelectedGroupId(null);
-                      setCurrentPath(['全部物料']);
-                      actionRef.current?.reload();
-                    }
-                  }}
-                >
-                  {path}
-                </a>
-              ),
-            }))}
-          />
-        </div>
-
-        {/* 操作工具栏 */}
-        <div
-          style={{
-            borderBottom: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
+    <>
+    <TwoColumnLayout
+      leftPanel={{
+        search: {
+          placeholder: '搜索分组',
+          value: groupSearchValue,
+          onChange: setGroupSearchValue,
+          allowClear: true,
+        },
+        actions: [
           <Button
+            key="create-group"
             type="primary"
             icon={<PlusOutlined />}
-            onClick={handleCreateMaterial}
-          >
-            新建物料
-          </Button>
-          <Button
-            icon={<PlusOutlined />}
+            block
             onClick={handleCreateGroup}
           >
             新建分组
-          </Button>
-          <Button
-            danger
-            disabled={selectedRowKeys.length === 0}
-            icon={<DeleteOutlined />}
-            onClick={() => {
-              if (selectedRowKeys.length > 0) {
-                // TODO: 实现批量删除
-                messageApi.info('批量删除功能开发中');
-              }
-            }}
-          >
-            删除
-          </Button>
-        </div>
-
-        {/* 物料列表 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+          </Button>,
+        ],
+        tree: {
+          className: 'material-group-tree',
+          treeData: filteredGroupTreeData.length > 0 || !groupSearchValue.trim() ? filteredGroupTreeData : groupTreeData,
+          selectedKeys: selectedGroupKeys,
+          expandedKeys: expandedKeys,
+          onSelect: handleGroupSelect,
+          onExpand: setExpandedKeys,
+          showIcon: true,
+          blockNode: true,
+          loading: materialGroupsLoading,
+          onRightClick: (info) => {
+            const key = info.node.key as string;
+            if (key !== 'all') {
+              const groupId = parseInt(key);
+              const group = materialGroups.find(g => g.id === groupId);
+              handleGroupContextMenu(info.event as any, group || null);
+            }
+          },
+        },
+        width: 300,
+        minWidth: 200,
+      }}
+      rightPanel={{
+        header: {
+          left: (
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                loadMaterialGroups();
+                actionRef.current?.reload();
+              }}
+            >
+              刷新
+            </Button>
+          ),
+          center: selectedGroupId ? (
+            <Space>
+              {(() => {
+                const group = materialGroups.find(g => g.id === selectedGroupId);
+                return group ? (
+                  <>
+                    <span style={{ fontWeight: 500 }}>{group.name}</span>
+                    <Tag color="blue">{group.code}</Tag>
+                  </>
+                ) : (
+                  <span style={{ color: token.colorTextSecondary }}>分组信息加载中...</span>
+                );
+              })()}
+            </Space>
+          ) : (
+            <Space>
+              <span style={{ fontWeight: 500 }}>全部物料</span>
+              <Tag color="default">全部</Tag>
+            </Space>
+          ),
+          // 注意：操作按钮已移至 UniTable 的 headerActions 中
+        },
+        content: (
           <UniTable<Material>
             actionRef={actionRef}
             columns={columns}
+            headerActions={
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleCreateMaterial}
+                >
+                  新建物料
+                </Button>
+                <Button
+                  danger
+                  disabled={selectedRowKeys.length === 0}
+                  icon={<DeleteOutlined />}
+                  onClick={() => {
+                    if (selectedRowKeys.length > 0) {
+                      // TODO: 实现批量删除
+                      messageApi.info('批量删除功能开发中');
+                    }
+                  }}
+                >
+                  删除
+                </Button>
+              </Space>
+            }
             request={async (params, sort, filter, searchFormValues) => {
               const apiParams: any = {
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -633,27 +565,16 @@ const MaterialsManagementPage: React.FC = () => {
               onChange: setSelectedRowKeys,
             }}
           />
-        </div>
-
-        {/* 底部状态栏 */}
-        <div
-          style={{
-            borderTop: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '12px',
-            color: token.colorTextSecondary,
-          }}
-        >
+        ),
+        footer: (
           <span>
             {selectedRowKeys.length > 0
               ? `已选择 ${selectedRowKeys.length} 项`
               : '物料列表'}
           </span>
-        </div>
-      </div>
+        ),
+      }}
+    />
 
       {/* 分组创建/编辑 Modal */}
       <Modal
@@ -1039,7 +960,7 @@ const MaterialsManagementPage: React.FC = () => {
           </Menu>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
