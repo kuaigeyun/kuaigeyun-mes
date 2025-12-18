@@ -65,6 +65,7 @@ import { LANGUAGE_MAP } from '../config/i18n';
 import i18n, { refreshTranslations } from '../config/i18n';
 import { getMenuTree, MenuTree } from '../services/menu';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
+import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
 
 // 权限守卫组件
@@ -823,19 +824,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     
     // 优先使用 menu.icon 字段（如果存在）
     if (menu.icon) {
-      // 首先尝试直接使用 lucide 图标名称（如 "database", "warehouse" 等）
-      // 支持带连字符的图标名称（如 "arrow-down-circle", "map-pin" 等）
-      // 使用字符串索引访问，确保带连字符的键名也能正确访问
+      // 首先尝试从预定义的 ManufacturingIcons 中获取
       const iconKey = menu.icon as keyof typeof ManufacturingIcons;
       const IconComponent = ManufacturingIcons[iconKey];
       if (IconComponent) {
         iconElement = React.createElement(IconComponent, { size: 16 });
       } else {
-        // 调试：如果图标未找到，输出警告
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(`图标未找到: ${menu.icon}，菜单: ${menu.name || menu.path}`);
-        }
-        // 如果不是 lucide 图标名称，尝试映射 Ant Design 图标名称
+        // 如果预定义映射中没有，尝试直接从 Lucide Icons 中获取（全量导入支持）
+        // 需要动态导入 Lucide Icons（因为全量导入会增加打包体积，所以按需导入）
+        // 注意：这里使用同步方式，因为 convertMenuTreeToMenuDataItem 是同步函数
+        // 实际上，由于 manufacturingIcons.tsx 已经全量导入了，我们可以直接使用
+        // 但为了更好的性能，这里先尝试从预定义映射获取，失败后再尝试直接访问
+        
+        // 尝试映射 Ant Design 图标名称
         const lucideIconMap: Record<string, React.ComponentType<any>> = {
           'DashboardOutlined': ManufacturingIcons.dashboard,
           'UserOutlined': ManufacturingIcons.user,
@@ -867,6 +868,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         const IconComponent = lucideIconMap[menu.icon];
         if (IconComponent) {
           iconElement = React.createElement(IconComponent, { size: 16 });
+        } else {
+          // 如果预定义映射和 Ant Design 映射都没有，尝试直接从 Lucide Icons 中获取
+          // 支持 PascalCase 图标名（如 "Factory", "Home"）或 kebab-case（如 "factory", "home"）
+          const iconName = menu.icon as string;
+          
+          // 尝试直接访问（PascalCase）
+          let DirectIcon = (LucideIcons as any)[iconName];
+          
+          // 如果直接访问失败，尝试转换为 PascalCase
+          if (!DirectIcon) {
+            const pascalCaseName = iconName
+              .split(/[-_]/)
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join('');
+            DirectIcon = (LucideIcons as any)[pascalCaseName];
+          }
+          
+          if (DirectIcon && DirectIcon !== React.Fragment && typeof DirectIcon === 'function') {
+            iconElement = React.createElement(DirectIcon, { size: 16 });
+          } else if (process.env.NODE_ENV === 'development') {
+            console.warn(`图标未找到: ${menu.icon}，菜单: ${menu.name || menu.path}。提示：可以直接使用 Lucide 图标名（PascalCase），如 "Factory", "Home" 等`);
+          }
         }
       }
     }
