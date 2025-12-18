@@ -4,409 +4,299 @@
  * 使用 Lucide React 提供统一的图标风格
  * 左侧菜单使用 Lucide 图标，其他系统布局图标使用 Ant Design Icons
  * 包含：设备、生产线、工具、工业流程等图标
+ * 
+ * 全量导入 Lucide React 所有图标，避免导入错误并支持动态访问
  */
 
 import React from 'react';
-// Lucide React - 统一的图标库，用于左侧菜单
-// Lucide React - 统一的图标库，用于左侧菜单
-import {
-  Factory,
-  Building2,
-  Cog,
-  Settings,
-  Settings2,
-  Wrench,
-  Hammer,
-  Warehouse,
-  Box,
-  Package,
-  Truck,
-  Cpu,
-  Zap,
-  FlaskConical,
-  Flame,
-  HardHat,
-  Shield,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  TrendingUp,
-  BarChart3,
-  PieChart,
-  ClipboardCheck,
-  ClipboardList,
-  FileText,
-  Receipt,
-  ShoppingCart,
-  ShoppingBag,
-  Construction,
-  Bot,
-  // 通用图标，用于替代 Ant Design Icons
-  LayoutDashboard,
-  User,
-  Users,
-  UserCog,
-  Crown,
-  Grid3x3,
-  Sliders,
-  Store,
-  Database,
-  Monitor,
-  Globe,
-  Network,
-  Code,
-  Printer,
-  History,
-  Calendar,
-  PlayCircle,
-  Inbox,
-  Bell,
-  Mail,
-  LogIn,
-  LogOut,
-  List,
-  FileCode,
-  Key,
-  Globe2,
-  Activity,
-  Server,
-  Gauge,
-  Workflow,
-  Layers,
-  Package2,
-  Boxes,
-  // 新增常用图标
-  Search,
-  Edit,
-  FileCheck,
-  RotateCcw,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  MapPin,
-  UserPlus,
-  Filter,
-  Headphones,
-  Pencil,
-  Book,
-  BookOpen,
-  RefreshCw,
-  FileSearch,
-  FileEdit,
-  FilePlus,
-  FileMinus,
-  Folder,
-  FolderOpen,
-  Grid,
-  Layout,
-  LayoutGrid,
-  Target,
-  Award,
-  Star,
-  Check,
-  X,
-  Plus,
-  Minus,
-  ArrowRight,
-  ArrowLeft,
-  ArrowUp,
-  ArrowDown,
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldOff,
-  AlertCircle,
-  Info,
-  HelpCircle,
-  CheckCircle,
-  Clock,
-  Timer,
-  CalendarDays,
-  Sun,
-  Moon,
-  Home,
-  Navigation,
-  Compass,
-  Map,
-  MapPinned,
-  Pin,
-  PinOff,
-  Flag,
-  SortAsc,
-  SortDesc,
-  MoreHorizontal,
-  MoreVertical,
-  Menu,
-  // WMS 相关图标
-  Download,
-  Upload,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  // 应用图标
-  DollarSign,
-  Phone,
-  Trophy,
-  Cloud,
-  Calculator,
-  FolderKanban,
-  Car,
-} from 'lucide-react';
+// Lucide React - 全量导入所有图标
+import * as LucideIcons from 'lucide-react';
+
+/**
+ * 从 Lucide Icons 获取图标组件
+ * 支持动态访问所有 Lucide 图标
+ * 
+ * @param iconName - 图标名称（PascalCase，如 'Factory', 'Home'）
+ * @returns 图标组件，如果不存在则返回默认图标
+ */
+function getLucideIcon(iconName: string): React.ComponentType<any> {
+  // 尝试直接访问
+  const Icon = (LucideIcons as any)[iconName];
+  if (Icon) {
+    return Icon;
+  }
+  
+  // 如果直接访问失败，尝试转换为 PascalCase
+  const pascalCaseName = iconName
+    .split(/[-_]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+  
+  const PascalIcon = (LucideIcons as any)[pascalCaseName];
+  if (PascalIcon) {
+    return PascalIcon;
+  }
+  
+  // 如果都找不到，返回默认图标
+  console.warn(`图标 "${iconName}" 在 Lucide Icons 中不存在，使用默认图标 Factory`);
+  return LucideIcons.Factory || React.Fragment;
+}
 
 /**
  * 制造业图标映射
  * 提供常用制造业场景的图标映射
  * 所有图标使用 Lucide React，确保风格统一
+ * 
+ * 使用动态访问 Lucide Icons，支持所有可用图标
  */
 export const ManufacturingIcons = {
   // 工厂和设备
-  factory: Factory,
-  manufacturing: Factory,
-  industry: Factory,
-  building: Building2,
-  factoryBuilding: Building2,
+  factory: getLucideIcon('Factory'),
+  manufacturing: getLucideIcon('Factory'),
+  industry: getLucideIcon('Factory'),
+  building: getLucideIcon('Building2'),
+  factoryBuilding: getLucideIcon('Building2'),
   
   // 机器和设备
-  machine: Cog,
-  equipment: Cog,
-  gear: Cog,
-  cogs: Settings, // Lucide 没有 Cogs，使用 Settings 替代
-  robot: Bot, // Lucide 没有 Robot，使用 Bot 替代
-  automation: Bot,
+  machine: getLucideIcon('Cog'),
+  equipment: getLucideIcon('Cog'),
+  gear: getLucideIcon('Cog'),
+  cogs: getLucideIcon('Settings'), // Lucide 没有 Cogs，使用 Settings 替代
+  robot: getLucideIcon('Bot'), // Lucide 没有 Robot，使用 Bot 替代
+  automation: getLucideIcon('Bot'),
   
   // 工具和维修
-  tool: Wrench, // Lucide 没有 Tool，使用 Wrench 替代
-  tools: Wrench,
-  toolbox: Wrench, // Lucide 没有 Tool，使用 Wrench 替代
-  wrench: Wrench,
-  hammer: Hammer,
-  maintenance: Wrench,
-  repair: Hammer,
+  tool: getLucideIcon('Wrench'), // Lucide 没有 Tool，使用 Wrench 替代
+  tools: getLucideIcon('Wrench'),
+  toolbox: getLucideIcon('Wrench'), // Lucide 没有 Tool，使用 Wrench 替代
+  wrench: getLucideIcon('Wrench'),
+  hammer: getLucideIcon('Hammer'),
+  maintenance: getLucideIcon('Wrench'),
+  repair: getLucideIcon('Hammer'),
   
   // 生产线和装配
-  productionLine: Settings, // Lucide 没有 Cogs，使用 Settings 替代
-  assembly: Settings,
-  conveyorBelt: Settings,
-  production: TrendingUp,
-  workflow: Workflow, // 工作流/工艺路线
-  process: Workflow, // 工艺管理
+  productionLine: getLucideIcon('Settings'), // Lucide 没有 Cogs，使用 Settings 替代
+  assembly: getLucideIcon('Settings'),
+  conveyorBelt: getLucideIcon('Settings'),
+  production: getLucideIcon('TrendingUp'),
+  workflow: getLucideIcon('Workflow'), // 工作流/工艺路线
+  process: getLucideIcon('Workflow'), // 工艺管理
   
   // 仓储和物流
-  warehouse: Warehouse,
-  storage: Warehouse,
-  inventory: Box,
-  package: Package,
-  box: Box,
-  boxes: Box,
-  pallet: Box,
-  storagePallet: Box,
+  warehouse: getLucideIcon('Warehouse'),
+  storage: getLucideIcon('Warehouse'),
+  inventory: getLucideIcon('Box'),
+  package: getLucideIcon('Package'),
+  box: getLucideIcon('Box'),
+  boxes: getLucideIcon('Box'),
+  pallet: getLucideIcon('Box'),
+  storagePallet: getLucideIcon('Box'),
   
   // 运输和配送
-  truck: Truck,
-  truckLoading: Truck,
-  truckMoving: Truck,
-  truckPickup: Truck,
-  shipping: Truck,
-  shippingFast: Truck,
+  truck: getLucideIcon('Truck'),
+  truckLoading: getLucideIcon('Truck'),
+  truckMoving: getLucideIcon('Truck'),
+  truckPickup: getLucideIcon('Truck'),
+  shipping: getLucideIcon('Truck'),
+  shippingFast: getLucideIcon('Truck'),
   
   // 能源和动力
-  power: Zap,
-  electricity: Zap,
-  bolt: Zap,
+  power: getLucideIcon('Zap'),
+  electricity: getLucideIcon('Zap'),
+  bolt: getLucideIcon('Zap'),
   
   // 化学和实验室
-  chemical: FlaskConical,
-  lab: FlaskConical,
-  flask: FlaskConical,
-  furnace: Flame,
-  fire: Flame,
+  chemical: getLucideIcon('FlaskConical'),
+  lab: getLucideIcon('FlaskConical'),
+  flask: getLucideIcon('FlaskConical'),
+  furnace: getLucideIcon('Flame'),
+  fire: getLucideIcon('Flame'),
   
   // 电子和芯片
-  electronics: Cpu,
-  microchip: Cpu,
+  electronics: getLucideIcon('Cpu'),
+  microchip: getLucideIcon('Cpu'),
   
   // 安全和质量
-  safety: HardHat,
-  hardHat: HardHat,
-  quality: Shield,
-  shield: Shield,
-  inspection: ClipboardCheck,
+  safety: getLucideIcon('HardHat'),
+  hardHat: getLucideIcon('HardHat'),
+  quality: getLucideIcon('Shield'),
+  shield: getLucideIcon('Shield'),
+  inspection: getLucideIcon('ClipboardCheck'),
   
   // 订单和交付
-  order: FileText,
-  delivery: Receipt,
-  receipt: Receipt,
-  invoice: FileText,
-  shoppingCart: ShoppingCart,
-  shoppingBag: ShoppingBag,
+  order: getLucideIcon('FileText'),
+  delivery: getLucideIcon('Receipt'),
+  receipt: getLucideIcon('Receipt'),
+  invoice: getLucideIcon('FileText'),
+  shoppingCart: getLucideIcon('ShoppingCart'),
+  shoppingBag: getLucideIcon('ShoppingBag'),
   
   // 分析和报告
-  analytics: BarChart3,
-  report: PieChart,
-  chartLine: TrendingUp,
-  chartBar: BarChart3,
-  chartPie: PieChart,
+  analytics: getLucideIcon('BarChart3'),
+  report: getLucideIcon('PieChart'),
+  chartLine: getLucideIcon('TrendingUp'),
+  chartBar: getLucideIcon('BarChart3'),
+  chartPie: getLucideIcon('PieChart'),
   
   // 清单和检查
-  checklist: ClipboardList,
-  clipboardCheck: ClipboardCheck,
-  clipboardList: ClipboardList,
+  checklist: getLucideIcon('ClipboardList'),
+  clipboardCheck: getLucideIcon('ClipboardCheck'),
+  clipboardList: getLucideIcon('ClipboardList'),
   
   // 状态图标
-  checkCircle: CheckCircle2,
-  timesCircle: XCircle,
-  exclamationTriangle: AlertTriangle,
+  checkCircle: getLucideIcon('CheckCircle2'),
+  timesCircle: getLucideIcon('XCircle'),
+  exclamationTriangle: getLucideIcon('AlertTriangle'),
   
   // 设置和配置
-  mdSettings: Settings,
-  mdConfiguration: Settings2,
-  mdPrecision: Cog,
-  mdFactory: Factory,
-  mdManufacturing: Factory,
-  mdBuild: Construction,
-  mdMaintenance: Wrench,
-  mdConstruction: Construction,
-  mdWorkshop: Construction,
-  mdEngineering: Cog,
-  mdDesign: Cog,
-  mdPrecisionManufacturing: Cog,
+  mdSettings: getLucideIcon('Settings'),
+  mdConfiguration: getLucideIcon('Settings2'),
+  mdPrecision: getLucideIcon('Cog'),
+  mdFactory: getLucideIcon('Factory'),
+  mdManufacturing: getLucideIcon('Factory'),
+  mdBuild: getLucideIcon('Construction'),
+  mdMaintenance: getLucideIcon('Wrench'),
+  mdConstruction: getLucideIcon('Construction'),
+  mdWorkshop: getLucideIcon('Construction'),
+  mdEngineering: getLucideIcon('Cog'),
+  mdDesign: getLucideIcon('Cog'),
+  mdPrecisionManufacturing: getLucideIcon('Cog'),
   
   // 通用图标映射（用于替代 Ant Design Icons）
-  dashboard: Gauge, // 使用工业仪表盘图标，更符合制造业
-  user: User,
-  users: Users,
-  team: Users,
-  userSwitch: UserCog,
-  crown: Crown,
-  appstore: Factory, // MES 系统使用工厂图标，更工业
-  control: Cog, // 系统配置使用齿轮图标，更工业
-  shop: Store,
-  database: Database,
-  monitor: Monitor,
-  global: Globe,
-  api: Network,
-  code: Code,
-  printer: Printer,
-  history: History,
-  calendar: Calendar,
-  playCircle: PlayCircle,
-  inbox: Inbox,
-  bell: Bell,
-  mail: Mail,
-  login: LogIn,
-  logout: LogOut,
-  list: List,
-  fileCode: FileCode,
-  key: Key,
-  globe2: Globe2,
-  activity: Activity,
-  server: Server,
+  dashboard: getLucideIcon('Gauge'), // 使用工业仪表盘图标，更符合制造业
+  user: getLucideIcon('User'),
+  users: getLucideIcon('Users'),
+  team: getLucideIcon('Users'),
+  userSwitch: getLucideIcon('UserCog'),
+  crown: getLucideIcon('Crown'),
+  appstore: getLucideIcon('Factory'), // MES 系统使用工厂图标，更工业
+  control: getLucideIcon('Cog'), // 系统配置使用齿轮图标，更工业
+  shop: getLucideIcon('Store'),
+  database: getLucideIcon('Database'),
+  monitor: getLucideIcon('Monitor'),
+  global: getLucideIcon('Globe'),
+  api: getLucideIcon('Network'),
+  code: getLucideIcon('Code'),
+  printer: getLucideIcon('Printer'),
+  history: getLucideIcon('History'),
+  calendar: getLucideIcon('Calendar'),
+  playCircle: getLucideIcon('PlayCircle'),
+  inbox: getLucideIcon('Inbox'),
+  bell: getLucideIcon('Bell'),
+  mail: getLucideIcon('Mail'),
+  login: getLucideIcon('LogIn'),
+  logout: getLucideIcon('LogOut'),
+  list: getLucideIcon('List'),
+  fileCode: getLucideIcon('FileCode'),
+  key: getLucideIcon('Key'),
+  globe2: getLucideIcon('Globe2'),
+  activity: getLucideIcon('Activity'),
+  server: getLucideIcon('Server'),
   
   // 增强工业关联度的图标
-  industrialDashboard: Gauge, // 工业仪表盘
-  mesSystem: Factory, // MES 制造执行系统
-  systemConfig: Cog, // 系统配置（齿轮）
-  operationsCenter: Factory, // 运营中心（工厂）
+  industrialDashboard: getLucideIcon('Gauge'), // 工业仪表盘
+  mesSystem: getLucideIcon('Factory'), // MES 制造执行系统
+  systemConfig: getLucideIcon('Cog'), // 系统配置（齿轮）
+  operationsCenter: getLucideIcon('Factory'), // 运营中心（工厂）
   
   // 新增图标映射
-  search: Search,
-  edit: Edit,
-  'file-check': FileCheck,
-  'rotate-ccw': RotateCcw,
-  'arrow-down-circle': ArrowDownCircle,
-  'arrow-up-circle': ArrowUpCircle,
-  'map-pin': MapPin,
-  'user-plus': UserPlus,
-  funnel: Filter,
-  funnelPlot: Filter,
-  headphones: Headphones,
-  pencil: Pencil,
-  book: Book,
-  'book-open': BookOpen,
-  'refresh-cw': RefreshCw,
-  'rotate-cw': RotateCcw, // 顺时针旋转（委外物料）
-  download: Download,
-  upload: Upload,
-  'arrow-down-to-line': ArrowDownToLine, // 入库（向下箭头到线）
-  'arrow-up-from-line': ArrowUpFromLine, // 出库（向上箭头从线）
-  'file-search': FileSearch,
-  'file-edit': FileEdit,
-  'file-plus': FilePlus,
-  'file-minus': FileMinus,
-  folder: Folder,
-  'folder-open': FolderOpen,
-  grid: Grid,
-  layout: Layout,
-  'layout-grid': LayoutGrid,
-  target: Target,
-  award: Award,
-  star: Star,
-  check: Check,
-  x: X,
-  plus: Plus,
-  minus: Minus,
-  'arrow-right': ArrowRight,
-  'arrow-left': ArrowLeft,
-  'arrow-up': ArrowUp,
-  'arrow-down': ArrowDown,
-  eye: Eye,
-  'eye-off': EyeOff,
-  lock: Lock,
-  unlock: Unlock,
-  'shield-check': ShieldCheck,
-  'shield-alert': ShieldAlert,
-  'shield-off': ShieldOff,
-  'alert-circle': AlertCircle,
-  info: Info,
-  'help-circle': HelpCircle,
-  'check-circle': CheckCircle,
-  clock: Clock,
-  timer: Timer,
-  'calendar-days': CalendarDays,
-  sun: Sun,
-  moon: Moon,
-  home: Home,
-  home2: Home, // 使用 Home 替代 Home2
-  navigation: Navigation,
-  navigation2: Navigation, // 使用 Navigation 替代 Navigation2
-  compass: Compass,
-  map: Map,
-  'map-pinned': MapPinned,
-  location: MapPin, // 使用 MapPin 替代 Location
-  location2: MapPin, // 使用 MapPin 替代 Location2
-  pin: Pin,
-  'pin-off': PinOff,
-  flag: Flag,
-  filter: Filter,
-  'sort-asc': SortAsc,
-  'sort-desc': SortDesc,
-  'more-horizontal': MoreHorizontal,
-  'more-vertical': MoreVertical,
-  menu: Menu,
-  'menu-square': Menu, // 使用 Menu 替代 MenuSquare
+  search: getLucideIcon('Search'),
+  edit: getLucideIcon('Edit'),
+  'file-check': getLucideIcon('FileCheck'),
+  'rotate-ccw': getLucideIcon('RotateCcw'),
+  'arrow-down-circle': getLucideIcon('ArrowDownCircle'),
+  'arrow-up-circle': getLucideIcon('ArrowUpCircle'),
+  'map-pin': getLucideIcon('MapPin'),
+  'user-plus': getLucideIcon('UserPlus'),
+  funnel: getLucideIcon('Filter'),
+  funnelPlot: getLucideIcon('Filter'),
+  headphones: getLucideIcon('Headphones'),
+  pencil: getLucideIcon('Pencil'),
+  book: getLucideIcon('Book'),
+  'book-open': getLucideIcon('BookOpen'),
+  'refresh-cw': getLucideIcon('RefreshCw'),
+  'rotate-cw': getLucideIcon('RotateCcw'), // 顺时针旋转（委外物料）
+  download: getLucideIcon('Download'),
+  upload: getLucideIcon('Upload'),
+  'arrow-down-to-line': getLucideIcon('ArrowDownToLine'), // 入库（向下箭头到线）
+  'arrow-up-from-line': getLucideIcon('ArrowUpFromLine'), // 出库（向上箭头从线）
+  'file-search': getLucideIcon('FileSearch'),
+  'file-edit': getLucideIcon('FileEdit'),
+  'file-plus': getLucideIcon('FilePlus'),
+  'file-minus': getLucideIcon('FileMinus'),
+  folder: getLucideIcon('Folder'),
+  'folder-open': getLucideIcon('FolderOpen'),
+  grid: getLucideIcon('Grid'),
+  layout: getLucideIcon('Layout'),
+  'layout-grid': getLucideIcon('LayoutGrid'),
+  target: getLucideIcon('Target'),
+  award: getLucideIcon('Award'),
+  star: getLucideIcon('Star'),
+  check: getLucideIcon('Check'),
+  x: getLucideIcon('X'),
+  plus: getLucideIcon('Plus'),
+  minus: getLucideIcon('Minus'),
+  'arrow-right': getLucideIcon('ArrowRight'),
+  'arrow-left': getLucideIcon('ArrowLeft'),
+  'arrow-up': getLucideIcon('ArrowUp'),
+  'arrow-down': getLucideIcon('ArrowDown'),
+  eye: getLucideIcon('Eye'),
+  'eye-off': getLucideIcon('EyeOff'),
+  lock: getLucideIcon('Lock'),
+  unlock: getLucideIcon('Unlock'),
+  'shield-check': getLucideIcon('ShieldCheck'),
+  'shield-alert': getLucideIcon('ShieldAlert'),
+  'shield-off': getLucideIcon('ShieldOff'),
+  'alert-circle': getLucideIcon('AlertCircle'),
+  info: getLucideIcon('Info'),
+  'help-circle': getLucideIcon('HelpCircle'),
+  'check-circle': getLucideIcon('CheckCircle'),
+  clock: getLucideIcon('Clock'),
+  timer: getLucideIcon('Timer'),
+  'calendar-days': getLucideIcon('CalendarDays'),
+  sun: getLucideIcon('Sun'),
+  moon: getLucideIcon('Moon'),
+  home: getLucideIcon('Home'),
+  home2: getLucideIcon('Home'), // 使用 Home 替代 Home2
+  navigation: getLucideIcon('Navigation'),
+  navigation2: getLucideIcon('Navigation'), // 使用 Navigation 替代 Navigation2
+  compass: getLucideIcon('Compass'),
+  map: getLucideIcon('Map'),
+  'map-pinned': getLucideIcon('MapPinned'),
+  location: getLucideIcon('MapPin'), // 使用 MapPin 替代 Location
+  location2: getLucideIcon('MapPin'), // 使用 MapPin 替代 Location2
+  pin: getLucideIcon('Pin'),
+  'pin-off': getLucideIcon('PinOff'),
+  flag: getLucideIcon('Flag'),
+  filter: getLucideIcon('Filter'),
+  'sort-asc': getLucideIcon('SortAsc'),
+  'sort-desc': getLucideIcon('SortDesc'),
+  'more-horizontal': getLucideIcon('MoreHorizontal'),
+  'more-vertical': getLucideIcon('MoreVertical'),
+  menu: getLucideIcon('Menu'),
+  'menu-square': getLucideIcon('Menu'), // 使用 Menu 替代 MenuSquare
   
   // 应用图标映射
-  dollar: DollarSign, // 财务
-  schedule: Calendar, // APS 排程
-  certificate: Award, // 认证
-  'customer-service': Phone, // CRM 客户服务
-  thunderbolt: Zap, // EMS 能源管理
-  trophy: Trophy, // EPM 企业绩效
-  'cloud-server': Cloud, // IOT 物联网
-  experiment: FlaskConical, // LIMS/PDM 实验/研发（使用已有的 FlaskConical）
-  calculator: Calculator, // MRP 物料需求计划
-  project: FolderKanban, // PM 项目管理
-  'safety-certificate': ShieldCheck, // QMS 质量认证（使用已有的 ShieldCheck）
-  apartment: Building2, // SCM 供应链（使用已有的 Building2）
-  shopping: ShoppingCart, // SRM 供应商关系（使用已有的 ShoppingCart）
-  car: Car, // TMS 运输管理
+  dollar: getLucideIcon('DollarSign'), // 财务
+  schedule: getLucideIcon('Calendar'), // APS 排程
+  certificate: getLucideIcon('Award'), // 认证
+  'customer-service': getLucideIcon('Phone'), // CRM 客户服务
+  thunderbolt: getLucideIcon('Zap'), // EMS 能源管理
+  trophy: getLucideIcon('Trophy'), // EPM 企业绩效
+  'cloud-server': getLucideIcon('Cloud'), // IOT 物联网
+  experiment: getLucideIcon('FlaskConical'), // LIMS/PDM 实验/研发（使用已有的 FlaskConical）
+  calculator: getLucideIcon('Calculator'), // MRP 物料需求计划
+  project: getLucideIcon('FolderKanban'), // PM 项目管理
+  'safety-certificate': getLucideIcon('ShieldCheck'), // QMS 质量认证（使用已有的 ShieldCheck）
+  apartment: getLucideIcon('Building2'), // SCM 供应链（使用已有的 Building2）
+  shopping: getLucideIcon('ShoppingCart'), // SRM 供应商关系（使用已有的 ShoppingCart）
+  car: getLucideIcon('Car'), // TMS 运输管理
   
   // 兼容性映射（支持多种命名方式）
-  'bar-chart': BarChart3,
-  'line-chart': TrendingUp,
-  'pie-chart': PieChart,
-  'trending-down': TrendingUp, // 使用 TrendingUp 替代 TrendingDown（Lucide 没有 TrendingDown）
+  'bar-chart': getLucideIcon('BarChart3'),
+  'line-chart': getLucideIcon('TrendingUp'),
+  'pie-chart': getLucideIcon('PieChart'),
+  'trending-down': getLucideIcon('TrendingUp'), // 使用 TrendingUp 替代 TrendingDown（Lucide 没有 TrendingDown）
 } as const;
 
 /**
@@ -428,19 +318,57 @@ export const ManufacturingIcons = {
  * <FactoryIcon size={24} color="#1890ff" />
  * ```
  */
+/**
+ * 获取制造业图标组件
+ * 
+ * @param iconName - 图标名称（支持 ManufacturingIcons 中的键名，或直接使用 Lucide 图标名）
+ * @param props - 图标属性（如 size, color 等）
+ * @returns React 图标组件
+ * 
+ * @example
+ * ```tsx
+ * import { getManufacturingIcon } from '@/utils/manufacturingIcons';
+ * 
+ * // 使用预定义的图标
+ * <Icon component={getManufacturingIcon('factory', { size: 24 })} />
+ * 
+ * // 或者直接使用
+ * const FactoryIcon = getManufacturingIcon('factory');
+ * <FactoryIcon size={24} color="#1890ff" />
+ * 
+ * // 直接使用 Lucide 图标名（动态访问）
+ * const CustomIcon = getManufacturingIcon('Camera');
+ * <CustomIcon size={24} />
+ * ```
+ */
 export function getManufacturingIcon(
-  iconName: keyof typeof ManufacturingIcons,
-  props?: React.ComponentProps<typeof ManufacturingIcons[typeof iconName]>
+  iconName: string,
+  props?: React.ComponentProps<any>
 ): React.ComponentType<any> {
-  const IconComponent = ManufacturingIcons[iconName];
-  if (!IconComponent) {
-    console.warn(`图标 "${iconName}" 不存在，使用默认图标`);
-    return Factory;
+  // 首先尝试从预定义的 ManufacturingIcons 中获取
+  if (iconName in ManufacturingIcons) {
+    const IconComponent = ManufacturingIcons[iconName as keyof typeof ManufacturingIcons];
+    if (IconComponent) {
+      // 返回一个包装组件，应用传入的 props
+      return (iconProps: any) => {
+        return React.createElement(IconComponent, { ...props, ...iconProps });
+      };
+    }
   }
   
-  // 返回一个包装组件，应用传入的 props
+  // 如果预定义映射中没有，尝试直接从 Lucide Icons 中获取
+  const LucideIcon = getLucideIcon(iconName);
+  if (LucideIcon && LucideIcon !== React.Fragment) {
+    return (iconProps: any) => {
+      return React.createElement(LucideIcon, { ...props, ...iconProps });
+    };
+  }
+  
+  // 如果都找不到，返回默认图标
+  console.warn(`图标 "${iconName}" 不存在，使用默认图标 Factory`);
+  const DefaultIcon = getLucideIcon('Factory');
   return (iconProps: any) => {
-    return React.createElement(IconComponent, { ...props, ...iconProps });
+    return React.createElement(DefaultIcon, { ...props, ...iconProps });
   };
 }
 
