@@ -1008,9 +1008,23 @@ class MaterialService:
             group_materials = material_map.get(group.id, [])
             
             # 创建分组响应对象（包含物料列表，子分组稍后添加）
-            group_response = MaterialGroupTreeResponse.model_validate(group)
-            group_response.materials = group_materials
-            group_response.children = []  # 先初始化为空，稍后递归填充
+            # 使用 model_validate 创建响应对象，然后手动设置 children 和 materials
+            group_dict = {
+                "id": group.id,
+                "uuid": group.uuid,
+                "tenant_id": group.tenant_id,
+                "code": group.code,
+                "name": group.name,
+                "parent_id": group.parent_id,
+                "description": group.description,
+                "is_active": group.is_active,
+                "created_at": group.created_at,
+                "updated_at": group.updated_at,
+                "deleted_at": group.deleted_at,
+                "children": [],  # 先初始化为空，稍后递归填充
+                "materials": group_materials
+            }
+            group_response = MaterialGroupTreeResponse.model_validate(group_dict)
             group_map[parent_id].append(group_response)
         
         # 递归构建分组树形结构

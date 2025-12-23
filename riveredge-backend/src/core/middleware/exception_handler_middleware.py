@@ -16,6 +16,7 @@ from loguru import logger
 
 from infra.exceptions.exceptions import (
     RiverEdgeException,
+    ValidationError,
     create_error_response,
 )
 from core.utils.error_logger import ErrorLogger
@@ -105,6 +106,42 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             
             return JSONResponse(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content=error_response
+            )
+        except ValidationError as e:
+            # ValidationError 应该返回 400 而不是 500
+            error_response = {
+                "success": False,
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": str(e) if str(e) else "数据验证失败",
+                    "details": {
+                        "type": type(e).__name__,
+                        "message": str(e),
+                    },
+                },
+                "timestamp": datetime.utcnow().isoformat() + "Z"
+            }
+            
+            # 记录错误日志
+            try:
+                tenant_id = getattr(request.state, 'tenant_id', None)
+                user_id = getattr(request.state, 'user_id', None)
+                ErrorLogger.log_api_error(
+                    error=e,
+                    request_path=str(request.url.path),
+                    request_method=request.method,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            except Exception:
+                logger.warning(
+                    f"验证错误: {request.url.path} - {str(e)}"
+                )
+            
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
                 content=error_response
             )
         except Exception as e:
