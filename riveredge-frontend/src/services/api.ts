@@ -395,9 +395,22 @@ export async function apiRequest<T = any>(
         }
         // 如果是 FastAPI 错误格式 { detail: ... }
         if (data.detail) {
-          const errorMessage = typeof data.detail === 'string' 
-            ? data.detail 
-            : JSON.stringify(data.detail);
+          let errorMessage: string;
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            // 如果是数组，提取第一个错误信息
+            errorMessage = data.detail[0]?.msg || JSON.stringify(data.detail);
+          } else {
+            errorMessage = JSON.stringify(data.detail);
+          }
+          // 对于 404 错误，如果 detail 是 "Not Found"，提供更友好的错误信息
+          if (response.status === 404) {
+            if (errorMessage === 'Not Found' || errorMessage.includes('Not Found')) {
+              errorMessage = `接口不存在: ${url}`;
+            }
+            // 其他情况直接使用后端返回的错误信息（不进行任何拼接）
+          }
           const error = new Error(errorMessage) as any;
           error.response = { data, status: response.status };
           throw error;
@@ -410,7 +423,12 @@ export async function apiRequest<T = any>(
         }
       }
       // 如果无法提取错误信息，使用默认错误
-      const error = new Error(`HTTP error! status: ${response.status}`) as any;
+      // 对于 404 错误，提供更友好的错误信息
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      if (response.status === 404) {
+        errorMessage = `接口不存在: ${url}`;
+      }
+      const error = new Error(errorMessage) as any;
       error.response = { data, status: response.status };
       throw error;
     }

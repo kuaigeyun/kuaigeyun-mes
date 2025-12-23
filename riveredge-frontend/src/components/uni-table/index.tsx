@@ -568,13 +568,40 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
    * 将按钮容器移动到 ant-pro-table 内部
    */
   useLayoutEffect(() => {
-    if (containerRef.current && buttonContainerRef.current) {
-      const proTable = containerRef.current.querySelector('.ant-pro-table');
-      if (proTable && buttonContainerRef.current.parentElement !== proTable) {
-        proTable.insertBefore(buttonContainerRef.current, proTable.firstChild);
+    // 移动搜索框到 ProTable 内部
+    // 使用重试机制确保在 TwoColumnLayout 等复杂布局中也能正常工作
+    const moveButtonContainer = () => {
+      if (containerRef.current && buttonContainerRef.current) {
+        const proTable = containerRef.current.querySelector('.ant-pro-table');
+        if (proTable && buttonContainerRef.current.parentElement !== proTable) {
+          proTable.insertBefore(buttonContainerRef.current, proTable.firstChild);
+          return true; // 成功移动
+        }
       }
+      return false; // 未找到 ProTable 或已经移动
+    };
+    
+    // 立即尝试移动
+    if (moveButtonContainer()) {
+      return;
     }
-  }, []);
+    
+    // 如果立即移动失败，使用多次重试（适用于 TwoColumnLayout 等复杂布局）
+    let retryCount = 0;
+    const maxRetries = 10; // 最多重试 10 次
+    const retryInterval = 50; // 每次重试间隔 50ms
+    
+    const retryTimer = setInterval(() => {
+      retryCount++;
+      if (moveButtonContainer() || retryCount >= maxRetries) {
+        clearInterval(retryTimer);
+      }
+    }, retryInterval);
+    
+    return () => {
+      clearInterval(retryTimer);
+    };
+  }, [currentViewType]); // 添加 currentViewType 作为依赖，确保视图切换时也能正确移动
 
   /**
    * 当视图类型是卡片/看板/统计视图时，确保数据已加载
@@ -1071,17 +1098,31 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           height: 32px !important;
         }
         /* 搜索框整体：使用主题背景色和边框色，统一圆角 - 最高优先级 */
+        /* 边框颜色与高级搜索按钮容器一致（使用 token.colorBorder） */
         html body .uni-table-fuzzy-search.ant-input-search,
         html body .uni-table-fuzzy-search .ant-input-group-wrapper,
         html body .uni-table-fuzzy-search .ant-input-group,
         html body .uni-table-fuzzy-search .ant-input-search.ant-input-search,
         html body .pro-table-button-container .uni-table-fuzzy-search,
-        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper {
-          border: 1px solid var(--ant-colorBorder) !important;
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
+          border: 1px solid ${token.colorBorder} !important;
           border-radius: ${token.borderRadius}px !important;
           overflow: hidden !important;
-          background-color: var(--ant-colorBgContainer) !important;
+          background-color: ${token.colorBgContainer} !important;
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
+        }
+        /* 深色模式下的搜索框样式 - 边框颜色与高级搜索按钮容器一致 */
+        html[data-theme="dark"] body .uni-table-fuzzy-search.ant-input-search,
+        html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group-wrapper,
+        html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-group,
+        html[data-theme="dark"] body .uni-table-fuzzy-search .ant-input-search.ant-input-search,
+        html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search,
+        html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-wrapper,
+        html[data-theme="dark"] body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
+          border: 1px solid ${token.colorBorder} !important;
+          background-color: ${token.colorBgContainer} !important;
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15), 0 1px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
         }
         /* 隐藏搜索按钮和图标 - 实时搜索不需要 */
         html body .uni-table-fuzzy-search .ant-input-search-button,
@@ -1102,12 +1143,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0 !important;
           padding: 0 !important;
         }
-        /* 输入框部分：完整圆角（使用主题圆角值），无边框，主题色文字 */
-        html body .uni-table-fuzzy-search .ant-input-affix-wrapper,
-        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper {
-          border: none !important;
+        /* 输入框内部：透明背景，主题色文字（边框在外层容器上） */
+        html body .uni-table-fuzzy-search .ant-input-affix-wrapper .ant-input,
+        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-affix-wrapper .ant-input {
           background-color: transparent !important;
-          border-radius: ${token.borderRadius}px !important;
         }
         html body .uni-table-fuzzy-search .ant-input,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input {
