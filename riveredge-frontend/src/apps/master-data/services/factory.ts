@@ -4,7 +4,7 @@
  * 提供车间、产线、工位的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Workshop,
   WorkshopCreate,

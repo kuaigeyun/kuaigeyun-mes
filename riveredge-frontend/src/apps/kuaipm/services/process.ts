@@ -4,7 +4,7 @@
  * 提供项目管理的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Project,
   ProjectCreate,

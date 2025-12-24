@@ -4,7 +4,7 @@
  * 提供数据采集的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   DeviceDataCollection,
   DeviceDataCollectionCreate,

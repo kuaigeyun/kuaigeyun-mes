@@ -4,7 +4,7 @@
  * 提供质量检验、不合格品管理、质量追溯、ISO标准体系等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   InspectionTask,
   InspectionTaskCreate,

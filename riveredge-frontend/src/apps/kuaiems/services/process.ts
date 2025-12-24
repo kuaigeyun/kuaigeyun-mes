@@ -4,7 +4,7 @@
  * 提供能源监测、能耗分析、节能管理、能源报表等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   EnergyMonitoring,
   EnergyMonitoringCreate,

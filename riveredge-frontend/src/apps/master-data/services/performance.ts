@@ -4,7 +4,7 @@
  * 提供假期、技能的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Holiday,
   HolidayCreate,

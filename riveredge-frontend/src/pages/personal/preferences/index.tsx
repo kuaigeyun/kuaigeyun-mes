@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
-import SafeProFormSelect from '@/components/SafeProFormSelect';
+import SafeProFormSelect from '../../../components/SafeProFormSelect';
 import { App, Card, message } from 'antd';
 import {
   getUserPreference,

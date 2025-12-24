@@ -23,7 +23,7 @@ const srcAliasPlugin = () => {
     enforce: 'pre', // 在其他插件之前执行，确保优先处理
     resolveId(id: string, importer?: string) {
       // 如果使用 @ 别名
-      if (id.startsWith('@/')) {
+      if (id.startsWith('')) {
         // 检查导入来源
         if (importer) {
           // importer 可能是绝对路径，检查是否包含 src
@@ -32,7 +32,7 @@ const srcAliasPlugin = () => {
           
           // 检查是否来自 src 目录（更严格的匹配）
           if (normalizedImporter.includes('/src/') || normalizedImporter.includes('\\src\\')) {
-            const path = id.replace('@/', '')
+            const path = id.replace('', '')
             const resolvedPath = resolve(srcPath, path)
             
             // 检查文件是否存在（支持 .ts, .tsx, .js, .jsx 扩展名）

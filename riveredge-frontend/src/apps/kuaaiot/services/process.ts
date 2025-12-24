@@ -4,7 +4,7 @@
  * 提供设备数据采集、传感器数据、实时监控、数据接口等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   DeviceDataCollection,
   DeviceDataCollectionCreate,

@@ -20,13 +20,13 @@ import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
 
 // 导入现有组件
-import SafeProFormSelect from '@/components/SafeProFormSelect';
-import { UniTable } from '@/components/uni-table';
-import { TwoColumnLayout } from '@/components/two-column-layout';
+import SafeProFormSelect from '../../../../components/SafeProFormSelect';
+import { UniTable } from '../../../../components/uni-table';
+import { TwoColumnLayout } from '../../../../components/two-column-layout';
 
 // 导入服务和类型
-import { materialApi, materialGroupApi } from '@/apps/master-data/services/material';
-import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '@/apps/master-data/types/material';
+import { materialApi, materialGroupApi } from '../../../../apps/master-data/services/material';
+import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '../../../../apps/master-data/types/material';
 
 /**
  * 物料管理合并页面组件

@@ -24,14 +24,14 @@ interface TechStackItem {
   license: string;
   commercialUse: boolean;
   category: 'backend' | 'frontend' | 'database' | 'infrastructure';
-  isCore?: boolean; // 是否为 FIR 核心组件
+  isCore?: boolean; // 是否为核心技术组件
 }
 
 /**
  * 技术栈数据
  */
 const techStackData: TechStackItem[] = [
-  // FIR 核心
+  // 核心技术栈
   {
     name: 'FastAPI',
     version: '0.115.0+',
@@ -446,7 +446,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           {text}
           {record.isCore && (
             <Tag color="gold" icon={<FileTextOutlined />}>
-              FIR 核心
+              核心组件
             </Tag>
           )}
         </Space>
@@ -493,19 +493,19 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       label: '概览',
       children: (
         <div style={{ padding: '16px 0', minHeight: '500px', backgroundColor: '#fff' }}>
-          <Title level={4}>FIR 技术栈</Title>
+          <Title level={4}>核心技术栈</Title>
           <Paragraph>
-            RiverEdge SaaS 多组织框架采用 <strong>FIR 技术栈组合</strong>：
+            RiverEdge SaaS 多组织框架采用现代化的技术栈：
           </Paragraph>
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <div>
-              <Text strong>F - FastAPI</Text>：高性能异步 Web 框架
+              <Text strong>FastAPI</Text>：高性能异步 Web 框架
             </div>
             <div>
-              <Text strong>I - Inngest</Text>：现代化任务调度系统
+              <Text strong>Inngest</Text>：现代化任务调度系统
             </div>
             <div>
-              <Text strong>R - React</Text>：现代化前端框架
+              <Text strong>React</Text>：现代化前端框架
             </div>
           </Space>
           <Divider />

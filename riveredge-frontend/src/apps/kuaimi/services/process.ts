@@ -4,7 +4,7 @@
  * 提供实时生产看板、设备综合效率分析、工艺参数优化、质量预测分析、系统应用绩效分析等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   ProductionDashboard,
   ProductionDashboardCreate,

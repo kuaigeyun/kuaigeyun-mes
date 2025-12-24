@@ -4,7 +4,7 @@
  * 提供线索、商机、订单等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Lead,
   LeadCreate,

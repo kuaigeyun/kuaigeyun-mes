@@ -4,7 +4,7 @@
  * 提供企业绩效管理的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   KPI,
   KPICreate,

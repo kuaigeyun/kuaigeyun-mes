@@ -4,7 +4,7 @@
  * 提供样品管理、实验管理、数据管理、报告管理等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   SampleManagement,
   SampleManagementCreate,

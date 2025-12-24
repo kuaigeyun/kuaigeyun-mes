@@ -732,6 +732,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'mix' | 'mix-integrated'>('mix');
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
@@ -983,13 +984,35 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
   });
 
+  // 初始化布局模式配置
+  useEffect(() => {
+    const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
+    try {
+      const savedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
+      if (savedThemeConfig) {
+        const themeConfig = JSON.parse(savedThemeConfig);
+        const savedLayoutMode = themeConfig.layoutMode || 'mix';
+        setLayoutMode(savedLayoutMode);
+        (window as any).__RIVEREDGE_LAYOUT_MODE__ = savedLayoutMode;
+      }
+    } catch (error) {
+      console.warn('Failed to load layout mode from localStorage:', error);
+    }
+  }, []);
+
   // 监听主题更新事件，实时更新菜单栏背景色
   useEffect(() => {
-    const handleThemeUpdate = () => {
+    const handleThemeUpdate = (event?: any) => {
       // 延迟一下，确保全局变量已经更新
       setTimeout(() => {
         const customBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+        const themeConfig = event?.detail?.themeConfig || {};
+        const currentLayoutMode = themeConfig.layoutMode || (window as any).__RIVEREDGE_LAYOUT_MODE__ || 'mix';
         setSiderBgColorState(customBgColor);
+        setLayoutMode(currentLayoutMode);
+
+        // 设置全局变量供其他组件使用
+        (window as any).__RIVEREDGE_LAYOUT_MODE__ = currentLayoutMode;
       }, 0);
     };
 
@@ -3128,9 +3151,80 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       `}</style>
       <ProLayout
         title="RiverEdge SaaS"
-        logo="/img/logo.png"
-        layout="mix"
+        logo={layoutMode === 'mix-integrated' ? false : "/img/logo.png"} // 融合模式下禁用顶栏LOGO
+        layout="mix" // 恢复到mix布局
         navTheme={isDarkMode ? "realDark" : "light"}
+        className={layoutMode === 'mix-integrated' ? 'ant-pro-layout-mix-integrated' : ''}
+        // 根据布局模式调整头部渲染
+        {...(layoutMode === 'mix-integrated' ? {
+          // MIX融合模式：修改左侧菜单栏头部样式，让LOGO与菜单栏视觉融合
+          menuHeaderRender: (logo: React.ReactNode, title: React.ReactNode, props: any) => (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              height: '64px',
+              background: token.colorBgContainer,
+              borderRight: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+              borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+              // 让侧边栏头部到顶
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 'auto',
+              width: '208px',
+              zIndex: 1001,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {/* 自定义更大的LOGO */}
+                <img
+                  src="/img/logo.png"
+                  alt="RiverEdge SaaS"
+                  style={{
+                    height: '48px', // 增大LOGO尺寸
+                    width: 'auto',
+                  }}
+                />
+                {/* 调整字体大小 */}
+                <span style={{
+                  fontSize: '14px', // 减小字体大小
+                  fontWeight: 600,
+                  color: token.colorText,
+                  whiteSpace: 'nowrap',
+                }}>
+                  RiverEdge SaaS
+                </span>
+              </div>
+              {/* 为融合模式添加特殊样式，让菜单内容在头部下面开始 */}
+              <style dangerouslySetInnerHTML={{
+                __html: `
+                  .ant-pro-layout-mix-integrated .ant-pro-sider-menu {
+                    padding-top: 72px !important;
+                  }
+                `
+              }} />
+            </div>
+          ),
+        } : {})}
+        collapsedButtonRender={(collapsed) => (
+        <div
+          style={{
+            padding: '8px',
+            borderTop: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+          }}
+        >
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              width: '100%',
+              color: token.colorTextSecondary,
+            }}
+            title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          />
+        </div>
+      )}
         contentWidth="Fluid"
         fixedHeader
         fixSiderbar
@@ -3506,26 +3600,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           </div>
         );
       }}
-      collapsedButtonRender={(collapsed) => (
-        <div
-          style={{
-            padding: '8px',
-            borderTop: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-          }}
-        >
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              width: '100%',
-              color: siderTextColor,
-            }}
-          />
-        </div>
-      )}
     >
-      <UniTabs 
+      <UniTabs
         menuConfig={menuConfig}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}

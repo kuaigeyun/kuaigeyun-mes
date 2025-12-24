@@ -4,7 +4,7 @@
  * 提供员工异动、考勤、薪资、排班等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   EmployeeOnboarding,
   EmployeeOnboardingCreate,

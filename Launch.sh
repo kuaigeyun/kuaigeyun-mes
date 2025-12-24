@@ -17,7 +17,6 @@ set -e  # 遇到错误立即退出
 # 服务端口配置（避免系统保留端口和主流项目常用端口）
 BACKEND_PORT="${BACKEND_PORT:-8200}"   # 后端服务端口（避免与主流项目常用端口冲突）
 FRONTEND_PORT="${FRONTEND_PORT:-8100}" # 前端服务端口（避免与主流项目常用端口冲突）
-INNGEST_PORT="${INNGEST_PORT:-8300}"   # Inngest 服务端口
 KKFILEVIEW_PORT="${KKFILEVIEW_PORT:-8400}" # kkFileView 服务端口
 
 # 启动超时配置（秒）- 已缩短
@@ -313,7 +312,7 @@ check_port() {
 kill_processes_by_name() {
     local port=$1
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local log_dir="$script_dir/startlogs"
+    local log_dir="$script_dir/.logs"
     mkdir -p "$log_dir" 2>/dev/null || true
 
     log_info "Windows: 通过进程名快速清理端口 $port 相关进程..."
@@ -341,13 +340,6 @@ kill_processes_by_name() {
                 wmic process where "CommandLine like '%main:app%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
             fi
             ;;
-        "$INNGEST_PORT")
-            # Inngest端口：清理 inngest 相关进程
-            log_info "清理Inngest进程..."
-            if command -v wmic &> /dev/null; then
-                wmic process where "CommandLine like '%inngest%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
-            fi
-            ;;
     esac
 
     # 额外清理：终止所有可能残留的进程
@@ -369,9 +361,6 @@ kill_processes_by_name_linux() {
             pkill -9 -f "uvicorn" 2>/dev/null || true
             pkill -9 -f "python.*main:app" 2>/dev/null || true
             ;;
-        "$INNGEST_PORT")
-            pkill -9 -f "inngest" 2>/dev/null || true
-            ;;
     esac
 }
 
@@ -381,7 +370,7 @@ cleanup_all_processes() {
     log_warn "执行全局清理：终止所有可能阻碍启动的进程..."
 
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local log_dir="$script_dir/startlogs"
+    local log_dir="$script_dir/.logs"
     mkdir -p "$log_dir" 2>/dev/null || true
 
     # Windows 专用：终止所有相关进程
@@ -395,7 +384,7 @@ cleanup_all_processes() {
 
         # 使用 wmic 清理特定进程
         if command -v wmic &> /dev/null; then
-            for pattern in "vite" "uvicorn" "main:app" "fastapi" "inngest"; do
+            for pattern in "vite" "uvicorn" "main:app" "fastapi"; do
                 wmic process where "CommandLine like '%$pattern%'" delete >> "$log_dir/taskkill.log" 2>&1 || true
             done
         fi
@@ -403,7 +392,7 @@ cleanup_all_processes() {
 
     # Linux/Mac: 使用 pkill 终止所有相关进程
     if command -v pkill &> /dev/null; then
-        for pattern in "vite" "uvicorn" "main:app" "fastapi" "inngest"; do
+        for pattern in "vite" "uvicorn" "main:app" "fastapi"; do
             pkill -9 -f "$pattern" 2>/dev/null || true
         done
     fi
@@ -522,7 +511,7 @@ get_pid_by_port() {
 terminate_process_on_port() {
     local port=$1
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local log_dir="$script_dir/startlogs"
+    local log_dir="$script_dir/.logs"
     mkdir -p "$log_dir" 2>/dev/null || true
 
     log_info "查找并终止占用端口 $port 的进程..."
@@ -825,15 +814,15 @@ start_backend() {
     # 进入后端目录并启动
     cd riveredge-backend
 
-    # 设置环境变量：强制 egg-info 生成到 startlogs 目录（如果必须生成）
-    export SETUPTOOLS_EGG_INFO_DIR="$(cd .. && pwd)/startlogs"
+    # 设置环境变量：强制 egg-info 生成到 .logs 目录（如果必须生成）
+    export SETUPTOOLS_EGG_INFO_DIR="$(cd .. && pwd)/.logs"
 
     # 清理可能存在的 egg-info 目录（严禁在 src 目录下产生）
-    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    # 如果在 src 目录下发现，立即删除或移动到 .logs
     if [ -d "src/riveredge_backend.egg-info" ]; then
-        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
-        mkdir -p "../startlogs" 2>/dev/null || true
-        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 .logs..."
+        mkdir -p "../.logs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../.logs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
     fi
 
     # 检查并同步 UV 虚拟环境（如果不存在或依赖有变化）
@@ -850,11 +839,11 @@ start_backend() {
     fi
     
     # 再次检查并清理（防止在同步过程中意外生成）
-    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    # 如果在 src 目录下发现，立即删除或移动到 .logs
     if [ -d "src/riveredge_backend.egg-info" ]; then
-        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
-        mkdir -p "../startlogs" 2>/dev/null || true
-        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 .logs..."
+        mkdir -p "../.logs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../.logs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
     fi
 
     # 设置环境变量
@@ -868,7 +857,7 @@ start_backend() {
     fi
 
     # 清理旧的PID文件
-    rm -f ../startlogs/backend.pid
+    rm -f ../.logs/backend.pid
 
     # 清理策略：只有在端口被占用时才执行彻底清理
     if check_port $port; then
@@ -902,9 +891,9 @@ start_backend() {
     log_info "使用 UV 启动后端服务..."
     # 使用 UV 运行，自动使用 .venv 虚拟环境
     # 设置 Python 路径，使用 UV 运行 uvicorn
-    PYTHONPATH="$(pwd)/src" nohup uv run uvicorn server.main:app --host "${HOST:-0.0.0.0}" --port $port --reload --reload-dir src > ../startlogs/backend.log 2>&1 &
+    PYTHONPATH="$(pwd)/src" nohup uv run uvicorn server.main:app --host "${HOST:-0.0.0.0}" --port $port --reload --reload-dir src > ../.logs/backend.log 2>&1 &
     local backend_pid=$!
-    echo $backend_pid > ../startlogs/backend.pid
+    echo $backend_pid > ../.logs/backend.pid
 
     cd ..
     log_success "后端服务启动中 (PID: $backend_pid, 端口: $port, UV + uvicorn + 热重载)"
@@ -914,10 +903,10 @@ start_backend() {
         log_info "等待后端服务启动..."
     fi
     if ! wait_for_service "http://localhost:$port/health" "后端服务" 15; then
-        log_error "后端服务启动失败，请检查 startlogs/backend.log"
-        if [ -f "startlogs/backend.pid" ]; then
+        log_error "后端服务启动失败，请检查 .logs/backend.log"
+        if [ -f ".logs/backend.pid" ]; then
             kill $backend_pid 2>/dev/null || true
-            rm -f startlogs/backend.pid
+            rm -f .logs/backend.pid
         fi
         exit 1
     fi
@@ -935,7 +924,7 @@ soft_restart_vite_windows() {
     log_info "Windows: 尝试软重启 VITE 相关进程（优雅停止）..."
     
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local log_dir="$script_dir/startlogs"
+    local log_dir="$script_dir/.logs"
     mkdir -p "$log_dir" 2>/dev/null || true
     
     local restart_success=false
@@ -988,7 +977,7 @@ hard_restart_vite_windows() {
     log_warn "Windows: 执行硬重启 VITE 相关进程（强制清理）..."
     
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local log_dir="$script_dir/startlogs"
+    local log_dir="$script_dir/.logs"
     mkdir -p "$log_dir" 2>/dev/null || true
     
     # 只在 Windows 下执行
@@ -1048,8 +1037,8 @@ cleanup_vite_windows() {
         
         # 检查后端服务是否运行（通过检查端口和PID文件）
         local backend_running=false
-        if [ -f "startlogs/backend.pid" ]; then
-            local backend_pid=$(cat startlogs/backend.pid 2>/dev/null)
+        if [ -f ".logs/backend.pid" ]; then
+            local backend_pid=$(cat .logs/backend.pid 2>/dev/null)
             if [ ! -z "$backend_pid" ] && kill -0 $backend_pid 2>/dev/null; then
                 backend_running=true
             fi
@@ -1064,8 +1053,8 @@ cleanup_vite_windows() {
         
         # 检查前端服务是否运行（通过检查端口和PID文件）
         local frontend_running=false
-        if [ -f "startlogs/frontend.pid" ]; then
-            local frontend_pid=$(cat startlogs/frontend.pid 2>/dev/null)
+        if [ -f ".logs/frontend.pid" ]; then
+            local frontend_pid=$(cat .logs/frontend.pid 2>/dev/null)
             if [ ! -z "$frontend_pid" ] && kill -0 $frontend_pid 2>/dev/null; then
                 frontend_running=true
             fi
@@ -1084,153 +1073,6 @@ cleanup_vite_windows() {
     return 0
 }
 
-# 启动 Inngest 服务
-start_inngest() {
-    local port=$1
-    log_info "启动 Inngest 服务 (端口: $port)..."
-    
-    # 检查 Inngest 可执行文件
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local inngest_exe=""
-    
-    # 查找 Inngest 可执行文件
-    if [ -f "$script_dir/bin/inngest.exe" ]; then
-        inngest_exe="$script_dir/bin/inngest.exe"
-    elif [ -f "$script_dir/bin/inngest" ]; then
-        inngest_exe="$script_dir/bin/inngest"
-    elif [ -f "$script_dir/bin/inngest-windows-amd64.exe" ]; then
-        inngest_exe="$script_dir/bin/inngest-windows-amd64.exe"
-    else
-        log_warn "未找到 Inngest 可执行文件，跳过 Inngest 服务启动"
-        log_warn "请确保 Inngest 可执行文件位于以下位置之一："
-        log_warn "  - $script_dir/bin/inngest.exe"
-        log_warn "  - $script_dir/bin/inngest"
-        log_warn "  - $script_dir/bin/inngest-windows-amd64.exe"
-        return 0  # 不阻止其他服务启动
-    fi
-    
-    # 检查配置文件
-    local config_file="$script_dir/bin/inngest.config.json"
-    if [ ! -f "$config_file" ]; then
-        log_warn "未找到 Inngest 配置文件: $config_file，跳过 Inngest 服务启动"
-        return 0  # 不阻止其他服务启动
-    fi
-    
-    # 检查端口是否被占用
-    if check_port $port; then
-        log_warn "端口 $port 被占用，清理 Inngest 相关进程..."
-        terminate_process_on_port $port || true
-        sleep 1
-        if check_port $port; then
-            log_warn "端口 $port 仍被占用，跳过 Inngest 服务启动"
-            return 0  # 不阻止其他服务启动
-        fi
-    fi
-    
-    # 清理旧的PID文件
-    rm -f "$script_dir/startlogs/inngest.pid"
-    
-    # 启动 Inngest 服务
-    cd "$script_dir"
-    # 确保日志目录存在
-    mkdir -p "$script_dir/startlogs" 2>/dev/null || true
-    
-    # 创建日志文件（确保存在）
-    touch "$script_dir/startlogs/inngest.log" 2>/dev/null || true
-    
-    # 动态更新配置文件中的端口（确保使用传入的端口参数）
-    # 使用 Python 更新配置文件中的端口
-    local temp_config="$script_dir/bin/inngest.config.tmp.json"
-    if command -v python &> /dev/null; then
-        python -c "
-import json
-import sys
-try:
-    with open('$config_file', 'r', encoding='utf-8') as f:
-        config = json.load(f)
-    config['event_api']['port'] = $port
-    with open('$temp_config', 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=4, ensure_ascii=False)
-except Exception as e:
-    print('Error updating config:', e, file=sys.stderr)
-    sys.exit(1)
-" 2>> "$script_dir/startlogs/inngest.log" || {
-            log_warn "无法更新 Inngest 配置文件端口，使用原始配置文件"
-            temp_config="$config_file"
-        }
-    else
-        log_warn "未找到 Python，无法动态更新端口配置，使用原始配置文件"
-        temp_config="$config_file"
-    fi
-    
-    # Windows Git Bash 兼容：使用不同的启动方式
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-        # Windows: 直接后台启动，重定向输出
-        # 使用 --port 参数直接设置端口，而不是依赖配置文件
-        ("$inngest_exe" dev --port "$port" -u "http://127.0.0.1:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1) &
-        local inngest_pid=$!
-    else
-        # Linux/Mac: 使用 nohup
-        # 使用 --port 参数直接设置端口，而不是依赖配置文件
-        nohup "$inngest_exe" dev --port "$port" -u "http://127.0.0.1:8200/api/inngest" --config "$temp_config" >> "$script_dir/startlogs/inngest.log" 2>&1 &
-        local inngest_pid=$!
-    fi
-    
-    # 清理临时配置文件（延迟删除，确保进程已启动）
-    if [ "$temp_config" != "$config_file" ]; then
-        (sleep 10 && rm -f "$temp_config" 2>/dev/null) &
-    fi
-    
-    # 等待一下确保进程启动
-    sleep 2
-    
-    # 验证进程是否真的在运行（通过检查端口或进程）
-    local process_running=false
-    
-    # 方法1: 检查进程是否存在
-    if kill -0 $inngest_pid 2>/dev/null; then
-        process_running=true
-    fi
-    
-    # 方法2: 检查端口是否监听（更可靠）
-    if check_port $port; then
-        process_running=true
-        # 如果进程ID不匹配，尝试从端口获取正确的PID
-        local port_pid=$(get_pid_by_port $port)
-        if [ ! -z "$port_pid" ] && [ "$port_pid" != "0" ] && [ "$port_pid" != "-" ]; then
-            inngest_pid=$port_pid
-        fi
-    fi
-    
-    if [ "$process_running" = false ]; then
-        log_warn "Inngest 进程启动失败，检查日志: $script_dir/startlogs/inngest.log"
-        if [ -f "$script_dir/startlogs/inngest.log" ] && [ -s "$script_dir/startlogs/inngest.log" ]; then
-            log_warn "Inngest 启动错误:"
-            tail -10 "$script_dir/startlogs/inngest.log" | while read line; do
-                log_warn "  $line"
-            done
-        else
-            log_warn "日志文件为空或不存在，可能进程立即退出了"
-        fi
-        return 0  # 不阻止其他服务启动
-    fi
-    
-    echo $inngest_pid > "$script_dir/startlogs/inngest.pid"
-    
-    log_success "Inngest 服务启动中 (PID: $inngest_pid, 端口: $port)"
-    
-    # 等待 Inngest 服务启动
-    if ! wait_for_service "http://localhost:$port" "Inngest 服务" 15; then
-        log_warn "Inngest 服务启动失败，请检查 $script_dir/startlogs/inngest.log"
-        if [ -f "$script_dir/startlogs/inngest.pid" ]; then
-            kill $inngest_pid 2>/dev/null || true
-            rm -f "$script_dir/startlogs/inngest.pid"
-        fi
-        return 0  # 不阻止其他服务启动
-    fi
-    
-    log_success "Inngest Dashboard: http://localhost:$port/_dashboard"
-}
 
 # 启动前端服务
 start_frontend() {
@@ -1269,7 +1111,7 @@ start_frontend() {
     local project_root="$script_dir"
     
     # 确保日志目录存在
-    mkdir -p "$project_root/startlogs" 2>/dev/null || true
+    mkdir -p "$project_root/.logs" 2>/dev/null || true
 
     # 检查前端依赖（静默模式）
     # ⚠️ 修复：从 riveredge-frontend 目录启动（package.json 在根目录）
@@ -1330,7 +1172,7 @@ start_frontend() {
     fi
 
     # 清理旧的PID文件
-    rm -f "$project_root/startlogs/frontend.pid"
+    rm -f "$project_root/.logs/frontend.pid"
 
     # 启动前最后一次端口检查（Windows 上需要更长的等待时间）
     if check_port $port; then
@@ -1359,21 +1201,21 @@ start_frontend() {
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
         host_bind="127.0.0.1"  # 强制使用 IPv4，避免 localhost 解析为 IPv6
     fi
-    # 使用 npx vite 直接启动，指定 src 作为根目录（vite.config.ts 在 src 目录下）
-    # vite [root] 指定根目录，--port 和 --host 指定端口和主机
-    nohup npx vite src --port $port --host $host_bind > "$project_root/startlogs/frontend.log" 2>&1 &
+    # 使用 npx vite 直接启动（vite.config.ts 已设置 root，不需要额外指定目录）
+    # --port 和 --host 指定端口和主机
+    nohup npx vite --port $port --host $host_bind > "$project_root/.logs/frontend.log" 2>&1 &
     local frontend_pid=$!
-    echo $frontend_pid > "$project_root/startlogs/frontend.pid"
+    echo $frontend_pid > "$project_root/.logs/frontend.pid"
 
     cd "$project_root"
     log_success "前端服务启动中 (PID: $frontend_pid, 端口: $port)"
 
     # 快速等待前端启动（缩短等待时间）
     if ! wait_for_frontend $port "前端服务" 15; then
-        log_error "前端服务启动失败，请检查 $project_root/startlogs/frontend.log"
-        if [ -f "$project_root/startlogs/frontend.pid" ]; then
+        log_error "前端服务启动失败，请检查 $project_root/.logs/frontend.log"
+        if [ -f "$project_root/.logs/frontend.pid" ]; then
             kill $frontend_pid 2>/dev/null || true
-            rm -f "$project_root/startlogs/frontend.pid"
+            rm -f "$project_root/.logs/frontend.pid"
         fi
         exit 1
     fi
@@ -1384,13 +1226,13 @@ stop_all() {
     log_info "停止所有服务..."
 
     # 确保日志目录存在
-    mkdir -p startlogs 2>/dev/null || true
+    mkdir -p .logs 2>/dev/null || true
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local log_dir="$script_dir/startlogs"
+    local log_dir="$script_dir/.logs"
 
     # 停止后端（通过PID文件）
-    if [ -f "startlogs/backend.pid" ]; then
-        local backend_pid=$(cat startlogs/backend.pid 2>/dev/null)
+    if [ -f ".logs/backend.pid" ]; then
+        local backend_pid=$(cat .logs/backend.pid 2>/dev/null)
         if [ ! -z "$backend_pid" ] && [ "$backend_pid" != "0" ]; then
             if kill -0 $backend_pid 2>/dev/null; then
                 log_info "停止后端服务 (PID: $backend_pid)"
@@ -1415,12 +1257,12 @@ stop_all() {
                 fi
             fi
         fi
-        rm -f startlogs/backend.pid
+        rm -f .logs/backend.pid
     fi
 
     # 停止前端（通过PID文件）
-    if [ -f "startlogs/frontend.pid" ]; then
-        local frontend_pid=$(cat startlogs/frontend.pid 2>/dev/null)
+    if [ -f ".logs/frontend.pid" ]; then
+        local frontend_pid=$(cat .logs/frontend.pid 2>/dev/null)
         if [ ! -z "$frontend_pid" ] && [ "$frontend_pid" != "0" ]; then
             if kill -0 $frontend_pid 2>/dev/null; then
                 log_info "停止前端服务 (PID: $frontend_pid)"
@@ -1445,38 +1287,9 @@ stop_all() {
                 fi
             fi
         fi
-        rm -f startlogs/frontend.pid
+        rm -f .logs/frontend.pid
     fi
 
-    # 停止 Inngest（通过PID文件）
-    if [ -f "startlogs/inngest.pid" ]; then
-        local inngest_pid=$(cat startlogs/inngest.pid 2>/dev/null)
-        if [ ! -z "$inngest_pid" ] && [ "$inngest_pid" != "0" ]; then
-            if kill -0 $inngest_pid 2>/dev/null; then
-                log_info "停止 Inngest 服务 (PID: $inngest_pid)"
-                kill -TERM $inngest_pid 2>/dev/null || true
-                # Windows环境下也尝试taskkill
-                if command -v taskkill &> /dev/null; then
-                    taskkill /PID $inngest_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
-                fi
-                # 等待进程结束
-                local count=0
-                while [ $count -lt 5 ] && kill -0 $inngest_pid 2>/dev/null; do
-                    sleep 0.5
-                    count=$((count + 1))
-                done
-                # 如果还在运行，强制清理
-                if kill -0 $inngest_pid 2>/dev/null; then
-                    log_warn "强制停止 Inngest 服务 (PID: $inngest_pid)"
-                    kill -KILL $inngest_pid 2>/dev/null || true
-                    if command -v taskkill &> /dev/null; then
-                        taskkill /PID $inngest_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
-                    fi
-                fi
-            fi
-        fi
-        rm -f startlogs/inngest.pid
-    fi
 
     # 清理可能残留的进程（简化版，避免卡住）
     log_info "清理残留进程..."
@@ -1525,8 +1338,8 @@ stop_all() {
 show_status() {
     log_info "服务状态检查:"
 
-    if [ -f "startlogs/backend.pid" ]; then
-        local backend_pid=$(cat startlogs/backend.pid)
+    if [ -f ".logs/backend.pid" ]; then
+        local backend_pid=$(cat .logs/backend.pid)
         if kill -0 $backend_pid 2>/dev/null; then
             log_success "后端服务运行中 (PID: $backend_pid)"
         else
@@ -1536,8 +1349,8 @@ show_status() {
         log_warn "后端服务未运行"
     fi
 
-    if [ -f "startlogs/frontend.pid" ]; then
-        local frontend_pid=$(cat startlogs/frontend.pid)
+    if [ -f ".logs/frontend.pid" ]; then
+        local frontend_pid=$(cat .logs/frontend.pid)
         if kill -0 $frontend_pid 2>/dev/null; then
             log_success "前端服务运行中 (PID: $frontend_pid)"
         else
@@ -1547,16 +1360,6 @@ show_status() {
         log_warn "前端服务未运行"
     fi
 
-    if [ -f "startlogs/inngest.pid" ]; then
-        local inngest_pid=$(cat startlogs/inngest.pid)
-        if kill -0 $inngest_pid 2>/dev/null; then
-            log_success "Inngest 服务运行中 (PID: $inngest_pid)"
-        else
-            log_warn "Inngest 服务PID文件存在但进程未运行"
-        fi
-    else
-        log_warn "Inngest 服务未运行"
-    fi
 
     # 检查端口占用情况（只检查使用的端口）
     echo
@@ -1574,11 +1377,6 @@ show_status() {
         log_success "后端端口 $BACKEND_PORT 可用"
     fi
     
-    if check_port $INNGEST_PORT; then
-        log_warn "Inngest 端口 $INNGEST_PORT 被占用"
-    else
-        log_success "Inngest 端口 $INNGEST_PORT 可用"
-    fi
 }
 
 # 主函数
@@ -1589,7 +1387,7 @@ main() {
     log_info "====================================="
 
     # 创建日志目录
-    mkdir -p startlogs
+    mkdir -p .logs
 
     # 日志轮转管理（保留最近7天的日志）
     manage_logs() {
@@ -1610,13 +1408,12 @@ main() {
     }
 
     # 执行日志管理
-    manage_logs "startlogs"
+    manage_logs ".logs"
 
     # 显示配置摘要
     log_info "启动配置:"
     log_info "   后端端口: $BACKEND_PORT"
     log_info "   前端端口: $FRONTEND_PORT"
-    log_info "   Inngest 端口: $INNGEST_PORT"
     log_info "   调试模式: $DEBUG"
     echo
 
@@ -1654,15 +1451,15 @@ main() {
     log_info "检查并同步 UV 依赖..."
     cd riveredge-backend
     
-    # 设置环境变量：强制 egg-info 生成到 startlogs 目录（如果必须生成）
-    export SETUPTOOLS_EGG_INFO_DIR="$(cd .. && pwd)/startlogs"
+    # 设置环境变量：强制 egg-info 生成到 .logs 目录（如果必须生成）
+    export SETUPTOOLS_EGG_INFO_DIR="$(cd .. && pwd)/.logs"
     
     # 清理可能存在的 egg-info 目录（严禁在 src 目录下产生）
-    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    # 如果在 src 目录下发现，立即删除或移动到 .logs
     if [ -d "src/riveredge_backend.egg-info" ]; then
-        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
-        mkdir -p "../startlogs" 2>/dev/null || true
-        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 .logs..."
+        mkdir -p "../.logs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../.logs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
     fi
     
     if [ ! -d ".venv" ] || [ "pyproject.toml" -nt ".venv" ] || [ "uv.lock" -nt ".venv" ]; then
@@ -1678,11 +1475,11 @@ main() {
     fi
     
     # 再次检查并清理（防止在同步过程中意外生成）
-    # 如果在 src 目录下发现，立即删除或移动到 startlogs
+    # 如果在 src 目录下发现，立即删除或移动到 .logs
     if [ -d "src/riveredge_backend.egg-info" ]; then
-        log_warn "检测到 src 目录下的 egg-info，正在移动到 startlogs..."
-        mkdir -p "../startlogs" 2>/dev/null || true
-        mv "src/riveredge_backend.egg-info" "../startlogs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
+        log_warn "检测到 src 目录下的 egg-info，正在移动到 .logs..."
+        mkdir -p "../.logs" 2>/dev/null || true
+        mv "src/riveredge_backend.egg-info" "../.logs/riveredge_backend.egg-info" 2>/dev/null || rm -rf "src/riveredge_backend.egg-info"
     fi
     
     cd ..
@@ -1704,7 +1501,7 @@ main() {
     fi
 
     # 清理指定端口，直到成功（如果被占用）
-    log_info "检查并清理端口 $FRONTEND_PORT (前端)、$BACKEND_PORT (后端) 和 $INNGEST_PORT (Inngest)..."
+    log_info "检查并清理端口 $FRONTEND_PORT (前端)、$BACKEND_PORT (后端)..."
 
     # 清理前端端口（如果被占用）
     if check_port "$FRONTEND_PORT"; then
@@ -1740,20 +1537,11 @@ main() {
         log_info "后端端口 $BACKEND_PORT 未被占用，跳过清理"
     fi
 
-    # 清理 Inngest 端口（如果被占用）
-    if check_port "$INNGEST_PORT"; then
-        if ! clear_port "$INNGEST_PORT"; then
-            log_warn "Inngest 端口 $INNGEST_PORT 清理失败，继续启动（Inngest 服务可选）"
-        fi
-    else
-        log_info "Inngest 端口 $INNGEST_PORT 未被占用，跳过清理"
-    fi
     
     local backend_port="$BACKEND_PORT"
     local frontend_port="$FRONTEND_PORT"
-    local inngest_port="$INNGEST_PORT"
-    
-    log_success "端口清理完成 - 后端: $backend_port, 前端: $frontend_port, Inngest: $inngest_port"
+
+    log_success "端口清理完成 - 后端: $backend_port, 前端: $frontend_port"
 
     # 启动后端
     start_backend "$backend_port"
@@ -1770,8 +1558,6 @@ main() {
         exit 1
     fi
 
-    # 启动 Inngest（可选服务，失败不阻止其他服务）
-    start_inngest "$inngest_port"
 
     log_success "所有服务启动成功！"
     echo
@@ -1796,8 +1582,6 @@ main() {
         echo "  平台登录:    http://localhost:$FRONTEND_PORT/platform"
         echo "  后端 API:    http://localhost:$BACKEND_PORT"
         echo "  API 文档:    http://localhost:$BACKEND_PORT/docs"
-        echo "  Inngest:     http://localhost:$INNGEST_PORT"
-        echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
         echo
         echo "管理命令:"
         echo "  查看状态:    ./Launch.sh status"
@@ -1806,10 +1590,9 @@ main() {
         echo "  获取帮助:    ./Launch.sh help"
         echo
         echo "日志文件:"
-        echo "  后端日志:    startlogs/backend.log"
-        echo "  前端日志:    startlogs/frontend.log"
-        echo "  Inngest 日志: startlogs/inngest.log"
-        echo "  清理日志:    startlogs/taskkill.log"
+        echo "  后端日志:    .logs/backend.log"
+        echo "  前端日志:    .logs/frontend.log"
+        echo "  清理日志:    .logs/taskkill.log"
         echo
         echo "提示:"
         echo "  服务将在后台持续运行"
@@ -1818,7 +1601,7 @@ main() {
         echo
         echo "=================================================================================="
     else
-        log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT Inngest: http://localhost:$INNGEST_PORT"
+        log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT"
     fi
     echo
 
@@ -1854,7 +1637,6 @@ RiverEdge SaaS 框架一键启动脚本
 环境变量配置:
     BACKEND_PORT=$BACKEND_PORT          后端服务端口
     FRONTEND_PORT=$FRONTEND_PORT        前端服务端口
-    INNGEST_PORT=$INNGEST_PORT          Inngest 服务端口
     DEBUG=$DEBUG                       调试模式
     QUIET=$QUIET                       静默模式 (减少输出)
 
@@ -1868,10 +1650,9 @@ RiverEdge SaaS 框架一键启动脚本
     DEBUG=true $0                 # 启用调试模式
 
 日志文件:
-    startlogs/backend.log         后端日志
-    startlogs/frontend.log        前端日志
-    startlogs/inngest.log         Inngest 日志
-    startlogs/taskkill.log        进程清理日志
+    .logs/backend.log         后端日志
+    .logs/frontend.log        前端日志
+    .logs/taskkill.log        进程清理日志
 
 EOF
 }

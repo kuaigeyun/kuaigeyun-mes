@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
-import SafeProFormSelect from '@/components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../../components/SafeProFormSelect';
 
 // 安全处理 options 的工具函数
 const safeOptions = (options: any): any[] => {
@@ -18,13 +18,13 @@ const safeOptions = (options: any): any[] => {
 };
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, List, Typography, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../../components/uni-table';
 import { workshopApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, WorkshopUpdate } from '../../../types/factory';
-import { batchImport } from '@/utils/batchOperations';
-import { generateCode } from '@/services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '@/utils/codeRulePage';
-import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '@/services/customField';
+import { batchImport } from '../../../../../utils/batchOperations';
+import { generateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../../../../services/customField';
 
 /**
  * 车间管理列表页面组件

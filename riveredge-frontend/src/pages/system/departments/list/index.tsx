@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import SafeProFormSelect from '@/components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../components/SafeProFormSelect';
 import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col, Input, Divider, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';

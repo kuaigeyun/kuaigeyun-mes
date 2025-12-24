@@ -4,7 +4,7 @@
  * 提供产能规划、生产计划、资源调度、计划调整等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   CapacityPlanning,
   CapacityPlanningCreate,

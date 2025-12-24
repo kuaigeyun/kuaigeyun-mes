@@ -4,7 +4,7 @@
  * 提供环境健康安全管理的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   EnvironmentMonitoring,
   EnvironmentMonitoringCreate,

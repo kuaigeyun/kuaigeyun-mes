@@ -6,7 +6,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormInstance, ProDescriptions, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../components/uni-table';
 import { employeeResignationApi } from '../../services/process';
 import type { EmployeeResignation, EmployeeResignationCreate, EmployeeResignationUpdate } from '../../types/process';
 

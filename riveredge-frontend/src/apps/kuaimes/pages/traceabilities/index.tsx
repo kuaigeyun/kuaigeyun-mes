@@ -7,7 +7,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
 import { App, Drawer, Tag, Button } from 'antd';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../components/uni-table';
 import { traceabilityApi } from '../../services/process';
 import type { Traceability } from '../../types/process';
 

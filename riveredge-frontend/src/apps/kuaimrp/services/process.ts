@@ -4,7 +4,7 @@
  * 提供MRP计划、LRP批次、物料需求、缺料预警等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   MRPPlan,
   MRPPlanCreate,

@@ -8,7 +8,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../components/uni-table';
 import { inventoryAdjustmentApi } from '../../services/process';
 import type { InventoryAdjustment, InventoryAdjustmentCreate, InventoryAdjustmentUpdate } from '../../types/process';
 

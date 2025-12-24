@@ -4,7 +4,7 @@
  * 提供客户、供应商的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Customer,
   CustomerCreate,
