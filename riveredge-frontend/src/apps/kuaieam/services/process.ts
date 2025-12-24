@@ -4,7 +4,7 @@
  * 提供维护计划、维护工单、故障报修等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   MaintenancePlan,
   MaintenancePlanCreate,

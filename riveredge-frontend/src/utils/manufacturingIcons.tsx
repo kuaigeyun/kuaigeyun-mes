@@ -308,7 +308,7 @@ export const ManufacturingIcons = {
  * 
  * @example
  * ```tsx
- * import { getManufacturingIcon } from '@/utils/manufacturingIcons';
+ * import { getManufacturingIcon } from '../utils/manufacturingIcons';
  * 
  * // 使用工厂图标
  * <Icon component={getManufacturingIcon('factory', { size: 24 })} />
@@ -327,7 +327,7 @@ export const ManufacturingIcons = {
  * 
  * @example
  * ```tsx
- * import { getManufacturingIcon } from '@/utils/manufacturingIcons';
+ * import { getManufacturingIcon } from '../utils/manufacturingIcons';
  * 
  * // 使用预定义的图标
  * <Icon component={getManufacturingIcon('factory', { size: 24 })} />

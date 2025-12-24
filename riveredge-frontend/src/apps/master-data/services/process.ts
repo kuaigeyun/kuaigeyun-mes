@@ -4,7 +4,7 @@
  * 提供不良品、工序、工艺路线、作业程序（SOP）的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   DefectType,
   DefectTypeCreate,

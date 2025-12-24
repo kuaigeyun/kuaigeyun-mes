@@ -9,62 +9,17 @@ import type { ProxyOptions } from 'vite'
 // 统一使用 SaaS 模式
 // 单体部署本质上就是只有 src，没有新建其他租户应用
 
-// src 目录路径（当前目录）
-const srcPath = resolve(__dirname, '.')
+// src 目录路径（src 目录）
+const srcPath = resolve(__dirname, 'src')
 
-// static 目录路径（指向根目录的 static）
-// 从 src/ 到 static/：../ -> riveredge-frontend/, ../static -> static/
-const publicDir = resolve(__dirname, '../static')
+// static 目录路径（指向前端项目的 static）
+const publicDir = resolve(__dirname, 'static')
 
-// Vite 插件：处理 src 文件中的 @ 别名（支持静态和动态导入）
-const srcAliasPlugin = () => {
-  return {
-    name: 'src-alias',
-    enforce: 'pre', // 在其他插件之前执行，确保优先处理
-    resolveId(id: string, importer?: string) {
-      // 如果使用 @ 别名
-      if (id.startsWith('@/')) {
-        // 检查导入来源
-        if (importer) {
-          // importer 可能是绝对路径，检查是否包含 src
-          // 处理 Windows 路径（反斜杠）和 Unix 路径（正斜杠）
-          const normalizedImporter = importer.replace(/\\/g, '/')
-          
-          // 检查是否来自 src 目录（更严格的匹配）
-          if (normalizedImporter.includes('/src/') || normalizedImporter.includes('\\src\\')) {
-            const path = id.replace('@/', '')
-            const resolvedPath = resolve(srcPath, path)
-            
-            // 检查文件是否存在（支持 .ts, .tsx, .js, .jsx 扩展名）
-            const extensions = ['.ts', '.tsx', '.js', '.jsx', '']
-            for (const ext of extensions) {
-              const filePath = resolvedPath + ext
-              if (existsSync(filePath)) {
-                // 返回绝对路径，确保 Vite 能正确解析
-                return filePath
-              }
-            }
-            
-            // 如果文件不存在，尝试作为目录查找 index 文件
-            const indexExtensions = ['/index.ts', '/index.tsx', '/index.js', '/index.jsx']
-            for (const ext of indexExtensions) {
-              const filePath = resolvedPath + ext
-              if (existsSync(filePath)) {
-                return filePath
-              }
-            }
-          }
-        }
-      }
-      return null
-    },
-  }
-}
 
 export default defineConfig({
-  // ⚠️ 关键修复：明确设置根目录，防止 Vite 监听父目录（包括后端目录）
-  root: __dirname, // 限制 Vite 只监听当前目录（src），不监听父目录
-  // 指定 static 目录（指向根目录的 static，与后端保持一致）
+  // ⚠️ 优化：设置根目录为src目录，因为index.html在src目录下
+  root: srcPath, // src目录
+  // 指定 static 目录
   publicDir: publicDir,
   // 服务器配置 - 优化稳定性
   server: {
@@ -101,7 +56,7 @@ export default defineConfig({
       } as ProxyOptions,
     },
     hmr: {
-      overlay: false, // ⚠️ 关键修复：关闭错误覆盖层，避免错误导致页面崩溃
+      overlay: true, // 允许错误覆盖层，但设置为不阻塞
       // 启用 HMR，使用 WebSocket
       protocol: 'ws',
       host: process.env.VITE_HMR_HOST || 'localhost', // 从环境变量读取 HMR 主机
@@ -109,13 +64,19 @@ export default defineConfig({
       clientPort: undefined,
       // ⚠️ 稳定性优化：增加 HMR 超时时间
       timeout: 30000, // 增加超时时间到 30 秒
-      // ⚠️ 关键修复：禁用 HMR 错误时自动刷新，避免频繁崩溃
+      // ⚠️ 优化 HMR：允许错误覆盖层但不阻塞开发
       client: {
-        overlay: false, // 关闭错误覆盖层
+        overlay: {
+          errors: true,
+          warnings: false, // 只显示错误，不显示警告
+        },
+        // 优化重连逻辑
+        reconnectInterval: 3000,
+        reconnectDelay: 1000,
       },
     },
     watch: {
-      // 优化文件监听，确保 HMR 正常工作
+      // 优化文件监听，确保 HMR 正常工作，避免频繁重启
       ignored: [
         '**/node_modules/**',
         '**/.git/**',
@@ -135,27 +96,54 @@ export default defineConfig({
         '**/.env.local',
         '**/.env.*.local',
         // ⚠️ 关键修复：忽略后端目录，防止前端服务监听后端文件变化导致崩溃
-        // 使用绝对路径模式，确保无论从哪个目录启动都能正确忽略
         '**/riveredge-backend/**',
         '**/backend/**',
-        '**/src/platform/**',
-        '**/src/core/**',
         '**/venv*/**',
         '**/__pycache__/**',
         '**/*.py',
         '**/*.pyc',
         '**/*.pyo',
-        // ⚠️ 额外保护：忽略项目根目录下的后端目录（相对路径和绝对路径）
+        '**/*.sqlite',
+        '**/*.sqlite3',
+        '**/*.db',
+        // 忽略 IDE 和编辑器文件
+        '**/.vscode/**',
+        '**/.idea/**',
+        '**/*.swp',
+        '**/*.swo',
+        '**/*~',
+        // 忽略 macOS 文件
+        '**/.fseventsd/**',
+        '**/.DocumentRevisions-V100/**',
+        '**/.TemporaryItems/**',
+        '**/.Trashes/**',
+        // 忽略 Windows 系统文件
+        '**/desktop.ini',
+        '**/Desktop.ini',
+        '**/Thumbs.db',
+        '**/$RECYCLE.BIN/**',
+        '**/*.stackdump',
+        // ⚠️ 额外保护：忽略项目根目录下的后端目录
         '../../riveredge-backend/**',
         '../../../riveredge-backend/**',
         '**/../riveredge-backend/**',
+        // 忽略其他可能变化的文件
+        '**/migrations/**',
+        '**/*.lock',
+        '**/uv.lock',
+        '**/Pipfile.lock',
+        '**/poetry.lock',
       ],
       // Windows 环境下使用轮询模式以确保文件变化能被检测到
       usePolling: platform() === 'win32',
-      // ⚠️ 稳定性优化：增加文件变化检测间隔，减少 CPU 占用和重启频率
-      interval: platform() === 'win32' ? 2000 : 100, // Windows 下增加到 2 秒
+      // ⚠️ 优化：增加文件变化检测间隔，减少 CPU 占用和重启频率
+      interval: platform() === 'win32' ? 1000 : 300, // 减少检测频率
       // 优化文件监听性能
-      binaryInterval: platform() === 'win32' ? 3000 : 1000,
+      binaryInterval: platform() === 'win32' ? 2000 : 500,
+      // 减少监听的文件类型，只监听源码文件
+      include: [
+        '**/*.{js,jsx,ts,tsx,json,css,less,scss,html}',
+      ],
     },
   },
   // 构建配置 - 优化性能
@@ -164,25 +152,26 @@ export default defineConfig({
     minify: false, // 开发模式下不压缩，提高构建速度
   },
   plugins: [
-    // React 插件 - 启用 Fast Refresh 和 HMR
+    // React 插件 - 优化 Fast Refresh 和 HMR
     react({
       // 启用 Fast Refresh
       fastRefresh: true,
-      // 包含所有文件进行 HMR
+      // 包含所有 React 文件进行 HMR
       include: '**/*.{jsx,tsx}',
-      // ⚠️ 关键修复：禁用开发环境下的严格模式，避免双重渲染导致的问题
-      babel: {
-        plugins: [],
+      exclude: '**/node_modules/**',
+      // ⚠️ 优化：移除不必要的babel配置，让React插件自动处理
+      // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
+      jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
+      // 添加Fast Refresh选项
+      fastRefreshOptions: {
+        // 强制启用Fast Refresh
+        force: true,
       },
-      // ⚠️ 关键修复：优化 HMR 行为，避免频繁重载
-      jsxRuntime: 'automatic',
     }),
-    // 自定义别名插件
-    srcAliasPlugin(),
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname), // 指向当前目录（src）
+      '@': '.', // 由于root是src目录，@指向当前目录
     },
   },
   define: {
@@ -206,8 +195,8 @@ export default defineConfig({
     // ⚠️ 关键修复：排除可能导致问题的依赖
     exclude: [],
   },
-  // ⚠️ 关键修复：增加日志级别，便于调试
-  logLevel: 'warn', // 只显示警告和错误，减少日志噪音
-  // ⚠️ 关键修复：禁用清屏，避免频繁刷新导致的问题
-  clearScreen: false,
+  // ⚠️ 优化：适当的日志级别
+  logLevel: 'info', // 显示必要信息，方便调试
+  // ⚠️ 优化：允许清屏，但减少频率
+  clearScreen: true,
 })

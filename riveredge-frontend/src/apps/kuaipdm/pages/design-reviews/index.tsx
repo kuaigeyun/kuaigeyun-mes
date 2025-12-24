@@ -8,7 +8,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../components/uni-table';
 import { designReviewApi } from '../../services/process';
 import type { DesignReview, DesignReviewCreate, DesignReviewUpdate } from '../../types/process';
 

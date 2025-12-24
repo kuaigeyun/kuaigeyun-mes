@@ -4,7 +4,7 @@
  * 提供运输需求、运输计划、车辆调度、运输执行、运费结算等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   TransportDemand,
   TransportDemandCreate,

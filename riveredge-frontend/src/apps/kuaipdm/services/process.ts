@@ -4,7 +4,7 @@
  * 提供设计变更、工程变更、设计评审、研发流程、知识管理等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   DesignChange,
   DesignChangeCreate,

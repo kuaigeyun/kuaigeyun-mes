@@ -6,11 +6,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import SafeProFormSelect from '@/components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../../components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../../components/uni-table';
 import { sopApi, operationApi } from '../../../services/process';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 

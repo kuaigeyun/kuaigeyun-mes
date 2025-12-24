@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormTextArea, ProFormDigit, ProFormDatePicker, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, SwapOutlined, CalculatorOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../components/uni-table';
 import { opportunityApi } from '../../services/process';
 import type { Opportunity, OpportunityCreate, OpportunityUpdate } from '../../types/process';
 

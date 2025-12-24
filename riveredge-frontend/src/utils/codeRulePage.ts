@@ -4,7 +4,7 @@
  * 提供获取功能页面配置的工具函数，支持从 localStorage 读取配置。
  */
 
-import { CodeRulePageConfig, getCodeRulePageConfig } from '@/config/codeRulePages';
+import { CodeRulePageConfig, getCodeRulePageConfig } from '../config/codeRulePages';
 
 /**
  * 获取功能页面配置（包含 localStorage 中的配置）

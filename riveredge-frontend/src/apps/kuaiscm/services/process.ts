@@ -4,7 +4,7 @@
  * 提供供应链网络、需求预测、供应链风险、全局库存视图等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   SupplyChainNetwork,
   SupplyChainNetworkCreate,

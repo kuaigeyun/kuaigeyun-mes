@@ -4,7 +4,7 @@
  * 提供物料分组、物料、BOM的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   MaterialGroup,
   MaterialGroupCreate,

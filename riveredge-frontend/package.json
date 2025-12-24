@@ -5,9 +5,9 @@
     "description_en": "RiverEdge SaaS Multi-tenant Framework - Frontend Monorepo",
     "private": true,
     "scripts": {
-        "dev": "vite src",
-        "dev:monolithic": "vite src",
-        "dev:saas": "vite src",
+        "dev": "vite",
+        "dev:monolithic": "vite",
+        "dev:saas": "vite",
         "build": "vite build src",
         "build:monolithic": "vite build src",
         "build:saas": "vite build src",

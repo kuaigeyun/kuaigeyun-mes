@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormSelect, ProFormTextArea, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, InputNumber } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, StarOutlined, UserOutlined, SwapOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../components/uni-table';
 import { leadApi } from '../../services/process';
 import type { Lead, LeadCreate, LeadUpdate } from '../../types/process';
 

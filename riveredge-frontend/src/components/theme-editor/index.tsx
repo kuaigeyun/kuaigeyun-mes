@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider } from 'antd';
-import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, AppstoreOutlined, LayoutOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getUserPreference, updateUserPreference } from '../../services/userPreference';
@@ -68,6 +68,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light');
   const [tabsPersistenceValue, setTabsPersistenceValue] = useState<boolean>(false);
   const [compactValue, setCompactValue] = useState<boolean>(false); // 颜色模式：浅色/深色/跟随系统
+  const [layoutMode, setLayoutMode] = useState<'mix' | 'mix-integrated'>('mix'); // MIX布局模式：标准MIX | LOGO融合MIX
 
   // 预设主题颜色
   const presetColors = [
@@ -210,6 +211,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         siderBgColor: themeConfig.siderBgColor || '',
         colorMode: userThemeMode,
         tabsPersistence: tabsPersistence,
+        layoutMode: themeConfig.layoutMode || 'mix',
       };
 
       form.setFieldsValue(formValues);
@@ -219,6 +221,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setSiderBgColorValue(themeConfig.siderBgColor || '');
       setTabsPersistenceValue(tabsPersistence);
       setCompactValue(themeConfig.compact || false);
+      setLayoutMode(themeConfig.layoutMode || 'mix');
       
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);
@@ -296,6 +299,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     // 如果颜色模式改变，更新状态
     if (changedValues.colorMode) {
       setColorMode(changedValues.colorMode);
+    }
+
+    // 如果布局模式改变，更新状态
+    if (changedValues.layoutMode) {
+      setLayoutMode(changedValues.layoutMode);
     }
 
     applyPreviewTheme(allValues, allValues.colorMode);
@@ -376,6 +384,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         borderRadius: values.borderRadius || 6,
         fontSize: values.fontSize || 14,
         compact: values.compact || false,
+        layoutMode: values.layoutMode || 'mix',
       };
 
       
@@ -484,6 +493,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const handleReset = () => {
     setTabsPersistenceValue(false);
     setCompactValue(false);
+    setLayoutMode('mix');
     form.setFieldsValue({
       colorPrimary: '#1890ff',
       borderRadius: 6,
@@ -492,6 +502,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       colorMode: 'light',
       siderBgColor: '', // 重置时设置为空字符串，表示使用默认背景色（无色）
       tabsPersistence: false, // 重置时关闭标签栏持久化
+      layoutMode: 'mix', // 重置时恢复到标准MIX布局
     });
 
     // 重置时清除本地存储的持久化配置
@@ -560,6 +571,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           fontSize: 14,
           compact: false,
           colorMode: 'light',
+          layoutMode: 'mix',
         }}
       >
         {/* 颜色模式 */}
@@ -985,10 +997,119 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           </Form.Item>
         </Card>
 
+        {/* 布局模式 */}
+        <Card
+          size="small"
+          title="布局模式"
+          style={{ marginBottom: 16 }}
+          bodyStyle={{ padding: '16px' }}
+        >
+          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
+            选择MIX布局的显示方式（LOGO模块与左侧菜单栏的融合程度）
+          </Paragraph>
+
+          <Form.Item
+            name="layoutMode"
+            style={{ marginBottom: 0 }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+              {/* 标准MIX布局 */}
+              <div
+                style={{
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  padding: '16px',
+                  borderRadius: 8,
+                  transition: 'all 0.2s',
+                  backgroundColor: form.getFieldValue('layoutMode') === 'mix'
+                    ? `${token.colorPrimary || '#1890ff'}15`
+                    : 'transparent',
+                  border: form.getFieldValue('layoutMode') === 'mix'
+                    ? `2px solid ${token.colorPrimary || '#1890ff'}`
+                    : '2px solid transparent',
+                }}
+                onClick={() => {
+                  form.setFieldValue('layoutMode', 'mix');
+                  setLayoutMode('mix');
+                }}
+                onMouseEnter={(e) => {
+                  if (form.getFieldValue('layoutMode') !== 'mix') {
+                    const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (form.getFieldValue('layoutMode') !== 'mix') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <AppstoreOutlined
+                  style={{
+                    fontSize: 32,
+                    color: form.getFieldValue('layoutMode') === 'mix'
+                      ? token.colorPrimary || '#1890ff'
+                      : '#8c8c8c',
+                    marginBottom: 8,
+                    display: 'block',
+                  }}
+                />
+                <div style={{ fontWeight: 500, fontSize: 14 }}>标准MIX</div>
+                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>LOGO独立显示</div>
+              </div>
+
+              {/* LOGO融合MIX布局 */}
+              <div
+                style={{
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  padding: '16px',
+                  borderRadius: 8,
+                  transition: 'all 0.2s',
+                  backgroundColor: form.getFieldValue('layoutMode') === 'mix-integrated'
+                    ? `${token.colorPrimary || '#1890ff'}15`
+                    : 'transparent',
+                  border: form.getFieldValue('layoutMode') === 'mix-integrated'
+                    ? `2px solid ${token.colorPrimary || '#1890ff'}`
+                    : '2px solid transparent',
+                }}
+                onClick={() => {
+                  form.setFieldValue('layoutMode', 'mix-integrated');
+                  setLayoutMode('mix-integrated');
+                }}
+                onMouseEnter={(e) => {
+                  if (form.getFieldValue('layoutMode') !== 'mix-integrated') {
+                    const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (form.getFieldValue('layoutMode') !== 'mix-integrated') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <LayoutOutlined
+                  style={{
+                    fontSize: 32,
+                    color: form.getFieldValue('layoutMode') === 'mix-integrated'
+                      ? token.colorPrimary || '#1890ff'
+                      : '#8c8c8c',
+                    marginBottom: 8,
+                    display: 'block',
+                  }}
+                />
+                <div style={{ fontWeight: 500, fontSize: 14 }}>LOGO融合</div>
+                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>LOGO与菜单栏一体</div>
+              </div>
+            </div>
+          </Form.Item>
+        </Card>
+
         {/* 主题配置 */}
-        <Card 
-          size="small" 
-          title="主题配置" 
+        <Card
+          size="small"
+          title="主题配置"
           style={{ marginBottom: 16 }}
           bodyStyle={{ padding: '16px' }}
         >

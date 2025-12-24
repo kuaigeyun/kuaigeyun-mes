@@ -6,10 +6,10 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import SafeProFormSelect from '@/components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../../components/SafeProFormSelect';
 import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { UniTable } from '@/components/uni-table';
+import { UniTable } from '../../../../../components/uni-table';
 import { productionLineApi, workshopApi } from '../../../services/factory';
 import type { ProductionLine, ProductionLineCreate, ProductionLineUpdate, Workshop } from '../../../types/factory';
 

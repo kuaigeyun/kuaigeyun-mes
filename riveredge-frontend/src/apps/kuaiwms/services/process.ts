@@ -4,7 +4,7 @@
  * 提供库存、入库单、出库单、盘点单、库存调整等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Inventory,
   InboundOrder,

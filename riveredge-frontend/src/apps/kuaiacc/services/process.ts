@@ -5,7 +5,7 @@
  * 按照中国财务规范设计
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   AccountSubject,
   AccountSubjectCreate,

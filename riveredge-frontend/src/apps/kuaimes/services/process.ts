@@ -4,7 +4,7 @@
  * 提供生产订单、工单、生产报工、生产追溯、返修工单等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   Order,
   OrderCreate,

@@ -4,7 +4,7 @@
  * 提供采购订单、委外订单、供应商评估、采购合同等的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   PurchaseOrder,
   PurchaseOrderCreate,

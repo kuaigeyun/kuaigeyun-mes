@@ -4,7 +4,7 @@
  * 提供企业认证与评审的 API 调用方法
  */
 
-import { api } from '@/services/api';
+import { api } from '../../../services/api';
 import type {
   CertificationType,
   CertificationTypeCreate,
