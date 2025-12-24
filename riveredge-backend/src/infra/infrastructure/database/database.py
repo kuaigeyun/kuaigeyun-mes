@@ -114,17 +114,17 @@ TORTOISE_ORM = {
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
                 "apps.master_data.models.product",  # 产品模型
-                # CRM 模型
-                "apps.kuaicrm.models.lead",  # 线索模型
-                "apps.kuaicrm.models.opportunity",  # 商机模型
-                "apps.kuaicrm.models.sales_order",  # 销售订单模型
-                "apps.kuaicrm.models.service_workorder",  # 服务工单模型
-                "apps.kuaicrm.models.warranty",  # 保修模型
-                "apps.kuaicrm.models.complaint",  # 投诉模型
-                "apps.kuaicrm.models.installation",  # 安装记录模型
-                "apps.kuaicrm.models.service_contract",  # 服务合同模型
-                "apps.kuaicrm.models.lead_followup",  # 线索跟进记录模型
-                "apps.kuaicrm.models.opportunity_followup",  # 商机跟进记录模型
+                # CRM 模型（与MES无关，已暂时卸载）
+                # "apps.kuaicrm.models.lead",  # 线索模型
+                # "apps.kuaicrm.models.opportunity",  # 商机模型
+                # "apps.kuaicrm.models.sales_order",  # 销售订单模型
+                # "apps.kuaicrm.models.service_workorder",  # 服务工单模型
+                # "apps.kuaicrm.models.warranty",  # 保修模型
+                # "apps.kuaicrm.models.complaint",  # 投诉模型
+                # "apps.kuaicrm.models.installation",  # 安装记录模型
+                # "apps.kuaicrm.models.service_contract",  # 服务合同模型
+                # "apps.kuaicrm.models.lead_followup",  # 线索跟进记录模型
+                # "apps.kuaicrm.models.opportunity_followup",  # 商机跟进记录模型
                 # 快格轻PDM 模型
                 "apps.kuaipdm.models.design_change",  # 设计变更模型
                 "apps.kuaipdm.models.engineering_change",  # 工程变更模型
@@ -137,11 +137,11 @@ TORTOISE_ORM = {
                 "apps.kuaimrp.models.material_requirement",  # 物料需求模型
                 "apps.kuaimrp.models.requirement_traceability",  # 需求追溯模型
                 "apps.kuaimrp.models.shortage_alert",  # 缺料预警模型
-                # 快格轻SRM 模型
-                "apps.kuaisrm.models.purchase_order",  # 采购订单模型
-                "apps.kuaisrm.models.outsourcing_order",  # 委外订单模型
-                "apps.kuaisrm.models.supplier_evaluation",  # 供应商评估模型
-                "apps.kuaisrm.models.purchase_contract",  # 采购合同模型
+                # 快格轻SRM 模型（与MES无关，已暂时卸载）
+                # "apps.kuaisrm.models.purchase_order",  # 采购订单模型
+                # "apps.kuaisrm.models.outsourcing_order",  # 委外订单模型
+                # "apps.kuaisrm.models.supplier_evaluation",  # 供应商评估模型
+                # "apps.kuaisrm.models.purchase_contract",  # 采购合同模型
                 # 快格轻WMS 模型
                 "apps.kuaiwms.models.inventory",  # 库存模型
                 "apps.kuaiwms.models.inbound_order",  # 入库单模型
@@ -237,7 +237,6 @@ async def register_db(app) -> None:
         # ⚠️ 关键修复：验证 Tortoise ORM 是否正确初始化
         # 检查 router 是否正确设置
         from tortoise import connections
-        from tortoise.router import TortoiseRouter
         try:
             # 尝试获取连接，验证配置是否正确
             conn = connections.get("default")
