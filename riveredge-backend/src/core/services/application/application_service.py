@@ -651,7 +651,7 @@ class ApplicationService:
                 
                 # 系统内置应用（如 master-data）应该自动安装
                 # 这些应用在 src/apps 目录下，是系统的一部分
-                builtin_apps = ['master-data', 'kuaimes']  # 系统内置应用列表
+                builtin_apps = ['master-data']  # 系统内置应用列表
                 should_auto_install = code in builtin_apps
                 
                 app_data = ApplicationCreate(

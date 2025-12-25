@@ -715,20 +715,25 @@ class AuthService:
             
             # 更新用户活动时间（记录登录时间和登录IP）
             try:
-                from core.services.logging.online_user_service import OnlineUserService
+                from core.services.interfaces.service_registry import ServiceLocator
                 from datetime import datetime
+
+                # 通过服务接口更新用户活动
+                user_activity_service = ServiceLocator.get_service("user_activity_service")
                 login_ip = request.client.host if request.client else None
+
                 asyncio.create_task(
-                    OnlineUserService.update_user_activity(
+                    user_activity_service.update_user_activity(
                         tenant_id=final_tenant_id,
                         user_id=user.id,
                         login_ip=login_ip,
                         login_time=datetime.now(),
                     )
                 )
-            except Exception:
+            except Exception as e:
                 # 更新活动时间失败不影响登录，静默处理
-                pass
+                from loguru import logger
+                logger.warning(f"更新用户活动时间失败: {e}")
         
         return result
     
@@ -1020,9 +1025,8 @@ class AuthService:
             request: 请求对象
         """
         try:
-            from core.services.logging.login_log_service import LoginLogService
-            from core.schemas.login_log import LoginLogCreate
-            
+            from core.services.interfaces.service_registry import ServiceLocator
+
             # 获取 IP 地址
             login_ip = None
             if request.client:
@@ -1036,51 +1040,21 @@ class AuthService:
                 real_ip = request.headers.get("X-Real-IP")
                 if real_ip:
                     login_ip = real_ip
-            
+
             # 获取用户代理
             user_agent = request.headers.get("User-Agent", "")
-            
-            # 解析登录设备（简单判断）
-            login_device = None
-            if user_agent:
-                user_agent_lower = user_agent.lower()
-                if "mobile" in user_agent_lower or "android" in user_agent_lower or "iphone" in user_agent_lower:
-                    login_device = "Mobile"
-                elif "tablet" in user_agent_lower or "ipad" in user_agent_lower:
-                    login_device = "Tablet"
-                else:
-                    login_device = "PC"
-            
-            # 解析登录浏览器（简单提取）
-            login_browser = None
-            if user_agent:
-                if "Chrome" in user_agent:
-                    login_browser = "Chrome"
-                elif "Firefox" in user_agent:
-                    login_browser = "Firefox"
-                elif "Safari" in user_agent:
-                    login_browser = "Safari"
-                elif "Edge" in user_agent:
-                    login_browser = "Edge"
-                elif "Opera" in user_agent:
-                    login_browser = "Opera"
-                else:
-                    login_browser = "Unknown"
-            
-            # 创建登录日志
-            login_log_data = LoginLogCreate(
-                tenant_id=tenant_id,
-                user_id=user_id,
+
+            # 通过服务接口记录登录事件
+            audit_log_service = ServiceLocator.get_service("audit_log_service")
+            await audit_log_service.log_login_event(
+                tenant_id=tenant_id or 0,  # 登录失败时可能为空
+                user_id=user_id or 0,      # 登录失败时可能为空
                 username=username,
-                login_ip=login_ip or "unknown",
-                login_location=None,  # 可以根据 IP 解析地理位置（可选）
-                login_device=login_device,
-                login_browser=login_browser,
-                login_status=login_status,
+                login_ip=login_ip,
+                user_agent=user_agent,
+                success=(login_status == "success"),
                 failure_reason=failure_reason,
             )
-            
-            await LoginLogService.create_login_log(login_log_data)
         except Exception as e:
             # 登录日志记录失败不影响登录流程，静默处理
             logger.warning(f"记录登录日志失败: {e}")
