@@ -168,17 +168,30 @@ def load_plugin_routes():
     if not apps_dir.exists():
         return
 
-    # 与MES完全无关的APP列表（暂时卸载）
+    # 快速上线模式：只保留主数据管理APP，其他APP全部停用并归档
     disabled_apps = {
-        "kuaiacc",    # 财务管理系统
+        "kuaiacc",    # 财务会计系统
+        "kuaiaps",    # 高级排产系统
+        "kuaicert",   # 认证管理系统
         "kuaicrm",    # 客户关系管理系统
+        "kuaieam",    # 设备资产管理系统
         "kuaiehs",    # 环境健康安全系统
+        "kuaiems",    # 能源管理系统
+        "kuaiepm",    # 企业绩效管理系统
         "kuaihrm",    # 人力资源管理系统
+        "kuaiiot",    # 物联网系统
         "kuailims",   # 实验室信息管理系统
+        "kuaimes",    # 制造执行系统
+        "kuaimi",     # 制造智能系统
+        "kuaimrp",    # 物料需求规划系统
         "kuaioa",     # 办公自动化系统
-        "kuaiscm",    # 供应链管理系统
+        "kuaipdm",    # 产品数据管理系统
+        "kuaipm",     # 项目管理系统
+        "kuaiqms",    # 质量管理系统
+        "kuaiscm",    # 供应链协同系统
         "kuaisrm",    # 供应商关系管理系统
         "kuaitms",    # 运输管理系统
+        "kuaiwms",    # 仓库管理系统
     }
 
     # 遍历 apps 目录下的所有插件
