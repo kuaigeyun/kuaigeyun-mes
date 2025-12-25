@@ -537,8 +537,8 @@ class ApplicationService:
         # 使用直接数据库查询，避免 Tortoise ORM 配置问题
         conn = await get_db_connection()
         try:
-            # 构建 SQL 查询
-            sql = """
+            # 构建基础 SQL 查询
+            base_sql = """
                 SELECT * FROM core_applications
                 WHERE tenant_id = $1
                   AND is_installed = TRUE
@@ -550,17 +550,14 @@ class ApplicationService:
 
             # 如果指定了 is_active，添加过滤条件
             if is_active is not None:
-                sql = sql.replace("AND code NOT IN ({})".format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))])),
-                                 "AND code NOT IN ({}) AND is_active = ${}".format(
-                                     ','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]),
-                                     len(params) + 1))
+                base_sql = base_sql.rstrip() + f"\n                  AND is_active = ${len(params) + 1}"
                 params.append(is_active)
 
             # 添加排序
-            sql += " ORDER BY sort_order, id"
+            final_sql = base_sql + "\n                ORDER BY sort_order, id"
 
             # 执行查询
-            rows = await conn.fetch(sql, *params)
+            rows = await conn.fetch(final_sql, *params)
 
             # 转换为字典列表
             result = []
