@@ -9,6 +9,7 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise import Tortoise
 from tortoise.exceptions import OperationalError
 from loguru import logger
+import asyncio
 
 from infra.config.infra_config import infra_settings as settings
 
@@ -19,12 +20,58 @@ from infra.config.infra_config import infra_settings as settings
 # 使用 127.0.0.1 而不是 localhost，避免 DNS 解析问题
 db_host = "127.0.0.1" if settings.DB_HOST == "localhost" else settings.DB_HOST
 
-# Tortoise ORM 配置字典
-# 使用官方推荐的方式配置连接池
-# 时区配置统一从 Settings 中读取，确保整个项目配置一致
-# 连接池配置参数（解决 "connection was closed in the middle of operation" 错误）：
-# 使用字典配置方式，显式指定连接参数和连接池配置
-# 注意：Tortoise ORM 0.20.1 支持在 credentials 中传递连接池参数
+# 动态生成 Tortoise ORM 配置
+# 不再使用硬编码的模型列表，通过数据库查询动态决定加载哪些应用模型
+async def get_dynamic_tortoise_config() -> dict:
+    """
+    动态生成 Tortoise ORM 配置
+
+    通过查询数据库中活跃的应用来动态决定需要加载的模型模块。
+    """
+    logger.info("🔧 生成动态 Tortoise ORM 配置...")
+
+    # 延迟导入，避免循环依赖
+    from .dynamic_config_service import DynamicDatabaseConfigService
+
+    # 获取动态配置
+    dynamic_config = await DynamicDatabaseConfigService.generate_tortoise_config()
+
+    # 合并连接配置
+    config = {
+        "connections": {
+            "default": {
+                "engine": "tortoise.backends.asyncpg",
+                "credentials": {
+                    "host": db_host,
+                    "port": settings.DB_PORT,
+                    "user": settings.DB_USER,
+                    "password": settings.DB_PASSWORD,
+                    "database": settings.DB_NAME,
+                    # 连接池配置（解决连接中断问题）
+                    "min_size": 5,  # 最小连接池大小
+                    "max_size": 20,  # 最大连接池大小（增加以支持并发请求）
+                    "max_queries": 50000,  # 每个连接最大查询次数
+                    "max_inactive_connection_lifetime": 300.0,  # 非活跃连接最大生存时间（秒）
+                    "command_timeout": 60,  # 命令超时（秒）
+                    "server_settings": {
+                        "application_name": "riveredge_asyncpg",
+                        "timezone": settings.TIMEZONE
+                    }
+                }
+            },
+        },
+        # 注意：Tortoise ORM 期望 routers 是一个列表，不能是 None
+        "routers": [],
+        "apps": dynamic_config["apps"],
+        "use_tz": dynamic_config["use_tz"],
+        "timezone": dynamic_config["timezone"],
+    }
+
+    logger.success("✅ 动态 Tortoise ORM 配置生成完成")
+    return config
+
+# 兼容性：保留静态配置用于初始化前的访问
+# 实际运行时会使用 get_dynamic_tortoise_config() 生成的动态配置
 TORTOISE_ORM = {
     "connections": {
         "default": {
@@ -201,17 +248,16 @@ async def register_db(app) -> None:
     """
     注册数据库组件到 FastAPI 应用
 
-    使用 Tortoise ORM 的 register_tortoise 方式管理连接池
+    使用动态配置生成Tortoise ORM配置，只加载活跃应用的模型
 
     Args:
         app: FastAPI 应用实例
     """
-    logger.info("注册 Tortoise ORM 到 FastAPI 应用")
+    logger.info("🔧 注册动态 Tortoise ORM 到 FastAPI 应用")
 
     try:
-        # ⚠️ 关键修复：确保配置中的 routers 字段存在且是列表
-        # 创建一个新的配置字典，确保所有字段都正确设置
-        config = TORTOISE_ORM.copy()  # 复制原始配置
+        # 使用动态配置生成器获取配置
+        config = await get_dynamic_tortoise_config()
         
         # 确保 routers 字段存在且是列表（不能是 None）
         if "routers" not in config or config["routers"] is None:

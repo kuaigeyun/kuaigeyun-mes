@@ -21,6 +21,7 @@ sys.path.insert(0, str(src_path))
 
 from infra.infrastructure.database.database import register_db
 from tortoise import Tortoise
+from core.services.application.application_registry_service import ApplicationRegistryService
 
 # 导入所有平台级 API 路由
 # 注意：SuperAdmin Auth已移除，使用Platform Admin Auth替代
@@ -119,6 +120,10 @@ async def lifespan(app: FastAPI):
     await register_db(app)
     print("✅ Tortoise ORM 已注册")
 
+    # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
+    await ApplicationRegistryService.reload_apps()
+    print("✅ 应用注册服务已重新初始化")
+
     yield
 
     # ⚠️ 注意：close_db_connections 已经在 register_db 中注册为 shutdown 事件
@@ -160,36 +165,23 @@ def load_plugin_routes():
     """
     动态加载插件路由
 
-    使用插件管理器根据数据库中的启用状态动态加载插件路由。
+    使用ApplicationRegistryService注册应用路由。
     """
     try:
-        from core.services.plugin_manager.plugin_manager import PluginManagerService
-        import asyncio
+        # 获取已注册的应用路由
+        registered_routes = ApplicationRegistryService.get_registered_routes()
 
-        # 获取插件管理器
-        apps_dir = Path(__file__).parent.parent / "apps"
-        plugin_manager = PluginManagerService(apps_dir)
-
-        # 由于这是同步函数，我们需要创建一个新的事件循环来运行异步代码
-        # 注意：这不是最佳实践，但在应用启动时是可行的
-
-        # 临时方案：直接启用我们需要的插件
-        # 在生产环境中，应该从数据库读取租户配置
-        enabled_plugins = ["master_data"]  # 快速上线模式下只启用主数据管理
-
-        # 加载启用的插件
-        loaded_plugins = plugin_manager.loader_service.load_enabled_plugins(enabled_plugins)
-
-        # 注册插件路由
-        for plugin_info in loaded_plugins:
-            for router in plugin_info['routers']:
+        # 注册所有应用路由
+        for app_code, routers in registered_routes.items():
+            for router in routers:
                 app.include_router(router, prefix="/api/v1")
-                print(f"✅ 已注册插件 {plugin_info['code']} 的路由")
+                print(f"✅ 已注册应用 {app_code} 的路由")
 
-        print(f"🎉 插件系统初始化完成，共加载 {len(loaded_plugins)} 个插件")
+        total_routes = sum(len(routers) for routers in registered_routes.values())
+        print(f"🎉 应用路由注册完成，共注册 {total_routes} 个路由对象")
 
     except Exception as e:
-        print(f"⚠️ 插件系统初始化失败: {str(e)}")
+        print(f"⚠️ 应用路由注册失败: {str(e)}")
         import traceback
         traceback.print_exc()
 
