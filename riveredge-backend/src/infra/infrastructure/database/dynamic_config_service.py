@@ -54,7 +54,7 @@ class DynamicDatabaseConfigService:
             "timezone": "Asia/Shanghai",  # 从Settings中读取
         }
 
-        logger.success("✅ 动态数据库配置生成完成")
+        logger.info("✅ 动态数据库配置生成完成")
         return config
 
     @staticmethod
@@ -72,7 +72,6 @@ class DynamicDatabaseConfigService:
             # 核心系统模型
             "core.models.application",
             "core.models.menu",
-            "core.models.user",
             "core.models.role",
             "core.models.permission",
             "core.models.user_role",
@@ -81,18 +80,59 @@ class DynamicDatabaseConfigService:
             "core.models.operation_log",
             "core.models.login_log",
             "core.models.data_backup",
+            "core.models.data_dictionary",
+            "core.models.dictionary_item",
+            "core.models.system_parameter",
+            "core.models.code_rule",
+            "core.models.code_sequence",
+            "core.models.custom_field",
+            "core.models.custom_field_value",
+            "core.models.site_setting",
+            "core.models.invitation_code",
+            "core.models.language",
+            "core.models.integration_config",
+            "core.models.file",
+            "core.models.api",
+            "core.models.data_source",
+            "core.models.dataset",
+            "core.models.message_config",
+            "core.models.message_template",
+            "core.models.message_log",
+            "core.models.scheduled_task",
+            "core.models.approval_process",
+            "core.models.approval_instance",
+            "core.models.approval_history",
+            "core.models.script",
+            "core.models.print_template",
+            "core.models.print_device",
+            "core.models.department",
+            "core.models.position",
 
             # 平台模型
-            "infra.models.user",
+            "infra.models.base",
             "infra.models.tenant",
-            "infra.models.superadmin",
-            "infra.models.saved_search",
+            "infra.models.tenant_config",
+            "infra.models.tenant_activity_log",
+            "infra.models.user",
+            "infra.models.infra_superadmin",
             "infra.models.package",
+            "infra.models.saved_search",
             "infra.models.invitation_code",
 
             # Aerich 模型（数据库迁移）
             "aerich.models",
         ]
+
+        # 验证模型模块是否存在，只包含存在的模块
+        validated_base_models = []
+        for model_path in base_models:
+            if DynamicDatabaseConfigService._module_exists(model_path):
+                validated_base_models.append(model_path)
+                logger.debug(f"✅ 验证基础模型存在: {model_path}")
+            else:
+                logger.warning(f"⚠️ 基础模型不存在，跳过: {model_path}")
+
+        return validated_base_models
 
         # 获取活跃应用的模型
         active_app_models = await DynamicDatabaseConfigService._get_active_app_models()
@@ -100,8 +140,16 @@ class DynamicDatabaseConfigService:
         # 合并所有模型
         all_models = base_models + active_app_models
 
-        logger.debug(f"📝 总共加载 {len(all_models)} 个模型模块")
-        return all_models
+        # 最终验证所有模型模块是否存在
+        final_models = []
+        for model_path in all_models:
+            if DynamicDatabaseConfigService._module_exists(model_path):
+                final_models.append(model_path)
+            else:
+                logger.warning(f"❌ 模型模块不存在: {model_path}")
+
+        logger.info(f"📝 最终加载 {len(final_models)} 个验证通过的模型模块")
+        return final_models
 
     @staticmethod
     async def _get_active_app_models() -> List[str]:
@@ -206,7 +254,7 @@ class DynamicDatabaseConfigService:
         result["total_models"] = len(result["valid_models"])
 
         if result["is_valid"]:
-            logger.success(f"✅ 应用 {app_code} 模型验证通过，共 {result['total_models']} 个有效模块")
+            logger.info(f"✅ 应用 {app_code} 模型验证通过，共 {result['total_models']} 个有效模块")
         else:
             logger.error(f"❌ 应用 {app_code} 模型验证失败，缺少主模型模块")
 

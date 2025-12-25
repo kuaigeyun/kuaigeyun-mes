@@ -67,7 +67,7 @@ async def get_dynamic_tortoise_config() -> dict:
         "timezone": dynamic_config["timezone"],
     }
 
-    logger.success("✅ 动态 Tortoise ORM 配置生成完成")
+    logger.info("✅ 动态 Tortoise ORM 配置生成完成")
     return config
 
 # 兼容性：保留静态配置用于初始化前的访问
