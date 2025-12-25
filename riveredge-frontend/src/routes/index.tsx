@@ -22,13 +22,13 @@ import SystemRoutes from './SystemRoutes';
 import AppRoutes from './AppRoutes';
 
 /**
- * 主应用路由组件
+ * 主路由组件
  *
  * 采用系统层与应用层完全隔离的架构：
  * - SystemRoutes: 系统核心功能，立即可用
  * - AppRoutes: 业务应用，异步加载，可降级
  */
-const AppRoutes: React.FC = () => {
+const MainRoutes: React.FC = () => {
   return (
     <Routes>
       {/* 系统核心路由 - 立即可用，不依赖应用加载 */}
@@ -40,4 +40,4 @@ const AppRoutes: React.FC = () => {
   );
 };
 
-export default AppRoutes;
+export default MainRoutes;
