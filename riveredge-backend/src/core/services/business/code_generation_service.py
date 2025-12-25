@@ -11,7 +11,7 @@ from tortoise.transactions import in_transaction
 
 from core.models.code_rule import CodeRule
 from core.models.code_sequence import CodeSequence
-from core.services.code_rule_service import CodeRuleService
+from core.services.business.code_rule_service import CodeRuleService
 from infra.exceptions.exceptions import ValidationError
 
 

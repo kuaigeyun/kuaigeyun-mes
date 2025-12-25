@@ -13,7 +13,7 @@ from loguru import logger
 from core.inngest.client import inngest_client
 from core.models.message_log import MessageLog
 from core.models.message_config import MessageConfig
-from core.services.message_config_service import MessageConfigService
+from core.services.messaging.message_config_service import MessageConfigService
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
 from infra.domain.tenant_context import get_current_tenant_id
 

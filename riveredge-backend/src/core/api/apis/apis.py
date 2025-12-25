@@ -15,7 +15,7 @@ from core.schemas.api import (
     APITestRequest,
     APITestResponse,
 )
-from core.services.api_service import APIService
+from core.services.application.api_service import APIService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

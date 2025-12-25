@@ -326,7 +326,7 @@ class PrintDeviceService:
         
         # 同步执行打印
         # 1. 获取打印模板
-        from core.services.print_template_service import PrintTemplateService
+        from core.services.print.print_template_service import PrintTemplateService
         print_template = await PrintTemplateService.get_print_template_by_uuid(
             tenant_id=tenant_id,
             uuid=data.template_uuid

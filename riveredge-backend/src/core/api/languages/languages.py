@@ -14,7 +14,7 @@ from core.schemas.language import (
     TranslationUpdateRequest,
     TranslationGetResponse,
 )
-from core.services.language_service import LanguageService
+from core.services.system.language_service import LanguageService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

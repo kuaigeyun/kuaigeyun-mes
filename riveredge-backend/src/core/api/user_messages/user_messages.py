@@ -13,7 +13,7 @@ from core.schemas.user_message import (
     UserMessageStatsResponse,
     UserMessageMarkReadRequest,
 )
-from core.services.user_message_service import UserMessageService
+from core.services.user.user_message_service import UserMessageService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

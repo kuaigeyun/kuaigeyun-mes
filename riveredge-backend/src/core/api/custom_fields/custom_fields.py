@@ -16,7 +16,7 @@ from core.schemas.custom_field import (
     CustomFieldValueResponse,
     BatchSetFieldValuesRequest,
 )
-from core.services.custom_field_service import CustomFieldService
+from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

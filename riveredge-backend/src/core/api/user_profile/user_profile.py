@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from core.schemas.user_profile import UserProfileUpdate, UserProfileResponse
-from core.services.user_profile_service import UserProfileService
+from core.services.user.user_profile_service import UserProfileService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

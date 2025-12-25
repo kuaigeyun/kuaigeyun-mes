@@ -15,7 +15,7 @@ from core.schemas.menu import (
     MenuTreeResponse,
     MenuListResponse,
 )
-from core.services.menu_service import MenuService
+from core.services.system.menu_service import MenuService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -103,7 +103,7 @@ async def get_menu_tree(
     # 开发环境下：自动扫描并同步插件菜单，确保菜单配置修改后立即生效
     if os.getenv("ENVIRONMENT", "development") == "development" or os.getenv("DEBUG", "false").lower() == "true":
         try:
-            from core.services.application_service import ApplicationService
+            from core.services.application.application_service import ApplicationService
             # 自动扫描并注册插件（只扫描，不阻塞主流程）
             # 如果菜单配置有变化，会自动同步菜单
             await ApplicationService.scan_and_register_plugins(tenant_id=tenant_id)

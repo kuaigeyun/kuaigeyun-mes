@@ -17,7 +17,7 @@ from core.schemas.role import (
     RoleListItem,
     PermissionInfo,
 )
-from core.services.role_service import RoleService
+from core.services.authorization.role_service import RoleService
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

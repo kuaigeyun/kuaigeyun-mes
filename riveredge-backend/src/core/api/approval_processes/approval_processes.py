@@ -12,7 +12,7 @@ from core.schemas.approval_process import (
     ApprovalProcessUpdate,
     ApprovalProcessResponse,
 )
-from core.services.approval_process_service import ApprovalProcessService
+from core.services.approval.approval_process_service import ApprovalProcessService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

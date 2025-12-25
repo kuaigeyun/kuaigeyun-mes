@@ -20,8 +20,8 @@ from core.schemas.data_backup import (
     DataBackupListResponse,
     DataBackupRestoreResponse,
 )
-from core.services.system_parameter_service import SystemParameterService
-from core.services.file_service import FileService
+from core.services.system.system_parameter_service import SystemParameterService
+from core.services.file.file_service import FileService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.database.database import DB_CONFIG
 from loguru import logger

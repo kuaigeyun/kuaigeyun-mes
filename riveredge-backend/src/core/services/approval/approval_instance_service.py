@@ -14,7 +14,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.approval_instance import ApprovalInstance
 from core.models.approval_process import ApprovalProcess
 from core.schemas.approval_instance import ApprovalInstanceCreate, ApprovalInstanceUpdate, ApprovalInstanceAction
-from core.services.message_service import MessageService
+from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError

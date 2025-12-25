@@ -12,7 +12,7 @@ from core.schemas.message_template import (
     MessageTemplateUpdate,
     MessageTemplateResponse,
 )
-from core.services.message_template_service import MessageTemplateService
+from core.services.messaging.message_template_service import MessageTemplateService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

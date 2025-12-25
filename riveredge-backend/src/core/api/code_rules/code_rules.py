@@ -14,8 +14,8 @@ from core.schemas.code_rule import (
     CodeGenerationRequest,
     CodeGenerationResponse,
 )
-from core.services.code_rule_service import CodeRuleService
-from core.services.code_generation_service import CodeGenerationService
+from core.services.business.code_rule_service import CodeRuleService
+from core.services.business.code_generation_service import CodeGenerationService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

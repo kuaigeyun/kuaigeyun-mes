@@ -12,7 +12,7 @@ from core.schemas.application import (
     ApplicationUpdate,
     ApplicationResponse,
 )
-from core.services.application_service import ApplicationService
+from core.services.application.application_service import ApplicationService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

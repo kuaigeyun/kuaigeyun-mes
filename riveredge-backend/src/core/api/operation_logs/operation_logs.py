@@ -13,7 +13,7 @@ from core.schemas.operation_log import (
     OperationLogListResponse,
     OperationLogStatsResponse,
 )
-from core.services.operation_log_service import OperationLogService
+from core.services.logging.operation_log_service import OperationLogService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

@@ -715,7 +715,7 @@ class AuthService:
             
             # 更新用户活动时间（记录登录时间和登录IP）
             try:
-                from core.services.online_user_service import OnlineUserService
+                from core.services.logging.online_user_service import OnlineUserService
                 from datetime import datetime
                 login_ip = request.client.host if request.client else None
                 asyncio.create_task(
@@ -1020,7 +1020,7 @@ class AuthService:
             request: 请求对象
         """
         try:
-            from core.services.login_log_service import LoginLogService
+            from core.services.logging.login_log_service import LoginLogService
             from core.schemas.login_log import LoginLogCreate
             
             # 获取 IP 地址

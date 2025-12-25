@@ -12,7 +12,7 @@ from core.schemas.message_config import (
     MessageConfigUpdate,
     MessageConfigResponse,
 )
-from core.services.message_config_service import MessageConfigService
+from core.services.messaging.message_config_service import MessageConfigService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

@@ -16,7 +16,7 @@ from core.schemas.user import (
     UserResponse,
     UserListResponse,
 )
-from core.services.user_service import UserService
+from core.services.user.user_service import UserService
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

@@ -16,7 +16,7 @@ from core.schemas.print_device import (
     PrintDeviceTestResponse,
     PrintDevicePrintResponse,
 )
-from core.services.print_device_service import PrintDeviceService
+from core.services.print.print_device_service import PrintDeviceService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

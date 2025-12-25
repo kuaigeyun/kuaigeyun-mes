@@ -13,7 +13,7 @@ from core.models.custom_field_value import CustomFieldValue
 from core.models.data_dictionary import DataDictionary
 from core.models.dictionary_item import DictionaryItem
 from core.schemas.custom_field import CustomFieldCreate, CustomFieldUpdate
-from core.services.data_dictionary_service import DataDictionaryService
+from core.services.data.data_dictionary_service import DataDictionaryService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 

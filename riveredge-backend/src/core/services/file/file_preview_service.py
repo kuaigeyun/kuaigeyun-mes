@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 
 from core.models.file import File
-from core.services.system_parameter_service import SystemParameterService
+from core.services.system.system_parameter_service import SystemParameterService
 from infra.config.infra_config import infra_settings as settings
 from infra.infrastructure.cache.cache_manager import cache_manager
 
@@ -476,7 +476,7 @@ class FilePreviewService:
             }
         """
         # 1. 查询文件
-        from core.services.file_service import FileService
+        from core.services.file.file_service import FileService
         file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
         
         # 2. 读取预览模式配置

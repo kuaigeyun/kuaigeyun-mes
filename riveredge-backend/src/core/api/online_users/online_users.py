@@ -12,7 +12,7 @@ from core.schemas.online_user import (
     OnlineUserListResponse,
     OnlineUserStatisticsResponse,
 )
-from core.services.online_user_service import OnlineUserService
+from core.services.logging.online_user_service import OnlineUserService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

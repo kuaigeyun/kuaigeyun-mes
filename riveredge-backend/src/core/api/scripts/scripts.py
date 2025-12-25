@@ -14,7 +14,7 @@ from core.schemas.script import (
     ScriptResponse,
     ScriptExecuteResponse,
 )
-from core.services.script_service import ScriptService
+from core.services.scheduling.script_service import ScriptService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

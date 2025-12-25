@@ -13,7 +13,7 @@ from core.schemas.integration_config import (
     IntegrationConfigResponse,
     TestConnectionResponse,
 )
-from core.services.integration_config_service import IntegrationConfigService
+from core.services.integration.integration_config_service import IntegrationConfigService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

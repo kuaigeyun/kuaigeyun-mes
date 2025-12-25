@@ -527,7 +527,7 @@ class UserService:
             user_id: 用户ID
         """
         try:
-            from core.services.online_user_service import OnlineUserService
+            from core.services.logging.online_user_service import OnlineUserService
             await OnlineUserService.force_logout(
                 tenant_id=tenant_id,
                 user_id=user_id

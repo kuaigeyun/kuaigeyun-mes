@@ -17,7 +17,7 @@ from core.schemas.dataset import (
 )
 from core.schemas.api import APITestResponse
 from core.schemas.data_source import TestConnectionResponse
-from core.services.dataset_service import DatasetService
+from core.services.data.dataset_service import DatasetService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

@@ -193,7 +193,7 @@ class DataSourceService:
         if (data_source_data.is_active is not None and old_is_active != data_source.is_active) or \
            (data_source_data.config and old_config != data_source.config):
             import asyncio
-            from core.services.dataset_service import DatasetService
+            from core.services.data.dataset_service import DatasetService
             asyncio.create_task(
                 DatasetService._notify_datasets_of_data_source_change(
                     tenant_id=tenant_id,
@@ -232,7 +232,7 @@ class DataSourceService:
         
         # 异步通知数据集管理数据源已被删除
         import asyncio
-        from core.services.dataset_service import DatasetService
+        from core.services.data.dataset_service import DatasetService
         asyncio.create_task(
             DatasetService._notify_datasets_of_data_source_change(
                 tenant_id=tenant_id,

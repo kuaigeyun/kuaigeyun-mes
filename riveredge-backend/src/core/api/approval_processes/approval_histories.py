@@ -8,7 +8,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from core.schemas.approval_history import ApprovalHistoryResponse
-from core.services.approval_history_service import ApprovalHistoryService
+from core.services.approval.approval_history_service import ApprovalHistoryService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError
 

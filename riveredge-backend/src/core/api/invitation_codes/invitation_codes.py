@@ -14,7 +14,7 @@ from core.schemas.invitation_code import (
     InvitationCodeVerifyRequest,
     InvitationCodeVerifyResponse,
 )
-from core.services.invitation_code_service import InvitationCodeService
+from core.services.invitation.invitation_code_service import InvitationCodeService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

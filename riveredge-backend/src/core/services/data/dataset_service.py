@@ -71,7 +71,7 @@ class DatasetService:
             api_code = query_config.get('api_code') if isinstance(query_config, dict) else None
             
             if api_uuid or api_code:
-                from core.services.api_service import APIService
+                from core.services.application.api_service import APIService
                 api_service = APIService()
                 
                 if api_uuid:
@@ -240,7 +240,7 @@ class DatasetService:
             api_code = query_config.get('api_code') if isinstance(query_config, dict) else None
             
             if api_uuid or api_code:
-                from core.services.api_service import APIService
+                from core.services.application.api_service import APIService
                 api_service = APIService()
                 
                 if api_uuid:
@@ -570,7 +570,7 @@ class DatasetService:
             
             if api_uuid or api_code:
                 # 从接口管理获取 API 配置
-                from core.services.api_service import APIService
+                from core.services.application.api_service import APIService
                 api_service = APIService()
                 
                 if api_uuid:
@@ -798,7 +798,7 @@ class DatasetService:
             raise ValidationError("数据集未关联接口管理中的 API（query_config 中缺少 api_uuid 或 api_code）")
         
         # 从接口管理获取 API
-        from core.services.api_service import APIService
+        from core.services.application.api_service import APIService
         from core.schemas.api import APITestRequest
         api_service = APIService()
         
@@ -912,7 +912,7 @@ class DatasetService:
         data_source = dataset.data_source
         
         # 调用数据源管理的测试功能
-        from core.services.data_source_service import DataSourceService
+        from core.services.data.data_source_service import DataSourceService
         test_result = await DataSourceService().test_connection(
             tenant_id=tenant_id,
             data_source_uuid=data_source.uuid,

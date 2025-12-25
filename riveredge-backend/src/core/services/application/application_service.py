@@ -246,7 +246,7 @@ class ApplicationService:
         is_active_changed = 'is_active' in update_data and old_is_active != application.is_active
         
         if menu_config_changed or is_active_changed:
-            from core.services.menu_service import MenuService
+            from core.services.system.menu_service import MenuService
             
             # 如果菜单配置变更，重新同步所有菜单（同步执行，确保菜单立即可用）
             if menu_config_changed and application.menu_config:
@@ -334,7 +334,7 @@ class ApplicationService:
         
         # 自动同步应用菜单配置到菜单管理（同步执行，确保菜单立即可用）
         if application.get('menu_config'):
-            from core.services.menu_service import MenuService
+            from core.services.system.menu_service import MenuService
             await MenuService.sync_menus_from_application_config(
                 tenant_id=tenant_id,
                 application_uuid=str(application['uuid']),
@@ -419,7 +419,7 @@ class ApplicationService:
         
         # 如果应用已安装且有菜单配置，确保菜单已同步并启用
         if application.get('is_installed') and application.get('menu_config'):
-            from core.services.menu_service import MenuService
+            from core.services.system.menu_service import MenuService
             # 重新同步菜单，确保菜单状态与应用状态一致
             await MenuService.sync_menus_from_application_config(
                 tenant_id=tenant_id,
@@ -684,7 +684,7 @@ class ApplicationService:
                     # 如果应用已安装且有菜单配置，确保菜单已同步
                     # 注意：即使菜单配置没有变化，也要同步，因为可能之前同步失败或菜单被删除
                     if application.menu_config and application.is_installed:
-                        from core.services.menu_service import MenuService
+                        from core.services.system.menu_service import MenuService
                         await MenuService.sync_menus_from_application_config(
                             tenant_id=tenant_id,
                             application_uuid=str(application.uuid),
@@ -705,7 +705,7 @@ class ApplicationService:
                         
                         # 自动同步菜单配置
                         if application.menu_config:
-                            from core.services.menu_service import MenuService
+                            from core.services.system.menu_service import MenuService
                             await MenuService.sync_menus_from_application_config(
                                 tenant_id=tenant_id,
                                 application_uuid=str(application.uuid),
@@ -726,7 +726,7 @@ class ApplicationService:
         # 所有应用注册完成后，统一清除菜单缓存，确保菜单一次性刷新
         if registered_apps:
             try:
-                from core.services.menu_service import MenuService
+                from core.services.system.menu_service import MenuService
                 await MenuService._clear_menu_cache(tenant_id)
             except Exception as e:
                 print(f"⚠️ 清除菜单缓存失败（不影响应用注册）: {e}")

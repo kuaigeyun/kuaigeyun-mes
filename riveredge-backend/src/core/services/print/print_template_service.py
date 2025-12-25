@@ -13,7 +13,7 @@ import re
 from tortoise.exceptions import IntegrityError
 
 from core.models.print_template import PrintTemplate
-from core.services.print_device_service import PrintDeviceService
+from core.services.print.print_device_service import PrintDeviceService
 from core.schemas.print_template import (
     PrintTemplateCreate,
     PrintTemplateUpdate,

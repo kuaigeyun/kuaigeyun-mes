@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from core.services.operation_log_service import OperationLogService
+from core.services.logging.operation_log_service import OperationLogService
 
 
 class OperationLogMiddleware(BaseHTTPMiddleware):
@@ -162,7 +162,7 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             
             # 更新用户活动时间（异步执行，不阻塞）
             try:
-                from core.services.online_user_service import OnlineUserService
+                from core.services.logging.online_user_service import OnlineUserService
                 asyncio.create_task(
                     OnlineUserService.update_user_activity(
                         tenant_id=tenant_id,
