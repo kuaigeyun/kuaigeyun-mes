@@ -20,7 +20,7 @@ import type { DataNode, TreeProps } from 'antd/es/tree';
 import type { MenuProps } from 'antd';
 
 // 导入现有组件
-import SafeProFormSelect from '../../../../components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { UniTable } from '../../../../components/uni-table';
 import { TwoColumnLayout } from '../../../../components/two-column-layout';
 

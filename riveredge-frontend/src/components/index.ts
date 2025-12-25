@@ -30,3 +30,4 @@ export type { KanbanBoardProps, KanbanColumn, KanbanCardProps } from './kanban-b
 export { default as TechStackModal } from './tech-stack-modal';
 export { default as LongPressVerify } from './long-press-verify';
 export type { LongPressVerifyProps } from './long-press-verify';
+export { default as SafeProFormSelect } from './safe-pro-form-select';

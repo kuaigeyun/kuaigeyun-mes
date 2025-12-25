@@ -7,7 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
