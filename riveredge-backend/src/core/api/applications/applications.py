@@ -110,17 +110,45 @@ async def list_installed_applications(
     # 需要处理 JSON 字段（如 menu_config）从字符串转换为字典
     result = []
     for app in applications:
-        # 处理 JSON 字段：如果 menu_config 是字符串，需要解析为字典
-        if 'menu_config' in app and isinstance(app['menu_config'], str):
-            try:
-                import json
-                app['menu_config'] = json.loads(app['menu_config']) if app['menu_config'] else None
-            except (json.JSONDecodeError, TypeError):
-                app['menu_config'] = None
-        
-        # 处理其他可能的 JSON 字段
-        # 直接使用字典构建响应
-        result.append(ApplicationResponse(**app))
+        try:
+            # 处理 JSON 字段：如果 menu_config 是字符串，需要解析为字典
+            if 'menu_config' in app and isinstance(app['menu_config'], str):
+                try:
+                    import json
+                    app['menu_config'] = json.loads(app['menu_config']) if app['menu_config'] else None
+                except (json.JSONDecodeError, TypeError):
+                    app['menu_config'] = None
+
+            # 只保留 ApplicationResponse 需要的字段，避免传递多余字段
+            app_data = {
+                'uuid': app.get('uuid'),
+                'tenant_id': app.get('tenant_id'),
+                'name': app.get('name'),
+                'code': app.get('code'),
+                'description': app.get('description'),
+                'icon': app.get('icon'),
+                'version': app.get('version'),
+                'route_path': app.get('route_path'),
+                'entry_point': app.get('entry_point'),
+                'menu_config': app.get('menu_config'),
+                'permission_code': app.get('permission_code'),
+                'is_system': app.get('is_system', False),
+                'is_active': app.get('is_active', True),
+                'is_installed': app.get('is_installed', False),
+                'sort_order': app.get('sort_order', 0),
+                'created_at': app.get('created_at'),
+                'updated_at': app.get('updated_at'),
+            }
+
+            # 构造响应对象
+            app_response = ApplicationResponse(**app_data)
+            result.append(app_response)
+
+        except Exception as e:
+            # 记录错误但不中断整个响应
+            print(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
+            continue
+
     return result
 
 
