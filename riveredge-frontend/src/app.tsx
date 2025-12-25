@@ -18,7 +18,7 @@ import { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
 import { getSiteSetting } from './services/siteSetting';
 // 使用 routes 中的路由配置
-import AppRoutes from './routes';
+import MainRoutes from './routes';
 import ErrorBoundary from './components/error-boundary';
 
 // ⚠️ 关键修复：将 Ant Design App 组件的 message 实例注入到全局，供工具函数使用
@@ -522,7 +522,7 @@ export default function App() {
   return (
               <ErrorBoundary>
                 <AuthGuard>
-                  <AppRoutes />
+                  <MainRoutes />
                 </AuthGuard>
               </ErrorBoundary>
     );

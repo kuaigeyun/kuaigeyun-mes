@@ -6,6 +6,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import BasicLayout from '../layouts/BasicLayout';
 
 // 加载中组件
 const LoadingFallback: React.FC = () => (
@@ -56,12 +57,26 @@ const IntegrationConfigsPage = lazy(() => import('../pages/system/integration-co
 const InvitationCodesPage = lazy(() => import('../pages/system/invitation-codes/list'));
 const MessageTemplatesPage = lazy(() => import('../pages/system/messages/template'));
 const MessageConfigsPage = lazy(() => import('../pages/system/messages/config'));
+const InngestDashboardPage = lazy(() => import('../pages/infra/inngest'));
 
 // 平台级页面（懒加载）
 const PlatformOperationPage = lazy(() => import('../pages/infra/operation'));
 const TenantsPage = lazy(() => import('../pages/infra/tenants/list'));
 const PackagesPage = lazy(() => import('../pages/infra/packages'));
 const MonitoringPage = lazy(() => import('../pages/infra/monitoring'));
+const PlatformAdminPage = lazy(() => import('../pages/infra/admin'));
+
+/**
+ * 页面布局包装函数
+ *
+ * 为系统和平台页面提供统一的BasicLayout包装
+ * 公开页面（如登录页）不使用此包装
+ */
+const renderWithLayout = (PageComponent: React.ComponentType) => (
+  <BasicLayout>
+    <PageComponent />
+  </BasicLayout>
+);
 
 /**
  * 系统核心路由组件
@@ -80,169 +95,189 @@ const SystemRoutes: React.FC = () => {
       {/* 系统级路由 */}
       <Route path="/system/dashboard" element={
         <Suspense fallback={<LoadingFallback />}>
-          <DashboardPage />
+          {renderWithLayout(DashboardPage)}
         </Suspense>
       } />
       <Route path="/system/roles" element={
         <Suspense fallback={<LoadingFallback />}>
-          <RolesPage />
+          {renderWithLayout(RolesPage)}
         </Suspense>
       } />
       <Route path="/system/permissions" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PermissionsPage />
+          {renderWithLayout(PermissionsPage)}
         </Suspense>
       } />
       <Route path="/system/departments" element={
         <Suspense fallback={<LoadingFallback />}>
-          <DepartmentsPage />
+          {renderWithLayout(DepartmentsPage)}
         </Suspense>
       } />
       <Route path="/system/positions" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PositionsPage />
+          {renderWithLayout(PositionsPage)}
         </Suspense>
       } />
       <Route path="/system/users" element={
         <Suspense fallback={<LoadingFallback />}>
-          <UserProfilePage />
+          {renderWithLayout(UserProfilePage)}
         </Suspense>
       } />
       <Route path="/system/user-profile" element={
         <Suspense fallback={<LoadingFallback />}>
-          <UserProfilePage />
+          {renderWithLayout(UserProfilePage)}
         </Suspense>
       } />
       <Route path="/system/languages" element={
         <Suspense fallback={<LoadingFallback />}>
-          <LanguagesPage />
+          {renderWithLayout(LanguagesPage)}
         </Suspense>
       } />
       <Route path="/system/site-settings" element={
         <Suspense fallback={<LoadingFallback />}>
-          <SiteSettingsPage />
+          {renderWithLayout(SiteSettingsPage)}
         </Suspense>
       } />
       <Route path="/system/applications" element={
         <Suspense fallback={<LoadingFallback />}>
-          <ApplicationCenterPage />
+          {renderWithLayout(ApplicationCenterPage)}
         </Suspense>
       } />
       <Route path="/system/plugin-manager" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PluginManagerPage />
+          {renderWithLayout(PluginManagerPage)}
         </Suspense>
       } />
       <Route path="/system/operation-logs" element={
         <Suspense fallback={<LoadingFallback />}>
-          <OperationLogsPage />
+          {renderWithLayout(OperationLogsPage)}
         </Suspense>
       } />
       <Route path="/system/login-logs" element={
         <Suspense fallback={<LoadingFallback />}>
-          <LoginLogsPage />
+          {renderWithLayout(LoginLogsPage)}
         </Suspense>
       } />
       <Route path="/system/online-users" element={
         <Suspense fallback={<LoadingFallback />}>
-          <OnlineUsersPage />
+          {renderWithLayout(OnlineUsersPage)}
         </Suspense>
       } />
       <Route path="/system/scheduled-tasks" element={
         <Suspense fallback={<LoadingFallback />}>
-          <ScheduledTasksPage />
+          {renderWithLayout(ScheduledTasksPage)}
         </Suspense>
       } />
       <Route path="/system/scripts" element={
         <Suspense fallback={<LoadingFallback />}>
-          <ScriptsPage />
+          {renderWithLayout(ScriptsPage)}
         </Suspense>
       } />
       <Route path="/system/print-devices" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PrintDevicesPage />
+          {renderWithLayout(PrintDevicesPage)}
         </Suspense>
       } />
       <Route path="/system/print-templates" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PrintTemplatesPage />
+          {renderWithLayout(PrintTemplatesPage)}
         </Suspense>
       } />
       <Route path="/system/code-rules" element={
         <Suspense fallback={<LoadingFallback />}>
-          <CodeRulesPage />
+          {renderWithLayout(CodeRulesPage)}
         </Suspense>
       } />
       <Route path="/system/data-dictionaries" element={
         <Suspense fallback={<LoadingFallback />}>
-          <DataDictionariesPage />
+          {renderWithLayout(DataDictionariesPage)}
         </Suspense>
       } />
       <Route path="/system/data-sources" element={
         <Suspense fallback={<LoadingFallback />}>
-          <DataSourcesPage />
+          {renderWithLayout(DataSourcesPage)}
         </Suspense>
       } />
       <Route path="/system/datasets" element={
         <Suspense fallback={<LoadingFallback />}>
-          <DatasetsPage />
+          {renderWithLayout(DatasetsPage)}
         </Suspense>
       } />
       <Route path="/system/data-backups" element={
         <Suspense fallback={<LoadingFallback />}>
-          <DataBackupsPage />
+          {renderWithLayout(DataBackupsPage)}
         </Suspense>
       } />
       <Route path="/system/custom-fields" element={
         <Suspense fallback={<LoadingFallback />}>
-          <CustomFieldsPage />
+          {renderWithLayout(CustomFieldsPage)}
         </Suspense>
       } />
       <Route path="/system/api-services" element={
         <Suspense fallback={<LoadingFallback />}>
-          <ApiServicesPage />
+          {renderWithLayout(ApiServicesPage)}
         </Suspense>
       } />
       <Route path="/system/integration-configs" element={
         <Suspense fallback={<LoadingFallback />}>
-          <IntegrationConfigsPage />
+          {renderWithLayout(IntegrationConfigsPage)}
         </Suspense>
       } />
       <Route path="/system/invitation-codes" element={
         <Suspense fallback={<LoadingFallback />}>
-          <InvitationCodesPage />
+          {renderWithLayout(InvitationCodesPage)}
         </Suspense>
       } />
       <Route path="/system/message-templates" element={
         <Suspense fallback={<LoadingFallback />}>
-          <MessageTemplatesPage />
+          {renderWithLayout(MessageTemplatesPage)}
         </Suspense>
       } />
       <Route path="/system/message-configs" element={
         <Suspense fallback={<LoadingFallback />}>
-          <MessageConfigsPage />
+          {renderWithLayout(MessageConfigsPage)}
+        </Suspense>
+      } />
+      <Route path="/system/inngest" element={
+        <Suspense fallback={<LoadingFallback />}>
+          {renderWithLayout(InngestDashboardPage)}
         </Suspense>
       } />
 
       {/* 平台级路由 */}
+      <Route path="/infra/admin" element={
+        <Suspense fallback={<LoadingFallback />}>
+          {renderWithLayout(PlatformAdminPage)}
+        </Suspense>
+      } />
+      <Route path="/infra/operation" element={
+        <Suspense fallback={<LoadingFallback />}>
+          {renderWithLayout(PlatformOperationPage)}
+        </Suspense>
+      } />
       <Route path="/platform/operation" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PlatformOperationPage />
+          {renderWithLayout(PlatformOperationPage)}
         </Suspense>
       } />
       <Route path="/infra/tenants" element={
         <Suspense fallback={<LoadingFallback />}>
-          <TenantsPage />
+          {renderWithLayout(TenantsPage)}
         </Suspense>
       } />
       <Route path="/infra/packages" element={
         <Suspense fallback={<LoadingFallback />}>
-          <PackagesPage />
+          {renderWithLayout(PackagesPage)}
         </Suspense>
       } />
       <Route path="/infra/monitoring" element={
         <Suspense fallback={<LoadingFallback />}>
-          <MonitoringPage />
+          {renderWithLayout(MonitoringPage)}
+        </Suspense>
+      } />
+      <Route path="/infra/inngest" element={
+        <Suspense fallback={<LoadingFallback />}>
+          {renderWithLayout(InngestDashboardPage)}
         </Suspense>
       } />
 
