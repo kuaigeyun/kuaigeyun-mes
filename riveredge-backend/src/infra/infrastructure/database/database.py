@@ -104,7 +104,7 @@ TORTOISE_ORM = {
                 # Aerich 模型
                 "aerich.models",
                 # 插件模型（从 src/apps 目录加载）
-                "apps.kuaimes.models.order",  # 快格轻MES 订单模型
+                # "apps.kuaimes.models.order",  # 快格轻MES 订单模型（已停用）
                 # 主数据管理模型
                 "apps.master_data.models.factory",  # 工厂数据模型（车间、产线、工位）
                 "apps.master_data.models.warehouse",  # 仓库数据模型（仓库、库区、库位）
@@ -125,56 +125,53 @@ TORTOISE_ORM = {
                 # "apps.kuaicrm.models.service_contract",  # 服务合同模型
                 # "apps.kuaicrm.models.lead_followup",  # 线索跟进记录模型
                 # "apps.kuaicrm.models.opportunity_followup",  # 商机跟进记录模型
-                # 快格轻PDM 模型
-                "apps.kuaipdm.models.design_change",  # 设计变更模型
-                "apps.kuaipdm.models.engineering_change",  # 工程变更模型
-                "apps.kuaipdm.models.design_review",  # 设计评审模型
-                "apps.kuaipdm.models.research_process",  # 研发流程模型
-                "apps.kuaipdm.models.knowledge",  # 知识管理模型
-                # 快格轻MRP 模型
-                "apps.kuaimrp.models.mrp_plan",  # MRP计划模型
-                "apps.kuaimrp.models.lrp_batch",  # LRP批次模型
-                "apps.kuaimrp.models.material_requirement",  # 物料需求模型
-                "apps.kuaimrp.models.requirement_traceability",  # 需求追溯模型
-                "apps.kuaimrp.models.shortage_alert",  # 缺料预警模型
+                # 快格轻PDM 模型（已停用）
+                # "apps.kuaipdm.models.design_change",  # 设计变更模型（已停用）
+                # "apps.kuaipdm.models.engineering_change",  # 工程变更模型（已停用）
+                # "apps.kuaipdm.models.design_review",  # 设计评审模型（已停用）
+                # "apps.kuaipdm.models.research_process",  # 研发流程模型（已停用）
+                # "apps.kuaipdm.models.knowledge",  # 知识管理模型（已停用）
+                # 快格轻MRP 模型（已停用）
+                # "apps.kuaimrp.models.mrp_plan",  # MRP计划模型（已停用）
+                # "apps.kuaimrp.models.lrp_batch",  # LRP批次模型（已停用）
+                # "apps.kuaimrp.models.material_requirement",  # 物料需求模型（已停用）
+                # "apps.kuaimrp.models.requirement_traceability",  # 需求追溯模型（已停用）
+                # "apps.kuaimrp.models.shortage_alert",  # 缺料预警模型（已停用）
                 # 快格轻SRM 模型（与MES无关，已暂时卸载）
                 # "apps.kuaisrm.models.purchase_order",  # 采购订单模型
                 # "apps.kuaisrm.models.outsourcing_order",  # 委外订单模型
                 # "apps.kuaisrm.models.supplier_evaluation",  # 供应商评估模型
                 # "apps.kuaisrm.models.purchase_contract",  # 采购合同模型
-                # 快格轻WMS 模型
-                "apps.kuaiwms.models.inventory",  # 库存模型
-                "apps.kuaiwms.models.inbound_order",  # 入库单模型
-                "apps.kuaiwms.models.outbound_order",  # 出库单模型
-                "apps.kuaiwms.models.stocktake",  # 盘点单模型
-                "apps.kuaiwms.models.inventory_adjustment",  # 库存调整模型
-                # 快格轻MES 模型
-                "apps.kuaimes.models.order",  # 生产订单模型
-                "apps.kuaimes.models.work_order",  # 工单模型
-                # 快格轻QMS 模型
-                "apps.kuaiqms.models.inspection_task",  # 质量检验任务模型
-                "apps.kuaiqms.models.inspection_record",  # 质量检验记录模型
-                "apps.kuaiqms.models.nonconforming_product",  # 不合格品记录模型
-                "apps.kuaiqms.models.nonconforming_handling",  # 不合格品处理模型
-                "apps.kuaiqms.models.quality_traceability",  # 质量追溯模型
-                "apps.kuaiqms.models.iso_audit",  # ISO质量审核模型
-                "apps.kuaiqms.models.capa",  # CAPA模型
-                "apps.kuaiqms.models.continuous_improvement",  # 持续改进模型
-                "apps.kuaiqms.models.quality_objective",  # 质量目标模型
-                "apps.kuaiqms.models.quality_indicator",  # 质量指标模型
-                # 快格轻EAM 模型
-                "apps.kuaieam.models.maintenance_plan",  # 维护计划模型
-                "apps.kuaieam.models.maintenance_workorder",  # 维护工单模型
-                "apps.kuaieam.models.maintenance_execution",  # 维护执行记录模型
-                "apps.kuaieam.models.failure_report",  # 故障报修模型
-                "apps.kuaieam.models.failure_handling",  # 故障处理模型
-                "apps.kuaieam.models.spare_part_demand",  # 备件需求模型
-                "apps.kuaieam.models.spare_part_purchase",  # 备件采购模型
-                "apps.kuaieam.models.tooling_usage",  # 工装夹具使用记录模型
-                "apps.kuaieam.models.mold_usage",  # 模具使用记录模型
-                "apps.kuaimes.models.production_report",  # 生产报工模型
-                "apps.kuaimes.models.traceability",  # 生产追溯模型
-                "apps.kuaimes.models.rework_order",  # 返修工单模型
+                # 已停用应用的模型（已全部删除）
+                # "apps.kuaiwms.models.inventory",  # 库存模型（已停用）
+                # "apps.kuaiwms.models.inbound_order",  # 入库单模型（已停用）
+                # "apps.kuaiwms.models.outbound_order",  # 出库单模型（已停用）
+                # "apps.kuaiwms.models.stocktake",  # 盘点单模型（已停用）
+                # "apps.kuaiwms.models.inventory_adjustment",  # 库存调整模型（已停用）
+                # "apps.kuaimes.models.order",  # 生产订单模型（已停用）
+                # "apps.kuaimes.models.work_order",  # 工单模型（已停用）
+                # "apps.kuaimes.models.production_report",  # 生产报工模型（已停用）
+                # "apps.kuaimes.models.traceability",  # 生产追溯模型（已停用）
+                # "apps.kuaimes.models.rework_order",  # 返修工单模型（已停用）
+                # "apps.kuaiqms.models.inspection_task",  # 质量检验任务模型（已停用）
+                # "apps.kuaiqms.models.inspection_record",  # 质量检验记录模型（已停用）
+                # "apps.kuaiqms.models.nonconforming_product",  # 不合格品记录模型（已停用）
+                # "apps.kuaiqms.models.nonconforming_handling",  # 不合格品处理模型（已停用）
+                # "apps.kuaiqms.models.quality_traceability",  # 质量追溯模型（已停用）
+                # "apps.kuaiqms.models.iso_audit",  # ISO质量审核模型（已停用）
+                # "apps.kuaiqms.models.capa",  # CAPA模型（已停用）
+                # "apps.kuaiqms.models.continuous_improvement",  # 持续改进模型（已停用）
+                # "apps.kuaiqms.models.quality_objective",  # 质量目标模型（已停用）
+                # "apps.kuaiqms.models.quality_indicator",  # 质量指标模型（已停用）
+                # "apps.kuaieam.models.maintenance_plan",  # 维护计划模型（已停用）
+                # "apps.kuaieam.models.maintenance_workorder",  # 维护工单模型（已停用）
+                # "apps.kuaieam.models.maintenance_execution",  # 维护执行记录模型（已停用）
+                # "apps.kuaieam.models.failure_report",  # 故障报修模型（已停用）
+                # "apps.kuaieam.models.failure_handling",  # 故障处理模型（已停用）
+                # "apps.kuaieam.models.spare_part_demand",  # 备件需求模型（已停用）
+                # "apps.kuaieam.models.spare_part_purchase",  # 备件采购模型（已停用）
+                # "apps.kuaieam.models.tooling_usage",  # 工装夹具使用记录模型（已停用）
+                # "apps.kuaieam.models.mold_usage",  # 模具使用记录模型（已停用）
             ],
             "default_connection": "default",
         },

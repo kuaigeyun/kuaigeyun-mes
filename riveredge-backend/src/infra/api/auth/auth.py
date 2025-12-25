@@ -46,18 +46,11 @@ async def login(
         }
         ```
     """
-    print(f"=== API LOGIN: 收到登录请求: username={data.username} ===")
     try:
         service = AuthService()
-        print(f"=== API LOGIN: 创建 AuthService 成功 ===")
         result = await service.login(data, request)
-        print(f"=== API LOGIN: 登录成功: username={data.username} ===")
         return LoginResponse(**result)
     except Exception as e:
-        print(f"=== API LOGIN: 登录失败: username={data.username}, error={type(e).__name__}: {e} ===")
-        import traceback
-        print(f"=== API LOGIN: 错误详情 ===")
-        print(traceback.format_exc())
         raise
 
 
