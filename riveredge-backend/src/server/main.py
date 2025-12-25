@@ -79,27 +79,27 @@ from core.api.help_documents.help_documents import router as help_documents_rout
 from apps.master_data.api.router import router as master_data_router
 # 以下APP与MES完全无关，已暂时卸载：
 # from apps.kuaicrm.api.router import router as kuaicrm_router
-from apps.kuaipdm.api.router import router as kuaipdm_router
-from apps.kuaimrp.api.router import router as kuaimrp_router
+# from apps.kuaipdm.api.router import router as kuaipdm_router
+# from apps.kuaimrp.api.router import router as kuaimrp_router
 # from apps.kuaisrm.api.router import router as kuaisrm_router
-from apps.kuaiwms.api.router import router as kuaiwms_router
-from apps.kuaimes.api.router import router as kuaimes_router
-from apps.kuaiqms.api.router import router as kuaiqms_router
-from apps.kuaieam.api.router import router as kuaieam_router
+# from apps.kuaiwms.api.router import router as kuaiwms_router
+# from apps.kuaimes.api.router import router as kuaimes_router
+# from apps.kuaiqms.api.router import router as kuaiqms_router
+# from apps.kuaieam.api.router import router as kuaieam_router
 # from apps.kuaitms.api.router import router as kuaitms_router
 # from apps.kuaiacc.api.router import router as kuaiacc_router
 # from apps.kuaihrm.api.router import router as kuaihrm_router
-from apps.kuaipm.api.router import router as kuaipm_router
+# from apps.kuaipm.api.router import router as kuaipm_router
 # from apps.kuaiehs.api.router import router as kuaiehs_router
-from apps.kuaicert.api.router import router as kuaicert_router
-from apps.kuaiepm.api.router import router as kuaiepm_router
+# from apps.kuaicert.api.router import router as kuaicert_router
+# from apps.kuaiepm.api.router import router as kuaiepm_router
 # from apps.kuaioa.api.router import router as kuaioa_router
-from apps.kuaiaps.api.router import router as kuaiaps_router
-from apps.kuaiems.api.router import router as kuaiems_router
+# from apps.kuaiaps.api.router import router as kuaiaps_router
+# from apps.kuaiems.api.router import router as kuaiems_router
 # from apps.kuailims.api.router import router as kuailims_router
-from apps.kuaimi.api.router import router as kuaimi_router
+# from apps.kuaimi.api.router import router as kuaimi_router
 # from apps.kuaiscm.api.router import router as kuaiscm_router
-from apps.kuaiiot.api.router import router as kuaiiot_router
+# from apps.kuaiiot.api.router import router as kuaiiot_router
 
 # Inngest 集成
 from core.inngest.client import inngest_client
@@ -401,27 +401,27 @@ app.include_router(help_documents_router, prefix="/api/v1/core")
 app.include_router(master_data_router, prefix="/api/v1")
 # 以下APP与MES完全无关，已暂时卸载：
 # app.include_router(kuaicrm_router, prefix="/api/v1")
-app.include_router(kuaipdm_router, prefix="/api/v1")
-app.include_router(kuaimrp_router, prefix="/api/v1")
+# app.include_router(kuaipdm_router, prefix="/api/v1")
+# app.include_router(kuaimrp_router, prefix="/api/v1")
 # app.include_router(kuaisrm_router, prefix="/api/v1")
-app.include_router(kuaiwms_router, prefix="/api/v1")
-app.include_router(kuaimes_router, prefix="/api/v1")
-app.include_router(kuaiqms_router, prefix="/api/v1")
-app.include_router(kuaieam_router, prefix="/api/v1")
+# app.include_router(kuaiwms_router, prefix="/api/v1")
+# app.include_router(kuaimes_router, prefix="/api/v1")
+# app.include_router(kuaiqms_router, prefix="/api/v1")
+# app.include_router(kuaieam_router, prefix="/api/v1")
 # app.include_router(kuaitms_router, prefix="/api/v1")
 # app.include_router(kuaiacc_router, prefix="/api/v1")
 # app.include_router(kuaihrm_router, prefix="/api/v1")
-app.include_router(kuaipm_router, prefix="/api/v1")
+# app.include_router(kuaipm_router, prefix="/api/v1")
 # app.include_router(kuaiehs_router, prefix="/api/v1")
-app.include_router(kuaicert_router, prefix="/api/v1")
-app.include_router(kuaiepm_router, prefix="/api/v1")
+# app.include_router(kuaicert_router, prefix="/api/v1")
+# app.include_router(kuaiepm_router, prefix="/api/v1")
 # app.include_router(kuaioa_router, prefix="/api/v1")
-app.include_router(kuaiaps_router, prefix="/api/v1")
-app.include_router(kuaiems_router, prefix="/api/v1")
+# app.include_router(kuaiaps_router, prefix="/api/v1")
+# app.include_router(kuaiems_router, prefix="/api/v1")
 # app.include_router(kuailims_router, prefix="/api/v1")
-app.include_router(kuaimi_router, prefix="/api/v1")
+# app.include_router(kuaimi_router, prefix="/api/v1")
 # app.include_router(kuaiscm_router, prefix="/api/v1")
-app.include_router(kuaiiot_router, prefix="/api/v1")
+# app.include_router(kuaiiot_router, prefix="/api/v1")
 
 # Inngest 测试端点
 @app.post("/api/v1/test/inngest")
