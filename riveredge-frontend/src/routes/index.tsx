@@ -73,6 +73,7 @@ const SiteSettingsPage = lazy(() => import('../pages/system/site-settings'));
 
 // 应用中心模块
 const ApplicationListPage = lazy(() => import('../pages/system/applications/list'));
+const PluginManagerPage = lazy(() => import('../pages/system/plugin-manager'));
 const MenuListPage = lazy(() => import('../pages/system/menus'));
 const InvitationCodeListPage = lazy(() => import('../pages/system/invitation-codes/list'));
 
@@ -369,6 +370,15 @@ const AppRoutes: React.FC = () => {
         element={
           <LayoutWrapper>
             <ApplicationListPage />
+          </LayoutWrapper>
+        }
+      />
+      {/* 插件管理 */}
+      <Route
+        path="/system/plugin-manager"
+        element={
+          <LayoutWrapper>
+            <PluginManagerPage />
           </LayoutWrapper>
         }
       />

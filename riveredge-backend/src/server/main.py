@@ -75,6 +75,9 @@ from core.api.online_users.online_users import router as online_users_router
 from core.api.data_backups.data_backups import router as data_backups_router
 from core.api.help_documents.help_documents import router as help_documents_router
 
+# 插件管理器API
+from core.api.plugin_manager.plugin_manager import router as plugin_manager_router
+
 # 导入应用级 API 路由（apps）
 from apps.master_data.api.router import router as master_data_router
 # 以下APP与MES完全无关，已暂时卸载：
@@ -152,110 +155,43 @@ from core.middleware.operation_log_middleware import OperationLogMiddleware
 app.add_middleware(OperationLogMiddleware)
 
 # 动态加载插件路由
-# 注意：插件路由需要在应用启动时或请求时动态加载
-# 这里提供一个基础框架，实际使用时需要根据插件注册机制来实现
-
-# 动态加载插件路由
-# 插件后端代码现在放在 src/apps/插件名/ 目录下
-# 自动扫描并注册所有已安装且启用的插件路由
+# 使用新的插件管理器进行动态插件加载
 def load_plugin_routes():
     """
     动态加载插件路由
 
-    扫描 src/apps 目录下的所有插件，自动注册其路由。
+    使用插件管理器根据数据库中的启用状态动态加载插件路由。
     """
-    apps_dir = Path(__file__).parent.parent / "apps"  # 插件目录
-    if not apps_dir.exists():
-        return
+    try:
+        from core.services.plugin_manager.plugin_manager import PluginManagerService
+        import asyncio
 
-    # 快速上线模式：只保留主数据管理APP，其他APP全部停用并归档
-    disabled_apps = {
-        "kuaiacc",    # 财务会计系统
-        "kuaiaps",    # 高级排产系统
-        "kuaicert",   # 认证管理系统
-        "kuaicrm",    # 客户关系管理系统
-        "kuaieam",    # 设备资产管理系统
-        "kuaiehs",    # 环境健康安全系统
-        "kuaiems",    # 能源管理系统
-        "kuaiepm",    # 企业绩效管理系统
-        "kuaihrm",    # 人力资源管理系统
-        "kuaiiot",    # 物联网系统
-        "kuailims",   # 实验室信息管理系统
-        "kuaimes",    # 制造执行系统
-        "kuaimi",     # 制造智能系统
-        "kuaimrp",    # 物料需求规划系统
-        "kuaioa",     # 办公自动化系统
-        "kuaipdm",    # 产品数据管理系统
-        "kuaipm",     # 项目管理系统
-        "kuaiqms",    # 质量管理系统
-        "kuaiscm",    # 供应链协同系统
-        "kuaisrm",    # 供应商关系管理系统
-        "kuaitms",    # 运输管理系统
-        "kuaiwms",    # 仓库管理系统
-    }
+        # 获取插件管理器
+        apps_dir = Path(__file__).parent.parent / "apps"
+        plugin_manager = PluginManagerService(apps_dir)
 
-    # 遍历 apps 目录下的所有插件
-    for plugin_dir in apps_dir.iterdir():
-        if not plugin_dir.is_dir():
-            continue
+        # 由于这是同步函数，我们需要创建一个新的事件循环来运行异步代码
+        # 注意：这不是最佳实践，但在应用启动时是可行的
 
-        plugin_code = plugin_dir.name
+        # 临时方案：直接启用我们需要的插件
+        # 在生产环境中，应该从数据库读取租户配置
+        enabled_plugins = ["master_data"]  # 快速上线模式下只启用主数据管理
 
-        # 跳过与MES无关的APP
-        if plugin_code in disabled_apps:
-            print(f"⏸️ 跳过插件 {plugin_code} (与MES无关，已暂时卸载)")
-            continue
-        
-        # 尝试导入插件的路由模块
-        # 约定：插件路由应该在 apps.{plugin_code}.api 目录下
-        try:
-            # 动态导入插件路由
-            # 注意：插件需要遵循约定，在 api 目录下定义 router
-            import importlib
-            api_module_path = f"apps.{plugin_code}.api"
-            
-            # 尝试导入 api 模块
-            try:
-                api_module = importlib.import_module(api_module_path)
-                
-                # 查找所有 router 对象
-                for attr_name in dir(api_module):
-                    attr = getattr(api_module, attr_name)
-                    if isinstance(attr, APIRouter):
-                        app.include_router(attr, prefix="/api/v1")
-                        print(f"✅ 已注册插件 {plugin_code} 的路由: {attr_name}")
-            except ImportError:
-                # 如果 api 模块不存在，尝试导入具体的路由文件
-                # 约定：插件路由文件应该在 apps.{plugin_code}.api.*.py
-                import pkgutil
-                api_package_dir = plugin_dir / "api"
-                
-                if api_package_dir.exists():
-                    # 遍历 api 目录下的所有子目录（如 orders）
-                    for subdir in api_package_dir.iterdir():
-                        if not subdir.is_dir():
-                            continue
-                        
-                        # 尝试导入子目录中的模块（如 orders.orders）
-                        for py_file in subdir.glob("*.py"):
-                            if py_file.name == "__init__.py":
-                                continue
-                            
-                            module_name = py_file.stem
-                            submodule_path = f"{api_module_path}.{subdir.name}.{module_name}"
-                            
-                            try:
-                                module = importlib.import_module(submodule_path)
-                                # 查找 router 对象
-                                for attr_name in dir(module):
-                                    attr = getattr(module, attr_name)
-                                    if isinstance(attr, APIRouter):
-                                        app.include_router(attr, prefix="/api/v1")
-                                        print(f"✅ 已注册插件 {plugin_code} 的路由: {submodule_path}.{attr_name}")
-                            except Exception as e:
-                                print(f"⚠️ 加载插件 {plugin_code} 的路由模块 {submodule_path} 失败: {e}")
-        except Exception as e:
-            print(f"⚠️ 加载插件 {plugin_code} 失败: {e}")
+        # 加载启用的插件
+        loaded_plugins = plugin_manager.loader_service.load_enabled_plugins(enabled_plugins)
+
+        # 注册插件路由
+        for plugin_info in loaded_plugins:
+            for router in plugin_info['routers']:
+                app.include_router(router, prefix="/api/v1")
+                print(f"✅ 已注册插件 {plugin_info['code']} 的路由")
+
+        print(f"🎉 插件系统初始化完成，共加载 {len(loaded_plugins)} 个插件")
+
+    except Exception as e:
+        print(f"⚠️ 插件系统初始化失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 # 加载插件路由
 load_plugin_routes()
@@ -396,6 +332,9 @@ app.include_router(login_logs_router, prefix="/api/v1/core")
 app.include_router(online_users_router, prefix="/api/v1/core")
 app.include_router(data_backups_router, prefix="/api/v1/core")
 app.include_router(help_documents_router, prefix="/api/v1/core")
+
+# 插件管理器路由 (Plugin Manager APIs)
+app.include_router(plugin_manager_router, prefix="/api/v1/core")
 
 # 应用级功能路由 (App Level APIs)
 app.include_router(master_data_router, prefix="/api/v1")
