@@ -24,7 +24,7 @@ import {
   ExclamationCircleOutlined,
   InfoCircleOutlined
 } from '@ant-design/icons';
-import { request } from '@/services/api';
+import { api } from '../../../services/api';
 
 interface PluginInfo {
   code: string;
@@ -48,7 +48,7 @@ const PluginManagerPage: React.FC = () => {
   // 获取插件列表
   const fetchPlugins = async (): Promise<{ data: PluginInfo[]; success: boolean }> => {
     try {
-      const response = await request('/api/v1/core/plugin-manager/plugins');
+      const response = await api.get('/api/v1/core/plugin-manager/plugins');
       return {
         data: response,
         success: true,
@@ -67,9 +67,7 @@ const PluginManagerPage: React.FC = () => {
   const handleDiscoverPlugins = async () => {
     setLoading(true);
     try {
-      const response = await request('/api/v1/core/plugin-manager/discover', {
-        method: 'POST',
-      });
+      const response = await api.post('/api/v1/core/plugin-manager/discover', {});
 
       if (response.success) {
         message.success(
@@ -90,9 +88,7 @@ const PluginManagerPage: React.FC = () => {
   // 启用插件
   const handleEnablePlugin = async (pluginCode: string) => {
     try {
-      const response = await request(`/api/v1/core/plugin-manager/plugins/${pluginCode}/enable`, {
-        method: 'POST',
-      });
+      const response = await api.post(`/api/v1/core/plugin-manager/plugins/${pluginCode}/enable`, {});
 
       if (response.success) {
         message.success(response.message);
@@ -109,9 +105,7 @@ const PluginManagerPage: React.FC = () => {
   // 停用插件
   const handleDisablePlugin = async (pluginCode: string) => {
     try {
-      const response = await request(`/api/v1/core/plugin-manager/plugins/${pluginCode}/disable`, {
-        method: 'POST',
-      });
+      const response = await api.post(`/api/v1/core/plugin-manager/plugins/${pluginCode}/disable`, {});
 
       if (response.success) {
         message.success(response.message);
