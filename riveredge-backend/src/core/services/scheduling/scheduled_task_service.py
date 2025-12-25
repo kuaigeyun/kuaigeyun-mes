@@ -12,7 +12,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.scheduled_task import ScheduledTask
 from core.schemas.scheduled_task import ScheduledTaskCreate, ScheduledTaskUpdate
-from core.services.message_service import MessageService
+from core.services.messaging.message_service import MessageService
 from core.schemas.message_template import SendMessageRequest
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError

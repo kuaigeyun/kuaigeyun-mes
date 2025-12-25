@@ -11,7 +11,7 @@ from loguru import logger
 
 from core.inngest.client import inngest_client
 from core.models.data_backup import DataBackup
-from core.services.data_backup_service import DataBackupService
+from core.services.data.data_backup_service import DataBackupService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
 from infra.domain.tenant_context import get_current_tenant_id
@@ -95,7 +95,7 @@ async def scheduled_backup_scheduler_function(event: Event) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: 调度结果
     """
-    from core.services.system_parameter_service import SystemParameterService
+    from core.services.system.system_parameter_service import SystemParameterService
     
     now = datetime.now()
     executed_count = 0
@@ -155,7 +155,7 @@ async def _should_execute_backup(backup: DataBackup, now: datetime) -> bool:
     Returns:
         bool: 是否需要执行
     """
-    from core.services.system_parameter_service import SystemParameterService
+    from core.services.system.system_parameter_service import SystemParameterService
     from datetime import timedelta
     
     # 如果备份状态不是 pending，不需要执行

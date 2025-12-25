@@ -15,7 +15,7 @@ from core.schemas.data_backup import (
     DataBackupRestoreRequest,
     DataBackupRestoreResponse,
 )
-from core.services.data_backup_service import DataBackupService
+from core.services.data.data_backup_service import DataBackupService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

@@ -12,7 +12,7 @@ from core.schemas.scheduled_task import (
     ScheduledTaskUpdate,
     ScheduledTaskResponse,
 )
-from core.services.scheduled_task_service import ScheduledTaskService
+from core.services.scheduling.scheduled_task_service import ScheduledTaskService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

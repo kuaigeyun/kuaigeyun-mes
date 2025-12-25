@@ -14,7 +14,7 @@ from core.schemas.print_template import (
     PrintTemplateResponse,
     PrintTemplateRenderResponse,
 )
-from core.services.print_template_service import PrintTemplateService
+from core.services.print.print_template_service import PrintTemplateService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

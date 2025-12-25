@@ -13,7 +13,7 @@ from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
 
 from core.models.approval_instance import ApprovalInstance
-from core.services.approval_instance_service import ApprovalInstanceService
+from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.schemas.approval_instance import ApprovalInstanceAction
 from core.schemas.user_task import (
     UserTaskResponse,

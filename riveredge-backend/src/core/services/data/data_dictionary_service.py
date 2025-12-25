@@ -267,7 +267,7 @@ class DataDictionaryService:
         # 如果字典被禁用，自动更新关联的自定义字段
         if "is_active" in update_data and not update_data["is_active"]:
             import asyncio
-            from core.services.custom_field_service import CustomFieldService
+            from core.services.business.custom_field_service import CustomFieldService
             
             # 异步更新关联的自定义字段（不阻塞主流程）
             asyncio.create_task(

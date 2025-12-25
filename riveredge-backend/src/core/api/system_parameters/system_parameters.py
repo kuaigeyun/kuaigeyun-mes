@@ -12,7 +12,7 @@ from core.schemas.system_parameter import (
     SystemParameterUpdate,
     SystemParameterResponse,
 )
-from core.services.system_parameter_service import SystemParameterService
+from core.services.system.system_parameter_service import SystemParameterService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

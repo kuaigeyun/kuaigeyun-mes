@@ -15,7 +15,7 @@ from core.schemas.position import (
     PositionListResponse,
     PositionListItem,
 )
-from core.services.position_service import PositionService
+from core.services.authorization.position_service import PositionService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

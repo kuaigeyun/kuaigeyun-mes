@@ -19,7 +19,7 @@ from core.schemas.dictionary_item import (
     DictionaryItemUpdate,
     DictionaryItemResponse,
 )
-from core.services.data_dictionary_service import DataDictionaryService
+from core.services.data.data_dictionary_service import DataDictionaryService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

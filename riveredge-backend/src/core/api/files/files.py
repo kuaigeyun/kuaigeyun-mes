@@ -16,8 +16,8 @@ from core.schemas.file import (
     FilePreviewResponse,
     FileUploadResponse,
 )
-from core.services.file_service import FileService
-from core.services.file_preview_service import FilePreviewService
+from core.services.file.file_service import FileService
+from core.services.file.file_preview_service import FilePreviewService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
@@ -347,7 +347,7 @@ async def download_file(
         
         # 构建完整路径（用于获取文件类型）
         import os
-        from core.services.file_service import FileService as FS
+        from core.services.file.file_service import FileService as FS
         full_path = os.path.join(FS.UPLOAD_DIR, file.file_path)
         
         # 处理文件名编码（支持中文文件名）

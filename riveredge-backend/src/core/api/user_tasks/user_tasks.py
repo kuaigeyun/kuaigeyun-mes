@@ -13,7 +13,7 @@ from core.schemas.user_task import (
     UserTaskStatsResponse,
     UserTaskActionRequest,
 )
-from core.services.user_task_service import UserTaskService
+from core.services.user.user_task_service import UserTaskService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

@@ -15,7 +15,7 @@ from core.schemas.department import (
     DepartmentTreeResponse,
     DepartmentTreeItem,
 )
-from core.services.department_service import DepartmentService
+from core.services.organization.department_service import DepartmentService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

@@ -12,8 +12,8 @@ from core.models.message_log import MessageLog
 from core.models.message_config import MessageConfig
 from core.models.message_template import MessageTemplate
 from core.schemas.message_template import SendMessageRequest, SendMessageResponse
-from core.services.message_config_service import MessageConfigService
-from core.services.message_template_service import MessageTemplateService
+from core.services.messaging.message_config_service import MessageConfigService
+from core.services.messaging.message_template_service import MessageTemplateService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 

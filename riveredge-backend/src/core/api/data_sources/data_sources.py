@@ -14,7 +14,7 @@ from core.schemas.data_source import (
     DataSourceResponse,
     TestConnectionResponse,
 )
-from core.services.data_source_service import DataSourceService
+from core.services.data.data_source_service import DataSourceService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

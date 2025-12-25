@@ -12,7 +12,7 @@ from loguru import logger
 from core.inngest.client import inngest_client
 from core.models.approval_instance import ApprovalInstance
 from core.models.approval_process import ApprovalProcess
-from core.services.approval_instance_service import ApprovalInstanceService
+from core.services.approval.approval_instance_service import ApprovalInstanceService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
 from infra.domain.tenant_context import get_current_tenant_id

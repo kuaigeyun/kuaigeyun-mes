@@ -12,7 +12,7 @@ from loguru import logger
 
 from core.inngest.client import inngest_client
 from core.models.scheduled_task import ScheduledTask
-from core.services.scheduled_task_service import ScheduledTaskService
+from core.services.scheduling.scheduled_task_service import ScheduledTaskService
 from core.utils.inngest_tenant_isolation import with_tenant_isolation
 from infra.domain.tenant_context import get_current_tenant_id
 

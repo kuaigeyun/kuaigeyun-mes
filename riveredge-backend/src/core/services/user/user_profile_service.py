@@ -11,7 +11,7 @@ from uuid import UUID
 from infra.models.user import User
 from infra.models.infra_superadmin import InfraSuperAdmin
 from core.schemas.user_profile import UserProfileUpdate, UserProfileResponse
-from core.services.file_service import FileService
+from core.services.file.file_service import FileService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, ValidationError
 
 

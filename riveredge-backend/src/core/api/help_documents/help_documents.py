@@ -8,7 +8,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
 
-from core.services.help_document_service import HelpDocumentService
+from core.services.help.help_document_service import HelpDocumentService
 from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 from infra.api.deps.deps import get_current_user as soil_get_current_user

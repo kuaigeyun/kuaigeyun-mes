@@ -390,7 +390,7 @@ class RoleService:
         # 更新关联菜单的可见性（异步，不阻塞主流程）
         if changed_permission_codes:
             import asyncio
-            from core.services.menu_service import MenuService
+            from core.services.system.menu_service import MenuService
             for permission_code in changed_permission_codes:
                 asyncio.create_task(
                     MenuService.update_menus_by_permission_code(

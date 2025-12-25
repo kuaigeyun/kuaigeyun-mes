@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from core.schemas.message_template import SendMessageRequest, SendMessageResponse
 from core.schemas.message_log import MessageLogResponse
-from core.services.message_service import MessageService
+from core.services.messaging.message_service import MessageService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

@@ -13,7 +13,7 @@ from core.schemas.login_log import (
     LoginLogStatsResponse,
     LoginLogResponse,
 )
-from core.services.login_log_service import LoginLogService
+from core.services.logging.login_log_service import LoginLogService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User

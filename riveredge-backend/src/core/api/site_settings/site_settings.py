@@ -7,7 +7,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from core.schemas.site_setting import SiteSettingUpdate, SiteSettingResponse
-from core.services.site_setting_service import SiteSettingService
+from core.services.system.site_setting_service import SiteSettingService
 from core.api.deps.deps import get_current_tenant
 
 router = APIRouter(prefix="/site-settings", tags=["Site Settings"])
