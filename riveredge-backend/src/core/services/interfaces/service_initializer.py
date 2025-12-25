@@ -50,7 +50,7 @@ class ServiceInitializer:
             for service_impl_class in ServiceInitializer._service_implementations:
                 await ServiceInitializer._register_service_implementation(service_impl_class)
 
-            logger.success("✅ 服务接口层初始化完成")
+            logger.info("✅ 服务接口层初始化完成")
 
         except Exception as e:
             logger.error(f"❌ 服务接口层初始化失败: {e}")
@@ -95,7 +95,7 @@ class ServiceInitializer:
             # 这里可以添加服务清理逻辑
             # 比如关闭数据库连接、清理缓存等
 
-            logger.success("✅ 服务接口层关闭完成")
+            logger.info("✅ 服务接口层关闭完成")
 
         except Exception as e:
             logger.error(f"❌ 服务接口层关闭失败: {e}")

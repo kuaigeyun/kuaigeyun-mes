@@ -54,7 +54,7 @@ class ApplicationRegistryService:
             # 注册应用路由
             await cls._register_app_routes(installed_apps)
 
-            logger.success("✅ 动态应用注册服务初始化完成")
+            logger.info("✅ 动态应用注册服务初始化完成")
 
         except Exception as e:
             logger.error(f"❌ 应用注册服务初始化失败: {e}")
@@ -165,7 +165,7 @@ class ApplicationRegistryService:
                 logger.error(f"❌ 注册应用 {app_name}({app_code}) 模型失败: {e}")
 
         if registered_models:
-            logger.success(f"✅ 成功注册 {len(registered_models)} 个应用模型: {', '.join(registered_models)}")
+            logger.info(f"✅ 成功注册 {len(registered_models)} 个应用模型: {', '.join(registered_models)}")
         else:
             logger.info("ℹ️ 没有应用模型需要注册")
 
@@ -210,7 +210,7 @@ class ApplicationRegistryService:
                 logger.error(f"❌ 注册应用 {app_name}({app_code}) 路由失败: {e}")
 
         if registered_routes:
-            logger.success(f"✅ 成功注册 {len(registered_routes)} 个应用路由: {', '.join(registered_routes)}")
+            logger.info(f"✅ 成功注册 {len(registered_routes)} 个应用路由: {', '.join(registered_routes)}")
         else:
             logger.info("ℹ️ 没有应用路由需要注册")
 
