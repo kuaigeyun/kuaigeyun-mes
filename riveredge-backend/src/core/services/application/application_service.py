@@ -761,5 +761,30 @@ class ApplicationService:
             except Exception as e:
                 print(f"⚠️ 清除菜单缓存失败（不影响应用注册）: {e}")
         
-        return registered_apps
+        # 转换为字典列表，与其他方法保持一致
+        result = []
+        for app in registered_apps:
+            result.append({
+                'id': app.id,
+                'uuid': str(app.uuid),
+                'tenant_id': app.tenant_id,
+                'name': app.name,
+                'code': app.code,
+                'description': app.description,
+                'icon': app.icon,
+                'version': app.version,
+                'route_path': app.route_path,
+                'entry_point': app.entry_point,
+                'menu_config': app.menu_config,
+                'permission_code': app.permission_code,
+                'is_system': app.is_system,
+                'is_active': app.is_active,
+                'is_installed': app.is_installed,
+                'sort_order': app.sort_order,
+                'created_at': app.created_at,
+                'updated_at': app.updated_at,
+                'deleted_at': app.deleted_at,
+            })
+
+        return result
 
