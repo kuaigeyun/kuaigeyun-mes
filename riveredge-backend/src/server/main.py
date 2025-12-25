@@ -22,6 +22,7 @@ sys.path.insert(0, str(src_path))
 from infra.infrastructure.database.database import register_db
 from tortoise import Tortoise
 from core.services.application.application_registry_service import ApplicationRegistryService
+from core.services.interfaces.service_initializer import ServiceInitializer
 
 # 导入所有平台级 API 路由
 # 注意：SuperAdmin Auth已移除，使用Platform Admin Auth替代
@@ -79,31 +80,8 @@ from core.api.help_documents.help_documents import router as help_documents_rout
 # 插件管理器API
 from core.api.plugin_manager.plugin_manager import router as plugin_manager_router
 
-# 导入应用级 API 路由（apps）
-from apps.master_data.api.router import router as master_data_router
-# 以下APP与MES完全无关，已暂时卸载：
-# from apps.kuaicrm.api.router import router as kuaicrm_router
-# from apps.kuaipdm.api.router import router as kuaipdm_router
-# from apps.kuaimrp.api.router import router as kuaimrp_router
-# from apps.kuaisrm.api.router import router as kuaisrm_router
-# from apps.kuaiwms.api.router import router as kuaiwms_router
-# from apps.kuaimes.api.router import router as kuaimes_router
-# from apps.kuaiqms.api.router import router as kuaiqms_router
-# from apps.kuaieam.api.router import router as kuaieam_router
-# from apps.kuaitms.api.router import router as kuaitms_router
-# from apps.kuaiacc.api.router import router as kuaiacc_router
-# from apps.kuaihrm.api.router import router as kuaihrm_router
-# from apps.kuaipm.api.router import router as kuaipm_router
-# from apps.kuaiehs.api.router import router as kuaiehs_router
-# from apps.kuaicert.api.router import router as kuaicert_router
-# from apps.kuaiepm.api.router import router as kuaiepm_router
-# from apps.kuaioa.api.router import router as kuaioa_router
-# from apps.kuaiaps.api.router import router as kuaiaps_router
-# from apps.kuaiems.api.router import router as kuaiems_router
-# from apps.kuailims.api.router import router as kuailims_router
-# from apps.kuaimi.api.router import router as kuaimi_router
-# from apps.kuaiscm.api.router import router as kuaiscm_router
-# from apps.kuaiiot.api.router import router as kuaiiot_router
+# 应用路由现在通过 ApplicationRegistryService 动态注册
+# 无需手动导入应用路由模块
 
 # Inngest 集成
 from core.inngest.client import inngest_client
@@ -119,6 +97,10 @@ async def lifespan(app: FastAPI):
     # 注册 Tortoise ORM 数据库连接
     await register_db(app)
     print("✅ Tortoise ORM 已注册")
+
+    # 初始化服务接口层
+    await ServiceInitializer.initialize_services()
+    print("✅ 服务接口层已初始化")
 
     # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
     await ApplicationRegistryService.reload_apps()
@@ -328,31 +310,8 @@ app.include_router(help_documents_router, prefix="/api/v1/core")
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
 
-# 应用级功能路由 (App Level APIs)
-app.include_router(master_data_router, prefix="/api/v1")
-# 以下APP与MES完全无关，已暂时卸载：
-# app.include_router(kuaicrm_router, prefix="/api/v1")
-# app.include_router(kuaipdm_router, prefix="/api/v1")
-# app.include_router(kuaimrp_router, prefix="/api/v1")
-# app.include_router(kuaisrm_router, prefix="/api/v1")
-# app.include_router(kuaiwms_router, prefix="/api/v1")
-# app.include_router(kuaimes_router, prefix="/api/v1")
-# app.include_router(kuaiqms_router, prefix="/api/v1")
-# app.include_router(kuaieam_router, prefix="/api/v1")
-# app.include_router(kuaitms_router, prefix="/api/v1")
-# app.include_router(kuaiacc_router, prefix="/api/v1")
-# app.include_router(kuaihrm_router, prefix="/api/v1")
-# app.include_router(kuaipm_router, prefix="/api/v1")
-# app.include_router(kuaiehs_router, prefix="/api/v1")
-# app.include_router(kuaicert_router, prefix="/api/v1")
-# app.include_router(kuaiepm_router, prefix="/api/v1")
-# app.include_router(kuaioa_router, prefix="/api/v1")
-# app.include_router(kuaiaps_router, prefix="/api/v1")
-# app.include_router(kuaiems_router, prefix="/api/v1")
-# app.include_router(kuailims_router, prefix="/api/v1")
-# app.include_router(kuaimi_router, prefix="/api/v1")
-# app.include_router(kuaiscm_router, prefix="/api/v1")
-# app.include_router(kuaiiot_router, prefix="/api/v1")
+# 应用级功能路由现在通过 ApplicationRegistryService 动态注册
+# 无需手动注册应用路由
 
 # Inngest 测试端点
 @app.post("/api/v1/test/inngest")
