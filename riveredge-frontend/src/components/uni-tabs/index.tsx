@@ -373,53 +373,121 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // 启用持久化时，尝试从 localStorage 恢复标签
     try {
       const savedTabs = localStorage.getItem('riveredge_saved_tabs');
-      
+
       if (savedTabs) {
         const parsedTabs: TabItem[] = JSON.parse(savedTabs);
-        
+
         if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
-          // 验证并恢复标签
+          // 检查当前是否在平台级页面
+          const isInfraPage = location.pathname.startsWith('/infra');
+
+          // 根据当前页面类型过滤标签
           const validTabs = parsedTabs.filter((tab) => {
             // 验证标签格式
-            return tab && typeof tab === 'object' && tab.key && tab.path && tab.label;
+            if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) {
+              return false;
+            }
+
+            // 如果在平台级页面，只恢复平台级标签；如果在系统级页面，只恢复系统级标签
+            if (isInfraPage) {
+              return tab.path.startsWith('/infra');
+            } else {
+              return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
+            }
           });
-          
+
           if (validTabs.length > 0) {
-            // 确保工作台标签存在
-            const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
-            if (!hasWorkplace) {
-              const workplaceTab: TabItem = {
-                key: '/system/dashboard/workplace',
-                path: '/system/dashboard/workplace',
-                label: getTabTitle('/system/dashboard/workplace'),
+            // 根据当前页面级别确保默认标签存在
+            if (isInfraPage) {
+              // 平台级页面：确保运营中心标签存在
+              const hasOperation = validTabs.some((tab) => tab.key === '/infra/operation');
+              if (!hasOperation) {
+                const operationTab: TabItem = {
+                  key: '/infra/operation',
+                  path: '/infra/operation',
+                  label: getTabTitle('/infra/operation'),
+                  closable: false,
+                  pinned: false,
+                };
+                validTabs.unshift(operationTab);
+              }
+            } else {
+              // 系统级页面：确保工作台标签存在
+              const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
+              if (!hasWorkplace) {
+                const workplaceTab: TabItem = {
+                  key: '/system/dashboard/workplace',
+                  path: '/system/dashboard/workplace',
+                  label: getTabTitle('/system/dashboard/workplace'),
+                  closable: false,
+                  pinned: false,
+                };
+                validTabs.unshift(workplaceTab);
+              }
+            }
+
+            setTabs(validTabs);
+          } else {
+            // 如果没有有效的标签页，根据当前页面级别创建默认标签
+            const defaultTabs: TabItem[] = [];
+            let defaultActiveKey: string;
+
+            if (isInfraPage) {
+              defaultActiveKey = '/infra/operation';
+              defaultTabs.push({
+                key: defaultActiveKey,
+                path: defaultActiveKey,
+                label: getTabTitle(defaultActiveKey),
                 closable: false,
                 pinned: false,
-              };
-              validTabs.unshift(workplaceTab);
-            }
-            
-            setTabs(validTabs);
-            
-            // 恢复当前激活的标签（如果存在）
-            const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
-            
-            if (savedActiveKey && validTabs.some((tab) => tab.key === savedActiveKey)) {
-              setActiveKey(savedActiveKey);
-              // 使用 setTimeout 确保在下一个事件循环中导航，避免与路由监听冲突
-              setTimeout(() => {
-                navigate(savedActiveKey);
-              }, 0);
+              });
             } else {
-              // 默认激活第一个标签
-              setActiveKey(validTabs[0].key);
-              setTimeout(() => {
-                navigate(validTabs[0].key);
-              }, 0);
+              defaultActiveKey = '/system/dashboard/workplace';
+              defaultTabs.push({
+                key: defaultActiveKey,
+                path: defaultActiveKey,
+                label: getTabTitle(defaultActiveKey),
+                closable: false,
+                pinned: false,
+              });
             }
-            
-            setIsInitialized(true);
-            return;
+            setTabs(defaultTabs);
+            setActiveKey(defaultActiveKey);
+            setTimeout(() => {
+              navigate(defaultActiveKey);
+            }, 0);
           }
+
+          // 对于有有效标签的情况，设置活动标签并导航
+          if (validTabs.length > 0) {
+            // 设置活动标签并导航的函数
+            const setActiveKeyAndNavigate = (tabs: TabItem[], savedActiveKey: string | null, isInfraPage: boolean) => {
+              if (savedActiveKey && tabs.some((tab) => tab.key === savedActiveKey)) {
+                // 检查保存的活动标签是否与当前页面级别匹配
+                const isSavedInfraTab = savedActiveKey.startsWith('/infra');
+                if ((isInfraPage && isSavedInfraTab) || (!isInfraPage && !isSavedInfraTab)) {
+                  setActiveKey(savedActiveKey);
+                  setTimeout(() => {
+                    navigate(savedActiveKey);
+                  }, 0);
+                  return;
+                }
+              }
+
+              // 默认激活第一个标签
+              setActiveKey(tabs[0].key);
+              setTimeout(() => {
+                navigate(tabs[0].key);
+              }, 0);
+            };
+
+            // 恢复当前激活的标签（如果存在且匹配当前页面级别）
+            const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
+            setActiveKeyAndNavigate(validTabs, savedActiveKey, isInfraPage);
+          }
+
+          setIsInitialized(true);
+          return;
         }
       }
     } catch (error) {

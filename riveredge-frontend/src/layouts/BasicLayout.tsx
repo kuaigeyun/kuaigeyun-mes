@@ -3242,26 +3242,20 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 但这里不使用 key，因为会导致标签丢失
         // 内容区域样式
         contentStyle={{
-          // 始终设置 padding: 0，因为我们使用 UniTabs 组件来管理内容区域的 padding
-          padding: 0,
+          // 统一使用非简写属性，避免与简写属性冲突
+          paddingTop: 0,
+          paddingBottom: 0,
+          paddingInline: 0,
+          paddingInlineStart: 0,
+          paddingInlineEnd: 0,
           background: token.colorBgLayout,
           // 全屏时：确保内容区域占据全屏，覆盖 ProLayout 的默认 padding-inline: 40px
           ...(isFullscreen ? {
             marginLeft: 0,
-            paddingLeft: 0,
-            paddingRight: 0,
-            paddingInline: 0,
-            paddingInlineStart: 0,
-            paddingInlineEnd: 0,
             width: '100%',
             maxWidth: '100%',
           } : {
-            // 退出全屏时：保持 padding: 0，但让 ProLayout 的 padding-inline 生效
-            // 注意：padding: 0 会覆盖 padding-inline，所以需要明确设置 padding-inline
-            // 但实际上，我们不需要 padding-inline，因为我们使用 UniTabs 来管理间距
-            paddingInline: 0,
-            paddingInlineStart: 0,
-            paddingInlineEnd: 0,
+            // 退出全屏时：保持统一的padding设置
           }),
         }}
         headerContentRender={() => (
@@ -3585,15 +3579,29 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           );
         }
         // 使用 Ant Design 原生渲染，只添加点击导航功能
+        // 优化：防止重复点击和不必要的导航
         return (
           <div
-            onClick={() => {
-              if (item.path && item.path !== location.pathname) {
-                navigate(item.path);
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (item.path && item.path !== location.pathname && !item.disabled) {
+                // 使用React Router的导航，确保SPA行为
+                navigate(item.path, { replace: false });
               }
             }}
             style={{
-              cursor: item.path ? 'pointer' : 'default',
+              cursor: item.path && !item.disabled ? 'pointer' : 'default',
+              width: '100%',
+              height: '100%',
+            }}
+            role="menuitem"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if ((e.key === 'Enter' || e.key === ' ') && item.path && item.path !== location.pathname && !item.disabled) {
+                e.preventDefault();
+                navigate(item.path, { replace: false });
+              }
             }}
           >
             {dom}
