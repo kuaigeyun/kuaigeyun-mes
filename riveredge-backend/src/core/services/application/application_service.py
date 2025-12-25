@@ -498,42 +498,75 @@ class ApplicationService:
     ) -> List[ApplicationDict]:
         """
         获取已安装的应用列表
-        
+
+        注意：会自动过滤掉快速上线模式中停用的应用。
+
         Args:
             tenant_id: 组织ID
             is_active: 是否启用（可选）
-            
+
         Returns:
             List[ApplicationDict]: 已安装的应用列表
         """
+        # 快速上线模式：停用的应用列表
+        disabled_apps = {
+            "kuaiacc",    # 财务会计系统
+            "kuaiaps",    # 高级排产系统
+            "kuaicert",   # 认证管理系统
+            "kuaicrm",    # 客户关系管理系统
+            "kuaieam",    # 设备资产管理系统
+            "kuaiehs",    # 环境健康安全系统
+            "kuaiems",    # 能源管理系统
+            "kuaiepm",    # 企业绩效管理系统
+            "kuaihrm",    # 人力资源管理系统
+            "kuaiiot",    # 物联网系统
+            "kuailims",   # 实验室信息管理系统
+            "kuaimes",    # 制造执行系统
+            "kuaimi",     # 制造智能系统
+            "kuaimrp",    # 物料需求规划系统
+            "kuaioa",     # 办公自动化系统
+            "kuaipdm",    # 产品数据管理系统
+            "kuaipm",     # 项目管理系统
+            "kuaiqms",    # 质量管理系统
+            "kuaiscm",    # 供应链协同系统
+            "kuaisrm",    # 供应商关系管理系统
+            "kuaitms",    # 运输管理系统
+            "kuaiwms",    # 仓库管理系统
+        }
+
         # 使用直接数据库查询，避免 Tortoise ORM 配置问题
         conn = await get_db_connection()
         try:
             # 构建 SQL 查询
             sql = """
                 SELECT * FROM core_applications
-                WHERE tenant_id = $1 
-                  AND is_installed = TRUE 
+                WHERE tenant_id = $1
+                  AND is_installed = TRUE
                   AND deleted_at IS NULL
-            """
-            params = [tenant_id]
-            
+                  AND code NOT IN ({})
+            """.format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]))
+
+            params = [tenant_id] + list(disabled_apps)
+
             # 如果指定了 is_active，添加过滤条件
             if is_active is not None:
-                sql += " AND is_active = $2"
+                sql = sql.replace("AND code NOT IN ({})".format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))])),
+                                 "AND code NOT IN ({}) AND is_active = ${}".format(
+                                     ','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]),
+                                     len(params) + 1))
                 params.append(is_active)
-            
+
             # 添加排序
             sql += " ORDER BY sort_order, id"
-            
+
             # 执行查询
             rows = await conn.fetch(sql, *params)
-            
+
             # 转换为字典列表
             result = []
             for row in rows:
                 result.append(dict(row))
-            
+
             return result
         finally:
             await conn.close()
