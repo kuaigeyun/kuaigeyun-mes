@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../../components/SafeProFormSelect';
+import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 
 // 安全处理 options 的工具函数
 const safeOptions = (options: any): any[] => {

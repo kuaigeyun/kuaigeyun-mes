@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { ProTable, ProColumns, ProForm, ProFormText, ProFormSelect } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../components/SafeProFormSelect';
+import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Tabs } from 'antd';
 import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from './card-view';
