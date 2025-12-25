@@ -128,11 +128,6 @@ const SystemRoutes: React.FC = () => {
           <ApplicationCenterPage />
         </Suspense>
       } />
-      <Route path="/system/applications/:uuid" element={
-        <Suspense fallback={<LoadingFallback />}>
-          <ApplicationDetailPage />
-        </Suspense>
-      } />
       <Route path="/system/plugin-manager" element={
         <Suspense fallback={<LoadingFallback />}>
           <PluginManagerPage />
