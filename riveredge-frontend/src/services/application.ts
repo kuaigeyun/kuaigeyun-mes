@@ -182,7 +182,7 @@ export async function uninstallApplication(applicationUuid: string): Promise<App
  */
 export async function enableApplication(applicationUuid: string): Promise<Application> {
   return apiRequest<Application>(`/core/applications/${applicationUuid}/enable`, {
-    method: 'PUT',
+    method: 'POST',
   });
 }
 
@@ -194,7 +194,7 @@ export async function enableApplication(applicationUuid: string): Promise<Applic
  */
 export async function disableApplication(applicationUuid: string): Promise<Application> {
   return apiRequest<Application>(`/core/applications/${applicationUuid}/disable`, {
-    method: 'PUT',
+    method: 'POST',
   });
 }
 
