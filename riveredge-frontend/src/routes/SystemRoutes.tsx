@@ -5,7 +5,7 @@
  */
 
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import BasicLayout from '../layouts/BasicLayout';
 
 // 加载中组件
@@ -29,6 +29,7 @@ import LockScreenPage from '../pages/lock-screen';
 
 // 系统级页面（懒加载）
 const DashboardPage = lazy(() => import('../pages/system/dashboard'));
+const DashboardAnalysisPage = lazy(() => import('../pages/system/dashboard/analysis'));
 const RolesPage = lazy(() => import('../pages/system/roles/list'));
 const PermissionsPage = lazy(() => import('../pages/system/permissions/list'));
 const DepartmentsPage = lazy(() => import('../pages/system/departments/list'));
@@ -93,9 +94,20 @@ const SystemRoutes: React.FC = () => {
       <Route path="/lock-screen" element={<LockScreenPage />} />
 
       {/* 系统级路由 */}
-      <Route path="/system/dashboard" element={
+      {/* 仪表盘重定向到工作台 */}
+      <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
+
+      {/* 工作台页面 */}
+      <Route path="/system/dashboard/workplace" element={
         <Suspense fallback={<LoadingFallback />}>
           {renderWithLayout(DashboardPage)}
+        </Suspense>
+      } />
+
+      {/* 分析页面 */}
+      <Route path="/system/dashboard/analysis" element={
+        <Suspense fallback={<LoadingFallback />}>
+          {renderWithLayout(DashboardAnalysisPage)}
         </Suspense>
       } />
       <Route path="/system/roles" element={
