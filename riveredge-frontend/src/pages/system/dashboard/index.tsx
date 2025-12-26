@@ -6,13 +6,13 @@
  */
 
 import { PageContainer } from '@ant-design/pro-components';
-import { 
-  Card, 
-  Row, 
-  Col, 
-  Avatar, 
-  Typography, 
-  Space, 
+import {
+  Card,
+  Row,
+  Col,
+  Avatar,
+  Typography,
+  Space,
   Tag,
   Button,
   Badge,
@@ -104,25 +104,24 @@ const quickActions = [
     key: 'users',
     title: '用户管理',
     icon: <UserOutlined />,
-    path: '/login/system/users',
+    path: '/system/users',
     description: '用户列表、权限管理',
   },
   {
     key: 'roles',
     title: '角色管理',
     icon: <TeamOutlined />,
-    path: '/login/system/roles',
+    path: '/system/roles',
     description: '角色配置、权限分配',
   },
   {
-    key: 'system',
-    title: '系统配置',
-    icon: <SettingOutlined />,
-    path: '/login/system/users',
-    description: '用户管理、角色管理',
+    key: 'departments',
+    title: '部门管理',
+    icon: <ShopOutlined />,
+    path: '/system/departments',
+    description: '组织架构、部门设置',
   },
 ];
-
 
 /**
  * 工作台页面组件
@@ -239,9 +238,9 @@ export default function DashboardPage() {
             }
             loading={notificationsLoading}
             extra={
-              <Button 
-                type="link" 
-                size="small" 
+              <Button
+                type="link"
+                size="small"
                 onClick={() => {
                   message.info('通知中心功能开发中');
                 }}
@@ -312,9 +311,9 @@ export default function DashboardPage() {
             }
             loading={todosLoading}
             extra={
-              <Button 
-                type="link" 
-                size="small" 
+              <Button
+                type="link"
+                size="small"
                 onClick={() => {
                   message.info('待办事项功能开发中');
                 }}
