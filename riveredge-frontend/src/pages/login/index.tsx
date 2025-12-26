@@ -284,7 +284,7 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success('登录成功');
-        navigate('/system/dashboard/workplace', { replace: true });
+        navigate('/system/dashboard', { replace: true });
       }, 0);
           }
         } catch (loginError: any) {
@@ -373,7 +373,7 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success('登录成功');
-        navigate('/system/dashboard/workplace', { replace: true });
+        navigate('/system/dashboard', { replace: true });
       }, 0);
           }
         } catch (loginError: any) {
@@ -457,7 +457,7 @@ export default function LoginPage() {
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success('登录成功');
-        navigate('/dashboard');
+        navigate('/system/dashboard');
       }, 0);
       return;
     }
@@ -501,7 +501,7 @@ export default function LoginPage() {
       const urlParams = new URL(window.location.href).searchParams;
       setTimeout(() => {
         message.success('登录成功');
-        navigate(urlParams.get('redirect') || '/dashboard');
+        navigate(urlParams.get('redirect') || '/system/dashboard');
       }, 0);
     } else {
       message.error('登录失败，无法确定组织');
@@ -901,7 +901,7 @@ export default function LoginPage() {
           const urlParams = new URL(window.location.href).searchParams;
           setTimeout(() => {
             message.success('体验登录成功（仅浏览权限）');
-            navigate(urlParams.get('redirect') || '/dashboard');
+            navigate(urlParams.get('redirect') || '/system/dashboard');
           }, 0);
         } else {
           message.error('体验登录失败，无法确定组织');
@@ -987,7 +987,7 @@ export default function LoginPage() {
         const urlParams = new URL(window.location.href).searchParams;
         setTimeout(() => {
           message.success('已选择组织');
-          navigate(urlParams.get('redirect') || '/dashboard');
+          navigate(urlParams.get('redirect') || '/system/dashboard');
         }, 0);
       } else {
         message.error('选择组织失败，请重试');

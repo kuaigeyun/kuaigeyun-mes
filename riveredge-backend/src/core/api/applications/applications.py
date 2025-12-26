@@ -289,6 +289,82 @@ async def delete_application(
         )
 
 
+@router.post("/{uuid}/enable", response_model=ApplicationResponse)
+async def enable_application(
+    uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    启用应用
+
+    启用指定的应用，并同步更新相关菜单状态。
+
+    Args:
+        uuid: 应用UUID
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        ApplicationResponse: 启用后的应用对象
+
+    Raises:
+        HTTPException: 当应用不存在时抛出
+    """
+    try:
+        application = await ApplicationService.enable_application(
+            tenant_id=tenant_id,
+            uuid=uuid
+        )
+        return ApplicationResponse.model_validate(application)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"启用应用失败: {str(e)}"
+        )
+
+
+@router.post("/{uuid}/disable", response_model=ApplicationResponse)
+async def disable_application(
+    uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    禁用应用
+
+    禁用指定的应用，并同步更新相关菜单状态。
+
+    Args:
+        uuid: 应用UUID
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        ApplicationResponse: 禁用后的应用对象
+
+    Raises:
+        HTTPException: 当应用不存在时抛出
+    """
+    try:
+        application = await ApplicationService.disable_application(
+            tenant_id=tenant_id,
+            uuid=uuid
+        )
+        return ApplicationResponse.model_validate(application)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"禁用应用失败: {str(e)}"
+        )
+
+
 @router.post("/scan", response_model=List[ApplicationResponse])
 async def scan_and_register_plugins(
     tenant_id: int = Depends(get_current_tenant),
