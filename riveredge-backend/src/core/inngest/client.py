@@ -8,19 +8,16 @@ import os
 from inngest import Inngest
 
 # 从环境变量获取 Inngest 配置
-# 优先使用 INNGEST_EVENT_API_URL，否则从 infra_settings 读取
+# 优先使用 INNGEST_EVENT_API_URL 环境变量（推荐方式）
+# 如果未设置，则使用 INNGEST_HOST 和 INNGEST_PORT 环境变量构建 URL
+# 最后回退到配置文件中的默认值
 from infra.config.infra_config import infra_settings
 
-# 优先使用 INNGEST_EVENT_API_URL 环境变量（推荐方式）
-# 如果未设置，则使用 INNGEST_HOST 和 INNGEST_PORT 构建 URL
-# 默认使用 Inngest 官方默认端口 8288
-INNGEST_EVENT_API_URL = os.getenv(
-    "INNGEST_EVENT_API_URL",
-    None
-)
+# 优先使用 INNGEST_EVENT_API_URL 环境变量（推荐方式，直接指定完整URL）
+INNGEST_EVENT_API_URL = os.getenv("INNGEST_EVENT_API_URL", None)
 
 if not INNGEST_EVENT_API_URL:
-    # 如果未设置 INNGEST_EVENT_API_URL，则从配置读取
+    # 如果未设置 INNGEST_EVENT_API_URL，则使用环境变量或配置文件的默认值
     INNGEST_HOST = os.getenv("INNGEST_HOST", infra_settings.INNGEST_HOST)
     INNGEST_PORT = int(os.getenv("INNGEST_PORT", str(infra_settings.INNGEST_PORT)))
     INNGEST_EVENT_API_URL = f"http://{INNGEST_HOST}:{INNGEST_PORT}"
