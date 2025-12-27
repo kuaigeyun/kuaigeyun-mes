@@ -14,8 +14,10 @@ from loguru import logger
 from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest, PersonalRegisterRequest, OrganizationRegisterRequest, RegisterResponse, CurrentUserResponse, SendVerificationCodeRequest, SendVerificationCodeResponse
 from infra.services.auth_service import AuthService
 from infra.api.deps.deps import get_current_user
+from infra.api.deps.services import get_auth_service_with_fallback
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
+from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -24,16 +26,20 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.post("/login", response_model=LoginResponse)
 async def login(
     data: LoginRequest,
-    request: Request
+    request: Request,
+    auth_service: Any = Depends(get_auth_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     用户登录接口
     
     验证用户凭据并返回 JWT Token（包含 tenant_id）。
     
+    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
+    
     Args:
         data: 登录请求数据（username, password, tenant_id 可选）
         request: 请求对象（用于获取 IP、User-Agent 等信息）
+        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
         
     Returns:
         LoginResponse: 登录成功的响应数据（包含 access_token 和用户信息）
@@ -50,22 +56,26 @@ async def login(
         }
         ```
     """
-    # ⚠️ 第三阶段改进：统一错误处理
-    # 异常由全局异常处理中间件统一处理
-    service = AuthService()
-    result = await service.login(data, request)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    result = await auth_service.login(data, request)
     return LoginResponse(**result)
 
 
 @router.post("/register", response_model=dict)
-async def register(data: UserRegisterRequest):
+async def register(
+    data: UserRegisterRequest,
+    auth_service: Any = Depends(get_auth_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
     """
     用户注册接口
     
     在已有组织中创建新用户。
     
+    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
+    
     Args:
         data: 用户注册请求数据
+        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
         
     Returns:
         dict: 注册成功的响应数据
@@ -73,8 +83,8 @@ async def register(data: UserRegisterRequest):
     Raises:
         HTTPException: 当组织不存在或用户名已存在时抛出
     """
-    service = AuthService()
-    user = await service.register(data)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    user = await auth_service.register(data)
     return {
         "message": "注册成功",
         "user_id": user.id,
@@ -104,12 +114,19 @@ async def refresh_token(token: str):
 
 
 @router.post("/guest-login", response_model=LoginResponse)
-async def guest_login():
+async def guest_login(
+    auth_service: Any = Depends(get_auth_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
     """
     免注册体验登录接口
 
     获取或创建默认组织和预设的体验账户，直接返回登录响应。
     体验账户只有浏览权限（只读权限），无新建、编辑、删除权限。
+    
+    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
+
+    Args:
+        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
 
     Returns:
         LoginResponse: 登录成功的响应数据
@@ -117,17 +134,10 @@ async def guest_login():
     Raises:
         HTTPException: 当创建体验账户失败时抛出
     """
-    try:
-        service = AuthService()
-        result = await service.guest_login()
-        return LoginResponse(**result)
-    except Exception as e:
-        logger.error(f"体验登录失败: {e}")
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"体验登录失败: {str(e)}"
-        )
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    # 异常由全局异常处理中间件统一处理
+    result = await auth_service.guest_login()
+    return LoginResponse(**result)
 
 
 @router.get("/me", response_model=CurrentUserResponse)
@@ -176,15 +186,21 @@ async def logout():
 
 
 @router.post("/register/personal")
-async def register_personal(data: PersonalRegisterRequest):
+async def register_personal(
+    data: PersonalRegisterRequest,
+    auth_service: Any = Depends(get_auth_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
     """
     个人注册接口
     
     个人用户注册。如果提供了 tenant_id，则在指定组织中创建用户；
     否则在默认组织中创建用户。如果提供了 invite_code，则验证邀请码并直接注册成功（免审核）。
     
+    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
+    
     Args:
         data: 个人注册请求数据
+        auth_service: 认证服务（依赖注入，如果未注册则回退到直接导入）
         
     Returns:
         RegisterResponse: 注册成功的响应数据
@@ -192,8 +208,8 @@ async def register_personal(data: PersonalRegisterRequest):
     Raises:
         HTTPException: 当组织不存在、用户名已存在或邀请码无效时抛出
     """
-    service = AuthService()
-    result = await service.register_personal(data)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    result = await auth_service.register_personal(data)
     # 返回格式与前端期望一致：{ success, message, user_id }
     return {
         "success": result["success"],
@@ -203,7 +219,10 @@ async def register_personal(data: PersonalRegisterRequest):
 
 
 @router.post("/register/organization")
-async def register_organization(data: OrganizationRegisterRequest):
+async def register_organization(
+    data: OrganizationRegisterRequest,
+    auth_service: Any = Depends(get_auth_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
     """
     组织注册接口
     
@@ -220,8 +239,8 @@ async def register_organization(data: OrganizationRegisterRequest):
     Raises:
         HTTPException: 当域名已存在或用户名已存在时抛出
     """
-    service = AuthService()
-    result = await service.register_organization(data)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    result = await auth_service.register_organization(data)
     
     # 返回格式与前端期望一致：{ success, message, tenant_id, user_id }
     return {

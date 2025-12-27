@@ -99,9 +99,14 @@ async def lifespan(app: FastAPI):
     await register_db(app)
     print("✅ Tortoise ORM 已注册")
 
-    # 初始化服务接口层
+    # 初始化服务接口层（系统级）
     await ServiceInitializer.initialize_services()
-    print("✅ 服务接口层已初始化")
+    print("✅ 系统级服务接口层已初始化")
+    
+    # ⚠️ 第三阶段改进：初始化平台级服务接口层
+    from infra.services.interfaces.service_initializer import InfraServiceInitializer
+    await InfraServiceInitializer.initialize_services()
+    print("✅ 平台级服务接口层已初始化")
 
     # ⚠️ 第一阶段改进：初始化应用路由管理器
     init_route_manager(app)
