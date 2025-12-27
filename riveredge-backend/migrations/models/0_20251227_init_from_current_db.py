@@ -37,4 +37,3 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
     -- 初始迁移不支持降级
     SELECT 1;
     """
-
