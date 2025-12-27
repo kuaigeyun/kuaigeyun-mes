@@ -12,29 +12,6 @@ import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getUserPreference, updateUserPreference } from '../../services/userPreference';
 import { getToken } from '../../utils/auth';
 
-// 调试函数：检查当前配置状态（在浏览器控制台中调用）
-(window as any).debugThemeConfig = async () => {
-  console.log('=== 调试主题配置状态 ===');
-
-  try {
-    // 检查用户偏好设置
-    const userPreference = await getUserPreference().catch(() => null);
-    console.log('用户偏好设置:', userPreference);
-
-    // 检查站点设置
-    const siteSetting = await getSiteSetting().catch(() => null);
-    console.log('站点设置:', siteSetting);
-
-    // 检查是否有token
-    const token = getToken();
-    console.log('用户登录状态:', !!token);
-
-    console.log('=== 调试完成 ===');
-  } catch (error) {
-    console.error('调试失败:', error);
-  }
-};
-
 const { Text, Paragraph } = Typography;
 
 /**

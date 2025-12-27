@@ -79,7 +79,6 @@ class DynamicDatabaseConfigService:
             "core.models.user_preference",
             "core.models.operation_log",
             "core.models.login_log",
-            "core.models.data_backup",
             "core.models.data_dictionary",
             "core.models.dictionary_item",
             "core.models.system_parameter",

@@ -269,32 +269,6 @@ export async function apiRequest<T = any>(
   fetchOptions.headers = headers;
 
   try {
-    // 调试日志：输出请求信息
-    if (isFormData) {
-      console.log('📤 发送文件上传请求:', {
-        url: requestUrl,
-        method: fetchOptions.method,
-        hasFile: fetchOptions.body instanceof FormData,
-        headers: headers,
-        tenantId: currentTenantId,
-        isInfraSuperAdmin,
-        allHeaders: Object.keys(headers),
-        xTenantIdHeader: headers['X-Tenant-ID'],
-        fetchOptionsHeaders: fetchOptions.headers,
-      });
-      
-      // 验证 X-Tenant-ID 是否在 fetchOptions 中
-      if (fetchOptions.headers && 'X-Tenant-ID' in fetchOptions.headers) {
-        console.log('✅ X-Tenant-ID 请求头已添加到 fetchOptions:', fetchOptions.headers['X-Tenant-ID']);
-      } else {
-        console.error('❌ X-Tenant-ID 请求头未添加到 fetchOptions!', {
-          headers: fetchOptions.headers,
-          currentTenantId,
-          needsTenantContext,
-        });
-      }
-    }
-    
     const response = await fetch(requestUrl, fetchOptions);
 
     // 读取响应体（无论成功还是失败都需要读取）

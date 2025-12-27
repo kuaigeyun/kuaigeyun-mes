@@ -15,6 +15,7 @@ import asyncpg
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.database.database import get_db_connection
+from loguru import logger
 
 # 由于使用直接 asyncpg 连接，类型注解使用 Dict[str, Any]
 ApplicationDict = Dict[str, Any]
@@ -615,7 +616,7 @@ class ApplicationService:
                 plugins.append(manifest_data)
             except (json.JSONDecodeError, IOError) as e:
                 # 忽略无法读取的 manifest.json
-                print(f"警告: 无法读取插件 {plugin_dir.name} 的 manifest.json: {e}")
+                logger.warning(f"警告: 无法读取插件 {plugin_dir.name} 的 manifest.json: {e}")
                 continue
         
         return plugins
@@ -635,17 +636,16 @@ class ApplicationService:
             List[Application]: 已注册的应用列表
         """
         plugins = ApplicationService._scan_plugin_manifests()
-        print(f"扫描到 {len(plugins)} 个插件清单")
-        print(f"插件清单内容: {plugins}")
+        logger.info(f"扫描到 {len(plugins)} 个插件清单")
         registered_apps = []
 
         for manifest in plugins:
-            print(f"处理插件: {manifest.get('name', 'unknown')} (code: {manifest.get('code', 'unknown')})")
+            logger.debug(f"处理插件: {manifest.get('name', 'unknown')} (code: {manifest.get('code', 'unknown')})")
             try:
                 # 从 manifest.json 提取应用信息
                 code = manifest.get('code')
                 if not code:
-                    print(f"警告: 插件 {manifest.get('name', 'unknown')} 缺少 code 字段，跳过注册")
+                    logger.warning(f"警告: 插件 {manifest.get('name', 'unknown')} 缺少 code 字段，跳过注册")
                     continue
                 
                 # 检查应用是否已存在
@@ -740,11 +740,10 @@ class ApplicationService:
                 registered_apps.append(application)
                 
             except Exception as e:
-                print(f"错误: 注册插件 {manifest.get('name', 'unknown')} 失败: {e}")
+                logger.error(f"错误: 注册插件 {manifest.get('name', 'unknown')} 失败: {e}")
                 import traceback
                 traceback.print_exc()
                 # 暂时不跳过，继续处理下一个插件
-                print(f"继续处理下一个插件...")
                 continue
         
         # 所有应用注册完成后，统一清除菜单缓存，确保菜单一次性刷新
@@ -753,7 +752,7 @@ class ApplicationService:
                 from core.services.system.menu_service import MenuService
                 await MenuService._clear_menu_cache(tenant_id)
             except Exception as e:
-                print(f"⚠️ 清除菜单缓存失败（不影响应用注册）: {e}")
+                logger.warning(f"⚠️ 清除菜单缓存失败（不影响应用注册）: {e}")
         
         # 转换为字典列表，与其他方法保持一致
         result = []

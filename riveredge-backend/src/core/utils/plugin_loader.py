@@ -46,7 +46,7 @@ class PluginLoader:
             
             # 尝试导入插件路由
             # 这里需要根据实际插件结构来导入
-            # 例如：from apps_kuaimes.api.orders.orders import router as kuaimes_orders_router
+            # 例如：from apps.master_data.api.router import router as master_data_router
             
             return None
         except Exception as e:

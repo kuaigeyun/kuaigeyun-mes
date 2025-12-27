@@ -239,16 +239,6 @@ from .online_user import (
     OnlineUserStatisticsResponse,
 )
 
-# 数据备份 Schema
-from .data_backup import (
-    DataBackupCreate,
-    DataBackupUpdate,
-    DataBackupResponse,
-    DataBackupListResponse,
-    DataBackupRestoreRequest,
-    DataBackupRestoreResponse,
-)
-
 __all__ = [
     # 角色权限 Schema
     "RoleCreate",
@@ -422,12 +412,5 @@ __all__ = [
     "OnlineUserResponse",
     "OnlineUserListResponse",
     "OnlineUserStatisticsResponse",
-    # 数据备份 Schema
-    "DataBackupCreate",
-    "DataBackupUpdate",
-    "DataBackupResponse",
-    "DataBackupListResponse",
-    "DataBackupRestoreRequest",
-    "DataBackupRestoreResponse",
 ]
 

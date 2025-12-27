@@ -125,21 +125,16 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
     sourcePath = getPluginSourcePath(pluginCode);
   }
   
-  // ⚠️ 调试日志：输出插件加载路径
-  console.log(`🔍 [插件加载] ${pluginCode} - 源路径: ${sourcePath}`);
-  
   // 使用重试机制加载插件
   const pluginModule = await withRetry(
     async () => {
       // 使用动态导入加载插件模块
       // 注意：Vite 的动态导入需要使用相对路径或绝对路径
       // 使用 /* @vite-ignore */ 可以跳过 Vite 的静态分析
-      console.log(`🔄 [插件加载] ${pluginCode} - 尝试导入: ${sourcePath}`);
       const module = await import(
         /* @vite-ignore */
         sourcePath
       );
-      console.log(`✅ [插件加载] ${pluginCode} - 导入成功`);
       return module;
     },
     {
@@ -168,7 +163,6 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
     throw new Error(`插件 ${application.code} 未导出路由组件。请确保插件入口文件导出了 default 或 ${pluginCode}Routes`);
   }
 
-  console.log(`✅ [插件加载] ${pluginCode} - 找到路由组件:`, PluginRoutes);
 
   // 返回路由配置
   const routePath = application.route_path || `/apps/${application.code}`;
