@@ -42,9 +42,19 @@ import DatasetsPage from '../pages/system/datasets/list';
 import DataBackupsPage from '../pages/system/data-backups';
 import CustomFieldsPage from '../pages/system/custom-fields/list';
 import ApiServicesPage from '../pages/system/apis/list';
+import ApisPage from '../pages/system/apis/list'; // 别名，用于 /system/apis 路由
 import IntegrationConfigsPage from '../pages/system/integration-configs/list';
 import MessageTemplatesPage from '../pages/system/messages/template';
 import MessageConfigsPage from '../pages/system/messages/config';
+import MenusPage from '../pages/system/menus';
+import SystemParametersPage from '../pages/system/system-parameters/list';
+import FilesPage from '../pages/system/files/list';
+import ApprovalProcessesPage from '../pages/system/approval-processes/list';
+import ApprovalInstancesPage from '../pages/system/approval-processes/instances';
+import PersonalProfilePage from '../pages/personal/profile';
+import PersonalPreferencesPage from '../pages/personal/preferences';
+import PersonalMessagesPage from '../pages/personal/messages';
+import PersonalTasksPage from '../pages/personal/tasks';
 import InngestDashboardPage from '../pages/infra/inngest';
 
 // 平台级页面（直接导入，移除懒加载）
@@ -93,7 +103,7 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/permissions" element={renderWithLayout(PermissionsPage)} />
       <Route path="/system/departments" element={renderWithLayout(DepartmentsPage)} />
       <Route path="/system/positions" element={renderWithLayout(PositionsPage)} />
-      <Route path="/system/users" element={renderWithLayout(UserProfilePage)} />
+      <Route path="/system/users" element={renderWithLayout(UsersPage)} />
       <Route path="/system/user-profile" element={renderWithLayout(UserProfilePage)} />
       <Route path="/system/languages" element={renderWithLayout(LanguagesPage)} />
       <Route path="/system/site-settings" element={renderWithLayout(SiteSettingsPage)} />
@@ -113,10 +123,24 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/data-backups" element={renderWithLayout(DataBackupsPage)} />
       <Route path="/system/custom-fields" element={renderWithLayout(CustomFieldsPage)} />
       <Route path="/system/api-services" element={renderWithLayout(ApiServicesPage)} />
+      <Route path="/system/apis" element={renderWithLayout(ApisPage)} />
       <Route path="/system/integration-configs" element={renderWithLayout(IntegrationConfigsPage)} />
       <Route path="/system/message-templates" element={renderWithLayout(MessageTemplatesPage)} />
+      <Route path="/system/messages/template" element={renderWithLayout(MessageTemplatesPage)} />
       <Route path="/system/message-configs" element={renderWithLayout(MessageConfigsPage)} />
+      <Route path="/system/messages/config" element={renderWithLayout(MessageConfigsPage)} />
+      <Route path="/system/menus" element={renderWithLayout(MenusPage)} />
+      <Route path="/system/system-parameters" element={renderWithLayout(SystemParametersPage)} />
+      <Route path="/system/files" element={renderWithLayout(FilesPage)} />
+      <Route path="/system/approval-processes" element={renderWithLayout(ApprovalProcessesPage)} />
+      <Route path="/system/approval-instances" element={renderWithLayout(ApprovalInstancesPage)} />
       <Route path="/system/inngest" element={renderWithLayout(InngestDashboardPage)} />
+
+      {/* 个人相关路由 */}
+      <Route path="/personal/profile" element={renderWithLayout(PersonalProfilePage)} />
+      <Route path="/personal/preferences" element={renderWithLayout(PersonalPreferencesPage)} />
+      <Route path="/personal/messages" element={renderWithLayout(PersonalMessagesPage)} />
+      <Route path="/personal/tasks" element={renderWithLayout(PersonalTasksPage)} />
 
       {/* 平台级路由 */}
       <Route path="/infra/admin" element={renderWithLayout(PlatformAdminPage)} />
