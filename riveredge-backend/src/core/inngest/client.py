@@ -11,12 +11,19 @@ from inngest import Inngest
 # 优先使用 INNGEST_EVENT_API_URL，否则从 infra_settings 读取
 from infra.config.infra_config import infra_settings
 
-INNGEST_HOST = os.getenv("INNGEST_HOST", infra_settings.INNGEST_HOST)
-INNGEST_PORT = int(os.getenv("INNGEST_PORT", str(infra_settings.INNGEST_PORT)))
+# 优先使用 INNGEST_EVENT_API_URL 环境变量（推荐方式）
+# 如果未设置，则使用 INNGEST_HOST 和 INNGEST_PORT 构建 URL
+# 默认使用 Inngest 官方默认端口 8288
 INNGEST_EVENT_API_URL = os.getenv(
     "INNGEST_EVENT_API_URL",
-    f"http://{INNGEST_HOST}:{INNGEST_PORT}"
+    None
 )
+
+if not INNGEST_EVENT_API_URL:
+    # 如果未设置 INNGEST_EVENT_API_URL，则从配置读取
+    INNGEST_HOST = os.getenv("INNGEST_HOST", infra_settings.INNGEST_HOST)
+    INNGEST_PORT = int(os.getenv("INNGEST_PORT", str(infra_settings.INNGEST_PORT)))
+    INNGEST_EVENT_API_URL = f"http://{INNGEST_HOST}:{INNGEST_PORT}"
 INNGEST_APP_ID = os.getenv(
     "INNGEST_APP_ID",
     "riveredge"
