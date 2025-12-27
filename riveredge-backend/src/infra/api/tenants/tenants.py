@@ -14,11 +14,13 @@ from loguru import logger
 
 from infra.schemas.tenant import TenantResponse, TenantListResponse, TenantUpdate, TenantCreate
 from infra.services.tenant_service import TenantService
+from infra.api.deps.services import get_tenant_service_with_fallback
 from infra.models.tenant import TenantStatus, TenantPlan
 from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.domain.timezone_utils import now
 from infra.exceptions.exceptions import NotFoundError, ValidationError, ConflictError
+from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/tenants", tags=["Infra Tenants"])
@@ -34,7 +36,8 @@ async def list_tenants_for_superadmin(
     domain: Optional[str] = Query(None, description="域名搜索（模糊搜索）"),
     sort: Optional[str] = Query(None, description="排序字段（如：name、status、created_at）"),
     order: Optional[str] = Query(None, description="排序顺序（asc 或 desc）"),
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取组织列表（超级管理员）
@@ -59,10 +62,13 @@ async def list_tenants_for_superadmin(
     """
     from loguru import logger
     logger.info(f"📋 [list_tenants_for_superadmin] 开始处理请求，admin_id: {current_admin.id}, page: {page}, page_size: {page_size}")
-    service = TenantService()
+    
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
     
     # 构建查询（超级管理员可以跨组织访问）
-    result = await service.list_tenants(
+    result = await tenant_service.list_tenants(
         page=page,
         page_size=page_size,
         status=status,
@@ -80,7 +86,8 @@ async def list_tenants_for_superadmin(
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant_detail_for_superadmin(
     tenant_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取组织详情（超级管理员）
@@ -97,10 +104,12 @@ async def get_tenant_detail_for_superadmin(
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
     
     # 获取组织（跳过组织过滤）
-    tenant = await service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    tenant = await tenant_service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
