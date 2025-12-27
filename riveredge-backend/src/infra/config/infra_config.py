@@ -83,9 +83,11 @@ class InfraSettings(BaseSettings):
     FRONTEND_HOST: str = Field(default="127.0.0.1", description="前端服务主机地址")
     FRONTEND_PORT: int = Field(default=8100, description="前端服务端口")
     
-    # Inngest 服务配置（使用 Inngest 官方默认端口 8288）
-    INNGEST_HOST: str = Field(default="127.0.0.1", description="Inngest 服务主机地址")
-    INNGEST_PORT: int = Field(default=8288, description="Inngest 服务端口（使用 Inngest 官方默认端口）")
+    # Inngest 服务配置（通过环境变量配置，不设置默认值）
+    # 推荐使用 INNGEST_EVENT_API_URL 环境变量直接指定完整URL
+    # 或使用 INNGEST_HOST + INNGEST_PORT 环境变量
+    INNGEST_HOST: str = Field(default="127.0.0.1", description="Inngest 服务主机地址（可通过环境变量覆盖）")
+    INNGEST_PORT: int = Field(default=8288, description="Inngest 服务端口（可通过环境变量覆盖，Inngest默认端口）")
     
     # CORS 配置
     # 注意：定义为 str 类型，避免 Pydantic Settings 自动尝试 JSON 解析
