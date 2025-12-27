@@ -1,2 +1,1 @@
-# Aerich 迁移文件目录
-
+# Aerich migrations
