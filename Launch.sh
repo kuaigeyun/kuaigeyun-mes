@@ -1295,7 +1295,7 @@ stop_all() {
     log_info "清理残留进程..."
     
     # 只清理关键端口，避免遍历所有端口导致卡住
-    for port in $FRONTEND_PORT $BACKEND_PORT $INNGEST_PORT; do
+    for port in $FRONTEND_PORT $BACKEND_PORT; do
         if check_port $port; then
             local pid=$(get_pid_by_port $port)
             if [ ! -z "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "-" ]; then
@@ -1320,7 +1320,7 @@ stop_all() {
 
     # 最终验证：检查关键端口是否已释放
     local ports_still_occupied=0
-    for port in $FRONTEND_PORT $BACKEND_PORT $INNGEST_PORT; do
+    for port in $FRONTEND_PORT $BACKEND_PORT; do
         if check_port $port; then
             log_warn "警告：端口 $port 仍被占用"
             ports_still_occupied=$((ports_still_occupied + 1))

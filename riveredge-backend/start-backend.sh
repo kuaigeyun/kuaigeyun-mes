@@ -35,9 +35,8 @@ export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 BACKEND_HOST="${HOST:-127.0.0.1}"
 BACKEND_PORT="${PORT:-8200}"
 
-# 设置 Inngest 配置环境变量
+# 设置 Inngest 配置环境变量（使用默认端口配置）
 export INNGEST_HOST="${INNGEST_HOST:-127.0.0.1}"
-export INNGEST_PORT="${INNGEST_PORT:-8300}"
 
 echo "启动后端服务..."
 echo "  访问地址：http://${BACKEND_HOST}:${BACKEND_PORT}"
