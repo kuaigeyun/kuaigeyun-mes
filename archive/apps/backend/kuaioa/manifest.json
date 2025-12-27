@@ -1,0 +1,155 @@
+{
+    "name": "快格轻OA",
+    "code": "kuaioa",
+    "version": "1.0.0",
+    "description": "协同办公 - 流程审批、文档管理、会议管理、公告通知",
+    "icon": "appstore",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaioa/index.tsx",
+    "route_path": "/apps/kuaioa",
+    "sort_order": 230,
+    "menu_config": {
+        "title": "快格轻OA",
+        "icon": "appstore",
+        "path": "/apps/kuaioa",
+        "children": [
+            {
+                "title": "流程审批",
+                "path": "/apps/kuaioa/approval",
+                "icon": "list",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "审批流程",
+                        "path": "/apps/kuaioa/approval/process",
+                        "permission": "kuaioa:approval:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "审批流转",
+                        "path": "/apps/kuaioa/approval/flow",
+                        "permission": "kuaioa:approval:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "审批监控",
+                        "path": "/apps/kuaioa/approval/monitoring",
+                        "permission": "kuaioa:approval:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "审批统计",
+                        "path": "/apps/kuaioa/approval/statistics",
+                        "permission": "kuaioa:approval:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "文档管理",
+                "path": "/apps/kuaioa/document",
+                "icon": "file-code",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "文档存储",
+                        "path": "/apps/kuaioa/document/storage",
+                        "permission": "kuaioa:document:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "版本管理",
+                        "path": "/apps/kuaioa/document/version",
+                        "permission": "kuaioa:document:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "权限控制",
+                        "path": "/apps/kuaioa/document/permission",
+                        "permission": "kuaioa:document:manage",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "文档搜索",
+                        "path": "/apps/kuaioa/document/search",
+                        "permission": "kuaioa:document:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "会议管理",
+                "path": "/apps/kuaioa/meeting",
+                "icon": "settings",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "会议预约",
+                        "path": "/apps/kuaioa/meeting/booking",
+                        "permission": "kuaioa:meeting:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "会议纪要",
+                        "path": "/apps/kuaioa/meeting/minutes",
+                        "permission": "kuaioa:meeting:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "会议资源",
+                        "path": "/apps/kuaioa/meeting/resources",
+                        "permission": "kuaioa:meeting:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "会议提醒",
+                        "path": "/apps/kuaioa/meeting/reminder",
+                        "permission": "kuaioa:meeting:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "公告通知",
+                "path": "/apps/kuaioa/notice",
+                "icon": "grid",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "公告发布",
+                        "path": "/apps/kuaioa/notice/announcement",
+                        "permission": "kuaioa:notice:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "通知推送",
+                        "path": "/apps/kuaioa/notice/push",
+                        "permission": "kuaioa:notice:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "消息中心",
+                        "path": "/apps/kuaioa/notice/message",
+                        "permission": "kuaioa:notice:view",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaioa:approval:view",
+        "kuaioa:approval:create",
+        "kuaioa:document:view",
+        "kuaioa:document:create",
+        "kuaioa:document:manage",
+        "kuaioa:meeting:view",
+        "kuaioa:meeting:create",
+        "kuaioa:notice:view",
+        "kuaioa:notice:create"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

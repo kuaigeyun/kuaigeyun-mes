@@ -1,0 +1,160 @@
+{
+    "name": "快格轻财务",
+    "code": "kuaiacc",
+    "version": "1.0.0",
+    "description": "财务管理 - 总账管理、应收应付、成本核算、财务报表",
+    "icon": "dollar",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaiacc/index.tsx",
+    "route_path": "/apps/kuaiacc",
+    "sort_order": 170,
+    "menu_config": {
+        "title": "快格轻财务",
+        "icon": "dollar",
+        "path": "/apps/kuaiacc",
+        "children": [
+            {
+                "title": "总账管理",
+                "path": "/apps/kuaiacc/ledger",
+                "icon": "settings",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "会计科目",
+                        "path": "/apps/kuaiacc/ledger/accounts",
+                        "permission": "kuaiacc:ledger:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "凭证管理",
+                        "path": "/apps/kuaiacc/ledger/vouchers",
+                        "permission": "kuaiacc:ledger:voucher:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "账务处理",
+                        "path": "/apps/kuaiacc/ledger/processing",
+                        "permission": "kuaiacc:ledger:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "期末结账",
+                        "path": "/apps/kuaiacc/ledger/close",
+                        "permission": "kuaiacc:ledger:close",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "应收应付",
+                "path": "/apps/kuaiacc/receivable-payable",
+                "icon": "list",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "客户发票",
+                        "path": "/apps/kuaiacc/receivable-payable/customer-invoice",
+                        "permission": "kuaiacc:receivable-payable:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "供应商发票",
+                        "path": "/apps/kuaiacc/receivable-payable/supplier-invoice",
+                        "permission": "kuaiacc:receivable-payable:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "收款管理",
+                        "path": "/apps/kuaiacc/receivable-payable/receipt",
+                        "permission": "kuaiacc:receivable-payable:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "付款管理",
+                        "path": "/apps/kuaiacc/receivable-payable/payment",
+                        "permission": "kuaiacc:receivable-payable:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "成本核算",
+                "path": "/apps/kuaiacc/cost",
+                "icon": "grid",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "标准成本",
+                        "path": "/apps/kuaiacc/cost/standard",
+                        "permission": "kuaiacc:cost:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "实际成本",
+                        "path": "/apps/kuaiacc/cost/actual",
+                        "permission": "kuaiacc:cost:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "成本分析",
+                        "path": "/apps/kuaiacc/cost/analysis",
+                        "permission": "kuaiacc:cost:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "成本中心",
+                        "path": "/apps/kuaiacc/cost/center",
+                        "permission": "kuaiacc:cost:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "财务报表",
+                "path": "/apps/kuaiacc/reports",
+                "icon": "layout",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "资产负债表",
+                        "path": "/apps/kuaiacc/reports/balance-sheet",
+                        "permission": "kuaiacc:reports:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "利润表",
+                        "path": "/apps/kuaiacc/reports/profit",
+                        "permission": "kuaiacc:reports:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "现金流量表",
+                        "path": "/apps/kuaiacc/reports/cash-flow",
+                        "permission": "kuaiacc:reports:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "成本报表",
+                        "path": "/apps/kuaiacc/reports/cost",
+                        "permission": "kuaiacc:reports:view",
+                        "sort_order": 4
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaiacc:ledger:view",
+        "kuaiacc:ledger:voucher:view",
+        "kuaiacc:ledger:voucher:create",
+        "kuaiacc:ledger:close",
+        "kuaiacc:receivable-payable:view",
+        "kuaiacc:receivable-payable:create",
+        "kuaiacc:cost:view",
+        "kuaiacc:reports:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

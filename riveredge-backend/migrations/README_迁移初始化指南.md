@@ -1,50 +1,119 @@
-# 数据库迁移初始化指南
+# 数据库迁移使用指南
 
 ## 概述
 
-本文档说明如何基于当前数据库状态（`public.sql`）重新初始化 Aerich 迁移文件。
+本文档说明如何使用迁移工具和迁移文件管理数据库结构。
 
-## 当前状态
+## 工具脚本
 
-- **数据库结构文件**: `migrations/models/public.sql` (已导出，包含128个表)
-- **现有迁移文件**: 57个迁移文件（可能存在版本号不连续或重复）
-- **Aerich 配置**: 已配置在 `pyproject.toml` 和 `migrations/aerich_config.py`
+### 1. 生成迁移文件工具
 
-## 问题分析
+**`generate_migration_from_sql.py`** - 从 public.sql 生成 Aerich 迁移文件
 
-### 1. 迁移链条检查
-
-运行检查脚本：
 ```bash
 cd riveredge-backend
-python migrations/check_migration_chain.py
+
+# 自动查找 public.sql 并生成迁移文件
+python migrations/generate_migration_from_sql.py
+
+# 指定 SQL 文件路径
+python migrations/generate_migration_from_sql.py path/to/public.sql
+
+# 指定输出文件名
+python migrations/generate_migration_from_sql.py public.sql -o 0_init_schema.py
 ```
 
-这将检查：
-- 迁移文件版本号是否连续
-- 是否有重复版本号
-- 迁移文件是否完整（包含 upgrade 函数）
+**功能**：
+- 解析 public.sql 文件
+- 提取 CREATE TABLE, CREATE SEQUENCE, CREATE INDEX, COMMENT 语句
+- 自动添加 IF NOT EXISTS 避免重复执行
+- 生成符合 Aerich 格式的迁移文件
 
-### 2. 当前数据库表结构
+### 2. 手动应用迁移工具
 
-从 `public.sql` 中提取的表（共128个）：
-- `aerich` - Aerich 迁移记录表
-- `core_*` - 系统级表（约50个）
-- `infra_*` - 平台级表（约10个）
-- `apps_master_data_*` - 主数据管理应用表（约20个）
-- 其他应用表
+**`apply_migration_manually.py`** - 手动将迁移记录插入 aerich 表
 
-## 初始化方案
+```bash
+cd riveredge-backend
+python migrations/apply_migration_manually.py
+```
 
-### 方案A：基于当前数据库状态初始化（推荐）
+**用途**：当 Aerich 出现兼容性问题时，手动插入迁移记录。
 
-适用于：数据库已有完整表结构，需要重新建立迁移链条。
+## 迁移文件
+
+### 当前迁移文件
+
+- **`models/0_init_schema.py`** - 完整的数据库结构迁移文件
+  - 包含所有表、序列、索引和注释
+  - 从 `public.sql` 自动生成
+  - 适用于新环境部署
+
+- **`models/public.sql`** - 数据库结构 SQL 文件
+  - 用于生成迁移文件
+  - 包含完整的数据库结构定义
+
+## 使用流程
+
+### 新环境部署
+
+1. **生成迁移文件**（如果还没有）：
+```bash
+cd riveredge-backend
+python migrations/generate_migration_from_sql.py migrations/models/public.sql -o 0_init_schema.py
+```
+
+2. **应用迁移**（选择一种方式）：
+
+**方式A：使用 Aerich（推荐）**
+```bash
+uv run aerich upgrade
+```
+
+**方式B：手动应用迁移记录**
+```bash
+python migrations/apply_migration_manually.py
+```
+
+**方式C：直接执行 SQL**（不推荐，但可以作为备选）
+```bash
+psql -U your_user -d your_db -f migrations/models/public.sql
+```
+
+### 现有环境更新
+
+如果数据库已经存在，只需要确保迁移记录已应用：
+
+```bash
+# 检查迁移记录
+python migrations/apply_migration_manually.py
+
+# 或使用 Aerich
+uv run aerich upgrade
+```
+
+## 注意事项
+
+1. **迁移文件命名**：迁移文件必须以数字前缀开头（如 `0_`, `1_`），Aerich 会根据数字顺序执行
+2. **IF NOT EXISTS**：所有 CREATE 语句都包含 `IF NOT EXISTS`，可以安全地重复执行
+3. **事务支持**：迁移文件设置了 `RUN_IN_TRANSACTION = True`，确保原子性
+4. **备份**：在生产环境执行迁移前，请先备份数据库
+
+## 历史记录
+
+- 2025-12-27: 创建初始迁移文件生成工具
+- 2025-12-27: 修复重复 IF NOT EXISTS 的 bug
+- 2025-12-27: 清理过程性脚本，保留最终有效工具
+
+## 旧版初始化流程（已废弃）
+
+以下流程已废弃，保留仅作参考：
 
 #### 步骤1：备份现有迁移文件
 
 ```bash
 cd riveredge-backend
-./migrations/init_from_current_db.sh
+# 旧版脚本已删除，请使用新的 generate_migration_from_sql.py
 ```
 
 这将：

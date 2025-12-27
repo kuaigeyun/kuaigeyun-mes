@@ -58,20 +58,37 @@ def parse_sql_file(sql_file_path: Path) -> Tuple[List[str], List[str], List[str]
             
             # 分类语句
             if re.match(r'CREATE\s+SEQUENCE', statement, re.IGNORECASE):
-                # 确保使用 IF NOT EXISTS
-                if 'IF NOT EXISTS' not in statement.upper():
+                # 确保使用 IF NOT EXISTS（避免重复添加）
+                statement_upper = statement.upper()
+                if 'IF NOT EXISTS' not in statement_upper:
                     statement = statement.replace('CREATE SEQUENCE', 'CREATE SEQUENCE IF NOT EXISTS', 1)
+                else:
+                    # 如果已经存在但位置不对，先移除再添加
+                    statement = re.sub(r'CREATE\s+SEQUENCE\s+IF\s+NOT\s+EXISTS\s+IF\s+NOT\s+EXISTS', 
+                                     'CREATE SEQUENCE IF NOT EXISTS', statement, flags=re.IGNORECASE)
                 sequences.append(statement)
             elif re.match(r'CREATE\s+TABLE', statement, re.IGNORECASE):
-                # 确保使用 IF NOT EXISTS
-                if 'IF NOT EXISTS' not in statement.upper():
+                # 确保使用 IF NOT EXISTS（避免重复添加）
+                statement_upper = statement.upper()
+                if 'IF NOT EXISTS' not in statement_upper:
                     statement = statement.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS', 1)
+                else:
+                    # 如果已经存在但位置不对，先移除再添加
+                    statement = re.sub(r'CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+IF\s+NOT\s+EXISTS', 
+                                     'CREATE TABLE IF NOT EXISTS', statement, flags=re.IGNORECASE)
                 tables.append(statement)
             elif re.match(r'CREATE\s+(?:UNIQUE\s+)?INDEX', statement, re.IGNORECASE):
-                # 确保使用 IF NOT EXISTS
-                if 'IF NOT EXISTS' not in statement.upper():
-                    statement = statement.replace('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS', 1)
-                    statement = statement.replace('CREATE UNIQUE INDEX', 'CREATE UNIQUE INDEX IF NOT EXISTS', 1)
+                # 确保使用 IF NOT EXISTS（避免重复添加）
+                statement_upper = statement.upper()
+                if 'IF NOT EXISTS' not in statement_upper:
+                    if 'UNIQUE' in statement_upper:
+                        statement = statement.replace('CREATE UNIQUE INDEX', 'CREATE UNIQUE INDEX IF NOT EXISTS', 1)
+                    else:
+                        statement = statement.replace('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS', 1)
+                else:
+                    # 如果已经存在但位置不对，先移除再添加
+                    statement = re.sub(r'CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+IF\s+NOT\s+EXISTS', 
+                                     r'CREATE \1INDEX IF NOT EXISTS', statement, flags=re.IGNORECASE)
                 indexes.append(statement)
             elif re.match(r'COMMENT\s+ON', statement, re.IGNORECASE):
                 comments.append(statement)
@@ -100,18 +117,16 @@ def generate_migration_file(
     if sequences:
         sql_parts.append("        -- 创建序列")
         for seq in sequences:
-            # 确保使用 IF NOT EXISTS
-            seq_sql = seq.replace('CREATE SEQUENCE', 'CREATE SEQUENCE IF NOT EXISTS')
-            sql_parts.append(f"        {seq_sql}")
+            # 序列已经在解析时处理过，直接使用
+            sql_parts.append(f"        {seq}")
         sql_parts.append("")
     
     # 2. 创建表
     if tables:
         sql_parts.append("        -- 创建表")
         for table in tables:
-            # 确保使用 IF NOT EXISTS
-            table_sql = table.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')
-            sql_parts.append(f"        {table_sql}")
+            # 表已经在解析时处理过，直接使用
+            sql_parts.append(f"        {table}")
             sql_parts.append("")
         sql_parts.append("")
     
@@ -119,13 +134,8 @@ def generate_migration_file(
     if indexes:
         sql_parts.append("        -- 创建索引")
         for idx in indexes:
-            # 确保使用 IF NOT EXISTS
-            if 'IF NOT EXISTS' not in idx.upper():
-                idx_sql = idx.replace('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS')
-                idx_sql = idx_sql.replace('CREATE UNIQUE INDEX', 'CREATE UNIQUE INDEX IF NOT EXISTS')
-            else:
-                idx_sql = idx
-            sql_parts.append(f"        {idx_sql}")
+            # 索引已经在解析时处理过，直接使用
+            sql_parts.append(f"        {idx}")
         sql_parts.append("")
     
     # 4. 添加注释
