@@ -18,7 +18,7 @@ set -e  # 遇到错误立即退出
 BACKEND_PORT="${BACKEND_PORT:-8200}"   # 后端服务端口（避免与主流项目常用端口冲突）
 FRONTEND_PORT="${FRONTEND_PORT:-8100}" # 前端服务端口（避免与主流项目常用端口冲突）
 KKFILEVIEW_PORT="${KKFILEVIEW_PORT:-8400}" # kkFileView 服务端口
-INNGEST_PORT="${INNGEST_PORT:-8288}"  # Inngest Dev Server 端口（官方默认端口）
+INNGEST_PORT="${INNGEST_PORT:-8288}"  # Inngest Dev Server 端口（可通过环境变量INNGEST_PORT覆盖，默认8288为Inngest官方默认端口）
 
 # Inngest 配置
 INNGEST_BACKEND_URL="${INNGEST_BACKEND_URL:-http://127.0.0.1:${BACKEND_PORT}/api/inngest}"  # Inngest连接的后端URL
@@ -813,31 +813,41 @@ wait_for_frontend() {
 
 # 启动 Inngest 服务
 start_inngest() {
-    log_info "启动 Inngest 服务（使用官方默认端口8288）..."
+    log_info "启动 Inngest 服务（端口: $INNGEST_PORT）..."
 
     # Inngest 脚本目录
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local inngest_dir="$script_dir/bin/inngest"
     local inngest_exe=""
 
     # 查找 Inngest 可执行文件
-    if [ -f "$inngest_dir/inngest.exe" ]; then
-        inngest_exe="$inngest_dir/inngest.exe"
-    elif [ -f "$inngest_dir/inngest" ]; then
-        inngest_exe="$inngest_dir/inngest"
-    elif [ -f "$inngest_dir/inngest-windows-amd64.exe" ]; then
-        inngest_exe="$inngest_dir/inngest-windows-amd64.exe"
+    # 优先查找 bin/inngest/ 目录（新结构）
+    # 如果不存在，回退到 bin/ 目录（旧结构）
+    if [ -f "$script_dir/bin/inngest/inngest.exe" ]; then
+        inngest_exe="$script_dir/bin/inngest/inngest.exe"
+        local config_file="$script_dir/bin/inngest/inngest.config.json"
+    elif [ -f "$script_dir/bin/inngest/inngest" ]; then
+        inngest_exe="$script_dir/bin/inngest/inngest"
+        local config_file="$script_dir/bin/inngest/inngest.config.json"
+    elif [ -f "$script_dir/bin/inngest/inngest-windows-amd64.exe" ]; then
+        inngest_exe="$script_dir/bin/inngest/inngest-windows-amd64.exe"
+        local config_file="$script_dir/bin/inngest/inngest.config.json"
+    elif [ -f "$script_dir/bin/inngest.exe" ]; then
+        # 回退：直接在 bin/ 目录下（旧结构）
+        inngest_exe="$script_dir/bin/inngest.exe"
+        local config_file="$script_dir/bin/inngest.config.json"
+    elif [ -f "$script_dir/bin/inngest" ]; then
+        # 回退：直接在 bin/ 目录下（旧结构）
+        inngest_exe="$script_dir/bin/inngest"
+        local config_file="$script_dir/bin/inngest.config.json"
     else
         log_warn "未找到 Inngest 可执行文件，跳过 Inngest 启动"
         log_warn "请确保以下文件之一存在:"
-        log_warn "  - $inngest_dir/inngest.exe"
-        log_warn "  - $inngest_dir/inngest"
-        log_warn "  - $inngest_dir/inngest-windows-amd64.exe"
+        log_warn "  - $script_dir/bin/inngest/inngest.exe (新结构)"
+        log_warn "  - $script_dir/bin/inngest.exe (旧结构)"
         return 1
     fi
 
-    # 检查配置文件
-    local config_file="$inngest_dir/inngest.config.json"
+    # 检查配置文件（已在上面根据可执行文件位置确定）
     if [ ! -f "$config_file" ]; then
         log_warn "未找到 Inngest 配置文件: $config_file，跳过 Inngest 启动"
         return 1
@@ -852,16 +862,18 @@ start_inngest() {
     rm -f "$pid_file"
 
     # 启动 Inngest 服务
-    # 使用官方默认端口8288，Windows下绑定到127.0.0.1
+    # 使用环境变量 INNGEST_PORT 指定的端口（默认8288，Inngest官方默认端口）
     log_info "启动 Inngest Dev Server（端口: $INNGEST_PORT，后端URL: $INNGEST_BACKEND_URL）..."
     
+    # 启动Inngest服务
+    # 明确指定 --port 参数，使用环境变量中的端口配置
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
-        # Windows: 绑定到127.0.0.1而不是0.0.0.0
-        ("$inngest_exe" dev -u "$INNGEST_BACKEND_URL" --config "$config_file" --host 127.0.0.1 >> "$log_file" 2>&1) &
+        # Windows: 使用 --host 127.0.0.1，明确指定 --port 使用环境变量中的端口
+        ("$inngest_exe" dev -u "$INNGEST_BACKEND_URL" --config "$config_file" --host 127.0.0.1 --port "$INNGEST_PORT" >> "$log_file" 2>&1) &
         local inngest_pid=$!
     else
-        # Linux/Mac: 使用 nohup
-        nohup "$inngest_exe" dev -u "$INNGEST_BACKEND_URL" --config "$config_file" >> "$log_file" 2>&1 &
+        # Linux/Mac: 使用 nohup，明确指定 --port 使用环境变量中的端口
+        nohup "$inngest_exe" dev -u "$INNGEST_BACKEND_URL" --config "$config_file" --port "$INNGEST_PORT" >> "$log_file" 2>&1 &
         local inngest_pid=$!
     fi
 
@@ -1459,7 +1471,8 @@ stop_all() {
         fi
     done
     
-    # 注意：Inngest端口8288可能被Windows系统保留，不强制检查
+    # 注意：Inngest端口通过环境变量INNGEST_PORT配置（默认8300，避免Windows端口保留问题）
+    # 启动命令中明确使用 --port 参数，确保端口配置一致
 
     if [ $ports_still_occupied -eq 0 ]; then
         log_success "所有服务已停止，端口已释放"
@@ -1565,7 +1578,7 @@ main() {
     log_info "启动配置:"
     log_info "   后端端口: $BACKEND_PORT"
     log_info "   前端端口: $FRONTEND_PORT"
-    log_info "   Inngest端口: $INNGEST_PORT (官方默认)"
+    log_info "   Inngest端口: $INNGEST_PORT"
     log_info "   调试模式: $DEBUG"
     echo
 

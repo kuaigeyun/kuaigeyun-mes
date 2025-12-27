@@ -1,0 +1,154 @@
+{
+    "name": "快格轻PDM",
+    "code": "kuaipdm",
+    "version": "1.0.0",
+    "description": "研发管理 - 设计变更、工程变更、设计评审、研发流程管理",
+    "icon": "experiment",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaipdm/index.tsx",
+    "route_path": "/apps/kuaipdm",
+    "sort_order": 30,
+    "menu_config": {
+        "title": "快格轻PDM",
+        "icon": "experiment",
+        "path": "/apps/kuaipdm",
+        "children": [
+            {
+                "title": "设计变更",
+                "path": "/apps/kuaipdm/design-change",
+                "icon": "edit",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "变更申请",
+                        "path": "/apps/kuaipdm/design-change/apply",
+                        "permission": "kuaipdm:design-change:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "变更审批",
+                        "path": "/apps/kuaipdm/design-change/approval",
+                        "permission": "kuaipdm:design-change:approve",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "变更执行",
+                        "path": "/apps/kuaipdm/design-change/execution",
+                        "permission": "kuaipdm:design-change:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "工程变更",
+                "path": "/apps/kuaipdm/engineering-change",
+                "icon": "refresh-cw",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "变更申请",
+                        "path": "/apps/kuaipdm/engineering-change/apply",
+                        "permission": "kuaipdm:engineering-change:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "变更跟踪",
+                        "path": "/apps/kuaipdm/engineering-change/tracking",
+                        "permission": "kuaipdm:engineering-change:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "设计评审",
+                "path": "/apps/kuaipdm/review",
+                "icon": "clipboard-check",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "评审计划",
+                        "path": "/apps/kuaipdm/review/plan",
+                        "permission": "kuaipdm:review:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "评审执行",
+                        "path": "/apps/kuaipdm/review/execution",
+                        "permission": "kuaipdm:review:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "评审记录",
+                        "path": "/apps/kuaipdm/review/records",
+                        "permission": "kuaipdm:review:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "研发流程",
+                "path": "/apps/kuaipdm/process",
+                "icon": "workflow",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "流程配置",
+                        "path": "/apps/kuaipdm/process/config",
+                        "permission": "kuaipdm:process:config:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "阶段管理",
+                        "path": "/apps/kuaipdm/process/stages",
+                        "permission": "kuaipdm:process:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "流程监控",
+                        "path": "/apps/kuaipdm/process/monitoring",
+                        "permission": "kuaipdm:process:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "知识管理",
+                "path": "/apps/kuaipdm/knowledge",
+                "icon": "book",
+                "sort_order": 5,
+                "children": [
+                    {
+                        "title": "知识库",
+                        "path": "/apps/kuaipdm/knowledge/library",
+                        "permission": "kuaipdm:knowledge:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "专利管理",
+                        "path": "/apps/kuaipdm/knowledge/patents",
+                        "permission": "kuaipdm:knowledge:patent:view",
+                        "sort_order": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaipdm:design-change:view",
+        "kuaipdm:design-change:create",
+        "kuaipdm:design-change:update",
+        "kuaipdm:design-change:approve",
+        "kuaipdm:engineering-change:view",
+        "kuaipdm:engineering-change:create",
+        "kuaipdm:review:view",
+        "kuaipdm:review:create",
+        "kuaipdm:process:view",
+        "kuaipdm:process:config:view",
+        "kuaipdm:knowledge:view",
+        "kuaipdm:knowledge:patent:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

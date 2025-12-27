@@ -1,0 +1,132 @@
+{
+    "name": "快格轻EMS",
+    "code": "kuaiems",
+    "version": "1.0.0",
+    "description": "能源管理 - 能源监测、能耗分析、节能管理、能源报表",
+    "icon": "thunderbolt",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaiems/index.tsx",
+    "route_path": "/apps/kuaiems",
+    "sort_order": 160,
+    "menu_config": {
+        "title": "快格轻EMS",
+        "icon": "thunderbolt",
+        "path": "/apps/kuaiems",
+        "children": [
+            {
+                "title": "能源监测",
+                "path": "/apps/kuaiems/monitoring",
+                "icon": "list",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "能耗数据",
+                        "path": "/apps/kuaiems/monitoring/data",
+                        "permission": "kuaiems:monitoring:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "实时监控",
+                        "path": "/apps/kuaiems/monitoring/realtime",
+                        "permission": "kuaiems:monitoring:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "能耗分析",
+                        "path": "/apps/kuaiems/monitoring/analysis",
+                        "permission": "kuaiems:monitoring:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "能耗分析",
+                "path": "/apps/kuaiems/analysis",
+                "icon": "bar-chart-3",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "能耗统计",
+                        "path": "/apps/kuaiems/analysis/statistics",
+                        "permission": "kuaiems:analysis:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "能耗对比",
+                        "path": "/apps/kuaiems/analysis/compare",
+                        "permission": "kuaiems:analysis:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "能耗趋势",
+                        "path": "/apps/kuaiems/analysis/trend",
+                        "permission": "kuaiems:analysis:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "节能管理",
+                "path": "/apps/kuaiems/conservation",
+                "icon": "settings",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "节能目标",
+                        "path": "/apps/kuaiems/conservation/target",
+                        "permission": "kuaiems:conservation:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "节能措施",
+                        "path": "/apps/kuaiems/conservation/measures",
+                        "permission": "kuaiems:conservation:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "节能效果",
+                        "path": "/apps/kuaiems/conservation/effect",
+                        "permission": "kuaiems:conservation:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "能源报表",
+                "path": "/apps/kuaiems/reports",
+                "icon": "grid",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "能耗报表",
+                        "path": "/apps/kuaiems/reports/consumption",
+                        "permission": "kuaiems:reports:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "成本分析",
+                        "path": "/apps/kuaiems/reports/cost",
+                        "permission": "kuaiems:reports:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "碳排放",
+                        "path": "/apps/kuaiems/reports/carbon",
+                        "permission": "kuaiems:reports:view",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaiems:monitoring:view",
+        "kuaiems:analysis:view",
+        "kuaiems:conservation:view",
+        "kuaiems:reports:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}
