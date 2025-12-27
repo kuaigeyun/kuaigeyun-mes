@@ -13,10 +13,16 @@ from .service_interface import (
     UserActivityServiceInterface,
     AuditLogServiceInterface,
     ApplicationServiceInterface,
+    UserServiceInterface,
+    RoleServiceInterface,
+    MessageServiceInterface,
 )
 from .implementations.user_activity_service_impl import UserActivityServiceImpl
 from .implementations.audit_log_service_impl import AuditLogServiceImpl
 from .implementations.application_service_impl import ApplicationServiceImpl
+from .implementations.user_service_impl import UserServiceImpl
+from .implementations.role_service_impl import RoleServiceImpl
+from .implementations.message_service_impl import MessageServiceImpl
 from .service_registry import ServiceLocator
 
 logger = logging.getLogger(__name__)
@@ -34,6 +40,10 @@ class ServiceInitializer:
         UserActivityServiceImpl,
         AuditLogServiceImpl,
         ApplicationServiceImpl,
+        # ⚠️ 第二阶段改进：添加高频使用的服务
+        UserServiceImpl,
+        RoleServiceImpl,
+        MessageServiceImpl,
     ]
 
     @staticmethod
@@ -72,6 +82,17 @@ class ServiceInitializer:
 
             # 获取服务名称
             service_name = service_instance.service_name
+
+            # ⚠️ 第二阶段改进：先注册服务类型，再注册服务实例
+            # 获取服务接口类型（从实现类的基类中获取）
+            service_interface = None
+            for base in service_impl_class.__bases__:
+                if hasattr(base, 'service_name'):
+                    service_interface = base
+                    break
+            
+            if service_interface:
+                ServiceLocator.register_service_type(service_interface)
 
             # 注册到服务定位器
             ServiceLocator.register_service(service_name, service_instance)

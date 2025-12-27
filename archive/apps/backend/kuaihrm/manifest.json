@@ -1,0 +1,141 @@
+{
+    "name": "快格轻HRM",
+    "code": "kuaihrm",
+    "version": "1.0.0",
+    "description": "人力资源管理 - 员工异动、考勤管理、薪资管理、排班管理",
+    "icon": "team",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaihrm/index.tsx",
+    "route_path": "/apps/kuaihrm",
+    "sort_order": 180,
+    "menu_config": {
+        "title": "快格轻HRM",
+        "icon": "team",
+        "path": "/apps/kuaihrm",
+        "children": [
+            {
+                "title": "员工异动",
+                "path": "/apps/kuaihrm/movement",
+                "icon": "list",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "入职流程",
+                        "path": "/apps/kuaihrm/movement/onboarding",
+                        "permission": "kuaihrm:movement:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "离职流程",
+                        "path": "/apps/kuaihrm/movement/offboarding",
+                        "permission": "kuaihrm:movement:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "员工异动",
+                        "path": "/apps/kuaihrm/movement/transfer",
+                        "permission": "kuaihrm:movement:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "考勤管理",
+                "path": "/apps/kuaihrm/attendance",
+                "icon": "settings",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "考勤规则",
+                        "path": "/apps/kuaihrm/attendance/rules",
+                        "permission": "kuaihrm:attendance:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "打卡记录",
+                        "path": "/apps/kuaihrm/attendance/records",
+                        "permission": "kuaihrm:attendance:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "请假加班",
+                        "path": "/apps/kuaihrm/attendance/leave-overtime",
+                        "permission": "kuaihrm:attendance:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "考勤统计",
+                        "path": "/apps/kuaihrm/attendance/statistics",
+                        "permission": "kuaihrm:attendance:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "薪资管理",
+                "path": "/apps/kuaihrm/salary",
+                "icon": "grid",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "薪资结构",
+                        "path": "/apps/kuaihrm/salary/structure",
+                        "permission": "kuaihrm:salary:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "薪资计算",
+                        "path": "/apps/kuaihrm/salary/calculate",
+                        "permission": "kuaihrm:salary:calculate",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "社保个税",
+                        "path": "/apps/kuaihrm/salary/social-tax",
+                        "permission": "kuaihrm:salary:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "薪资发放",
+                        "path": "/apps/kuaihrm/salary/payment",
+                        "permission": "kuaihrm:salary:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "排班管理",
+                "path": "/apps/kuaihrm/scheduling",
+                "icon": "layout",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "排班计划",
+                        "path": "/apps/kuaihrm/scheduling/plan",
+                        "permission": "kuaihrm:scheduling:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "排班执行",
+                        "path": "/apps/kuaihrm/scheduling/execution",
+                        "permission": "kuaihrm:scheduling:view",
+                        "sort_order": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaihrm:movement:view",
+        "kuaihrm:movement:create",
+        "kuaihrm:attendance:view",
+        "kuaihrm:attendance:create",
+        "kuaihrm:salary:view",
+        "kuaihrm:salary:calculate",
+        "kuaihrm:scheduling:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

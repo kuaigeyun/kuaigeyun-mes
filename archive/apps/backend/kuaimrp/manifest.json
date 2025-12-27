@@ -1,0 +1,149 @@
+{
+    "name": "快格轻MRP",
+    "code": "kuaimrp",
+    "version": "1.0.0",
+    "description": "物料需求 - MRP/LRP双模式需求计算、需求追溯、计划优化",
+    "icon": "calculator",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaimrp/index.tsx",
+    "route_path": "/apps/kuaimrp",
+    "sort_order": 50,
+    "menu_config": {
+        "title": "快格轻MRP",
+        "icon": "calculator",
+        "path": "/apps/kuaimrp",
+        "children": [
+            {
+                "title": "MRP计算",
+                "path": "/apps/kuaimrp/mrp",
+                "icon": "list",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "需求汇总",
+                        "path": "/apps/kuaimrp/mrp/demand-summary",
+                        "permission": "kuaimrp:mrp:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "MRP计算",
+                        "path": "/apps/kuaimrp/mrp/calculate",
+                        "permission": "kuaimrp:mrp:calculate",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "计划生成",
+                        "path": "/apps/kuaimrp/mrp/plan",
+                        "permission": "kuaimrp:mrp:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "LRP计算",
+                "path": "/apps/kuaimrp/lrp",
+                "icon": "grid",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "订单分解",
+                        "path": "/apps/kuaimrp/lrp/order-breakdown",
+                        "permission": "kuaimrp:lrp:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "LRP计算",
+                        "path": "/apps/kuaimrp/lrp/calculate",
+                        "permission": "kuaimrp:lrp:calculate",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "批次管理",
+                        "path": "/apps/kuaimrp/lrp/batches",
+                        "permission": "kuaimrp:lrp:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "需求追溯",
+                "path": "/apps/kuaimrp/traceability",
+                "icon": "search",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "需求来源",
+                        "path": "/apps/kuaimrp/traceability/source",
+                        "permission": "kuaimrp:traceability:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "全阶供需",
+                        "path": "/apps/kuaimrp/traceability/supply-demand",
+                        "permission": "kuaimrp:traceability:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "计划优化",
+                "path": "/apps/kuaimrp/optimization",
+                "icon": "calendar",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "批量优化",
+                        "path": "/apps/kuaimrp/optimization/batch",
+                        "permission": "kuaimrp:optimization:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "交期优化",
+                        "path": "/apps/kuaimrp/optimization/delivery",
+                        "permission": "kuaimrp:optimization:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "成本优化",
+                        "path": "/apps/kuaimrp/optimization/cost",
+                        "permission": "kuaimrp:optimization:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "缺料分析",
+                "path": "/apps/kuaimrp/shortage",
+                "icon": "bar-chart-3",
+                "sort_order": 5,
+                "children": [
+                    {
+                        "title": "缺料预警",
+                        "path": "/apps/kuaimrp/shortage/alert",
+                        "permission": "kuaimrp:shortage:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "缺料分析",
+                        "path": "/apps/kuaimrp/shortage/analysis",
+                        "permission": "kuaimrp:shortage:view",
+                        "sort_order": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaimrp:mrp:view",
+        "kuaimrp:mrp:calculate",
+        "kuaimrp:lrp:view",
+        "kuaimrp:lrp:calculate",
+        "kuaimrp:traceability:view",
+        "kuaimrp:optimization:view",
+        "kuaimrp:shortage:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

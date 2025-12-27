@@ -22,6 +22,7 @@ sys.path.insert(0, str(src_path))
 from infra.infrastructure.database.database import register_db
 from tortoise import Tortoise
 from core.services.application.application_registry_service import ApplicationRegistryService
+from core.services.application.application_route_manager import init_route_manager
 from core.services.interfaces.service_initializer import ServiceInitializer
 
 # 导入所有平台级 API 路由
@@ -102,6 +103,10 @@ async def lifespan(app: FastAPI):
     await ServiceInitializer.initialize_services()
     print("✅ 服务接口层已初始化")
 
+    # ⚠️ 第一阶段改进：初始化应用路由管理器
+    init_route_manager(app)
+    print("✅ 应用路由管理器已初始化")
+
     # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
     await ApplicationRegistryService.reload_apps()
     print("✅ 应用注册服务已重新初始化")
@@ -148,16 +153,27 @@ def load_plugin_routes():
     动态加载插件路由
 
     使用ApplicationRegistryService注册应用路由。
+    ⚠️ 第一阶段改进：路由现在通过 ApplicationRouteManager 管理
     """
     try:
         # 获取已注册的应用路由
         registered_routes = ApplicationRegistryService.get_registered_routes()
 
-        # 注册所有应用路由
-        for app_code, routers in registered_routes.items():
-            for router in routers:
-                app.include_router(router, prefix="/api/v1")
-                print(f"✅ 已注册应用 {app_code} 的路由")
+        # ⚠️ 第一阶段改进：通过路由管理器注册路由（如果已初始化）
+        from core.services.application.application_route_manager import get_route_manager
+        route_manager = get_route_manager()
+        
+        if route_manager:
+            # 使用路由管理器注册路由
+            for app_code, routers in registered_routes.items():
+                route_manager.register_app_routes(app_code, routers)
+                print(f"✅ 通过路由管理器注册应用 {app_code} 的路由")
+        else:
+            # 向后兼容：如果路由管理器未初始化，使用旧方式
+            for app_code, routers in registered_routes.items():
+                for router in routers:
+                    app.include_router(router, prefix="/api/v1")
+                    print(f"✅ 已注册应用 {app_code} 的路由（兼容模式）")
 
         total_routes = sum(len(routers) for routers in registered_routes.values())
         print(f"🎉 应用路由注册完成，共注册 {total_routes} 个路由对象")
@@ -167,7 +183,7 @@ def load_plugin_routes():
         import traceback
         traceback.print_exc()
 
-# 加载插件路由
+# 加载插件路由（在路由管理器初始化后调用）
 load_plugin_routes()
 
 # 挂载静态文件目录
@@ -216,6 +232,28 @@ async def health_check():
         "status": "healthy",
         "service": "riveredge-backend"
     }
+
+# ⚠️ 第二阶段改进：服务健康检查端点
+@app.get("/health/services")
+async def health_check_services():
+    """
+    服务健康检查端点
+    
+    检查所有已注册服务的健康状态。
+    """
+    try:
+        from core.services.interfaces.service_registry import service_registry
+        health_info = await service_registry.health_check_all()
+        return {
+            "status": "healthy",
+            "services": health_info
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "服务健康检查失败，请检查服务注册状态"
+        }
 
 # 修复的FastAPI原生文档
 @app.get("/docs", include_in_schema=False)

@@ -19,6 +19,7 @@ from pathlib import Path
 from loguru import logger
 
 from core.services.application.application_service import ApplicationService
+from core.services.application.application_route_manager import get_route_manager
 from core.models.application import Application
 
 
@@ -200,7 +201,13 @@ class ApplicationRegistryService:
                         cls._registered_routes[app_code] = [router]
                         registered_routes.append(f"{app_name}({app_code})")
 
-                        logger.debug(f"✅ 注册应用路由: {route_module_path}")
+                        # 如果路由管理器已初始化，则注册路由
+                        route_manager = get_route_manager()
+                        if route_manager:
+                            route_manager.register_app_routes(app_code, [router])
+                            logger.debug(f"✅ 通过路由管理器注册应用路由: {route_module_path}")
+                        else:
+                            logger.debug(f"✅ 缓存应用路由（路由管理器未初始化）: {route_module_path}")
                     else:
                         logger.warning(f"⚠️ 应用 {app_name}({app_code}) 的路由模块中未找到router对象")
                 else:
@@ -280,6 +287,95 @@ class ApplicationRegistryService:
 
         # 重新初始化
         await cls.initialize()
+    
+    @classmethod
+    async def register_single_app(cls, app_code: str) -> bool:
+        """
+        注册单个应用的路由和模型
+        
+        用于应用启用时动态注册。
+        
+        Args:
+            app_code: 应用代码
+            
+        Returns:
+            bool: 是否注册成功
+        """
+        try:
+            # 从数据库查询应用信息（使用 ApplicationService 确保一致性）
+            # 注意：这里需要 tenant_id，但我们暂时使用 0 作为系统级查询
+            # 实际使用时应该传入正确的 tenant_id
+            from infra.infrastructure.database.database import get_db_connection
+            conn = await get_db_connection()
+            
+            try:
+                rows = await conn.fetch("""
+                    SELECT uuid, code, name, description, version,
+                           route_path, entry_point, menu_config,
+                           is_system, is_active, is_installed,
+                           created_at, updated_at
+                    FROM core_applications
+                    WHERE code = $1
+                      AND is_installed = TRUE
+                      AND is_active = TRUE
+                      AND deleted_at IS NULL
+                    LIMIT 1
+                """, app_code)
+                
+                if not rows:
+                    logger.warning(f"应用 {app_code} 不存在或未启用")
+                    return False
+                
+                app_data = dict(rows[0])
+            finally:
+                await conn.close()
+            
+            # 解析JSON字段
+            if app_data.get('menu_config') and isinstance(app_data['menu_config'], str):
+                try:
+                    app_data['menu_config'] = json.loads(app_data['menu_config'])
+                except json.JSONDecodeError:
+                    app_data['menu_config'] = None
+            
+            # 注册应用模型
+            await cls._register_app_models([app_data])
+            
+            # 注册应用路由
+            await cls._register_app_routes([app_data])
+            
+            logger.info(f"✅ 应用 {app_code} 注册成功")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 注册应用 {app_code} 失败: {e}")
+            return False
+    
+    @classmethod
+    async def unregister_single_app(cls, app_code: str) -> None:
+        """
+        注销单个应用的路由
+        
+        用于应用禁用时移除路由。
+        
+        注意：FastAPI 不支持动态移除路由，这里只是从缓存中移除
+        实际的路由仍然存在，但可以通过权限中间件来阻止访问
+        
+        Args:
+            app_code: 应用代码
+        """
+        try:
+            # 从缓存中移除
+            if app_code in cls._registered_routes:
+                del cls._registered_routes[app_code]
+                logger.info(f"✅ 应用 {app_code} 的路由已从缓存中移除")
+            
+            # 从路由管理器中移除
+            route_manager = get_route_manager()
+            if route_manager:
+                route_manager.unregister_app_routes(app_code)
+                
+        except Exception as e:
+            logger.error(f"❌ 注销应用 {app_code} 失败: {e}")
 
     @classmethod
     async def is_app_registered(cls, app_code: str) -> bool:

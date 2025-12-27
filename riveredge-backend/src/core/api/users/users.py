@@ -18,6 +18,8 @@ from core.schemas.user import (
 )
 from core.services.user.user_service import UserService
 from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.service_helpers import get_user_service_with_fallback
+from core.services.interfaces.service_interface import UserServiceInterface
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
@@ -66,16 +68,20 @@ async def create_user(
     data: UserCreate,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    user_service: Any = Depends(get_user_service_with_fallback),
 ):
     """
     创建用户
     
     创建新用户并保存到数据库。如果用户名已存在，则抛出异常。
     
+    ⚠️ 第三阶段改进：使用依赖注入获取服务，支持向后兼容
+    
     Args:
         data: 用户创建数据
         current_user: 当前用户（依赖注入）
         tenant_id: 当前组织ID（依赖注入）
+        user_service: 用户服务（依赖注入，如果未注册则回退到直接导入）
         
     Returns:
         UserResponse: 创建的用户对象
@@ -84,7 +90,10 @@ async def create_user(
         HTTPException: 当用户名已存在时抛出
     """
     try:
-        user = await UserService.create_user(
+        # ⚠️ 第三阶段改进：使用依赖注入的服务
+        # user_service 可能是接口实现（实例）或类（回退情况）
+        # 两种情况下调用方式相同（接口实现内部调用静态方法）
+        user = await user_service.create_user(
             tenant_id=tenant_id,
             data=data,
             current_user_id=current_user.id
@@ -148,6 +157,7 @@ async def get_user_list(
     is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    user_service: Any = Depends(get_user_service_with_fallback),  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取用户列表
@@ -198,7 +208,8 @@ async def get_user_list(
             detail=f"获取当前用户ID失败: {str(e)}"
         )
     
-    result = await UserService.get_user_list(
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    result = await user_service.get_user_list(
         tenant_id=tenant_id,
         page=page,
         page_size=page_size,

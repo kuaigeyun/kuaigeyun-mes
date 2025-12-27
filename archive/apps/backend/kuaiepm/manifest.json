@@ -1,0 +1,145 @@
+{
+    "name": "快格轻EPM",
+    "code": "kuaiepm",
+    "version": "1.0.0",
+    "description": "企业绩效管理 - KPI管理、平衡计分卡、经营分析、预算分析",
+    "icon": "trophy",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaiepm/index.tsx",
+    "route_path": "/apps/kuaiepm",
+    "sort_order": 220,
+    "menu_config": {
+        "title": "快格轻EPM",
+        "icon": "trophy",
+        "path": "/apps/kuaiepm",
+        "children": [
+            {
+                "title": "KPI管理",
+                "path": "/apps/kuaiepm/kpi",
+                "icon": "settings",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "KPI定义",
+                        "path": "/apps/kuaiepm/kpi/definition",
+                        "permission": "kuaiepm:kpi:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "KPI监控",
+                        "path": "/apps/kuaiepm/kpi/monitoring",
+                        "permission": "kuaiepm:kpi:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "KPI分析",
+                        "path": "/apps/kuaiepm/kpi/analysis",
+                        "permission": "kuaiepm:kpi:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "KPI预警",
+                        "path": "/apps/kuaiepm/kpi/alert",
+                        "permission": "kuaiepm:kpi:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "平衡计分卡",
+                "path": "/apps/kuaiepm/bsc",
+                "icon": "list",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "战略地图",
+                        "path": "/apps/kuaiepm/bsc/strategy",
+                        "permission": "kuaiepm:bsc:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "目标分解",
+                        "path": "/apps/kuaiepm/bsc/objectives",
+                        "permission": "kuaiepm:bsc:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "绩效评估",
+                        "path": "/apps/kuaiepm/bsc/evaluation",
+                        "permission": "kuaiepm:bsc:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "经营分析",
+                "path": "/apps/kuaiepm/business",
+                "icon": "bar-chart-3",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "经营仪表盘",
+                        "path": "/apps/kuaiepm/business/dashboard",
+                        "permission": "kuaiepm:business:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "数据分析",
+                        "path": "/apps/kuaiepm/business/analysis",
+                        "permission": "kuaiepm:business:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "趋势分析",
+                        "path": "/apps/kuaiepm/business/trend",
+                        "permission": "kuaiepm:business:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "对比分析",
+                        "path": "/apps/kuaiepm/business/compare",
+                        "permission": "kuaiepm:business:view",
+                        "sort_order": 4
+                    }
+                ]
+            },
+            {
+                "title": "预算分析",
+                "path": "/apps/kuaiepm/budget",
+                "icon": "grid",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "预算对比",
+                        "path": "/apps/kuaiepm/budget/compare",
+                        "permission": "kuaiepm:budget:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "差异分析",
+                        "path": "/apps/kuaiepm/budget/variance",
+                        "permission": "kuaiepm:budget:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "预测分析",
+                        "path": "/apps/kuaiepm/budget/forecast",
+                        "permission": "kuaiepm:budget:view",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaiepm:kpi:view",
+        "kuaiepm:kpi:create",
+        "kuaiepm:bsc:view",
+        "kuaiepm:business:view",
+        "kuaiepm:budget:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

@@ -179,10 +179,10 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-      // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
-      if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-        return '/system/dashboard';
-      }
+    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
+    if (location.pathname === '/login' && !currentUser.is_infra_admin) {
+      return '/system/dashboard';
+    }
     }
     
     // ⚠️ 核心逻辑：只有没有 token 时才跳转到登录页

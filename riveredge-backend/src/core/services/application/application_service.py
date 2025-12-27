@@ -508,30 +508,39 @@ class ApplicationService:
         Returns:
             List[ApplicationDict]: 已安装的应用列表
         """
-        # 动态获取停用应用列表：查询数据库中 is_active=False 的应用
-        disabled_apps_result = await conn.fetch("""
-            SELECT code FROM core_applications
-            WHERE tenant_id = $1
-              AND is_installed = TRUE
-              AND is_active = FALSE
-              AND deleted_at IS NULL
-        """, tenant_id)
-
-        disabled_apps = {row['code'] for row in disabled_apps_result}
-
-        # 使用直接数据库查询，避免 Tortoise ORM 配置问题
+        # ⚠️ 关键修复：先创建数据库连接
         conn = await get_db_connection()
         try:
-            # 构建基础 SQL 查询
-            base_sql = """
-                SELECT * FROM core_applications
+            # 动态获取停用应用列表：查询数据库中 is_active=False 的应用
+            disabled_apps_result = await conn.fetch("""
+                SELECT code FROM core_applications
                 WHERE tenant_id = $1
                   AND is_installed = TRUE
+                  AND is_active = FALSE
                   AND deleted_at IS NULL
-                  AND code NOT IN ({})
-            """.format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]))
+            """, tenant_id)
 
-            params = [tenant_id] + list(disabled_apps)
+            disabled_apps = {row['code'] for row in disabled_apps_result}
+
+            # 构建基础 SQL 查询
+            # ⚠️ 关键修复：处理 disabled_apps 为空的情况
+            if disabled_apps:
+                base_sql = """
+                    SELECT * FROM core_applications
+                    WHERE tenant_id = $1
+                      AND is_installed = TRUE
+                      AND deleted_at IS NULL
+                      AND code NOT IN ({})
+                """.format(','.join(['${}'.format(i + 2) for i in range(len(disabled_apps))]))
+                params = [tenant_id] + list(disabled_apps)
+            else:
+                base_sql = """
+                    SELECT * FROM core_applications
+                    WHERE tenant_id = $1
+                      AND is_installed = TRUE
+                      AND deleted_at IS NULL
+                """
+                params = [tenant_id]
 
             # 如果指定了 is_active，添加过滤条件
             if is_active is not None:
