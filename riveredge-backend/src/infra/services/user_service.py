@@ -1,7 +1,10 @@
 """
 用户服务模块
 
-提供用户的 CRUD 操作和业务逻辑处理
+提供用户的 CRUD 操作和业务逻辑处理。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from typing import Optional, List, Dict, Any
@@ -315,4 +318,50 @@ class UserService:
         await user.save()
         
         return user
+    
+    async def get_user_with_tenant_info(self, user_id: int, tenant_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        获取用户及其组织信息
+        
+        获取用户详细信息，包括组织名称。
+        
+        Args:
+            user_id: 用户ID
+            tenant_id: 组织ID（可选，默认从上下文获取）
+            
+        Returns:
+            Optional[Dict[str, Any]]: 用户信息字典（包含组织名称），如果用户不存在则返回None
+            
+        Example:
+            >>> service = UserService()
+            >>> user_info = await service.get_user_with_tenant_info(1)
+            >>> user_info['tenant_name']
+            '测试组织'
+        """
+        from infra.models.tenant import Tenant
+        
+        # 获取用户
+        user = await self.get_user_by_id(user_id, tenant_id)
+        if not user:
+            return None
+        
+        # 获取组织信息
+        tenant_name = None
+        if user.tenant_id:
+            tenant = await Tenant.get_or_none(id=user.tenant_id)
+            if tenant:
+                tenant_name = tenant.name
+        
+        return {
+            "id": user.id,
+            "uuid": str(user.uuid),
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "tenant_id": user.tenant_id,
+            "tenant_name": tenant_name,
+            "is_active": user.is_active,
+            "is_infra_admin": user.is_infra_admin,
+            "is_tenant_admin": user.is_tenant_admin,
+        }
 

@@ -1,7 +1,10 @@
 """
 保存搜索条件 API 模块
 
-提供保存搜索条件的 RESTful API 接口
+提供保存搜索条件的 RESTful API 接口。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from typing import Optional

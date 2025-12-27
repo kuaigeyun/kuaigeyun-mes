@@ -1,7 +1,10 @@
 """
 组织公开 API 模块
 
-提供不需要认证的组织相关公开接口，用于注册等功能
+提供不需要认证的组织相关公开接口，用于注册等功能。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from fastapi import APIRouter, Query

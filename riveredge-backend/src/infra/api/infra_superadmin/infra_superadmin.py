@@ -1,7 +1,10 @@
 """
 平台超级管理员管理 API 模块
 
-提供平台超级管理员管理相关的 RESTful API 接口
+提供平台超级管理员管理相关的 RESTful API 接口。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
