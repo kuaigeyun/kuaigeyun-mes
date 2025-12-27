@@ -1,0 +1,124 @@
+{
+    "name": "快格轻SCM",
+    "code": "kuaiscm",
+    "version": "1.0.0",
+    "description": "供应链协同 - 供应链网络建模、需求预测协同、风险预警、全局库存可视化",
+    "icon": "apartment",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaiscm/index.tsx",
+    "route_path": "/apps/kuaiscm",
+    "sort_order": 80,
+    "menu_config": {
+        "title": "快格轻SCM",
+        "icon": "apartment",
+        "path": "/apps/kuaiscm",
+        "children": [
+            {
+                "title": "供应链网络",
+                "path": "/apps/kuaiscm/network",
+                "icon": "list",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "网络建模",
+                        "path": "/apps/kuaiscm/network/modeling",
+                        "permission": "kuaiscm:network:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "节点管理",
+                        "path": "/apps/kuaiscm/network/nodes",
+                        "permission": "kuaiscm:network:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "需求预测",
+                "path": "/apps/kuaiscm/forecast",
+                "icon": "grid",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "预测共享",
+                        "path": "/apps/kuaiscm/forecast/share",
+                        "permission": "kuaiscm:forecast:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "预测准确性",
+                        "path": "/apps/kuaiscm/forecast/accuracy",
+                        "permission": "kuaiscm:forecast:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "协同计划",
+                        "path": "/apps/kuaiscm/forecast/collaboration",
+                        "permission": "kuaiscm:forecast:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "风险预警",
+                "path": "/apps/kuaiscm/risk",
+                "icon": "layout",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "风险识别",
+                        "path": "/apps/kuaiscm/risk/identification",
+                        "permission": "kuaiscm:risk:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "风险评估",
+                        "path": "/apps/kuaiscm/risk/assessment",
+                        "permission": "kuaiscm:risk:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "应急预案",
+                        "path": "/apps/kuaiscm/risk/contingency",
+                        "permission": "kuaiscm:risk:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "全局库存",
+                "path": "/apps/kuaiscm/inventory",
+                "icon": "database",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "库存视图",
+                        "path": "/apps/kuaiscm/inventory/view",
+                        "permission": "kuaiscm:inventory:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "库存分析",
+                        "path": "/apps/kuaiscm/inventory/analysis",
+                        "permission": "kuaiscm:inventory:view",
+                        "sort_order": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaiscm:network:view",
+        "kuaiscm:network:create",
+        "kuaiscm:network:update",
+        "kuaiscm:forecast:view",
+        "kuaiscm:forecast:create",
+        "kuaiscm:risk:view",
+        "kuaiscm:risk:create",
+        "kuaiscm:inventory:view"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}
