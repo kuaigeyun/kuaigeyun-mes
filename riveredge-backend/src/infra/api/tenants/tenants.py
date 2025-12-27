@@ -140,10 +140,12 @@ async def approve_tenant_registration(
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
     
     # 获取组织
-    tenant = await service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    tenant = await tenant_service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
