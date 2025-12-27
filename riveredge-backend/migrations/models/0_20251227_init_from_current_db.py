@@ -9,6 +9,8 @@
 
 from tortoise import BaseDBAsyncClient
 
+RUN_IN_TRANSACTION = True
+
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
     """
@@ -21,6 +23,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     -- 初始迁移：基于当前数据库状态
     -- 数据库表结构已通过 public.sql 导入
     -- 此迁移不执行任何操作，仅用于标记当前状态
+    SELECT 1;
     """
 
 
@@ -32,5 +35,6 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
     """
     return """
     -- 初始迁移不支持降级
+    SELECT 1;
     """
 
