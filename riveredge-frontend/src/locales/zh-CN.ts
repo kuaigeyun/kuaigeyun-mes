@@ -27,7 +27,6 @@ export default {
   'menu.system.integration-configs': '集成设置',
   'menu.system.languages': '语言管理',
   'menu.system.custom-fields': '自定义字段',
-  'menu.system.invitation-codes': '邀请码管理',
   'menu.system.files': '文件管理',
   'menu.system.apis': '接口管理',
   'menu.system.data-sources': '数据源管理',
@@ -103,7 +102,6 @@ export default {
   'permission.resource.code_rule': '编码规则',
   'permission.resource.custom_field': '自定义字段',
   'permission.resource.site_setting': '站点设置',
-  'permission.resource.invitation_code': '邀请码',
   'permission.resource.language': '语言',
   'permission.resource.integration_config': '集成配置',
 };

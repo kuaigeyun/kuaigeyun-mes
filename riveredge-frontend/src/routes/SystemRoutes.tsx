@@ -55,7 +55,6 @@ const DataBackupsPage = lazy(() => import('../pages/system/data-backups'));
 const CustomFieldsPage = lazy(() => import('../pages/system/custom-fields/list'));
 const ApiServicesPage = lazy(() => import('../pages/system/apis/list'));
 const IntegrationConfigsPage = lazy(() => import('../pages/system/integration-configs/list'));
-const InvitationCodesPage = lazy(() => import('../pages/system/invitation-codes/list'));
 const MessageTemplatesPage = lazy(() => import('../pages/system/messages/template'));
 const MessageConfigsPage = lazy(() => import('../pages/system/messages/config'));
 const InngestDashboardPage = lazy(() => import('../pages/infra/inngest'));
@@ -233,11 +232,6 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/integration-configs" element={
         <Suspense fallback={<LoadingFallback />}>
           {renderWithLayout(IntegrationConfigsPage)}
-        </Suspense>
-      } />
-      <Route path="/system/invitation-codes" element={
-        <Suspense fallback={<LoadingFallback />}>
-          {renderWithLayout(InvitationCodesPage)}
         </Suspense>
       } />
       <Route path="/system/message-templates" element={
