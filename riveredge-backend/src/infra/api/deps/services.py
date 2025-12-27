@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-from typing import Optional
+from typing import Optional, Any, Dict
 from fastapi import Depends
 from infra.services.service_registry import InfraServiceLocator
 from infra.services.interfaces.service_interface import (
