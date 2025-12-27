@@ -1419,10 +1419,10 @@ stop_all() {
     
     # 清理 Inngest 进程（通过进程名）
     if command -v pkill &> /dev/null; then
-        pkill -f "inngest.*dev" 2>/dev/null & || true
+        (pkill -f "inngest.*dev" 2>/dev/null || true) &
     fi
     if command -v taskkill &> /dev/null; then
-        taskkill /F /IM inngest.exe >> "$log_dir/taskkill.log" 2>&1 & || true
+        (taskkill /F /IM inngest.exe >> "$log_dir/taskkill.log" 2>&1 || true) &
     fi
     
     # 只清理关键端口，避免遍历所有端口导致卡住
