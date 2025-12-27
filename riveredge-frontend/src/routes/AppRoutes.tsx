@@ -77,25 +77,11 @@ const AppRoutes: React.FC = () => {
       // 获取已安装且启用的应用列表
       const applications = await getInstalledApplicationList({ is_active: true });
 
-        applications.map(app => ({
-          code: app.code,
-          name: app.name,
-          entry_point: app.entry_point,
-          route_path: app.route_path,
-          is_active: app.is_active,
-          is_installed: app.is_installed,
-        }))
-      );
-
       // 异步加载所有应用路由
       const routes: React.ReactNode[] = [];
       const loadPromises = applications.map(async (app: Application) => {
         if (app.entry_point && app.route_path) {
           try {
-              entry_point: app.entry_point,
-              route_path: app.route_path,
-            });
-
             const pluginRouteConfigs = await loadPlugin(app);
 
 
