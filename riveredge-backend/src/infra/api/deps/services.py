@@ -166,3 +166,100 @@ def get_tenant_service_with_fallback() -> Any:
     
     return TenantServiceAdapter()
 
+
+def get_package_service_with_fallback() -> Any:
+    """
+    获取套餐服务，如果未注册则回退到直接导入
+    
+    Returns:
+        套餐服务实例（PackageServiceImpl）或适配器对象（向后兼容）
+    """
+    service = get_package_service()
+    if service:
+        return service
+    
+    # 回退到直接导入（向后兼容）
+    class PackageServiceAdapter:
+        """PackageService 适配器"""
+        def __init__(self):
+            self._package_service = PackageService()
+        
+        async def list_packages(self, **kwargs) -> Dict[str, Any]:
+            return await self._package_service.list_packages(**kwargs)
+        
+        async def get_package_by_id(self, package_id: int) -> Optional[Any]:
+            return await self._package_service.get_package_by_id(package_id)
+    
+    return PackageServiceAdapter()
+
+
+def get_infra_superadmin_service_with_fallback() -> Any:
+    """
+    获取平台超级管理员服务，如果未注册则回退到直接导入
+    
+    Returns:
+        平台超级管理员服务实例（InfraSuperAdminServiceImpl）或适配器对象（向后兼容）
+    """
+    service = get_infra_superadmin_service()
+    if service:
+        return service
+    
+    # 回退到直接导入（向后兼容）
+    class InfraSuperAdminServiceAdapter:
+        """InfraSuperAdminService 适配器"""
+        def __init__(self):
+            self._admin_service = InfraSuperAdminService()
+        
+        async def get_current_admin(self) -> Optional[Any]:
+            return await self._admin_service.get_infra_superadmin()
+        
+        async def create_admin(self, data: Any) -> Any:
+            return await self._admin_service.create_infra_superadmin(data)
+        
+        async def update_admin(self, data: Any) -> Any:
+            return await self._admin_service.update_infra_superadmin(data)
+        
+        # 向后兼容：也支持直接调用原方法名
+        async def create_infra_superadmin(self, data: Any) -> Any:
+            return await self._admin_service.create_infra_superadmin(data)
+        
+        async def update_infra_superadmin(self, data: Any) -> Any:
+            return await self._admin_service.update_infra_superadmin(data)
+    
+    return InfraSuperAdminServiceAdapter()
+
+
+def get_saved_search_service_with_fallback() -> Any:
+    """
+    获取保存搜索服务，如果未注册则回退到直接导入
+    
+    Returns:
+        保存搜索服务实例（SavedSearchServiceImpl）或适配器对象（向后兼容）
+    """
+    service = get_saved_search_service()
+    if service:
+        return service
+    
+    # 回退到直接导入（向后兼容）
+    class SavedSearchServiceAdapter:
+        """SavedSearchService 适配器"""
+        def __init__(self):
+            self._saved_search_service = SavedSearchService()
+        
+        async def list_saved_searches(self, page_path: str, user_id: int, include_shared: bool = True, tenant_id: Optional[int] = None) -> Dict[str, Any]:
+            return await self._saved_search_service.list_saved_searches(page_path, user_id, include_shared, tenant_id)
+        
+        async def create_saved_search(self, data: Any, user_id: int, tenant_id: Optional[int] = None) -> Any:
+            return await self._saved_search_service.create_saved_search(data, user_id, tenant_id)
+        
+        async def get_saved_search_by_uuid(self, uuid: str, user_id: int) -> Optional[Any]:
+            return await self._saved_search_service.get_saved_search_by_uuid(uuid, user_id)
+        
+        async def update_saved_search(self, uuid: str, data: Any, user_id: int) -> Optional[Any]:
+            return await self._saved_search_service.update_saved_search(uuid, data, user_id)
+        
+        async def delete_saved_search(self, uuid: str, user_id: int) -> bool:
+            return await self._saved_search_service.delete_saved_search(uuid, user_id)
+    
+    return SavedSearchServiceAdapter()
+

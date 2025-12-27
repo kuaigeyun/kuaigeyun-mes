@@ -49,4 +49,13 @@ class InfraSuperAdminServiceImpl(InfraSuperAdminServiceInterface):
     async def update_admin(self, data: Any) -> Any:
         """更新平台超级管理员"""
         return await self._admin_service.update_infra_superadmin(data)
+    
+    # 向后兼容：也支持直接调用原方法名
+    async def create_infra_superadmin(self, data: Any) -> Any:
+        """创建平台超级管理员（向后兼容方法名）"""
+        return await self._admin_service.create_infra_superadmin(data)
+    
+    async def update_infra_superadmin(self, data: Any) -> Any:
+        """更新平台超级管理员（向后兼容方法名）"""
+        return await self._admin_service.update_infra_superadmin(data)
 

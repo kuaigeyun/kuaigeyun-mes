@@ -18,9 +18,11 @@ from infra.schemas.saved_search import (
     SavedSearchUpdate
 )
 from infra.services.saved_search_service import SavedSearchService
+from infra.api.deps.services import get_saved_search_service_with_fallback
 from infra.models.user import User
 from infra.domain.tenant_context import get_current_tenant_id
 from infra.api.deps.deps import get_current_user
+from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/saved-searches", tags=["Saved Searches"])
@@ -30,7 +32,8 @@ router = APIRouter(prefix="/saved-searches", tags=["Saved Searches"])
 async def list_saved_searches(
     page_path: str = Query(..., description="页面路径"),
     include_shared: bool = Query(True, description="是否包含共享的搜索条件"),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取保存搜索条件列表
@@ -45,10 +48,12 @@ async def list_saved_searches(
     Returns:
         SavedSearchListResponse: 保存搜索条件列表响应
     """
-    service = SavedSearchService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not saved_search_service:
+        saved_search_service = SavedSearchService()  # 向后兼容
     tenant_id = get_current_tenant_id()
     
-    result = await service.list_saved_searches(
+    result = await saved_search_service.list_saved_searches(
         page_path=page_path,
         user_id=current_user.id,
         include_shared=include_shared,
@@ -70,7 +75,8 @@ async def list_saved_searches(
 @router.post("", response_model=SavedSearchResponse, status_code=status.HTTP_201_CREATED)
 async def create_saved_search(
     data: SavedSearchCreate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     创建保存搜索条件
@@ -84,11 +90,13 @@ async def create_saved_search(
     Returns:
         SavedSearchResponse: 创建的保存搜索条件
     """
-    service = SavedSearchService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not saved_search_service:
+        saved_search_service = SavedSearchService()  # 向后兼容
     tenant_id = get_current_tenant_id()
     
     try:
-        saved_search = await service.create_saved_search(
+        saved_search = await saved_search_service.create_saved_search(
             data=data,
             user_id=current_user.id,
             tenant_id=tenant_id
@@ -106,7 +114,8 @@ async def create_saved_search(
 @router.get("/{search_uuid}", response_model=SavedSearchResponse)
 async def get_saved_search(
     search_uuid: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取保存搜索条件详情
@@ -123,8 +132,10 @@ async def get_saved_search(
     Raises:
         HTTPException: 当搜索条件不存在或无权访问时抛出
     """
-    service = SavedSearchService()
-    saved_search = await service.get_saved_search_by_uuid(
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not saved_search_service:
+        saved_search_service = SavedSearchService()  # 向后兼容
+    saved_search = await saved_search_service.get_saved_search_by_uuid(
         uuid=search_uuid,
         user_id=current_user.id
     )
@@ -142,7 +153,8 @@ async def get_saved_search(
 async def update_saved_search(
     search_uuid: str,
     data: SavedSearchUpdate,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     更新保存搜索条件
@@ -160,8 +172,10 @@ async def update_saved_search(
     Raises:
         HTTPException: 当搜索条件不存在或无权访问时抛出
     """
-    service = SavedSearchService()
-    saved_search = await service.update_saved_search(
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not saved_search_service:
+        saved_search_service = SavedSearchService()  # 向后兼容
+    saved_search = await saved_search_service.update_saved_search(
         uuid=search_uuid,
         data=data,
         user_id=current_user.id
@@ -180,7 +194,8 @@ async def update_saved_search(
 @router.delete("/{search_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_saved_search(
     search_uuid: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     删除保存搜索条件
@@ -194,8 +209,10 @@ async def delete_saved_search(
     Raises:
         HTTPException: 当搜索条件不存在或无权访问时抛出
     """
-    service = SavedSearchService()
-    success = await service.delete_saved_search(
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not saved_search_service:
+        saved_search_service = SavedSearchService()  # 向后兼容
+    success = await saved_search_service.delete_saved_search(
         uuid=search_uuid,
         user_id=current_user.id
     )

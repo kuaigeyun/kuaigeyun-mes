@@ -13,6 +13,7 @@ from loguru import logger
 
 from infra.schemas.package import PackageResponse, PackageListResponse, PackageCreate, PackageUpdate
 from infra.services.package_service import PackageService
+from infra.api.deps.services import get_package_service_with_fallback
 from infra.models.tenant import TenantPlan
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.api.deps.deps import get_current_infra_superadmin
@@ -85,6 +86,7 @@ async def list_packages(
     allow_pro_apps: Optional[bool] = Query(None, description="是否允许PRO应用筛选"),
     sort: Optional[str] = Query(None, description="排序字段（如：name、plan、created_at、max_users）"),
     order: Optional[str] = Query(None, description="排序顺序（asc 或 desc）"),
+    package_service: Any = Depends(get_package_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取套餐列表（平台超级管理员）
@@ -106,12 +108,14 @@ async def list_packages(
     Returns:
         PackageListResponse: 套餐列表响应
     """
-    service = PackageService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not package_service:
+        package_service = PackageService()  # 向后兼容
 
     # 处理参数兼容性：优先使用 pageSize（前端发送的参数），否则使用 page_size
     actual_page_size = pageSize if pageSize is not None else page_size
 
-    result = await service.list_packages(
+    result = await package_service.list_packages(
         page=page,
         page_size=actual_page_size,
         plan=plan,
@@ -139,7 +143,8 @@ async def list_packages(
 @router.get("/{package_id}", response_model=PackageResponse)
 async def get_package_detail(
     package_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    package_service: Any = Depends(get_package_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     获取套餐详情（超级管理员）
@@ -156,8 +161,10 @@ async def get_package_detail(
     Raises:
         HTTPException: 当套餐不存在时抛出
     """
-    service = PackageService()
-    package = await service.get_package_by_id(package_id)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not package_service:
+        package_service = PackageService()  # 向后兼容
+    package = await package_service.get_package_by_id(package_id)
     if not package:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -170,7 +177,8 @@ async def get_package_detail(
 @router.post("", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
 async def create_package(
     data: PackageCreate,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    package_service: Any = Depends(get_package_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     创建套餐（超级管理员）
@@ -187,9 +195,11 @@ async def create_package(
     Raises:
         HTTPException: 当套餐类型已存在时抛出
     """
-    service = PackageService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not package_service:
+        package_service = PackageService()  # 向后兼容
     try:
-        package = await service.create_package(data)
+        package = await package_service.create_package(data)
         logger.info(f"创建套餐: {package.name} (ID: {package.id})")
         return package
     except Exception as e:
@@ -204,7 +214,8 @@ async def create_package(
 async def update_package(
     package_id: int,
     data: PackageUpdate,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    package_service: Any = Depends(get_package_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     更新套餐（超级管理员）
@@ -222,8 +233,10 @@ async def update_package(
     Raises:
         HTTPException: 当套餐不存在时抛出
     """
-    service = PackageService()
-    package = await service.update_package(package_id, data)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not package_service:
+        package_service = PackageService()  # 向后兼容
+    package = await package_service.update_package(package_id, data)
     if not package:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -237,7 +250,8 @@ async def update_package(
 @router.delete("/{package_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_package(
     package_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    package_service: Any = Depends(get_package_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     删除套餐（超级管理员）
@@ -251,8 +265,10 @@ async def delete_package(
     Raises:
         HTTPException: 当套餐不存在时抛出
     """
-    service = PackageService()
-    success = await service.delete_package(package_id)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not package_service:
+        package_service = PackageService()  # 向后兼容
+    success = await package_service.delete_package(package_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
