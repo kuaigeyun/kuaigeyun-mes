@@ -7,7 +7,7 @@
 
 import asyncio
 from typing import Dict, Type, Any, Optional, List
-from weakref import WeakValueDictionary
+# ⚠️ 修复：移除 WeakValueDictionary，使用普通字典
 import logging
 
 from .service_interface import ServiceInterface
@@ -24,14 +24,15 @@ class ServiceRegistry:
     """
 
     _instance: Optional['ServiceRegistry'] = None
-    _services: WeakValueDictionary[str, ServiceInterface]
+    _services: Dict[str, ServiceInterface]  # ⚠️ 修复：使用普通字典而不是 WeakValueDictionary，避免服务被垃圾回收
     _service_types: Dict[str, Type[ServiceInterface]]
     _initialized: bool = False
 
     def __new__(cls) -> 'ServiceRegistry':
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._services = WeakValueDictionary()
+            # ⚠️ 修复：使用普通字典，确保服务实例不会被垃圾回收
+            cls._instance._services = {}
             cls._instance._service_types = {}
         return cls._instance
 

@@ -14,6 +14,7 @@ from core.schemas.application import (
     ApplicationResponse,
 )
 from core.services.application.application_service import ApplicationService
+from core.services.application.application_registry_service import ApplicationRegistryService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -314,6 +315,18 @@ async def enable_application(
             tenant_id=tenant_id,
             uuid=uuid
         )
+        
+        # ⚠️ 第一阶段改进：动态注册应用路由
+        try:
+            # 使用应用代码注册路由
+            app_code = application.get('code') or application.get('uuid')
+            if app_code:
+                await ApplicationRegistryService.register_single_app(app_code)
+        except Exception as route_error:
+            # 路由注册失败不影响应用启用，只记录日志
+            import logging
+            logging.warning(f"应用路由注册失败（不影响应用启用）: {route_error}")
+        
         return ApplicationResponse.model_validate(application)
     except NotFoundError as e:
         raise HTTPException(
@@ -352,6 +365,18 @@ async def disable_application(
             tenant_id=tenant_id,
             uuid=uuid
         )
+        
+        # ⚠️ 第一阶段改进：动态移除应用路由
+        try:
+            # 使用应用代码移除路由
+            app_code = application.get('code') or application.get('uuid')
+            if app_code:
+                await ApplicationRegistryService.unregister_single_app(app_code)
+        except Exception as route_error:
+            # 路由移除失败不影响应用禁用，只记录日志
+            import logging
+            logging.warning(f"应用路由移除失败（不影响应用禁用）: {route_error}")
+        
         return ApplicationResponse.model_validate(application)
     except NotFoundError as e:
         raise HTTPException(
