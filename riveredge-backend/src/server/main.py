@@ -231,7 +231,7 @@ try:
         ]
     )
     logger.info("✅ Inngest 服务端点注册成功")
-    logger.info(f"✅ 已注册 {len([
+    inngest_functions = [
         test_integration_function,
         message_sender_function,
         scheduled_task_executor_function,
@@ -240,7 +240,8 @@ try:
         approval_action_workflow_function,
         sop_execution_workflow_function,
         sop_node_complete_workflow_function,
-    ])} 个 Inngest 函数")
+    ]
+    logger.info(f"✅ 已注册 {len(inngest_functions)} 个 Inngest 函数")
 except Exception as e:
     logger.error(f"❌ Inngest 服务端点注册失败: {e}")
     import traceback
