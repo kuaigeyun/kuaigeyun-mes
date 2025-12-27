@@ -5,7 +5,7 @@
  */
 
 import { ProLayout } from '@ant-design/pro-components';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Spin, theme } from 'antd';
 import type { MenuDataItem } from '@ant-design/pro-components';
@@ -3499,6 +3499,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         mode: 'inline',
         openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
         selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
+        // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
+        // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为
+        onClick: (info) => {
+          // 如果菜单项有 path，阻止默认的链接跳转行为
+          const menuItem = info.item;
+          if (menuItem && menuItem.props && menuItem.props.path) {
+            const path = menuItem.props.path;
+            // 外部链接已经在 menuItemRender 中处理，这里只阻止内部路由的默认行为
+            if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
+              // 完全阻止默认行为，让 Link 组件处理路由
+              // React Router 的 Link 组件会阻止默认行为并使用 navigate() 进行路由跳转
+              info.domEvent.preventDefault();
+              info.domEvent.stopPropagation();
+            }
+          }
+        },
         onOpenChange: (keys) => {
           // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单
           // 1. 计算哪些菜单被收起了（从 requiredOpenKeys 中移除的）
@@ -3572,35 +3588,27 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             </div>
           );
         }
-        // 使用 Ant Design 原生渲染，只添加点击导航功能
-        // 优化：防止重复点击和不必要的导航
-        return (
-          <div
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (item.path && item.path !== location.pathname && !item.disabled) {
-                // 使用React Router的导航，确保SPA行为
-                navigate(item.path, { replace: false });
-              }
-            }}
-            style={{
-              cursor: item.path && !item.disabled ? 'pointer' : 'default',
-              width: '100%',
-              height: '100%',
-            }}
-            role="menuitem"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && item.path && item.path !== location.pathname && !item.disabled) {
-                e.preventDefault();
-                navigate(item.path, { replace: false });
-              }
-            }}
-          >
-            {dom}
-          </div>
-        );
+        // ⚠️ 关键修复：使用 ProLayout 原生方式，返回 React Router 的 Link 组件
+        // Link 组件会自动处理 SPA 路由，不会整页刷新
+        if (item.path && !item.disabled) {
+          // 内部路由：使用 Link 组件进行 SPA 路由跳转
+          // 包装在 div 中并阻止事件冒泡，防止 Menu 的默认行为
+          return (
+            <div
+              onClick={(e) => {
+                // 阻止事件冒泡到 Menu，防止 Menu 的默认链接行为
+                e.stopPropagation();
+              }}
+              style={{ display: 'block', width: '100%' }}
+            >
+              <Link to={item.path} style={{ display: 'block', width: '100%' }}>
+                {dom}
+              </Link>
+            </div>
+          );
+        }
+        // 没有 path 或 disabled 的菜单项：直接返回 dom
+        return dom;
       }}
     >
       <UniTabs
