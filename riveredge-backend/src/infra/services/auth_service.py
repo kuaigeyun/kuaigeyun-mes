@@ -732,7 +732,6 @@ class AuthService:
                 )
             except Exception as e:
                 # 更新活动时间失败不影响登录，静默处理
-                from loguru import logger
                 logger.warning(f"更新用户活动时间失败: {e}")
         
         return result
