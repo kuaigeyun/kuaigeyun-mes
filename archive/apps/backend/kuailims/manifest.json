@@ -1,0 +1,137 @@
+{
+    "name": "快格轻LIMS",
+    "code": "kuailims",
+    "version": "1.0.0",
+    "description": "实验管理 - 样品管理、实验管理、数据管理、报告管理",
+    "icon": "experiment",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuailims/index.tsx",
+    "route_path": "/apps/kuailims",
+    "sort_order": 110,
+    "menu_config": {
+        "title": "快格轻LIMS",
+        "icon": "experiment",
+        "path": "/apps/kuailims",
+        "children": [
+            {
+                "title": "样品管理",
+                "path": "/apps/kuailims/sample",
+                "icon": "settings",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "样品登记",
+                        "path": "/apps/kuailims/sample/register",
+                        "permission": "kuailims:sample:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "样品流转",
+                        "path": "/apps/kuailims/sample/flow",
+                        "permission": "kuailims:sample:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "样品存储",
+                        "path": "/apps/kuailims/sample/storage",
+                        "permission": "kuailims:sample:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "实验管理",
+                "path": "/apps/kuailims/experiment",
+                "icon": "list",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "实验计划",
+                        "path": "/apps/kuailims/experiment/plan",
+                        "permission": "kuailims:experiment:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "实验执行",
+                        "path": "/apps/kuailims/experiment/execution",
+                        "permission": "kuailims:experiment:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "实验记录",
+                        "path": "/apps/kuailims/experiment/records",
+                        "permission": "kuailims:experiment:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "数据管理",
+                "path": "/apps/kuailims/data",
+                "icon": "grid",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "数据录入",
+                        "path": "/apps/kuailims/data/entry",
+                        "permission": "kuailims:data:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "数据审核",
+                        "path": "/apps/kuailims/data/audit",
+                        "permission": "kuailims:data:audit",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "数据归档",
+                        "path": "/apps/kuailims/data/archive",
+                        "permission": "kuailims:data:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "报告管理",
+                "path": "/apps/kuailims/report",
+                "icon": "layout",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "报告生成",
+                        "path": "/apps/kuailims/report/generate",
+                        "permission": "kuailims:report:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "报告审核",
+                        "path": "/apps/kuailims/report/audit",
+                        "permission": "kuailims:report:audit",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "报告发布",
+                        "path": "/apps/kuailims/report/publish",
+                        "permission": "kuailims:report:publish",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuailims:sample:view",
+        "kuailims:sample:create",
+        "kuailims:experiment:view",
+        "kuailims:experiment:create",
+        "kuailims:data:view",
+        "kuailims:data:audit",
+        "kuailims:report:view",
+        "kuailims:report:audit",
+        "kuailims:report:publish"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

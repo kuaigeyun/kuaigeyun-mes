@@ -22,7 +22,7 @@ const InngestDashboard: React.FC = () => {
       }}
     >
       <iframe
-        src={`http://${import.meta.env.VITE_INNGEST_HOST || '127.0.0.1'}:${import.meta.env.VITE_INNGEST_PORT || '8300'}/`}
+        src={`http://${import.meta.env.VITE_INNGEST_HOST || '127.0.0.1'}:${import.meta.env.VITE_INNGEST_PORT || '8288'}/`}
         style={{
           width: '100%',
           height: '100%',

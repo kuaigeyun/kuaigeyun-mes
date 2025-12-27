@@ -158,7 +158,7 @@ cd riveredge
 - **前端应用**: http://localhost:8100
 - **后端API**: http://localhost:8200
 - **API文档**: http://localhost:8200/docs
-- **Inngest控制台**: http://localhost:8288（默认端口，Windows环境可能需要管理员权限）
+- **Inngest控制台**: http://localhost:${INNGEST_PORT:-8300}（端口通过环境变量INNGEST_PORT配置，默认8300避免Windows端口保留问题）
 
 ### 🛠️ 手动安装
 
@@ -292,9 +292,9 @@ SECRET_KEY=your-secret-key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
-# Inngest 配置
+# Inngest 配置（可通过环境变量覆盖）
 INNGEST_HOST=127.0.0.1
-INNGEST_PORT=8288  # 默认端口（Windows环境可能需要管理员权限）
+INNGEST_PORT=8300  # Inngest服务端口（可通过环境变量INNGEST_PORT覆盖，默认8300避免Windows端口保留问题）
 ```
 
 ### 前端配置
@@ -309,9 +309,9 @@ VITE_API_BASE_URL=http://localhost:8200
 VITE_BACKEND_HOST=127.0.0.1
 VITE_BACKEND_PORT=8200
 
-# Inngest 服务地址
+# Inngest 服务地址（可通过环境变量覆盖）
 VITE_INNGEST_HOST=127.0.0.1
-VITE_INNGEST_PORT=8288  # 默认端口
+VITE_INNGEST_PORT=8300  # Inngest服务端口（可通过环境变量VITE_INNGEST_PORT覆盖，默认8300避免Windows端口保留问题）
 ```
 
 ## 🎨 核心功能特性

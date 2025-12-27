@@ -1,0 +1,135 @@
+{
+    "name": "快格轻IOT",
+    "code": "kuaiiot",
+    "version": "1.0.0",
+    "description": "数据采集 - 设备数据采集、传感器数据、实时监控、数据接口",
+    "icon": "cloud-server",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaiiot/index.tsx",
+    "route_path": "/apps/kuaiiot",
+    "sort_order": 130,
+    "menu_config": {
+        "title": "快格轻IOT",
+        "icon": "cloud-server",
+        "path": "/apps/kuaiiot",
+        "children": [
+            {
+                "title": "设备数据",
+                "path": "/apps/kuaiiot/equipment",
+                "icon": "cog",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "实时采集",
+                        "path": "/apps/kuaiiot/equipment/realtime",
+                        "permission": "kuaiiot:equipment:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "历史数据",
+                        "path": "/apps/kuaiiot/equipment/history",
+                        "permission": "kuaiiot:equipment:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "数据清洗",
+                        "path": "/apps/kuaiiot/equipment/cleaning",
+                        "permission": "kuaiiot:equipment:manage",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "传感器数据",
+                "path": "/apps/kuaiiot/sensor",
+                "icon": "list",
+                "sort_order": 2,
+                "children": [
+                    {
+                        "title": "传感器配置",
+                        "path": "/apps/kuaiiot/sensor/config",
+                        "permission": "kuaiiot:sensor:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "数据采集",
+                        "path": "/apps/kuaiiot/sensor/collection",
+                        "permission": "kuaiiot:sensor:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "数据监控",
+                        "path": "/apps/kuaiiot/sensor/monitoring",
+                        "permission": "kuaiiot:sensor:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "实时监控",
+                "path": "/apps/kuaiiot/monitoring",
+                "icon": "grid",
+                "sort_order": 3,
+                "children": [
+                    {
+                        "title": "设备状态",
+                        "path": "/apps/kuaiiot/monitoring/status",
+                        "permission": "kuaiiot:monitoring:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "异常预警",
+                        "path": "/apps/kuaiiot/monitoring/alert",
+                        "permission": "kuaiiot:monitoring:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "实时看板",
+                        "path": "/apps/kuaiiot/monitoring/dashboard",
+                        "permission": "kuaiiot:monitoring:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "数据接口",
+                "path": "/apps/kuaiiot/api",
+                "icon": "layout",
+                "sort_order": 4,
+                "children": [
+                    {
+                        "title": "数据API",
+                        "path": "/apps/kuaiiot/api/data",
+                        "permission": "kuaiiot:api:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "数据推送",
+                        "path": "/apps/kuaiiot/api/push",
+                        "permission": "kuaiiot:api:manage",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "数据订阅",
+                        "path": "/apps/kuaiiot/api/subscribe",
+                        "permission": "kuaiiot:api:manage",
+                        "sort_order": 3
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaiiot:equipment:view",
+        "kuaiiot:equipment:manage",
+        "kuaiiot:sensor:view",
+        "kuaiiot:sensor:manage",
+        "kuaiiot:monitoring:view",
+        "kuaiiot:api:view",
+        "kuaiiot:api:manage"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

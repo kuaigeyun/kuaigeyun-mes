@@ -1922,14 +1922,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         onCancel={() => setTechStackModalOpen(false)}
       />
       
-      {/* 动态设置全局背景色，确保深色模式下正确应用 */}
+      {/* 动态设置全局背景色，确保浅色和深色模式下都正确应用 */}
       <style>{`
         html, body {
-          background-color: ${token.colorBgLayout} !important;
+          background-color: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
           transition: none !important;
         }
         #root {
-          background-color: ${token.colorBgLayout} !important;
+          background-color: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
           transition: none !important;
         }
         /* 禁用主题切换时的过渡动画，让切换更干脆 */
@@ -2213,7 +2213,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         :root {
           --riveredge-menu-primary-color: ${token.colorPrimary};
           --ant-colorPrimary: ${token.colorPrimary};
-          --ant-colorBgLayout: ${token.colorBgLayout};
+          --ant-colorBgLayout: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')};
         }
         /* ==================== PageContainer 相关 ==================== */
         .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,
@@ -2658,13 +2658,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         /* 内容区背景颜色与 PageContainer 一致 - 使用 token 值 */
         .ant-pro-layout-bg-list {
-          background: ${token.colorBgLayout} !important;
+          background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
         }
         /* 确保 ProLayout 内容区域背景色与激活标签一致 */
         .ant-pro-layout-content,
         .ant-pro-layout-content .ant-pro-page-container,
         .ant-pro-layout-content .ant-pro-page-container-children-content {
-          background: ${token.colorBgLayout} !important;
+          background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
         }
         /* 左侧菜单区背景色 - 与顶栏和标签栏保持一致 */
         /* 浅色模式下，如果设置了自定义背景色，则使用自定义背景色；否则使用默认背景色（与顶栏一致） */
@@ -3242,7 +3242,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           paddingInline: 0,
           paddingInlineStart: 0,
           paddingInlineEnd: 0,
-          background: token.colorBgLayout,
+          background: token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5'),
           // 全屏时：确保内容区域占据全屏，覆盖 ProLayout 的默认 padding-inline: 40px
           ...(isFullscreen ? {
             marginLeft: 0,
