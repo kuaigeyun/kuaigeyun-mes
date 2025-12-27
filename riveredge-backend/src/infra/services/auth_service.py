@@ -338,7 +338,6 @@ class AuthService:
         # 如果提供了邀请码，验证邀请码（这里简化处理，实际应该从组织设置中读取邀请码）
         # 注意：PersonalRegisterRequest 中暂未包含 invite_code 字段，后续需要添加
         # if hasattr(data, 'invite_code') and data.invite_code:
-        #     # TODO: 实现邀请码验证逻辑
         #     # 如果邀请码有效，直接注册成功（免审核）
         #     pass
         

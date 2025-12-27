@@ -73,12 +73,10 @@ const AppRoutes: React.FC = () => {
         return;
       }
 
-      console.log('🔄 开始加载业务应用...');
 
       // 获取已安装且启用的应用列表
       const applications = await getInstalledApplicationList({ is_active: true });
 
-      console.log(`📦 发现 ${applications.length} 个已安装应用:`,
         applications.map(app => ({
           code: app.code,
           name: app.name,
@@ -94,14 +92,12 @@ const AppRoutes: React.FC = () => {
       const loadPromises = applications.map(async (app: Application) => {
         if (app.entry_point && app.route_path) {
           try {
-            console.log(`🔄 正在加载应用: ${app.code}`, {
               entry_point: app.entry_point,
               route_path: app.route_path,
             });
 
             const pluginRouteConfigs = await loadPlugin(app);
 
-            console.log(`✅ 应用 ${app.code} 加载成功:`, pluginRouteConfigs);
 
             // 为每个路由配置创建Route组件
             for (const routeConfig of pluginRouteConfigs) {
@@ -131,7 +127,6 @@ const AppRoutes: React.FC = () => {
       // 等待所有应用加载完成
       await Promise.all(loadPromises);
 
-      console.log(`🎉 应用加载完成，共加载 ${routes.length} 个路由`);
       setAppRoutes(routes);
       setLoading(false);
 

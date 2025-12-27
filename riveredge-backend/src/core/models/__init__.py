@@ -89,9 +89,6 @@ from .operation_log import OperationLog
 # 登录日志模型
 from .login_log import LoginLog
 
-# 数据备份模型
-from .data_backup import DataBackup
-
 __all__ = [
     # 基础模型
     "BaseModel",
@@ -152,8 +149,6 @@ __all__ = [
     "OperationLog",
     # 登录日志模型
     "LoginLog",
-    # 数据备份模型
-    "DataBackup",
     # 菜单管理模型
     "Menu",
 ]

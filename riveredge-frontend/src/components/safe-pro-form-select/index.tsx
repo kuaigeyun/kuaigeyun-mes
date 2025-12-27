@@ -21,7 +21,6 @@ import { ProFormSelect } from '@ant-design/pro-components';
 const safeOptions = (options: any, componentName: string = 'ProFormSelect'): any[] => {
   // 如果 options 是 undefined 或 null，返回空数组
   if (options == null) {
-    console.debug(`${componentName}: options 为 null/undefined，使用空数组`);
     return [];
   }
 
@@ -30,12 +29,13 @@ const safeOptions = (options: any, componentName: string = 'ProFormSelect'): any
     return options;
   }
 
-  // 处理其他异常情况
-  console.warn(`${componentName}: options 不是数组类型:`, {
-    options,
-    type: typeof options,
-    componentStack: new Error().stack?.split('\n').slice(0, 5).join('\n')
-  });
+  // 处理其他异常情况（仅在开发环境输出警告）
+  if (import.meta.env.DEV) {
+    console.warn(`${componentName}: options 不是数组类型:`, {
+      options,
+      type: typeof options,
+    });
+  }
 
   // 尝试转换对象为数组（某些情况下后端可能返回对象）
   if (typeof options === 'object') {
@@ -44,7 +44,9 @@ const safeOptions = (options: any, componentName: string = 'ProFormSelect'): any
       try {
         return Array.from(options);
       } catch (e) {
-        console.warn(`${componentName}: 无法转换对象为数组:`, e);
+        if (import.meta.env.DEV) {
+          console.warn(`${componentName}: 无法转换对象为数组:`, e);
+        }
       }
     }
 

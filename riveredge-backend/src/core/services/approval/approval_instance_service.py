@@ -685,58 +685,13 @@ class ApprovalInstanceService:
             # 从审批数据中获取业务对象信息
             data = approval_instance.data or {}
             
-            # 处理销售订单审批完成
-            if "order_uuid" in data:
-                await ApprovalInstanceService._handle_sales_order_approval(
-                    tenant_id=tenant_id,
-                    approval_instance=approval_instance,
-                    order_uuid=data["order_uuid"]
-                )
+            # 处理业务对象审批完成回调
+            # 注意：kuaicrm应用已停用，相关审批回调已移除
+            # 未来如需支持其他业务对象的审批回调，可在此添加
             
-            # TODO: 可以添加其他业务对象的审批回调
+            # TODO: 可以添加其他业务对象的审批回调（如快智造的工单审批等）
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"处理审批完成回调失败: {str(e)}")
-    
-    @staticmethod
-    async def _handle_sales_order_approval(
-        tenant_id: int,
-        approval_instance: ApprovalInstance,
-        order_uuid: str
-    ) -> None:
-        """
-        处理销售订单审批完成
-        
-        Args:
-            tenant_id: 组织ID
-            approval_instance: 审批实例
-            order_uuid: 订单UUID
-        """
-        try:
-            from apps.kuaicrm.models.sales_order import SalesOrder
-            
-            order = await SalesOrder.filter(
-                tenant_id=tenant_id,
-                uuid=order_uuid,
-                deleted_at__isnull=True
-            ).first()
-            
-            if not order:
-                return
-            
-            # 更新订单审批状态
-            order.approval_status = approval_instance.status
-            
-            # 根据审批结果更新订单状态
-            if approval_instance.status == "approved":
-                order.status = "已审批"
-            elif approval_instance.status == "rejected":
-                order.status = "已关闭"
-            
-            await order.save()
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"处理销售订单审批完成失败: {str(e)}")
 

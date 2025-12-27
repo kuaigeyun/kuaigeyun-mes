@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
+from loguru import logger
 
 # 添加src目录到Python路径
 src_path = Path(__file__).parent.parent
@@ -75,7 +76,6 @@ from core.api.user_tasks.user_tasks import router as user_tasks_router
 from core.api.operation_logs.operation_logs import router as operation_logs_router
 from core.api.login_logs.login_logs import router as login_logs_router
 from core.api.online_users.online_users import router as online_users_router
-from core.api.data_backups.data_backups import router as data_backups_router
 from core.api.help_documents.help_documents import router as help_documents_router
 
 # 插件管理器API
@@ -97,31 +97,31 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 注册 Tortoise ORM 数据库连接
     await register_db(app)
-    print("✅ Tortoise ORM 已注册")
+    logger.info("✅ Tortoise ORM 已注册")
 
     # 初始化服务接口层（系统级）
     await ServiceInitializer.initialize_services()
-    print("✅ 系统级服务接口层已初始化")
+    logger.info("✅ 系统级服务接口层已初始化")
     
     # ⚠️ 第三阶段改进：初始化平台级服务接口层
     from infra.services.interfaces.service_initializer import InfraServiceInitializer
     await InfraServiceInitializer.initialize_services()
-    print("✅ 平台级服务接口层已初始化")
+    logger.info("✅ 平台级服务接口层已初始化")
 
     # ⚠️ 第一阶段改进：初始化应用路由管理器
     init_route_manager(app)
-    print("✅ 应用路由管理器已初始化")
+    logger.info("✅ 应用路由管理器已初始化")
 
     # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
     await ApplicationRegistryService.reload_apps()
-    print("✅ 应用注册服务已重新初始化")
+    logger.info("✅ 应用注册服务已重新初始化")
 
     yield
 
     # ⚠️ 注意：close_db_connections 已经在 register_db 中注册为 shutdown 事件
     # 这里不需要再次关闭，避免重复关闭导致错误
     # await Tortoise.close_connections()
-    print("✅ 应用关闭中...")
+    logger.info("✅ 应用关闭中...")
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -172,19 +172,19 @@ def load_plugin_routes():
             # 使用路由管理器注册路由
             for app_code, routers in registered_routes.items():
                 route_manager.register_app_routes(app_code, routers)
-                print(f"✅ 通过路由管理器注册应用 {app_code} 的路由")
+                logger.debug(f"✅ 通过路由管理器注册应用 {app_code} 的路由")
         else:
             # 向后兼容：如果路由管理器未初始化，使用旧方式
             for app_code, routers in registered_routes.items():
                 for router in routers:
                     app.include_router(router, prefix="/api/v1")
-                    print(f"✅ 已注册应用 {app_code} 的路由（兼容模式）")
+                    logger.debug(f"✅ 已注册应用 {app_code} 的路由（兼容模式）")
 
         total_routes = sum(len(routers) for routers in registered_routes.values())
-        print(f"🎉 应用路由注册完成，共注册 {total_routes} 个路由对象")
+        logger.info(f"🎉 应用路由注册完成，共注册 {total_routes} 个路由对象")
 
     except Exception as e:
-        print(f"⚠️ 应用路由注册失败: {str(e)}")
+        logger.error(f"⚠️ 应用路由注册失败: {str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -203,25 +203,46 @@ from core.inngest.functions import (
     scheduled_task_scheduler_function,
     approval_workflow_function,
     approval_action_workflow_function,
-    data_backup_executor_function,
-    scheduled_backup_scheduler_function,
     sop_execution_workflow_function,
     sop_node_complete_workflow_function,
 )
 
 # 挂载 Inngest 服务端点
 # serve() 函数需要 app, client, 和 functions 参数
+# 必须注册所有 Inngest 函数，确保它们被 Inngest Dev Server 发现
 try:
     inngest_serve(
         app,
         inngest_client,
         [
+            # 测试函数
             test_integration_function,
+            # 消息发送
+            message_sender_function,
+            # 定时任务
+            scheduled_task_executor_function,
+            scheduled_task_scheduler_function,
+            # 审批流程
+            approval_workflow_function,
+            approval_action_workflow_function,
+            # SOP执行流程
+            sop_execution_workflow_function,
+            sop_node_complete_workflow_function,
         ]
     )
-    print("✅ Inngest 服务端点注册成功")
+    logger.info("✅ Inngest 服务端点注册成功")
+    logger.info(f"✅ 已注册 {len([
+        test_integration_function,
+        message_sender_function,
+        scheduled_task_executor_function,
+        scheduled_task_scheduler_function,
+        approval_workflow_function,
+        approval_action_workflow_function,
+        sop_execution_workflow_function,
+        sop_node_complete_workflow_function,
+    ])} 个 Inngest 函数")
 except Exception as e:
-    print(f"❌ Inngest 服务端点注册失败: {e}")
+    logger.error(f"❌ Inngest 服务端点注册失败: {e}")
     import traceback
     traceback.print_exc()
 
@@ -347,7 +368,6 @@ app.include_router(user_tasks_router, prefix="/api/v1/personal")
 app.include_router(operation_logs_router, prefix="/api/v1/core")
 app.include_router(login_logs_router, prefix="/api/v1/core")
 app.include_router(online_users_router, prefix="/api/v1/core")
-app.include_router(data_backups_router, prefix="/api/v1/core")
 app.include_router(help_documents_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)

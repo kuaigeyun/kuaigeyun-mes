@@ -221,9 +221,7 @@ export default function LoginPage() {
       // 临时跳过验证码验证（待短信服务完全接入后启用）
       // TODO: 实现真实的验证码验证逻辑
       if (!values.phone_verification_code || values.phone_verification_code.trim() === '') {
-        console.log('验证码为空，跳过验证');
       } else {
-        console.log('验证码输入:', values.phone_verification_code);
         // 这里可以添加简单的格式验证
         if (!/^\d{6}$/.test(values.phone_verification_code)) {
           message.error('验证码格式不正确，应为6位数字');
@@ -735,7 +733,6 @@ export default function LoginPage() {
     
     // 调试日志
     if (recentFailTimes.length > 0) {
-      console.log('登录失败次数:', recentFailTimes.length, '需要验证:', needVerify);
     }
     
     setRequireVerification(needVerify);

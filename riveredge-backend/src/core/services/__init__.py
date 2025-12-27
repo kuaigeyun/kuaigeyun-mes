@@ -29,7 +29,6 @@ from .system.menu_service import MenuService
 from .data.dataset_service import DatasetService
 from .data.data_source_service import DataSourceService
 from .data.data_dictionary_service import DataDictionaryService
-from .data.data_backup_service import DataBackupService
 
 # 文件管理服务
 from .file.file_service import FileService
@@ -107,7 +106,6 @@ __all__ = [
     "DatasetService",
     "DataSourceService",
     "DataDictionaryService",
-    "DataBackupService",
 
     # 文件管理
     "FileService",

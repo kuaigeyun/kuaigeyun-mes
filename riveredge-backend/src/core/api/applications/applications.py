@@ -17,6 +17,7 @@ from core.services.application.application_service import ApplicationService
 from core.services.application.application_registry_service import ApplicationRegistryService
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from loguru import logger
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -124,7 +125,7 @@ async def list_applications(
 
         except Exception as e:
             # 记录错误但不中断整个响应
-            print(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
+            logger.error(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
             continue
 
     return result
@@ -186,7 +187,7 @@ async def list_installed_applications(
 
         except Exception as e:
             # 记录错误但不中断整个响应
-            print(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
+            logger.error(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
             continue
 
     return result
@@ -449,7 +450,7 @@ async def scan_and_register_plugins(
 
             except Exception as e:
                 # 记录错误但不中断整个响应
-                print(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
+                logger.error(f"处理应用 {app.get('code', 'unknown')} 时出错: {e}")
                 continue
 
         return result

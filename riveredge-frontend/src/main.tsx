@@ -82,7 +82,10 @@ const queryClient = new QueryClient({
     log: (...args) => {
       // 开发环境输出日志
       if (process.env.NODE_ENV === 'development') {
-        console.log('[React Query]', ...args);
+        // 开发环境日志（可选）
+        if (import.meta.env.DEV) {
+          console.log('[React Query]', ...args);
+        }
       }
     },
     warn: (...args) => {

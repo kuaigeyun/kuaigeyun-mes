@@ -18,10 +18,15 @@ set -e  # 遇到错误立即退出
 BACKEND_PORT="${BACKEND_PORT:-8200}"   # 后端服务端口（避免与主流项目常用端口冲突）
 FRONTEND_PORT="${FRONTEND_PORT:-8100}" # 前端服务端口（避免与主流项目常用端口冲突）
 KKFILEVIEW_PORT="${KKFILEVIEW_PORT:-8400}" # kkFileView 服务端口
+INNGEST_PORT="${INNGEST_PORT:-8288}"  # Inngest Dev Server 端口（官方默认端口）
+
+# Inngest 配置
+INNGEST_BACKEND_URL="${INNGEST_BACKEND_URL:-http://127.0.0.1:${BACKEND_PORT}/api/inngest}"  # Inngest连接的后端URL
 
 # 启动超时配置（秒）- 已缩短
 BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-30}"
 FRONTEND_START_TIMEOUT="${FRONTEND_START_TIMEOUT:-30}"
+INNGEST_START_TIMEOUT="${INNGEST_START_TIMEOUT:-15}"  # Inngest启动超时（通常很快）
 
 # 健康检查配置 - 已缩短
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-1}"
@@ -806,6 +811,94 @@ wait_for_frontend() {
     return 1
 }
 
+# 启动 Inngest 服务
+start_inngest() {
+    log_info "启动 Inngest 服务（使用官方默认端口8288）..."
+
+    # Inngest 脚本目录
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local inngest_dir="$script_dir/bin/inngest"
+    local inngest_exe=""
+
+    # 查找 Inngest 可执行文件
+    if [ -f "$inngest_dir/inngest.exe" ]; then
+        inngest_exe="$inngest_dir/inngest.exe"
+    elif [ -f "$inngest_dir/inngest" ]; then
+        inngest_exe="$inngest_dir/inngest"
+    elif [ -f "$inngest_dir/inngest-windows-amd64.exe" ]; then
+        inngest_exe="$inngest_dir/inngest-windows-amd64.exe"
+    else
+        log_warn "未找到 Inngest 可执行文件，跳过 Inngest 启动"
+        log_warn "请确保以下文件之一存在:"
+        log_warn "  - $inngest_dir/inngest.exe"
+        log_warn "  - $inngest_dir/inngest"
+        log_warn "  - $inngest_dir/inngest-windows-amd64.exe"
+        return 1
+    fi
+
+    # 检查配置文件
+    local config_file="$inngest_dir/inngest.config.json"
+    if [ ! -f "$config_file" ]; then
+        log_warn "未找到 Inngest 配置文件: $config_file，跳过 Inngest 启动"
+        return 1
+    fi
+
+    # 确保日志目录存在
+    mkdir -p .logs 2>/dev/null || true
+    local log_file=".logs/inngest.log"
+    local pid_file=".logs/inngest.pid"
+
+    # 清理旧的PID文件
+    rm -f "$pid_file"
+
+    # 启动 Inngest 服务
+    # 使用官方默认端口8288，Windows下绑定到127.0.0.1
+    log_info "启动 Inngest Dev Server（端口: $INNGEST_PORT，后端URL: $INNGEST_BACKEND_URL）..."
+    
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+        # Windows: 绑定到127.0.0.1而不是0.0.0.0
+        ("$inngest_exe" dev -u "$INNGEST_BACKEND_URL" --config "$config_file" --host 127.0.0.1 >> "$log_file" 2>&1) &
+        local inngest_pid=$!
+    else
+        # Linux/Mac: 使用 nohup
+        nohup "$inngest_exe" dev -u "$INNGEST_BACKEND_URL" --config "$config_file" >> "$log_file" 2>&1 &
+        local inngest_pid=$!
+    fi
+
+    # 等待进程启动
+    sleep 2
+
+    # 验证进程是否在运行
+    if kill -0 $inngest_pid 2>/dev/null; then
+        # 保存PID
+        echo $inngest_pid > "$pid_file"
+        log_success "Inngest 服务启动成功 (PID: $inngest_pid)"
+        
+        # 等待服务完全启动（检查日志）
+        local wait_count=0
+        while [ $wait_count -lt $INNGEST_START_TIMEOUT ]; do
+            if grep -q "service starting" "$log_file" 2>/dev/null; then
+                log_success "Inngest 服务已就绪"
+                return 0
+            fi
+            sleep 1
+            wait_count=$((wait_count + 1))
+        done
+        
+        log_success "Inngest 服务启动中（请查看日志确认状态）"
+        return 0
+    else
+        log_error "Inngest 进程启动失败，检查日志: $log_file"
+        if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+            log_error "启动错误:"
+            tail -10 "$log_file" | while read line; do
+                log_error "  $line"
+            done
+        fi
+        return 1
+    fi
+}
+
 # 启动后端服务（使用 uvicorn）
 start_backend() {
     local port=$1
@@ -1290,9 +1383,47 @@ stop_all() {
         rm -f .logs/frontend.pid
     fi
 
+    # 停止 Inngest（通过PID文件）
+    if [ -f ".logs/inngest.pid" ]; then
+        local inngest_pid=$(cat .logs/inngest.pid 2>/dev/null)
+        if [ ! -z "$inngest_pid" ] && [ "$inngest_pid" != "0" ]; then
+            if kill -0 $inngest_pid 2>/dev/null; then
+                log_info "停止 Inngest 服务 (PID: $inngest_pid)"
+                kill -TERM $inngest_pid 2>/dev/null || true
+                # Windows环境下也尝试taskkill
+                if command -v taskkill &> /dev/null; then
+                    taskkill /PID $inngest_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
+                fi
+                # 等待进程结束
+                local count=0
+                while [ $count -lt 5 ] && kill -0 $inngest_pid 2>/dev/null; do
+                    sleep 0.5
+                    count=$((count + 1))
+                done
+                # 如果还在运行，强制清理
+                if kill -0 $inngest_pid 2>/dev/null; then
+                    log_warn "强制停止 Inngest 服务 (PID: $inngest_pid)"
+                    kill -KILL $inngest_pid 2>/dev/null || true
+                    if command -v taskkill &> /dev/null; then
+                        taskkill /PID $inngest_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
+                    fi
+                fi
+            fi
+        fi
+        rm -f .logs/inngest.pid
+    fi
+
 
     # 清理可能残留的进程（简化版，避免卡住）
     log_info "清理残留进程..."
+    
+    # 清理 Inngest 进程（通过进程名）
+    if command -v pkill &> /dev/null; then
+        pkill -f "inngest.*dev" 2>/dev/null & || true
+    fi
+    if command -v taskkill &> /dev/null; then
+        taskkill /F /IM inngest.exe >> "$log_dir/taskkill.log" 2>&1 & || true
+    fi
     
     # 只清理关键端口，避免遍历所有端口导致卡住
     for port in $FRONTEND_PORT $BACKEND_PORT; do
@@ -1313,6 +1444,7 @@ stop_all() {
     if command -v pkill &> /dev/null; then
         pkill -f "uvicorn.*server.main:app" 2>/dev/null &
         pkill -f "vite.*--port" 2>/dev/null &
+        pkill -f "inngest.*dev" 2>/dev/null &
     fi
 
     # 等待进程完全停止
@@ -1326,6 +1458,8 @@ stop_all() {
             ports_still_occupied=$((ports_still_occupied + 1))
         fi
     done
+    
+    # 注意：Inngest端口8288可能被Windows系统保留，不强制检查
 
     if [ $ports_still_occupied -eq 0 ]; then
         log_success "所有服务已停止，端口已释放"
@@ -1360,6 +1494,16 @@ show_status() {
         log_warn "前端服务未运行"
     fi
 
+    if [ -f ".logs/inngest.pid" ]; then
+        local inngest_pid=$(cat .logs/inngest.pid)
+        if kill -0 $inngest_pid 2>/dev/null; then
+            log_success "Inngest 服务运行中 (PID: $inngest_pid)"
+        else
+            log_warn "Inngest 服务PID文件存在但进程未运行"
+        fi
+    else
+        log_warn "Inngest 服务未运行"
+    fi
 
     # 检查端口占用情况（只检查使用的端口）
     echo
@@ -1375,6 +1519,13 @@ show_status() {
         log_warn "后端端口 $BACKEND_PORT 被占用"
     else
         log_success "后端端口 $BACKEND_PORT 可用"
+    fi
+    
+    # Inngest端口检查（Windows可能被系统保留，不强制）
+    if check_port $INNGEST_PORT; then
+        log_warn "Inngest 端口 $INNGEST_PORT 被占用（Windows可能被系统保留）"
+    else
+        log_success "Inngest 端口 $INNGEST_PORT 可用"
     fi
     
 }
@@ -1414,6 +1565,7 @@ main() {
     log_info "启动配置:"
     log_info "   后端端口: $BACKEND_PORT"
     log_info "   前端端口: $FRONTEND_PORT"
+    log_info "   Inngest端口: $INNGEST_PORT (官方默认)"
     log_info "   调试模式: $DEBUG"
     echo
 
@@ -1558,6 +1710,11 @@ main() {
         exit 1
     fi
 
+    # 启动 Inngest（在后端启动之后，因为Inngest需要连接后端）
+    start_inngest
+    if [ $? -ne 0 ]; then
+        log_warn "Inngest 启动失败，但继续运行（Inngest是可选的）"
+    fi
 
     log_success "所有服务启动成功！"
     echo
@@ -1582,6 +1739,9 @@ main() {
         echo "  平台登录:    http://localhost:$FRONTEND_PORT/platform"
         echo "  后端 API:    http://localhost:$BACKEND_PORT"
         echo "  API 文档:    http://localhost:$BACKEND_PORT/docs"
+        if [ -f ".logs/inngest.pid" ]; then
+            echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
+        fi
         echo
         echo "管理命令:"
         echo "  查看状态:    ./Launch.sh status"
@@ -1592,6 +1752,9 @@ main() {
         echo "日志文件:"
         echo "  后端日志:    .logs/backend.log"
         echo "  前端日志:    .logs/frontend.log"
+        if [ -f ".logs/inngest.pid" ]; then
+            echo "  Inngest日志: .logs/inngest.log"
+        fi
         echo "  清理日志:    .logs/taskkill.log"
         echo
         echo "提示:"
@@ -1601,7 +1764,11 @@ main() {
         echo
         echo "=================================================================================="
     else
-        log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT"
+        if [ -f ".logs/inngest.pid" ]; then
+            log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT Inngest: http://localhost:$INNGEST_PORT/_dashboard"
+        else
+            log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT"
+        fi
     fi
     echo
 
