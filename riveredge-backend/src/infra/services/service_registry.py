@@ -8,7 +8,6 @@ Date: 2025-12-27
 """
 
 from typing import Dict, Type, Any, Optional, List
-from weakref import WeakValueDictionary
 from loguru import logger
 
 
@@ -18,15 +17,18 @@ class InfraServiceRegistry:
     
     管理所有平台级服务的注册、发现和生命周期。
     采用单例模式，确保全局唯一。
+    
+    Author: Luigi Lu
+    Date: 2025-12-27
     """
     
     _instance: Optional['InfraServiceRegistry'] = None
-    _services: WeakValueDictionary[str, Any]
+    _services: Dict[str, Any]  # ⚠️ 修复：使用普通Dict而不是WeakValueDictionary，避免服务实例被垃圾回收
     
     def __new__(cls) -> 'InfraServiceRegistry':
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._services = WeakValueDictionary()
+            cls._instance._services = {}  # ⚠️ 修复：使用普通字典
         return cls._instance
     
     @classmethod

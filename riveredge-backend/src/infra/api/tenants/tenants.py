@@ -1,7 +1,10 @@
 """
 超级管理员组织管理 API 模块
 
-提供超级管理员对组织的管理接口，包括组织注册审核、启用/禁用等
+提供超级管理员对组织的管理接口，包括组织注册审核、启用/禁用等。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from typing import Optional
@@ -15,6 +18,7 @@ from infra.models.tenant import TenantStatus, TenantPlan
 from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.domain.timezone_utils import now
+from infra.exceptions.exceptions import NotFoundError, ValidationError, ConflictError
 
 # 创建路由
 router = APIRouter(prefix="/tenants", tags=["Infra Tenants"])
@@ -35,18 +39,19 @@ async def list_tenants_for_superadmin(
     """
     获取组织列表（超级管理员）
     
-    获取所有组织的列表，支持分页、筛选和搜索。
+    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、文本字段模糊搜索、排序。
+    使用 ProTable 原生搜索逻辑，简单可靠。
     此接口需要平台超级管理员权限。
     
     Args:
-        page: 页码（从 1 开始）
-        page_size: 每页数量（1-100）
-        status: 组织状态筛选（可选）
-        plan: 组织套餐筛选（可选）
-        name: 组织名称搜索（模糊搜索，可选）
-        domain: 域名搜索（模糊搜索，可选）
-        sort: 排序字段（可选）
-        order: 排序顺序（asc 或 desc，可选）
+        page: 页码（从 1 开始，默认 1）
+        page_size: 每页数量（1-100，默认 10）
+        status: 组织状态筛选（可选，精确匹配）
+        plan: 组织套餐筛选（可选，精确匹配）
+        name: 组织名称搜索（可选，模糊搜索）
+        domain: 域名搜索（可选，模糊搜索）
+        sort: 排序字段（可选，如：name、status、created_at）
+        order: 排序顺序（可选，asc 或 desc）
         current_admin: 当前平台超级管理员对象（通过依赖注入获取）
         
     Returns:
@@ -54,26 +59,6 @@ async def list_tenants_for_superadmin(
     """
     from loguru import logger
     logger.info(f"📋 [list_tenants_for_superadmin] 开始处理请求，admin_id: {current_admin.id}, page: {page}, page_size: {page_size}")
-    """
-    获取组织列表（超级管理员）
-    
-    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、文本字段模糊搜索、排序。
-    使用 ProTable 原生搜索逻辑，简单可靠。
-    
-    Args:
-        page: 页码（默认 1）
-        page_size: 每页数量（默认 10，最大 100）
-        status: 组织状态筛选（可选，精确匹配）
-        plan: 组织套餐筛选（可选，精确匹配）
-        name: 组织名称搜索（可选，模糊搜索）
-        domain: 域名搜索（可选，模糊搜索）
-        sort: 排序字段（可选，如：name、status、created_at）
-        order: 排序顺序（可选，asc 或 desc）
-        current_admin: 当前超级管理员（依赖注入）
-        
-    Returns:
-        TenantListResponse: 组织列表响应
-    """
     service = TenantService()
     
     # 构建查询（超级管理员可以跨组织访问）
@@ -314,15 +299,11 @@ async def create_tenant_by_superadmin(
     """
     service = TenantService()
     
-    try:
-        tenant = await service.create_tenant(data)
-        logger.info(f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})")
-        return tenant
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    # ⚠️ 第三阶段改进：统一错误处理
+    # 异常由全局异常处理中间件统一处理
+    tenant = await service.create_tenant(data)
+    logger.info(f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})")
+    return tenant
 
 
 @router.put("/{tenant_id}", response_model=TenantResponse)

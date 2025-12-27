@@ -1,7 +1,10 @@
 """
 用户认证 API 路由
 
-提供用户登录、注册、Token 刷新等认证相关的 RESTful API 接口
+提供用户登录、注册、Token 刷新等认证相关的 RESTful API 接口。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,6 +15,7 @@ from infra.schemas.auth import LoginRequest, LoginResponse, UserRegisterRequest,
 from infra.services.auth_service import AuthService
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
+from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthenticationError
 
 # 创建路由
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -46,12 +50,11 @@ async def login(
         }
         ```
     """
-    try:
-        service = AuthService()
-        result = await service.login(data, request)
-        return LoginResponse(**result)
-    except Exception as e:
-        raise
+    # ⚠️ 第三阶段改进：统一错误处理
+    # 异常由全局异常处理中间件统一处理
+    service = AuthService()
+    result = await service.login(data, request)
+    return LoginResponse(**result)
 
 
 @router.post("/register", response_model=dict)
@@ -136,33 +139,25 @@ async def get_current_user_info(
     
     返回当前登录用户的详细信息，包括组织信息。
     
+    ⚠️ 第三阶段改进：使用服务层方法获取用户信息，避免API层直接查询数据库
+    
     Args:
         current_user: 当前用户对象（通过依赖注入获取）
         
     Returns:
         CurrentUserResponse: 当前用户信息响应数据
     """
-    from infra.models.tenant import Tenant
+    from infra.services.user_service import UserService
     
-    # 获取租户信息（如果用户有租户）
-    tenant_name = None
-    if current_user.tenant_id:
-        tenant = await Tenant.get_or_none(id=current_user.tenant_id)
-        if tenant:
-            tenant_name = tenant.name
+    # ⚠️ 第三阶段改进：使用服务层方法获取用户信息
+    service = UserService()
+    user_info = await service.get_user_with_tenant_info(current_user.id, current_user.tenant_id)
     
-    return CurrentUserResponse(
-        id=current_user.id,
-        uuid=str(current_user.uuid),
-        username=current_user.username,
-        email=current_user.email,
-        full_name=current_user.full_name,
-        tenant_id=current_user.tenant_id,
-        tenant_name=tenant_name,  # ⚠️ 关键修复：返回租户名称
-        is_active=current_user.is_active,
-        is_infra_admin=current_user.is_infra_admin,
-        is_tenant_admin=current_user.is_tenant_admin,
-    )
+    if not user_info:
+        # ⚠️ 第三阶段改进：使用统一的异常类
+        raise NotFoundError("用户", str(current_user.id))
+    
+    return CurrentUserResponse(**user_info)
 
 
 @router.post("/logout")

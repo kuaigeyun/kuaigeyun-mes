@@ -1,7 +1,10 @@
 """
 统计 API 模块
 
-提供平台级统计数据相关的 API 接口
+提供平台级统计数据相关的 API 接口。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from datetime import datetime

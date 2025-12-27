@@ -1,7 +1,10 @@
 """
 套餐管理 API 模块
 
-提供套餐管理的 RESTful API 接口
+提供套餐管理的 RESTful API 接口。
+
+Author: Luigi Lu
+Date: 2025-12-27
 """
 
 from typing import Optional
