@@ -7,23 +7,15 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { Spin, Alert, Button } from 'antd';
+import { Alert, Button } from 'antd';
 import { getInstalledApplicationList } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
 import BasicLayout from '../layouts/BasicLayout';
+import PageSkeleton from '../components/page-skeleton';
 
-// 加载中组件
-const LoadingFallback: React.FC = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh'
-  }}>
-    <Spin size="large" />
-  </div>
-);
+// 加载中组件 - 使用骨架屏
+const LoadingFallback: React.FC = () => <PageSkeleton />;
 
 // 应用加载错误组件
 const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, onRetry }) => (
