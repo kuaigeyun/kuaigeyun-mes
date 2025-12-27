@@ -157,6 +157,16 @@ class InfraServiceLocator:
             bool: 是否已注册
         """
         return InfraServiceLocator._registry.has_service(service_name)
+    
+    @staticmethod
+    def list_services() -> List[str]:
+        """
+        列出所有已注册的服务
+        
+        Returns:
+            List[str]: 服务名称列表
+        """
+        return InfraServiceLocator._registry.list_services()
 
 
 class ServiceNotFoundError(Exception):
