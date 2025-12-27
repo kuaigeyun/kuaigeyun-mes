@@ -59,7 +59,7 @@ async def apply_migration_manually():
         
         # 显示所有迁移记录
         records = await conn.fetch("""
-            SELECT id, version, app, create_time 
+            SELECT id, version, app 
             FROM aerich 
             ORDER BY id DESC 
             LIMIT 10
@@ -67,7 +67,7 @@ async def apply_migration_manually():
         
         print("\n📋 最近的迁移记录:")
         for record in records:
-            print(f"  {record['id']}: {record['version']} ({record['app']}) - {record['create_time']}")
+            print(f"  {record['id']}: {record['version']} ({record['app']})")
         
     finally:
         await conn.close()
