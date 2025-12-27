@@ -38,24 +38,25 @@ async def apply_migration_manually():
             print("❌ aerich 表不存在，请先运行 aerich init-db")
             return
         
-        # 检查迁移是否已存在
+        # 检查迁移是否已存在（使用新的迁移文件名）
+        migration_version = '0_init_schema'
         migration_exists = await conn.fetchval("""
             SELECT EXISTS (
                 SELECT FROM aerich 
-                WHERE version = '0_20251227_init_from_current_db' 
+                WHERE version = $1 
                 AND app = 'models'
             )
-        """)
+        """, migration_version)
         
         if migration_exists:
-            print("✅ 迁移 0_20251227_init_from_current_db 已存在")
+            print(f"✅ 迁移 {migration_version} 已存在")
         else:
             # 插入迁移记录
             await conn.execute("""
                 INSERT INTO aerich (version, app, content)
-                VALUES ('0_20251227_init_from_current_db', 'models', '{}')
-            """)
-            print("✅ 已插入迁移记录: 0_20251227_init_from_current_db")
+                VALUES ($1, 'models', '{}')
+            """, migration_version)
+            print(f"✅ 已插入迁移记录: {migration_version}")
         
         # 显示所有迁移记录
         records = await conn.fetch("""
