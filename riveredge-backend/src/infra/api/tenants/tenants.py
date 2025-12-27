@@ -122,7 +122,8 @@ async def get_tenant_detail_for_superadmin(
 @router.post("/{tenant_id}/approve", response_model=TenantResponse)
 async def approve_tenant_registration(
     tenant_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     审核通过组织注册
@@ -150,7 +151,7 @@ async def approve_tenant_registration(
         )
     
     # 激活组织
-    tenant = await service.activate_tenant(tenant_id)
+    tenant = await tenant_service.activate_tenant(tenant_id)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -166,7 +167,8 @@ async def approve_tenant_registration(
 async def reject_tenant_registration(
     tenant_id: int,
     reason: Optional[str] = Query(None, description="拒绝原因"),
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     审核拒绝组织注册
@@ -184,10 +186,12 @@ async def reject_tenant_registration(
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
     
     # 获取组织
-    tenant = await service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    tenant = await tenant_service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -195,7 +199,7 @@ async def reject_tenant_registration(
         )
     
     # 暂停组织（拒绝注册）
-    tenant = await service.update_tenant(
+    tenant = await tenant_service.update_tenant(
         tenant_id,
         TenantUpdate(
             status=TenantStatus.SUSPENDED,
@@ -223,7 +227,8 @@ async def reject_tenant_registration(
 @router.post("/{tenant_id}/activate", response_model=TenantResponse)
 async def activate_tenant_by_superadmin(
     tenant_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     激活组织（超级管理员）
@@ -233,6 +238,7 @@ async def activate_tenant_by_superadmin(
     Args:
         tenant_id: 组织 ID
         current_admin: 当前超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
         
     Returns:
         TenantResponse: 更新后的组织
@@ -240,8 +246,10 @@ async def activate_tenant_by_superadmin(
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
-    tenant = await service.activate_tenant(tenant_id, skip_tenant_filter=True)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    tenant = await tenant_service.activate_tenant(tenant_id, skip_tenant_filter=True)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -256,7 +264,8 @@ async def activate_tenant_by_superadmin(
 @router.post("/{tenant_id}/deactivate", response_model=TenantResponse)
 async def deactivate_tenant_by_superadmin(
     tenant_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     停用组织（超级管理员）
@@ -266,6 +275,7 @@ async def deactivate_tenant_by_superadmin(
     Args:
         tenant_id: 组织 ID
         current_admin: 当前超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
         
     Returns:
         TenantResponse: 更新后的组织
@@ -273,8 +283,10 @@ async def deactivate_tenant_by_superadmin(
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
-    tenant = await service.deactivate_tenant(tenant_id, skip_tenant_filter=True)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    tenant = await tenant_service.deactivate_tenant(tenant_id, skip_tenant_filter=True)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -289,7 +301,8 @@ async def deactivate_tenant_by_superadmin(
 @router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant_by_superadmin(
     data: TenantCreate,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     创建组织（平台超级管理员）
@@ -299,6 +312,7 @@ async def create_tenant_by_superadmin(
     Args:
         data: 组织创建数据
         current_admin: 当前平台超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
         
     Returns:
         TenantResponse: 创建的组织
@@ -306,11 +320,13 @@ async def create_tenant_by_superadmin(
     Raises:
         HTTPException: 当域名已存在时抛出
     """
-    service = TenantService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
     
     # ⚠️ 第三阶段改进：统一错误处理
     # 异常由全局异常处理中间件统一处理
-    tenant = await service.create_tenant(data)
+    tenant = await tenant_service.create_tenant(data)
     logger.info(f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})")
     return tenant
 
@@ -319,7 +335,8 @@ async def create_tenant_by_superadmin(
 async def update_tenant_by_superadmin(
     tenant_id: int,
     data: TenantUpdate,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     更新组织（平台超级管理员）
@@ -330,6 +347,7 @@ async def update_tenant_by_superadmin(
         tenant_id: 组织 ID
         data: 组织更新数据
         current_admin: 当前平台超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
         
     Returns:
         TenantResponse: 更新后的组织
@@ -337,9 +355,11 @@ async def update_tenant_by_superadmin(
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
     
-    tenant = await service.update_tenant(tenant_id, data, skip_tenant_filter=True)
+    tenant = await tenant_service.update_tenant(tenant_id, data, skip_tenant_filter=True)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -353,7 +373,8 @@ async def update_tenant_by_superadmin(
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant_by_superadmin(
     tenant_id: int,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     删除组织（平台超级管理员，软删除）
@@ -363,12 +384,15 @@ async def delete_tenant_by_superadmin(
     Args:
         tenant_id: 组织 ID
         current_admin: 当前平台超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
         
     Raises:
         HTTPException: 当组织不存在时抛出
     """
-    service = TenantService()
-    success = await service.delete_tenant(tenant_id)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    success = await tenant_service.delete_tenant(tenant_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

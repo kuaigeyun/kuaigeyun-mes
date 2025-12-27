@@ -15,8 +15,10 @@ from infra.schemas.infra_superadmin import (
     InfraSuperAdminResponse
 )
 from infra.services.infra_superadmin_service import InfraSuperAdminService
+from infra.api.deps.services import get_infra_superadmin_service_with_fallback
 from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
+from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/admin", tags=["Infra Admin"])
@@ -44,7 +46,8 @@ async def get_infra_superadmin(
 @router.post("", response_model=InfraSuperAdminResponse, status_code=status.HTTP_201_CREATED)
 async def create_infra_superadmin(
     data: InfraSuperAdminCreate,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    admin_service: Any = Depends(get_infra_superadmin_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     创建平台超级管理员
@@ -65,8 +68,17 @@ async def create_infra_superadmin(
     Raises:
         HTTPException: 当平台超级管理员已存在时抛出
     """
-    service = InfraSuperAdminService()
-    admin = await service.create_infra_superadmin(data)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not admin_service:
+        admin_service = InfraSuperAdminService()  # 向后兼容
+    # 优先使用接口方法名，如果不存在则使用原方法名（向后兼容）
+    if hasattr(admin_service, 'create_admin'):
+        admin = await admin_service.create_admin(data)
+    elif hasattr(admin_service, 'create_infra_superadmin'):
+        admin = await admin_service.create_infra_superadmin(data)
+    else:
+        # 如果都没有，说明是适配器，直接调用
+        admin = await admin_service.create_admin(data)
     
     return InfraSuperAdminResponse.model_validate(admin)
 
@@ -74,7 +86,8 @@ async def create_infra_superadmin(
 @router.put("", response_model=InfraSuperAdminResponse)
 async def update_infra_superadmin(
     data: InfraSuperAdminUpdate,
-    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin)
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    admin_service: Any = Depends(get_infra_superadmin_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
     更新平台超级管理员信息
@@ -91,8 +104,17 @@ async def update_infra_superadmin(
     Raises:
         HTTPException: 当平台超级管理员不存在时抛出
     """
-    service = InfraSuperAdminService()
-    admin = await service.update_infra_superadmin(data)
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not admin_service:
+        admin_service = InfraSuperAdminService()  # 向后兼容
+    # 优先使用接口方法名，如果不存在则使用原方法名（向后兼容）
+    if hasattr(admin_service, 'update_admin'):
+        admin = await admin_service.update_admin(data)
+    elif hasattr(admin_service, 'update_infra_superadmin'):
+        admin = await admin_service.update_infra_superadmin(data)
+    else:
+        # 如果都没有，说明是适配器，直接调用
+        admin = await admin_service.update_admin(data)
     
     if not admin:
         raise HTTPException(
