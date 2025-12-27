@@ -101,7 +101,6 @@ def get_auth_service_with_fallback() -> Any:
     Returns:
         认证服务实例（AuthServiceImpl）或适配器对象（向后兼容）
     """
-    from typing import Any
     
     service = get_auth_service()
     if service:
@@ -138,7 +137,7 @@ def get_tenant_service_with_fallback() -> Any:
     Returns:
         组织服务实例（TenantServiceImpl）或适配器对象（向后兼容）
     """
-    from typing import Any, Dict, Optional
+    from typing import Dict, Optional
     
     service = get_tenant_service()
     if service:
