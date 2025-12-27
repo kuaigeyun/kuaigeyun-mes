@@ -27,7 +27,6 @@ export default {
   'menu.system.integration-configs': 'Integration Settings',
   'menu.system.languages': 'Language Management',
   'menu.system.custom-fields': 'Custom Fields',
-  'menu.system.invitation-codes': 'Invitation Code Management',
   'menu.system.files': 'File Management',
   'menu.system.apis': 'API Management',
   'menu.system.data-sources': 'Data Source Management',
@@ -103,7 +102,6 @@ export default {
   'permission.resource.code_rule': 'Code Rule',
   'permission.resource.custom_field': 'Custom Field',
   'permission.resource.site_setting': 'Site Setting',
-  'permission.resource.invitation_code': 'Invitation Code',
   'permission.resource.language': 'Language',
   'permission.resource.integration_config': 'Integration Config',
 };
