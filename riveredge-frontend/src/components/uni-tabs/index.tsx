@@ -453,15 +453,24 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             }
             setTabs(defaultTabs);
             setActiveKey(defaultActiveKey);
-            setTimeout(() => {
-              navigate(defaultActiveKey);
-            }, 0);
+            // 临时禁用自动导航，避免调试页面被跳转
+            // setTimeout(() => {
+            //   navigate(defaultActiveKey);
+            // }, 0);
           }
 
           // 对于有有效标签的情况，设置活动标签并导航
           if (validTabs.length > 0) {
             // 设置活动标签并导航的函数
             const setActiveKeyAndNavigate = (tabs: TabItem[], savedActiveKey: string | null, isInfraPage: boolean) => {
+              // 如果当前路径是调试页面或应用页面，不进行自动导航
+              const currentPath = window.location.pathname;
+              if (currentPath.startsWith('/debug/') || currentPath.startsWith('/apps/')) {
+                console.log('🚫 UniTabs: 调试页面或应用页面，跳过自动导航');
+                setActiveKey(currentPath);
+                return;
+              }
+
               if (savedActiveKey && tabs.some((tab) => tab.key === savedActiveKey)) {
                 // 检查保存的活动标签是否与当前页面级别匹配
                 const isSavedInfraTab = savedActiveKey.startsWith('/infra');

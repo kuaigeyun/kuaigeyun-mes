@@ -31,11 +31,12 @@ import AppRoutes from './AppRoutes';
 const MainRoutes: React.FC = () => {
   return (
     <Routes>
+      {/* 应用业务路由 - 异步加载，失败不影响系统 */}
+      {/* ⚠️ 重要：必须放在 SystemRoutes 之前，确保 /apps/* 路径优先匹配 */}
+      <Route path="/apps/*" element={<AppRoutes />} />
+
       {/* 系统核心路由 - 立即可用，不依赖应用加载 */}
       <Route path="/*" element={<SystemRoutes />} />
-
-      {/* 应用业务路由 - 异步加载，失败不影响系统 */}
-      <Route path="/apps/*" element={<AppRoutes />} />
     </Routes>
   );
 };

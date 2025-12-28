@@ -31,24 +31,25 @@ import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomFiel
  */
 const WorkshopsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  
-  // Drawer 相关状态（详情查看）
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [currentWorkshopUuid, setCurrentWorkshopUuid] = useState<string | null>(null);
-  const [workshopDetail, setWorkshopDetail] = useState<Workshop | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  
-  // Modal 相关状态（创建/编辑车间）
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  
-  // 自定义字段相关状态
-  const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+
+    const actionRef = useRef<ActionType>(null);
+    const formRef = useRef<ProFormInstance>();
+    const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+    // Drawer 相关状态（详情查看）
+    const [drawerVisible, setDrawerVisible] = useState(false);
+    const [currentWorkshopUuid, setCurrentWorkshopUuid] = useState<string | null>(null);
+    const [workshopDetail, setWorkshopDetail] = useState<Workshop | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    // Modal 相关状态（创建/编辑车间）
+    const [modalVisible, setModalVisible] = useState(false);
+    const [isEdit, setIsEdit] = useState(false);
+    const [formLoading, setFormLoading] = useState(false);
+
+    // 自定义字段相关状态
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
 
   /**
    * 加载自定义字段
@@ -56,12 +57,13 @@ const WorkshopsPage: React.FC = () => {
   useEffect(() => {
     const loadCustomFields = async () => {
       try {
-        const fields = await getCustomFieldsByTable('master_data_factory_workshops', true);
-        console.log('加载的自定义字段:', fields);
-        fields.forEach(field => {
-          if (field.field_type === 'select') {
-            console.log(`字段 ${field.code} 的 config:`, field.config);
+        const fields = await getCustomFieldsByTable('master_data_factory_workshops', true).catch((error) => {
+          // 如果是401错误，静默忽略（token可能在其他地方被验证）
+          if (error?.response?.status === 401) {
+            console.warn('⚠️ 自定义字段加载失败（401），跳过加载');
+            return [];
           }
+          throw error; // 其他错误重新抛出
         });
         setCustomFields(fields);
       } catch (error) {
@@ -671,94 +673,96 @@ const WorkshopsPage: React.FC = () => {
    */
   const columns: ProColumns<Workshop>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
-    return [
-    {
-      title: '车间编码',
-      dataIndex: 'code',
-      width: 150,
-      fixed: 'left',
-    },
-    {
-      title: '车间名称',
-      dataIndex: 'name',
-      width: 200,
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      ellipsis: true,
-      hideInSearch: true,
-    },
-    {
-      title: '启用状态',
-      dataIndex: 'isActive',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+    const fixedColumns = [
+      {
+        title: '车间编码',
+        dataIndex: 'code',
+        width: 150,
+        fixed: 'left' as const,
       },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
-    },
-    // 插入自定义字段列
-    ...customFieldColumns,
-    {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 150,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除这个车间吗？"
-            description="删除车间前需要检查是否有关联的产线"
-            onConfirm={() => handleDelete(record)}
-          >
+      {
+        title: '车间名称',
+        dataIndex: 'name',
+        width: 200,
+      },
+      {
+        title: '描述',
+        dataIndex: 'description',
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: '启用状态',
+        dataIndex: 'isActive',
+        width: 100,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: '启用', status: 'Success' },
+          false: { text: '禁用', status: 'Default' },
+        },
+        render: (_, record) => (
+          <Tag color={record.isActive ? 'success' : 'default'}>
+            {record.isActive ? '启用' : '禁用'}
+          </Tag>
+        ),
+      },
+      // 插入自定义字段列
+      ...customFieldColumns,
+      {
+        title: '创建时间',
+        dataIndex: 'createdAt',
+        width: 180,
+        valueType: 'dateTime',
+        hideInSearch: true,
+        sorter: true,
+      },
+      {
+        title: '操作',
+        valueType: 'option',
+        width: 150,
+        fixed: 'right' as const,
+        render: (_, record) => (
+          <Space>
             <Button
               type="link"
-              danger
               size="small"
-              icon={<DeleteOutlined />}
+              onClick={() => handleOpenDetail(record)}
             >
-              删除
+              详情
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              编辑
+            </Button>
+            <Popconfirm
+              title="确定要删除这个车间吗？"
+              description="删除车间前需要检查是否有关联的产线"
+              onConfirm={() => handleDelete(record)}
+            >
+              <Button
+                type="link"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+              >
+                删除
+              </Button>
+            </Popconfirm>
+          </Space>
+        ),
+      },
     ];
+
+    return fixedColumns;
   }, [customFields]);
 
   return (
     <>
-      <UniTable<Workshop>
+        <UniTable<Workshop>
         actionRef={actionRef}
         columns={columns}
         onImport={handleImport}
@@ -790,12 +794,12 @@ const WorkshopsPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
           };
-          
+
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
             apiParams.isActive = searchFormValues.isActive;
           }
-          
+
           try {
             const result = await workshopApi.list(apiParams);
             
@@ -1035,7 +1039,7 @@ const WorkshopsPage: React.FC = () => {
         </ProForm>
       </Modal>
     </>
-  );
+    );
 };
 
 export default WorkshopsPage;

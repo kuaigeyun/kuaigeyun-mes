@@ -51,6 +51,28 @@ import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadc
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+
+// 安全的翻译 hook，避免多语言初始化失败导致应用崩溃
+const useSafeTranslation = () => {
+  try {
+    return useTranslation();
+  } catch (error) {
+    console.warn('i18n initialization failed, using fallback:', error);
+    // 返回一个基本的翻译函数作为后备
+    return {
+      t: (key: string, options?: any) => {
+        // 如果是中文 key，直接返回
+        if (key.includes('zh-CN') || key.includes('中文')) return key;
+        // 其他情况返回英文版本或原始 key
+        return key;
+      },
+      i18n: {
+        language: 'zh-CN',
+        changeLanguage: () => Promise.resolve(),
+      }
+    };
+  }
+};
 import TenantSelector from '../components/tenant-selector';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
@@ -149,11 +171,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           console.warn('⚠️ 获取用户信息失败，使用本地缓存:', error);
         }
       } else {
-        // 没有本地缓存时，清理认证信息
-        if ((error as any)?.response?.status === 401) {
+        // 没有本地缓存时，如果是401错误且不在应用页面，则清理认证信息
+        // 在应用页面时不清除认证信息，避免跳转
+        const isInApp = window.location.pathname.startsWith('/apps/');
+        if ((error as any)?.response?.status === 401 && !isInApp) {
           console.error('❌ 认证已过期，请重新登录:', error);
           clearAuth();
           setCurrentUser(undefined);
+        } else if ((error as any)?.response?.status === 401 && isInApp) {
+          console.warn('⚠️ 应用页面用户信息获取失败（401），跳过清除认证信息:', error);
         } else {
           console.warn('⚠️ 获取用户信息失败，但保留当前状态，允许继续访问:', error);
         }
@@ -177,10 +203,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [isLoading, setLoading]);
 
   // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
-  const publicPaths = ['/login'];
+  const publicPaths = ['/login', '/debug/'];
   // 平台登录页是公开的，但其他平台页面需要登录
   const isInfraLoginPage = location.pathname === '/infra/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage;
+
+  // ⚠️ 关键修复：如果是调试页面，直接渲染内容，不受加载状态影响
+  if (location.pathname.startsWith('/debug/')) {
+    return <>{children}</>;
+  }
 
   // 如果正在加载，显示加载状态
   if (loading || isLoading) {
@@ -375,12 +406,8 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/inngest': ManufacturingIcons.automation,
       '/infra/admin': ManufacturingIcons.quality,
       
-      // MES 相关路径
-      '/apps/kuaimes': ManufacturingIcons.production, // MES 制造执行系统（生产图标）
-      '/apps/kuaimes/planning': ManufacturingIcons.checklist, // 生产计划 - 清单图标
-      '/apps/kuaimes/execution': ManufacturingIcons.production, // 生产执行 - 生产趋势图标
-      '/apps/kuaimes/material': ManufacturingIcons.warehouse, // 物料管理 - 仓库图标
-      '/apps/kuaimes/quality': ManufacturingIcons.quality, // 质量管控 - 质量盾牌图标
+      // 应用路径图标映射 - 通过动态应用配置加载，不在此处硬编码
+      // '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 由应用配置动态加载
     };
     
     if (pathMap[menuPath]) {
@@ -724,7 +751,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken(); // 获取主题 token
-  const { i18n: i18nInstance, t } = useTranslation(); // 获取 i18n 实例和翻译函数
+  const { i18n: i18nInstance, t } = useSafeTranslation(); // 获取 i18n 实例和翻译函数（安全的）
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
@@ -1298,19 +1325,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 根据完整路径转换为中文名称（更精确的匹配）
    */
   const translateFullPathToChinese = (path: string): string => {
-    const fullPathMap: Record<string, string> = {
-      '/apps/master-data/materials': '物料数据',
-      '/apps/master-data/materials/list': '物料管理',
-      '/apps/master-data/materials/bom': 'BOM',
-      '/apps/master-data/factory/workshops': '车间',
-      '/apps/master-data/factory/production-lines': '产线',
-      '/apps/master-data/factory/workstations': '工位',
-      '/apps/master-data/warehouse/warehouses': '仓库',
-      '/apps/master-data/warehouse/storage-areas': '库区',
-      '/apps/master-data/warehouse/storage-locations': '库位',
-    };
-    
-    return fullPathMap[path] || translatePathSegmentToChinese(path.split('/').pop() || '');
+    // 移除硬编码的路径映射，依赖应用配置中的菜单标题
+    // 应用菜单的中文标题应在应用的 manifest.json 中定义
+    return translatePathSegmentToChinese(path.split('/').pop() || '');
   };
 
   /**

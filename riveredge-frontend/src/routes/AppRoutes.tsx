@@ -14,6 +14,62 @@ import type { Application } from '../services/application';
 import BasicLayout from '../layouts/BasicLayout';
 import PageSkeleton from '../components/page-skeleton';
 
+// 应用组件错误边界
+const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }> = ({ children, appName }) => {
+  const [hasError, setHasError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  React.useEffect(() => {
+    const errorHandler = (event: ErrorEvent) => {
+      console.error(`❌ AppErrorBoundary: 捕获到错误 in ${appName}:`, event.error);
+      setHasError(true);
+      setError(event.error);
+    };
+
+    window.addEventListener('error', errorHandler);
+    return () => window.removeEventListener('error', errorHandler);
+  }, [appName]);
+
+  if (hasError) {
+    return (
+      <div style={{ padding: '20px', background: '#fff2f0', border: '1px solid #ffccc7' }}>
+        <h3 style={{ color: '#cf1322' }}>❌ 应用加载错误</h3>
+        <p><strong>应用:</strong> {appName}</p>
+        <p><strong>错误:</strong> {error?.message || '未知错误'}</p>
+        <details>
+          <summary style={{ cursor: 'pointer', color: '#1890ff' }}>🔍 查看错误详情</summary>
+          <pre style={{ marginTop: '10px', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+            {error?.stack || 'No stack trace'}
+          </pre>
+        </details>
+        <Button
+          style={{ marginTop: '10px' }}
+          onClick={() => {
+            setHasError(false);
+            setError(null);
+            window.location.reload();
+          }}
+        >
+          重新加载
+        </Button>
+      </div>
+    );
+  }
+
+  try {
+    return <>{children}</>;
+  } catch (renderError) {
+    console.error(`❌ AppErrorBoundary: 渲染错误 in ${appName}:`, renderError);
+    return (
+      <div style={{ padding: '20px', background: '#fff2f0', border: '1px solid #ffccc7' }}>
+        <h3 style={{ color: '#cf1322' }}>❌ 应用渲染错误</h3>
+        <p><strong>应用:</strong> {appName}</p>
+        <p><strong>错误:</strong> {renderError instanceof Error ? renderError.message : String(renderError)}</p>
+      </div>
+    );
+  }
+};
+
 // 加载中组件 - 使用骨架屏
 const LoadingFallback: React.FC = () => <PageSkeleton />;
 
@@ -53,6 +109,9 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
  * 异步加载业务应用，确保应用层问题不影响系统层
  */
 const AppRoutes: React.FC = () => {
+  console.log('🎯 AppRoutes component mounted');
+  console.log('🎯 AppRoutes: 当前路径:', window.location.pathname);
+
   const [appRoutes, setAppRoutes] = useState<React.ReactNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -87,14 +146,50 @@ const AppRoutes: React.FC = () => {
 
             // 为每个路由配置创建Route组件
             for (const routeConfig of pluginRouteConfigs) {
+              // ⚠️ 重要：由于 AppRoutes 已经被 /apps/* 匹配，这里需要使用相对路径
+              // routeConfig.path 是 /apps/master-data，需要去掉 /apps/ 前缀
+              const relativePath = routeConfig.path.startsWith('/apps/') 
+                ? routeConfig.path.replace('/apps/', '') 
+                : routeConfig.path;
+              
+              console.log(`🔧 AppRoutes: 创建应用路由 ${relativePath}/* (原始路径: ${routeConfig.path})`);
               routes.push(
                 <Route
-                  key={`app-${app.code}-${routeConfig.path}`}
-                  path={`${routeConfig.path}/*`}
+                  key={`app-${app.code}-${relativePath}`}
+                  path={`${relativePath}/*`}
                   element={
                     <BasicLayout>
-                      <Suspense fallback={<LoadingFallback />}>
-                        <routeConfig.component />
+                      <Suspense fallback={
+                        <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7', margin: '10px' }}>
+                          <h3>🔄 正在加载应用: {app.name}</h3>
+                          <p>路由: {routeConfig.path}</p>
+                          <p>时间: {new Date().toLocaleTimeString()}</p>
+                        </div>
+                      }>
+                        <AppErrorBoundary appName={app.name}>
+                          {(() => {
+                            console.log(`🎯 准备渲染应用组件: ${app.name}`);
+                            console.log(`🎯 组件信息:`, routeConfig.component);
+
+                            // 尝试直接渲染组件，看是否能触发错误
+                            try {
+                              const componentElement = React.createElement(routeConfig.component);
+                              console.log(`✅ 组件元素创建成功:`, componentElement);
+                              return (
+                                <>
+                                  <div style={{ padding: '10px', background: '#f6ffed', border: '1px solid #b7eb8f', marginBottom: '10px' }}>
+                                    <strong>🎯 应用组件开始渲染</strong><br />
+                                    <small>应用: {app.name} | 组件: {routeConfig.component.name || 'Unknown'} | 时间: {new Date().toLocaleTimeString()}</small>
+                                  </div>
+                                  {componentElement}
+                                </>
+                              );
+                            } catch (renderError) {
+                              console.error(`❌ 组件渲染失败:`, renderError);
+                              throw renderError;
+                            }
+                          })()}
+                        </AppErrorBoundary>
                       </Suspense>
                     </BasicLayout>
                   }
@@ -139,6 +234,22 @@ const AppRoutes: React.FC = () => {
   }
 
   // 正常状态：渲染应用路由
+  console.log(`🔧 AppRoutes: 渲染 ${appRoutes.length} 个应用路由`);
+  console.log('🔧 AppRoutes: appRoutes content:', appRoutes);
+  console.log('🔧 AppRoutes: 当前路径:', window.location.pathname);
+
+  if (appRoutes.length === 0) {
+    console.warn('⚠️ AppRoutes: 没有应用路由，可能应用未加载');
+    return (
+      <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7' }}>
+        <h3>⚠️ 没有可用的应用路由</h3>
+        <p>当前路径: {window.location.pathname}</p>
+        <p>已加载的应用路由数: {appRoutes.length}</p>
+        <p>如果这是应用路径，请检查应用是否正确安装和启用</p>
+      </div>
+    );
+  }
+
   return (
     <Routes>
       {appRoutes}

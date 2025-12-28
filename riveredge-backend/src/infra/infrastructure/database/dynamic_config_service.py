@@ -65,6 +65,7 @@ class DynamicDatabaseConfigService:
         Returns:
             List[str]: 模型模块路径列表
         """
+        logger.info("📋 === _get_active_models 方法被调用 ===")
         logger.debug("📋 获取活跃应用模型列表...")
 
         # 基础模型（系统必须的）
@@ -131,13 +132,72 @@ class DynamicDatabaseConfigService:
             else:
                 logger.warning(f"⚠️ 基础模型不存在，跳过: {model_path}")
 
-        return validated_base_models
-
         # 获取活跃应用的模型
-        active_app_models = await DynamicDatabaseConfigService._get_active_app_models()
+        logger.info("📋 === 开始获取活跃应用模型列表 ===")
+
+        try:
+            # 尝试从数据库查询活跃应用
+            logger.info("📋 尝试连接数据库查询活跃应用...")
+            from infra.infrastructure.database.database import get_db_connection
+            conn = await get_db_connection()
+            logger.info("📋 数据库连接成功")
+
+            try:
+                rows = await conn.fetch("""
+                    SELECT DISTINCT code
+                    FROM core_applications
+                    WHERE is_installed = TRUE
+                      AND is_active = TRUE
+                      AND deleted_at IS NULL
+                """)
+
+                active_app_codes = [row['code'] for row in rows]
+                logger.info(f"📋 从数据库发现 {len(active_app_codes)} 个活跃应用: {active_app_codes}")
+
+            finally:
+                await conn.close()
+                logger.info("📋 数据库连接已关闭")
+
+        except Exception as e:
+            logger.error(f"从数据库查询活跃应用失败: {e}", exc_info=True)
+            # 回退到临时方案
+            active_app_codes = ['master-data']
+            logger.info(f"📋 使用临时方案，活跃应用: {active_app_codes}")
+
+        logger.info(f"📋 将处理的活跃应用代码: {active_app_codes}")
+
+        # 根据应用代码生成模型模块路径
+        active_app_models = []
+        for app_code in active_app_codes:
+            # 将连字符转换为下划线
+            module_code = app_code.replace('-', '_')
+            logger.info(f"📋 处理应用 {app_code} -> 模块代码 {module_code}")
+
+            # 常见的应用模型模块
+            potential_modules = [
+                f"apps.{module_code}.models.factory",
+                f"apps.{module_code}.models.warehouse",
+                f"apps.{module_code}.models.material",
+                f"apps.{module_code}.models.process",
+                f"apps.{module_code}.models.customer",
+                f"apps.{module_code}.models.supplier",
+                f"apps.{module_code}.models.performance",
+                f"apps.{module_code}.models.product",
+            ]
+
+            # 只添加存在的模块
+            for module_path in potential_modules:
+                if DynamicDatabaseConfigService._module_exists(module_path):
+                    active_app_models.append(module_path)
+                    logger.info(f"✅ 发现应用模型模块: {module_path}")
+                else:
+                    logger.debug(f"❌ 应用模型模块不存在: {module_path}")
+
+        logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
 
         # 合并所有模型
-        all_models = base_models + active_app_models
+        all_models = validated_base_models + active_app_models
+        logger.info(f"📋 合并后总共 {len(all_models)} 个模型模块 (基础: {len(validated_base_models)}, 应用: {len(active_app_models)})")
 
         # 最终验证所有模型模块是否存在
         final_models = []
@@ -148,6 +208,7 @@ class DynamicDatabaseConfigService:
                 logger.warning(f"❌ 模型模块不存在: {model_path}")
 
         logger.info(f"📝 最终加载 {len(final_models)} 个验证通过的模型模块")
+        logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(final_models)} 个模型 ===")
         return final_models
 
     @staticmethod
@@ -160,21 +221,63 @@ class DynamicDatabaseConfigService:
         Returns:
             List[str]: 应用模型模块路径列表
         """
-        # 由于循环导入问题，这里暂时返回硬编码的活跃应用模型
-        # 在实际运行时，会通过ApplicationRegistryService获取准确的模型列表
-        logger.info("📋 获取活跃应用模型列表（临时方案）")
+        logger.info("📋 === 开始获取活跃应用模型列表 ===")
 
-        # 临时返回已知活跃应用的模型
-        active_app_models = [
-            "apps.master_data.models.factory",  # 工厂数据模型
-            "apps.master_data.models.warehouse",  # 仓库数据模型
-            "apps.master_data.models.material",  # 物料数据模型
-            "apps.master_data.models.process",  # 工艺数据模型
-            "apps.master_data.models.customer",  # 供应链数据模型
-            "apps.master_data.models.supplier",  # 供应链数据模型
-            "apps.master_data.models.performance",  # 绩效数据模型
-            "apps.master_data.models.product",  # 产品模型
-        ]
+        try:
+            # 尝试从数据库查询活跃应用
+            from infra.infrastructure.database.database import get_db_connection
+            conn = await get_db_connection()
+
+            try:
+                rows = await conn.fetch("""
+                    SELECT DISTINCT code
+                    FROM core_applications
+                    WHERE is_installed = TRUE
+                      AND is_active = TRUE
+                      AND deleted_at IS NULL
+                """)
+
+                active_app_codes = [row['code'] for row in rows]
+                logger.info(f"📋 从数据库发现 {len(active_app_codes)} 个活跃应用: {active_app_codes}")
+
+            finally:
+                await conn.close()
+
+        except Exception as e:
+            logger.warning(f"从数据库查询活跃应用失败，使用临时方案: {e}")
+            # 回退到临时方案
+            active_app_codes = ['master-data']
+
+        logger.info(f"📋 将处理的活跃应用代码: {active_app_codes}")
+
+        # 根据应用代码生成模型模块路径
+        active_app_models = []
+        for app_code in active_app_codes:
+            # 将连字符转换为下划线
+            module_code = app_code.replace('-', '_')
+            logger.info(f"📋 处理应用 {app_code} -> 模块代码 {module_code}")
+
+            # 常见的应用模型模块
+            potential_modules = [
+                f"apps.{module_code}.models.factory",
+                f"apps.{module_code}.models.warehouse",
+                f"apps.{module_code}.models.material",
+                f"apps.{module_code}.models.process",
+                f"apps.{module_code}.models.customer",
+                f"apps.{module_code}.models.supplier",
+                f"apps.{module_code}.models.performance",
+                f"apps.{module_code}.models.product",
+            ]
+
+            # 只添加存在的模块
+            for module_path in potential_modules:
+                if DynamicDatabaseConfigService._module_exists(module_path):
+                    active_app_models.append(module_path)
+                    logger.info(f"✅ 发现应用模型模块: {module_path}")
+                else:
+                    logger.debug(f"❌ 应用模型模块不存在: {module_path}")
+
+        logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
 
         # 验证这些模块是否存在
         validated_models = []
@@ -186,6 +289,7 @@ class DynamicDatabaseConfigService:
                 logger.warning(f"⚠️ 应用模型不存在: {module_path}")
 
         logger.info(f"📦 验证通过的应用模型: {len(validated_models)} 个")
+        logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(validated_models)} 个模型 ===")
         return validated_models
 
     @staticmethod

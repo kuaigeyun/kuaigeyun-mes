@@ -17,6 +17,7 @@ import LockScreenPage from '../pages/lock-screen';
 
 // 系统级页面（直接导入，移除懒加载）
 import DashboardPage from '../pages/system/dashboard';
+
 import DashboardAnalysisPage from '../pages/system/dashboard/analysis';
 import RolesPage from '../pages/system/roles/list';
 import PermissionsPage from '../pages/system/permissions/list';
@@ -141,6 +142,8 @@ const SystemRoutes: React.FC = () => {
       <Route path="/personal/preferences" element={renderWithLayout(PersonalPreferencesPage)} />
       <Route path="/personal/messages" element={renderWithLayout(PersonalMessagesPage)} />
       <Route path="/personal/tasks" element={renderWithLayout(PersonalTasksPage)} />
+
+      {/* 调试路由 */}
 
       {/* 平台级路由 */}
       <Route path="/infra/admin" element={renderWithLayout(PlatformAdminPage)} />

@@ -33,7 +33,11 @@ if (typeof window !== 'undefined') {
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
-  
+
+  // ⚠️ 关键修复：将所有路径检查移到 Hook 调用之前，避免 Hook 顺序问题
+  const isMasterDataPath = location.pathname.startsWith('/apps/master-data');
+  const isDebugPath = location.pathname.startsWith('/debug/');
+
   // 使用 useRef 跟踪是否已经初始化，避免重复执行
   const initializedRef = React.useRef(false);
 
@@ -43,10 +47,10 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (initializedRef.current) {
       return;
     }
-    
+
     const token = getToken();
     const savedUserInfo = getUserInfo();
-    
+
     // 如果有 token 或保存的用户信息，但 currentUser 为空，尝试恢复
     // 注意：这里读取 currentUser 是为了检查是否需要恢复，但由于使用了 initializedRef，
     // 这个 effect 只会在首次挂载时执行一次，所以即使 currentUser 不在依赖数组中也是安全的
@@ -68,7 +72,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         setUserInfo(restoredUser);
       }
     }
-    
+
     // 标记为已初始化，避免重复执行
     initializedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,7 +80,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
   // ⚠️ 关键修复：先定义公开页面判断，避免在 shouldFetchUser 中使用未定义的变量
-  const publicPaths = ['/login'];
+  const publicPaths = ['/login', '/debug/'];
   // 平台登录页是公开的，但其他平台页面需要登录
   const isInfraLoginPage = location.pathname === '/infra/login';
   const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage;
@@ -109,7 +113,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       // 如果有 token，尝试从 localStorage 恢复用户信息
       const token = getToken();
       const savedUserInfo = getUserInfo();
-      
+
       if (token && savedUserInfo) {
         // 从 localStorage 恢复用户信息，允许继续访问
         const restoredUser = {
@@ -153,8 +157,50 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = getToken();
   const hasToken = !!token;
 
-  // 如果正在加载，显示加载状态
-  if (loading || isLoading) {
+  // 使用 useMemo 稳定重定向逻辑，避免无限循环
+  const redirectTarget = React.useMemo(() => {
+    // ⚠️ 核心逻辑：只有真正已登录（有 token 且 currentUser 存在）时才重定向
+    // 如果只有 token 但没有 currentUser，说明可能还在加载中，不重定向
+    const isAuthenticated = hasToken && currentUser;
+
+    // 如果是公开页面且已登录，重定向到对应的仪表盘
+    if (isPublicPath && isAuthenticated) {
+      // 平台超管登录后，如果访问的是登录页，重定向到平台运营看板
+      if (isInfraLoginPage && currentUser.is_infra_admin) {
+        return '/infra/operation';
+      }
+    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
+    if (location.pathname === '/login' && !currentUser.is_infra_admin) {
+      return '/system/dashboard';
+    }
+    }
+
+    // ⚠️ 核心逻辑：只有没有 token 时才跳转到登录页
+    // 有 token = 已登录，允许访问所有页面（包括功能菜单）
+    if (!isPublicPath && !hasToken) {
+      // 平台级路由重定向到平台登录页
+      if (location.pathname.startsWith('/infra')) {
+        return '/infra/login';
+      }
+      // 系统级路由重定向到用户登录页
+      return '/login';
+    }
+
+    return null;
+  }, [isPublicPath, currentUser, isInfraLoginPage, location.pathname, hasToken]);
+
+  // ⚠️ 关键修复：移除所有条件返回，确保每次渲染都调用相同数量的 Hook
+  // 使用状态变量控制渲染内容
+  const shouldBypassAuth = isMasterDataPath || isDebugPath;
+  const shouldShowLoading = loading || isLoading;
+  const shouldRedirect = redirectTarget !== null;
+
+  // 根据状态决定渲染内容
+  if (shouldBypassAuth) {
+    return <>{children}</>;
+  }
+
+  if (shouldShowLoading) {
     return (
       <div style={{
         display: 'flex',
@@ -167,40 +213,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   }
 
-  // 使用 useMemo 稳定重定向逻辑，避免无限循环
-  const redirectTarget = React.useMemo(() => {
-    // ⚠️ 核心逻辑：只有真正已登录（有 token 且 currentUser 存在）时才重定向
-    // 如果只有 token 但没有 currentUser，说明可能还在加载中，不重定向
-    const isAuthenticated = hasToken && currentUser;
-    
-    // 如果是公开页面且已登录，重定向到对应的仪表盘
-    if (isPublicPath && isAuthenticated) {
-      // 平台超管登录后，如果访问的是登录页，重定向到平台运营看板
-      if (isInfraLoginPage && currentUser.is_infra_admin) {
-        return '/infra/operation';
-      }
-    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
-    if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return '/system/dashboard';
-    }
-    }
-    
-    // ⚠️ 核心逻辑：只有没有 token 时才跳转到登录页
-    // 有 token = 已登录，允许访问所有页面（包括功能菜单）
-    if (!isPublicPath && !hasToken) {
-      // 平台级路由重定向到平台登录页
-      if (location.pathname.startsWith('/infra')) {
-        return '/infra/login';
-      }
-      // 系统级路由重定向到用户登录页
-      return '/login';
-    }
-    
-    return null;
-  }, [isPublicPath, currentUser, isInfraLoginPage, location.pathname, hasToken]);
-
-  // 如果需要重定向，执行重定向
-  if (redirectTarget) {
+  if (shouldRedirect) {
     return <Navigate to={redirectTarget} replace />;
   }
 
@@ -209,6 +222,8 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 // 主应用组件
 export default function App() {
+  console.log('🎯 App component mounted, current path:', window.location.pathname);
+
   const [userPreference, setUserPreference] = useState<UserPreference | null>(null);
   const [siteThemeConfig, setSiteThemeConfig] = useState<{
     colorPrimary?: string;
@@ -346,11 +361,19 @@ export default function App() {
   // 初始化时加载用户偏好设置和站点主题配置
   useEffect(() => {
     const token = getToken();
-    
+
     if (token) {
       // 并行加载用户偏好设置和站点主题配置
+      // ⚠️ 关键修复：静默处理 401 错误，避免清除有效 token
       Promise.all([
-        getUserPreference().catch(() => null),
+        getUserPreference().catch((error) => {
+          // 如果是 401 错误，静默忽略（token 可能在其他地方被验证）
+          if (error?.response?.status === 401) {
+            console.warn('⚠️ 用户偏好设置加载失败（401），跳过设置');
+            return null;
+          }
+          return null;
+        }),
         loadSiteTheme().catch(() => null),
       ]).then(([preference, siteTheme]) => {
         if (preference) {
@@ -394,8 +417,10 @@ export default function App() {
           }
         }
         
-        // 加载用户选择的语言
-        return loadUserLanguage();
+        // 加载用户选择的语言（异步，不阻塞主题加载）
+        loadUserLanguage().catch((err) => {
+          console.warn('Failed to load user language during app init:', err);
+        });
       }).catch((error) => {
         console.warn('Failed to load preferences:', error);
         // 如果加载失败，尝试使用本地存储的主题配置

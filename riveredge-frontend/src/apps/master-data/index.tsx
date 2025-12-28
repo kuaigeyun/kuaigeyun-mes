@@ -38,41 +38,43 @@ import SkillsPage from './pages/performance/skills';
 const MasterDataApp: React.FC = () => {
   return (
     <Routes>
-      {/* 工厂建模 */}
+      {/* 工厂建模路由 */}
       <Route path="factory/workshops" element={<WorkshopsPage />} />
       <Route path="factory/production-lines" element={<ProductionLinesPage />} />
       <Route path="factory/workstations" element={<WorkstationsPage />} />
-      
-      {/* 仓库管理 */}
+
+      {/* 仓库管理路由 */}
       <Route path="warehouse/warehouses" element={<WarehousesPage />} />
       <Route path="warehouse/storage-areas" element={<StorageAreasPage />} />
       <Route path="warehouse/storage-locations" element={<StorageLocationsPage />} />
-      
-      {/* 物料管理 */}
-      <Route path="materials" element={<MaterialsManagementPage />} />
+
+      {/* 物料管理路由 */}
       <Route path="materials/list" element={<MaterialsManagementPage />} />
-      <Route path="materials/materials" element={<MaterialsManagementPage />} />
       <Route path="materials/bom" element={<BOMPage />} />
-      
-      {/* 工艺管理 */}
+
+      {/* 工艺管理路由 */}
       <Route path="process/defect-types" element={<DefectTypesPage />} />
       <Route path="process/operations" element={<OperationsPage />} />
       <Route path="process/routes" element={<ProcessRoutesPage />} />
       <Route path="process/sop" element={<SOPPage />} />
       <Route path="process/sop/designer" element={<ESOPDesignerPage />} />
       <Route path="process/sop/execution" element={<SOPExecutionPage />} />
-      
-      {/* 供应链 */}
+
+      {/* 供应链路由 */}
       <Route path="supply-chain/customers" element={<CustomersPage />} />
       <Route path="supply-chain/suppliers" element={<SuppliersPage />} />
-      
-      {/* 绩效管理 */}
+
+      {/* 绩效管理路由 */}
       <Route path="performance/holidays" element={<HolidaysPage />} />
       <Route path="performance/skills" element={<SkillsPage />} />
-      
-      {/* 默认路由 */}
-      <Route index element={<div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>主数据管理</div>} />
-      <Route path="*" element={<div style={{ padding: '16px', margin: 0, boxSizing: 'border-box' }}>页面未找到</div>} />
+
+      {/* 默认路由 - 应用首页 */}
+      <Route path="" element={
+        <div style={{ padding: '24px', textAlign: 'center' }}>
+          <h2>主数据管理应用</h2>
+          <p>欢迎使用主数据管理系统，请从左侧菜单选择功能模块。</p>
+        </div>
+      } />
     </Routes>
   );
 };
