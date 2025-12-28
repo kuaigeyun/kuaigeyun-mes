@@ -18,6 +18,7 @@ import {
   UpdateSiteSettingData,
 } from '../../../services/siteSetting';
 import { uploadFile, getFilePreview, FileUploadResponse } from '../../../services/file';
+import ImageCropper from '../../../components/image-cropper';
 
 /**
  * 站点设置页面组件
@@ -30,6 +31,8 @@ const SiteSettingsPage: React.FC = () => {
   const [siteSetting, setSiteSetting] = useState<SiteSetting | null>(null);
   const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [cropModalVisible, setCropModalVisible] = useState(false);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
 
   /**
    * 判断字符串是否是UUID格式
@@ -171,18 +174,44 @@ const SiteSettingsPage: React.FC = () => {
   };
 
   /**
-   * 处理LOGO上传
+   * 处理LOGO文件选择（在剪裁之前）
    */
-  const handleLogoUpload: UploadProps['customRequest'] = async (options) => {
-    const { file, onSuccess, onError } = options;
+  const handleLogoFileSelect: UploadProps['beforeUpload'] = (file) => {
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      messageApi.error('请选择图片文件');
+      return false;
+    }
     
+    // 保存选中的文件，显示剪裁弹窗
+    setSelectedImageFile(file);
+    setCropModalVisible(true);
+    
+    // 阻止默认上传行为
+    return false;
+  };
+
+  /**
+   * 处理剪裁确认
+   */
+  const handleCropConfirm = async (croppedImageBlob: Blob) => {
     try {
+      // 将Blob转换为File对象
+      const croppedFile = new File([croppedImageBlob], selectedImageFile?.name || 'logo.png', {
+        type: 'image/png',
+        lastModified: Date.now(),
+      });
+
       // 先使用本地文件创建预览URL（立即显示）
-      const localPreviewUrl = URL.createObjectURL(file as File);
+      const localPreviewUrl = URL.createObjectURL(croppedFile);
       setLogoUrl(localPreviewUrl);
       
-      // 上传文件（使用category标记为站点logo，便于管理，自动租户隔离）
-      const response: FileUploadResponse = await uploadFile(file as File, {
+      // 关闭剪裁弹窗
+      setCropModalVisible(false);
+      setSelectedImageFile(null);
+      
+      // 上传剪裁后的文件（使用category标记为站点logo，便于管理，自动租户隔离）
+      const response: FileUploadResponse = await uploadFile(croppedFile, {
         category: 'site-logo',
         description: '站点Logo',
       });
@@ -195,20 +224,16 @@ const SiteSettingsPage: React.FC = () => {
         
         // 获取服务器预览URL
         let previewUrl: string | undefined = undefined;
-        const fileType = response.file_type || (file as File).type;
-        
-        if (fileType?.startsWith('image/')) {
-          try {
-            const previewInfo = await getFilePreview(response.uuid);
-            previewUrl = previewInfo.preview_url;
-            // 释放本地预览URL
-            URL.revokeObjectURL(localPreviewUrl);
-            // 使用服务器预览URL
-            setLogoUrl(previewUrl);
-          } catch (error) {
-            // 如果获取预览URL失败，继续使用本地预览URL
-            console.error('获取LOGO预览URL失败:', error);
-          }
+        try {
+          const previewInfo = await getFilePreview(response.uuid);
+          previewUrl = previewInfo.preview_url;
+          // 释放本地预览URL
+          URL.revokeObjectURL(localPreviewUrl);
+          // 使用服务器预览URL
+          setLogoUrl(previewUrl);
+        } catch (error) {
+          // 如果获取预览URL失败，继续使用本地预览URL
+          console.error('获取LOGO预览URL失败:', error);
         }
         
         // 更新LOGO文件列表
@@ -219,7 +244,6 @@ const SiteSettingsPage: React.FC = () => {
           url: previewUrl || localPreviewUrl,
         }]);
         
-        onSuccess?.(response);
         messageApi.success('LOGO上传成功');
       } else {
         // 上传失败，释放本地预览URL
@@ -228,20 +252,37 @@ const SiteSettingsPage: React.FC = () => {
         throw new Error('上传失败');
       }
     } catch (error: any) {
-      onError?.(error);
       messageApi.error(error.message || 'LOGO上传失败');
     }
   };
 
   /**
+   * 处理剪裁取消
+   */
+  const handleCropCancel = () => {
+    setCropModalVisible(false);
+    setSelectedImageFile(null);
+  };
+
+  /**
    * 处理清除LOGO
    */
-  const handleClearLogo = () => {
-    setLogoUrl(undefined);
-    setLogoFileList([]);
-    form.setFieldsValue({
-      site_logo: '',
-    });
+  const handleClearLogo = async () => {
+    try {
+      setSaving(true);
+      setLogoUrl(undefined);
+      setLogoFileList([]);
+      form.setFieldsValue({
+        site_logo: '',
+      });
+      await updateSiteSetting({ settings: { site_logo: '' } });
+      messageApi.success('站点Logo已清除');
+      window.dispatchEvent(new CustomEvent('siteThemeUpdated')); // 触发更新
+    } catch (error: any) {
+      messageApi.error(error.message || '清除Logo失败');
+    } finally {
+      setSaving(false);
+    }
   };
 
   /**
@@ -353,9 +394,8 @@ const SiteSettingsPage: React.FC = () => {
                 )}
                 <Space>
                   <Upload
-                    customRequest={handleLogoUpload}
+                    beforeUpload={handleLogoFileSelect}
                     fileList={logoFileList}
-                    onChange={({ fileList }) => setLogoFileList(fileList)}
                     maxCount={1}
                     accept="image/*"
                     showUploadList={false}
@@ -489,6 +529,16 @@ const SiteSettingsPage: React.FC = () => {
           </Card>
         </Form>
       </Card>
+
+      {/* 图片剪裁弹窗 */}
+      <ImageCropper
+        open={cropModalVisible}
+        title="剪裁站点Logo"
+        image={selectedImageFile}
+        defaultShape="rect"
+        onCancel={handleCropCancel}
+        onConfirm={handleCropConfirm}
+      />
     </PageContainer>
   );
 };
