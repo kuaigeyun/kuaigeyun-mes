@@ -49,7 +49,7 @@ import {
 } from '@ant-design/icons';
 import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
 import type { MenuProps } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import TenantSelector from '../components/tenant-selector';
 import UniTabs from '../components/uni-tabs';
@@ -67,6 +67,8 @@ import { getMenuTree, MenuTree } from '../services/menu';
 import { ManufacturingIcons } from '../utils/manufacturingIcons';
 import * as LucideIcons from 'lucide-react'; // 全量导入 Lucide Icons，支持动态访问所有图标
 import { getAvatarUrl, getAvatarText, getAvatarFontSize } from '../utils/avatar';
+import { getSiteSetting } from '../services/siteSetting';
+import { getFilePreview } from '../services/file';
 
 // 权限守卫组件
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -791,6 +793,69 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     queryFn: () => getLanguageList({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
   });
+  
+  const queryClient = useQueryClient();
+  
+  // 获取站点设置
+  const { data: siteSetting } = useQuery({
+    queryKey: ['siteSetting'],
+    queryFn: () => getSiteSetting(),
+    staleTime: 5 * 60 * 1000, // 5 分钟缓存
+    enabled: !!currentUser, // 只在用户登录后获取
+  });
+  
+  // 判断字符串是否是UUID格式
+  const isUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  // 获取站点名称（如果未配置或为空字符串则使用默认值）
+  const siteName = (siteSetting?.settings?.site_name?.trim() || '') || 'RiverEdge SaaS';
+  
+  // 获取站点LOGO（支持UUID和URL格式）
+  const [siteLogoUrl, setSiteLogoUrl] = useState<string>('/img/logo.png');
+  const siteLogoValue = siteSetting?.settings?.site_logo?.trim() || '';
+  
+  // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
+  useEffect(() => {
+    const loadSiteLogo = async () => {
+      if (!siteLogoValue) {
+        setSiteLogoUrl('/img/logo.png');
+        return;
+      }
+      
+      // 如果是UUID格式，获取文件预览URL
+      if (isUUID(siteLogoValue)) {
+        try {
+          const previewInfo = await getFilePreview(siteLogoValue);
+          setSiteLogoUrl(previewInfo.preview_url);
+        } catch (error) {
+          console.error('获取站点LOGO预览URL失败:', error);
+          setSiteLogoUrl('/img/logo.png');
+        }
+      } else {
+        // 如果是URL格式，直接使用
+        setSiteLogoUrl(siteLogoValue);
+      }
+    };
+    
+    loadSiteLogo();
+  }, [siteLogoValue]);
+  
+  const siteLogo = siteLogoUrl;
+  
+  // 监听站点设置更新事件，刷新站点设置查询
+  useEffect(() => {
+    const handleSiteSettingUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['siteSetting'] });
+    };
+    
+    window.addEventListener('siteThemeUpdated', handleSiteSettingUpdate);
+    return () => {
+      window.removeEventListener('siteThemeUpdated', handleSiteSettingUpdate);
+    };
+  }, [queryClient]);
   
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
   // 开发环境下：不缓存，窗口聚焦时刷新，确保菜单配置修改后立即生效
@@ -3144,8 +3209,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         ` : ''}
       `}</style>
       <ProLayout
-        title="RiverEdge SaaS"
-        logo={layoutMode === 'mix-integrated' ? false : "/img/logo.png"} // 融合模式下禁用顶栏LOGO
+        title={siteName}
+        logo={layoutMode === 'mix-integrated' ? false : siteLogo} // 融合模式下禁用顶栏LOGO
         layout="mix" // 恢复到mix布局
         navTheme={isDarkMode ? "realDark" : "light"}
         className={layoutMode === 'mix-integrated' ? 'ant-pro-layout-mix-integrated' : ''}
@@ -3172,8 +3237,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {/* 自定义更大的LOGO */}
                 <img
-                  src="/img/logo.png"
-                  alt="RiverEdge SaaS"
+                  src={siteLogo}
+                  alt={siteName}
                   style={{
                     height: '48px', // 增大LOGO尺寸
                     width: 'auto',
@@ -3186,7 +3251,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   color: token.colorText,
                   whiteSpace: 'nowrap',
                 }}>
-                  RiverEdge SaaS
+                  {siteName}
                 </span>
               </div>
               {/* 为融合模式添加特殊样式，让菜单内容在头部下面开始 */}
