@@ -1,12 +1,12 @@
 /**
  * 站点设置页面
- * 
+ *
  * 用于系统管理员配置组织内的站点设置。
- * 支持站点基本信息、Logo、主题色、邀请注册开关等配置。
+ * 支持站点基本信息、Logo、邀请注册开关等配置。
  */
 
 import React, { useState, useEffect } from 'react';
-import { App, Card, Form, Input, Switch, Button, ColorPicker, Upload, message, Space, Divider, InputNumber, Select } from 'antd';
+import { App, Card, Form, Input, Switch, Button, Upload, message, Space, Divider } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { theme } from 'antd';
@@ -292,33 +292,19 @@ const SiteSettingsPage: React.FC = () => {
     try {
       setSaving(true);
       const values = await form.validateFields();
-      
-      // 构建主题配置对象（使用 Ant Design 原生配置格式）
-      const themeConfig = {
-        colorPrimary: values.theme_color || '#1890ff',
-        borderRadius: values.theme_borderRadius || 6,
-        fontSize: values.theme_fontSize || 14,
-        compact: values.theme_compact || false,
-      };
-      
+
       const settings: Record<string, any> = {
         site_name: values.site_name,
         site_logo: values.site_logo,
-        theme_config: themeConfig,
         enable_invitation: values.enable_invitation,
         enable_register: values.enable_register,
         copyright: values.copyright,
         description: values.description,
       };
-      
+
       await updateSiteSetting({ settings });
       messageApi.success('保存成功');
-      
-      // 触发主题更新事件，通知应用重新加载主题配置
-      window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
-        detail: { themeConfig }
-      }));
-      
+
       // 重新加载设置
       await loadSiteSetting();
     } catch (error: any) {
@@ -356,7 +342,6 @@ const SiteSettingsPage: React.FC = () => {
           form={form}
           layout="vertical"
           initialValues={{
-            theme_color: '#1890ff',
             enable_invitation: true,
             enable_register: true,
           }}
@@ -426,80 +411,6 @@ const SiteSettingsPage: React.FC = () => {
             </Form.Item>
           </Card>
 
-          <Card type="inner" title="主题设置" style={{ marginBottom: 16 }}>
-            <Form.Item
-              name="theme_color"
-              label="主题色（colorPrimary）"
-              tooltip="Ant Design 原生配置：主要品牌颜色"
-              getValueFromEvent={(color) => {
-                // 处理 ColorPicker 返回的颜色对象，转换为 hex 字符串
-                if (typeof color === 'string') {
-                  return color;
-                }
-                // 处理颜色对象
-                if (color && typeof color.toHexString === 'function') {
-                  try {
-                    return color.toHexString();
-                  } catch (e) {
-                    console.warn('Color toHexString failed:', e);
-                  }
-                }
-                // 处理包含 metaColor 的颜色对象
-                if (color && color.metaColor) {
-                  if (typeof color.metaColor.toHexString === 'function') {
-                    try {
-                      return color.metaColor.toHexString();
-                    } catch (e) {
-                      console.warn('Color metaColor toHexString failed:', e);
-                    }
-                  }
-                  // 如果 metaColor 有 r, g, b 属性，手动转换为 hex
-                  if (typeof color.metaColor.r === 'number' && typeof color.metaColor.g === 'number' && typeof color.metaColor.b === 'number') {
-                    const r = Math.round(color.metaColor.r).toString(16).padStart(2, '0');
-                    const g = Math.round(color.metaColor.g).toString(16).padStart(2, '0');
-                    const b = Math.round(color.metaColor.b).toString(16).padStart(2, '0');
-                    return `#${r}${g}${b}`;
-                  }
-                }
-                // 如果 color 有 r, g, b 属性，手动转换为 hex
-                if (color && typeof color.r === 'number' && typeof color.g === 'number' && typeof color.b === 'number') {
-                  const r = Math.round(color.r).toString(16).padStart(2, '0');
-                  const g = Math.round(color.g).toString(16).padStart(2, '0');
-                  const b = Math.round(color.b).toString(16).padStart(2, '0');
-                  return `#${r}${g}${b}`;
-                }
-                // 默认返回
-                return '#1890ff';
-              }}
-            >
-              <ColorPicker showText format="hex" />
-            </Form.Item>
-            
-            <Form.Item
-              name="theme_borderRadius"
-              label="圆角大小（borderRadius）"
-              tooltip="Ant Design 原生配置：组件圆角大小（单位：px）"
-            >
-              <InputNumber min={0} max={16} style={{ width: '100%' }} />
-            </Form.Item>
-            
-            <Form.Item
-              name="theme_fontSize"
-              label="字体大小（fontSize）"
-              tooltip="Ant Design 原生配置：基础字体大小（单位：px）"
-            >
-              <InputNumber min={12} max={20} style={{ width: '100%' }} />
-            </Form.Item>
-            
-            <Form.Item
-              name="theme_compact"
-              label="紧凑模式（compact）"
-              tooltip="Ant Design 原生配置：是否启用紧凑模式"
-              valuePropName="checked"
-            >
-              <Switch />
-            </Form.Item>
-          </Card>
 
           <Card type="inner" title="功能设置" style={{ marginBottom: 16 }}>
             <Form.Item
