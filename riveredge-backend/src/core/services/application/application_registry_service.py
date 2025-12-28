@@ -147,12 +147,49 @@ class ApplicationRegistryService:
 
             try:
                 # 构建模型模块路径
-                model_module_path = f"apps.{app_code}.models"
+                # 将应用代码中的连字符转换为下划线，以匹配Python模块命名规范
+                module_code = app_code.replace('-', '_')
+                model_module_path = f"apps.{module_code}.models"
 
                 # 检查模块是否存在
                 if cls._module_exists(model_module_path):
                     # 动态导入模型模块
                     model_module = importlib.import_module(model_module_path)
+
+                    # ⚠️ 关键修复：确保模型使用正确的数据库连接
+                    # 在 Tortoise ORM 中，每个模型的 _meta.db 属性指定其数据库连接
+                    # 问题在于动态导入的模型没有被 Tortoise 初始化，所以需要手动设置
+                    try:
+                        # 导入 Tortoise 的连接模块
+                        from tortoise import connections
+
+                        # 为模块中的所有 Tortoise 模型设置数据库连接
+                        for attr_name in dir(model_module):
+                            attr = getattr(model_module, attr_name)
+                            # 检查是否是 Tortoise 模型类
+                            if (hasattr(attr, '_meta') and
+                                hasattr(attr._meta, 'db_table') and
+                                hasattr(attr, '__bases__') and
+                                hasattr(attr, 'Meta')):
+                                # 强制设置数据库连接
+                                attr._meta.db = 'default'
+                                logger.info(f"✅ 设置模型 {attr.__name__} 的数据库连接为 'default'")
+
+                        # 尝试注册模型到 Tortoise（如果可能的话）
+                        # 注意：Tortoise.init 后可能无法动态添加模型，但我们可以尝试
+                        try:
+                            from tortoise import Tortoise
+                            # 如果 Tortoise 已经初始化，尝试重新注册模型
+                            if hasattr(Tortoise, '_apps') and 'models' in Tortoise._apps:
+                                # 强制将模型添加到已注册的应用中
+                                if model_module_path not in Tortoise._apps['models']['models']:
+                                    Tortoise._apps['models']['models'].append(model_module_path)
+                                    logger.info(f"✅ 将模型模块 {model_module_path} 添加到 Tortoise 配置")
+                        except Exception as e:
+                            logger.debug(f"无法动态注册模型到 Tortoise: {e}")
+
+                    except Exception as setup_error:
+                        logger.error(f"设置模型数据库连接失败: {setup_error}")
 
                     # 注册到已注册模型集合
                     cls._registered_models.add(model_module_path)
@@ -187,7 +224,9 @@ class ApplicationRegistryService:
 
             try:
                 # 构建路由模块路径
-                route_module_path = f"apps.{app_code}.api.router"
+                # 将应用代码中的连字符转换为下划线，以匹配Python模块命名规范
+                module_code = app_code.replace('-', '_')
+                route_module_path = f"apps.{module_code}.api.router"
 
                 # 检查模块是否存在
                 if cls._module_exists(route_module_path):

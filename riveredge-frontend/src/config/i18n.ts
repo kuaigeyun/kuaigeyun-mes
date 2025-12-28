@@ -70,12 +70,20 @@ i18n
 export async function loadUserLanguage(): Promise<void> {
   try {
     // 获取用户偏好设置
-    const preference = await getUserPreference();
+    const preference = await getUserPreference().catch((error) => {
+      // 如果是 401 错误，静默忽略（token 可能在其他地方被验证）
+      if (error?.response?.status === 401) {
+        console.warn('⚠️ 用户语言偏好设置加载失败（401），使用默认语言');
+        return null;
+      }
+      throw error; // 其他错误重新抛出
+    });
+
     const languageCode = preference?.preferences?.language || 'zh-CN';
-    
+
     // 切换到用户选择的语言
     await i18n.changeLanguage(languageCode);
-    
+
     // 从后端加载翻译内容
     try {
       const response = await getTranslations(languageCode);

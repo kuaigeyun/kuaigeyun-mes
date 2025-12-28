@@ -8,7 +8,7 @@
 import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 from datetime import datetime
 import asyncpg
 
@@ -59,9 +59,14 @@ class ApplicationService:
             # 插入新应用
             app_data = data.model_dump()
             app_data['tenant_id'] = tenant_id
-            app_data['uuid'] = str(UUID())  # 生成UUID
+            app_data['uuid'] = str(uuid4())  # 生成UUID
             app_data['created_at'] = datetime.utcnow()
             app_data['updated_at'] = datetime.utcnow()
+            
+            # 将 menu_config 字典转换为 JSON 字符串
+            if 'menu_config' in app_data and app_data['menu_config'] is not None:
+                if isinstance(app_data['menu_config'], dict):
+                    app_data['menu_config'] = json.dumps(app_data['menu_config'], ensure_ascii=False)
 
             columns = list(app_data.keys())
             placeholders = [f"${i+1}" for i in range(len(columns))]
@@ -134,13 +139,31 @@ class ApplicationService:
             code: 应用代码
             
         Returns:
-            Application: 应用对象，如果不存在返回 None
+            ApplicationDict: 应用字典对象，如果不存在返回 None
         """
-        return await Application.filter(
-            tenant_id=tenant_id,
-            code=code,
-            deleted_at__isnull=True
-        ).first()
+        conn = await get_db_connection()
+        try:
+            query = """
+                SELECT * FROM core_applications
+                WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                LIMIT 1
+            """
+            row = await conn.fetchrow(query, tenant_id, code)
+            
+            if not row:
+                return None
+            
+            app_dict = dict(row)
+            # 处理 JSON 字段
+            if 'menu_config' in app_dict and app_dict['menu_config']:
+                try:
+                    app_dict['menu_config'] = json.loads(app_dict['menu_config'])
+                except:
+                    app_dict['menu_config'] = None
+            
+            return app_dict
+        finally:
+            await conn.close()
     
     @staticmethod
     async def list_applications(
@@ -573,12 +596,13 @@ class ApplicationService:
         """
         # 插件现在放在 src/apps/ 目录下
         current_file = Path(__file__).resolve()  # 使用绝对路径
-        # riveredge-backend/src/core/services/application_service.py
+        # riveredge-backend/src/core/services/application/application_service.py
+        # -> riveredge-backend/src/core/services/application/
         # -> riveredge-backend/src/core/services/
         # -> riveredge-backend/src/core/
         # -> riveredge-backend/src/
         # -> riveredge-backend/src/apps
-        backend_src_dir = current_file.parent.parent.parent  # riveredge-backend/src
+        backend_src_dir = current_file.parent.parent.parent.parent  # riveredge-backend/src
         plugins_dir = backend_src_dir / "apps"
         return plugins_dir
     
@@ -656,7 +680,8 @@ class ApplicationService:
                 
                 # 构建应用数据
                 # 如果应用已存在，保持现有的 is_active 状态；否则默认启用
-                is_active = existing_app.is_active if existing_app else True
+                is_active = existing_app.get('is_active', True) if existing_app else True
+                is_installed = existing_app.get('is_installed', False) if existing_app else False
                 
                 # 系统内置应用（如 master-data）应该自动安装
                 # 这些应用在 src/apps 目录下，是系统的一部分
@@ -681,12 +706,8 @@ class ApplicationService:
                 if existing_app:
                     # 更新现有应用（保留 is_active 和 is_installed 状态）
                     # 但是，如果是系统内置应用且未安装，自动安装
-                    if should_auto_install and not existing_app.is_installed:
-                        existing_app.is_installed = True
-                        await existing_app.save()
-                    
-                    # 检查菜单配置是否变更
-                    menu_config_changed = existing_app.menu_config != app_data.menu_config
+                    if should_auto_install and not is_installed:
+                        is_installed = True
                     
                     update_data = ApplicationUpdate(
                         name=app_data.name,
@@ -701,19 +722,27 @@ class ApplicationService:
                     )
                     application = await ApplicationService.update_application(
                         tenant_id=tenant_id,
-                        uuid=str(existing_app.uuid),
+                        uuid=existing_app.get('uuid'),
                         data=update_data
                     )
                     
+                    # 如果是系统内置应用且未安装，更新安装状态
+                    if should_auto_install and not is_installed:
+                        await ApplicationService.install_application(
+                            tenant_id=tenant_id,
+                            uuid=existing_app.get('uuid')
+                        )
+                        application['is_installed'] = True
+                    
                     # 如果应用已安装且有菜单配置，确保菜单已同步
                     # 注意：即使菜单配置没有变化，也要同步，因为可能之前同步失败或菜单被删除
-                    if application.menu_config and application.is_installed:
+                    if application.get('menu_config') and application.get('is_installed'):
                         from core.services.system.menu_service import MenuService
                         await MenuService.sync_menus_from_application_config(
                             tenant_id=tenant_id,
-                            application_uuid=str(application.uuid),
-                            menu_config=application.menu_config,
-                            is_active=application.is_active
+                            application_uuid=application.get('uuid'),
+                            menu_config=application.get('menu_config'),
+                            is_active=application.get('is_active', True)
                         )
                 else:
                     # 创建新应用
@@ -724,17 +753,20 @@ class ApplicationService:
                     
                     # 如果是系统内置应用，自动安装
                     if should_auto_install:
-                        application.is_installed = True
-                        await application.save()
+                        await ApplicationService.install_application(
+                            tenant_id=tenant_id,
+                            uuid=application.get('uuid')
+                        )
+                        application['is_installed'] = True
                         
                         # 自动同步菜单配置
-                        if application.menu_config:
+                        if application.get('menu_config'):
                             from core.services.system.menu_service import MenuService
                             await MenuService.sync_menus_from_application_config(
                                 tenant_id=tenant_id,
-                                application_uuid=str(application.uuid),
-                                menu_config=application.menu_config,
-                                is_active=application.is_active
+                                application_uuid=application.get('uuid'),
+                                menu_config=application.get('menu_config'),
+                                is_active=application.get('is_active', True)
                             )
                 
                 registered_apps.append(application)
@@ -757,19 +789,24 @@ class ApplicationService:
         # 转换为字典列表，与其他方法保持一致
         result = []
         for app in registered_apps:
-            result.append({
-                'id': app.id,
-                'uuid': str(app.uuid),
-                'tenant_id': app.tenant_id,
-                'name': app.name,
-                'code': app.code,
-                'description': app.description,
-                'icon': app.icon,
-                'version': app.version,
-                'route_path': app.route_path,
-                'entry_point': app.entry_point,
-                'menu_config': app.menu_config,
-                'permission_code': app.permission_code,
+            # app 已经是字典，直接使用
+            if isinstance(app, dict):
+                result.append(app)
+            else:
+                # 如果是对象，转换为字典
+                result.append({
+                    'id': app.id,
+                    'uuid': str(app.uuid),
+                    'tenant_id': app.tenant_id,
+                    'name': app.name,
+                    'code': app.code,
+                    'description': app.description,
+                    'icon': app.icon,
+                    'version': app.version,
+                    'route_path': app.route_path,
+                    'entry_point': app.entry_point,
+                    'menu_config': app.menu_config,
+                    'permission_code': app.permission_code,
                 'is_system': app.is_system,
                 'is_active': app.is_active,
                 'is_installed': app.is_installed,

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { App, Card, Form, Input, Switch, Button, Upload, message, Space, Divider } from 'antd';
+import { App, Card, Form, Input, Switch, Button, Upload, message, Space, Divider, Select } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { theme } from 'antd';
@@ -296,6 +296,13 @@ const SiteSettingsPage: React.FC = () => {
       const settings: Record<string, any> = {
         site_name: values.site_name,
         site_logo: values.site_logo,
+        organization_name: values.organization_name,
+        organization_address: values.organization_address,
+        contact_info: values.contact_info,
+        default_currency: values.default_currency,
+        date_format: values.date_format,
+        default_language: values.default_language,
+        timezone: values.timezone,
         enable_invitation: values.enable_invitation,
         enable_register: values.enable_register,
         copyright: values.copyright,
@@ -342,6 +349,10 @@ const SiteSettingsPage: React.FC = () => {
           form={form}
           layout="vertical"
           initialValues={{
+            default_currency: 'CNY',
+            date_format: 'YYYY-MM-DD',
+            default_language: 'zh-CN',
+            timezone: 'Asia/Shanghai',
             enable_invitation: true,
             enable_register: true,
           }}
@@ -400,6 +411,79 @@ const SiteSettingsPage: React.FC = () => {
               </Space>
             </Form.Item>
             
+            <Form.Item
+              name="organization_name"
+              label="组织名称"
+            >
+              <Input placeholder="请输入组织名称" />
+            </Form.Item>
+
+            <Form.Item
+              name="organization_address"
+              label="组织地址"
+            >
+              <Input placeholder="请输入组织地址" />
+            </Form.Item>
+
+            <Form.Item
+              name="contact_info"
+              label="联系方式"
+            >
+              <Input placeholder="请输入联系方式" />
+            </Form.Item>
+
+            <Form.Item
+              name="default_currency"
+              label="默认货币"
+            >
+              <Select placeholder="请选择默认货币">
+                <Select.Option value="CNY">人民币 (CNY)</Select.Option>
+                <Select.Option value="USD">美元 (USD)</Select.Option>
+                <Select.Option value="EUR">欧元 (EUR)</Select.Option>
+                <Select.Option value="JPY">日元 (JPY)</Select.Option>
+                <Select.Option value="GBP">英镑 (GBP)</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="date_format"
+              label="日期格式"
+            >
+              <Select placeholder="请选择日期格式">
+                <Select.Option value="YYYY-MM-DD">YYYY-MM-DD</Select.Option>
+                <Select.Option value="DD/MM/YYYY">DD/MM/YYYY</Select.Option>
+                <Select.Option value="MM/DD/YYYY">MM/DD/YYYY</Select.Option>
+                <Select.Option value="YYYY年MM月DD日">YYYY年MM月DD日</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="default_language"
+              label="默认语言"
+            >
+              <Select placeholder="请选择默认语言">
+                <Select.Option value="zh-CN">中文 (简体)</Select.Option>
+                <Select.Option value="zh-TW">中文 (繁体)</Select.Option>
+                <Select.Option value="en-US">English (US)</Select.Option>
+                <Select.Option value="ja-JP">日本語</Select.Option>
+                <Select.Option value="ko-KR">한국어</Select.Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              name="timezone"
+              label="时区设置"
+            >
+              <Select placeholder="请选择时区">
+                <Select.Option value="Asia/Shanghai">东八区 (UTC+8)</Select.Option>
+                <Select.Option value="Asia/Tokyo">东京 (UTC+9)</Select.Option>
+                <Select.Option value="Asia/Seoul">首尔 (UTC+9)</Select.Option>
+                <Select.Option value="America/New_York">纽约 (UTC-5)</Select.Option>
+                <Select.Option value="Europe/London">伦敦 (UTC+0)</Select.Option>
+                <Select.Option value="Europe/Paris">巴黎 (UTC+1)</Select.Option>
+              </Select>
+            </Form.Item>
+
             <Form.Item
               name="description"
               label="站点描述"
