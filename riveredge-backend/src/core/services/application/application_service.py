@@ -263,24 +263,32 @@ class ApplicationService:
 
             update_data = data.model_dump(exclude_unset=True)
 
-            # 处理菜单配置的JSON序列化
-            if 'menu_config' in update_data and update_data['menu_config'] is not None:
-                if isinstance(update_data['menu_config'], dict):
-                    update_data['menu_config'] = json.dumps(update_data['menu_config'], ensure_ascii=False)
-
             # 构建更新查询
             if update_data:
-                columns = list(update_data.keys())
-                placeholders = [f"${i+1}" for i in range(len(columns))]
-                values = list(update_data.values())
+                set_clauses = []
+                params = [tenant_id, uuid]
+                param_index = 3
+
+                for key, value in update_data.items():
+                    if key == 'menu_config' and value is not None:
+                        # 特殊处理menu_config字段，将JSON对象转换为jsonb
+                        if isinstance(value, dict):
+                            set_clauses.append(f"{key} = ${param_index}::jsonb")
+                            params.append(json.dumps(value, ensure_ascii=False))
+                        else:
+                            set_clauses.append(f"{key} = ${param_index}")
+                            params.append(value)
+                    else:
+                        set_clauses.append(f"{key} = ${param_index}")
+                        params.append(value)
+                    param_index += 1
 
                 query = f"""
                     UPDATE core_applications
-                    SET {', '.join(f'{col} = {ph}' for col, ph in zip(columns, placeholders))}, updated_at = NOW()
+                    SET {', '.join(set_clauses)}, updated_at = NOW()
                     WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
                 """
 
-                params = [tenant_id, uuid] + values
                 result = await conn.execute(query, *params)
 
                 if result != "UPDATE 1":
