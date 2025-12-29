@@ -164,17 +164,23 @@ async def list_suppliers(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     category: Optional[str] = Query(None, description="供应商分类（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（供应商编码或名称）"),
+    code: Optional[str] = Query(None, description="供应商编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="供应商名称（模糊匹配）")
 ):
     """
     获取供应商列表
-    
+
     - **skip**: 跳过数量（默认：0）
     - **limit**: 限制数量（默认：100，最大：1000）
     - **category**: 供应商分类（可选，用于过滤）
     - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（供应商编码或名称）
+    - **code**: 供应商编码（精确匹配）
+    - **name**: 供应商名称（模糊匹配）
     """
-    return await SupplyChainService.list_suppliers(tenant_id, skip, limit, category, is_active)
+    return await SupplyChainService.list_suppliers(tenant_id, skip, limit, category, is_active, keyword, code, name)
 
 
 @router.get("/suppliers/{supplier_uuid}", response_model=SupplierResponse, summary="获取供应商详情")
