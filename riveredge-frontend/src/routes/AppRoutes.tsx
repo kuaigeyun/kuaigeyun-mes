@@ -168,16 +168,7 @@ const AppRoutes: React.FC = () => {
 
                             // 尝试直接渲染组件，看是否能触发错误
                             try {
-                              const componentElement = React.createElement(routeConfig.component);
-                              return (
-                                <>
-                                  <div style={{ padding: '10px', background: '#f6ffed', border: '1px solid #b7eb8f', marginBottom: '10px' }}>
-                                    <strong>🎯 应用组件开始渲染</strong><br />
-                                    <small>应用: {app.name} | 组件: {routeConfig.component.name || 'Unknown'} | 时间: {new Date().toLocaleTimeString()}</small>
-                                  </div>
-                                  {componentElement}
-                                </>
-                              );
+                              return React.createElement(routeConfig.component);
                             } catch (renderError) {
                               console.error(`❌ 组件渲染失败:`, renderError);
                               throw renderError;
