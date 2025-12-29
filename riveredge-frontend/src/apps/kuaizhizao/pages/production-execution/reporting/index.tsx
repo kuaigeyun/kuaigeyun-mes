@@ -314,6 +314,7 @@ const ReportingPage: React.FC = () => {
         ]}
       />
     </div>
+    </div>
 
     {/* 手动报工 Modal */}
     <Modal
