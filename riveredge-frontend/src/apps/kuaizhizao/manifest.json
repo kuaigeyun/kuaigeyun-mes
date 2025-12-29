@@ -52,8 +52,7 @@
                 "title": "仓储管理",
                 "icon": "warehouse",
                 "sort_order": 3,
-                "children": [
-                    {
+                "children": [{
                         "title": "库存查询",
                         "path": "/apps/kuaizhizao/warehouse-management/inventory",
                         "permission": "kuaizhizao:inventory:view",

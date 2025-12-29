@@ -15,6 +15,8 @@ from core.schemas.application import (
 )
 from core.services.application.application_service import ApplicationService
 from core.services.application.application_registry_service import ApplicationRegistryService
+import json
+from pathlib import Path
 from core.api.deps.deps import get_current_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
@@ -458,4 +460,92 @@ async def scan_and_register_plugins(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"扫描插件失败: {str(e)}"
+        )
+
+
+@router.post("/sync-manifest/{app_code}")
+async def sync_application_manifest(
+    app_code: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    同步应用清单配置
+
+    从前端应用的manifest.json文件同步菜单配置到数据库。
+    解决应用菜单更新后需要重新安装的问题。
+
+    Args:
+        app_code: 应用代码
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        dict: 同步结果
+    """
+    try:
+        # 构建manifest.json文件路径
+        manifest_path = Path(__file__).parent.parent.parent.parent.parent / "riveredge-frontend" / "src" / "apps" / app_code / "manifest.json"
+
+        if not manifest_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"manifest.json文件不存在: {manifest_path}"
+            )
+
+        # 读取manifest.json
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            manifest = json.load(f)
+
+        # 获取应用信息
+        app = await ApplicationService.get_application_by_code(tenant_id, app_code)
+        if not app:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"应用不存在: {app_code}"
+            )
+
+        # 更新应用配置
+        menu_config = manifest.get('menu_config')
+        version = manifest.get('version', app.get('version', '1.0.0'))
+
+        if not menu_config:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="manifest.json缺少menu_config配置"
+            )
+
+        # 更新数据库中的应用配置
+        update_data = ApplicationUpdate(
+            menu_config=menu_config,
+            version=version
+        )
+
+        updated_app = await ApplicationService.update_application(
+            tenant_id=tenant_id,
+            uuid=str(app['uuid']),
+            data=update_data
+        )
+
+        logger.info(f"✅ 应用清单同步成功: {app_code} v{version}")
+
+        return {
+            "success": True,
+            "message": f"应用清单同步成功: {app_code} v{version}",
+            "data": {
+                "app_code": app_code,
+                "version": version,
+                "menu_count": len(menu_config.get('children', [])),
+                "updated_at": updated_app.get('updated_at')
+            }
+        }
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"manifest.json格式错误: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"同步应用清单失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步失败: {str(e)}"
         )
