@@ -22,7 +22,7 @@ class LoginRequest(BaseModel):
     """
 
     username: str = Field(..., min_length=1, max_length=255, description="用户名或手机号（支持用户名或手机号登录）")
-    password: str = Field(..., min_length=1, max_length=100, description="密码")
+    password: str = Field(..., min_length=1, max_length=72, description="密码")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则直接设置组织上下文）")
 
 
@@ -88,7 +88,7 @@ class UserRegisterRequest(BaseModel):
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
     email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，符合中国用户使用习惯）")
-    password: str = Field(..., min_length=8, max_length=100, description="密码（最少 8 字符）")
+    password: str = Field(..., min_length=8, max_length=72, description="密码（8-72个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
 
@@ -112,7 +112,7 @@ class PersonalRegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
     phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
     email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，用于邮件通知）")
-    password: str = Field(..., min_length=8, max_length=100, description="密码（最少 8 字符）")
+    password: str = Field(..., min_length=8, max_length=72, description="密码（8-72个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则在指定组织中创建用户，否则在默认组织中创建）")
 
@@ -204,7 +204,7 @@ class TenantJoinRequest(BaseModel):
     tenant_id: int = Field(..., description="组织 ID")
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
     email: Optional[EmailStr] = Field(None, description="邮箱（可选）")
-    password: str = Field(..., min_length=8, max_length=100, description="密码（最少 8 字符）")
+    password: str = Field(..., min_length=8, max_length=72, description="密码（8-72个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="全名（可选）")
 
 
