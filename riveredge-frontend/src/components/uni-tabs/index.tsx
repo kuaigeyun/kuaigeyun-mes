@@ -370,6 +370,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return;
     }
     
+    // 清理可能存在的应用页面标签，避免应用页面成为默认首页
+    try {
+      const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
+      if (savedActiveKey && savedActiveKey.startsWith('/apps/')) {
+        console.warn('清理旧的应用页面标签:', savedActiveKey);
+        localStorage.removeItem('riveredge_saved_active_key');
+      }
+    } catch (error) {
+      // 清理失败，静默处理
+    }
+
     // 启用持久化时，尝试从 localStorage 恢复标签
     try {
       const savedTabs = localStorage.getItem('riveredge_saved_tabs');
@@ -472,13 +483,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
               if (savedActiveKey && tabs.some((tab) => tab.key === savedActiveKey)) {
                 // 检查保存的活动标签是否与当前页面级别匹配
-                const isSavedInfraTab = savedActiveKey.startsWith('/infra');
-                if ((isInfraPage && isSavedInfraTab) || (!isInfraPage && !isSavedInfraTab)) {
-                  setActiveKey(savedActiveKey);
-                  setTimeout(() => {
-                    navigate(savedActiveKey);
-                  }, 0);
-                  return;
+                // 排除应用页面，避免应用页面成为默认活动标签
+                if (savedActiveKey.startsWith('/apps/')) {
+                  // 如果保存的是应用页面标签，跳过恢复
+                  console.warn('跳过恢复应用页面标签:', savedActiveKey);
+                } else {
+                  const isSavedInfraTab = savedActiveKey.startsWith('/infra');
+                  if ((isInfraPage && isSavedInfraTab) || (!isInfraPage && !isSavedInfraTab)) {
+                    setActiveKey(savedActiveKey);
+                    setTimeout(() => {
+                      navigate(savedActiveKey);
+                    }, 0);
+                    return;
+                  }
                 }
               }
 
@@ -518,8 +535,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     try {
       // 保存标签列表
       localStorage.setItem('riveredge_saved_tabs', JSON.stringify(tabs));
-      // 保存当前激活的标签
-      if (activeKey) {
+      // 保存当前激活的标签（排除应用页面，避免应用页面成为默认首页）
+      if (activeKey && !activeKey.startsWith('/apps/')) {
         localStorage.setItem('riveredge_saved_active_key', activeKey);
       }
     } catch (error) {
