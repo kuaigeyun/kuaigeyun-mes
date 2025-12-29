@@ -65,8 +65,8 @@ class UserService:
         ).first()
         
         if existing_user:
-            raise ValidationError(f"用户名 {data.username} 已存在")
-        
+            raise ValidationError(f"用户名 '{data.username}' 已被使用，请选择其他用户名")
+
         # 验证部门（如果提供）
         department_id = None
         if data.department_uuid:
@@ -75,12 +75,12 @@ class UserService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).first()
-            
+
             if not department:
-                raise ValidationError("部门不存在或不属于当前组织")
-            
+                raise ValidationError("所选部门不存在或不属于当前组织，请重新选择部门")
+
             department_id = department.id
-        
+
         # 验证职位（如果提供）
         position_id = None
         if data.position_uuid:
@@ -89,9 +89,9 @@ class UserService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).first()
-            
+
             if not position:
-                raise ValidationError("职位不存在或不属于当前组织")
+                raise ValidationError("所选职位不存在或不属于当前组织，请重新选择职位")
             
             position_id = position.id
         
@@ -105,7 +105,7 @@ class UserService:
             ).all()
             
             if len(roles) != len(data.role_uuids):
-                raise ValidationError("部分角色不存在或不属于当前组织")
+                raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
             
             role_ids = [role.id for role in roles]
         
@@ -398,8 +398,8 @@ class UserService:
                 ).first()
                 
                 if not department:
-                    raise ValidationError("部门不存在或不属于当前组织")
-                
+                    raise ValidationError("所选部门不存在或不属于当前组织，请重新选择部门")
+
                 user.department_id = department.id
             else:
                 user.department_id = None
@@ -414,8 +414,8 @@ class UserService:
                 ).first()
                 
                 if not position:
-                    raise ValidationError("职位不存在或不属于当前组织")
-                
+                    raise ValidationError("所选职位不存在或不属于当前组织，请重新选择职位")
+
                 user.position_id = position.id
             else:
                 user.position_id = None
@@ -442,8 +442,8 @@ class UserService:
                 ).all()
                 
                 if len(roles) != len(data.role_uuids):
-                    raise ValidationError("部分角色不存在或不属于当前组织")
-                
+                    raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
+
                 await user.roles.add(*roles)
         
         # 重新加载关联数据

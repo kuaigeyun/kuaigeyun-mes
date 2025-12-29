@@ -356,10 +356,57 @@ const UserListPage: React.FC = () => {
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      // 解析具体的错误信息，提供更友好的提示
+      const errorMessage = parseErrorMessage(error);
+      messageApi.error(errorMessage);
     } finally {
       setFormLoading(false);
     }
+  };
+
+  /**
+   * 解析错误信息，提供具体的字段级提示
+   */
+  const parseErrorMessage = (error: any): string => {
+    const message = error.message || error.detail || '操作失败';
+
+    // 解析用户名相关错误
+    if (message.includes('用户名') && message.includes('已存在')) {
+      return '用户名已被使用，请更换其他用户名';
+    }
+
+    // 解析部门相关错误
+    if (message.includes('部门不存在') || message.includes('部门')) {
+      return '选择的部门不存在或不属于当前组织，请重新选择';
+    }
+
+    // 解析职位相关错误
+    if (message.includes('职位不存在') || message.includes('职位')) {
+      return '选择的职位不存在或不属于当前组织，请重新选择';
+    }
+
+    // 解析角色相关错误
+    if (message.includes('角色') && (message.includes('不存在') || message.includes('无效'))) {
+      return '选择的角色不存在或无效，请重新选择';
+    }
+
+    // 解析手机号相关错误
+    if (message.includes('手机号') || message.includes('phone')) {
+      return '手机号格式不正确或已被使用，请检查后重新输入';
+    }
+
+    // 解析邮箱相关错误
+    if (message.includes('邮箱') || message.includes('email')) {
+      return '邮箱格式不正确或已被使用，请检查后重新输入';
+    }
+
+    // 解析权限相关错误
+    if (message.includes('权限') || message.includes('permission')) {
+      return '您没有权限执行此操作，请联系管理员';
+    }
+
+    // 其他情况返回原始错误信息
+    return message;
   };
 
   /**
