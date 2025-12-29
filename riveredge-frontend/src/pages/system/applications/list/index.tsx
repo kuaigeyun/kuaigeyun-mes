@@ -283,6 +283,57 @@ const ApplicationListPage: React.FC = () => {
         onClick: () => handleView(application),
       },
       {
+        key: 'sync-manifest',
+        label: '同步清单配置',
+        icon: <AppstoreOutlined />,
+        onClick: async () => {
+          try {
+            Modal.confirm({
+              title: '同步清单配置',
+              content: `确定要从manifest.json同步应用配置吗？这将更新菜单和其他配置信息。`,
+              onOk: async () => {
+                messageApi.loading({ content: '正在同步配置...', key: 'sync-manifest' });
+                try {
+                  const response = await fetch(`/api/v1/applications/sync-manifest/${application.code}`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                  });
+
+                  if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '同步失败');
+                  }
+
+                  const result = await response.json();
+                  messageApi.success({
+                    content: result.message || '配置同步成功',
+                    key: 'sync-manifest'
+                  });
+
+                  // 刷新应用列表
+                  loadApplications();
+
+                  // 触发菜单刷新事件
+                  window.dispatchEvent(new CustomEvent('application-status-changed', {
+                    detail: { application, isActive: application.is_active }
+                  }));
+
+                } catch (error: any) {
+                  messageApi.error({
+                    content: error.message || '同步失败',
+                    key: 'sync-manifest'
+                  });
+                }
+              },
+            });
+          } catch (error: any) {
+            messageApi.error(error.message || '操作失败');
+          }
+        },
+      },
+      {
         type: 'divider' as const,
       },
       !application.is_installed
