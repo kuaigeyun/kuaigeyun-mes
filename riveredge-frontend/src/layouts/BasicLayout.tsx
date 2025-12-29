@@ -965,6 +965,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           'SettingOutlined': ManufacturingIcons.mdSettings,
           'BellOutlined': ManufacturingIcons.bell,
           'LoginOutlined': ManufacturingIcons.login,
+          // 快格轻制造应用图标映射
+          'planning': ManufacturingIcons.calendar, // 计划管理使用日历图标
+          'shopping-cart': ManufacturingIcons.shoppingCart, // 销售管理使用购物车图标
         };
         const IconComponent = lucideIconMap[menu.icon];
         if (IconComponent) {
