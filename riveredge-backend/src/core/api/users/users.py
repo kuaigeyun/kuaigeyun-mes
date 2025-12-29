@@ -102,8 +102,8 @@ async def create_user(
             department_uuid=data.department_uuid,
             position_uuid=data.position_uuid,
             role_uuids=data.role_uuids,
-            is_active=data.is_active,
-            is_tenant_admin=data.is_tenant_admin,
+            is_active=data.is_active if data.is_active is not None else True,
+            is_tenant_admin=data.is_tenant_admin if data.is_tenant_admin is not None else False,
         )
 
         # ⚠️ 第三阶段改进：使用依赖注入的服务
