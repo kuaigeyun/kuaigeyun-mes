@@ -1,0 +1,263 @@
+{
+    "name": "快格轻制造",
+    "code": "kuaizhizao",
+    "version": "1.0.4",
+    "description": "轻量级MES系统，专注生产执行核心流程",
+    "icon": "production",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaizhizao/index.tsx",
+    "route_path": "/apps/kuaizhizao",
+    "sort_order": 980,
+    "menu_config": {
+        "title": "快格轻制造",
+        "icon": "production",
+        "path": "/apps/kuaizhizao",
+        "children": [{
+                "title": "计划管理",
+                "icon": "planning",
+                "sort_order": 1,
+                "children": [{
+                        "title": "需求管理",
+                        "path": "/apps/kuaizhizao/plan-management/demand-management",
+                        "permission": "kuaizhizao:demand:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "计划排程",
+                        "path": "/apps/kuaizhizao/plan-management/scheduling",
+                        "permission": "kuaizhizao:scheduling:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "销售管理",
+                "icon": "shopping-cart",
+                "sort_order": 1.5,
+                "children": [{
+                    "title": "销售订单",
+                    "path": "/apps/kuaizhizao/sales-management/sales-orders",
+                    "permission": "kuaizhizao:sales-order:view",
+                    "sort_order": 1
+                }]
+            },
+            {
+                "title": "质量管理",
+                "icon": "check-circle",
+                "sort_order": 2.5,
+                "children": [{
+                        "title": "来料检验",
+                        "path": "/apps/kuaizhizao/quality-management/incoming-inspection",
+                        "permission": "kuaizhizao:incoming-inspection:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "过程检验",
+                        "path": "/apps/kuaizhizao/quality-management/process-inspection",
+                        "permission": "kuaizhizao:process-inspection:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "成品检验",
+                        "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
+                        "permission": "kuaizhizao:finished-goods-inspection:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "财务管理",
+                "icon": "dollar",
+                "sort_order": 3,
+                "children": [{
+                        "title": "应付管理",
+                        "path": "/apps/kuaizhizao/finance-management/accounts-payable",
+                        "permission": "kuaizhizao:accounts-payable:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "应收管理",
+                        "path": "/apps/kuaizhizao/finance-management/accounts-receivable",
+                        "permission": "kuaizhizao:accounts-receivable:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "报表分析",
+                "icon": "bar-chart",
+                "sort_order": 4,
+                "children": [{
+                        "title": "库存报表",
+                        "path": "/apps/kuaizhizao/reports/inventory-report",
+                        "permission": "kuaizhizao:inventory-report:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "生产报表",
+                        "path": "/apps/kuaizhizao/reports/production-report",
+                        "permission": "kuaizhizao:production-report:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "质量报表",
+                        "path": "/apps/kuaizhizao/reports/quality-report",
+                        "permission": "kuaizhizao:quality-report:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "通用功能",
+                "icon": "tool",
+                "sort_order": 5,
+                "children": [{
+                        "title": "数据导入导出",
+                        "path": "/apps/kuaizhizao/common/data-import-export",
+                        "permission": "kuaizhizao:data-import-export:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "系统设置",
+                        "path": "/apps/kuaizhizao/common/system-settings",
+                        "permission": "kuaizhizao:system-settings:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "生产执行",
+                "icon": "factory",
+                "sort_order": 2,
+                "children": [{
+                        "title": "工单管理",
+                        "path": "/apps/kuaizhizao/production-execution/work-orders",
+                        "permission": "kuaizhizao:work-order:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "报工管理",
+                        "path": "/apps/kuaizhizao/production-execution/reporting",
+                        "permission": "kuaizhizao:reporting:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "仓储管理",
+                "icon": "warehouse",
+                "sort_order": 3,
+                "children": [{
+                        "title": "库存查询",
+                        "path": "/apps/kuaizhizao/warehouse-management/inventory",
+                        "permission": "kuaizhizao:inventory:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "入库管理",
+                        "path": "/apps/kuaizhizao/warehouse-management/inbound",
+                        "permission": "kuaizhizao:inbound:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "产品入库",
+                        "path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
+                        "permission": "kuaizhizao:finished-goods-inventory:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "销售出库",
+                        "path": "/apps/kuaizhizao/warehouse-management/sales-outbound",
+                        "permission": "kuaizhizao:sales-outbound:view",
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "出库管理",
+                        "path": "/apps/kuaizhizao/warehouse-management/outbound",
+                        "permission": "kuaizhizao:outbound:view",
+                        "sort_order": 5
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaizhizao:demand:view",
+        "kuaizhizao:demand:create",
+        "kuaizhizao:demand:update",
+        "kuaizhizao:demand:delete",
+        "kuaizhizao:scheduling:view",
+        "kuaizhizao:scheduling:create",
+        "kuaizhizao:scheduling:update",
+        "kuaizhizao:scheduling:delete",
+        "kuaizhizao:sales-order:view",
+        "kuaizhizao:sales-order:create",
+        "kuaizhizao:sales-order:update",
+        "kuaizhizao:sales-order:delete",
+        "kuaizhizao:incoming-inspection:view",
+        "kuaizhizao:incoming-inspection:create",
+        "kuaizhizao:incoming-inspection:update",
+        "kuaizhizao:incoming-inspection:delete",
+        "kuaizhizao:process-inspection:view",
+        "kuaizhizao:process-inspection:create",
+        "kuaizhizao:process-inspection:update",
+        "kuaizhizao:process-inspection:delete",
+        "kuaizhizao:finished-goods-inspection:view",
+        "kuaizhizao:finished-goods-inspection:create",
+        "kuaizhizao:finished-goods-inspection:update",
+        "kuaizhizao:finished-goods-inspection:delete",
+        "kuaizhizao:accounts-payable:view",
+        "kuaizhizao:accounts-payable:create",
+        "kuaizhizao:accounts-payable:update",
+        "kuaizhizao:accounts-payable:delete",
+        "kuaizhizao:accounts-receivable:view",
+        "kuaizhizao:accounts-receivable:create",
+        "kuaizhizao:accounts-receivable:update",
+        "kuaizhizao:accounts-receivable:delete",
+        "kuaizhizao:inventory-report:view",
+        "kuaizhizao:inventory-report:create",
+        "kuaizhizao:inventory-report:update",
+        "kuaizhizao:inventory-report:delete",
+        "kuaizhizao:production-report:view",
+        "kuaizhizao:production-report:create",
+        "kuaizhizao:production-report:update",
+        "kuaizhizao:production-report:delete",
+        "kuaizhizao:quality-report:view",
+        "kuaizhizao:quality-report:create",
+        "kuaizhizao:quality-report:update",
+        "kuaizhizao:quality-report:delete",
+        "kuaizhizao:data-import-export:view",
+        "kuaizhizao:data-import-export:create",
+        "kuaizhizao:data-import-export:update",
+        "kuaizhizao:data-import-export:delete",
+        "kuaizhizao:system-settings:view",
+        "kuaizhizao:system-settings:create",
+        "kuaizhizao:system-settings:update",
+        "kuaizhizao:system-settings:delete",
+        "kuaizhizao:work-order:view",
+        "kuaizhizao:work-order:create",
+        "kuaizhizao:work-order:update",
+        "kuaizhizao:work-order:delete",
+        "kuaizhizao:reporting:view",
+        "kuaizhizao:reporting:create",
+        "kuaizhizao:reporting:update",
+        "kuaizhizao:reporting:delete",
+        "kuaizhizao:inventory:view",
+        "kuaizhizao:inbound:view",
+        "kuaizhizao:inbound:create",
+        "kuaizhizao:inbound:update",
+        "kuaizhizao:finished-goods-inventory:view",
+        "kuaizhizao:finished-goods-inventory:create",
+        "kuaizhizao:finished-goods-inventory:update",
+        "kuaizhizao:sales-outbound:view",
+        "kuaizhizao:sales-outbound:create",
+        "kuaizhizao:sales-outbound:update",
+        "kuaizhizao:outbound:view",
+        "kuaizhizao:outbound:create",
+        "kuaizhizao:outbound:update"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}
