@@ -150,7 +150,7 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
     const loadOperations = async () => {
       try {
         setLoading(true);
-        const result = await operationApi.list({ isActive: true, limit: 1000 });
+        const result = await operationApi.list({ is_active: true, limit: 1000 });
         setAllOperations(result);
       } catch (error: any) {
         message.error(error.message || '加载工序列表失败');
@@ -343,38 +343,55 @@ const ProcessRoutesPage: React.FC = () => {
         code: detail.code,
         name: detail.name,
         description: detail.description,
-        isActive: detail.isActive,
+        isActive: detail.is_active,
       });
       
       // 加载工序序列
-      if (detail.operationSequence) {
+      if (detail.operation_sequence) {
         try {
-          // operationSequence 可能是数组或对象，需要根据实际数据结构解析
+          // operation_sequence 可能是数组或对象，需要根据实际数据结构解析
           let sequenceData: any[] = [];
-          
-          if (Array.isArray(detail.operationSequence)) {
-            sequenceData = detail.operationSequence;
-          } else if (typeof detail.operationSequence === 'object') {
+
+          if (Array.isArray(detail.operation_sequence)) {
+            sequenceData = detail.operation_sequence;
+          } else if (typeof detail.operation_sequence === 'object') {
             // 如果是对象，尝试转换为数组
-            if (detail.operationSequence.operations) {
-              sequenceData = detail.operationSequence.operations;
-            } else if (detail.operationSequence.sequence) {
-              sequenceData = detail.operationSequence.sequence;
+            if (detail.operation_sequence.operations) {
+              sequenceData = detail.operation_sequence.operations;
+            } else if (detail.operation_sequence.sequence) {
+              sequenceData = detail.operation_sequence.sequence;
             } else {
-              // 尝试将对象的值转换为数组
-              sequenceData = Object.values(detail.operationSequence);
+              // 尝试直接使用对象的值
+              const entries = Object.entries(detail.operation_sequence);
+
+              for (const [key, value] of entries) {
+                if (Array.isArray(value)) {
+                  sequenceData = value;
+                  break;
+                }
+              }
+
+              // 如果还没找到，尝试将所有值合并
+              if (sequenceData.length === 0) {
+                const allValues = Object.values(detail.operation_sequence).filter(v => v != null);
+                if (allValues.length > 0 && Array.isArray(allValues[0])) {
+                  sequenceData = allValues[0] as any[];
+                } else if (allValues.length > 0) {
+                  sequenceData = allValues as any[];
+                }
+              }
             }
           }
           
-          // 如果序列数据包含工序UUID，需要获取工序详情
+          // 如果序列数据包含工序信息，需要获取工序详情
           if (sequenceData.length > 0) {
             const operations: OperationItem[] = [];
-            
+
             // 如果序列数据是UUID数组
             if (typeof sequenceData[0] === 'string') {
               // 获取所有工序
               const allOperations = await operationApi.list({ limit: 1000 });
-              
+
               // 根据UUID匹配工序
               for (const uuid of sequenceData) {
                 const operation = allOperations.find((op) => op.uuid === uuid);
@@ -388,21 +405,22 @@ const ProcessRoutesPage: React.FC = () => {
                 }
               }
             } else {
-              // 如果序列数据已经是工序对象
+              // 如果序列数据已经是工序对象，直接使用
               for (const item of sequenceData) {
-                if (item.uuid) {
+                if (item && item.uuid) {
                   operations.push({
                     uuid: item.uuid,
                     code: item.code || '',
                     name: item.name || '',
-                    description: item.description,
+                    description: item.description || '',
                   });
                 }
               }
             }
-            
+
             setOperationSequence(operations);
           } else {
+            console.log('No operations to load');
             setOperationSequence([]);
           }
         } catch (error: any) {
@@ -463,7 +481,7 @@ const ProcessRoutesPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
+
       // 将工序序列转换为JSON格式
       // 格式：{ sequence: [uuid1, uuid2, ...] } 或直接使用UUID数组
       const operationSequenceData = operationSequence.length > 0
@@ -476,10 +494,13 @@ const ProcessRoutesPage: React.FC = () => {
             })),
           }
         : null;
-      
+
       const submitData = {
-        ...values,
-        operationSequence: operationSequenceData,
+        code: values.code,
+        name: values.name,
+        description: values.description,
+        is_active: values.isActive,
+        operation_sequence: operationSequenceData,
       };
       
       if (isEdit && currentProcessRouteUuid) {
@@ -535,7 +556,7 @@ const ProcessRoutesPage: React.FC = () => {
     },
     {
       title: '启用状态',
-      dataIndex: 'isActive',
+      dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
@@ -543,14 +564,14 @@ const ProcessRoutesPage: React.FC = () => {
         false: { text: '禁用', status: 'Default' },
       },
       render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+        <Tag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? '启用' : '禁用'}
         </Tag>
       ),
     },
     {
       title: '创建时间',
-      dataIndex: 'createdAt',
+      dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
@@ -610,7 +631,7 @@ const ProcessRoutesPage: React.FC = () => {
           
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
-            apiParams.isActive = searchFormValues.isActive;
+            apiParams.is_active = searchFormValues.isActive;
           }
           
           try {
@@ -679,22 +700,97 @@ const ProcessRoutesPage: React.FC = () => {
             },
             {
               title: '启用状态',
-              dataIndex: 'isActive',
+              dataIndex: 'is_active',
               render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
+                <Tag color={record.is_active ? 'success' : 'default'}>
+                  {record.is_active ? '启用' : '禁用'}
                 </Tag>
               ),
             },
             {
               title: '创建时间',
-              dataIndex: 'createdAt',
+              dataIndex: 'created_at',
               valueType: 'dateTime',
             },
             {
               title: '更新时间',
-              dataIndex: 'updatedAt',
+              dataIndex: 'updated_at',
               valueType: 'dateTime',
+            },
+            {
+              title: '工序序列',
+              span: 2,
+              render: (_, record) => {
+
+                if (!record.operation_sequence) {
+                  return <span style={{ color: '#999' }}>暂无工序</span>;
+                }
+
+                try {
+                  let operations: any[] = [];
+
+                  // 解析工序序列数据
+                  if (Array.isArray(record.operation_sequence)) {
+                    operations = record.operation_sequence;
+                  } else if (typeof record.operation_sequence === 'object' && record.operation_sequence !== null) {
+
+                    // 优先使用 operations 数组（包含完整信息）
+                    if (record.operation_sequence.operations && Array.isArray(record.operation_sequence.operations)) {
+                      operations = record.operation_sequence.operations;
+                    } else if (record.operation_sequence.sequence && Array.isArray(record.operation_sequence.sequence)) {
+                      operations = record.operation_sequence.sequence.map((uuid: string) => ({
+                        uuid,
+                        code: uuid.substring(0, 8),
+                        name: '工序',
+                      }));
+                    } else {
+                      // 尝试直接使用对象的值
+                      const entries = Object.entries(record.operation_sequence);
+
+                      for (const [key, value] of entries) {
+                        if (Array.isArray(value)) {
+                          operations = value;
+                          break;
+                        }
+                      }
+
+                      // 如果还没找到，尝试将所有值合并
+                      if (operations.length === 0) {
+                        const allValues = Object.values(record.operation_sequence).filter(v => v != null);
+                        if (allValues.length > 0 && Array.isArray(allValues[0])) {
+                          operations = allValues[0] as any[];
+                        } else if (allValues.length > 0) {
+                          operations = allValues as any[];
+                        }
+                      }
+                    }
+                  }
+
+                  if (!operations || operations.length === 0) {
+                    console.log('operations 为空或长度为0');
+                    return <span style={{ color: '#999' }}>暂无工序</span>;
+                  }
+
+                  // 显示工序列表
+                  return (
+                    <div>
+                      <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                        共 {operations.length} 个工序：
+                      </div>
+                      <Space wrap>
+                        {operations.map((op: any, index: number) => (
+                          <Tag key={op?.uuid || op || index} color="blue">
+                            {op?.code || op || `工序${index + 1}`} - {op?.name || '未知工序'}
+                          </Tag>
+                        ))}
+                      </Space>
+                    </div>
+                  );
+                } catch (error) {
+                  console.error('解析工序序列失败:', error, record.operation_sequence);
+                  return <span style={{ color: '#ff4d4f' }}>工序数据解析失败: {error.message}</span>;
+                }
+              },
             },
           ]}
         />

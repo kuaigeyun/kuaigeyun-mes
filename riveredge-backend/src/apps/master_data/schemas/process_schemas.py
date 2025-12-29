@@ -143,20 +143,23 @@ class OperationResponse(OperationBase):
 
 class ProcessRouteBase(BaseModel):
     """工艺路线基础 Schema"""
-    
+
     code: str = Field(..., max_length=50, description="工艺路线编码")
     name: str = Field(..., max_length=200, description="工艺路线名称")
     description: Optional[str] = Field(None, description="描述")
     operation_sequence: Optional[Dict[str, Any]] = Field(None, description="工序序列（JSON格式）")
     is_active: bool = Field(True, description="是否启用")
-    
+
+    class Config:
+        populate_by_name = True
+
     @validator("code")
     def validate_code(cls, v):
         """验证编码格式"""
         if not v or not v.strip():
             raise ValueError("工艺路线编码不能为空")
         return v.strip().upper()
-    
+
     @validator("name")
     def validate_name(cls, v):
         """验证名称格式"""
