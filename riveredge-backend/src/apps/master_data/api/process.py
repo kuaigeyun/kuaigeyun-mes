@@ -238,7 +238,7 @@ async def create_process_route(
 ):
     """
     创建工艺路线
-    
+
     - **code**: 工艺路线编码（必填，组织内唯一）
     - **name**: 工艺路线名称（必填）
     - **description**: 描述（可选）
@@ -295,7 +295,7 @@ async def update_process_route(
 ):
     """
     更新工艺路线
-    
+
     - **process_route_uuid**: 工艺路线UUID
     - **code**: 工艺路线编码（可选）
     - **name**: 工艺路线名称（可选）

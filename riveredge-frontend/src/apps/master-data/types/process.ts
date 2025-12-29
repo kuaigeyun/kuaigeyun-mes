@@ -71,21 +71,21 @@ export interface OperationUpdate {
 export interface OperationListParams {
   skip?: number;
   limit?: number;
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 export interface ProcessRoute {
   id: number;
   uuid: string;
-  tenantId: number;
+  tenant_id: number;
   code: string;
   name: string;
   description?: string;
-  operationSequence?: Record<string, any>;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string;
+  operation_sequence?: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
 }
 
 export interface ProcessRouteCreate {
@@ -107,7 +107,7 @@ export interface ProcessRouteUpdate {
 export interface ProcessRouteListParams {
   skip?: number;
   limit?: number;
-  isActive?: boolean;
+  is_active?: boolean;
 }
 
 export interface SOP {
