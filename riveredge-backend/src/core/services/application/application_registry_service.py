@@ -124,6 +124,21 @@ class ApplicationRegistryService:
                     "is_installed": True,
                     "created_at": None,
                     "updated_at": None
+                },
+                {
+                    "uuid": "kuaizhizao-uuid",
+                    "code": "kuaizhizao",
+                    "name": "快格轻制造",
+                    "description": "轻量级MES系统，专注生产执行核心流程",
+                    "version": "1.0.4",
+                    "route_path": "/apps/kuaizhizao",
+                    "entry_point": "apps.kuaizhizao.api.router",
+                    "menu_config": None,
+                    "is_system": False,
+                    "is_active": True,
+                    "is_installed": True,
+                    "created_at": None,
+                    "updated_at": None
                 }
             ]
 
