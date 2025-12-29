@@ -837,7 +837,6 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           hasSearchParamsRef: !!searchParamsRef,
         });
       }
-      }
       
       // ⭐ 最佳实践：统一设置搜索参数到所有需要的地方
       // 1. 设置到 ProTable 的表单（用于表单值读取）
