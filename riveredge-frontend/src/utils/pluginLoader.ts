@@ -166,8 +166,7 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
 
   // 返回路由配置
   const routePath = application.route_path || `/apps/${application.code}`;
-  console.log(`📝 [插件加载] ${pluginCode} - 注册路由: ${routePath}/*`);
-  
+
   return [
     {
       path: routePath,

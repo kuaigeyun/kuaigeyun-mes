@@ -109,8 +109,6 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
  * 异步加载业务应用，确保应用层问题不影响系统层
  */
 const AppRoutes: React.FC = () => {
-  console.log('🎯 AppRoutes component mounted');
-  console.log('🎯 AppRoutes: 当前路径:', window.location.pathname);
 
   const [appRoutes, setAppRoutes] = useState<React.ReactNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +150,6 @@ const AppRoutes: React.FC = () => {
                 ? routeConfig.path.replace('/apps/', '') 
                 : routeConfig.path;
               
-              console.log(`🔧 AppRoutes: 创建应用路由 ${relativePath}/* (原始路径: ${routeConfig.path})`);
               routes.push(
                 <Route
                   key={`app-${app.code}-${relativePath}`}
@@ -168,13 +165,10 @@ const AppRoutes: React.FC = () => {
                       }>
                         <AppErrorBoundary appName={app.name}>
                           {(() => {
-                            console.log(`🎯 准备渲染应用组件: ${app.name}`);
-                            console.log(`🎯 组件信息:`, routeConfig.component);
 
                             // 尝试直接渲染组件，看是否能触发错误
                             try {
                               const componentElement = React.createElement(routeConfig.component);
-                              console.log(`✅ 组件元素创建成功:`, componentElement);
                               return (
                                 <>
                                   <div style={{ padding: '10px', background: '#f6ffed', border: '1px solid #b7eb8f', marginBottom: '10px' }}>
@@ -234,9 +228,6 @@ const AppRoutes: React.FC = () => {
   }
 
   // 正常状态：渲染应用路由
-  console.log(`🔧 AppRoutes: 渲染 ${appRoutes.length} 个应用路由`);
-  console.log('🔧 AppRoutes: appRoutes content:', appRoutes);
-  console.log('🔧 AppRoutes: 当前路径:', window.location.pathname);
 
   if (appRoutes.length === 0) {
     console.warn('⚠️ AppRoutes: 没有应用路由，可能应用未加载');

@@ -222,7 +222,6 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 // 主应用组件
 export default function App() {
-  console.log('🎯 App component mounted, current path:', window.location.pathname);
 
   const [userPreference, setUserPreference] = useState<UserPreference | null>(null);
   const [siteThemeConfig, setSiteThemeConfig] = useState<{
