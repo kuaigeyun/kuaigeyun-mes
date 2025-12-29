@@ -226,12 +226,24 @@ export async function syncApplicationManifest(appCode: string): Promise<{
   message: string;
   data?: any;
 }> {
-  return apiRequest<{
-    success: boolean;
-    message: string;
-    data?: any;
-  }>(`/core/applications/sync-manifest/${appCode}`, {
+  // ⚠️ 特殊处理：sync-manifest API 返回的是 { success: true, message: ..., data: ... }
+  // 但 apiRequest 会返回 data 字段的内容，我们需要整个响应对象
+  const baseUrl = window.location.origin;
+  const response = await fetch(`${baseUrl}/api/v1/core/applications/sync-manifest/${appCode}`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
+    },
   });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || `HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  return result; // 返回完整的响应对象 { success, message, data }
 }
 
