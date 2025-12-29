@@ -186,7 +186,7 @@ const ReportingPage: React.FC = () => {
     <>
       <div>
         {/* 统计卡片 */}
-        <div style={{ padding: '0 16px' }}>
+        <div style={{ padding: '16px 16px 0 16px' }}>
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={6}>
             <Card>
@@ -233,8 +233,7 @@ const ReportingPage: React.FC = () => {
       </div>
 
       {/* UniTable */}
-      <div style={{ padding: '16px' }}>
-        <UniTable
+      <UniTable
         headerTitle="报工管理"
         actionRef={actionRef}
         rowKey="id"
@@ -314,7 +313,6 @@ const ReportingPage: React.FC = () => {
           </Button>,
         ]}
       />
-      </div>
       </div>
 
       {/* 手动报工 Modal */}
