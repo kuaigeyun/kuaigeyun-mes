@@ -68,12 +68,18 @@
                         "permission": "kuaizhizao:inbound:view",
                         "sort_order": 2
                     },
-                    {
-                        "title": "出库管理",
-                        "path": "/apps/kuaizhizao/warehouse-management/outbound",
-                        "permission": "kuaizhizao:outbound:view",
-                        "sort_order": 3
-                    }
+            {
+                "title": "产品入库",
+                "path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
+                "permission": "kuaizhizao:finished-goods-inventory:view",
+                "sort_order": 4
+            },
+            {
+                "title": "出库管理",
+                "path": "/apps/kuaizhizao/warehouse-management/outbound",
+                "permission": "kuaizhizao:outbound:view",
+                "sort_order": 5
+            }
                 ]
             }
         ]
@@ -99,6 +105,9 @@
         "kuaizhizao:inbound:view",
         "kuaizhizao:inbound:create",
         "kuaizhizao:inbound:update",
+        "kuaizhizao:finished-goods-inventory:view",
+        "kuaizhizao:finished-goods-inventory:create",
+        "kuaizhizao:finished-goods-inventory:update",
         "kuaizhizao:outbound:view",
         "kuaizhizao:outbound:create",
         "kuaizhizao:outbound:update"
