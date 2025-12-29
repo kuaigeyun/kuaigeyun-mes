@@ -76,7 +76,7 @@ export interface CreateUserData {
   email?: string;
   password: string;
   full_name?: string;
-  phone?: string;
+  phone: string;  // 修改为必填，与后端UserCreateRequest一致
   department_uuid?: string;
   position_uuid?: string;
   role_uuids?: string[];

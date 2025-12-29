@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from core.schemas.user import (
     UserCreate,
+    UserCreateRequest,
     UserUpdate,
     UserResponse,
     UserListResponse,
@@ -65,7 +66,7 @@ class UserImportRequest(BaseModel):
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
-    data: UserCreate,
+    data: UserCreateRequest,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     user_service: Any = Depends(get_user_service_with_fallback),
@@ -90,12 +91,27 @@ async def create_user(
         HTTPException: 当用户名已存在时抛出
     """
     try:
+        # 将请求数据转换为内部UserCreate对象，添加tenant_id
+        user_create_data = UserCreate(
+            username=data.username,
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name,
+            phone=data.phone,
+            tenant_id=tenant_id,  # 从依赖注入获取
+            department_uuid=data.department_uuid,
+            position_uuid=data.position_uuid,
+            role_uuids=data.role_uuids,
+            is_active=data.is_active,
+            is_tenant_admin=data.is_tenant_admin,
+        )
+
         # ⚠️ 第三阶段改进：使用依赖注入的服务
         # user_service 可能是接口实现（实例）或类（回退情况）
         # 两种情况下调用方式相同（接口实现内部调用静态方法）
         user = await user_service.create_user(
             tenant_id=tenant_id,
-            data=data,
+            data=user_create_data,
             current_user_id=current_user.id
         )
         

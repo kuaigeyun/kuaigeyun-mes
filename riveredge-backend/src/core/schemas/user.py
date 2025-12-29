@@ -14,22 +14,34 @@ from pydantic import BaseModel, Field, ConfigDict
 from infra.schemas.user import UserBase, UserCreate as SoilUserCreate, UserUpdate as SoilUserUpdate, UserResponse as SoilUserResponse
 
 
+class UserCreateRequest(BaseModel):
+    """
+    用户创建请求 Schema（前端请求体）
+
+    用于前端创建用户的请求数据，不包含 tenant_id（由后端自动获取）。
+    """
+    username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
+    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
+    password: str = Field(..., min_length=8, max_length=100, description="密码（最少 8 字符）")
+    full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
+    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填）")
+    department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
+    position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
+    role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选）")
+    is_active: bool = Field(default=True, description="是否激活")
+    is_tenant_admin: bool = Field(default=False, description="是否为组织管理员")
+
+
 class UserCreate(SoilUserCreate):
     """
     用户创建 Schema（扩展）
-    
+
     扩展自 infra.schemas.user.UserCreate，添加部门、职位、角色关联字段。
-    
-    Attributes:
-        department_uuid: 所属部门UUID（可选）
-        position_uuid: 所属职位UUID（可选）
-        role_uuids: 角色UUID列表（可选）
-        phone: 手机号（可选）
+    用于内部服务调用，包含完整的字段验证。
     """
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选）")
-    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填）")
 
 
 class UserUpdate(SoilUserUpdate):
