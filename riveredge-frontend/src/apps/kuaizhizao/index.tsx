@@ -16,6 +16,15 @@ import ReportingPage from './pages/production-execution/reporting';
 // 销售管理页面
 import SalesOrdersPage from './pages/sales-management/sales-orders';
 
+// 质量管理页面
+import IncomingInspectionPage from './pages/quality-management/incoming-inspection';
+import ProcessInspectionPage from './pages/quality-management/process-inspection';
+import FinishedGoodsInspectionPage from './pages/quality-management/finished-goods-inspection';
+
+// 财务管理页面
+import AccountsPayablePage from './pages/finance-management/accounts-payable';
+import AccountsReceivablePage from './pages/finance-management/accounts-receivable';
+
 // 仓储管理页面
 import InventoryPage from './pages/warehouse-management/inventory';
 import InboundPage from './pages/warehouse-management/inbound';
@@ -36,6 +45,15 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 销售管理路由 */}
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
+
+      {/* 质量管理路由 */}
+      <Route path="quality-management/incoming-inspection" element={<IncomingInspectionPage />} />
+      <Route path="quality-management/process-inspection" element={<ProcessInspectionPage />} />
+      <Route path="quality-management/finished-goods-inspection" element={<FinishedGoodsInspectionPage />} />
+
+      {/* 财务管理路由 */}
+      <Route path="finance-management/accounts-payable" element={<AccountsPayablePage />} />
+      <Route path="finance-management/accounts-receivable" element={<AccountsReceivablePage />} />
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />
