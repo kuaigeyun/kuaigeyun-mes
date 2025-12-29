@@ -7,6 +7,10 @@ import zhCN from 'antd/locale/zh_CN'
 import App from './app'
 import './global.less'
 
+// ⚠️ 关键修复：同步导入i18n配置，确保应用启动前语言包已加载
+// 这解决了菜单标题显示英文的问题
+import './config/i18n'
+
 // Ant Design 6.0 已移除 findDOMNode 兼容逻辑，不再需要抑制警告
 
 // ⚠️ 关键修复：全局错误处理，捕获未处理的错误，避免应用崩溃
