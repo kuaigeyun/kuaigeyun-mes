@@ -1,7 +1,7 @@
 {
     "name": "快格轻制造",
     "code": "kuaizhizao",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "轻量级MES系统，专注生产执行核心流程",
     "icon": "production",
     "author": "RiverEdge Team",
@@ -35,10 +35,51 @@
                 "icon": "shopping-cart",
                 "sort_order": 1.5,
                 "children": [{
-                        "title": "销售订单",
-                        "path": "/apps/kuaizhizao/sales-management/sales-orders",
-                        "permission": "kuaizhizao:sales-order:view",
+                    "title": "销售订单",
+                    "path": "/apps/kuaizhizao/sales-management/sales-orders",
+                    "permission": "kuaizhizao:sales-order:view",
+                    "sort_order": 1
+                }]
+            },
+            {
+                "title": "质量管理",
+                "icon": "check-circle",
+                "sort_order": 2.5,
+                "children": [{
+                        "title": "来料检验",
+                        "path": "/apps/kuaizhizao/quality-management/incoming-inspection",
+                        "permission": "kuaizhizao:incoming-inspection:view",
                         "sort_order": 1
+                    },
+                    {
+                        "title": "过程检验",
+                        "path": "/apps/kuaizhizao/quality-management/process-inspection",
+                        "permission": "kuaizhizao:process-inspection:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "成品检验",
+                        "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
+                        "permission": "kuaizhizao:finished-goods-inspection:view",
+                        "sort_order": 3
+                    }
+                ]
+            },
+            {
+                "title": "财务管理",
+                "icon": "dollar",
+                "sort_order": 3,
+                "children": [{
+                        "title": "应付管理",
+                        "path": "/apps/kuaizhizao/finance-management/accounts-payable",
+                        "permission": "kuaizhizao:accounts-payable:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "应收管理",
+                        "path": "/apps/kuaizhizao/finance-management/accounts-receivable",
+                        "permission": "kuaizhizao:accounts-receivable:view",
+                        "sort_order": 2
                     }
                 ]
             },
@@ -111,6 +152,26 @@
         "kuaizhizao:sales-order:create",
         "kuaizhizao:sales-order:update",
         "kuaizhizao:sales-order:delete",
+        "kuaizhizao:incoming-inspection:view",
+        "kuaizhizao:incoming-inspection:create",
+        "kuaizhizao:incoming-inspection:update",
+        "kuaizhizao:incoming-inspection:delete",
+        "kuaizhizao:process-inspection:view",
+        "kuaizhizao:process-inspection:create",
+        "kuaizhizao:process-inspection:update",
+        "kuaizhizao:process-inspection:delete",
+        "kuaizhizao:finished-goods-inspection:view",
+        "kuaizhizao:finished-goods-inspection:create",
+        "kuaizhizao:finished-goods-inspection:update",
+        "kuaizhizao:finished-goods-inspection:delete",
+        "kuaizhizao:accounts-payable:view",
+        "kuaizhizao:accounts-payable:create",
+        "kuaizhizao:accounts-payable:update",
+        "kuaizhizao:accounts-payable:delete",
+        "kuaizhizao:accounts-receivable:view",
+        "kuaizhizao:accounts-receivable:create",
+        "kuaizhizao:accounts-receivable:update",
+        "kuaizhizao:accounts-receivable:delete",
         "kuaizhizao:work-order:view",
         "kuaizhizao:work-order:create",
         "kuaizhizao:work-order:update",
