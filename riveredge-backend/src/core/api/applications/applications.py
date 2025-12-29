@@ -463,6 +463,11 @@ async def scan_and_register_plugins(
         )
 
 
+@router.get("/test-sync")
+async def test_sync_endpoint():
+    """测试同步端点是否可访问"""
+    return {"message": "Sync endpoint is working", "timestamp": "2024-12-01"}
+
 @router.post("/sync-manifest/{app_code}")
 async def sync_application_manifest(
     app_code: str,
@@ -483,7 +488,14 @@ async def sync_application_manifest(
     """
     try:
         # 构建manifest.json文件路径
-        manifest_path = Path(__file__).parent.parent.parent.parent.parent / "riveredge-frontend" / "src" / "apps" / app_code / "manifest.json"
+        # 从后端API文件位置向上查找前端应用目录
+        current_dir = Path(__file__).parent  # applications/
+        backend_src = current_dir.parent.parent.parent  # src/
+        backend_root = backend_src.parent  # riveredge-backend/
+        project_root = backend_root.parent  # 项目根目录
+        manifest_path = project_root / "riveredge-frontend" / "src" / "apps" / app_code / "manifest.json"
+
+        logger.info(f"Manifest文件路径: {manifest_path}")
 
         if not manifest_path.exists():
             raise HTTPException(
