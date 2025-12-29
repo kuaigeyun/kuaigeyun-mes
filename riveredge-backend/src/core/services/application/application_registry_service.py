@@ -230,25 +230,31 @@ class ApplicationRegistryService:
 
                 # 检查模块是否存在
                 if cls._module_exists(route_module_path):
-                    # 动态导入路由模块
-                    route_module = importlib.import_module(route_module_path)
+                    try:
+                        # 动态导入路由模块
+                        route_module = importlib.import_module(route_module_path)
 
-                    # 获取路由对象（通常命名为router）
-                    router = getattr(route_module, 'router', None)
-                    if router:
-                        # 缓存路由对象
-                        cls._registered_routes[app_code] = [router]
-                        registered_routes.append(f"{app_name}({app_code})")
+                        # 获取路由对象（通常命名为router）
+                        router = getattr(route_module, 'router', None)
+                        if router:
+                            # 缓存路由对象
+                            cls._registered_routes[app_code] = [router]
+                            registered_routes.append(f"{app_name}({app_code})")
 
-                        # 如果路由管理器已初始化，则注册路由
-                        route_manager = get_route_manager()
-                        if route_manager:
-                            route_manager.register_app_routes(app_code, [router])
-                            logger.debug(f"✅ 通过路由管理器注册应用路由: {route_module_path}")
+                            # 如果路由管理器已初始化，则注册路由
+                            route_manager = get_route_manager()
+                            if route_manager:
+                                route_manager.register_app_routes(app_code, [router])
+                                logger.info(f"✅ 通过路由管理器注册应用路由: {route_module_path}")
+                            else:
+                                logger.debug(f"✅ 缓存应用路由（路由管理器未初始化）: {route_module_path}")
                         else:
-                            logger.debug(f"✅ 缓存应用路由（路由管理器未初始化）: {route_module_path}")
-                    else:
-                        logger.warning(f"⚠️ 应用 {app_name}({app_code}) 的路由模块中未找到router对象")
+                            logger.warning(f"⚠️ 应用 {app_name}({app_code}) 的路由模块中未找到router对象")
+                    except ImportError as ie:
+                        logger.error(f"❌ 导入应用 {app_name}({app_code}) 路由模块失败: {ie}")
+                        logger.info(f"💡 这可能是由于缺少运行时依赖导致的，请确保所有依赖都已正确安装")
+                    except Exception as e:
+                        logger.error(f"❌ 注册应用 {app_name}({app_code}) 路由时发生错误: {e}")
                 else:
                     logger.warning(f"⚠️ 应用 {app_name}({app_code}) 的路由模块不存在: {route_module_path}")
 
@@ -265,19 +271,32 @@ class ApplicationRegistryService:
         """
         检查Python模块是否存在
 
+        注意：由于运行时依赖可能不完整，这里使用文件系统检查而不是导入检查
+
         Args:
-            module_path: 模块路径，如 'apps.master_data.models'
+            module_path: 模块路径，如 'apps.master_data.api.router'
 
         Returns:
-            bool: 模块是否存在
+            bool: 模块文件是否存在
         """
         try:
-            importlib.import_module(module_path)
-            return True
-        except ImportError:
-            return False
-        except Exception:
-            # 其他导入错误也视为模块不存在
+            # 将模块路径转换为文件路径
+            # apps.master_data.api.router -> apps/master_data/api/router.py
+            file_path = module_path.replace('.', '/') + '.py'
+
+            # 检查文件是否存在于src目录中
+            import os
+            from pathlib import Path
+
+            # 获取当前文件的目录，然后向上查找src目录
+            current_file = Path(__file__)
+            src_dir = current_file.parent.parent.parent.parent  # 向上4级到src目录
+
+            full_path = src_dir / file_path
+            return full_path.exists()
+
+        except Exception as e:
+            logger.debug(f"检查模块 {module_path} 存在性失败: {e}")
             return False
 
     @classmethod

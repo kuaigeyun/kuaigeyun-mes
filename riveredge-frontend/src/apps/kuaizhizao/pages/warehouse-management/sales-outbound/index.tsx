@@ -13,8 +13,9 @@ import { UniTable } from '../../../../../components/uni-table';
 interface SalesOutbound {
   id: number;
   outboundCode: string;
-  salesOrderCode: string;
-  salesOrderName: string;
+  orderType: 'MTO' | 'MTS'; // 添加订单类型
+  salesOrderCode?: string; // MTO模式下的销售订单号
+  salesOrderName?: string; // MTO模式下的销售订单名称
   customerName: string;
   productCode: string;
   productName: string;
@@ -110,9 +111,26 @@ const SalesOutboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: '订单类型',
+      dataIndex: 'orderType',
+      width: 100,
+      render: (text) => (
+        <Tag color={text === 'MTO' ? 'blue' : 'green'}>
+          {text === 'MTO' ? '按订单生产' : '按库存生产'}
+        </Tag>
+      ),
+    },
+    {
       title: '销售订单',
       dataIndex: 'salesOrderCode',
       width: 120,
+      render: (text, record) => (
+        record.orderType === 'MTO' ? (
+          <Tag color="blue">{text}</Tag>
+        ) : (
+          <span style={{ color: '#999' }}>无</span>
+        )
+      ),
     },
     {
       title: '客户名称',
@@ -281,6 +299,7 @@ const SalesOutboundPage: React.FC = () => {
             {
               id: 1,
               outboundCode: 'OUT20241201001',
+              orderType: 'MTO',
               salesOrderCode: 'SO20241201001',
               salesOrderName: '客户A订单',
               customerName: '客户A',
@@ -300,8 +319,7 @@ const SalesOutboundPage: React.FC = () => {
             {
               id: 2,
               outboundCode: 'OUT20241201002',
-              salesOrderCode: 'SO20241201002',
-              salesOrderName: '客户B订单',
+              orderType: 'MTS',
               customerName: '客户B',
               productCode: 'FIN002',
               productName: '产品B',
@@ -392,14 +410,50 @@ const SalesOutboundPage: React.FC = () => {
             </Col>
             <Col span={12}>
               <ProFormSelect
+                name="orderType"
+                label="出库类型"
+                placeholder="请选择出库类型"
+                rules={[{ required: true, message: '请选择出库类型' }]}
+                options={[
+                  { label: '按订单生产 (MTO)', value: 'MTO' },
+                  { label: '按库存生产 (MTS)', value: 'MTS' },
+                ]}
+                initialValue="MTS"
+              />
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
                 name="salesOrderCode"
                 label="销售订单"
                 placeholder="请选择销售订单"
-                rules={[{ required: true, message: '请选择销售订单' }]}
+                dependencies={['orderType']}
+                rules={[
+                  ({ getFieldValue }) => ({
+                    required: getFieldValue('orderType') === 'MTO',
+                    message: 'MTO模式必须选择销售订单',
+                  }),
+                ]}
                 request={async () => [
-                  { label: 'SO20241201001 - 客户A订单', value: 'SO20241201001' },
-                  { label: 'SO20241201002 - 客户B订单', value: 'SO20241201002' },
-                  { label: 'SO20241201003 - 客户C订单', value: 'SO20241201003' },
+                  { label: 'SO20241201001 - 客户A订单 (MTO)', value: 'SO20241201001' },
+                  { label: 'SO20241201002 - 客户B订单 (MTO)', value: 'SO20241201002' },
+                  { label: 'SO20241201003 - 客户C订单 (MTO)', value: 'SO20241201003' },
+                ]}
+                hidden={({ orderType }) => orderType !== 'MTO'}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="customerName"
+                label="客户"
+                placeholder="请选择客户"
+                rules={[{ required: true, message: '请选择客户' }]}
+                request={async () => [
+                  { label: '客户A', value: '客户A' },
+                  { label: '客户B', value: '客户B' },
+                  { label: '客户C', value: '客户C' },
                 ]}
               />
             </Col>
