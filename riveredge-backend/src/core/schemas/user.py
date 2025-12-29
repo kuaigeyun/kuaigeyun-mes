@@ -29,7 +29,7 @@ class UserCreate(SoilUserCreate):
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选）")
-    phone: Optional[str] = Field(None, max_length=20, description="手机号（可选）")
+    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填）")
 
 
 class UserUpdate(SoilUserUpdate):
