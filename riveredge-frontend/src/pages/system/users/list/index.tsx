@@ -726,7 +726,7 @@ const UserListPage: React.FC = () => {
             />
           </div>
         </ProForm>
-      </Modal>
+      </FormModal>
 
       {/* 详情 Drawer */}
       <Drawer
