@@ -96,20 +96,28 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
 def hash_password(password: str) -> str:
     """
     加密密码
-    
-    使用 bcrypt 算法加密密码。
-    
+
+    使用 bcrypt 算法加密密码。bcrypt 算法限制密码长度最多72字节。
+
     Args:
         password: 明文密码
-        
+
     Returns:
         str: 加密后的密码哈希值
-        
+
+    Raises:
+        ValueError: 密码长度超过72字节
+
     Example:
         >>> hashed = hash_password("mypassword")
         >>> len(hashed) > 0
         True
     """
+    # bcrypt 限制密码长度最多72字节
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        raise ValueError(f"密码长度不能超过72字节（当前长度：{len(password_bytes)}字节），请使用更短的密码")
+
     return pwd_context.hash(password)
 
 

@@ -72,7 +72,15 @@ class UserService:
             )
         
         # 创建用户（自动设置 tenant_id）⭐ 关键
-        password_hash = hash_password(data.password)
+        try:
+            password_hash = hash_password(data.password)
+        except ValueError as e:
+            if "密码长度不能超过72字节" in str(e):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="密码长度不能超过72个字符，请使用更短的密码"
+                )
+            raise
         user = await User.create(
             tenant_id=tenant_id,  # ⭐ 关键：自动设置组织 ID
             username=data.username,

@@ -186,7 +186,15 @@ async def change_password(
                 )
             
             # 更新密码
-            user.password_hash = User.hash_password(data.new_password)
+            try:
+                user.password_hash = User.hash_password(data.new_password)
+            except ValueError as e:
+                if "cannot be longer than 72 bytes" in str(e) or "密码长度不能超过72字节" in str(e):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="新密码长度不能超过72个字符，请使用更短的密码"
+                    )
+                raise
             await user.save()
         
         return {"message": "密码修改成功"}
