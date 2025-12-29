@@ -136,6 +136,28 @@ const AppRoutes: React.FC = () => {
 
       // 异步加载所有应用路由
       const routes: React.ReactNode[] = [];
+
+      // 🔧 开发阶段：硬编码添加快格轻制造APP路由
+      try {
+        const { default: KuaizhizaoApp } = await import('../apps/kuaizhizao');
+        routes.push(
+          <Route
+            key="app-kuaizhizao"
+            path="kuaizhizao/*"
+            element={
+              <BasicLayout>
+                <Suspense fallback={<LoadingFallback />}>
+                  <AppErrorBoundary appName="快格轻制造">
+                    <KuaizhizaoApp />
+                  </AppErrorBoundary>
+                </Suspense>
+              </BasicLayout>
+            }
+          />
+        );
+      } catch (appError) {
+        console.error('❌ 快格轻制造APP加载失败:', appError);
+      }
       const loadPromises = applications.map(async (app: Application) => {
         if (app.entry_point && app.route_path) {
           try {
