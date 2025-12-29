@@ -266,15 +266,29 @@ const SuppliersPage: React.FC = () => {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
           };
-          
+
           // 启用状态筛选
           if (searchFormValues?.isActive !== undefined && searchFormValues.isActive !== '' && searchFormValues.isActive !== null) {
             apiParams.isActive = searchFormValues.isActive;
           }
-          
+
           // 分类筛选
           if (searchFormValues?.category !== undefined && searchFormValues.category !== '' && searchFormValues.category !== null) {
             apiParams.category = searchFormValues.category;
+          }
+
+          // 搜索参数处理
+          if (searchFormValues?.code && searchFormValues.code.trim()) {
+            apiParams.code = searchFormValues.code.trim();
+          }
+
+          if (searchFormValues?.name && searchFormValues.name.trim()) {
+            apiParams.name = searchFormValues.name.trim();
+          }
+
+          // 如果有关键词搜索，传递给后端
+          if (searchFormValues?.keyword && searchFormValues.keyword.trim()) {
+            apiParams.keyword = searchFormValues.keyword.trim();
           }
           
           try {

@@ -273,18 +273,24 @@ class SupplyChainService:
         skip: int = 0,
         limit: int = 100,
         category: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
     ) -> List[SupplierResponse]:
         """
         获取供应商列表
-        
+
         Args:
             tenant_id: 租户ID
             skip: 跳过数量
             limit: 限制数量
             category: 供应商分类（可选，用于过滤）
             is_active: 是否启用（可选）
-            
+            keyword: 搜索关键词（供应商编码或名称）
+            code: 供应商编码（精确匹配）
+            name: 供应商名称（模糊匹配）
+
         Returns:
             List[SupplierResponse]: 供应商列表
         """
@@ -292,12 +298,27 @@ class SupplyChainService:
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
+
         if category is not None:
             query = query.filter(category=category)
-        
+
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        # 添加搜索条件
+        if keyword:
+            # 关键词搜索供应商编码或名称
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        if code:
+            # 精确匹配供应商编码
+            query = query.filter(code__icontains=code)
+
+        if name:
+            # 模糊匹配供应商名称
+            query = query.filter(name__icontains=name)
         
         suppliers = await query.offset(skip).limit(limit).order_by("code").all()
         

@@ -100,6 +100,9 @@ export interface MaterialListParams {
   limit?: number;
   groupId?: number;
   isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
 }
 
 export interface BOM {
