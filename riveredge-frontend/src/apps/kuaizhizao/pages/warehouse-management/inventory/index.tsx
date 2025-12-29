@@ -119,53 +119,57 @@ const InventoryPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div>
       {/* 库存统计卡片 */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="库存总品种数"
-              value={stats.totalItems}
-              prefix={<SearchOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="库存总价值"
-              value={stats.totalValue}
-              prefix="¥"
-              precision={2}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="低库存预警"
-              value={stats.lowStockItems}
-              suffix="种"
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="临近过期"
-              value={stats.expiringItems}
-              suffix="种"
-              valueStyle={{ color: '#f5222d' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <div style={{ padding: '0 16px' }}>
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="库存总品种数"
+                value={stats.totalItems}
+                prefix={<SearchOutlined />}
+                valueStyle={{ color: '#1890ff' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="库存总价值"
+                value={stats.totalValue}
+                prefix="¥"
+                precision={2}
+                valueStyle={{ color: '#52c41a' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="低库存预警"
+                value={stats.lowStockItems}
+                suffix="种"
+                valueStyle={{ color: '#faad14' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="临近过期"
+                value={stats.expiringItems}
+                suffix="种"
+                valueStyle={{ color: '#f5222d' }}
+              />
+            </Card>
+          </Col>
+        </Row>
+      </div>
 
-      <UniTable
+      {/* UniTable */}
+      <div style={{ padding: '16px' }}>
+        <UniTable
         headerTitle="库存查询"
         actionRef={actionRef}
         rowKey="id"
