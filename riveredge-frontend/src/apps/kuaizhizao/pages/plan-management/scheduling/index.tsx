@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Row, Col, message, Modal } from 'antd';
+import { App, Button, Tag, Space, Card, message, Modal } from 'antd';
 import { ReloadOutlined, CalculatorOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 
@@ -330,18 +330,6 @@ const SchedulingPage: React.FC = () => {
       label: '工单排程',
       children: (
         <>
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col span={24}>
-              <Alert
-                message="工单排程说明"
-                description="根据MRP结果和工作中心能力，自动安排工单的生产计划和时间。"
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-            </Col>
-          </Row>
-
           <UniTable
             headerTitle=""
             actionRef={actionRef}
