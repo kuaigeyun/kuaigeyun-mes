@@ -98,17 +98,23 @@ class FactoryService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
     ) -> List[WorkshopResponse]:
         """
         获取车间列表
-        
+
         Args:
             tenant_id: 租户ID
             skip: 跳过数量
             limit: 限制数量
             is_active: 是否启用（可选）
-            
+            keyword: 搜索关键词（车间编码或名称）
+            code: 车间编码（精确匹配）
+            name: 车间名称（模糊匹配）
+
         Returns:
             List[WorkshopResponse]: 车间列表
         """
@@ -117,9 +123,24 @@ class FactoryService:
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             )
-            
+
             if is_active is not None:
                 query = query.filter(is_active=is_active)
+
+            # 添加搜索条件
+            if keyword:
+                # 关键词搜索车间编码或名称
+                query = query.filter(
+                    Q(code__icontains=keyword) | Q(name__icontains=keyword)
+                )
+
+            if code:
+                # 精确匹配车间编码
+                query = query.filter(code__icontains=code)
+
+            if name:
+                # 模糊匹配车间名称
+                query = query.filter(name__icontains=name)
             
             workshops = await query.offset(skip).limit(limit).order_by("code").all()
             

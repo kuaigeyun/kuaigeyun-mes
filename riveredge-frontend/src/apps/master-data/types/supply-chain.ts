@@ -100,5 +100,8 @@ export interface SupplierListParams {
   limit?: number;
   category?: string;
   isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
 }
 

@@ -576,6 +576,20 @@ const MaterialsManagementPage: React.FC = () => {
                 apiParams.isActive = searchFormValues.isActive;
               }
 
+              // 搜索参数处理
+              if (searchFormValues?.code && searchFormValues.code.trim()) {
+                apiParams.code = searchFormValues.code.trim();
+              }
+
+              if (searchFormValues?.name && searchFormValues.name.trim()) {
+                apiParams.name = searchFormValues.name.trim();
+              }
+
+              // 如果有关键词搜索，传递给后端
+              if (searchFormValues?.keyword && searchFormValues.keyword.trim()) {
+                apiParams.keyword = searchFormValues.keyword.trim();
+              }
+
               try {
                 const result = await materialApi.list(apiParams);
                 return {

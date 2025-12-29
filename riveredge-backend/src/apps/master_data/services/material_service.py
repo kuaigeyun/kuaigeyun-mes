@@ -338,18 +338,24 @@ class MaterialService:
         skip: int = 0,
         limit: int = 100,
         group_id: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
     ) -> List[MaterialResponse]:
         """
         获取物料列表
-        
+
         Args:
             tenant_id: 租户ID
             skip: 跳过数量
             limit: 限制数量
             group_id: 物料分组ID（可选，用于过滤）
             is_active: 是否启用（可选）
-            
+            keyword: 搜索关键词（物料编码或名称）
+            code: 物料编码（精确匹配）
+            name: 物料名称（模糊匹配）
+
         Returns:
             List[MaterialResponse]: 物料列表
         """
@@ -357,12 +363,27 @@ class MaterialService:
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
+
         if group_id is not None:
             query = query.filter(group_id=group_id)
-        
+
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        # 添加搜索条件
+        if keyword:
+            # 关键词搜索物料编码或名称
+            query = query.filter(
+                Q(code__icontains=keyword) | Q(name__icontains=keyword)
+            )
+
+        if code:
+            # 精确匹配物料编码
+            query = query.filter(code__icontains=code)
+
+        if name:
+            # 模糊匹配物料名称
+            query = query.filter(name__icontains=name)
         
         materials = await query.offset(skip).limit(limit).order_by("code").all()
         
