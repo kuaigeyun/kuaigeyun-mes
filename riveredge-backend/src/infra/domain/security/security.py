@@ -13,7 +13,7 @@ from passlib.context import CryptContext
 from infra.config.infra_config import infra_settings as settings
 
 
-# 密码加密上下文（使用 pbkdf2，更好的跨平台兼容性）
+# 密码加密上下文（使用 pbkdf2_sha256，更好的跨平台兼容性）
 pwd_context = CryptContext(
     schemes=["pbkdf2_sha256"],
     deprecated="auto",
@@ -103,7 +103,7 @@ def hash_password(password: str) -> str:
         password: 明文密码
 
     Returns:
-        str: 加密后的密码哈希值（固定长度约60字符）
+        str: 加密后的密码哈希值
 
     Example:
         >>> hashed = hash_password("mypassword")
@@ -111,7 +111,6 @@ def hash_password(password: str) -> str:
         True
     """
     # pbkdf2_sha256 支持任意长度的密码，不需要长度限制
-    
     return pwd_context.hash(password)
 
 
