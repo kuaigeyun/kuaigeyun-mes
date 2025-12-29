@@ -179,6 +179,13 @@ const ApplicationListPage: React.FC = () => {
       loadApplications();
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+
+      // 触发自定义事件，通知菜单立即刷新
+      window.dispatchEvent(new CustomEvent('application-status-changed', {
+        detail: { application: record, isInstalled: true }
+      }));
+
+      console.log(`📢 已触发应用安装事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || '安装失败');
     }
@@ -194,6 +201,13 @@ const ApplicationListPage: React.FC = () => {
       loadApplications();
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+
+      // 触发自定义事件，通知菜单立即刷新
+      window.dispatchEvent(new CustomEvent('application-status-changed', {
+        detail: { application: record, isInstalled: false }
+      }));
+
+      console.log(`📢 已触发应用卸载事件: ${record.name}`);
     } catch (error: any) {
       messageApi.error(error.message || '卸载失败');
     }
@@ -212,8 +226,16 @@ const ApplicationListPage: React.FC = () => {
         messageApi.success('禁用成功');
       }
       loadApplications();
+
       // 使应用菜单缓存失效，自动更新菜单
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+
+      // 触发自定义事件，通知菜单立即刷新
+      window.dispatchEvent(new CustomEvent('application-status-changed', {
+        detail: { application: record, isActive: checked }
+      }));
+
+      console.log(`📢 已触发应用状态变更事件: ${record.name} ${checked ? '启用' : '禁用'}`);
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
     }
