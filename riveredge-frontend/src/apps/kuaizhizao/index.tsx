@@ -17,6 +17,7 @@ import ReportingPage from './pages/production-execution/reporting';
 import InventoryPage from './pages/warehouse-management/inventory';
 import InboundPage from './pages/warehouse-management/inbound';
 import FinishedGoodsInboundPage from './pages/warehouse-management/finished-goods-inventory';
+import SalesOutboundPage from './pages/warehouse-management/sales-outbound';
 import OutboundPage from './pages/warehouse-management/outbound';
 
 const KuaizhizaoApp: React.FC = () => {
@@ -34,6 +35,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />
       <Route path="warehouse-management/inbound" element={<InboundPage />} />
       <Route path="warehouse-management/finished-goods-inventory" element={<FinishedGoodsInboundPage />} />
+      <Route path="warehouse-management/sales-outbound" element={<SalesOutboundPage />} />
       <Route path="warehouse-management/outbound" element={<OutboundPage />} />
 
       {/* 默认路由 - 应用首页 */}
