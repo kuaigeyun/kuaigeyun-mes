@@ -685,8 +685,13 @@ const UserListPage: React.FC = () => {
             <ProFormText
               name="username"
               label="用户名"
-              rules={[{ required: true, message: '请输入用户名' }]}
-              placeholder="请输入用户名"
+              rules={[
+                { required: true, message: '请输入用户名' },
+                { min: 3, message: '用户名长度不能少于3个字符' },
+                { max: 50, message: '用户名长度不能超过50个字符' },
+                { pattern: /^[a-zA-Z0-9_-]+$/, message: '用户名只能包含字母、数字、下划线和连字符' }
+              ]}
+              placeholder="请输入用户名（3-50个字符）"
               disabled={isEdit}
               fieldProps={{
                 autoComplete: 'off'
@@ -695,6 +700,9 @@ const UserListPage: React.FC = () => {
             <ProFormText
               name="full_name"
               label="姓名"
+              rules={[
+                { max: 100, message: '姓名长度不能超过100个字符' }
+              ]}
               placeholder="请输入姓名"
             />
           </div>
@@ -704,13 +712,19 @@ const UserListPage: React.FC = () => {
             <ProFormText
               name="phone"
               label="手机号"
-              rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号' }]}
+              rules={[
+                { required: true, message: '请输入手机号' },
+                { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的11位中国大陆手机号（以1开头）' }
+              ]}
               placeholder="请输入手机号"
             />
             <ProFormText
               name="email"
               label="邮箱"
-              placeholder="请输入邮箱"
+              rules={[
+                { type: 'email', message: '请输入正确的邮箱地址' }
+              ]}
+              placeholder="请输入邮箱（可选）"
             />
           </div>
 
@@ -719,8 +733,12 @@ const UserListPage: React.FC = () => {
             <ProFormText
               name="password"
               label="密码"
-              rules={isEdit ? [] : [{ required: true, message: '请输入密码' }]}
-              placeholder={isEdit ? '留空则不修改密码' : '请输入密码'}
+              rules={isEdit ? [] : [
+                { required: true, message: '请输入密码' },
+                { min: 8, message: '密码长度不能少于8个字符' },
+                { max: 100, message: '密码长度不能超过100个字符' }
+              ]}
+              placeholder={isEdit ? '留空则不修改密码' : '请输入密码（至少8个字符）'}
               fieldProps={{
                 type: 'password',
                 autoComplete: 'new-password'
@@ -731,6 +749,8 @@ const UserListPage: React.FC = () => {
               label="确认密码"
               rules={isEdit ? [] : [
                 { required: true, message: '请再次输入密码' },
+                { min: 8, message: '密码长度不能少于8个字符' },
+                { max: 100, message: '密码长度不能超过100个字符' },
                 ({ getFieldValue }) => ({
                   validator(_, value) {
                     if (!value || getFieldValue('password') === value) {
@@ -740,7 +760,7 @@ const UserListPage: React.FC = () => {
                   },
                 }),
               ]}
-              placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码'}
+              placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码（至少8个字符）'}
               fieldProps={{
                 type: 'password',
                 autoComplete: 'new-password'
