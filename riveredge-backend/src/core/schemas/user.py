@@ -8,7 +8,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 # 导入基础用户 Schema
 from infra.schemas.user import UserBase, UserCreate as SoilUserCreate, UserUpdate as SoilUserUpdate, UserResponse as SoilUserResponse
