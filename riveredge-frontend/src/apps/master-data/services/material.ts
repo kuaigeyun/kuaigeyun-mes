@@ -58,6 +58,13 @@ export const materialGroupApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/materials/groups/${uuid}`);
   },
+
+  /**
+   * 获取物料分组树形结构
+   */
+  tree: async (): Promise<any[]> => {
+    return api.get('/apps/master-data/materials/groups/tree');
+  },
 };
 
 /**
