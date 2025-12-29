@@ -68,47 +68,75 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({ operation
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    marginBottom: 12,
   };
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <Card
-        size="small"
-        style={{ marginBottom: 8 }}
-        bodyStyle={{ padding: '12px' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
-            {...listeners}
-            style={{
-              cursor: 'grab',
-              padding: '4px 8px',
-              display: 'flex',
-              alignItems: 'center',
-              color: '#999',
-            }}
-          >
-            <HolderOutlined />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 500, marginBottom: 4 }}>
-              {operation.code} - {operation.name}
-            </div>
-            {operation.description && (
-              <div style={{ color: '#666', fontSize: 12 }}>
-                {operation.description}
-              </div>
-            )}
-          </div>
-          <Button
-            type="text"
-            danger
-            size="small"
-            icon={<CloseOutlined />}
-            onClick={onDelete}
-          />
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 16px',
+        background: '#fff',
+        border: '1px solid #f0f0f0',
+        borderRadius: '6px',
+        cursor: 'grab',
+        transition: 'all 0.2s',
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+      }}>
+        <div
+          {...listeners}
+          style={{
+            width: 28,
+            height: 28,
+            background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
+            color: 'white',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 14,
+            fontWeight: 600,
+            flexShrink: 0,
+            boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)',
+            cursor: 'grab',
+          }}
+        >
+          <HolderOutlined style={{ fontSize: 12 }} />
         </div>
-      </Card>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontWeight: 600,
+            color: '#262626',
+            marginBottom: 2,
+            fontSize: '14px'
+          }}>
+            {operation.code} - {operation.name}
+          </div>
+          {operation.description && (
+            <div style={{
+              color: '#8c8c8c',
+              fontSize: '12px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {operation.description}
+            </div>
+          )}
+        </div>
+
+        <Button
+          size="small"
+          danger
+          onClick={onDelete}
+          style={{ flexShrink: 0 }}
+        >
+          删除
+        </Button>
+      </div>
     </div>
   );
 };
@@ -329,76 +357,16 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
             >
               <div style={{
                 border: '1px solid #d9d9d9',
-                padding: '16px',
+                padding: '20px',
                 background: '#fafafa',
                 minHeight: 120
               }}>
-                {operations.map((operation, index) => (
-                  <div key={operation.uuid} style={{ marginBottom: 12 }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 16px',
-                      background: '#fff',
-                      border: '1px solid #f0f0f0',
-                      cursor: 'grab',
-                      transition: 'all 0.2s',
-                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
-                      ':hover': {
-                        borderColor: '#1890ff',
-                        boxShadow: '0 2px 8px rgba(24, 144, 255, 0.15)'
-                      }
-                    }}>
-                      <div style={{
-                        width: 28,
-                        height: 28,
-                        background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
-                        color: 'white',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        flexShrink: 0,
-                        boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)'
-                      }}>
-                        {index + 1}
-                      </div>
-
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontWeight: 600,
-                          color: '#262626',
-                          marginBottom: 2,
-                          fontSize: '14px'
-                        }}>
-                          {operation.code} - {operation.name}
-                        </div>
-                        {operation.description && (
-                          <div style={{
-                            color: '#8c8c8c',
-                            fontSize: '12px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {operation.description}
-                          </div>
-                        )}
-                      </div>
-
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => handleDeleteOperation(operation.uuid)}
-                        style={{ flexShrink: 0 }}
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </div>
+                {operations.map((operation) => (
+                  <SortableOperationItem
+                    key={operation.uuid}
+                    operation={operation}
+                    onDelete={() => handleDeleteOperation(operation.uuid)}
+                  />
                 ))}
               </div>
             </SortableContext>
