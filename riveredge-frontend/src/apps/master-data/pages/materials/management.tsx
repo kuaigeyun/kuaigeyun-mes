@@ -74,39 +74,72 @@ const MaterialsManagementPage: React.FC = () => {
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null);
 
   /**
-   * 加载物料分组列表
+   * 将后端树形数据转换为Ant Design Tree组件格式
+   */
+  const convertToTreeData = useCallback((treeResponse: any[]): DataNode[] => {
+    const convertNode = (node: any): DataNode => {
+      return {
+        title: `${node.code} - ${node.name}`,
+        key: node.id.toString(),
+        icon: <FolderOutlined />,
+        isLeaf: !node.children || node.children.length === 0,
+        children: node.children ? node.children.map(convertNode) : undefined,
+      };
+    };
+
+    return [
+      {
+        title: '全部物料',
+        key: 'all',
+        icon: <FolderOutlined />,
+        isLeaf: false,
+      },
+      ...treeResponse.map(convertNode)
+    ];
+  }, []);
+
+  /**
+   * 加载物料分组树形结构
    */
   const loadMaterialGroups = useCallback(async () => {
     try {
       setMaterialGroupsLoading(true);
-      const result = await materialGroupApi.list({ limit: 1000 });
-      setMaterialGroups(result);
+
+      // 获取树形结构数据
+      const treeResult = await materialGroupApi.tree();
 
       // 构建树形数据
-      const treeData: DataNode[] = [
-        {
-          title: '全部物料',
-          key: 'all',
-          icon: <FolderOutlined />,
-          isLeaf: false,
-        },
-        ...result.map(group => ({
-          title: `${group.code} - ${group.name}`,
-          key: group.id.toString(),
-          icon: <FolderOutlined />,
-          isLeaf: false,
-        }))
-      ];
+      const treeData: DataNode[] = convertToTreeData(treeResult);
 
       setGroupTreeData(treeData);
       setFilteredGroupTreeData(treeData);
+
+      // 同时获取平级列表用于其他操作（如果需要）
+      const listResult = await materialGroupApi.list({ limit: 1000 });
+      setMaterialGroups(listResult);
+
+      // 递归收集所有节点的key用于展开
+      const collectAllKeys = (nodes: DataNode[]): React.Key[] => {
+        let keys: React.Key[] = [];
+        nodes.forEach(node => {
+          keys.push(node.key);
+          if (node.children && node.children.length > 0) {
+            keys = keys.concat(collectAllKeys(node.children));
+          }
+        });
+        return keys;
+      };
+
+      const allKeys = collectAllKeys(treeData);
+      setExpandedKeys(allKeys);
+
     } catch (error: any) {
-      console.error('加载物料分组列表失败:', error);
+      console.error('加载物料分组树形结构失败:', error);
       messageApi.error('加载物料分组失败');
     } finally {
       setMaterialGroupsLoading(false);
     }
-  }, [messageApi]);
+  }, [messageApi, convertToTreeData]);
 
   /**
    * 处理分组树选择
@@ -126,6 +159,13 @@ const MaterialsManagementPage: React.FC = () => {
       // 刷新物料列表
       actionRef.current?.reload();
     }
+  };
+
+  /**
+   * 处理分组树展开/收起
+   */
+  const handleGroupExpand: TreeProps['onExpand'] = (expandedKeys) => {
+    setExpandedKeys(expandedKeys);
   };
 
   /**
@@ -441,7 +481,7 @@ const MaterialsManagementPage: React.FC = () => {
           selectedKeys: selectedGroupKeys,
           expandedKeys: expandedKeys,
           onSelect: handleGroupSelect,
-          onExpand: setExpandedKeys,
+          onExpand: handleGroupExpand,
           showIcon: true,
           blockNode: true,
           loading: materialGroupsLoading,
