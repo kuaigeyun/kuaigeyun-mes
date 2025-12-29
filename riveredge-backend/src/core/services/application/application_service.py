@@ -252,44 +252,72 @@ class ApplicationService:
         Raises:
             NotFoundError: 当应用不存在时抛出
         """
-        application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
-        
-        # 记录旧的菜单配置和应用状态
-        old_menu_config = application.menu_config
-        old_is_active = application.is_active
-        
-        update_data = data.model_dump(exclude_unset=True)
-        
-        for key, value in update_data.items():
-            setattr(application, key, value)
-        
-        await application.save()
-        
-        # 如果菜单配置变更或应用状态变更，自动同步菜单
-        menu_config_changed = 'menu_config' in update_data and old_menu_config != application.menu_config
-        is_active_changed = 'is_active' in update_data and old_is_active != application.is_active
-        
-        if menu_config_changed or is_active_changed:
-            from core.services.system.menu_service import MenuService
-            
-            # 如果菜单配置变更，重新同步所有菜单（同步执行，确保菜单立即可用）
-            if menu_config_changed and application.menu_config:
-                await MenuService.sync_menus_from_application_config(
-                    tenant_id=tenant_id,
-                    application_uuid=str(application.uuid),
-                    menu_config=application.menu_config,
-                    is_active=application.is_active
-                )
-            elif is_active_changed:
-                # 如果只是应用状态变更，只更新菜单的启用状态
-                from core.models.menu import Menu
-                await Menu.filter(
-                    tenant_id=tenant_id,
-                    application_uuid=str(application.uuid),
-                    deleted_at__isnull=True
-                ).update(is_active=application.is_active)
-        
-        return application
+        conn = await get_db_connection()
+        try:
+            # 获取当前应用信息
+            application = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
+
+            # 记录旧的菜单配置和应用状态
+            old_menu_config = application.get('menu_config')
+            old_is_active = application.get('is_active', False)
+
+            update_data = data.model_dump(exclude_unset=True)
+
+            # 处理菜单配置的JSON序列化
+            if 'menu_config' in update_data and update_data['menu_config'] is not None:
+                if isinstance(update_data['menu_config'], dict):
+                    update_data['menu_config'] = json.dumps(update_data['menu_config'], ensure_ascii=False)
+
+            # 构建更新查询
+            if update_data:
+                columns = list(update_data.keys())
+                placeholders = [f"${i+1}" for i in range(len(columns))]
+                values = list(update_data.values())
+
+                query = f"""
+                    UPDATE core_applications
+                    SET {', '.join(f'{col} = {ph}' for col, ph in zip(columns, placeholders))}, updated_at = NOW()
+                    WHERE tenant_id = $1 AND uuid = $2 AND deleted_at IS NULL
+                """
+
+                params = [tenant_id, uuid] + values
+                result = await conn.execute(query, *params)
+
+                if result != "UPDATE 1":
+                    raise NotFoundError(f"应用 {uuid} 更新失败")
+
+            # 如果菜单配置变更或应用状态变更，自动同步菜单
+            menu_config_changed = 'menu_config' in update_data
+            is_active_changed = 'is_active' in update_data
+
+            if menu_config_changed or is_active_changed:
+                from core.services.system.menu_service import MenuService
+
+                # 重新获取更新后的应用信息
+                updated_app = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
+
+                # 如果菜单配置变更，重新同步所有菜单
+                if menu_config_changed and updated_app.get('menu_config'):
+                    await MenuService.sync_menus_from_application_config(
+                        tenant_id=tenant_id,
+                        application_uuid=uuid,
+                        menu_config=updated_app['menu_config'],
+                        is_active=updated_app.get('is_active', True)
+                    )
+                elif is_active_changed:
+                    # 如果只是应用状态变更，只更新菜单的启用状态
+                    from core.models.menu import Menu
+                    await Menu.filter(
+                        tenant_id=tenant_id,
+                        application_uuid=uuid,
+                        deleted_at__isnull=True
+                    ).update(is_active=updated_app.get('is_active', True))
+
+            # 返回更新后的应用信息
+            return await ApplicationService.get_application_by_uuid(tenant_id, uuid)
+
+        finally:
+            await conn.close()
     
     @staticmethod
     async def delete_application(
