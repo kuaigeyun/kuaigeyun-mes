@@ -497,35 +497,41 @@ const UserListPage: React.FC = () => {
     {
       title: '邮箱',
       dataIndex: 'email',
-      // 移除固定宽度，让智能分配
+      width: 180,
+      ellipsis: true,
     },
     {
       title: '姓名',
       dataIndex: 'full_name',
-      // 移除固定宽度，让智能分配
+      width: 120,
+      ellipsis: true,
     },
     {
       title: '手机号',
       dataIndex: 'phone',
-      // 移除固定宽度，让智能分配
+      width: 130,
       hideInSearch: true,
+      ellipsis: true,
     },
     {
       title: '部门',
       dataIndex: 'department',
-      // 移除固定宽度，让智能分配
+      width: 120,
+      ellipsis: true,
       render: (_, record) => record.department?.name || '-',
     },
     {
       title: '职位',
       dataIndex: 'position',
-      // 移除固定宽度，让智能分配
+      width: 120,
+      ellipsis: true,
       render: (_, record) => record.position?.name || '-',
     },
     {
       title: '角色',
       dataIndex: 'roles',
-      // 移除固定宽度，让智能分配
+      width: 150,
+      ellipsis: true,
       hideInSearch: true,
       render: (_, record) => (
         <Space>
