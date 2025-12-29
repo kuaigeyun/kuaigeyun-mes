@@ -8,7 +8,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, AutoComplete, Select } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import FormModal from '../../../../components/form-modal';
@@ -42,7 +42,151 @@ const UserListPage: React.FC = () => {
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
-  
+
+  // 自定义AutoComplete选择器组件（单选）
+  const AutoCompleteSelect: React.FC<{
+    value?: string;
+    onChange?: (value: string) => void;
+    options: Array<{ label: string; value: string; key?: string }>;
+    placeholder?: string;
+    disabled?: boolean;
+    style?: React.CSSProperties;
+  }> = ({ value, onChange, options, placeholder, disabled, style }) => {
+    const [inputValue, setInputValue] = useState('');
+
+    // 过滤选项
+    const filteredOptions = options.filter(option =>
+      option.label.toLowerCase().includes(inputValue.toLowerCase())
+    );
+
+    // 处理选择
+    const handleSelect = (selectedValue: string) => {
+      const selectedOption = options.find(opt => opt.value === selectedValue);
+      if (selectedOption) {
+        setInputValue(selectedOption.label);
+        onChange?.(selectedValue);
+      }
+    };
+
+    // 处理输入变化
+    const handleInputChange = (input: string) => {
+      setInputValue(input);
+    };
+
+    // 当value变化时，更新显示的文本
+    useEffect(() => {
+      if (value) {
+        const selectedOption = options.find(opt => opt.value === value);
+        if (selectedOption) {
+          setInputValue(selectedOption.label);
+        }
+      } else {
+        setInputValue('');
+      }
+    }, [value, options]);
+
+    return (
+      <AutoComplete
+        value={inputValue}
+        onChange={handleInputChange}
+        onSelect={handleSelect}
+        placeholder={placeholder}
+        disabled={disabled}
+        style={style}
+        options={filteredOptions.map(option => ({
+          value: option.value,
+          label: option.label,
+        }))}
+        filterOption={false} // 禁用默认过滤，我们使用自定义过滤
+      />
+    );
+  };
+
+  // 自定义多选AutoComplete组件
+  const AutoCompleteMultiSelect: React.FC<{
+    value?: string[];
+    onChange?: (value: string[]) => void;
+    options: Array<{ label: string; value: string; key?: string }>;
+    placeholder?: string;
+    disabled?: boolean;
+    style?: React.CSSProperties;
+  }> = ({ value = [], onChange, options, placeholder, disabled, style }) => {
+    const [inputValue, setInputValue] = useState('');
+
+    // 获取已选中的选项标签
+    const selectedLabels = value.map(val => {
+      const option = options.find(opt => opt.value === val);
+      return option?.label || val;
+    }).join(', ');
+
+    // 显示值（已选中的标签或输入的值）
+    const displayValue = selectedLabels || inputValue;
+
+    // 过滤选项（排除已选中的）
+    const filteredOptions = options.filter(option =>
+      !value.includes(option.value) &&
+      option.label.toLowerCase().includes(inputValue.toLowerCase())
+    );
+
+    // 处理选择
+    const handleSelect = (selectedValue: string) => {
+      const newValue = [...value, selectedValue];
+      onChange?.(newValue);
+      setInputValue(''); // 清空输入
+    };
+
+    // 处理输入变化
+    const handleInputChange = (input: string) => {
+      setInputValue(input);
+    };
+
+    // 处理删除标签
+    const handleTagClose = (removedValue: string) => {
+      const newValue = value.filter(val => val !== removedValue);
+      onChange?.(newValue);
+    };
+
+    return (
+      <div style={{ position: 'relative', ...style }}>
+        {/* 显示已选中的标签 */}
+        {value.length > 0 && (
+          <div style={{ marginBottom: '8px' }}>
+            <Space size={[0, 8]} wrap>
+              {value.map(val => {
+                const option = options.find(opt => opt.value === val);
+                return (
+                  <Tag
+                    key={val}
+                    closable
+                    onClose={() => handleTagClose(val)}
+                    style={{ margin: 0 }}
+                  >
+                    {option?.label || val}
+                  </Tag>
+                );
+              })}
+            </Space>
+          </div>
+        )}
+
+        {/* AutoComplete输入框 */}
+        <AutoComplete
+          value={inputValue}
+          onChange={handleInputChange}
+          onSelect={handleSelect}
+          placeholder={value.length === 0 ? placeholder : '继续添加...'}
+          disabled={disabled}
+          style={{ width: '100%' }}
+          options={filteredOptions.map(option => ({
+            value: option.value,
+            label: option.label,
+          }))}
+          filterOption={false}
+        />
+      </div>
+    );
+  };
+
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -529,32 +673,43 @@ const UserListPage: React.FC = () => {
 
           {/* 第四行：组织架构 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <SafeProFormSelect
+            <ProForm.Item
               name="department_uuid"
               label="部门"
-              placeholder="请选择部门"
-              options={departmentOptions}
-              allowClear
-            />
-            <SafeProFormSelect
+              rules={[]}
+            >
+              <AutoCompleteSelect
+                placeholder="请输入部门名称搜索"
+                options={departmentOptions}
+                style={{ width: '100%' }}
+              />
+            </ProForm.Item>
+            <ProForm.Item
               name="position_uuid"
               label="职位"
-              placeholder="请选择职位"
-              options={positionOptions}
-              allowClear
-            />
+              rules={[]}
+            >
+              <AutoCompleteSelect
+                placeholder="请输入职位名称搜索"
+                options={positionOptions}
+                style={{ width: '100%' }}
+              />
+            </ProForm.Item>
           </div>
 
           {/* 第五行：角色和权限 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
-            <SafeProFormSelect
+            <ProForm.Item
               name="role_uuids"
               label="角色"
-              placeholder="请选择角色（可多选）"
-              options={roleOptions}
-              mode="multiple"
-              allowClear
-            />
+              rules={[]}
+            >
+              <AutoCompleteMultiSelect
+                placeholder="请输入角色名称搜索并选择"
+                options={roleOptions}
+                style={{ width: '100%' }}
+              />
+            </ProForm.Item>
           </div>
 
           {/* 第六行：状态设置 */}
