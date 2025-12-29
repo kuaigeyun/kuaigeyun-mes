@@ -152,17 +152,31 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
   );
 
   // 获取插件路由组件
-  const PluginRoutes = pluginModule.default || pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`];
+  let PluginRoutes = pluginModule.default || pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`];
 
+  // 如果没有找到路由组件，检查是否是完整的应用组件（包含内部路由）
   if (!PluginRoutes) {
-    console.error(`❌ [插件加载] ${pluginCode} - 未找到路由组件`, {
-      default: pluginModule.default,
-      routes: pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`],
-      allExports: Object.keys(pluginModule),
-    });
-    throw new Error(`插件 ${application.code} 未导出路由组件。请确保插件入口文件导出了 default 或 ${pluginCode}Routes`);
-  }
+    // 尝试查找应用组件（App后缀）
+    PluginRoutes = pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}App`];
 
+    if (!PluginRoutes && pluginModule.default) {
+      // 如果default存在且是一个React组件，直接使用它
+      const defaultExport = pluginModule.default;
+      if (typeof defaultExport === 'function' || (defaultExport && typeof defaultExport === 'object' && '$$typeof' in defaultExport)) {
+        PluginRoutes = defaultExport;
+      }
+    }
+
+    if (!PluginRoutes) {
+      console.error(`❌ [插件加载] ${pluginCode} - 未找到路由组件或应用组件`, {
+        default: pluginModule.default,
+        routes: pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`],
+        app: pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}App`],
+        allExports: Object.keys(pluginModule),
+      });
+      throw new Error(`插件 ${application.code} 未导出路由组件或应用组件。请确保插件入口文件导出了 default、${pluginCode}Routes 或 ${pluginCode}App`);
+    }
+  }
 
   // 返回路由配置
   const routePath = application.route_path || `/apps/${application.code}`;
