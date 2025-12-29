@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Card, Select } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Card, Select, Divider, Typography, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined, CloseOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -235,36 +235,89 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
   );
 
   return (
-    <div>
+    <div style={{ minHeight: 240 }}>
       {/* 工序选择器 */}
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-        <Select
-          placeholder="请选择要添加的工序"
-          options={availableOperations.map((op) => ({
-            label: `${op.code} - ${op.name}`,
-            value: op.uuid,
-          }))}
-          value={selectedOperationUuid}
-          onChange={setSelectedOperationUuid}
-          style={{ flex: 1 }}
-          loading={loading}
-          showSearch
-          filterOption={(input: string, option: any) => {
-            const label = option?.label || '';
-            return label.toLowerCase().includes(input.toLowerCase());
-          }}
-        />
-        <Button type="primary" onClick={handleAddOperation} disabled={!selectedOperationUuid || loading}>
+      <div style={{ marginBottom: 24 }}>
+        <Typography.Text strong style={{ marginBottom: 12, display: 'block' }}>
           添加工序
-        </Button>
+        </Typography.Text>
+        <Space.Compact style={{ width: '100%' }}>
+          <Select
+            placeholder="搜索并选择工序..."
+            options={availableOperations.map((op) => ({
+              label: `${op.code} - ${op.name}`,
+              value: op.uuid,
+              title: op.description || `${op.code} - ${op.name}`,
+            }))}
+            value={selectedOperationUuid}
+            onChange={setSelectedOperationUuid}
+            style={{ flex: 1, minWidth: 200 }}
+            loading={loading}
+            showSearch
+            allowClear
+            filterOption={(input: string, option: any) => {
+              const label = option?.label || '';
+              return label.toLowerCase().includes(input.toLowerCase());
+            }}
+            notFoundContent={loading ? '加载中...' : '暂无可用工序'}
+          />
+          <Button
+            type="primary"
+            onClick={handleAddOperation}
+            disabled={!selectedOperationUuid || loading}
+            style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+          >
+            <PlusOutlined />
+            添加
+          </Button>
+        </Space.Compact>
+        {availableOperations.length === 0 && !loading && (
+          <div style={{ marginTop: 8 }}>
+            <Typography.Text type="danger" style={{ fontSize: '12px' }}>
+              没有可用的工序，请先在"工序管理"中创建工序
+            </Typography.Text>
+          </div>
+        )}
       </div>
 
-      {/* 工序列表（可拖拽排序） */}
-      {operations.length > 0 ? (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ marginBottom: 8, color: '#666', fontSize: 14 }}>
-            工序序列（共 {operations.length} 个，可拖拽排序）：
-          </div>
+      <Divider style={{ margin: '16px 0' }} />
+
+      {/* 工序列表 */}
+      <div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16
+        }}>
+          <Typography.Text strong>
+            工序序列 ({operations.length} 个)
+          </Typography.Text>
+          {operations.length > 1 && (
+            <Button
+              size="small"
+              danger
+              onClick={() => {
+                Modal.confirm({
+                  title: '清空工序',
+                  content: '确定要清空所有工序吗？此操作不可撤销。',
+                  okText: '确定清空',
+                  cancelText: '取消',
+                  okButtonProps: { danger: true },
+                  onOk: () => {
+                    setOperations([]);
+                    onChange?.([]);
+                    setSelectedOperationUuid(undefined);
+                  },
+                });
+              }}
+            >
+              清空全部
+            </Button>
+          )}
+        </div>
+
+        {operations.length > 0 ? (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -274,21 +327,95 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
               items={operations.map((op) => op.uuid)}
               strategy={verticalListSortingStrategy}
             >
-              {operations.map((operation) => (
-                <SortableOperationItem
-                  key={operation.uuid}
-                  operation={operation}
-                  onDelete={() => handleDeleteOperation(operation.uuid)}
-                />
-              ))}
+              <div style={{
+                border: '1px solid #d9d9d9',
+                padding: '16px',
+                background: '#fafafa',
+                minHeight: 120
+              }}>
+                {operations.map((operation, index) => (
+                  <div key={operation.uuid} style={{ marginBottom: 12 }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '12px 16px',
+                      background: '#fff',
+                      border: '1px solid #f0f0f0',
+                      cursor: 'grab',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+                      ':hover': {
+                        borderColor: '#1890ff',
+                        boxShadow: '0 2px 8px rgba(24, 144, 255, 0.15)'
+                      }
+                    }}>
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
+                        color: 'white',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        flexShrink: 0,
+                        boxShadow: '0 2px 4px rgba(24, 144, 255, 0.3)'
+                      }}>
+                        {index + 1}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#262626',
+                          marginBottom: 2,
+                          fontSize: '14px'
+                        }}>
+                          {operation.code} - {operation.name}
+                        </div>
+                        {operation.description && (
+                          <div style={{
+                            color: '#8c8c8c',
+                            fontSize: '12px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {operation.description}
+                          </div>
+                        )}
+                      </div>
+
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => handleDeleteOperation(operation.uuid)}
+                        style={{ flexShrink: 0 }}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </SortableContext>
           </DndContext>
-        </div>
-      ) : (
-        <div style={{ marginTop: 16, padding: 24, textAlign: 'center', background: '#f5f5f5', borderRadius: 4, color: '#999' }}>
-          暂无工序，请添加工序
-        </div>
-      )}
+        ) : (
+          <div style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            background: '#fafafa',
+            border: '1px dashed #d9d9d9'
+          }}>
+            <Typography.Text type="secondary" style={{ fontSize: '14px' }}>
+              暂无工序，请从上方选择工序并点击"添加"按钮
+            </Typography.Text>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -313,6 +440,28 @@ const ProcessRoutesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
+
+  // 键盘快捷键支持
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!modalVisible) return;
+
+      // Ctrl/Cmd + Enter 保存
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        formRef.current?.submit();
+      }
+
+      // Escape 关闭
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleCloseModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [modalVisible]);
 
   /**
    * 处理新建工艺路线
@@ -482,8 +631,21 @@ const ProcessRoutesPage: React.FC = () => {
     try {
       setFormLoading(true);
 
+      // 前端验证
+      if (!values.code?.trim()) {
+        messageApi.error('请输入工艺路线编码');
+        return;
+      }
+      if (!values.name?.trim()) {
+        messageApi.error('请输入工艺路线名称');
+        return;
+      }
+      if (operationSequence.length === 0) {
+        messageApi.error('请至少添加一个工序');
+        return;
+      }
+
       // 将工序序列转换为JSON格式
-      // 格式：{ sequence: [uuid1, uuid2, ...] } 或直接使用UUID数组
       const operationSequenceData = operationSequence.length > 0
         ? {
             sequence: operationSequence.map((op) => op.uuid),
@@ -496,29 +658,31 @@ const ProcessRoutesPage: React.FC = () => {
         : null;
 
       const submitData = {
-        code: values.code,
-        name: values.name,
-        description: values.description,
-        is_active: values.isActive,
+        code: values.code.trim(),
+        name: values.name.trim(),
+        description: values.description?.trim() || null,
+        is_active: values.isActive ?? true,
         operation_sequence: operationSequenceData,
       };
-      
+
       if (isEdit && currentProcessRouteUuid) {
         // 更新工艺路线
         await processRouteApi.update(currentProcessRouteUuid, submitData as ProcessRouteUpdate);
-        messageApi.success('更新成功');
+        messageApi.success('工艺路线更新成功');
       } else {
         // 创建工艺路线
         await processRouteApi.create(submitData as ProcessRouteCreate);
-        messageApi.success('创建成功');
+        messageApi.success('工艺路线创建成功');
       }
-      
+
       setModalVisible(false);
       setOperationSequence([]);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      console.error('提交工艺路线失败:', error);
+      const errorMessage = error.response?.data?.message || error.message || (isEdit ? '更新失败' : '创建失败');
+      messageApi.error(errorMessage);
     } finally {
       setFormLoading(false);
     }
@@ -801,77 +965,150 @@ const ProcessRoutesPage: React.FC = () => {
         title={isEdit ? '编辑工艺路线' : '新建工艺路线'}
         open={modalVisible}
         onCancel={handleCloseModal}
-        footer={null}
-        width={800}
+        onOk={() => formRef.current?.submit()}
+        okText={isEdit ? '更新' : '创建'}
+        cancelText="取消"
+        confirmLoading={formLoading}
+        width={960}
         destroyOnHidden
+        style={{ top: 20 }}
+        bodyStyle={{
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}
+        footer={[
+          <div key="footer" style={{ display: 'flex', justifyContent: 'flex-start', gap: '8px' }}>
+            <Button onClick={handleCloseModal}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={formLoading}
+              onClick={() => formRef.current?.submit()}
+            >
+              {isEdit ? '更新' : '创建'}
+            </Button>
+          </div>
+        ]}
       >
         <ProForm
           formRef={formRef}
           loading={formLoading}
           onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
+          submitter={false}
           initialValues={{
-            isActive: true,
+            is_active: true,
           }}
           layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
         >
-          <ProFormText
-            name="code"
-            label="工艺路线编码"
-            placeholder="请输入工艺路线编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入工艺路线编码' },
-              { max: 50, message: '工艺路线编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="工艺路线名称"
-            placeholder="请输入工艺路线名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入工艺路线名称' },
-              { max: 200, message: '工艺路线名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
-          <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>
-              工序序列
+          {/* 快捷键提示 */}
+          <div style={{
+            marginBottom: 16,
+            padding: '8px 12px',
+            background: '#f6ffed',
+            border: '1px solid #b7eb8f',
+            textAlign: 'center'
+          }}>
+            <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+              💡 快捷键：Ctrl+Enter 保存 • Esc 关闭
+            </Typography.Text>
+          </div>
+
+          {/* 基本信息 */}
+          <Row gutter={24}>
+            <Col span={12}>
+              <ProFormText
+                name="code"
+                label={
+                  <Typography.Text strong>工艺路线编码</Typography.Text>
+                }
+                placeholder="请输入工艺路线编码"
+                rules={[
+                  { required: true, message: '请输入工艺路线编码' },
+                  { max: 50, message: '工艺路线编码不能超过50个字符' },
+                ]}
+                fieldProps={{
+                  style: { textTransform: 'uppercase' },
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="name"
+                label={
+                  <Typography.Text strong>工艺路线名称</Typography.Text>
+                }
+                placeholder="请输入工艺路线名称"
+                rules={[
+                  { required: true, message: '请输入工艺路线名称' },
+                  { max: 200, message: '工艺路线名称不能超过200个字符' },
+                ]}
+              />
+            </Col>
+          </Row>
+
+          {/* 工序序列配置 */}
+          <div style={{ marginTop: 24, marginBottom: 24 }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 16
+            }}>
+              <Typography.Text strong style={{ fontSize: '16px' }}>
+                工序序列配置
+              </Typography.Text>
+              <Space>
+                <Tag color={operationSequence.length > 0 ? 'processing' : 'default'} size="small">
+                  {operationSequence.length} 个工序
+                </Tag>
+                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                  支持拖拽排序，点击删除移除工序
+                </Typography.Text>
+              </Space>
             </div>
             <OperationSequenceEditor
               value={operationSequence}
               onChange={setOperationSequence}
             />
           </div>
+
+          {/* 描述 */}
+          <Row>
+            <Col span={24}>
+              <ProFormTextArea
+                name="description"
+                label={
+                  <Typography.Text strong>描述</Typography.Text>
+                }
+                placeholder="请输入工艺路线的详细描述（可选）"
+                fieldProps={{
+                  rows: 3,
+                  maxLength: 500,
+                  showCount: true,
+                }}
+              />
+            </Col>
+          </Row>
+
+          {/* 启用状态 */}
+          <Row style={{ marginTop: 16 }}>
+            <Col span={24}>
+              <ProFormSwitch
+                name="is_active"
+                label={
+                  <Space direction="vertical" size={4}>
+                    <Typography.Text strong>是否启用</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                      禁用后该工艺路线将不可用
+                    </Typography.Text>
+                  </Space>
+                }
+                checkedChildren="启用"
+                unCheckedChildren="禁用"
+              />
+            </Col>
+          </Row>
         </ProForm>
       </Modal>
     </>
