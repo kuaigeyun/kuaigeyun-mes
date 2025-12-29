@@ -73,7 +73,7 @@
                 "children": [
                     {
                         "title": "物料管理",
-                        "path": "/apps/master-data/materials/list",
+                        "path": "/apps/master-data/materials",
                         "permission": "master-data:material:view",
                         "sort_order": 1
                     },
