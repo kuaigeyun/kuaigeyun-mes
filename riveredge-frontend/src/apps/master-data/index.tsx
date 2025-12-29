@@ -49,7 +49,7 @@ const MasterDataApp: React.FC = () => {
       <Route path="warehouse/storage-locations" element={<StorageLocationsPage />} />
 
       {/* 物料管理路由 */}
-      <Route path="materials/list" element={<MaterialsManagementPage />} />
+      <Route path="materials" element={<MaterialsManagementPage />} />
       <Route path="materials/bom" element={<BOMPage />} />
 
       {/* 工艺管理路由 */}
