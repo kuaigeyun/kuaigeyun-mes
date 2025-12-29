@@ -59,6 +59,7 @@ const getApplicationIcon = (code: string, icon?: string | null) => {
   // 根据应用代码返回默认图标
   const iconMap: Record<string, React.ReactNode> = {
     kuaimes: React.createElement(ManufacturingIcons.production, { size: 72 }), // 快格轻MES
+    kuaizhizao: React.createElement(ManufacturingIcons.production, { size: 72 }), // 快格轻制造
     'master-data': React.createElement(ManufacturingIcons.database, { size: 72 }), // 主数据管理
     crm: <UserOutlined />,
     erp: <ShopOutlined />,
