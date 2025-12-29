@@ -35,13 +35,29 @@ interface WorkOrderSchedule {
   priority: number;
 }
 
+interface GanttTask {
+  id: string;
+  name: string;
+  start: Date;
+  end: Date;
+  progress: number;
+  dependencies?: string[];
+  workCenter: string;
+  priority: number;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Tab状态
-  const [activeTab, setActiveTab] = useState<'mrp' | 'schedule'>('mrp');
+  const [activeTab, setActiveTab] = useState<'mrp' | 'schedule' | 'gantt'>('mrp');
+
+  // 甘特图数据状态
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>([]);
+  const [ganttViewMode, setGanttViewMode] = useState<'day' | 'week' | 'month'>('week');
 
   /**
    * 处理MRP运算
@@ -84,6 +100,75 @@ const SchedulingPage: React.FC = () => {
       },
     });
   };
+
+  /**
+   * 处理甘特图任务拖拽
+   */
+  const handleTaskDrag = (taskId: string, newStart: Date, newEnd: Date) => {
+    setGanttTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId
+          ? { ...task, start: newStart, end: newEnd }
+          : task
+      )
+    );
+    messageApi.success('工单排程已更新');
+  };
+
+  /**
+   * 处理甘特图视图模式切换
+   */
+  const handleViewModeChange = (mode: 'day' | 'week' | 'month') => {
+    setGanttViewMode(mode);
+  };
+
+  /**
+   * 加载甘特图数据
+   */
+  const loadGanttData = () => {
+    // 模拟甘特图数据
+    const mockTasks: GanttTask[] = [
+      {
+        id: 'task-1',
+        name: 'WO20241201001 - 产品A生产',
+        start: new Date('2024-12-02'),
+        end: new Date('2024-12-04'),
+        progress: 30,
+        workCenter: '组装线1',
+        priority: 8,
+        status: 'in_progress',
+      },
+      {
+        id: 'task-2',
+        name: 'WO20241201002 - 产品B生产',
+        start: new Date('2024-12-03'),
+        end: new Date('2024-12-05'),
+        progress: 0,
+        workCenter: '组装线2',
+        priority: 6,
+        status: 'pending',
+        dependencies: ['task-1'],
+      },
+      {
+        id: 'task-3',
+        name: 'WO20241201003 - 产品C生产',
+        start: new Date('2024-12-04'),
+        end: new Date('2024-12-06'),
+        progress: 100,
+        workCenter: '组装线1',
+        priority: 5,
+        status: 'completed',
+      },
+    ];
+    setGanttTasks(mockTasks);
+  };
+
+  // 初始化甘特图数据
+  React.useEffect(() => {
+    if (activeTab === 'gantt') {
+      loadGanttData();
+    }
+  }, [activeTab]);
 
   /**
    * MRP建议表格列定义
@@ -386,6 +471,75 @@ const SchedulingPage: React.FC = () => {
               </Button>,
             ]}
           />
+        </>
+      ),
+    },
+    {
+      key: 'gantt',
+      label: '甘特图排产',
+      children: (
+        <>
+          {/* 甘特图工具栏 */}
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Space>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={loadGanttData}
+              >
+                刷新
+              </Button>
+              <Button
+                type="primary"
+                icon={<ScheduleOutlined />}
+                onClick={handleAutoSchedule}
+              >
+                自动排程
+              </Button>
+            </Space>
+            <Space>
+              <span>视图：</span>
+              <Button.Group>
+                <Button
+                  type={ganttViewMode === 'day' ? 'primary' : 'default'}
+                  onClick={() => handleViewModeChange('day')}
+                >
+                  日
+                </Button>
+                <Button
+                  type={ganttViewMode === 'week' ? 'primary' : 'default'}
+                  onClick={() => handleViewModeChange('week')}
+                >
+                  周
+                </Button>
+                <Button
+                  type={ganttViewMode === 'month' ? 'primary' : 'default'}
+                  onClick={() => handleViewModeChange('month')}
+                >
+                  月
+                </Button>
+              </Button.Group>
+            </Space>
+          </div>
+
+          {/* 甘特图容器 */}
+          <Card style={{ height: 600 }}>
+            <div style={{
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#f5f5f5',
+              border: '2px dashed #d9d9d9',
+              borderRadius: '8px'
+            }}>
+              <div style={{ textAlign: 'center', color: '#999' }}>
+                <ScheduleOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
+                <div style={{ fontSize: '16px', marginBottom: '8px' }}>甘特图功能开发中</div>
+                <div>支持拖拽调整工单排程时间</div>
+                <div>显示工作中心产能和依赖关系</div>
+              </div>
+            </div>
+          </Card>
         </>
       ),
     },
