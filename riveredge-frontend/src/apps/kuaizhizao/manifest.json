@@ -1,7 +1,7 @@
 {
     "name": "快格轻制造",
     "code": "kuaizhizao",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "轻量级MES系统，专注生产执行核心流程",
     "icon": "production",
     "author": "RiverEdge Team",
@@ -108,6 +108,24 @@
                 ]
             },
             {
+                "title": "通用功能",
+                "icon": "tool",
+                "sort_order": 5,
+                "children": [{
+                        "title": "数据导入导出",
+                        "path": "/apps/kuaizhizao/common/data-import-export",
+                        "permission": "kuaizhizao:data-import-export:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "系统设置",
+                        "path": "/apps/kuaizhizao/common/system-settings",
+                        "permission": "kuaizhizao:system-settings:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
                 "title": "生产执行",
                 "icon": "factory",
                 "sort_order": 2,
@@ -208,6 +226,14 @@
         "kuaizhizao:quality-report:create",
         "kuaizhizao:quality-report:update",
         "kuaizhizao:quality-report:delete",
+        "kuaizhizao:data-import-export:view",
+        "kuaizhizao:data-import-export:create",
+        "kuaizhizao:data-import-export:update",
+        "kuaizhizao:data-import-export:delete",
+        "kuaizhizao:system-settings:view",
+        "kuaizhizao:system-settings:create",
+        "kuaizhizao:system-settings:update",
+        "kuaizhizao:system-settings:delete",
         "kuaizhizao:work-order:view",
         "kuaizhizao:work-order:create",
         "kuaizhizao:work-order:update",

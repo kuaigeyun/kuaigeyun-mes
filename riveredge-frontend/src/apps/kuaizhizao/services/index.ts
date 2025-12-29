@@ -7,3 +7,4 @@ export * from './sales';
 export * from './quality';
 export * from './finance';
 export * from './reports';
+export * from './common';
