@@ -490,77 +490,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const internalFormRef = useRef<ProFormInstance>();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonContainerRef = useRef<HTMLDivElement>(null);
-  const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
   
 
-  /**
-   * 动态计算表格滚动高度
-   * 计算可用高度：窗口高度 - 表格容器顶部距离 - 表格头部和工具栏 - 分页器 - 标签栏 - 安全边距
-   * 使用 ProTable 原生的 scroll.y 属性，只滚动表格行部分
-   */
-  useEffect(() => {
-    const calculateTableHeight = () => {
-      if (!containerRef.current) {
-        setTableScrollY(undefined);
-        return;
-      }
-
-      // 获取窗口高度
-      const windowHeight = window.innerHeight;
-
-      // 获取表格容器距离顶部的距离
-      const tableContainerRect = containerRef.current.getBoundingClientRect();
-      const tableTopOffset = tableContainerRect.top;
-
-      // 获取标签栏高度
-      const tabBar = document.querySelector('.uni-tabs-header') as HTMLElement;
-      const tabBarHeight = tabBar?.offsetHeight || 0;
-
-      // 计算表格头部和工具栏的高度（包括搜索栏、工具栏等）
-      const tableHeaderHeight = 100; // 工具栏、搜索栏、按钮等
-      const paginationHeight = 56; // 分页器高度
-      const pagePadding = 16 * 2; // 页面容器的上下 padding（各16px）
-      const bottomPadding = 16; // 底部额外的 padding
-      const extraSpace = 0; // 额外的安全边距
-
-      // 计算可用高度（减去标签栏高度、页面padding和底部padding）
-      const availableHeight = windowHeight - tableTopOffset - tableHeaderHeight - paginationHeight - tabBarHeight - pagePadding - bottomPadding - extraSpace;
-
-      // 只有当可用高度大于300px时才设置滚动高度，否则让表格自适应
-      // 300px是考虑表头、工具栏等固定元素后的最小高度
-      const minScrollHeight = 300;
-      const scrollY = availableHeight > minScrollHeight ? Math.min(availableHeight, windowHeight * 0.8) : undefined;
-
-      setTableScrollY(scrollY);
-    };
-
-    // 延迟计算，确保 DOM 已完全渲染
-    const timer = setTimeout(calculateTableHeight, 100);
-
-    // 初始计算
-    calculateTableHeight();
-
-    // 监听窗口大小变化
-    window.addEventListener('resize', calculateTableHeight);
-
-    // 使用 ResizeObserver 监听容器大小变化
-    let resizeObserver: ResizeObserver | null = null;
-    if (containerRef.current) {
-      resizeObserver = new ResizeObserver(() => {
-        // 延迟计算，避免频繁触发
-        setTimeout(calculateTableHeight, 50);
-      });
-      resizeObserver.observe(containerRef.current);
-    }
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', calculateTableHeight);
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      }
-    };
-  }, []);
 
   // 使用外部传入的 ref 或内部创建的 ref（优先使用外部传入的）
   const actionRef = externalActionRef || hookActionRef || internalActionRef;
@@ -1326,7 +1257,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }}
         scroll={{
           x: true, // 启用水平滚动，由ProTable自动管理列宽
-          y: tableScrollY, // 垂直滚动：当行数超出容器高度时显示
+          // 不设置y，让表格自适应内容高度，避免不必要的垂直滚动条
         }}
         {...(() => {
           // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
