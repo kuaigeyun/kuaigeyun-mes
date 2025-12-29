@@ -112,7 +112,7 @@ class ApplicationRegistryService:
             apps = [
                 {
                     "uuid": "master-data-uuid",
-                    "code": "master_data",
+                    "code": "master-data",
                     "name": "主数据管理",
                     "description": "基础数据管理应用",
                     "version": "1.0.0",
