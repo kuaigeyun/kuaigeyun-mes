@@ -19,6 +19,7 @@ import json
 from typing import Dict, Any
 
 from tortoise import Tortoise
+from tortoise.queryset import Q
 from infra.infrastructure.database.database import TORTOISE_ORM
 
 from infra.models.user import User
@@ -509,12 +510,12 @@ class AuthService:
         # 确保数据库连接已初始化
         await _ensure_db_connection()
 
-        logger.info(f"开始登录: username={data.username}, tenant_id={getattr(data, 'tenant_id', None)}")
-        # 查找用户（仅支持用户名登录，符合中国用户使用习惯）
+        logger.info(f"开始登录: username_or_phone={data.username}, tenant_id={getattr(data, 'tenant_id', None)}")
+        # 查找用户（支持用户名或手机号登录，符合中国用户使用习惯）
         # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
         # 如果提供了 tenant_id，同时过滤组织，避免多组织用户名冲突
         # 注意：使用 register_tortoise 后，连接池会自动管理，直接使用 Tortoise ORM 原生查询
-        
+
         # 优先查找平台管理（tenant_id=None 且 is_infra_admin=True）
         # 平台管理不需要 tenant_id，可以跨组织访问
         user = await User.get_or_none(
@@ -522,18 +523,20 @@ class AuthService:
             tenant_id__isnull=True,
             is_infra_admin=True
         )
-        
+
         # 如果不是系统级超级管理员，根据是否提供 tenant_id 进行查找
         if not user:
             if data.tenant_id is not None:
-                # 提供了 tenant_id，查找该组织内的用户
-                user = await User.get_or_none(
-                    username=data.username,
+                # 提供了 tenant_id，查找该组织内的用户（支持用户名或手机号）
+                user = await User.filter(
+                    Q(username=data.username) | Q(phone=data.username),
                     tenant_id=data.tenant_id
-                )
+                ).first()
             else:
-                # 没有提供 tenant_id，查找任意组织的用户（可能多个组织有相同用户名）
-                user = await User.get_or_none(username=data.username)
+                # 没有提供 tenant_id，查找任意组织的用户（可能多个组织有相同用户名/手机号）
+                user = await User.filter(
+                    Q(username=data.username) | Q(phone=data.username)
+                ).first()
         
         if not user:
             # 记录登录失败日志（用户不存在）

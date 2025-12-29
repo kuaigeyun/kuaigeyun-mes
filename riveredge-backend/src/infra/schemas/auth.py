@@ -12,16 +12,16 @@ from pydantic import BaseModel, Field, EmailStr, field_validator
 class LoginRequest(BaseModel):
     """
     登录请求 Schema
-    
+
     用于用户登录的请求数据。
-    
+
     Attributes:
-        username: 用户名（符合中国用户使用习惯，仅支持用户名登录）
+        username: 用户名或手机号（支持用户名或手机号登录）
         password: 密码
         tenant_id: 组织 ID（可选，如果提供则直接设置组织上下文）
     """
-    
-    username: str = Field(..., min_length=1, max_length=255, description="用户名（符合中国用户使用习惯）")
+
+    username: str = Field(..., min_length=1, max_length=255, description="用户名或手机号（支持用户名或手机号登录）")
     password: str = Field(..., min_length=1, max_length=100, description="密码")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则直接设置组织上下文）")
 
