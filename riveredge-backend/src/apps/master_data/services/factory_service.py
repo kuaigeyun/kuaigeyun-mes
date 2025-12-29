@@ -6,6 +6,7 @@
 
 from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
+from tortoise.query_utils import Q
 
 from apps.master_data.models.factory import Workshop, ProductionLine, Workstation
 from apps.master_data.schemas.factory_schemas import (
