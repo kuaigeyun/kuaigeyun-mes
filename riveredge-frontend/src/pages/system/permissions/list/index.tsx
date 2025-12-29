@@ -173,6 +173,9 @@ const PermissionListPage: React.FC = () => {
         showAdvancedSearch={true}
         pagination={{
           defaultPageSize: 20,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          pageSizeOptions: ['10', '20', '50', '100'],
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" onClick={handleCreate}>
