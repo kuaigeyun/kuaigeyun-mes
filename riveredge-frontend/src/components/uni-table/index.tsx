@@ -525,10 +525,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       // 计算可用高度（减去标签栏高度、页面padding和底部padding）
       const availableHeight = windowHeight - tableTopOffset - tableHeaderHeight - paginationHeight - tabBarHeight - pagePadding - bottomPadding - extraSpace;
 
-      // 设置最小高度为 200px，最大高度不超过窗口高度的 80%
-      const scrollY = Math.max(200, Math.min(availableHeight, windowHeight * 0.8));
+      // 只有当可用高度大于300px时才设置滚动高度，否则让表格自适应
+      // 300px是考虑表头、工具栏等固定元素后的最小高度
+      const minScrollHeight = 300;
+      const scrollY = availableHeight > minScrollHeight ? Math.min(availableHeight, windowHeight * 0.8) : undefined;
 
-      setTableScrollY(scrollY > 0 ? scrollY : undefined);
+      setTableScrollY(scrollY);
     };
 
     // 延迟计算，确保 DOM 已完全渲染
@@ -1322,8 +1324,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           pageSizeOptions: ['10', '20', '50', '100'],
         }}
         scroll={{
-          x: '100%', // 水平滚动：限制表格宽度为容器宽度，超出时显示水平滚动条
-          y: tableScrollY, // 垂直滚动：当行数超出容器高度时显示垂直滚动条
+          x: 'max-content', // 水平滚动：当内容宽度超过容器时显示滚动条
+          y: tableScrollY || undefined, // 垂直滚动：只有在明确需要时才显示滚动条
         }}
         {...(() => {
           // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
