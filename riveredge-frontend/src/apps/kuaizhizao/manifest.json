@@ -1,7 +1,7 @@
 {
     "name": "快格轻制造",
     "code": "kuaizhizao",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "轻量级MES系统，专注生产执行核心流程",
     "icon": "production",
     "author": "RiverEdge Team",
@@ -12,13 +12,11 @@
         "title": "快格轻制造",
         "icon": "production",
         "path": "/apps/kuaizhizao",
-        "children": [
-            {
+        "children": [{
                 "title": "计划管理",
                 "icon": "planning",
                 "sort_order": 1,
-                "children": [
-                    {
+                "children": [{
                         "title": "需求管理",
                         "path": "/apps/kuaizhizao/plan-management/demand-management",
                         "permission": "kuaizhizao:demand:view",
@@ -36,8 +34,7 @@
                 "title": "生产执行",
                 "icon": "factory",
                 "sort_order": 2,
-                "children": [
-                    {
+                "children": [{
                         "title": "工单管理",
                         "path": "/apps/kuaizhizao/production-execution/work-orders",
                         "permission": "kuaizhizao:work-order:view",
