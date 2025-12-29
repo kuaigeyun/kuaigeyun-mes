@@ -31,6 +31,18 @@
                 ]
             },
             {
+                "title": "销售管理",
+                "icon": "shopping-cart",
+                "sort_order": 1.5,
+                "children": [{
+                        "title": "销售订单",
+                        "path": "/apps/kuaizhizao/sales-management/sales-orders",
+                        "permission": "kuaizhizao:sales-order:view",
+                        "sort_order": 1
+                    }
+                ]
+            },
+            {
                 "title": "生产执行",
                 "icon": "factory",
                 "sort_order": 2,
@@ -95,6 +107,10 @@
         "kuaizhizao:scheduling:create",
         "kuaizhizao:scheduling:update",
         "kuaizhizao:scheduling:delete",
+        "kuaizhizao:sales-order:view",
+        "kuaizhizao:sales-order:create",
+        "kuaizhizao:sales-order:update",
+        "kuaizhizao:sales-order:delete",
         "kuaizhizao:work-order:view",
         "kuaizhizao:work-order:create",
         "kuaizhizao:work-order:update",

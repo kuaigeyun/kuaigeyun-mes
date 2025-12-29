@@ -19,6 +19,8 @@ interface WorkOrder {
   quantity: number;
   status: 'draft' | 'released' | 'in_progress' | 'completed' | 'cancelled';
   productionMode: 'MTS' | 'MTO';
+  salesOrderCode?: string; // MTO模式下的销售订单号
+  salesOrderName?: string; // MTO模式下的销售订单名称
   startDate?: string;
   endDate?: string;
   createdAt: string;
@@ -133,6 +135,18 @@ const WorkOrdersPage: React.FC = () => {
       },
     },
     {
+      title: '销售订单',
+      dataIndex: 'salesOrderCode',
+      width: 120,
+      render: (text, record) => (
+        record.productionMode === 'MTO' ? (
+          <Tag color="blue">{text}</Tag>
+        ) : (
+          <span style={{ color: '#999' }}>无</span>
+        )
+      ),
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       width: 100,
@@ -229,6 +243,8 @@ const WorkOrdersPage: React.FC = () => {
               quantity: 50,
               status: 'in_progress',
               productionMode: 'MTO',
+              salesOrderCode: 'SO20241201002',
+              salesOrderName: '客户B订单',
               startDate: '2024-12-02 08:00:00',
               endDate: '2024-12-03 18:00:00',
               createdAt: '2024-12-01 14:30:00',

@@ -53,7 +53,7 @@ const SchedulingPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Tab状态
-  const [activeTab, setActiveTab] = useState<'mrp' | 'schedule' | 'gantt'>('mrp');
+  const [activeTab, setActiveTab] = useState<'mrp' | 'lrp' | 'schedule' | 'gantt'>('mrp');
 
   // 甘特图数据状态
   const [ganttTasks, setGanttTasks] = useState<GanttTask[]>([]);
@@ -332,7 +332,7 @@ const SchedulingPage: React.FC = () => {
   const tabs = [
     {
       key: 'mrp',
-      label: 'MRP运算结果',
+      label: 'MRP运算结果 (MTS)',
       children: (
         <>
           <UniTable
@@ -402,6 +402,152 @@ const SchedulingPage: React.FC = () => {
                 key="generate-orders"
                 icon={<ScheduleOutlined />}
                 onClick={handleGenerateWorkOrders}
+              >
+                生成工单
+              </Button>,
+            ]}
+          />
+        </>
+      ),
+    },
+    {
+      key: 'lrp',
+      label: 'LRP运算结果 (MTO)',
+      children: (
+        <>
+          <UniTable
+            headerTitle=""
+            actionRef={actionRef}
+            rowKey="id"
+            columns={[
+              {
+                title: '销售订单',
+                dataIndex: 'salesOrderCode',
+                width: 150,
+                ellipsis: true,
+              },
+              {
+                title: '产品编码',
+                dataIndex: 'productCode',
+                width: 120,
+              },
+              {
+                title: '产品名称',
+                dataIndex: 'productName',
+                width: 150,
+                ellipsis: true,
+              },
+              {
+                title: '需求数量',
+                dataIndex: 'requiredQuantity',
+                width: 100,
+                align: 'right',
+              },
+              {
+                title: '可用库存',
+                dataIndex: 'availableQuantity',
+                width: 100,
+                align: 'right',
+              },
+              {
+                title: '缺口数量',
+                dataIndex: 'shortageQuantity',
+                width: 100,
+                align: 'right',
+                render: (text) => (
+                  <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>
+                    {text > 0 ? `-${text}` : text}
+                  </span>
+                ),
+              },
+              {
+                title: '建议工单数',
+                dataIndex: 'suggestedWorkOrders',
+                width: 100,
+                align: 'center',
+              },
+              {
+                title: '交货日期',
+                dataIndex: 'deliveryDate',
+                width: 120,
+                valueType: 'date',
+              },
+              {
+                title: '优先级',
+                dataIndex: 'priority',
+                width: 80,
+                valueEnum: {
+                  high: { text: '高', status: 'error' },
+                  medium: { text: '中', status: 'warning' },
+                  low: { text: '低', status: 'default' },
+                },
+              },
+              {
+                title: '状态',
+                dataIndex: 'status',
+                width: 100,
+                valueEnum: {
+                  pending: { text: '待处理', status: 'default' },
+                  scheduled: { text: '已排程', status: 'processing' },
+                  completed: { text: '已完成', status: 'success' },
+                },
+              },
+            ]}
+            showAdvancedSearch={true}
+            request={async (params) => {
+              // 模拟MTO LRP结果数据
+              const mockData = [
+                {
+                  id: 1,
+                  salesOrderCode: 'SO20251229001',
+                  productCode: 'P001',
+                  productName: '产品A',
+                  requiredQuantity: 100,
+                  availableQuantity: 8,
+                  shortageQuantity: 92,
+                  suggestedWorkOrders: 1,
+                  deliveryDate: '2026-01-20',
+                  priority: 'high',
+                  status: 'pending',
+                },
+                {
+                  id: 2,
+                  salesOrderCode: 'SO20251229002',
+                  productCode: 'P002',
+                  productName: '产品B',
+                  requiredQuantity: 50,
+                  availableQuantity: 60,
+                  shortageQuantity: 0,
+                  suggestedWorkOrders: 0,
+                  deliveryDate: '2026-01-15',
+                  priority: 'medium',
+                  status: 'scheduled',
+                },
+              ];
+
+              return {
+                data: mockData,
+                success: true,
+                total: mockData.length,
+              };
+            }}
+            rowSelection={{
+              selectedRowKeys,
+              onChange: setSelectedRowKeys,
+            }}
+            toolBarRender={() => [
+              <Button
+                key="run-lrp"
+                type="primary"
+                icon={<CalculatorOutlined />}
+                onClick={() => messageApi.info('运行LRP运算功能开发中')}
+              >
+                运行LRP运算
+              </Button>,
+              <Button
+                key="create-work-orders"
+                icon={<ScheduleOutlined />}
+                onClick={() => messageApi.info('生成工单功能开发中')}
               >
                 生成工单
               </Button>,
@@ -550,7 +696,7 @@ const SchedulingPage: React.FC = () => {
       <Card
         tabList={tabs.map(tab => ({ key: tab.key, label: tab.label }))}
         activeTabKey={activeTab}
-        onTabChange={(key) => setActiveTab(key as 'mrp' | 'schedule')}
+        onTabChange={(key) => setActiveTab(key as 'mrp' | 'lrp' | 'schedule')}
         bodyStyle={{ padding: '0' }}
       >
         {tabs.find(tab => tab.key === activeTab)?.children}
