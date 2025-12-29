@@ -235,6 +235,7 @@ const RoleListPage: React.FC = () => {
     {
       title: '描述',
       dataIndex: 'description',
+      width: 200,
       ellipsis: true,
       hideInSearch: true,
     },
