@@ -770,7 +770,8 @@ const UserProfilePage: React.FC = () => {
                         }}
                         rules={[
                           { required: true, message: '请输入当前密码' },
-                          { min: 6, message: '密码至少6位' },
+                          { min: 8, message: '密码长度至少 8 个字符' },
+                          { max: 128, message: '密码长度不能超过 128 个字符' },
                         ]}
                       />
                       
@@ -778,12 +779,13 @@ const UserProfilePage: React.FC = () => {
                         name="new_password"
                         label="新密码"
                         fieldProps={{
-                          placeholder: '请输入新密码（至少6位）',
+                          placeholder: '请输入新密码（8-128个字符）',
                           style: { width: 360 },
                         }}
                         rules={[
                           { required: true, message: '请输入新密码' },
-                          { min: 6, message: '密码至少6位' },
+                          { min: 8, message: '密码长度至少 8 个字符' },
+                          { max: 128, message: '密码长度不能超过 128 个字符' },
                         ]}
                       />
                       

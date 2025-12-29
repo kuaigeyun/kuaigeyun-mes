@@ -735,9 +735,10 @@ const UserListPage: React.FC = () => {
               label="密码"
               rules={isEdit ? [] : [
                 { required: true, message: '请输入密码' },
-                { min: 8, message: '密码长度不能少于8个字符' }
+                { min: 8, message: '密码长度不能少于8个字符' },
+                { max: 128, message: '密码长度不能超过128个字符' }
               ]}
-              placeholder={isEdit ? '留空则不修改密码' : '请输入密码（至少8个字符）'}
+              placeholder={isEdit ? '留空则不修改密码' : '请输入密码（8-128个字符）'}
               fieldProps={{
                 type: 'password',
                 autoComplete: 'new-password'
@@ -749,6 +750,7 @@ const UserListPage: React.FC = () => {
               rules={isEdit ? [] : [
                 { required: true, message: '请再次输入密码' },
                 { min: 8, message: '密码长度不能少于8个字符' },
+                { max: 128, message: '密码长度不能超过128个字符' },
                 ({ getFieldValue }) => ({
                   validator(_, value) {
                     if (!value || getFieldValue('password') === value) {
@@ -758,7 +760,7 @@ const UserListPage: React.FC = () => {
                   },
                 }),
               ]}
-              placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码（至少8个字符）'}
+              placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码（8-128个字符）'}
               fieldProps={{
                 type: 'password',
                 autoComplete: 'new-password'

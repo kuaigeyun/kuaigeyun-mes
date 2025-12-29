@@ -133,12 +133,13 @@ export default function PlatformLoginPage() {
               name="password"
               rules={[
                 { required: true, message: '请输入密码' },
-                { min: 6, message: '密码至少6个字符' },
+                { min: 8, message: '密码长度至少 8 个字符' },
+                { max: 128, message: '密码长度不能超过 128 个字符' },
               ]}
             >
               <Input.Password
                 prefix={<LockOutlined />}
-                placeholder="密码"
+                placeholder="密码（8-128个字符）"
                 autoComplete="current-password"
               />
             </Form.Item>

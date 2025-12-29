@@ -2070,11 +2070,12 @@ export default function LoginPage() {
                   rules={[
                     { required: true, message: '请输入密码' },
                     { min: 8, message: '密码长度至少 8 个字符' },
+                    { max: 128, message: '密码长度不能超过 128 个字符' },
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <LockOutlined />,
-                    placeholder: '请输入密码（至少8个字符）',
+                    placeholder: '请输入密码（8-128个字符）',
                     autoComplete: 'new-password',
                   }}
                   extra={
@@ -2359,11 +2360,12 @@ export default function LoginPage() {
                   rules={[
                     { required: true, message: '请输入密码' },
                     { min: 8, message: '密码长度至少 8 个字符' },
+                    { max: 128, message: '密码长度不能超过 128 个字符' },
                   ]}
                   fieldProps={{
                     size: 'large',
                     prefix: <LockOutlined />,
-                    placeholder: '请输入密码（至少8个字符）',
+                    placeholder: '请输入密码（8-128个字符）',
                     autoComplete: 'new-password',
                   }}
                   extra={
