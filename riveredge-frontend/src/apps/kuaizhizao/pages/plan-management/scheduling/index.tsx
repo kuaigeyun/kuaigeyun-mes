@@ -415,6 +415,19 @@ const SchedulingPage: React.FC = () => {
 
   return (
     <div>
+      {/* MRP功能提示 */}
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col span={24}>
+          <Alert
+            message="🎯 MRP运算功能"
+            description="当前页面包含MRP物料需求计算功能。点击上方Tab切换到'MRP运算结果'查看物料需求分析和工单建议。"
+            type="info"
+            showIcon
+            closable
+          />
+        </Col>
+      </Row>
+
       <Card
         tabList={tabs.map(tab => ({ key: tab.key, label: tab.label }))}
         activeTabKey={activeTab}
