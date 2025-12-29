@@ -6,6 +6,7 @@
 
 from typing import List, Optional
 
+from tortoise.query_utils import Q
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.supply_chain_schemas import (

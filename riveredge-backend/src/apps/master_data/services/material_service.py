@@ -7,6 +7,7 @@
 from typing import List, Optional, TYPE_CHECKING
 from decimal import Decimal
 
+from tortoise.query_utils import Q
 from apps.master_data.models.material import MaterialGroup, Material, BOM
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
