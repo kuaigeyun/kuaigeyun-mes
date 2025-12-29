@@ -119,7 +119,7 @@ const InventoryPage: React.FC = () => {
   ];
 
   return (
-    <>
+    <div style={{ padding: '24px' }}>
       {/* 库存统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
@@ -253,7 +253,7 @@ const InventoryPage: React.FC = () => {
           syncToUrl: true,
         }}
       />
-    </>
+    </div>
   );
 };
 

@@ -183,7 +183,7 @@ const ReportingPage: React.FC = () => {
   ];
 
   return (
-    <>
+    <div style={{ padding: '24px' }}>
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
@@ -309,9 +309,10 @@ const ReportingPage: React.FC = () => {
           </Button>,
         ]}
       />
+    </div>
 
-      {/* 手动报工 Modal */}
-      <Modal
+    {/* 手动报工 Modal */}
+    <Modal
         title="手动报工"
         open={reportingModalVisible}
         onCancel={() => setReportingModalVisible(false)}
