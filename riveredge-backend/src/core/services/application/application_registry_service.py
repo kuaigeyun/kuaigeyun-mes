@@ -130,7 +130,7 @@ class ApplicationRegistryService:
                     "code": "kuaizhizao",
                     "name": "快格轻制造",
                     "description": "轻量级MES系统，专注生产执行核心流程",
-                    "version": "1.0.4",
+                    "version": "1.0.5",
                     "route_path": "/apps/kuaizhizao",
                     "entry_point": "apps.kuaizhizao.api.router",
                     "menu_config": None,
