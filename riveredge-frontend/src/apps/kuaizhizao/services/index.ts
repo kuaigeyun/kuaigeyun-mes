@@ -6,3 +6,4 @@ export * from './production';
 export * from './sales';
 export * from './quality';
 export * from './finance';
+export * from './reports';

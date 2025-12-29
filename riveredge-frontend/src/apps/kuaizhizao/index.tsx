@@ -25,6 +25,11 @@ import FinishedGoodsInspectionPage from './pages/quality-management/finished-goo
 import AccountsPayablePage from './pages/finance-management/accounts-payable';
 import AccountsReceivablePage from './pages/finance-management/accounts-receivable';
 
+// 报表分析页面
+import InventoryReportPage from './pages/reports/inventory-report';
+import ProductionReportPage from './pages/reports/production-report';
+import QualityReportPage from './pages/reports/quality-report';
+
 // 仓储管理页面
 import InventoryPage from './pages/warehouse-management/inventory';
 import InboundPage from './pages/warehouse-management/inbound';
@@ -54,6 +59,11 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 财务管理路由 */}
       <Route path="finance-management/accounts-payable" element={<AccountsPayablePage />} />
       <Route path="finance-management/accounts-receivable" element={<AccountsReceivablePage />} />
+
+      {/* 报表分析路由 */}
+      <Route path="reports/inventory-report" element={<InventoryReportPage />} />
+      <Route path="reports/production-report" element={<ProductionReportPage />} />
+      <Route path="reports/quality-report" element={<QualityReportPage />} />
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />

@@ -1,7 +1,7 @@
 {
     "name": "快格轻制造",
     "code": "kuaizhizao",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "轻量级MES系统，专注生产执行核心流程",
     "icon": "production",
     "author": "RiverEdge Team",
@@ -80,6 +80,30 @@
                         "path": "/apps/kuaizhizao/finance-management/accounts-receivable",
                         "permission": "kuaizhizao:accounts-receivable:view",
                         "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "报表分析",
+                "icon": "bar-chart",
+                "sort_order": 4,
+                "children": [{
+                        "title": "库存报表",
+                        "path": "/apps/kuaizhizao/reports/inventory-report",
+                        "permission": "kuaizhizao:inventory-report:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "生产报表",
+                        "path": "/apps/kuaizhizao/reports/production-report",
+                        "permission": "kuaizhizao:production-report:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "质量报表",
+                        "path": "/apps/kuaizhizao/reports/quality-report",
+                        "permission": "kuaizhizao:quality-report:view",
+                        "sort_order": 3
                     }
                 ]
             },
@@ -172,6 +196,18 @@
         "kuaizhizao:accounts-receivable:create",
         "kuaizhizao:accounts-receivable:update",
         "kuaizhizao:accounts-receivable:delete",
+        "kuaizhizao:inventory-report:view",
+        "kuaizhizao:inventory-report:create",
+        "kuaizhizao:inventory-report:update",
+        "kuaizhizao:inventory-report:delete",
+        "kuaizhizao:production-report:view",
+        "kuaizhizao:production-report:create",
+        "kuaizhizao:production-report:update",
+        "kuaizhizao:production-report:delete",
+        "kuaizhizao:quality-report:view",
+        "kuaizhizao:quality-report:create",
+        "kuaizhizao:quality-report:update",
+        "kuaizhizao:quality-report:delete",
         "kuaizhizao:work-order:view",
         "kuaizhizao:work-order:create",
         "kuaizhizao:work-order:update",
