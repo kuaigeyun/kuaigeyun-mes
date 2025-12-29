@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, message, Modal } from 'antd';
+import { App, Button, Tag, Space, Card, Row, Col, message, Modal } from 'antd';
 import { ReloadOutlined, CalculatorOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 
@@ -250,18 +250,6 @@ const SchedulingPage: React.FC = () => {
       label: 'MRP运算结果',
       children: (
         <>
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col span={24}>
-              <Alert
-                message="MRP运算说明"
-                description="基于销售预测和当前库存计算物料需求，自动生成工单和采购建议。"
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-            </Col>
-          </Row>
-
           <UniTable
             headerTitle=""
             actionRef={actionRef}
