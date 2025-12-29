@@ -34,6 +34,7 @@ import {
   uninstallApplication,
   enableApplication,
   disableApplication,
+  syncApplicationManifest,
   Application,
 } from '../../../../services/application';
 
@@ -294,31 +295,24 @@ const ApplicationListPage: React.FC = () => {
               onOk: async () => {
                 messageApi.loading({ content: '正在同步配置...', key: 'sync-manifest' });
                 try {
-                  const response = await fetch(`/api/v1/core/applications/sync-manifest/${application.code}`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                  });
+                  const result = await syncApplicationManifest(application.code);
 
-                  if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || '同步失败');
+                  if (result.success) {
+                    messageApi.success({
+                      content: result.message || '配置同步成功',
+                      key: 'sync-manifest'
+                    });
+
+                    // 刷新应用列表
+                    loadApplications();
+
+                    // 触发菜单刷新事件
+                    window.dispatchEvent(new CustomEvent('application-status-changed', {
+                      detail: { application, isActive: application.is_active }
+                    }));
+                  } else {
+                    throw new Error(result.message || '同步失败');
                   }
-
-                  const result = await response.json();
-                  messageApi.success({
-                    content: result.message || '配置同步成功',
-                    key: 'sync-manifest'
-                  });
-
-                  // 刷新应用列表
-                  loadApplications();
-
-                  // 触发菜单刷新事件
-                  window.dispatchEvent(new CustomEvent('application-status-changed', {
-                    detail: { application, isActive: application.is_active }
-                  }));
 
                 } catch (error: any) {
                   messageApi.error({
