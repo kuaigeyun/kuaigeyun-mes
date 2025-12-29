@@ -491,112 +491,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonContainerRef = useRef<HTMLDivElement>(null);
   const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
-  const [optimizedColumns, setOptimizedColumns] = useState<ProColumns<T>[]>(columns);
   
-  /**
-   * 智能优化列宽，避免不必要的水平滚动条
-   */
-  useEffect(() => {
-    const optimizeColumnWidths = () => {
-      if (!containerRef.current || !columns.length) {
-        setOptimizedColumns(columns);
-        return;
-      }
-
-      const containerWidth = containerRef.current.offsetWidth || window.innerWidth - 64; // 减去padding
-      let totalFixedWidth = 0;
-      let flexibleColumns: ProColumns<T>[] = [];
-      let minTotalWidth = 0;
-
-      // 分类列：固定宽度 vs 灵活宽度
-      columns.forEach((col, index) => {
-        if (col.width && typeof col.width === 'number') {
-          // 固定宽度列
-          totalFixedWidth += col.width;
-          minTotalWidth += Math.min(col.width, 100); // 最小宽度100px
-        } else if (col.dataIndex === 'option' || col.title === '操作') {
-          // 操作列通常需要固定宽度
-          const actionWidth = 180;
-          totalFixedWidth += actionWidth;
-          minTotalWidth += actionWidth;
-        } else {
-          // 灵活宽度列
-          flexibleColumns.push({ ...col, originalIndex: index });
-          minTotalWidth += 100; // 假设最小宽度100px
-        }
-      });
-
-      // 操作列通常需要固定宽度
-      const actionColumnWidth = 200; // 操作列宽度
-      totalFixedWidth += actionColumnWidth;
-      minTotalWidth += actionColumnWidth;
-
-      const optimizedCols: ProColumns<T>[] = [...columns];
-
-      if (totalFixedWidth > containerWidth && flexibleColumns.length > 0) {
-        // 需要压缩：重新分配空间
-        const availableWidth = containerWidth - minTotalWidth + (flexibleColumns.length * 120);
-        const widthPerFlexibleColumn = Math.max(120, availableWidth / flexibleColumns.length);
-
-        // 更新灵活列的宽度
-        flexibleColumns.forEach(({ originalIndex }) => {
-          if (optimizedCols[originalIndex]) {
-            optimizedCols[originalIndex] = {
-              ...optimizedCols[originalIndex],
-              width: widthPerFlexibleColumn,
-              ellipsis: true, // 启用省略号
-            };
-          }
-        });
-
-        // 压缩固定宽度列（如果仍然超出）
-        if (totalFixedWidth + (widthPerFlexibleColumn * flexibleColumns.length) > containerWidth) {
-          const compressionRatio = containerWidth / (totalFixedWidth + (widthPerFlexibleColumn * flexibleColumns.length));
-
-          optimizedCols.forEach((col, index) => {
-            if (col.width && typeof col.width === 'number') {
-              optimizedCols[index] = {
-                ...col,
-                width: Math.max(80, Math.floor(col.width * compressionRatio)), // 最小80px
-                ellipsis: true,
-              };
-            }
-          });
-        }
-      } else if (totalFixedWidth < containerWidth) {
-        // 有剩余空间，可以稍微增加一些列的宽度
-        const extraSpace = containerWidth - totalFixedWidth;
-        if (flexibleColumns.length > 0) {
-          const extraPerColumn = extraSpace / flexibleColumns.length;
-          flexibleColumns.forEach(({ originalIndex }) => {
-            const originalCol = columns[originalIndex];
-            const baseWidth = (originalCol.width as number) || 150;
-            optimizedCols[originalIndex] = {
-              ...optimizedCols[originalIndex],
-              width: baseWidth + extraPerColumn,
-            };
-          });
-        }
-      }
-
-      // 为所有列添加省略号设置（如果还没有的话）
-      optimizedCols.forEach((col, index) => {
-        if (!col.ellipsis && (col.width || col.dataIndex !== 'option')) {
-          optimizedCols[index] = {
-            ...col,
-            ellipsis: true,
-          };
-        }
-      });
-
-      setOptimizedColumns(optimizedCols);
-    };
-
-    // 延迟执行，确保DOM已渲染
-    const timer = setTimeout(optimizeColumnWidths, 150);
-
-    return () => clearTimeout(timer);
-  }, [columns, containerRef]);
 
   /**
    * 动态计算表格滚动高度
@@ -1363,7 +1258,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           headerTitle={buildHeaderActions() || headerTitle || undefined}
           actionRef={actionRef}
           formRef={formRef}
-          columns={optimizedColumns.length > 0 ? optimizedColumns : columns}
+          columns={columns}
           request={handleRequest}
           rowKey={rowKey}
           search={false}
@@ -1430,8 +1325,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           pageSizeOptions: ['10', '20', '50', '100'],
         }}
         scroll={{
-          x: 'max-content', // 水平滚动：当内容宽度超过容器时显示滚动条
-          y: tableScrollY || undefined, // 垂直滚动：只有在明确需要时才显示滚动条
+          x: true, // 启用水平滚动，由ProTable自动管理列宽
+          y: tableScrollY, // 垂直滚动：当行数超出容器高度时显示
         }}
         {...(() => {
           // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
