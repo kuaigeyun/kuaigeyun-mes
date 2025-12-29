@@ -38,7 +38,7 @@ class InfraSuperAdmin(BaseModel):
         id: 平台超级管理员 ID（主键）
         username: 用户名（全局唯一，平台唯一）
         email: 用户邮箱（可选）
-        password_hash: 密码哈希值（使用 bcrypt 加密）
+        password_hash: 密码哈希值（使用 pbkdf2_sha256 加密）
         full_name: 用户全名（可选）
         is_active: 是否激活
         last_login: 最后登录时间（可选）
@@ -63,7 +63,7 @@ class InfraSuperAdmin(BaseModel):
     )
     password_hash = fields.CharField(
         max_length=255,
-        description="密码哈希值（使用 bcrypt 加密）"
+        description="密码哈希值（使用 pbkdf2_sha256 加密）"
     )
     full_name = fields.CharField(
         max_length=100,
@@ -127,15 +127,15 @@ class InfraSuperAdmin(BaseModel):
     def hash_password(password: str) -> str:
         """
         加密密码
-        
-        使用 bcrypt 算法加密密码。
-        
+
+        使用 pbkdf2_sha256 算法加密密码，支持任意长度的密码。
+
         Args:
             password: 明文密码
-            
+
         Returns:
             str: 加密后的密码哈希值
-            
+
         Example:
             >>> hashed = InfraSuperAdmin.hash_password("mypassword")
             >>> len(hashed) > 0

@@ -6,9 +6,9 @@
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 
 # 导入基础用户 Schema
 from infra.schemas.user import UserBase, UserCreate as SoilUserCreate, UserUpdate as SoilUserUpdate, UserResponse as SoilUserResponse
@@ -21,12 +21,23 @@ class UserCreateRequest(BaseModel):
     用于前端创建用户的请求数据，不包含 tenant_id（由后端自动获取）。
     """
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填）")
     department_uuid: Optional[str] = Field(None, description="所属部门UUID（可选）")
     position_uuid: Optional[str] = Field(None, description="所属职位UUID（可选）")
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        """验证邮箱字段，允许空值"""
+        if v is None or v == "":
+            return None
+        # 如果提供了值，则验证邮箱格式
+        if '@' not in v:
+            raise ValueError('邮箱格式不正确，必须包含@符号')
+        return v
     role_uuids: Optional[List[str]] = Field(None, description="角色UUID列表（可选）")
     is_active: bool = Field(default=True, description="是否激活")
     is_tenant_admin: bool = Field(default=False, description="是否为组织管理员")

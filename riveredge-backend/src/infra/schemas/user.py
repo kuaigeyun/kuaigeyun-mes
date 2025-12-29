@@ -7,7 +7,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 
 
 class UserBase(BaseModel):
@@ -19,12 +19,23 @@ class UserBase(BaseModel):
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
     phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，用于邮件通知）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选，用于邮件通知）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: bool = Field(default=True, description="是否激活")
     is_infra_admin: bool = Field(default=False, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
     is_tenant_admin: bool = Field(default=False, description="是否为组织管理员")
     source: Optional[str] = Field(None, max_length=50, description="用户来源（invite_code, personal, organization等）")
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        """验证邮箱字段，允许空值"""
+        if v is None or v == "":
+            return None
+        # 如果提供了值，则验证邮箱格式
+        if '@' not in v:
+            raise ValueError('邮箱格式不正确，必须包含@符号')
+        return v
 
 
 class UserCreate(UserBase):

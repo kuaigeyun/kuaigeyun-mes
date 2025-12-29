@@ -97,7 +97,7 @@ def hash_password(password: str) -> str:
     """
     加密密码
 
-    使用 bcrypt 算法加密密码。bcrypt 会自动截断超过72字节的密码。
+    使用 pbkdf2_sha256 算法加密密码，支持任意长度的密码。
 
     Args:
         password: 明文密码
@@ -110,8 +110,8 @@ def hash_password(password: str) -> str:
         >>> len(hashed) > 0
         True
     """
-    # bcrypt 会自动截断超过72字节的密码，这里不主动报错
-    # 让用户设置更长的密码也没问题，bcrypt会安全处理
+    # pbkdf2_sha256 支持任意长度的密码，不需要长度限制
+    
     return pwd_context.hash(password)
 
 
