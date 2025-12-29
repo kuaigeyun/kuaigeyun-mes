@@ -829,12 +829,14 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       
       // 调试日志（开发环境）
       if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 高级搜索 - 设置搜索参数:', {
           quickFilters,
           filterGroups,
           filterParams,
           finalSearchParams,
           hasSearchParamsRef: !!searchParamsRef,
         });
+      }
       }
       
       // ⭐ 最佳实践：统一设置搜索参数到所有需要的地方
