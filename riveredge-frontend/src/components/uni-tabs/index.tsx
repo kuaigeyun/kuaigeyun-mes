@@ -679,10 +679,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 全部关闭
    */
   const handleCloseAll = () => {
+    console.log('handleCloseAll called, current tabs:', tabs.length);
     // 保留工作台标签和所有固定标签
     const workplaceTab = tabs.find((tab) => tab.key === '/system/dashboard/workplace');
     const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
     const newTabs: TabItem[] = [];
+
+    console.log('workplaceTab:', workplaceTab);
+    console.log('pinnedTabs:', pinnedTabs);
 
     // 先添加工作台标签（如果存在）
     if (workplaceTab) {
@@ -692,12 +696,16 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // 添加所有固定标签
     newTabs.push(...pinnedTabs);
 
+    console.log('newTabs after filtering:', newTabs);
+
     // 如果还有标签，切换到第一个标签；否则跳转到工作台
     if (newTabs.length > 0) {
+      console.log('Setting tabs to:', newTabs.length, 'tabs, active key:', newTabs[0].key);
       setTabs(newTabs);
       setActiveKey(newTabs[0].key);
       navigate(newTabs[0].key);
     } else {
+      console.log('Clearing all tabs, navigating to workplace');
       setTabs([]);
       navigate('/system/dashboard/workplace');
     }
@@ -771,25 +779,34 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return {
       items: menuItems,
       onClick: ({ key }) => {
+        console.log('Context menu clicked:', key, 'for tab:', tabKey);
         switch (key) {
           case 'refresh':
+            console.log('Refreshing tab:', tabKey);
             handleTabRefresh(tabKey);
             break;
           case 'pin':
+            console.log('Toggling pin for tab:', tabKey);
             togglePinTab(tabKey);
             break;
           case 'close':
+            console.log('Closing tab:', tabKey);
             handleTabClose(tabKey);
             break;
           case 'closeRight':
+            console.log('Closing tabs to the right of:', tabKey);
             handleCloseRight(tabKey);
             break;
           case 'closeOthers':
+            console.log('Closing other tabs except:', tabKey);
             handleCloseOthers(tabKey);
             break;
           case 'closeAll':
+            console.log('Closing all tabs');
             handleCloseAll();
             break;
+          default:
+            console.log('Unknown menu key:', key);
         }
       },
     };
