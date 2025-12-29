@@ -134,20 +134,21 @@ class User(BaseModel):
     def hash_password(password: str) -> str:
         """
         加密密码
-        
-        使用 bcrypt 算法加密密码。
-        
+
+        使用 bcrypt 算法加密密码。bcrypt 会自动截断超过72字节的密码。
+
         Args:
             password: 明文密码
-            
+
         Returns:
-            str: 加密后的密码哈希值
-            
+            str: 加密后的密码哈希值（固定长度约60字符）
+
         Example:
             >>> hashed = User.hash_password("mypassword")
             >>> len(hashed) > 0
             True
         """
+        # 直接使用passlib的bcrypt实现，它会自动处理长密码
         return pwd_context.hash(password)
     
     def verify_password(self, password: str) -> bool:

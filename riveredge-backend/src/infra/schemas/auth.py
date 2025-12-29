@@ -22,7 +22,7 @@ class LoginRequest(BaseModel):
     """
 
     username: str = Field(..., min_length=1, max_length=255, description="用户名或手机号（支持用户名或手机号登录）")
-    password: str = Field(..., min_length=1, max_length=72, description="密码")
+    password: str = Field(..., min_length=1, description="密码")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则直接设置组织上下文）")
 
 
