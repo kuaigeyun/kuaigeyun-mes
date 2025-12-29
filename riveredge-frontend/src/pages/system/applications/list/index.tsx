@@ -294,7 +294,7 @@ const ApplicationListPage: React.FC = () => {
               onOk: async () => {
                 messageApi.loading({ content: '正在同步配置...', key: 'sync-manifest' });
                 try {
-                  const response = await fetch(`/api/v1/applications/sync-manifest/${application.code}`, {
+                  const response = await fetch(`/api/v1/core/applications/sync-manifest/${application.code}`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
