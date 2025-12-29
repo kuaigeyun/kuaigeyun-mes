@@ -11,6 +11,7 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import FormModal from '../../../../components/form-modal';
 import {
   getUserList,
   getUserByUuid,
@@ -471,81 +472,104 @@ const UserListPage: React.FC = () => {
       />
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModal
         title={isEdit ? '编辑用户' : '新建用户'}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         confirmLoading={formLoading}
-        size={800}
+        width={1000}
       >
         <ProForm
           formRef={formRef}
           submitter={false}
           layout="vertical"
         >
-          <ProFormText
-            name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
-            placeholder="请输入用户名"
-            disabled={isEdit}
-          />
-          <ProFormText
-            name="email"
-            label="邮箱"
-            placeholder="请输入邮箱"
-          />
-          <ProFormText
-            name="password"
-            label="密码"
-            rules={isEdit ? [] : [{ required: true, message: '请输入密码' }]}
-            placeholder={isEdit ? '留空则不修改密码' : '请输入密码'}
-            fieldProps={{ type: 'password' }}
-          />
-          <ProFormText
-            name="full_name"
-            label="姓名"
-            placeholder="请输入姓名"
-          />
-          <ProFormText
-            name="phone"
-            label="手机号"
-            rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号' }]}
-            placeholder="请输入手机号"
-          />
-          <SafeProFormSelect
-            name="department_uuid"
-            label="部门"
-            placeholder="请选择部门"
-            options={departmentOptions}
-            allowClear
-          />
-          <SafeProFormSelect
-            name="position_uuid"
-            label="职位"
-            placeholder="请选择职位"
-            options={positionOptions}
-            allowClear
-          />
-          <SafeProFormSelect
-            name="role_uuids"
-            label="角色"
-            placeholder="请选择角色（可多选）"
-            options={roleOptions}
-            mode="multiple"
-            allowClear
-          />
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-            initialValue={true}
-          />
-          <ProFormSwitch
-            name="is_tenant_admin"
-            label="是否组织管理员"
-            initialValue={false}
-          />
+          {/* 第一行：基本信息 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <ProFormText
+              name="username"
+              label="用户名"
+              rules={[{ required: true, message: '请输入用户名' }]}
+              placeholder="请输入用户名"
+              disabled={isEdit}
+            />
+            <ProFormText
+              name="full_name"
+              label="姓名"
+              placeholder="请输入姓名"
+            />
+          </div>
+
+          {/* 第二行：联系方式 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <ProFormText
+              name="phone"
+              label="手机号"
+              rules={[{ required: true, message: '请输入手机号' }, { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号' }]}
+              placeholder="请输入手机号"
+            />
+            <ProFormText
+              name="email"
+              label="邮箱"
+              placeholder="请输入邮箱"
+            />
+          </div>
+
+          {/* 第三行：密码 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
+            <ProFormText
+              name="password"
+              label="密码"
+              rules={isEdit ? [] : [{ required: true, message: '请输入密码' }]}
+              placeholder={isEdit ? '留空则不修改密码' : '请输入密码'}
+              fieldProps={{ type: 'password' }}
+            />
+          </div>
+
+          {/* 第四行：组织架构 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <SafeProFormSelect
+              name="department_uuid"
+              label="部门"
+              placeholder="请选择部门"
+              options={departmentOptions}
+              allowClear
+            />
+            <SafeProFormSelect
+              name="position_uuid"
+              label="职位"
+              placeholder="请选择职位"
+              options={positionOptions}
+              allowClear
+            />
+          </div>
+
+          {/* 第五行：角色和权限 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
+            <SafeProFormSelect
+              name="role_uuids"
+              label="角色"
+              placeholder="请选择角色（可多选）"
+              options={roleOptions}
+              mode="multiple"
+              allowClear
+            />
+          </div>
+
+          {/* 第六行：状态设置 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <ProFormSwitch
+              name="is_active"
+              label="是否启用"
+              initialValue={true}
+            />
+            <ProFormSwitch
+              name="is_tenant_admin"
+              label="是否组织管理员"
+              initialValue={false}
+            />
+          </div>
         </ProForm>
       </Modal>
 
