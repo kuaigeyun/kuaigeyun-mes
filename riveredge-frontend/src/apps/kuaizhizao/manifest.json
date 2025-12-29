@@ -1,0 +1,51 @@
+{
+    "name": "快格轻制造",
+    "code": "kuaizhizao",
+    "version": "1.0.0",
+    "description": "轻量级MES系统，专注生产执行核心流程",
+    "icon": "production",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaizhizao/index.tsx",
+    "route_path": "/apps/kuaizhizao",
+    "sort_order": 980,
+    "menu_config": {
+        "title": "快格轻制造",
+        "icon": "production",
+        "path": "/apps/kuaizhizao",
+        "children": [
+            {
+                "title": "生产执行",
+                "icon": "factory",
+                "sort_order": 1,
+                "children": [
+                    {
+                        "title": "工单管理",
+                        "path": "/apps/kuaizhizao/production-execution/work-orders",
+                        "permission": "kuaizhizao:work-order:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "报工管理",
+                        "path": "/apps/kuaizhizao/production-execution/reporting",
+                        "permission": "kuaizhizao:reporting:view",
+                        "sort_order": 2
+                    }
+                ]
+            }
+        ]
+    },
+    "permissions": [
+        "kuaizhizao:work-order:view",
+        "kuaizhizao:work-order:create",
+        "kuaizhizao:work-order:update",
+        "kuaizhizao:work-order:delete",
+        "kuaizhizao:reporting:view",
+        "kuaizhizao:reporting:create",
+        "kuaizhizao:reporting:update",
+        "kuaizhizao:reporting:delete"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}
