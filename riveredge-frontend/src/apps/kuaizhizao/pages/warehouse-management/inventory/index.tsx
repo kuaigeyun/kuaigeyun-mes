@@ -121,7 +121,7 @@ const InventoryPage: React.FC = () => {
   return (
     <div>
       {/* 库存统计卡片 */}
-      <div style={{ padding: '0 16px' }}>
+      <div style={{ padding: '16px 16px 0 16px' }}>
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={6}>
             <Card>
@@ -168,8 +168,7 @@ const InventoryPage: React.FC = () => {
       </div>
 
       {/* UniTable */}
-      <div style={{ padding: '16px' }}>
-        <UniTable
+      <UniTable
         headerTitle="库存查询"
         actionRef={actionRef}
         rowKey="id"
@@ -257,7 +256,6 @@ const InventoryPage: React.FC = () => {
           syncToUrl: true,
         }}
       />
-    </div>
     </div>
   );
 };
