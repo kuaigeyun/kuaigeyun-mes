@@ -885,12 +885,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [queryClient]);
   
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
-  // 开发环境下：不缓存，窗口聚焦时刷新，确保菜单配置修改后立即生效
-  // 生产环境下：正常缓存，减少请求
-  const { data: applicationMenus, isLoading: applicationMenusLoading } = useQuery({
+  // 优化缓存策略：应用状态变更后立即刷新菜单
+  const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
     queryKey: ['applicationMenus'],
     queryFn: () => getMenuTree({ is_active: true }),
-    staleTime: process.env.NODE_ENV === 'development' ? 0 : 1 * 60 * 1000, // 开发环境不缓存，生产环境1分钟缓存
+    staleTime: process.env.NODE_ENV === 'development' ? 0 : 5 * 60 * 1000, // 开发环境不缓存，生产环境5分钟缓存（从1分钟增加到5分钟）
     refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
     refetchOnWindowFocus: process.env.NODE_ENV === 'development' ? true : false, // 开发环境窗口聚焦时刷新
     refetchOnMount: true, // 组件挂载时刷新
@@ -900,6 +899,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return appMenus;
     },
   });
+
+  // 监听应用状态变更事件，主动刷新菜单
+  useEffect(() => {
+    const handleApplicationStatusChange = () => {
+      console.log('🔄 检测到应用状态变更，刷新菜单...');
+      refetchApplicationMenus();
+    };
+
+    // 监听自定义事件
+    window.addEventListener('application-status-changed', handleApplicationStatusChange);
+
+    return () => {
+      window.removeEventListener('application-status-changed', handleApplicationStatusChange);
+    };
+  }, [refetchApplicationMenus]);
   
   /**
    * 将 MenuTree 转换为 MenuDataItem
