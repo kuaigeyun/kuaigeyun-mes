@@ -22,7 +22,7 @@ router = APIRouter(prefix="/user-profile", tags=["UserProfile"])
 class ChangePasswordRequest(BaseModel):
     """修改密码请求"""
     old_password: str = Field(..., description="当前密码")
-    new_password: str = Field(..., min_length=8, max_length=72, description="新密码（8-72个字符）")
+    new_password: str = Field(..., min_length=8, description="新密码（至少8个字符）")
 
 
 @router.get("", response_model=UserProfileResponse)
@@ -186,15 +186,7 @@ async def change_password(
                 )
             
             # 更新密码
-            try:
-                user.password_hash = User.hash_password(data.new_password)
-            except ValueError as e:
-                if "cannot be longer than 72 bytes" in str(e) or "密码长度不能超过72字节" in str(e):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="新密码长度不能超过72个字符，请使用更短的密码"
-                    )
-                raise
+            user.password_hash = User.hash_password(data.new_password)
             await user.save()
         
         return {"message": "密码修改成功"}
