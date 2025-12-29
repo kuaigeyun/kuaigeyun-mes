@@ -205,6 +205,7 @@ const WorkOrdersPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        showAdvancedSearch={true}
         request={async (params) => {
           // 模拟数据
           const mockData: WorkOrder[] = [

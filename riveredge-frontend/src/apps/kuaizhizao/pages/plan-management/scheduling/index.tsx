@@ -267,6 +267,7 @@ const SchedulingPage: React.FC = () => {
             actionRef={actionRef}
             rowKey="id"
             columns={mrpColumns}
+            showAdvancedSearch={true}
             request={async (params) => {
               // 模拟MRP结果数据
               const mockData: MRPSuggestion[] = [
@@ -358,6 +359,7 @@ const SchedulingPage: React.FC = () => {
             actionRef={actionRef}
             rowKey="id"
             columns={scheduleColumns}
+            showAdvancedSearch={true}
             request={async (params) => {
               // 模拟工单排程数据
               const mockData: WorkOrderSchedule[] = [
