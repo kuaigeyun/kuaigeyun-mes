@@ -430,17 +430,23 @@ async def list_materials(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     group_id: Optional[int] = Query(None, description="物料分组ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),
+    code: Optional[str] = Query(None, description="物料编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="物料名称（模糊匹配）")
 ):
     """
     获取物料列表
-    
+
     - **skip**: 跳过数量（默认：0）
     - **limit**: 限制数量（默认：100，最大：1000）
     - **group_id**: 物料分组ID（可选，用于过滤）
     - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（物料编码或名称）
+    - **code**: 物料编码（精确匹配）
+    - **name**: 物料名称（模糊匹配）
     """
-    return await MaterialService.list_materials(tenant_id, skip, limit, group_id, is_active)
+    return await MaterialService.list_materials(tenant_id, skip, limit, group_id, is_active, keyword, code, name)
 
 
 @router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")

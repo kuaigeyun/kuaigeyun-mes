@@ -637,7 +637,7 @@ const MaterialsManagementPage: React.FC = () => {
         onCancel={() => setGroupModalVisible(false)}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm
           formRef={groupFormRef}
@@ -731,7 +731,7 @@ const MaterialsManagementPage: React.FC = () => {
         onCancel={() => setMaterialModalVisible(false)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm
           formRef={materialFormRef}

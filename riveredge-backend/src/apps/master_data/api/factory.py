@@ -50,17 +50,23 @@ async def list_workshops(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（车间编码或名称）"),
+    code: Optional[str] = Query(None, description="车间编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="车间名称（模糊匹配）")
 ):
     """
     获取车间列表
-    
+
     - **skip**: 跳过数量（默认：0）
     - **limit**: 限制数量（默认：100，最大：1000）
     - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（车间编码或名称）
+    - **code**: 车间编码（精确匹配）
+    - **name**: 车间名称（模糊匹配）
     """
     try:
-        return await FactoryService.list_workshops(tenant_id, skip, limit, is_active)
+        return await FactoryService.list_workshops(tenant_id, skip, limit, is_active, keyword, code, name)
     except Exception as e:
         from loguru import logger
         logger.exception(f"获取车间列表失败: {str(e)}")
