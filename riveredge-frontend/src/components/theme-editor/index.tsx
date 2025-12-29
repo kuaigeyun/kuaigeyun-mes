@@ -245,14 +245,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
    * 处理表单值变化（实时预览）
    */
   const handleValuesChange = (changedValues: any, allValues: any) => {
-    // 调试：监控表单值变化
-    console.log('表单值变化:', changedValues, '所有值:', allValues);
     if (changedValues.tabsPersistence !== undefined) {
-      console.log('Switch开关状态改变:', changedValues.tabsPersistence, '当前表单值:', allValues.tabsPersistence);
       setTabsPersistenceValue(changedValues.tabsPersistence);
     }
     if (changedValues.compact !== undefined) {
-      console.log('紧凑模式开关状态改变:', changedValues.compact);
       setCompactValue(changedValues.compact);
     }
     // 确保 colorPrimary 是字符串格式
@@ -330,9 +326,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 因为 Switch 组件的值可能在 validateFields 时丢失
       const tabsPersistenceValue = Boolean(form.getFieldValue('tabsPersistence'));
 
-      console.log('=== 保存标签持久化配置 ===');
-      console.log('form.getFieldValue("tabsPersistence"):', form.getFieldValue('tabsPersistence'));
-      console.log('最终保存值:', tabsPersistenceValue);
 
       // 构建站点主题配置对象（使用 Ant Design 原生配置格式）
       // 确保 colorPrimary 是字符串格式
@@ -405,10 +398,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           // 立即保存到本地存储（必须在保存到后端之后，确保值正确）
           // 这是最重要的，因为读取时优先从本地存储读取
           localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
-          console.log('已保存到后端和本地存储:', tabsPersistenceValue, '验证:', localStorage.getItem('riveredge_tabs_persistence'));
-
           // 触发用户偏好更新事件，通知 UniTabs 组件更新配置
-          console.log('触发用户偏好更新事件:', updatedPreferences);
           window.dispatchEvent(new CustomEvent('userPreferenceUpdated', {
             detail: { preferences: updatedPreferences }
           }));
@@ -1119,7 +1109,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               <Switch checked={tabsPersistenceValue} onChange={(checked) => {
                 setTabsPersistenceValue(checked);
                 form.setFieldsValue({ tabsPersistence: checked });
-                console.log('Switch直接onChange:', checked);
               }} />
               <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
                 启用后，关闭浏览器后重新打开，已打开的标签页会自动恢复；关闭后只保留仪表板、钉住标签和当前页面

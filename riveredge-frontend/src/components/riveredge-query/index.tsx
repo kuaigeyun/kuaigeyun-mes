@@ -829,9 +829,6 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       
       // 调试日志（开发环境）
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 高级搜索 - 设置搜索参数:', {
-          values,
-          filteredValues,
           quickFilters,
           filterGroups,
           filterParams,
@@ -854,9 +851,6 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         
         // 调试日志：确认 searchParamsRef 已设置
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔍 高级搜索 - searchParamsRef 已设置:', {
-            searchParamsRef: searchParamsRef.current,
-            finalSearchParams,
           });
         }
       } else {
@@ -883,7 +877,6 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
       // ⭐ 最佳实践：触发 ProTable 重新查询
       // ⚠️ 修复：在 reload 之前再次确认 searchParamsRef.current 的值
       if (process.env.NODE_ENV === 'development' && searchParamsRef) {
-        console.log('🔍 高级搜索 - reload 前的 searchParamsRef:', searchParamsRef.current);
       }
       
       if (actionRef.current) {

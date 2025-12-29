@@ -466,7 +466,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               // 如果当前路径是调试页面或应用页面，不进行自动导航
               const currentPath = window.location.pathname;
               if (currentPath.startsWith('/debug/') || currentPath.startsWith('/apps/')) {
-                console.log('🚫 UniTabs: 调试页面或应用页面，跳过自动导航');
                 setActiveKey(currentPath);
                 return;
               }
