@@ -67,16 +67,14 @@ async def direct_update_manifest():
                 print('❌ manifest.json缺少menu_config')
                 return
 
-            # 执行更新
+            # 执行更新 - 使用jsonb类型
             update_query = '''
                 UPDATE core_applications
-                SET menu_config = $1, version = $2, updated_at = NOW()
+                SET menu_config = $1::jsonb, version = $2, updated_at = NOW()
                 WHERE tenant_id = $3 AND uuid = $4 AND deleted_at IS NULL
             '''
 
-            menu_config_json = json.dumps(menu_config, ensure_ascii=False)
-
-            result = await conn.execute(update_query, menu_config_json, version, 1, str(app['uuid']))
+            result = await conn.execute(update_query, menu_config, version, 1, str(app['uuid']))
 
             if result == 'UPDATE 1':
                 print('✅ 应用配置更新成功！')
