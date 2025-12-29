@@ -336,19 +336,23 @@ const UserListPage: React.FC = () => {
     try {
       setFormLoading(true);
       const values = await formRef.current?.validateFields();
-      
+
+      // 移除确认密码字段，后端不需要这个字段
+      const submitData = { ...values };
+      delete submitData.confirmPassword;
+
       if (isEdit && currentUserUuid) {
-        await updateUser(currentUserUuid, values as UpdateUserData);
+        await updateUser(currentUserUuid, submitData as UpdateUserData);
         messageApi.success('更新成功');
       } else {
-        if (!values.password) {
+        if (!submitData.password) {
           messageApi.error('新建用户必须设置密码');
           return;
         }
-        await createUser(values as CreateUserData);
+        await createUser(submitData as CreateUserData);
         messageApi.success('创建成功');
       }
-      
+
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
@@ -637,6 +641,9 @@ const UserListPage: React.FC = () => {
               rules={[{ required: true, message: '请输入用户名' }]}
               placeholder="请输入用户名"
               disabled={isEdit}
+              fieldProps={{
+                autoComplete: 'off'
+              }}
             />
             <ProFormText
               name="full_name"
@@ -661,13 +668,36 @@ const UserListPage: React.FC = () => {
           </div>
 
           {/* 第三行：密码 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
             <ProFormText
               name="password"
               label="密码"
               rules={isEdit ? [] : [{ required: true, message: '请输入密码' }]}
               placeholder={isEdit ? '留空则不修改密码' : '请输入密码'}
-              fieldProps={{ type: 'password' }}
+              fieldProps={{
+                type: 'password',
+                autoComplete: 'new-password'
+              }}
+            />
+            <ProFormText
+              name="confirmPassword"
+              label="确认密码"
+              rules={isEdit ? [] : [
+                { required: true, message: '请再次输入密码' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('两次输入的密码不一致'));
+                  },
+                }),
+              ]}
+              placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码'}
+              fieldProps={{
+                type: 'password',
+                autoComplete: 'new-password'
+              }}
             />
           </div>
 
