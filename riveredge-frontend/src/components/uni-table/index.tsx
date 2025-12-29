@@ -1252,8 +1252,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         pagination={{
           defaultPageSize,
           showSizeChanger: true,
-          showQuickJumper,
+          showQuickJumper: true,
           pageSizeOptions: ['10', '20', '50', '100'],
+          showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
         }}
         scroll={{
           x: true, // 启用水平滚动，由ProTable自动管理列宽
