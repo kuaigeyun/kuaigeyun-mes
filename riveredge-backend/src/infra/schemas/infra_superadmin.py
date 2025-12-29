@@ -46,7 +46,7 @@ class InfraSuperAdminCreate(BaseModel):
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符，平台唯一）")
     email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
-    password: str = Field(..., min_length=8, max_length=100, description="密码（最少 8 字符）")
+    password: str = Field(..., min_length=8, max_length=72, description="密码（8-72个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: bool = Field(default=True, description="是否激活")
 
@@ -68,7 +68,7 @@ class InfraSuperAdminUpdate(BaseModel):
     email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: Optional[bool] = Field(None, description="是否激活")
-    password: Optional[str] = Field(None, min_length=8, max_length=100, description="密码（可选，最少 8 字符）")
+    password: Optional[str] = Field(None, min_length=8, max_length=72, description="密码（可选，8-72个字符）")
 
 
 class InfraSuperAdminResponse(InfraSuperAdminBase):
@@ -110,7 +110,7 @@ class InfraSuperAdminLoginRequest(BaseModel):
     """
     
     username: str = Field(..., min_length=1, max_length=50, description="用户名")
-    password: str = Field(..., min_length=1, max_length=100, description="密码")
+    password: str = Field(..., min_length=1, max_length=72, description="密码")
 
 
 class InfraSuperAdminLoginResponse(BaseModel):
