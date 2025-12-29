@@ -22,8 +22,12 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Authoriz
 # 向后兼容别名
 PermissionDeniedError = AuthorizationError
 
-# 密码加密上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 密码加密上下文（使用 pbkdf2_sha256，更好的跨平台兼容性）
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+    pbkdf2_sha256__default_rounds=30000
+)
 
 
 class UserService:

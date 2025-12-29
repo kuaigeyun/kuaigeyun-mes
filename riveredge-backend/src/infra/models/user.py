@@ -12,8 +12,12 @@ from passlib.context import CryptContext
 from infra.models.base import BaseModel
 
 
-# 密码加密上下文（使用 bcrypt）
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 密码加密上下文（使用 pbkdf2_sha256，更好的跨平台兼容性）
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+    pbkdf2_sha256__default_rounds=30000
+)
 
 
 class User(BaseModel):
@@ -35,7 +39,7 @@ class User(BaseModel):
         tenant_id: 组织 ID（外键，关联到 infra_tenants 表，可为空用于平台管理）
         username: 用户名（组织内唯一，平台管理全局唯一）
         email: 用户邮箱（可选，符合中国用户使用习惯）
-        password_hash: 密码哈希值（使用 bcrypt 加密）
+        password_hash: 密码哈希值（使用 pbkdf2_sha256 加密）
         full_name: 用户全名（可选）
         is_active: 是否激活
         is_infra_admin: 是否为平台管理（系统级超级管理员，需 tenant_id=None）
@@ -49,7 +53,7 @@ class User(BaseModel):
     tenant_id = fields.IntField(null=True, description="组织 ID（外键，关联到 infra_tenants 表，可为空用于平台管理）")
     username = fields.CharField(max_length=50, description="用户名（组织内唯一，平台管理全局唯一）")
     email = fields.CharField(max_length=255, null=True, description="用户邮箱（可选，符合中国用户使用习惯）")
-    password_hash = fields.CharField(max_length=255, description="密码哈希值（使用 bcrypt 加密）")
+    password_hash = fields.CharField(max_length=255, description="密码哈希值（使用 pbkdf2_sha256 加密）")
     full_name = fields.CharField(max_length=100, null=True, description="用户全名（可选）")
     is_active = fields.BooleanField(default=True, description="是否激活")
     is_infra_admin = fields.BooleanField(default=False, description="是否为平台管理（系统级超级管理员，需 tenant_id=None）")
@@ -97,7 +101,7 @@ class User(BaseModel):
     roles = fields.ManyToManyField(
         "models.Role",  # Tortoise ORM 会自动解析为 core.models.Role
         related_name="users",
-        through="models.UserRole",  # Tortoise ORM 会自动解析为 core.models.UserRole
+        through="core.models.UserRole",  # 明确指定core应用中的UserRole模型
         description="用户角色（多对多关系）"
     )
     
@@ -135,20 +139,20 @@ class User(BaseModel):
         """
         加密密码
 
-        使用 bcrypt 算法加密密码。bcrypt 会自动截断超过72字节的密码。
+        使用 pbkdf2_sha256 算法加密密码，支持任意长度的密码。
 
         Args:
             password: 明文密码
 
         Returns:
-            str: 加密后的密码哈希值（固定长度约60字符）
+            str: 加密后的密码哈希值
 
         Example:
             >>> hashed = User.hash_password("mypassword")
             >>> len(hashed) > 0
             True
         """
-        # 直接使用passlib的bcrypt实现，它会自动处理长密码
+        # 使用pbkdf2_sha256算法，支持任意长度的密码
         return pwd_context.hash(password)
     
     def verify_password(self, password: str) -> bool:

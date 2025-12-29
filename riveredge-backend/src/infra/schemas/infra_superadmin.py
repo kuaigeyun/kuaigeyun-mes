@@ -7,7 +7,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 
 
 class InfraSuperAdminBase(BaseModel):
@@ -24,7 +24,7 @@ class InfraSuperAdminBase(BaseModel):
     """
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符，平台唯一）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: bool = Field(default=True, description="是否激活")
 
@@ -45,7 +45,7 @@ class InfraSuperAdminCreate(BaseModel):
     """
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符，平台唯一）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: bool = Field(default=True, description="是否激活")
@@ -65,7 +65,7 @@ class InfraSuperAdminUpdate(BaseModel):
         password: 密码（可选，如果提供则更新密码）
     """
     
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     is_active: Optional[bool] = Field(None, description="是否激活")
     password: Optional[str] = Field(None, min_length=8, description="密码（可选，至少8个字符）")
@@ -133,3 +133,15 @@ class InfraSuperAdminLoginResponse(BaseModel):
     user: InfraSuperAdminResponse = Field(..., description="平台超级管理员信息")
     default_tenant_id: Optional[int] = Field(None, description="默认租户 ID（可选，用于设置默认组织上下文）")
 
+
+# 全局邮箱验证器
+@field_validator('email', mode='before')
+@classmethod
+def validate_email(cls, v):
+    """验证邮箱字段，允许空值"""
+    if v is None or v == "":
+        return None
+    # 如果提供了值，则验证邮箱格式
+    if '@' not in v:
+        raise ValueError('邮箱格式不正确，必须包含@符号')
+    return v

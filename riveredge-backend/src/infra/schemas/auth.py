@@ -87,7 +87,7 @@ class UserRegisterRequest(BaseModel):
     """
     
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，符合中国用户使用习惯）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选，符合中国用户使用习惯）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     tenant_id: int = Field(..., description="组织 ID（用于多组织隔离）")
@@ -111,7 +111,7 @@ class PersonalRegisterRequest(BaseModel):
 
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
     phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号）")
-    email: Optional[EmailStr] = Field(None, description="用户邮箱（可选，用于邮件通知）")
+    email: Optional[str] = Field(None, description="用户邮箱（可选，用于邮件通知）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="用户全名（可选）")
     tenant_id: Optional[int] = Field(None, description="组织 ID（可选，如果提供则在指定组织中创建用户，否则在默认组织中创建）")
@@ -146,7 +146,7 @@ class SendVerificationCodeRequest(BaseModel):
         email: 邮箱地址（可选，用于邮箱验证码）
     """
     phone: Optional[str] = Field(None, pattern=r'^1[3-9]\d{9}$', description="手机号（可选，11位中国大陆手机号）")
-    email: Optional[EmailStr] = Field(None, description="邮箱地址（可选）")
+    email: Optional[str] = Field(None, description="邮箱地址（可选）")
 
 
 class SendVerificationCodeResponse(BaseModel):
@@ -182,7 +182,7 @@ class OrganizationRegisterRequest(BaseModel):
     tenant_name: str = Field(..., min_length=1, max_length=100, description="组织名称")
     tenant_domain: Optional[str] = Field(None, max_length=100, description="组织域名（可选，留空则自动生成8位随机域名，格式：riveredge.cn/xxxxx）")
     username: str = Field(..., min_length=3, max_length=50, description="管理员用户名（3-50 字符）")
-    email: Optional[EmailStr] = Field(None, description="管理员邮箱（可选，符合中国用户使用习惯）")
+    email: Optional[str] = Field(None, description="管理员邮箱（可选，符合中国用户使用习惯）")
     password: str = Field(..., min_length=8, max_length=100, description="管理员密码（最少 8 字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="管理员全名（可选）")
 
@@ -203,7 +203,7 @@ class TenantJoinRequest(BaseModel):
     
     tenant_id: int = Field(..., description="组织 ID")
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50 字符）")
-    email: Optional[EmailStr] = Field(None, description="邮箱（可选）")
+    email: Optional[str] = Field(None, description="邮箱（可选）")
     password: str = Field(..., min_length=8, description="密码（至少8个字符）")
     full_name: Optional[str] = Field(None, max_length=100, description="全名（可选）")
 
@@ -289,3 +289,15 @@ class CurrentUserResponse(BaseModel):
     is_infra_admin: bool = Field(..., description="是否为平台管理（系统级超级管理员）")
     is_tenant_admin: bool = Field(..., description="是否为组织管理员")
 
+
+# 全局邮箱验证器
+@field_validator('email', mode='before')
+@classmethod
+def validate_email(cls, v):
+    """验证邮箱字段，允许空值"""
+    if v is None or v == "":
+        return None
+    # 如果提供了值，则验证邮箱格式
+    if '@' not in v:
+        raise ValueError('邮箱格式不正确，必须包含@符号')
+    return v
