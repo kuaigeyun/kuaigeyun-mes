@@ -110,7 +110,12 @@ class UserService:
             role_ids = [role.id for role in roles]
         
         # 加密密码
-        password_hash = User.hash_password(data.password)
+        try:
+            password_hash = User.hash_password(data.password)
+        except ValueError as e:
+            if "cannot be longer than 72 bytes" in str(e) or "密码长度不能超过72字节" in str(e):
+                raise ValidationError("密码长度不能超过72个字符，请使用更短的密码")
+            raise
         
         # 创建用户
         user = await User.create(
@@ -763,7 +768,12 @@ class UserService:
                     role_ids = [role.id for role in roles]
                 
                 # 创建用户
-                password_hash = User.hash_password(user_data['password'])
+                try:
+                    password_hash = User.hash_password(user_data['password'])
+                except ValueError as e:
+                    if "cannot be longer than 72 bytes" in str(e) or "密码长度不能超过72字节" in str(e):
+                        raise ValidationError(f"用户 '{user_data['username']}' 的密码长度不能超过72个字符，请使用更短的密码")
+                    raise
                 
                 user = await User.create(
                     tenant_id=tenant_id,
