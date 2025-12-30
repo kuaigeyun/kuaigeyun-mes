@@ -1,0 +1,190 @@
+"""
+采购订单API接口
+
+提供采购订单相关的REST API接口。
+
+Author: Luigi Lu
+Date: 2025-12-30
+"""
+
+from datetime import date
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, Query, Path
+from fastapi.responses import JSONResponse
+
+from core.api.deps import get_current_user, get_current_tenant
+from core.models.user import User as CurrentUser
+from infra.exceptions.exceptions import handle_exceptions
+
+from apps.kuaizhizao.schemas.purchase import (
+    PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
+    PurchaseOrderListResponse, PurchaseOrderApprove, PurchaseOrderConfirm,
+    PurchaseOrderListParams
+)
+from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+
+router = APIRouter(prefix="/purchase-orders", tags=["采购订单管理"])
+
+
+# === 采购订单CRUD接口 ===
+@router.post("", response_model=PurchaseOrderResponse, summary="创建采购订单")
+@handle_exceptions
+async def create_purchase_order(
+    order: PurchaseOrderCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    创建采购订单
+
+    - **order**: 采购订单创建数据
+    - **current_user**: 当前登录用户
+    - **tenant_id**: 当前租户ID
+
+    返回创建的采购订单信息
+    """
+    return await PurchaseService().create_purchase_order(
+        tenant_id=tenant_id,
+        order_data=order,
+        created_by=current_user.id
+    )
+
+
+@router.get("", response_model=List[PurchaseOrderListResponse], summary="获取采购订单列表")
+@handle_exceptions
+async def list_purchase_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=100, description="返回数量"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    status: Optional[str] = Query(None, description="订单状态"),
+    review_status: Optional[str] = Query(None, description="审核状态"),
+    order_date_from: Optional[date] = Query(None, description="订单日期从"),
+    order_date_to: Optional[date] = Query(None, description="订单日期到"),
+    delivery_date_from: Optional[date] = Query(None, description="到货日期从"),
+    delivery_date_to: Optional[date] = Query(None, description="到货日期到"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    获取采购订单列表
+
+    支持多种筛选条件和分页查询
+    """
+    params = PurchaseOrderListParams(
+        skip=skip,
+        limit=limit,
+        supplier_id=supplier_id,
+        status=status,
+        review_status=review_status,
+        order_date_from=order_date_from,
+        order_date_to=order_date_to,
+        delivery_date_from=delivery_date_from,
+        delivery_date_to=delivery_date_to,
+        keyword=keyword
+    )
+
+    return await PurchaseService().list_purchase_orders(tenant_id, params)
+
+
+@router.get("/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")
+@handle_exceptions
+async def get_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    根据ID获取采购订单详情
+
+    - **order_id**: 采购订单ID
+    """
+    return await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
+
+
+@router.put("/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")
+@handle_exceptions
+async def update_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    order: PurchaseOrderUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    更新采购订单信息
+
+    只能更新草稿状态的订单
+
+    - **order_id**: 采购订单ID
+    - **order**: 采购订单更新数据
+    """
+    return await PurchaseService().update_purchase_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        order_data=order,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/{order_id}", summary="删除采购订单")
+@handle_exceptions
+async def delete_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    删除采购订单
+
+    只能删除草稿状态的订单
+
+    - **order_id**: 采购订单ID
+    """
+    result = await PurchaseService().delete_purchase_order(tenant_id, order_id)
+    return JSONResponse(content={"success": result, "message": "删除成功"})
+
+
+# === 采购订单业务操作接口 ===
+@router.post("/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
+@handle_exceptions
+async def approve_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    approve_data: PurchaseOrderApprove,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    审核采购订单
+
+    - **order_id**: 采购订单ID
+    - **approve_data**: 审核数据
+    """
+    return await PurchaseService().approve_purchase_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        approve_data=approve_data,
+        approved_by=current_user.id
+    )
+
+
+@router.post("/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="确认采购订单")
+@handle_exceptions
+async def confirm_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    confirm_data: PurchaseOrderConfirm,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    确认采购订单（供应商确认）
+
+    - **order_id**: 采购订单ID
+    - **confirm_data**: 确认数据
+    """
+    return await PurchaseService().confirm_purchase_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        confirm_data=confirm_data,
+        confirmed_by=current_user.id
+    )
+
+

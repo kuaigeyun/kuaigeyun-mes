@@ -9,20 +9,41 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, 
 import { App, Button, Tag, Space, Modal, Drawer, message, Form } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { warehouseApi } from '../../../services/production';
 
+// 统一的入库单接口（结合采购入库和成品入库）
 interface InboundOrder {
-  id: number;
-  code: string;
-  type: 'purchase' | 'production' | 'return' | 'initial';
-  status: 'draft' | 'confirmed' | 'completed' | 'cancelled';
-  supplierName?: string;
-  workOrderCode?: string;
-  totalQuantity: number;
-  totalItems: number;
-  warehouseName: string;
-  operatorName: string;
-  createdAt: string;
-  completedAt?: string;
+  id?: number;
+  tenant_id?: number;
+  receipt_code?: string;
+  receipt_type?: 'purchase' | 'finished_goods'; // 入库类型
+  status?: string;
+  receipt_date?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  work_order_id?: number;
+  work_order_code?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  received_by?: string;
+  total_quantity?: number;
+  total_items?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  items?: InboundOrderItem[];
+}
+
+interface InboundOrderItem {
+  id?: number;
+  tenant_id?: number;
+  receipt_id?: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
 }
 
 const InboundPage: React.FC = () => {
@@ -48,21 +69,40 @@ const InboundPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = (record: InboundOrder) => {
-    setCurrentOrder(record);
-    setDetailDrawerVisible(true);
+  const handleDetail = async (record: InboundOrder) => {
+    try {
+      let detailData;
+      if (record.receipt_type === 'purchase') {
+        detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
+      } else if (record.receipt_type === 'finished_goods') {
+        detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
+      }
+      setCurrentOrder(detailData);
+      setDetailDrawerVisible(true);
+    } catch (error) {
+      messageApi.error('获取入库单详情失败');
+    }
   };
 
   /**
    * 处理确认入库
    */
-  const handleConfirm = (record: InboundOrder) => {
+  const handleConfirm = async (record: InboundOrder) => {
     Modal.confirm({
       title: '确认入库',
-      content: `确定要确认入库单 "${record.code}" 吗？确认后将更新库存。`,
+      content: `确定要确认入库单 "${record.receipt_code}" 吗？确认后将更新库存。`,
       onOk: async () => {
-        messageApi.success('入库确认成功，库存已更新');
-        actionRef.current?.reload();
+        try {
+          if (record.receipt_type === 'purchase') {
+            await warehouseApi.purchaseReceipt.confirm(record.id!.toString());
+          } else if (record.receipt_type === 'finished_goods') {
+            await warehouseApi.finishedGoodsReceipt.confirm(record.id!.toString());
+          }
+          messageApi.success('入库确认成功，库存已更新');
+          actionRef.current?.reload();
+        } catch (error) {
+          messageApi.error('入库确认失败');
+        }
       },
     });
   };
@@ -73,20 +113,18 @@ const InboundPage: React.FC = () => {
   const columns: ProColumns<InboundOrder>[] = [
     {
       title: '入库单号',
-      dataIndex: 'code',
+      dataIndex: 'receipt_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
       title: '入库类型',
-      dataIndex: 'type',
+      dataIndex: 'receipt_type',
       width: 100,
       valueEnum: {
         purchase: { text: '采购入库', status: 'processing' },
-        production: { text: '生产入库', status: 'success' },
-        return: { text: '退货入库', status: 'warning' },
-        initial: { text: '初始入库', status: 'default' },
+        finished_goods: { text: '成品入库', status: 'success' },
       },
     },
     {
@@ -94,57 +132,57 @@ const InboundPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        confirmed: { text: '已确认', status: 'processing' },
-        completed: { text: '已完成', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        '草稿': { text: '草稿', status: 'default' },
+        '已确认': { text: '已确认', status: 'processing' },
+        '已完成': { text: '已完成', status: 'success' },
+        '已取消': { text: '已取消', status: 'error' },
       },
     },
     {
       title: '供应商',
-      dataIndex: 'supplierName',
+      dataIndex: 'supplier_name',
       width: 120,
       ellipsis: true,
     },
     {
       title: '工单号',
-      dataIndex: 'workOrderCode',
+      dataIndex: 'work_order_code',
       width: 120,
       ellipsis: true,
     },
     {
       title: '入库数量',
-      dataIndex: 'totalQuantity',
+      dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
       title: '入库品种',
-      dataIndex: 'totalItems',
+      dataIndex: 'total_items',
       width: 100,
       align: 'right',
     },
     {
       title: '入库仓库',
-      dataIndex: 'warehouseName',
+      dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
       title: '操作员',
-      dataIndex: 'operatorName',
+      dataIndex: 'received_by',
       width: 100,
       ellipsis: true,
     },
     {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      valueType: 'dateTime',
-      width: 160,
+      title: '入库日期',
+      dataIndex: 'receipt_date',
+      valueType: 'date',
+      width: 120,
     },
     {
-      title: '完成时间',
-      dataIndex: 'completedAt',
+      title: '创建时间',
+      dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
@@ -187,51 +225,51 @@ const InboundPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         request={async (params) => {
-          // 模拟数据
-          const mockData: InboundOrder[] = [
-            {
-              id: 1,
-              code: 'IN20241201001',
-              type: 'initial',
-              status: 'completed',
-              totalQuantity: 10250,
-              totalItems: 3,
-              warehouseName: '原材料仓库',
-              operatorName: '张三',
-              createdAt: '2024-12-01 09:00:00',
-              completedAt: '2024-12-01 09:30:00',
-            },
-            {
-              id: 2,
-              code: 'IN20241201002',
-              type: 'production',
-              status: 'confirmed',
-              workOrderCode: 'WO20241201001',
-              totalQuantity: 88,
-              totalItems: 1,
-              warehouseName: '成品仓库',
-              operatorName: '李四',
-              createdAt: '2024-12-01 16:00:00',
-            },
-            {
-              id: 3,
-              code: 'IN20241201003',
-              type: 'purchase',
-              status: 'draft',
-              supplierName: '供应商A',
-              totalQuantity: 2000,
-              totalItems: 2,
-              warehouseName: '原材料仓库',
-              operatorName: '王五',
-              createdAt: '2024-12-01 14:00:00',
-            },
-          ];
+          try {
+            // 并行获取采购入库单和成品入库单
+            const [purchaseReceipts, finishedGoodsReceipts] = await Promise.all([
+              warehouseApi.purchaseReceipt.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              }),
+              warehouseApi.finishedGoodsReceipt.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              }),
+            ]);
 
-          return {
-            data: mockData,
-            success: true,
-            total: mockData.length,
-          };
+            // 合并并转换数据格式
+            const purchaseData = purchaseReceipts.data?.map(item => ({
+              ...item,
+              receipt_type: 'purchase' as const,
+            })) || [];
+
+            const finishedData = finishedGoodsReceipts.data?.map(item => ({
+              ...item,
+              receipt_type: 'finished_goods' as const,
+            })) || [];
+
+            // 合并两个数据源
+            const combinedData = [...purchaseData, ...finishedData];
+
+            // 按创建时间排序
+            combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+
+            return {
+              data: combinedData,
+              success: true,
+              total: (purchaseReceipts.total || 0) + (finishedGoodsReceipts.total || 0),
+            };
+          } catch (error) {
+            messageApi.error('获取入库单列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
         }}
         rowSelection={{
           selectedRowKeys,
@@ -325,33 +363,55 @@ const InboundPage: React.FC = () => {
       >
         {currentOrder && (
           <div>
-            <p><strong>入库单号：</strong>{currentOrder.code}</p>
+            <p><strong>入库单号：</strong>{currentOrder.receipt_code}</p>
             <p><strong>入库类型：</strong>
               <Tag color={
-                currentOrder.type === 'purchase' ? 'processing' :
-                currentOrder.type === 'production' ? 'success' :
-                currentOrder.type === 'return' ? 'warning' : 'default'
+                currentOrder.receipt_type === 'purchase' ? 'processing' : 'success'
               }>
-                {currentOrder.type === 'purchase' ? '采购入库' :
-                 currentOrder.type === 'production' ? '生产入库' :
-                 currentOrder.type === 'return' ? '退货入库' : '初始入库'}
+                {currentOrder.receipt_type === 'purchase' ? '采购入库' : '成品入库'}
               </Tag>
             </p>
             <p><strong>状态：</strong>
               <Tag color={
-                currentOrder.status === 'completed' ? 'success' :
-                currentOrder.status === 'confirmed' ? 'processing' :
-                currentOrder.status === 'cancelled' ? 'error' : 'default'
+                currentOrder.status === '已完成' ? 'success' :
+                currentOrder.status === '已确认' ? 'processing' :
+                currentOrder.status === '已取消' ? 'error' : 'default'
               }>
-                {currentOrder.status === 'draft' ? '草稿' :
-                 currentOrder.status === 'confirmed' ? '已确认' :
-                 currentOrder.status === 'completed' ? '已完成' : '已取消'}
+                {currentOrder.status}
               </Tag>
             </p>
-            <p><strong>入库仓库：</strong>{currentOrder.warehouseName}</p>
-            <p><strong>总数量：</strong>{currentOrder.totalQuantity}</p>
-            <p><strong>总品种：</strong>{currentOrder.totalItems}</p>
-            <p><strong>操作员：</strong>{currentOrder.operatorName}</p>
+            {currentOrder.supplier_name && (
+              <p><strong>供应商：</strong>{currentOrder.supplier_name}</p>
+            )}
+            {currentOrder.work_order_code && (
+              <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
+            )}
+            <p><strong>入库仓库：</strong>{currentOrder.warehouse_name}</p>
+            <p><strong>入库日期：</strong>{currentOrder.receipt_date}</p>
+            <p><strong>操作员：</strong>{currentOrder.received_by}</p>
+            {currentOrder.notes && (
+              <p><strong>备注：</strong>{currentOrder.notes}</p>
+            )}
+
+            {/* 入库单明细 */}
+            {currentOrder.items && currentOrder.items.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <h4>入库明细</h4>
+                {currentOrder.items.map((item, index) => (
+                  <div key={item.id} style={{
+                    padding: '12px',
+                    marginBottom: '8px',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: '4px'
+                  }}>
+                    <p><strong>物料编码：</strong>{item.material_code}</p>
+                    <p><strong>物料名称：</strong>{item.material_name}</p>
+                    <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
+                    {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </Drawer>

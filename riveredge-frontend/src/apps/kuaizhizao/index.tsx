@@ -7,13 +7,21 @@ import { Routes, Route } from 'react-router-dom';
 
 // 计划管理页面
 import DemandManagementPage from './pages/plan-management/demand-management';
+import BOMManagementPage from './pages/plan-management/bill-of-materials';
+import MRPComputationPage from './pages/plan-management/mrp-computation';
+import LRPComputationPage from './pages/plan-management/lrp-computation';
+import ProductionPlansPage from './pages/plan-management/production-plans';
 import SchedulingPage from './pages/plan-management/scheduling';
 
 // 生产执行页面
 import WorkOrdersPage from './pages/production-execution/work-orders';
 import ReportingPage from './pages/production-execution/reporting';
 
+// 采购管理页面
+import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
+
 // 销售管理页面
+import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
 
 // 质量管理页面
@@ -46,13 +54,21 @@ const KuaizhizaoApp: React.FC = () => {
     <Routes>
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={<DemandManagementPage />} />
+      <Route path="plan-management/bill-of-materials" element={<BOMManagementPage />} />
+      <Route path="plan-management/mrp-computation" element={<MRPComputationPage />} />
+      <Route path="plan-management/lrp-computation" element={<LRPComputationPage />} />
+      <Route path="plan-management/production-plans" element={<ProductionPlansPage />} />
       <Route path="plan-management/scheduling" element={<SchedulingPage />} />
+
+      {/* 采购管理路由 */}
+      <Route path="purchase-management/purchase-orders" element={<PurchaseOrdersPage />} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
       <Route path="production-execution/reporting" element={<ReportingPage />} />
 
       {/* 销售管理路由 */}
+      <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
 
       {/* 质量管理路由 */}

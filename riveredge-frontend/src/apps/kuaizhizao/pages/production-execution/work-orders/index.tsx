@@ -10,20 +10,37 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, message, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { workOrderApi } from '../../../services/production';
 
 interface WorkOrder {
-  id: number;
-  code: string;
-  name: string;
-  productName: string;
-  quantity: number;
-  status: 'draft' | 'released' | 'in_progress' | 'completed' | 'cancelled';
-  productionMode: 'MTS' | 'MTO';
-  salesOrderCode?: string; // MTO模式下的销售订单号
-  salesOrderName?: string; // MTO模式下的销售订单名称
-  startDate?: string;
-  endDate?: string;
-  createdAt: string;
+  id?: number;
+  tenant_id?: number;
+  code?: string;
+  name?: string;
+  product_id?: number;
+  product_code?: string;
+  product_name?: string;
+  quantity?: number;
+  production_mode?: 'MTS' | 'MTO';
+  sales_order_id?: number;
+  sales_order_code?: string;
+  sales_order_name?: string;
+  workshop_id?: number;
+  workshop_name?: string;
+  work_center_id?: number;
+  work_center_name?: string;
+  status?: string;
+  priority?: string;
+  planned_start_date?: string;
+  planned_end_date?: string;
+  actual_start_date?: string;
+  actual_end_date?: string;
+  completed_quantity?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  remarks?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const WorkOrdersPage: React.FC = () => {
@@ -84,16 +101,14 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 处理下达工单
    */
-  const handleRelease = (record: WorkOrder) => {
-    Modal.confirm({
-      title: '确认下达',
-      content: `确定要下达工单 "${record.name}" 吗？下达后将进入生产执行阶段。`,
-      onOk: async () => {
-        // 这里添加下达逻辑
-        messageApi.success('工单下达成功');
-        actionRef.current?.reload();
-      },
-    });
+  const handleRelease = async (record: WorkOrder) => {
+    try {
+      await workOrderApi.release(record.id!.toString());
+      messageApi.success('工单下达成功');
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error('工单下达失败');
+    }
   };
 
   /**
@@ -115,7 +130,7 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: '产品',
-      dataIndex: 'productName',
+      dataIndex: 'product_name',
       width: 150,
       ellipsis: true,
     },
@@ -127,7 +142,7 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: '生产模式',
-      dataIndex: 'productionMode',
+      dataIndex: 'production_mode',
       width: 100,
       valueEnum: {
         MTS: { text: '按库存生产', status: 'processing' },
@@ -136,10 +151,10 @@ const WorkOrdersPage: React.FC = () => {
     },
     {
       title: '销售订单',
-      dataIndex: 'salesOrderCode',
+      dataIndex: 'sales_order_code',
       width: 120,
       render: (text, record) => (
-        record.productionMode === 'MTO' ? (
+        record.production_mode === 'MTO' ? (
           <Tag color="blue">{text}</Tag>
         ) : (
           <span style={{ color: '#999' }}>无</span>
@@ -151,28 +166,28 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        released: { text: '已下达', status: 'processing' },
-        in_progress: { text: '生产中', status: 'processing' },
-        completed: { text: '已完成', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        '草稿': { text: '草稿', status: 'default' },
+        '已下达': { text: '已下达', status: 'processing' },
+        '生产中': { text: '生产中', status: 'processing' },
+        '已完成': { text: '已完成', status: 'success' },
+        '已取消': { text: '已取消', status: 'error' },
       },
     },
     {
       title: '计划开始时间',
-      dataIndex: 'startDate',
+      dataIndex: 'planned_start_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
       title: '计划结束时间',
-      dataIndex: 'endDate',
+      dataIndex: 'planned_end_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
       title: '创建时间',
-      dataIndex: 'createdAt',
+      dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
@@ -221,53 +236,25 @@ const WorkOrdersPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         request={async (params) => {
-          // 模拟数据
-          const mockData: WorkOrder[] = [
-            {
-              id: 1,
-              code: 'WO20241201001',
-              name: '产品A生产工单',
-              productName: '产品A',
-              quantity: 100,
-              status: 'released',
-              productionMode: 'MTS',
-              startDate: '2024-12-01 08:00:00',
-              endDate: '2024-12-01 18:00:00',
-              createdAt: '2024-12-01 10:00:00',
-            },
-            {
-              id: 2,
-              code: 'WO20241201002',
-              name: '产品B定制工单',
-              productName: '产品B',
-              quantity: 50,
-              status: 'in_progress',
-              productionMode: 'MTO',
-              salesOrderCode: 'SO20241201002',
-              salesOrderName: '客户B订单',
-              startDate: '2024-12-02 08:00:00',
-              endDate: '2024-12-03 18:00:00',
-              createdAt: '2024-12-01 14:30:00',
-            },
-            {
-              id: 3,
-              code: 'WO20241201003',
-              name: '产品C生产工单',
-              productName: '产品C',
-              quantity: 200,
-              status: 'draft',
-              productionMode: 'MTS',
-              startDate: '2024-12-03 08:00:00',
-              endDate: '2024-12-04 18:00:00',
-              createdAt: '2024-12-01 16:00:00',
-            },
-          ];
-
-          return {
-            data: mockData,
-            success: true,
-            total: mockData.length,
-          };
+          try {
+            const response = await workOrderApi.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              ...params,
+            });
+            return {
+              data: response.data,
+              success: response.success,
+              total: response.total,
+            };
+          } catch (error) {
+            messageApi.error('获取工单列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
         }}
         rowSelection={{
           selectedRowKeys,
@@ -315,20 +302,44 @@ const WorkOrdersPage: React.FC = () => {
           <div>
             <p><strong>工单编号：</strong>{workOrderDetail.code}</p>
             <p><strong>工单名称：</strong>{workOrderDetail.name}</p>
-            <p><strong>产品：</strong>{workOrderDetail.productName}</p>
-            <p><strong>数量：</strong>{workOrderDetail.quantity}</p>
-            <p><strong>状态：</strong>
-              <Tag color={
-                workOrderDetail.status === 'completed' ? 'success' :
-                workOrderDetail.status === 'in_progress' ? 'processing' :
-                workOrderDetail.status === 'cancelled' ? 'error' : 'default'
-              }>
-                {workOrderDetail.status === 'draft' ? '草稿' :
-                 workOrderDetail.status === 'released' ? '已下达' :
-                 workOrderDetail.status === 'in_progress' ? '生产中' :
-                 workOrderDetail.status === 'completed' ? '已完成' : '已取消'}
+            <p><strong>产品编码：</strong>{workOrderDetail.product_code}</p>
+            <p><strong>产品名称：</strong>{workOrderDetail.product_name}</p>
+            <p><strong>计划数量：</strong>{workOrderDetail.quantity}</p>
+            <p><strong>生产模式：</strong>
+              <Tag color={workOrderDetail.production_mode === 'MTO' ? 'blue' : 'green'}>
+                {workOrderDetail.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
               </Tag>
             </p>
+            {workOrderDetail.production_mode === 'MTO' && (
+              <>
+                <p><strong>销售订单：</strong>{workOrderDetail.sales_order_code}</p>
+                <p><strong>订单名称：</strong>{workOrderDetail.sales_order_name}</p>
+              </>
+            )}
+            <p><strong>状态：</strong>
+              <Tag color={
+                workOrderDetail.status === '已完成' ? 'success' :
+                workOrderDetail.status === '生产中' ? 'processing' :
+                workOrderDetail.status === '已取消' ? 'error' : 'default'
+              }>
+                {workOrderDetail.status}
+              </Tag>
+            </p>
+            <p><strong>优先级：</strong>{workOrderDetail.priority}</p>
+            <p><strong>计划开始时间：</strong>{workOrderDetail.planned_start_date}</p>
+            <p><strong>计划结束时间：</strong>{workOrderDetail.planned_end_date}</p>
+            {workOrderDetail.actual_start_date && (
+              <p><strong>实际开始时间：</strong>{workOrderDetail.actual_start_date}</p>
+            )}
+            {workOrderDetail.actual_end_date && (
+              <p><strong>实际结束时间：</strong>{workOrderDetail.actual_end_date}</p>
+            )}
+            <p><strong>已完成数量：</strong>{workOrderDetail.completed_quantity}</p>
+            <p><strong>合格数量：</strong>{workOrderDetail.qualified_quantity}</p>
+            <p><strong>不合格数量：</strong>{workOrderDetail.unqualified_quantity}</p>
+            {workOrderDetail.remarks && (
+              <p><strong>备注：</strong>{workOrderDetail.remarks}</p>
+            )}
           </div>
         )}
       </Drawer>

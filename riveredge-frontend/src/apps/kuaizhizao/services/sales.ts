@@ -14,38 +14,59 @@ import { apiRequest } from '../../../services/api';
  */
 export interface SalesOrder {
   id?: number;
-  orderCode?: string;
-  customerId: number;
-  customerName?: string;
-  orderType: 'MTO' | 'MTS';
-  status?: 'draft' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
-  orderDate?: string;
-  deliveryDate: string;
-  totalAmount?: number;
-  totalQuantity?: number;
-  remarks?: string;
-  items: SalesOrderItem[];
+  tenant_id?: number;
+  order_code?: string;
+  customer_id: number;
+  customer_name?: string;
+  customer_contact?: string;
+  customer_phone?: string;
+  order_date?: string;
+  delivery_date: string;
+  order_type: 'MTO' | 'MTS';
+  total_quantity?: number;
+  total_amount?: number;
+  status?: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  review_time?: string;
+  review_status?: string;
+  review_remarks?: string;
+  salesman_id?: number;
+  salesman_name?: string;
+  shipping_address?: string;
+  shipping_method?: string;
+  payment_terms?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  items?: SalesOrderItem[];
 }
 
 export interface SalesOrderItem {
   id?: number;
-  productId: number;
-  productCode?: string;
-  productName?: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice?: number;
-  deliveryDate: string;
+  tenant_id?: number;
+  order_id?: number;
+  material_id: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
+  ordered_quantity: number;
+  unit_price: number;
+  total_price?: number;
+  delivered_quantity?: number;
+  delivery_date: string;
+  notes?: string;
 }
 
 export interface SalesOrderListParams {
   skip?: number;
   limit?: number;
-  orderType?: 'MTO' | 'MTS';
+  order_type?: 'MTO' | 'MTS';
   status?: string;
-  customerId?: number;
-  startDate?: string;
-  endDate?: string;
+  customer_id?: number;
+  start_date?: string;
+  end_date?: string;
   keyword?: string;
 }
 
@@ -60,7 +81,7 @@ export interface SalesOrderListResponse {
  */
 export async function listSalesOrders(params: SalesOrderListParams = {}): Promise<SalesOrderListResponse> {
   return apiRequest<SalesOrderListResponse>({
-    url: '/apps/kuaizhizao/sales-management/sales-orders',
+    url: '/apps/kuaizhizao/sales-orders',
     method: 'GET',
     params,
   });
@@ -71,7 +92,7 @@ export async function listSalesOrders(params: SalesOrderListParams = {}): Promis
  */
 export async function createSalesOrder(data: SalesOrder): Promise<SalesOrder> {
   return apiRequest<SalesOrder>({
-    url: '/apps/kuaizhizao/sales-management/sales-orders',
+    url: '/apps/kuaizhizao/sales-orders',
     method: 'POST',
     data,
   });
@@ -82,7 +103,7 @@ export async function createSalesOrder(data: SalesOrder): Promise<SalesOrder> {
  */
 export async function getSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-management/sales-orders/${id}`,
+    url: `/apps/kuaizhizao/sales-orders/${id}`,
     method: 'GET',
   });
 }
@@ -92,7 +113,7 @@ export async function getSalesOrder(id: number): Promise<SalesOrder> {
  */
 export async function updateSalesOrder(id: number, data: Partial<SalesOrder>): Promise<SalesOrder> {
   return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-management/sales-orders/${id}`,
+    url: `/apps/kuaizhizao/sales-orders/${id}`,
     method: 'PUT',
     data,
   });
@@ -103,7 +124,7 @@ export async function updateSalesOrder(id: number, data: Partial<SalesOrder>): P
  */
 export async function deleteSalesOrder(id: number): Promise<void> {
   return apiRequest<void>({
-    url: `/apps/kuaizhizao/sales-management/sales-orders/${id}`,
+    url: `/apps/kuaizhizao/sales-orders/${id}`,
     method: 'DELETE',
   });
 }
@@ -116,7 +137,7 @@ export async function importSalesOrders(file: File): Promise<{ success: boolean;
   formData.append('file', file);
 
   return apiRequest<{ success: boolean; message: string; data?: any }>({
-    url: '/apps/kuaizhizao/sales-management/sales-orders/import',
+    url: '/apps/kuaizhizao/sales-orders/import',
     method: 'POST',
     data: formData,
     headers: {
@@ -130,7 +151,7 @@ export async function importSalesOrders(file: File): Promise<{ success: boolean;
  */
 export async function confirmSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-management/sales-orders/${id}/confirm`,
+    url: `/apps/kuaizhizao/sales-orders/${id}/confirm`,
     method: 'POST',
   });
 }
@@ -140,7 +161,7 @@ export async function confirmSalesOrder(id: number): Promise<SalesOrder> {
  */
 export async function cancelSalesOrder(id: number): Promise<SalesOrder> {
   return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-management/sales-orders/${id}/cancel`,
+    url: `/apps/kuaizhizao/sales-orders/${id}/cancel`,
     method: 'POST',
   });
 }

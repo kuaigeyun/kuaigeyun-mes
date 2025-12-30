@@ -12,29 +12,24 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Input, Select, DatePicker } from 'antd';
 import { DollarOutlined, EyeOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { financeApi } from '../../../services/production';
 
 // 应付单接口定义
 interface AccountsPayable {
-  id: number;
-  payableCode: string;
-  purchaseOrderCode: string;
-  supplierName: string;
-  materialCode: string;
-  materialName: string;
-  quantity: number;
-  unitPrice: number;
-  totalAmount: number;
-  taxRate: number;
-  taxAmount: number;
-  netAmount: number;
-  currency: string;
-  dueDate: string;
-  status: 'draft' | 'confirmed' | 'paid' | 'overdue';
-  paymentMethod?: string;
-  paymentDate?: string;
-  remarks?: string;
-  createdAt: string;
-  updatedAt: string;
+  id?: number;
+  tenant_id?: number;
+  payable_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  total_amount?: number;
+  paid_amount?: number;
+  due_date?: string;
+  status?: string;
+  related_purchase_order_id?: number;
+  related_purchase_receipt_id?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const AccountsPayablePage: React.FC = () => {
@@ -74,84 +69,75 @@ const AccountsPayablePage: React.FC = () => {
   // 处理付款提交
   const handlePaymentSubmit = async (values: any) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (currentPayable?.id) {
+        await financeApi.payable.recordPayment(currentPayable.id.toString(), {
+          payment_amount: values.paymentAmount,
+          payment_method: values.paymentMethod,
+          payment_date: values.paymentDate,
+          remarks: values.remarks,
+        });
+      }
 
-      messageApi.success(`付款成功：¥${currentPayable?.totalAmount.toLocaleString()}`);
+      messageApi.success('付款记录成功');
 
       setPaymentModalVisible(false);
       paymentForm.resetFields();
       actionRef.current?.reload();
 
-      // 更新统计数据
-      setStats(prev => ({
-        ...prev,
-        paidAmount: prev.paidAmount + currentPayable!.totalAmount,
-        pendingAmount: Math.max(0, prev.pendingAmount - currentPayable!.totalAmount),
-      }));
-
     } catch (error: any) {
-      messageApi.error(error.message || '付款失败');
+      messageApi.error('付款记录失败');
     }
   };
 
   // 处理详情查看
-  const handleDetail = (record: AccountsPayable) => {
-    setPayableDetail(record);
-    setDetailVisible(true);
+  const handleDetail = async (record: AccountsPayable) => {
+    try {
+      const detail = await financeApi.payable.get(record.id!.toString());
+      setPayableDetail(detail);
+      setDetailVisible(true);
+    } catch (error) {
+      messageApi.error('获取应付单详情失败');
+    }
   };
 
   // 表格列定义
   const columns: ProColumns<AccountsPayable>[] = [
     {
       title: '应付单号',
-      dataIndex: 'payableCode',
+      dataIndex: 'payable_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
-      title: '采购订单',
-      dataIndex: 'purchaseOrderCode',
-      width: 120,
-    },
-    {
       title: '供应商',
-      dataIndex: 'supplierName',
+      dataIndex: 'supplier_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '物料名称',
-      dataIndex: 'materialName',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: '数量',
-      dataIndex: 'quantity',
-      width: 80,
-      align: 'right',
-    },
-    {
-      title: '单价',
-      dataIndex: 'unitPrice',
-      width: 100,
-      align: 'right',
-      render: (price) => `¥${price.toFixed(2)}`,
-    },
-    {
-      title: '总金额',
-      dataIndex: 'totalAmount',
+      title: '应付金额',
+      dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (amount) => `¥${amount.toLocaleString()}`,
+      render: (amount) => `¥${amount?.toLocaleString() || 0}`,
     },
     {
-      title: '税率',
-      dataIndex: 'taxRate',
-      width: 80,
+      title: '已付金额',
+      dataIndex: 'paid_amount',
+      width: 120,
       align: 'right',
-      render: (rate) => `${rate}%`,
+      render: (amount) => `¥${amount?.toLocaleString() || 0}`,
+    },
+    {
+      title: '剩余金额',
+      dataIndex: ['total_amount', 'paid_amount'],
+      width: 120,
+      align: 'right',
+      render: (_, record) => {
+        const remaining = (record.total_amount || 0) - (record.paid_amount || 0);
+        return `¥${remaining.toLocaleString()}`;
+      },
     },
     {
       title: '到期日期',
@@ -177,12 +163,12 @@ const AccountsPayablePage: React.FC = () => {
       width: 100,
       render: (status) => {
         const statusMap = {
-          draft: { text: '草稿', color: 'default' },
-          confirmed: { text: '待付款', color: 'processing' },
-          paid: { text: '已付款', color: 'success' },
-          overdue: { text: '逾期', color: 'error' },
+          '草稿': { text: '草稿', color: 'default' },
+          '已审核': { text: '已审核', color: 'processing' },
+          '已结清': { text: '已结清', color: 'success' },
+          '已取消': { text: '已取消', color: 'error' },
         };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap.draft;
+        const config = statusMap[status as keyof typeof statusMap] || statusMap['草稿'];
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -201,7 +187,7 @@ const AccountsPayablePage: React.FC = () => {
           >
             详情
           </Button>
-          {record.status === 'confirmed' && (
+          {record.status === '已审核' && (
             <Button
               size="small"
               type="primary"
@@ -284,74 +270,25 @@ const AccountsPayablePage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据
-            const mockData: AccountsPayable[] = [
-              {
-                id: 1,
-                payableCode: 'PAY20251229001',
-                purchaseOrderCode: 'PO20251229001',
-                supplierName: '供应商A',
-                materialCode: 'RAW001',
-                materialName: '螺丝A',
-                quantity: 1000,
-                unitPrice: 2.5,
-                totalAmount: 2500,
-                taxRate: 13,
-                taxAmount: 325,
-                netAmount: 2825,
-                currency: 'CNY',
-                dueDate: '2025-12-31',
-                status: 'confirmed',
-                createdAt: '2025-12-29 10:00:00',
-                updatedAt: '2025-12-29 10:00:00',
-              },
-              {
-                id: 2,
-                payableCode: 'PAY20251229002',
-                purchaseOrderCode: 'PO20251229002',
-                supplierName: '供应商B',
-                materialCode: 'RAW002',
-                materialName: '螺母B',
-                quantity: 500,
-                unitPrice: 1.8,
-                totalAmount: 900,
-                taxRate: 13,
-                taxAmount: 117,
-                netAmount: 1017,
-                currency: 'CNY',
-                dueDate: '2025-12-25',
-                status: 'overdue',
-                createdAt: '2025-12-20 09:00:00',
-                updatedAt: '2025-12-20 09:00:00',
-              },
-              {
-                id: 3,
-                payableCode: 'PAY20251229003',
-                purchaseOrderCode: 'PO20251229003',
-                supplierName: '供应商C',
-                materialCode: 'RAW003',
-                materialName: '垫片C',
-                quantity: 200,
-                unitPrice: 3.2,
-                totalAmount: 640,
-                taxRate: 13,
-                taxAmount: 83.2,
-                netAmount: 723.2,
-                currency: 'CNY',
-                dueDate: '2026-01-05',
-                status: 'paid',
-                paymentMethod: '银行转账',
-                paymentDate: '2025-12-28',
-                createdAt: '2025-12-25 14:00:00',
-                updatedAt: '2025-12-28 11:00:00',
-              },
-            ];
-
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+            try {
+              const response = await financeApi.payable.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              });
+              return {
+                data: response.data,
+                success: response.success,
+                total: response.total,
+              };
+            } catch (error) {
+              messageApi.error('获取应付单列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowSelection={{
             selectedRowKeys,

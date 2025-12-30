@@ -12,10 +12,10 @@ from .base import BaseModel
 class OperationLog(BaseModel):
     """
     操作日志模型
-    
+
     用于记录系统操作日志，支持自动记录和手动记录。
     支持多组织隔离，每个组织的操作日志相互独立。
-    
+
     注意：继承自 BaseModel，自动包含 uuid、tenant_id、created_at、updated_at 字段。
     注意：操作日志不可修改和删除，因此不需要 updated_at 和 deleted_at 字段。
     """

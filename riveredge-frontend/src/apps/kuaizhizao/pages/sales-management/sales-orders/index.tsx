@@ -13,34 +13,26 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, message, Card, Statistic, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { listSalesOrders, getSalesOrder, SalesOrder as APISalesOrder } from '../../../services/sales';
 
-// 销售订单接口定义
-interface SalesOrder {
-  id: number;
-  orderCode: string;
-  customerId: number;
-  customerName: string;
-  orderType: 'MTO' | 'MTS';
-  status: 'draft' | 'confirmed' | 'processing' | 'completed' | 'cancelled';
-  orderDate: string;
-  deliveryDate: string;
-  totalAmount: number;
-  totalQuantity: number;
-  remarks?: string;
-  createdAt: string;
-  updatedAt: string;
-  items: SalesOrderItem[];
-}
+// 使用API服务中的接口定义
+type SalesOrder = APISalesOrder;
 
 interface SalesOrderItem {
-  id: number;
-  productId: number;
-  productCode: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  deliveryDate: string;
+  id?: number;
+  tenant_id?: number;
+  order_id?: number;
+  material_id: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
+  ordered_quantity: number;
+  unit_price: number;
+  total_price?: number;
+  delivered_quantity?: number;
+  delivery_date: string;
+  notes?: string;
 }
 
 const SalesOrdersPage: React.FC = () => {
@@ -52,82 +44,27 @@ const SalesOrdersPage: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<SalesOrder | null>(null);
 
-  // 模拟数据
-  const mockData: SalesOrder[] = [
-    {
-      id: 1,
-      orderCode: 'SO20251229001',
-      customerId: 1,
-      customerName: '客户A',
-      orderType: 'MTO',
-      status: 'confirmed',
-      orderDate: '2025-12-29',
-      deliveryDate: '2026-01-20',
-      totalAmount: 15000,
-      totalQuantity: 100,
-      remarks: '紧急订单',
-      createdAt: '2025-12-29 10:00:00',
-      updatedAt: '2025-12-29 10:00:00',
-      items: [
-        {
-          id: 1,
-          productId: 1,
-          productCode: 'P001',
-          productName: '产品A',
-          quantity: 100,
-          unitPrice: 150,
-          totalPrice: 15000,
-          deliveryDate: '2026-01-20'
-        }
-      ]
-    },
-    {
-      id: 2,
-      orderCode: 'SO20251229002',
-      customerId: 2,
-      customerName: '客户B',
-      orderType: 'MTS',
-      status: 'processing',
-      orderDate: '2025-12-29',
-      deliveryDate: '2026-01-15',
-      totalAmount: 7500,
-      totalQuantity: 50,
-      createdAt: '2025-12-29 11:00:00',
-      updatedAt: '2025-12-29 11:00:00',
-      items: [
-        {
-          id: 2,
-          productId: 2,
-          productCode: 'P002',
-          productName: '产品B',
-          quantity: 50,
-          unitPrice: 150,
-          totalPrice: 7500,
-          deliveryDate: '2026-01-15'
-        }
-      ]
-    }
-  ];
+  // 移除模拟数据，使用真实API
 
   // 表格列定义
   const columns: ProColumns<SalesOrder>[] = [
     {
       title: '订单编号',
-      dataIndex: 'orderCode',
-      key: 'orderCode',
+      dataIndex: 'order_code',
+      key: 'order_code',
       width: 150,
       fixed: 'left',
     },
     {
       title: '客户名称',
-      dataIndex: 'customerName',
-      key: 'customerName',
+      dataIndex: 'customer_name',
+      key: 'customer_name',
       width: 120,
     },
     {
       title: '订单类型',
-      dataIndex: 'orderType',
-      key: 'orderType',
+      dataIndex: 'order_type',
+      key: 'order_type',
       width: 100,
       render: (text) => (
         <Tag color={text === 'MTO' ? 'blue' : 'green'}>
@@ -142,41 +79,42 @@ const SalesOrdersPage: React.FC = () => {
       width: 100,
       render: (status) => {
         const statusMap = {
-          draft: { text: '草稿', color: 'default' },
-          confirmed: { text: '已确认', color: 'processing' },
-          processing: { text: '进行中', color: 'processing' },
-          completed: { text: '已完成', color: 'success' },
-          cancelled: { text: '已取消', color: 'error' },
+          '草稿': { text: '草稿', color: 'default' },
+          '已审核': { text: '已审核', color: 'processing' },
+          '已确认': { text: '已确认', color: 'processing' },
+          '进行中': { text: '进行中', color: 'processing' },
+          '已完成': { text: '已完成', color: 'success' },
+          '已取消': { text: '已取消', color: 'error' },
         };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap.draft;
+        const config = statusMap[status as keyof typeof statusMap] || statusMap['草稿'];
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
       title: '订单日期',
-      dataIndex: 'orderDate',
-      key: 'orderDate',
+      dataIndex: 'order_date',
+      key: 'order_date',
       width: 120,
       valueType: 'date',
     },
     {
       title: '交货日期',
-      dataIndex: 'deliveryDate',
-      key: 'deliveryDate',
+      dataIndex: 'delivery_date',
+      key: 'delivery_date',
       width: 120,
       valueType: 'date',
     },
     {
       title: '总数量',
-      dataIndex: 'totalQuantity',
-      key: 'totalQuantity',
+      dataIndex: 'total_quantity',
+      key: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
       title: '总金额',
-      dataIndex: 'totalAmount',
-      key: 'totalAmount',
+      dataIndex: 'total_amount',
+      key: 'total_amount',
       width: 120,
       align: 'right',
       render: (amount) => `¥${amount?.toLocaleString() || 0}`,
@@ -219,9 +157,14 @@ const SalesOrdersPage: React.FC = () => {
   ];
 
   // 处理详情
-  const handleDetail = (record: SalesOrder) => {
-    setCurrentRecord(record);
-    setDetailVisible(true);
+  const handleDetail = async (record: SalesOrder) => {
+    try {
+      const detail = await getSalesOrder(record.id!);
+      setCurrentRecord(detail);
+      setDetailVisible(true);
+    } catch (error) {
+      messageApi.error('获取订单详情失败');
+    }
   };
 
   // 处理编辑
@@ -311,12 +254,25 @@ const SalesOrdersPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟API调用
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+            try {
+              const response = await listSalesOrders({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              });
+              return {
+                data: response.data,
+                success: response.success,
+                total: response.total,
+              };
+            } catch (error) {
+              messageApi.error('获取销售订单列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowSelection={{
             selectedRowKeys,
@@ -355,74 +311,101 @@ const SalesOrdersPage: React.FC = () => {
             <Card title="基本信息" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <strong>订单编号：</strong>{currentRecord.orderCode}
+                  <strong>订单编号：</strong>{currentRecord.order_code}
                 </Col>
                 <Col span={12}>
-                  <strong>客户名称：</strong>{currentRecord.customerName}
+                  <strong>客户名称：</strong>{currentRecord.customer_name}
                 </Col>
               </Row>
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col span={12}>
                   <strong>订单类型：</strong>
-                  <Tag color={currentRecord.orderType === 'MTO' ? 'blue' : 'green'}>
-                    {currentRecord.orderType === 'MTO' ? '按订单生产' : '按库存生产'}
+                  <Tag color={currentRecord.order_type === 'MTO' ? 'blue' : 'green'}>
+                    {currentRecord.order_type === 'MTO' ? '按订单生产' : '按库存生产'}
                   </Tag>
                 </Col>
                 <Col span={12}>
                   <strong>订单状态：</strong>
-                  <Tag color="processing">已确认</Tag>
+                  <Tag color={
+                    currentRecord.status === '已完成' ? 'success' :
+                    currentRecord.status === '已取消' ? 'error' :
+                    currentRecord.status === '进行中' ? 'processing' : 'default'
+                  }>
+                    {currentRecord.status}
+                  </Tag>
                 </Col>
               </Row>
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col span={12}>
-                  <strong>订单日期：</strong>{currentRecord.orderDate}
+                  <strong>订单日期：</strong>{currentRecord.order_date}
                 </Col>
                 <Col span={12}>
-                  <strong>交货日期：</strong>{currentRecord.deliveryDate}
+                  <strong>交货日期：</strong>{currentRecord.delivery_date}
                 </Col>
               </Row>
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col span={12}>
-                  <strong>总数量：</strong>{currentRecord.totalQuantity}
+                  <strong>总数量：</strong>{currentRecord.total_quantity}
                 </Col>
                 <Col span={12}>
-                  <strong>总金额：</strong>¥{currentRecord.totalAmount.toLocaleString()}
+                  <strong>总金额：</strong>¥{currentRecord.total_amount?.toLocaleString() || 0}
                 </Col>
               </Row>
-              {currentRecord.remarks && (
+              {currentRecord.customer_contact && (
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>联系人：</strong>{currentRecord.customer_contact}
+                  </Col>
+                  <Col span={12}>
+                    <strong>联系电话：</strong>{currentRecord.customer_phone}
+                  </Col>
+                </Row>
+              )}
+              {currentRecord.notes && (
                 <Row style={{ marginTop: 8 }}>
                   <Col span={24}>
-                    <strong>备注：</strong>{currentRecord.remarks}
+                    <strong>备注：</strong>{currentRecord.notes}
                   </Col>
                 </Row>
               )}
             </Card>
 
             <Card title="订单明细">
-              {currentRecord.items.map((item, index) => (
+              {currentRecord.items?.map((item, index) => (
                 <Card key={item.id} size="small" style={{ marginBottom: 8 }}>
                   <Row gutter={16}>
                     <Col span={12}>
-                      <strong>产品编码：</strong>{item.productCode}
+                      <strong>物料编码：</strong>{item.material_code}
                     </Col>
                     <Col span={12}>
-                      <strong>产品名称：</strong>{item.productName}
+                      <strong>物料名称：</strong>{item.material_name}
                     </Col>
                   </Row>
                   <Row gutter={16} style={{ marginTop: 8 }}>
-                    <Col span={8}>
-                      <strong>数量：</strong>{item.quantity}
+                    <Col span={12}>
+                      <strong>规格：</strong>{item.material_spec || '-'}
                     </Col>
-                    <Col span={8}>
-                      <strong>单价：</strong>¥{item.unitPrice}
+                    <Col span={12}>
+                      <strong>单位：</strong>{item.material_unit || '-'}
                     </Col>
-                    <Col span={8}>
-                      <strong>金额：</strong>¥{item.totalPrice.toLocaleString()}
+                  </Row>
+                  <Row gutter={16} style={{ marginTop: 8 }}>
+                    <Col span={6}>
+                      <strong>订单数量：</strong>{item.ordered_quantity}
+                    </Col>
+                    <Col span={6}>
+                      <strong>已交数量：</strong>{item.delivered_quantity || 0}
+                    </Col>
+                    <Col span={6}>
+                      <strong>单价：</strong>¥{item.unit_price}
+                    </Col>
+                    <Col span={6}>
+                      <strong>金额：</strong>¥{item.total_price?.toLocaleString() || 0}
                     </Col>
                   </Row>
                   <Row style={{ marginTop: 8 }}>
                     <Col span={24}>
-                      <strong>交货日期：</strong>{item.deliveryDate}
+                      <strong>交货日期：</strong>{item.delivery_date}
                     </Col>
                   </Row>
                 </Card>

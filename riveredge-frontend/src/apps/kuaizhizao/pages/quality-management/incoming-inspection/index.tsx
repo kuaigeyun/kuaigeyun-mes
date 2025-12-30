@@ -12,24 +12,28 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Radio, Input, Select } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { qualityApi } from '../../../services/production';
 
 // 来料检验接口定义
 interface IncomingInspection {
-  id: number;
-  inspectionCode: string;
-  purchaseOrderCode: string;
-  materialCode: string;
-  materialName: string;
-  supplierName: string;
-  batchNo: string;
-  quantity: number;
-  unit: string;
-  inspectionStatus: 'pending' | 'qualified' | 'unqualified' | 'conditional';
-  inspectionResult: 'pending' | 'pass' | 'fail';
-  inspectorName: string;
-  inspectionDate?: string;
-  remarks?: string;
-  createdAt: string;
+  id?: number;
+  tenant_id?: number;
+  inspection_code?: string;
+  purchase_receipt_id?: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  quantity?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  status?: string;
+  inspection_date?: string;
+  inspector_id?: number;
+  inspector_name?: string;
+  certificate_number?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const IncomingInspectionPage: React.FC = () => {
@@ -69,115 +73,97 @@ const IncomingInspectionPage: React.FC = () => {
   // 处理检验提交
   const handleInspectionSubmit = async (values: any) => {
     try {
-      // 模拟API调用
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (currentInspection?.id) {
+        await qualityApi.incomingInspection.conduct(currentInspection.id.toString(), {
+          qualified_quantity: values.qualifiedQuantity,
+          unqualified_quantity: values.unqualifiedQuantity,
+          notes: values.remarks,
+        });
+      }
 
-      const resultText = values.inspectionResult === 'pass' ? '合格' : '不合格';
-      messageApi.success(`来料检验完成：${resultText}`);
+      messageApi.success('来料检验完成');
 
       setInspectionModalVisible(false);
       inspectionForm.resetFields();
       actionRef.current?.reload();
 
-      // 更新统计数据
-      setStats(prev => ({
-        ...prev,
-        pendingCount: Math.max(0, prev.pendingCount - 1),
-        qualifiedCount: values.inspectionResult === 'pass' ? prev.qualifiedCount + 1 : prev.qualifiedCount,
-        unqualifiedCount: values.inspectionResult === 'fail' ? prev.unqualifiedCount + 1 : prev.unqualifiedCount,
-        totalInspected: prev.totalInspected + 1,
-      }));
-
     } catch (error: any) {
-      messageApi.error(error.message || '检验提交失败');
+      messageApi.error('检验提交失败');
     }
   };
 
   // 处理详情查看
-  const handleDetail = (record: IncomingInspection) => {
-    setInspectionDetail(record);
-    setDetailVisible(true);
+  const handleDetail = async (record: IncomingInspection) => {
+    try {
+      const detail = await qualityApi.incomingInspection.get(record.id!.toString());
+      setInspectionDetail(detail);
+      setDetailVisible(true);
+    } catch (error) {
+      messageApi.error('获取检验单详情失败');
+    }
   };
 
   // 表格列定义
   const columns: ProColumns<IncomingInspection>[] = [
     {
       title: '检验单号',
-      dataIndex: 'inspectionCode',
+      dataIndex: 'inspection_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
-      title: '采购订单',
-      dataIndex: 'purchaseOrderCode',
-      width: 120,
-    },
-    {
       title: '物料编码',
-      dataIndex: 'materialCode',
+      dataIndex: 'material_code',
       width: 120,
     },
     {
       title: '物料名称',
-      dataIndex: 'materialName',
+      dataIndex: 'material_name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '供应商',
-      dataIndex: 'supplierName',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '批次号',
-      dataIndex: 'batchNo',
-      width: 100,
-    },
-    {
-      title: '数量',
+      title: '检验数量',
       dataIndex: 'quantity',
-      width: 80,
+      width: 100,
+      align: 'right',
+    },
+    {
+      title: '合格数量',
+      dataIndex: 'qualified_quantity',
+      width: 100,
+      align: 'right',
+    },
+    {
+      title: '不合格数量',
+      dataIndex: 'unqualified_quantity',
+      width: 100,
       align: 'right',
     },
     {
       title: '检验状态',
-      dataIndex: 'inspectionStatus',
+      dataIndex: 'status',
       width: 100,
       render: (status) => {
         const statusMap = {
-          pending: { text: '待检验', color: 'default' },
-          qualified: { text: '合格', color: 'success' },
-          unqualified: { text: '不合格', color: 'error' },
-          conditional: { text: '条件合格', color: 'warning' },
+          '草稿': { text: '草稿', color: 'default' },
+          '已审核': { text: '已审核', color: 'processing' },
+          '已完成': { text: '已完成', color: 'success' },
+          '已取消': { text: '已取消', color: 'error' },
         };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap.pending;
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
-    },
-    {
-      title: '检验结果',
-      dataIndex: 'inspectionResult',
-      width: 100,
-      render: (result) => {
-        const resultMap = {
-          pending: { text: '待检验', color: 'default' },
-          pass: { text: '合格', color: 'success' },
-          fail: { text: '不合格', color: 'error' },
-        };
-        const config = resultMap[result as keyof typeof resultMap] || resultMap.pending;
+        const config = statusMap[status as keyof typeof statusMap] || statusMap['草稿'];
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
       title: '检验员',
-      dataIndex: 'inspectorName',
+      dataIndex: 'inspector_name',
       width: 100,
     },
     {
       title: '检验日期',
-      dataIndex: 'inspectionDate',
+      dataIndex: 'inspection_date',
       width: 120,
       valueType: 'dateTime',
     },
@@ -276,63 +262,25 @@ const IncomingInspectionPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据
-            const mockData: IncomingInspection[] = [
-              {
-                id: 1,
-                inspectionCode: 'IQ20251229001',
-                purchaseOrderCode: 'PO20251229001',
-                materialCode: 'RAW001',
-                materialName: '螺丝A',
-                supplierName: '供应商A',
-                batchNo: 'BATCH001',
-                quantity: 1000,
-                unit: '个',
-                inspectionStatus: 'pending',
-                inspectionResult: 'pending',
-                inspectorName: '',
-                createdAt: '2025-12-29 09:00:00',
-              },
-              {
-                id: 2,
-                inspectionCode: 'IQ20251229002',
-                purchaseOrderCode: 'PO20251229002',
-                materialCode: 'RAW002',
-                materialName: '螺母B',
-                supplierName: '供应商B',
-                batchNo: 'BATCH002',
-                quantity: 500,
-                unit: '个',
-                inspectionStatus: 'qualified',
-                inspectionResult: 'pass',
-                inspectorName: '张三',
-                inspectionDate: '2025-12-29 10:30:00',
-                createdAt: '2025-12-29 08:30:00',
-              },
-              {
-                id: 3,
-                inspectionCode: 'IQ20251229003',
-                purchaseOrderCode: 'PO20251229003',
-                materialCode: 'RAW003',
-                materialName: '垫片C',
-                supplierName: '供应商C',
-                batchNo: 'BATCH003',
-                quantity: 200,
-                unit: '个',
-                inspectionStatus: 'unqualified',
-                inspectionResult: 'fail',
-                inspectorName: '李四',
-                inspectionDate: '2025-12-29 11:00:00',
-                remarks: '尺寸不符合要求',
-                createdAt: '2025-12-29 09:30:00',
-              },
-            ];
-
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+            try {
+              const response = await qualityApi.incomingInspection.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              });
+              return {
+                data: response.data,
+                success: response.success,
+                total: response.total,
+              };
+            } catch (error) {
+              messageApi.error('获取来料检验列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowSelection={{
             selectedRowKeys,
@@ -355,7 +303,7 @@ const IncomingInspectionPage: React.FC = () => {
 
       {/* 检验Modal */}
       <Modal
-        title={`来料检验 - ${currentInspection?.inspectionCode}`}
+        title={`来料检验 - ${currentInspection?.inspection_code}`}
         open={inspectionModalVisible}
         onCancel={() => setInspectionModalVisible(false)}
         onOk={() => inspectionForm.submit()}
@@ -368,18 +316,15 @@ const IncomingInspectionPage: React.FC = () => {
             <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <strong>物料：</strong>{currentInspection.materialName}
+                  <strong>物料编码：</strong>{currentInspection.material_code}
                 </Col>
                 <Col span={12}>
-                  <strong>供应商：</strong>{currentInspection.supplierName}
+                  <strong>物料名称：</strong>{currentInspection.material_name}
                 </Col>
               </Row>
               <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>数量：</strong>{currentInspection.quantity} {currentInspection.unit}
-                </Col>
-                <Col span={12}>
-                  <strong>批次号：</strong>{currentInspection.batchNo}
+                <Col span={24}>
+                  <strong>检验数量：</strong>{currentInspection.quantity}
                 </Col>
               </Row>
             </Card>
@@ -388,20 +333,49 @@ const IncomingInspectionPage: React.FC = () => {
               form={inspectionForm}
               layout="vertical"
               onFinish={handleInspectionSubmit}
+              initialValues={{
+                qualifiedQuantity: currentInspection.quantity,
+                unqualifiedQuantity: 0,
+              }}
             >
               <Form.Item
-                name="inspectionResult"
-                label="检验结果"
-                rules={[{ required: true, message: '请选择检验结果' }]}
+                name="qualifiedQuantity"
+                label="合格数量"
+                rules={[
+                  { required: true, message: '请输入合格数量' },
+                  { type: 'number', min: 0, message: '合格数量不能小于0' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      const unqualifiedQuantity = getFieldValue('unqualifiedQuantity') || 0;
+                      if (value + unqualifiedQuantity > currentInspection.quantity) {
+                        return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
               >
-                <Radio.Group>
-                  <Radio value="pass">
-                    <Tag color="success">合格</Tag> 产品符合质量标准
-                  </Radio>
-                  <Radio value="fail">
-                    <Tag color="error">不合格</Tag> 产品不符合质量标准
-                  </Radio>
-                </Radio.Group>
+                <Input type="number" placeholder="请输入合格数量" />
+              </Form.Item>
+
+              <Form.Item
+                name="unqualifiedQuantity"
+                label="不合格数量"
+                rules={[
+                  { required: true, message: '请输入不合格数量' },
+                  { type: 'number', min: 0, message: '不合格数量不能小于0' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      const qualifiedQuantity = getFieldValue('qualifiedQuantity') || 0;
+                      if (qualifiedQuantity + value > currentInspection.quantity) {
+                        return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
+              >
+                <Input type="number" placeholder="请输入不合格数量" />
               </Form.Item>
 
               <Form.Item
@@ -413,14 +387,6 @@ const IncomingInspectionPage: React.FC = () => {
                   placeholder="请输入检验详情、发现的问题或处理意见"
                 />
               </Form.Item>
-
-              <Form.Item
-                name="inspectorName"
-                label="检验员"
-                rules={[{ required: true, message: '请输入检验员姓名' }]}
-              >
-                <Input placeholder="请输入检验员姓名" />
-              </Form.Item>
             </Form>
           </div>
         )}
@@ -428,7 +394,7 @@ const IncomingInspectionPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <Drawer
-        title={`检验详情 - ${inspectionDetail?.inspectionCode}`}
+        title={`检验详情 - ${inspectionDetail?.inspection_code}`}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
         width={600}
@@ -438,26 +404,26 @@ const IncomingInspectionPage: React.FC = () => {
             <Card title="基本信息" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <strong>检验单号：</strong>{inspectionDetail.inspectionCode}
+                  <strong>检验单号：</strong>{inspectionDetail.inspection_code}
                 </Col>
                 <Col span={12}>
-                  <strong>采购订单：</strong>{inspectionDetail.purchaseOrderCode}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>物料：</strong>{inspectionDetail.materialName}
-                </Col>
-                <Col span={12}>
-                  <strong>供应商：</strong>{inspectionDetail.supplierName}
+                  <strong>物料编码：</strong>{inspectionDetail.material_code}
                 </Col>
               </Row>
               <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>数量：</strong>{inspectionDetail.quantity} {inspectionDetail.unit}
+                <Col span={24}>
+                  <strong>物料名称：</strong>{inspectionDetail.material_name}
                 </Col>
-                <Col span={12}>
-                  <strong>批次号：</strong>{inspectionDetail.batchNo}
+              </Row>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={8}>
+                  <strong>检验数量：</strong>{inspectionDetail.quantity}
+                </Col>
+                <Col span={8}>
+                  <strong>合格数量：</strong>{inspectionDetail.qualified_quantity || 0}
+                </Col>
+                <Col span={8}>
+                  <strong>不合格数量：</strong>{inspectionDetail.unqualified_quantity || 0}
                 </Col>
               </Row>
             </Card>
@@ -467,38 +433,29 @@ const IncomingInspectionPage: React.FC = () => {
                 <Col span={12}>
                   <strong>检验状态：</strong>
                   <Tag color={
-                    inspectionDetail.inspectionStatus === 'qualified' ? 'success' :
-                    inspectionDetail.inspectionStatus === 'unqualified' ? 'error' :
-                    inspectionDetail.inspectionStatus === 'conditional' ? 'warning' : 'default'
+                    inspectionDetail.status === '已完成' ? 'success' :
+                    inspectionDetail.status === '已审核' ? 'processing' :
+                    inspectionDetail.status === '已取消' ? 'error' : 'default'
                   }>
-                    {inspectionDetail.inspectionStatus === 'qualified' ? '合格' :
-                     inspectionDetail.inspectionStatus === 'unqualified' ? '不合格' :
-                     inspectionDetail.inspectionStatus === 'conditional' ? '条件合格' : '待检验'}
+                    {inspectionDetail.status}
                   </Tag>
                 </Col>
                 <Col span={12}>
-                  <strong>检验结果：</strong>
-                  <Tag color={
-                    inspectionDetail.inspectionResult === 'pass' ? 'success' :
-                    inspectionDetail.inspectionResult === 'fail' ? 'error' : 'default'
-                  }>
-                    {inspectionDetail.inspectionResult === 'pass' ? '合格' :
-                     inspectionDetail.inspectionResult === 'fail' ? '不合格' : '待检验'}
-                  </Tag>
+                  <strong>证书编号：</strong>{inspectionDetail.certificate_number || '无'}
                 </Col>
               </Row>
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col span={12}>
-                  <strong>检验员：</strong>{inspectionDetail.inspectorName}
+                  <strong>检验员：</strong>{inspectionDetail.inspector_name}
                 </Col>
                 <Col span={12}>
-                  <strong>检验日期：</strong>{inspectionDetail.inspectionDate}
+                  <strong>检验日期：</strong>{inspectionDetail.inspection_date}
                 </Col>
               </Row>
-              {inspectionDetail.remarks && (
+              {inspectionDetail.notes && (
                 <Row style={{ marginTop: 8 }}>
                   <Col span={24}>
-                    <strong>检验备注：</strong>{inspectionDetail.remarks}
+                    <strong>检验备注：</strong>{inspectionDetail.notes}
                   </Col>
                 </Row>
               )}

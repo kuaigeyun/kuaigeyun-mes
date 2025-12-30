@@ -183,6 +183,40 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.supplier",
                 f"apps.{module_code}.models.performance",
                 f"apps.{module_code}.models.product",
+                f"apps.{module_code}.models.work_order",
+                f"apps.{module_code}.models.reporting_record",
+                # 仓储管理模块
+                f"apps.{module_code}.models.production_picking",
+                f"apps.{module_code}.models.production_picking_item",
+                f"apps.{module_code}.models.finished_goods_receipt",
+                f"apps.{module_code}.models.finished_goods_receipt_item",
+                f"apps.{module_code}.models.sales_delivery",
+                f"apps.{module_code}.models.sales_delivery_item",
+                f"apps.{module_code}.models.purchase_receipt",
+                f"apps.{module_code}.models.purchase_receipt_item",
+                f"apps.{module_code}.models.purchase_order",
+                f"apps.{module_code}.models.purchase_order_item",
+                # 质量管理模块
+                f"apps.{module_code}.models.incoming_inspection",
+                f"apps.{module_code}.models.process_inspection",
+                f"apps.{module_code}.models.finished_goods_inspection",
+                # 财务协同模块
+                f"apps.{module_code}.models.payable",
+                f"apps.{module_code}.models.purchase_invoice",
+                f"apps.{module_code}.models.receivable",
+                # 销售管理模块
+                f"apps.{module_code}.models.sales_forecast",
+                f"apps.{module_code}.models.sales_forecast_item",
+                f"apps.{module_code}.models.sales_order",
+                f"apps.{module_code}.models.sales_order_item",
+                # BOM管理模块
+                f"apps.{module_code}.models.bill_of_materials",
+                f"apps.{module_code}.models.bill_of_materials_item",
+                # 生产计划模块
+                f"apps.{module_code}.models.production_plan",
+                f"apps.{module_code}.models.production_plan_item",
+                f"apps.{module_code}.models.mrp_result",
+                f"apps.{module_code}.models.lrp_result",
             ]
 
             # 只添加存在的模块
@@ -267,6 +301,40 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.supplier",
                 f"apps.{module_code}.models.performance",
                 f"apps.{module_code}.models.product",
+                f"apps.{module_code}.models.work_order",
+                f"apps.{module_code}.models.reporting_record",
+                # 仓储管理模块
+                f"apps.{module_code}.models.production_picking",
+                f"apps.{module_code}.models.production_picking_item",
+                f"apps.{module_code}.models.finished_goods_receipt",
+                f"apps.{module_code}.models.finished_goods_receipt_item",
+                f"apps.{module_code}.models.sales_delivery",
+                f"apps.{module_code}.models.sales_delivery_item",
+                f"apps.{module_code}.models.purchase_receipt",
+                f"apps.{module_code}.models.purchase_receipt_item",
+                f"apps.{module_code}.models.purchase_order",
+                f"apps.{module_code}.models.purchase_order_item",
+                # 质量管理模块
+                f"apps.{module_code}.models.incoming_inspection",
+                f"apps.{module_code}.models.process_inspection",
+                f"apps.{module_code}.models.finished_goods_inspection",
+                # 财务协同模块
+                f"apps.{module_code}.models.payable",
+                f"apps.{module_code}.models.purchase_invoice",
+                f"apps.{module_code}.models.receivable",
+                # 销售管理模块
+                f"apps.{module_code}.models.sales_forecast",
+                f"apps.{module_code}.models.sales_forecast_item",
+                f"apps.{module_code}.models.sales_order",
+                f"apps.{module_code}.models.sales_order_item",
+                # BOM管理模块
+                f"apps.{module_code}.models.bill_of_materials",
+                f"apps.{module_code}.models.bill_of_materials_item",
+                # 生产计划模块
+                f"apps.{module_code}.models.production_plan",
+                f"apps.{module_code}.models.production_plan_item",
+                f"apps.{module_code}.models.mrp_result",
+                f"apps.{module_code}.models.lrp_result",
             ]
 
             # 只添加存在的模块

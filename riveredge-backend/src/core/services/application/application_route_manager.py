@@ -40,28 +40,37 @@ class ApplicationRouteManager:
     ) -> None:
         """
         注册应用路由
-        
+
         Args:
             app_code: 应用代码
             routers: 路由列表
             prefix: 路由前缀
         """
+        logger.info(f"🔧 开始注册应用 {app_code} 的路由，prefix={prefix}, routers数量={len(routers) if routers else 0}")
         if not routers:
             logger.warning(f"应用 {app_code} 没有路由需要注册")
             return
-        
+
         # 如果应用已注册过路由，先移除旧路由
         if app_code in self._registered_routes:
             logger.info(f"应用 {app_code} 已存在路由，先移除旧路由")
             self.unregister_app_routes(app_code)
-        
+
         # 注册新路由
         registered = []
         for router in routers:
             try:
+                logger.debug(f"📝 正在注册路由器，prefix={router.prefix}, tags={router.tags}")
                 self.app.include_router(router, prefix=prefix)
                 registered.append(router)
                 logger.debug(f"✅ 注册应用 {app_code} 的路由: {router.prefix}")
+                # 检查路由是否真的被添加了
+                route_count = len([route for route in self.app.routes if hasattr(route, 'path') and route.path.startswith(prefix)])
+                logger.debug(f"📊 当前应用路由数量（以 {prefix} 开头）: {route_count}")
+                # 打印所有以 prefix 开头的路由
+                matching_routes = [route.path for route in self.app.routes if hasattr(route, 'path') and route.path.startswith(prefix)]
+                if matching_routes:
+                    logger.debug(f"📋 匹配的路由路径: {matching_routes[:5]}")  # 只打印前5个
             except Exception as e:
                 logger.error(f"❌ 注册应用 {app_code} 的路由失败: {e}")
                 continue

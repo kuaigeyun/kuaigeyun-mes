@@ -158,6 +158,34 @@ TORTOISE_ORM = {
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
                 "apps.master_data.models.performance",  # 绩效数据模型（假期、技能）
                 "apps.master_data.models.product",  # 产品模型
+                # 快格轻制造模型
+                "apps.kuaizhizao.models.work_order",  # 工单模型
+                "apps.kuaizhizao.models.reporting_record",  # 报工记录模型
+                "apps.kuaizhizao.models.production_picking",  # 生产领料模型
+                "apps.kuaizhizao.models.production_picking_item",  # 生产领料明细模型
+                "apps.kuaizhizao.models.finished_goods_receipt",  # 成品入库模型
+                "apps.kuaizhizao.models.finished_goods_receipt_item",  # 成品入库明细模型
+                "apps.kuaizhizao.models.sales_delivery",  # 销售发货模型
+                "apps.kuaizhizao.models.sales_delivery_item",  # 销售发货明细模型
+                "apps.kuaizhizao.models.purchase_receipt",  # 采购收货模型
+                "apps.kuaizhizao.models.purchase_receipt_item",  # 采购收货明细模型
+                "apps.kuaizhizao.models.purchase_order",  # 采购订单模型
+                "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
+                "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
+                "apps.kuaizhizao.models.finished_goods_inspection",  # 成品检验模型
+                "apps.kuaizhizao.models.payable",  # 应付账款模型
+                "apps.kuaizhizao.models.purchase_invoice",  # 采购发票模型
+                "apps.kuaizhizao.models.receivable",  # 应收账款模型
+                "apps.kuaizhizao.models.sales_forecast",  # 销售预测模型
+                "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
+                "apps.kuaizhizao.models.sales_order",  # 销售订单模型
+                "apps.kuaizhizao.models.sales_order_item",  # 销售订单明细模型
+                "apps.kuaizhizao.models.bill_of_materials",  # BOM模型
+                "apps.kuaizhizao.models.bill_of_materials_item",  # BOM明细模型
+                "apps.kuaizhizao.models.production_plan",  # 生产计划模型
+                "apps.kuaizhizao.models.production_plan_item",  # 生产计划明细模型
+                "apps.kuaizhizao.models.mrp_result",  # MRP结果模型
+                "apps.kuaizhizao.models.lrp_result",  # LRP结果模型
             ],
             "default_connection": "default",
         },
