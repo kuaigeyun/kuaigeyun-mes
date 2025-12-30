@@ -9,20 +9,43 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, message, Form } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { warehouseApi } from '../../../services/production';
 
+// 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
-  id: number;
-  code: string;
-  type: 'production' | 'sales' | 'return';
-  status: 'draft' | 'confirmed' | 'completed' | 'cancelled';
-  customerName?: string;
-  workOrderCode?: string;
-  totalQuantity: number;
-  totalItems: number;
-  warehouseName: string;
-  operatorName: string;
-  createdAt: string;
-  completedAt?: string;
+  id?: number;
+  tenant_id?: number;
+  delivery_code?: string; // 销售出库单编码
+  picking_code?: string; // 生产领料单编码
+  outbound_type?: 'production_picking' | 'sales_delivery'; // 出库类型
+  status?: string;
+  delivery_date?: string; // 出库日期
+  customer_id?: number;
+  customer_name?: string;
+  work_order_id?: number;
+  work_order_code?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  delivered_by?: string; // 操作员
+  total_quantity?: number;
+  total_items?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  items?: OutboundOrderItem[];
+}
+
+interface OutboundOrderItem {
+  id?: number;
+  tenant_id?: number;
+  delivery_id?: number; // 销售出库单明细ID
+  picking_id?: number; // 生产领料单明细ID
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
 }
 
 const OutboundPage: React.FC = () => {
@@ -48,21 +71,40 @@ const OutboundPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = (record: OutboundOrder) => {
-    setCurrentOrder(record);
-    setDetailDrawerVisible(true);
+  const handleDetail = async (record: OutboundOrder) => {
+    try {
+      let detailData;
+      if (record.outbound_type === 'production_picking') {
+        detailData = await warehouseApi.productionPicking.get(record.id!.toString());
+      } else if (record.outbound_type === 'sales_delivery') {
+        detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
+      }
+      setCurrentOrder(detailData);
+      setDetailDrawerVisible(true);
+    } catch (error) {
+      messageApi.error('获取出库单详情失败');
+    }
   };
 
   /**
    * 处理确认出库
    */
-  const handleConfirm = (record: OutboundOrder) => {
+  const handleConfirm = async (record: OutboundOrder) => {
     Modal.confirm({
       title: '确认出库',
-      content: `确定要确认出库单 "${record.code}" 吗？确认后将更新库存。`,
+      content: `确定要确认出库单 "${record.delivery_code || record.picking_code}" 吗？确认后将更新库存。`,
       onOk: async () => {
-        messageApi.success('出库确认成功，库存已更新');
-        actionRef.current?.reload();
+        try {
+          if (record.outbound_type === 'production_picking') {
+            await warehouseApi.productionPicking.confirm(record.id!.toString());
+          } else if (record.outbound_type === 'sales_delivery') {
+            await warehouseApi.salesDelivery.confirm(record.id!.toString());
+          }
+          messageApi.success('出库确认成功，库存已更新');
+          actionRef.current?.reload();
+        } catch (error) {
+          messageApi.error('出库确认失败');
+        }
       },
     });
   };
@@ -73,19 +115,19 @@ const OutboundPage: React.FC = () => {
   const columns: ProColumns<OutboundOrder>[] = [
     {
       title: '出库单号',
-      dataIndex: 'code',
+      dataIndex: ['delivery_code', 'picking_code'],
       width: 140,
       ellipsis: true,
       fixed: 'left',
+      render: (_, record) => record.delivery_code || record.picking_code,
     },
     {
       title: '出库类型',
-      dataIndex: 'type',
+      dataIndex: 'outbound_type',
       width: 100,
       valueEnum: {
-        production: { text: '生产领料', status: 'processing' },
-        sales: { text: '销售出库', status: 'success' },
-        return: { text: '退货出库', status: 'warning' },
+        production_picking: { text: '生产领料', status: 'processing' },
+        sales_delivery: { text: '销售出库', status: 'success' },
       },
     },
     {
@@ -93,57 +135,57 @@ const OutboundPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        confirmed: { text: '已确认', status: 'processing' },
-        completed: { text: '已完成', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        '草稿': { text: '草稿', status: 'default' },
+        '已确认': { text: '已确认', status: 'processing' },
+        '已完成': { text: '已完成', status: 'success' },
+        '已取消': { text: '已取消', status: 'error' },
       },
     },
     {
       title: '客户',
-      dataIndex: 'customerName',
+      dataIndex: 'customer_name',
       width: 120,
       ellipsis: true,
     },
     {
       title: '工单号',
-      dataIndex: 'workOrderCode',
+      dataIndex: 'work_order_code',
       width: 120,
       ellipsis: true,
     },
     {
       title: '出库数量',
-      dataIndex: 'totalQuantity',
+      dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
       title: '出库品种',
-      dataIndex: 'totalItems',
+      dataIndex: 'total_items',
       width: 100,
       align: 'right',
     },
     {
       title: '出库仓库',
-      dataIndex: 'warehouseName',
+      dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
       title: '操作员',
-      dataIndex: 'operatorName',
+      dataIndex: 'delivered_by',
       width: 100,
       ellipsis: true,
     },
     {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      valueType: 'dateTime',
-      width: 160,
+      title: '出库日期',
+      dataIndex: 'delivery_date',
+      valueType: 'date',
+      width: 120,
     },
     {
-      title: '完成时间',
-      dataIndex: 'completedAt',
+      title: '创建时间',
+      dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
@@ -186,52 +228,51 @@ const OutboundPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         request={async (params) => {
-          // 模拟数据
-          const mockData: OutboundOrder[] = [
-            {
-              id: 1,
-              code: 'OUT20241201001',
-              type: 'production',
-              status: 'completed',
-              workOrderCode: 'WO20241201001',
-              totalQuantity: 190,
-              totalItems: 3,
-              warehouseName: '原材料仓库',
-              operatorName: '张三',
-              createdAt: '2024-12-01 13:00:00',
-              completedAt: '2024-12-01 13:30:00',
-            },
-            {
-              id: 2,
-              code: 'OUT20241201002',
-              type: 'sales',
-              status: 'confirmed',
-              customerName: '客户A',
-              totalQuantity: 50,
-              totalItems: 1,
-              warehouseName: '成品仓库',
-              operatorName: '李四',
-              createdAt: '2024-12-01 16:30:00',
-            },
-            {
-              id: 3,
-              code: 'OUT20241201003',
-              type: 'production',
-              status: 'draft',
-              workOrderCode: 'WO20241201002',
-              totalQuantity: 105,
-              totalItems: 3,
-              warehouseName: '原材料仓库',
-              operatorName: '王五',
-              createdAt: '2024-12-01 15:00:00',
-            },
-          ];
+          try {
+            // 并行获取生产领料单和销售出库单
+            const [productionPickings, salesDeliveries] = await Promise.all([
+              warehouseApi.productionPicking.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              }),
+              warehouseApi.salesDelivery.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                ...params,
+              }),
+            ]);
 
-          return {
-            data: mockData,
-            success: true,
-            total: mockData.length,
-          };
+            // 合并并转换数据格式
+            const pickingData = productionPickings.data?.map(item => ({
+              ...item,
+              outbound_type: 'production_picking' as const,
+            })) || [];
+
+            const deliveryData = salesDeliveries.data?.map(item => ({
+              ...item,
+              outbound_type: 'sales_delivery' as const,
+            })) || [];
+
+            // 合并两个数据源
+            const combinedData = [...pickingData, ...deliveryData];
+
+            // 按创建时间排序
+            combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+
+            return {
+              data: combinedData,
+              success: true,
+              total: (productionPickings.total || 0) + (salesDeliveries.total || 0),
+            };
+          } catch (error) {
+            messageApi.error('获取出库单列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
         }}
         rowSelection={{
           selectedRowKeys,
@@ -320,31 +361,57 @@ const OutboundPage: React.FC = () => {
       >
         {currentOrder && (
           <div>
-            <p><strong>出库单号：</strong>{currentOrder.code}</p>
+            <p><strong>出库单号：</strong>{currentOrder.delivery_code || currentOrder.picking_code}</p>
             <p><strong>出库类型：</strong>
               <Tag color={
-                currentOrder.type === 'production' ? 'processing' :
-                currentOrder.type === 'sales' ? 'success' : 'warning'
+                currentOrder.outbound_type === 'production_picking' ? 'processing' : 'success'
               }>
-                {currentOrder.type === 'production' ? '生产领料' :
-                 currentOrder.type === 'sales' ? '销售出库' : '退货出库'}
+                {currentOrder.outbound_type === 'production_picking' ? '生产领料' : '销售出库'}
               </Tag>
             </p>
             <p><strong>状态：</strong>
               <Tag color={
-                currentOrder.status === 'completed' ? 'success' :
-                currentOrder.status === 'confirmed' ? 'processing' :
-                currentOrder.status === 'cancelled' ? 'error' : 'default'
+                currentOrder.status === '已完成' ? 'success' :
+                currentOrder.status === '已确认' ? 'processing' :
+                currentOrder.status === '已取消' ? 'error' : 'default'
               }>
-                {currentOrder.status === 'draft' ? '草稿' :
-                 currentOrder.status === 'confirmed' ? '已确认' :
-                 currentOrder.status === 'completed' ? '已完成' : '已取消'}
+                {currentOrder.status}
               </Tag>
             </p>
-            <p><strong>出库仓库：</strong>{currentOrder.warehouseName}</p>
-            <p><strong>总数量：</strong>{currentOrder.totalQuantity}</p>
-            <p><strong>总品种：</strong>{currentOrder.totalItems}</p>
-            <p><strong>操作员：</strong>{currentOrder.operatorName}</p>
+            {currentOrder.customer_name && (
+              <p><strong>客户：</strong>{currentOrder.customer_name}</p>
+            )}
+            {currentOrder.work_order_code && (
+              <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
+            )}
+            <p><strong>出库仓库：</strong>{currentOrder.warehouse_name}</p>
+            <p><strong>出库日期：</strong>{currentOrder.delivery_date}</p>
+            <p><strong>操作员：</strong>{currentOrder.delivered_by}</p>
+            <p><strong>总数量：</strong>{currentOrder.total_quantity}</p>
+            <p><strong>总品种：</strong>{currentOrder.total_items}</p>
+            {currentOrder.notes && (
+              <p><strong>备注：</strong>{currentOrder.notes}</p>
+            )}
+
+            {/* 出库单明细 */}
+            {currentOrder.items && currentOrder.items.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <h4>出库明细</h4>
+                {currentOrder.items.map((item, index) => (
+                  <div key={item.id} style={{
+                    padding: '12px',
+                    marginBottom: '8px',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: '4px'
+                  }}>
+                    <p><strong>物料编码：</strong>{item.material_code}</p>
+                    <p><strong>物料名称：</strong>{item.material_name}</p>
+                    <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
+                    {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </Drawer>

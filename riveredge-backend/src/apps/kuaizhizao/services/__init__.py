@@ -1,0 +1,81 @@
+"""
+快格轻制造 APP - 业务服务模块
+
+统一管理所有业务服务。
+"""
+
+# 生产执行模块
+from .work_order_service import WorkOrderService
+from .reporting_service import ReportingService
+
+# 仓储管理模块
+from .warehouse_service import (
+    ProductionPickingService,
+    FinishedGoodsReceiptService,
+    SalesDeliveryService,
+    PurchaseReceiptService,
+)
+
+# 质量管理模块
+from .quality_service import (
+    IncomingInspectionService,
+    ProcessInspectionService,
+    FinishedGoodsInspectionService,
+)
+
+# 财务协同模块
+from .finance_service import (
+    PayableService,
+    PurchaseInvoiceService,
+    ReceivableService,
+)
+
+# 采购管理模块
+from .purchase_service import PurchaseService
+
+# 销售管理模块
+from .sales_service import (
+    SalesForecastService,
+    SalesOrderService,
+)
+
+# BOM管理模块
+from .bom_service import BOMService
+
+# 生产计划模块
+from .planning_service import ProductionPlanningService
+
+__all__ = [
+    # 生产执行模块
+    'WorkOrderService',
+    'ReportingService',
+
+    # 仓储管理模块
+    'ProductionPickingService',
+    'FinishedGoodsReceiptService',
+    'SalesDeliveryService',
+    'PurchaseReceiptService',
+
+    # 质量管理模块
+    'IncomingInspectionService',
+    'ProcessInspectionService',
+    'FinishedGoodsInspectionService',
+
+    # 财务协同模块
+    'PayableService',
+    'PurchaseInvoiceService',
+    'ReceivableService',
+
+    # 采购管理模块
+    'PurchaseService',
+
+    # 销售管理模块
+    'SalesForecastService',
+    'SalesOrderService',
+
+    # BOM管理模块
+    'BOMService',
+
+    # 生产计划模块
+    'ProductionPlanningService',
+]

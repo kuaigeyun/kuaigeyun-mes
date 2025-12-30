@@ -85,3 +85,4 @@ async def diagnose_app_registration():
 
 if __name__ == "__main__":
     asyncio.run(diagnose_app_registration())
+

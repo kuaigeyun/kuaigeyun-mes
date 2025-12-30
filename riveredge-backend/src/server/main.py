@@ -84,9 +84,9 @@ from core.api.plugin_manager.plugin_manager import router as plugin_manager_rout
 # 应用路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动导入应用路由模块
 
-# Inngest 集成
-from core.inngest.client import inngest_client
-from inngest.fast_api import serve as inngest_serve
+# Inngest 集成 - 暂时禁用以便测试
+# from core.inngest.client import inngest_client
+# from inngest.fast_api import serve as inngest_serve
 
 # 获取运行模式 - 默认为SaaS模式
 MODE = os.getenv("MODE", "saas")
@@ -192,7 +192,10 @@ def load_plugin_routes():
 load_plugin_routes()
 
 # 挂载静态文件目录
-app.mount("/static", StaticFiles(directory="static"), name="static")
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "..", "..", "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # 注册 Inngest 服务
 # 导入 Inngest 函数（确保函数被注册）
@@ -207,41 +210,41 @@ from core.inngest.functions import (
     sop_node_complete_workflow_function,
 )
 
-# 挂载 Inngest 服务端点
+# 挂载 Inngest 服务端点 - 暂时禁用
 # serve() 函数需要 app, client, 和 functions 参数
 # 必须注册所有 Inngest 函数，确保它们被 Inngest Dev Server 发现
 try:
-    inngest_serve(
-        app,
-        inngest_client,
-        [
-            # 测试函数
-            test_integration_function,
-            # 消息发送
-            message_sender_function,
-            # 定时任务
-            scheduled_task_executor_function,
-            scheduled_task_scheduler_function,
-            # 审批流程
-            approval_workflow_function,
-            approval_action_workflow_function,
-            # SOP执行流程
-            sop_execution_workflow_function,
-            sop_node_complete_workflow_function,
-        ]
-    )
-    logger.info("✅ Inngest 服务端点注册成功")
+    # inngest_serve(
+    #     app,
+    #     inngest_client,
+    #     [
+    #         # 测试函数
+    #         test_integration_function,
+    #         # 消息发送
+    #         message_sender_function,
+    #         # 定时任务
+    #         scheduled_task_executor_function,
+    #         scheduled_task_scheduler_function,
+    #         # 审批流程
+    #         approval_workflow_function,
+    #         approval_action_workflow_function,
+    #         # SOP执行流程
+    #         sop_execution_workflow_function,
+    #         sop_node_complete_workflow_function,
+    #     ]
+    # )
+    logger.info("ℹ️ Inngest 服务端点已暂时禁用")
     inngest_functions = [
-        test_integration_function,
-        message_sender_function,
-        scheduled_task_executor_function,
-        scheduled_task_scheduler_function,
-        approval_workflow_function,
-        approval_action_workflow_function,
-        sop_execution_workflow_function,
-        sop_node_complete_workflow_function,
+        # test_integration_function,
+        # message_sender_function,
+        # scheduled_task_executor_function,
+        # scheduled_task_scheduler_function,
+        # approval_workflow_function,
+        # approval_action_workflow_function,
+        # sop_execution_workflow_function,
+        # sop_node_complete_workflow_function,
     ]
-    logger.info(f"✅ 已注册 {len(inngest_functions)} 个 Inngest 函数")
+    logger.info(f"ℹ️ Inngest 函数注册已暂时禁用，当前注册 {len(inngest_functions)} 个函数")
 except Exception as e:
     logger.error(f"❌ Inngest 服务端点注册失败: {e}")
     import traceback
@@ -259,6 +262,29 @@ async def health_check():
         "status": "healthy",
         "service": "riveredge-backend"
     }
+
+# 手动重新加载应用路由（调试用）
+@app.post("/debug/reload-apps")
+async def debug_reload_apps():
+    """
+    手动重新加载应用路由（调试用）
+
+    这是一个临时的调试端点，用于测试应用路由重新加载功能。
+    """
+    from core.services.application.application_registry_service import ApplicationRegistryService
+
+    try:
+        await ApplicationRegistryService.reload_apps()
+        return {
+            "status": "success",
+            "message": "应用路由重新加载完成",
+        }
+    except Exception as e:
+        logger.error(f"应用路由重新加载失败: {e}")
+        return {
+            "status": "error",
+            "message": f"应用路由重新加载失败: {str(e)}",
+        }
 
 # ⚠️ 第二阶段改进：服务健康检查端点
 @app.get("/health/services")
@@ -377,39 +403,39 @@ app.include_router(plugin_manager_router, prefix="/api/v1/core")
 # 应用级功能路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动注册应用路由
 
-# Inngest 测试端点
-@app.post("/api/v1/test/inngest")
-async def test_inngest_integration(message: str = "Hello from RiverEdge!"):
-    """
-    测试 Inngest 集成
-    
-    发送测试事件到 Inngest，验证集成是否正常工作。
-    """
-    from inngest import Event
-    
-    try:
-        # 发送测试事件
-        result = await inngest_client.send(
-            Event(
-                name="test/integration",
-                data={
-                    "message": message,
-                    "timestamp": str(datetime.now()),
-                }
-            )
-        )
-        
-        return {
-            "success": True,
-            "message": "事件已发送到 Inngest",
-            "event_ids": result.ids if hasattr(result, "ids") else None,
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "发送事件到 Inngest 失败",
-        }
+# Inngest 测试端点 - 暂时禁用
+# @app.post("/api/v1/test/inngest")
+# async def test_inngest_integration(message: str = "Hello from RiverEdge!"):
+#     """
+#     测试 Inngest 集成
+#
+#     发送测试事件到 Inngest，验证集成是否正常工作。
+#     """
+#     from inngest import Event
+#
+#     try:
+#         # 发送测试事件
+#         result = await inngest_client.send(
+#             Event(
+#                 name="test/integration",
+#                 data={
+#                     "message": message,
+#                     "timestamp": str(datetime.now()),
+#                 }
+#             )
+#         )
+#
+#         return {
+#             "success": True,
+#             "message": "事件已发送到 Inngest",
+#             "event_ids": result.ids if hasattr(result, "ids") else None,
+#         }
+#     except Exception as e:
+#         return {
+#             "success": False,
+#             "error": str(e),
+#             "message": "发送事件到 Inngest 失败",
+#         }
 
 if __name__ == "__main__":
     import uvicorn

@@ -4,6 +4,9 @@
 包含所有系统级功能的 Schema 定义，用于请求/响应数据验证。
 """
 
+# 基础Schema
+from .base import BaseSchema
+
 # 角色权限 Schema
 from .role import RoleCreate, RoleUpdate, RoleResponse, RoleListResponse
 from .permission import PermissionResponse, PermissionListResponse
@@ -240,6 +243,8 @@ from .online_user import (
 )
 
 __all__ = [
+    # 基础Schema
+    "BaseSchema",
     # 角色权限 Schema
     "RoleCreate",
     "RoleUpdate",

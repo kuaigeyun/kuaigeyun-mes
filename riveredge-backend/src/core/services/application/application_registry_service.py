@@ -259,8 +259,10 @@ class ApplicationRegistryService:
                             # 如果路由管理器已初始化，则注册路由
                             route_manager = get_route_manager()
                             if route_manager:
-                                route_manager.register_app_routes(app_code, [router])
-                                logger.info(f"✅ 通过路由管理器注册应用路由: {route_module_path}")
+                                # 使用应用的 route_path 作为路由前缀
+                                route_prefix = app.get('route_path', '/api/v1')
+                                route_manager.register_app_routes(app_code, [router], prefix=route_prefix)
+                                logger.info(f"✅ 通过路由管理器注册应用路由: {route_module_path} (prefix: {route_prefix})")
                             else:
                                 logger.debug(f"✅ 缓存应用路由（路由管理器未初始化）: {route_module_path}")
                         else:

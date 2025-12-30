@@ -6,11 +6,17 @@
 
 from fastapi import APIRouter
 
+# 导入子路由
+from .production import router as production_router
+
 # 创建主路由
-router = APIRouter(prefix="/apps/kuaizhizao", tags=["Kuaige Zhizao MES"])
+router = APIRouter(tags=["Kuaige Zhizao MES"])
 
 # 注意：路由前缀使用 kuaizhizao（不带连字符），因为这是 URL 路径
 # 但目录名使用 kuaizhizao（不带下划线），保持一致性
+
+# 注册子路由
+router.include_router(production_router)
 
 @router.get("/health")
 async def health_check():

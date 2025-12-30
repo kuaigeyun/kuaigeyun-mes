@@ -16,24 +16,23 @@ import { Line, Bar, Pie } from '@ant-design/charts';
 
 // 库存报表接口定义
 interface InventoryReportItem {
-  id: number;
-  materialCode: string;
-  materialName: string;
-  category: string;
-  warehouseName: string;
-  currentStock: number;
-  availableStock: number;
-  reservedStock: number;
-  minStock: number;
-  maxStock: number;
-  unit: string;
-  unitPrice: number;
-  totalValue: number;
-  turnoverRate: number;
-  turnoverDays: number;
-  lastInboundDate?: string;
-  lastOutboundDate?: string;
-  status: 'normal' | 'low' | 'high' | 'out_of_stock';
+  material_code?: string;
+  material_name?: string;
+  category?: string;
+  warehouse_name?: string;
+  current_stock?: number;
+  available_stock?: number;
+  reserved_stock?: number;
+  min_stock?: number;
+  max_stock?: number;
+  unit?: string;
+  unit_price?: number;
+  total_value?: number;
+  turnover_rate?: number;
+  turnover_days?: number;
+  last_inbound_date?: string;
+  last_outbound_date?: string;
+  status?: 'normal' | 'low' | 'high' | 'out_of_stock';
 }
 
 interface InventoryTurnoverData {
@@ -84,14 +83,14 @@ const InventoryReportPage: React.FC = () => {
   const columns: ProColumns<InventoryReportItem>[] = [
     {
       title: '物料编码',
-      dataIndex: 'materialCode',
+      dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
       fixed: 'left',
     },
     {
       title: '物料名称',
-      dataIndex: 'materialName',
+      dataIndex: 'material_name',
       width: 150,
       ellipsis: true,
     },
@@ -102,12 +101,12 @@ const InventoryReportPage: React.FC = () => {
     },
     {
       title: '仓库',
-      dataIndex: 'warehouseName',
+      dataIndex: 'warehouse_name',
       width: 120,
     },
     {
       title: '当前库存',
-      dataIndex: 'currentStock',
+      dataIndex: 'current_stock',
       width: 100,
       align: 'right',
       render: (text, record) => (
@@ -122,13 +121,13 @@ const InventoryReportPage: React.FC = () => {
     },
     {
       title: '可用库存',
-      dataIndex: 'availableStock',
+      dataIndex: 'available_stock',
       width: 100,
       align: 'right',
     },
     {
       title: '预留库存',
-      dataIndex: 'reservedStock',
+      dataIndex: 'reserved_stock',
       width: 100,
       align: 'right',
     },

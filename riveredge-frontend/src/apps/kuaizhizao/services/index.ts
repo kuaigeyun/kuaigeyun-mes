@@ -8,3 +8,14 @@ export * from './quality';
 export * from './finance';
 export * from './reports';
 export * from './common';
+
+// 导出各个API模块
+export {
+  workOrderApi,
+  reportingApi,
+  warehouseApi,
+  qualityApi,
+  financeApi,
+  planningApi,
+  bomApi,
+} from './production';

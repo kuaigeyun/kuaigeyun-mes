@@ -9,21 +9,37 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker }
 import { App, Button, Tag, Space, Modal, Drawer, message, Form, Table, Input, Select } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { planningApi } from '../../../services/production';
 
+// 使用后端销售预测接口定义
 interface DemandForecast {
-  id: number;
-  code: string;
-  name: string;
-  productCode: string;
-  productName: string;
-  mode: 'MTS' | 'MTO';
-  forecastPeriod: string; // 预测周期，如 "2026-01"
-  forecastQuantity: number;
-  unit: string;
-  status: 'draft' | 'active' | 'completed' | 'cancelled';
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
+  id?: number;
+  tenant_id?: number;
+  forecast_code?: string;
+  forecast_name?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  review_time?: string;
+  review_status?: string;
+  review_remarks?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  // 预测明细
+  forecast_items?: ForecastItem[];
+}
+
+interface ForecastItem {
+  id?: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  component_type?: string;
+  forecast_date?: string;
+  forecast_quantity?: number;
 }
 
 const DemandManagementPage: React.FC = () => {
@@ -60,21 +76,31 @@ const DemandManagementPage: React.FC = () => {
   /**
    * 处理查看详情
    */
-  const handleDetail = (record: DemandForecast) => {
-    setCurrentForecast(record);
-    setDetailDrawerVisible(true);
+  const handleDetail = async (record: DemandForecast) => {
+    try {
+      const detail = await planningApi.productionPlan.get(record.id!.toString());
+      setCurrentForecast(detail);
+      setDetailDrawerVisible(true);
+    } catch (error) {
+      messageApi.error('获取销售预测详情失败');
+    }
   };
 
   /**
-   * 处理激活预测
+   * 处理审核预测
    */
   const handleActivate = (record: DemandForecast) => {
     Modal.confirm({
-      title: '激活销售预测',
-      content: `确定要激活销售预测 "${record.name}" 吗？激活后将用于MRP运算。`,
+      title: '审核销售预测',
+      content: `确定要审核通过销售预测 "${record.forecast_name}" 吗？审核后将可用于MRP运算。`,
       onOk: async () => {
-        messageApi.success('销售预测激活成功');
-        actionRef.current?.reload();
+        try {
+          // 这里应该调用审核API，暂时模拟
+          messageApi.success('销售预测审核成功');
+          actionRef.current?.reload();
+        } catch (error) {
+          messageApi.error('销售预测审核失败');
+        }
       },
     });
   };
@@ -82,12 +108,25 @@ const DemandManagementPage: React.FC = () => {
   /**
    * 处理运行MRP
    */
-  const handleRunMRP = (record: DemandForecast) => {
+  const handleRunMRP = async (record: DemandForecast) => {
     Modal.confirm({
       title: '运行MRP运算',
-      content: `确定要基于销售预测 "${record.name}" 运行MRP运算吗？`,
+      content: `确定要基于销售预测 "${record.forecast_name}" 运行MRP运算吗？`,
       onOk: async () => {
-        messageApi.success('MRP运算已启动，请稍后查看结果');
+        try {
+          if (record.id) {
+            await planningApi.mrp.compute({
+              forecast_id: record.id,
+              planning_horizon: 30,
+              time_bucket: '周',
+              include_safety_stock: true,
+              explosion_type: 'single_level',
+            });
+            messageApi.success('MRP运算已启动，请稍后查看结果');
+          }
+        } catch (error) {
+          messageApi.error('MRP运算启动失败');
+        }
       },
     });
   };
@@ -98,76 +137,47 @@ const DemandManagementPage: React.FC = () => {
   const columns: ProColumns<DemandForecast>[] = [
     {
       title: '预测编号',
-      dataIndex: 'code',
+      dataIndex: 'forecast_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
       title: '预测名称',
-      dataIndex: 'name',
-      width: 150,
+      dataIndex: 'forecast_name',
+      width: 200,
       ellipsis: true,
     },
     {
-      title: '产品编码',
-      dataIndex: 'productCode',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'productName',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: '生产模式',
-      dataIndex: 'mode',
-      width: 100,
-      valueEnum: {
-        MTS: { text: '按库存生产', status: 'processing' },
-        MTO: { text: '按订单生产', status: 'success' },
-      },
-    },
-    {
-      title: '预测周期',
-      dataIndex: 'forecastPeriod',
-      width: 100,
-      align: 'center',
-    },
-    {
-      title: '预测数量',
-      dataIndex: 'forecastQuantity',
-      width: 100,
-      align: 'right',
-    },
-    {
-      title: '单位',
-      dataIndex: 'unit',
-      width: 80,
-      align: 'center',
+      title: '预测期间',
+      dataIndex: ['start_date', 'end_date'],
+      width: 200,
+      render: (_, record) => `${record.start_date} ~ ${record.end_date}`,
     },
     {
       title: '状态',
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        active: { text: '激活', status: 'processing' },
-        completed: { text: '完成', status: 'success' },
-        cancelled: { text: '取消', status: 'error' },
+        '草稿': { text: '草稿', status: 'default' },
+        '已审核': { text: '已审核', status: 'processing' },
+        '已完成': { text: '已完成', status: 'success' },
+        '已取消': { text: '已取消', status: 'error' },
       },
     },
     {
-      title: '创建人',
-      dataIndex: 'createdBy',
+      title: '审核状态',
+      dataIndex: 'review_status',
       width: 100,
-      ellipsis: true,
+      valueEnum: {
+        '待审核': { text: '待审核', status: 'default' },
+        '审核通过': { text: '审核通过', status: 'success' },
+        '审核驳回': { text: '审核驳回', status: 'error' },
+      },
     },
     {
       title: '创建时间',
-      dataIndex: 'createdAt',
+      dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
@@ -193,17 +203,17 @@ const DemandManagementPage: React.FC = () => {
           >
             编辑
           </Button>
-          {record.status === 'draft' && (
+          {record.status === '草稿' && (
             <Button
               type="link"
               size="small"
               onClick={() => handleActivate(record)}
               style={{ color: '#52c41a' }}
             >
-              激活
+              审核
             </Button>
           )}
-          {record.status === 'active' && record.mode === 'MTS' && (
+          {record.status === '已审核' && (
             <Button
               type="link"
               size="small"
@@ -228,60 +238,25 @@ const DemandManagementPage: React.FC = () => {
         columns={columns}
         showAdvancedSearch={true}
         request={async (params) => {
-          // 模拟数据
-          const mockData: DemandForecast[] = [
-            {
-              id: 1,
-              code: 'FC202601001',
-              name: '产品A 1月份销售预测',
-              productCode: 'FIN001',
-              productName: '产品A',
-              mode: 'MTS',
-              forecastPeriod: '2026-01',
-              forecastQuantity: 100,
-              unit: '个',
-              status: 'active',
-              createdBy: '张三',
-              createdAt: '2024-12-01 09:00:00',
-              updatedAt: '2024-12-01 09:00:00',
-            },
-            {
-              id: 2,
-              code: 'FC202602001',
-              name: '产品B 2月份销售预测',
-              productCode: 'FIN002',
-              productName: '产品B',
-              mode: 'MTS',
-              forecastPeriod: '2026-02',
-              forecastQuantity: 60,
-              unit: '个',
-              status: 'draft',
-              createdBy: '李四',
-              createdAt: '2024-12-01 10:30:00',
-              updatedAt: '2024-12-01 10:30:00',
-            },
-            {
-              id: 3,
-              code: 'FC202601002',
-              name: '定制产品C 订单预测',
-              productCode: 'FIN001',
-              productName: '产品A',
-              mode: 'MTO',
-              forecastPeriod: '2026-01',
-              forecastQuantity: 50,
-              unit: '个',
-              status: 'active',
-              createdBy: '王五',
-              createdAt: '2024-12-01 11:00:00',
-              updatedAt: '2024-12-01 11:00:00',
-            },
-          ];
-
-          return {
-            data: mockData,
-            success: true,
-            total: mockData.length,
-          };
+          try {
+            const response = await planningApi.productionPlan.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              ...params,
+            });
+            return {
+              data: response.data,
+              success: response.success,
+              total: response.total,
+            };
+          } catch (error) {
+            messageApi.error('获取销售预测列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
         }}
         rowSelection={{
           selectedRowKeys,
@@ -380,53 +355,63 @@ const DemandManagementPage: React.FC = () => {
         {currentForecast && (
           <div style={{ padding: '16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-              <div><strong>预测编号：</strong>{currentForecast.code}</div>
-              <div><strong>预测名称：</strong>{currentForecast.name}</div>
-              <div><strong>产品编码：</strong>{currentForecast.productCode}</div>
-              <div><strong>产品名称：</strong>{currentForecast.productName}</div>
-              <div><strong>生产模式：</strong>
-                <Tag color={currentForecast.mode === 'MTS' ? 'processing' : 'success'}>
-                  {currentForecast.mode === 'MTS' ? '按库存生产' : '按订单生产'}
-                </Tag>
-              </div>
-              <div><strong>预测周期：</strong>{currentForecast.forecastPeriod}</div>
-              <div><strong>预测数量：</strong>{currentForecast.forecastQuantity} {currentForecast.unit}</div>
+              <div><strong>预测编号：</strong>{currentForecast.forecast_code}</div>
+              <div><strong>预测名称：</strong>{currentForecast.forecast_name}</div>
+              <div><strong>预测期间：</strong>{currentForecast.start_date} ~ {currentForecast.end_date}</div>
               <div><strong>状态：</strong>
                 <Tag color={
-                  currentForecast.status === 'active' ? 'processing' :
-                  currentForecast.status === 'completed' ? 'success' :
-                  currentForecast.status === 'cancelled' ? 'error' : 'default'
+                  currentForecast.status === '已审核' ? 'processing' :
+                  currentForecast.status === '已完成' ? 'success' :
+                  currentForecast.status === '已取消' ? 'error' : 'default'
                 }>
-                  {currentForecast.status === 'draft' ? '草稿' :
-                   currentForecast.status === 'active' ? '激活' :
-                   currentForecast.status === 'completed' ? '完成' : '取消'}
+                  {currentForecast.status}
                 </Tag>
               </div>
-              <div><strong>创建人：</strong>{currentForecast.createdBy}</div>
-              <div><strong>创建时间：</strong>{currentForecast.createdAt}</div>
-              <div><strong>更新时间：</strong>{currentForecast.updatedAt}</div>
+              <div><strong>审核状态：</strong>
+                <Tag color={
+                  currentForecast.review_status === '审核通过' ? 'success' :
+                  currentForecast.review_status === '审核驳回' ? 'error' : 'default'
+                }>
+                  {currentForecast.review_status}
+                </Tag>
+              </div>
+              <div><strong>审核人：</strong>{currentForecast.reviewer_name}</div>
+              <div><strong>审核时间：</strong>{currentForecast.review_time}</div>
+              <div><strong>创建时间：</strong>{currentForecast.created_at}</div>
             </div>
 
-            {/* 预测历史表格 */}
-            <div>
-              <h4>预测历史</h4>
-              <Table
-                size="small"
-                columns={[
-                  { title: '周期', dataIndex: 'period', width: 100 },
-                  { title: '预测数量', dataIndex: 'quantity', width: 120, align: 'right' },
-                  { title: '实际销量', dataIndex: 'actual', width: 120, align: 'right' },
-                  { title: '准确率', dataIndex: 'accuracy', width: 100, align: 'right' },
-                ]}
-                dataSource={[
-                  { period: '2025-12', quantity: 80, actual: 75, accuracy: '93.8%' },
-                  { period: '2025-11', quantity: 70, actual: 68, accuracy: '97.1%' },
-                  { period: '2025-10', quantity: 65, actual: 62, accuracy: '95.4%' },
-                ]}
-                pagination={false}
-                bordered
-              />
-            </div>
+            {currentForecast.review_remarks && (
+              <div style={{ marginBottom: '24px' }}>
+                <strong>审核备注：</strong>{currentForecast.review_remarks}
+              </div>
+            )}
+
+            {currentForecast.notes && (
+              <div style={{ marginBottom: '24px' }}>
+                <strong>备注：</strong>{currentForecast.notes}
+              </div>
+            )}
+
+            {/* 预测明细表格 */}
+            {currentForecast.forecast_items && currentForecast.forecast_items.length > 0 && (
+              <div>
+                <h4>预测明细</h4>
+                <Table
+                  size="small"
+                  columns={[
+                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                    { title: '类型', dataIndex: 'component_type', width: 100 },
+                    { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
+                    { title: '预测数量', dataIndex: 'forecast_quantity', width: 120, align: 'right' },
+                  ]}
+                  dataSource={currentForecast.forecast_items}
+                  pagination={false}
+                  bordered
+                  rowKey="id"
+                />
+              </div>
+            )}
           </div>
         )}
       </Drawer>

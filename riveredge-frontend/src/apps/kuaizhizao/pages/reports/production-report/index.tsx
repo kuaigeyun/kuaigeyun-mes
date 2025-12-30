@@ -16,24 +16,23 @@ import { Line, Bar, Column } from '@ant-design/charts';
 
 // 生产报表接口定义
 interface ProductionReportItem {
-  id: number;
-  workOrderCode: string;
-  productName: string;
-  plannedQuantity: number;
-  actualQuantity: number;
-  qualifiedQuantity: number;
-  defectiveQuantity: number;
-  completionRate: number;
-  qualifiedRate: number;
-  plannedStartDate: string;
-  actualStartDate?: string;
-  plannedEndDate: string;
-  actualEndDate?: string;
-  plannedDuration: number; // 计划工时(小时)
-  actualDuration: number; // 实际工时(小时)
-  efficiency: number; // 生产效率(%)
-  status: 'completed' | 'in_progress' | 'delayed' | 'cancelled';
-  delayDays: number;
+  work_order_code?: string;
+  product_name?: string;
+  planned_quantity?: number;
+  actual_quantity?: number;
+  qualified_quantity?: number;
+  defective_quantity?: number;
+  completion_rate?: number;
+  qualified_rate?: number;
+  planned_start_date?: string;
+  actual_start_date?: string;
+  planned_end_date?: string;
+  actual_end_date?: string;
+  planned_duration?: number; // 计划工时(小时)
+  actual_duration?: number; // 实际工时(小时)
+  efficiency?: number; // 生产效率(%)
+  status?: string;
+  delay_days?: number;
 }
 
 interface ProductionEfficiencyData {
