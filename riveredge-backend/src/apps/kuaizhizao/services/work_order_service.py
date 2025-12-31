@@ -25,6 +25,9 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderResponse,
     WorkOrderListResponse
 )
+from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from loguru import logger
 
 
 class WorkOrderService(AppBaseService[WorkOrder]):
@@ -244,11 +247,85 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             soft_delete=True
         )
 
+    async def check_material_shortage(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        warehouse_id: Optional[int] = None
+    ) -> dict:
+        """
+        检查工单缺料情况
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            warehouse_id: 仓库ID（可选，如果为None则查询所有仓库）
+
+        Returns:
+            dict: 缺料检测结果，包含：
+            - has_shortage: 是否有缺料
+            - shortage_items: 缺料明细列表
+            - total_shortage_count: 缺料物料总数
+        """
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+        # 获取BOM物料需求
+        try:
+            material_requirements = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=work_order.product_id,
+                required_quantity=float(work_order.quantity),
+                only_approved=True
+            )
+        except NotFoundError:
+            # 如果没有BOM，返回无缺料
+            logger.warning(f"工单 {work_order.code} 的产品 {work_order.product_id} 没有BOM，跳过缺料检测")
+            return {
+                "has_shortage": False,
+                "shortage_items": [],
+                "total_shortage_count": 0
+            }
+
+        shortage_items = []
+        
+        # 检查每个物料的需求和库存
+        for requirement in material_requirements:
+            # 获取可用库存
+            available_quantity = await get_material_available_quantity(
+                tenant_id=tenant_id,
+                material_id=requirement.component_id,
+                warehouse_id=warehouse_id
+            )
+            
+            # 计算缺料数量
+            shortage_quantity = max(Decimal(0), Decimal(str(requirement.net_requirement)) - available_quantity)
+            
+            if shortage_quantity > 0:
+                shortage_items.append({
+                    "material_id": requirement.component_id,
+                    "material_code": requirement.component_code,
+                    "material_name": requirement.component_name,
+                    "required_quantity": float(requirement.net_requirement),
+                    "available_quantity": float(available_quantity),
+                    "shortage_quantity": float(shortage_quantity),
+                    "unit": requirement.unit
+                })
+
+        return {
+            "has_shortage": len(shortage_items) > 0,
+            "shortage_items": shortage_items,
+            "total_shortage_count": len(shortage_items),
+            "work_order_id": work_order_id,
+            "work_order_code": work_order.code,
+            "work_order_name": work_order.name
+        }
+
     async def release_work_order(
         self,
         tenant_id: int,
         work_order_id: int,
-        released_by: int
+        released_by: int,
+        check_shortage: bool = True
     ) -> WorkOrderResponse:
         """
         下达工单
@@ -257,6 +334,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             tenant_id: 组织ID
             work_order_id: 工单ID
             released_by: 下达人ID
+            check_shortage: 是否在下达前检查缺料（默认：True）
 
         Returns:
             WorkOrderResponse: 更新后的工单信息
@@ -264,12 +342,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         Raises:
             NotFoundError: 工单不存在
             ValidationError: 不允许下达的工单状态
+            BusinessLogicError: 存在缺料时抛出（如果check_shortage=True）
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
             if work_order.status != 'draft':
                 raise ValidationError("只能下达草稿状态的工单")
+
+            # 检查缺料
+            if check_shortage:
+                shortage_result = await self.check_material_shortage(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id
+                )
+                if shortage_result["has_shortage"]:
+                    shortage_materials = ", ".join([
+                        f"{item['material_name']}(缺{item['shortage_quantity']}{item['unit']})"
+                        for item in shortage_result["shortage_items"][:3]
+                    ])
+                    raise BusinessLogicError(
+                        f"工单存在缺料，无法下达。缺料物料：{shortage_materials}"
+                        + (f"等{shortage_result['total_shortage_count']}种物料" 
+                           if shortage_result['total_shortage_count'] > 3 else "")
+                    )
 
             # 更新状态
             work_order = await self.update_with_user(
@@ -307,3 +403,139 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             status=status
         )
         return WorkOrderResponse.model_validate(work_order)
+
+    async def check_delayed_work_orders(
+        self,
+        tenant_id: int,
+        days_threshold: int = 0,
+        status: Optional[str] = None
+    ) -> List[dict]:
+        """
+        检查延期工单
+
+        Args:
+            tenant_id: 组织ID
+            days_threshold: 延期天数阈值（默认0，即只要超过计划结束日期就算延期）
+            status: 工单状态过滤（可选）
+
+        Returns:
+            List[dict]: 延期工单列表，每个元素包含：
+            - work_order_id: 工单ID
+            - work_order_code: 工单编码
+            - work_order_name: 工单名称
+            - planned_end_date: 计划结束日期
+            - actual_end_date: 实际结束日期
+            - delay_days: 延期天数
+            - status: 工单状态
+        """
+        now = datetime.now()
+        query = WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        # 状态过滤
+        if status:
+            query = query.filter(status=status)
+        else:
+            # 默认只查询未完成的工单
+            query = query.filter(status__in=['released', 'in_progress'])
+
+        # 查询有计划结束日期且已过期的工单
+        query = query.filter(
+            planned_end_date__isnull=False,
+            planned_end_date__lt=now
+        )
+
+        work_orders = await query.all()
+        delayed_orders = []
+
+        for wo in work_orders:
+            if wo.planned_end_date:
+                # 计算延期天数
+                if wo.actual_end_date:
+                    # 如果已完工，使用实际结束日期
+                    delay_days = (wo.actual_end_date - wo.planned_end_date).days
+                else:
+                    # 如果未完工，使用当前日期
+                    delay_days = (now - wo.planned_end_date).days
+
+                # 如果超过阈值，加入列表
+                if delay_days > days_threshold:
+                    delayed_orders.append({
+                        "work_order_id": wo.id,
+                        "work_order_code": wo.code,
+                        "work_order_name": wo.name,
+                        "product_name": wo.product_name,
+                        "planned_end_date": wo.planned_end_date.isoformat() if wo.planned_end_date else None,
+                        "actual_end_date": wo.actual_end_date.isoformat() if wo.actual_end_date else None,
+                        "delay_days": delay_days,
+                        "status": wo.status,
+                        "priority": wo.priority
+                    })
+
+        # 按延期天数降序排序
+        delayed_orders.sort(key=lambda x: x["delay_days"], reverse=True)
+        return delayed_orders
+
+    async def analyze_delay_reasons(
+        self,
+        tenant_id: int,
+        work_order_id: Optional[int] = None
+    ) -> dict:
+        """
+        分析延期原因
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID（可选，如果为None则分析所有延期工单）
+
+        Returns:
+            dict: 延期原因分析结果，包含：
+            - total_delayed: 延期工单总数
+            - delay_reasons: 延期原因统计
+            - work_orders: 延期工单详情列表
+        """
+        if work_order_id:
+            # 分析单个工单
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            delayed_orders = await self.check_delayed_work_orders(
+                tenant_id=tenant_id,
+                status=work_order.status
+            )
+            # 过滤出指定工单
+            delayed_orders = [wo for wo in delayed_orders if wo["work_order_id"] == work_order_id]
+        else:
+            # 分析所有延期工单
+            delayed_orders = await self.check_delayed_work_orders(tenant_id=tenant_id)
+
+        # 分析延期原因
+        delay_reasons = {
+            "material_shortage": 0,  # 缺料
+            "capacity_shortage": 0,  # 产能不足
+            "quality_issue": 0,  # 质量问题
+            "planning_issue": 0,  # 计划问题
+            "other": 0  # 其他
+        }
+
+        # TODO: 根据实际业务逻辑分析延期原因
+        # 这里可以根据工单的关联数据（如缺料记录、报工记录、检验记录等）来判断延期原因
+        for order in delayed_orders:
+            # 简化实现：根据工单状态和延期天数推断原因
+            if order["status"] == "released":
+                # 已下达但未开始，可能是缺料或产能问题
+                delay_reasons["material_shortage"] += 1
+            elif order["status"] == "in_progress":
+                # 进行中但延期，可能是产能或质量问题
+                if order["delay_days"] > 7:
+                    delay_reasons["capacity_shortage"] += 1
+                else:
+                    delay_reasons["planning_issue"] += 1
+            else:
+                delay_reasons["other"] += 1
+
+        return {
+            "total_delayed": len(delayed_orders),
+            "delay_reasons": delay_reasons,
+            "work_orders": delayed_orders
+        }

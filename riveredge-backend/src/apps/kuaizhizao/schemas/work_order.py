@@ -126,3 +126,24 @@ class WorkOrderListResponse(BaseModel):
     completed_quantity: Decimal = Field(..., description="已完成数量")
     created_by_name: str = Field(..., description="创建人姓名")
     created_at: datetime = Field(..., description="创建时间")
+
+
+class MaterialShortageItem(BaseModel):
+    """缺料明细项"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    required_quantity: float = Field(..., description="需求数量")
+    available_quantity: float = Field(..., description="可用库存")
+    shortage_quantity: float = Field(..., description="缺料数量")
+    unit: str = Field(..., description="单位")
+
+
+class MaterialShortageResponse(BaseModel):
+    """缺料检测响应Schema"""
+    has_shortage: bool = Field(..., description="是否有缺料")
+    shortage_items: list[MaterialShortageItem] = Field(default_factory=list, description="缺料明细列表")
+    total_shortage_count: int = Field(..., description="缺料物料总数")
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    work_order_name: str = Field(..., description="工单名称")
