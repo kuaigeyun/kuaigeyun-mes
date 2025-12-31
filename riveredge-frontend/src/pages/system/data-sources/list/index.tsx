@@ -6,12 +6,13 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, ThunderboltOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getDataSourceList,
   getDataSourceByUuid,
@@ -33,7 +34,6 @@ const { TextArea } = Input;
 const DataSourceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
@@ -42,6 +42,7 @@ const DataSourceListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentDataSourceUuid, setCurrentDataSourceUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [dataSourceType, setDataSourceType] = useState<'postgresql' | 'mysql' | 'mongodb' | 'api'>('postgresql');
   const [configJson, setConfigJson] = useState<string>('{}');
   
@@ -61,12 +62,11 @@ const DataSourceListPage: React.FC = () => {
     setCurrentDataSourceUuid(null);
     setDataSourceType('postgresql');
     setConfigJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       type: 'postgresql',
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -77,18 +77,18 @@ const DataSourceListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentDataSourceUuid(record.uuid);
       setDataSourceType(record.type);
-      setModalVisible(true);
       
       // 获取数据源详情
       const detail = await getDataSourceByUuid(record.uuid);
       setConfigJson(JSON.stringify(detail.config, null, 2));
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
         type: detail.type,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取数据源详情失败');
     }
@@ -146,10 +146,9 @@ const DataSourceListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新数据源）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析配置 JSON
       let config: Record<string, any> = {};
@@ -157,7 +156,7 @@ const DataSourceListPage: React.FC = () => {
         config = JSON.parse(configJson);
       } catch (e) {
         messageApi.error('配置 JSON 格式不正确');
-        return;
+        throw new Error('配置 JSON 格式不正确');
       }
       
       if (isEdit && currentDataSourceUuid) {
@@ -183,9 +182,11 @@ const DataSourceListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -342,7 +343,7 @@ const DataSourceListPage: React.FC = () => {
   return (
     <>
       {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
         <Tabs
           activeKey={viewMode}
           onChange={(key) => setViewMode(key as 'card' | 'list')}
@@ -367,7 +368,8 @@ const DataSourceListPage: React.FC = () => {
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
-        <UniTable<DataSource>
+        <ListPageTemplate>
+          <UniTable<DataSource>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -425,27 +427,28 @@ const DataSourceListPage: React.FC = () => {
             新建数据源
           </Button>,
         ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
         />
+        </ListPageTemplate>
       )}
 
       {/* 创建/编辑数据源 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑数据源' : '新建数据源'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
           <ProFormText
             name="name"
             label="数据源名称"
@@ -531,116 +534,109 @@ const DataSourceListPage: React.FC = () => {
               style={{ fontFamily: 'monospace' }}
             />
           </div>
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-        </ProForm>
-      </Modal>
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+        />
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="数据源详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<DataSource>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '数据源名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '数据源代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '数据源类型',
-                dataIndex: 'type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    postgresql: 'PostgreSQL',
-                    mysql: 'MySQL',
-                    mongodb: 'MongoDB',
-                    api: 'API',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '数据源描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '连接配置',
-                dataIndex: 'config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '300px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '连接状态',
-                dataIndex: 'is_connected',
-                render: (value) => (
-                  <Space>
-                    {value ? (
-                      <Badge status="success" text="已连接" />
-                    ) : (
-                      <Badge status="default" text="未连接" />
-                    )}
-                  </Space>
-                ),
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '最后连接时间',
-                dataIndex: 'last_connected_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '最后错误',
-                dataIndex: 'last_error',
-                render: (value) => value ? (
-                  <Tag color="error">{value}</Tag>
-                ) : '-',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '数据源名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '数据源代码',
+            dataIndex: 'code',
+          },
+          {
+            title: '数据源类型',
+            dataIndex: 'type',
+            render: (value: string) => {
+              const typeMap: Record<string, string> = {
+                postgresql: 'PostgreSQL',
+                mysql: 'MySQL',
+                mongodb: 'MongoDB',
+                api: 'API',
+              };
+              return typeMap[value] || value;
+            },
+          },
+          {
+            title: '数据源描述',
+            dataIndex: 'description',
+          },
+          {
+            title: '连接配置',
+            dataIndex: 'config',
+            render: (value: Record<string, any>) => (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '300px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            ),
+          },
+          {
+            title: '连接状态',
+            dataIndex: 'is_connected',
+            render: (value: boolean) => (
+              <Space>
+                {value ? (
+                  <Badge status="success" text="已连接" />
+                ) : (
+                  <Badge status="default" text="未连接" />
+                )}
+              </Space>
+            ),
+          },
+          {
+            title: '启用状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          {
+            title: '最后连接时间',
+            dataIndex: 'last_connected_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '最后错误',
+            dataIndex: 'last_error',
+            render: (value: string) => value ? (
+              <Tag color="error">{value}</Tag>
+            ) : '-',
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
     </>
   );
 };

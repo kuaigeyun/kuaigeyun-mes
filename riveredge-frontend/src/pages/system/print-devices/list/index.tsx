@@ -6,12 +6,13 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Tabs } from 'antd';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Tabs, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, CheckCircleOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getPrintDeviceList,
   getPrintDeviceByUuid,
@@ -36,7 +37,6 @@ const { TextArea } = Input;
 const PrintDeviceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
@@ -45,6 +45,7 @@ const PrintDeviceListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentPrintDeviceUuid, setCurrentPrintDeviceUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [configJson, setConfigJson] = useState<string>('{}');
   
   // Modal 相关状态（测试连接）
@@ -72,13 +73,12 @@ const PrintDeviceListPage: React.FC = () => {
     setIsEdit(false);
     setCurrentPrintDeviceUuid(null);
     setConfigJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       type: 'network',
       is_active: true,
       is_default: false,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -88,12 +88,11 @@ const PrintDeviceListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentPrintDeviceUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取打印设备详情
       const detail = await getPrintDeviceByUuid(record.uuid);
       setConfigJson(JSON.stringify(detail.config, null, 2));
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         type: detail.type,
@@ -101,6 +100,7 @@ const PrintDeviceListPage: React.FC = () => {
         is_active: detail.is_active,
         is_default: detail.is_default,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取打印设备详情失败');
     }
@@ -230,7 +230,7 @@ const PrintDeviceListPage: React.FC = () => {
   /**
    * 处理表单提交
    */
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
       
@@ -240,7 +240,7 @@ const PrintDeviceListPage: React.FC = () => {
         config = JSON.parse(configJson);
       } catch (e) {
         messageApi.error('设备配置 JSON 格式错误');
-        return;
+        throw new Error('设备配置 JSON 格式错误');
       }
       
       const data: CreatePrintDeviceData | UpdatePrintDeviceData = {
@@ -257,9 +257,11 @@ const PrintDeviceListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -427,7 +429,7 @@ const PrintDeviceListPage: React.FC = () => {
   return (
     <>
       {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
         <Tabs
           activeKey={viewMode}
           onChange={(key) => setViewMode(key as 'card' | 'list')}
@@ -461,7 +463,8 @@ const PrintDeviceListPage: React.FC = () => {
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
-        <UniTable<PrintDevice>
+        <ListPageTemplate>
+          <UniTable<PrintDevice>
         headerTitle="打印设备管理"
         actionRef={actionRef}
         columns={columns}
@@ -488,32 +491,29 @@ const PrintDeviceListPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
-        toolBarRender={() => []}
-        search={{
-          labelWidth: 'auto',
-          showAdvancedSearch: true,
-        }}
-      />
+          toolBarRender={() => []}
+          search={{
+            labelWidth: 'auto',
+            showAdvancedSearch: true,
+          }}
+        />
+        </ListPageTemplate>
       )}
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑打印设备' : '新建打印设备'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={null}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-            },
-          }}
-        >
           <ProFormText
             name="name"
             label="设备名称"
@@ -574,8 +574,7 @@ const PrintDeviceListPage: React.FC = () => {
               />
             </>
           )}
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 测试连接 Modal */}
       <Modal
@@ -662,99 +661,92 @@ const PrintDeviceListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="打印设备详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
-      >
-        {detailLoading ? (
-          <div>加载中...</div>
-        ) : detailData ? (
-          <ProDescriptions
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '设备名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '设备代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '设备类型',
-                dataIndex: 'type',
-              },
-              {
-                title: '设备描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '是否启用',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '在线状态',
-                dataIndex: 'is_online',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'error'}>
-                    {value ? '在线' : '离线'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '是否默认',
-                dataIndex: 'is_default',
-                render: (value) => (
-                  <Tag color={value ? 'processing' : 'default'}>
-                    {value ? '默认' : '-'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '设备配置',
-                dataIndex: 'config',
-                render: (value) => (
-                  <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '使用次数',
-                dataIndex: 'usage_count',
-              },
-              {
-                title: '最后连接时间',
-                dataIndex: 'last_connected_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '最后使用时间',
-                dataIndex: 'last_used_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        ) : null}
-      </Drawer>
+        loading={detailLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '设备名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '设备代码',
+            dataIndex: 'code',
+          },
+          {
+            title: '设备类型',
+            dataIndex: 'type',
+          },
+          {
+            title: '设备描述',
+            dataIndex: 'description',
+          },
+          {
+            title: '是否启用',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          {
+            title: '在线状态',
+            dataIndex: 'is_online',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'error'}>
+                {value ? '在线' : '离线'}
+              </Tag>
+            ),
+          },
+          {
+            title: '是否默认',
+            dataIndex: 'is_default',
+            render: (value: boolean) => (
+              <Tag color={value ? 'processing' : 'default'}>
+                {value ? '默认' : '-'}
+              </Tag>
+            ),
+          },
+          {
+            title: '设备配置',
+            dataIndex: 'config',
+            render: (value: Record<string, any>) => (
+              <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            ),
+          },
+          {
+            title: '使用次数',
+            dataIndex: 'usage_count',
+          },
+          {
+            title: '最后连接时间',
+            dataIndex: 'last_connected_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '最后使用时间',
+            dataIndex: 'last_used_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
     </>
   );
 };
