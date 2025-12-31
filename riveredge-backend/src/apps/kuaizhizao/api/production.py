@@ -14,6 +14,9 @@ from infra.models.user import User
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
+
+# 初始化服务实例
+reporting_service = ReportingService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -300,7 +303,7 @@ async def create_reporting_record(
 
     - **reporting**: 报工数据
     """
-    return await ReportingService.create_reporting_record(
+    return await reporting_service.create_reporting_record(
         tenant_id=tenant_id,
         reporting_data=reporting,
         reported_by=current_user.id
@@ -344,7 +347,7 @@ async def list_reporting_records(
         except ValueError:
             pass
 
-    return await ReportingService.list_reporting_records(
+    return await reporting_service.list_reporting_records(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -369,7 +372,7 @@ async def get_reporting_record(
 
     - **record_id**: 报工记录ID
     """
-    return await ReportingService.get_reporting_record_by_id(
+    return await reporting_service.get_reporting_record_by_id(
         tenant_id=tenant_id,
         record_id=record_id
     )
@@ -388,7 +391,7 @@ async def approve_reporting_record(
     - **record_id**: 报工记录ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await ReportingService.approve_reporting_record(
+    return await reporting_service.approve_reporting_record(
         tenant_id=tenant_id,
         record_id=record_id,
         approved_by=current_user.id,
@@ -407,7 +410,7 @@ async def delete_reporting_record(
 
     - **record_id**: 报工记录ID
     """
-    await ReportingService.delete_reporting_record(
+    await reporting_service.delete_reporting_record(
         tenant_id=tenant_id,
         record_id=record_id
     )
