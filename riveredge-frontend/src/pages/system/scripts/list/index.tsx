@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Form } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getScriptList,
   getScriptByUuid,
@@ -33,7 +34,6 @@ const { TextArea } = Input;
 const ScriptListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑脚本）
@@ -41,6 +41,7 @@ const ScriptListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentScriptUuid, setCurrentScriptUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Modal 相关状态（执行脚本）
   const [executeModalVisible, setExecuteModalVisible] = useState(false);
@@ -60,12 +61,11 @@ const ScriptListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentScriptUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       type: 'python',
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -75,11 +75,10 @@ const ScriptListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentScriptUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取脚本详情
       const detail = await getScriptByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         type: detail.type,
@@ -88,6 +87,7 @@ const ScriptListPage: React.FC = () => {
         config: detail.config ? JSON.stringify(detail.config, null, 2) : '',
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取脚本详情失败');
     }
@@ -189,7 +189,7 @@ const ScriptListPage: React.FC = () => {
   /**
    * 处理表单提交
    */
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
       
@@ -200,7 +200,7 @@ const ScriptListPage: React.FC = () => {
           config = JSON.parse(values.config);
         } catch (e) {
           messageApi.error('脚本配置 JSON 格式错误');
-          return;
+          throw new Error('脚本配置 JSON 格式错误');
         }
       }
       
@@ -218,9 +218,11 @@ const ScriptListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -378,136 +380,133 @@ const ScriptListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<Script>
-        headerTitle="脚本管理"
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, ...rest } = params;
-          const skip = (current - 1) * pageSize;
-          const limit = pageSize;
-          
-          const listParams: any = {
-            skip,
-            limit,
-            ...searchFormValues,
-          };
-          
-          const data = await getScriptList(listParams);
-          return {
-            data,
-            success: true,
-            total: data.length,
-          };
-        }}
-        rowKey="uuid"
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="batch-delete"
-            danger
-            onClick={handleBatchDelete}
-            disabled={selectedRowKeys.length === 0}
-          >
-            批量删除
-          </Button>,
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建
-          </Button>,
-        ]}
-        search={{
-          labelWidth: 'auto',
-          showAdvancedSearch: true,
-        }}
-      />
+      <ListPageTemplate>
+        <UniTable<Script>
+          headerTitle="脚本管理"
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20, ...rest } = params;
+            const skip = (current - 1) * pageSize;
+            const limit = pageSize;
+            
+            const listParams: any = {
+              skip,
+              limit,
+              ...searchFormValues,
+            };
+            
+            const data = await getScriptList(listParams);
+            return {
+              data,
+              success: true,
+              total: data.length,
+            };
+          }}
+          rowKey="uuid"
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          toolBarRender={() => [
+            <Button
+              key="batch-delete"
+              danger
+              onClick={handleBatchDelete}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量删除
+            </Button>,
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              新建
+            </Button>,
+          ]}
+          search={{
+            labelWidth: 'auto',
+            showAdvancedSearch: true,
+          }}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑脚本' : '新建脚本'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={null}
-        size={900}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-            },
+        <ProFormText
+          name="name"
+          label="脚本名称"
+          rules={[{ required: true, message: '请输入脚本名称' }]}
+        />
+        <ProFormText
+          name="code"
+          label="脚本代码"
+          rules={[
+            { required: true, message: '请输入脚本代码' },
+            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '脚本代码只能包含字母、数字和下划线，且必须以字母开头' },
+          ]}
+          disabled={isEdit}
+          tooltip="脚本代码用于程序识别，创建后不可修改"
+        />
+        <SafeProFormSelect
+          name="type"
+          label="脚本类型"
+          rules={[{ required: true, message: '请选择脚本类型' }]}
+          options={[
+            { label: 'Python', value: 'python' },
+            { label: 'Shell', value: 'shell' },
+            { label: 'SQL', value: 'sql' },
+            { label: 'JavaScript', value: 'javascript' },
+            { label: '其他', value: 'other' },
+          ]}
+          disabled={isEdit}
+        />
+        <ProFormTextArea
+          name="description"
+          label="脚本描述"
+          fieldProps={{
+            rows: 3,
           }}
-        >
-          <ProFormText
-            name="name"
-            label="脚本名称"
-            rules={[{ required: true, message: '请输入脚本名称' }]}
+        />
+        <ProFormTextArea
+          name="content"
+          label="脚本内容"
+          rules={[{ required: true, message: '请输入脚本内容' }]}
+          fieldProps={{
+            rows: 12,
+            style: { fontFamily: 'monospace' },
+          }}
+        />
+        <ProFormTextArea
+          name="config"
+          label="脚本配置（JSON，可选）"
+          fieldProps={{
+            rows: 4,
+            style: { fontFamily: 'monospace' },
+          }}
+          tooltip="脚本配置，JSON 格式，如参数、环境变量等"
+        />
+        {isEdit && (
+          <ProFormSwitch
+            name="is_active"
+            label="是否启用"
           />
-          <ProFormText
-            name="code"
-            label="脚本代码"
-            rules={[
-              { required: true, message: '请输入脚本代码' },
-              { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '脚本代码只能包含字母、数字和下划线，且必须以字母开头' },
-            ]}
-            disabled={isEdit}
-            tooltip="脚本代码用于程序识别，创建后不可修改"
-          />
-          <SafeProFormSelect
-            name="type"
-            label="脚本类型"
-            rules={[{ required: true, message: '请选择脚本类型' }]}
-            options={[
-              { label: 'Python', value: 'python' },
-              { label: 'Shell', value: 'shell' },
-              { label: 'SQL', value: 'sql' },
-              { label: 'JavaScript', value: 'javascript' },
-              { label: '其他', value: 'other' },
-            ]}
-            disabled={isEdit}
-          />
-          <ProFormTextArea
-            name="description"
-            label="脚本描述"
-            fieldProps={{
-              rows: 3,
-            }}
-          />
-          <ProFormTextArea
-            name="content"
-            label="脚本内容"
-            rules={[{ required: true, message: '请输入脚本内容' }]}
-            fieldProps={{
-              rows: 12,
-              style: { fontFamily: 'monospace' },
-            }}
-          />
-          <ProFormTextArea
-            name="config"
-            label="脚本配置（JSON，可选）"
-            fieldProps={{
-              rows: 4,
-              style: { fontFamily: 'monospace' },
-            }}
-            tooltip="脚本配置，JSON 格式，如参数、环境变量等"
-          />
-          {isEdit && (
-            <ProFormSwitch
-              name="is_active"
-              label="是否启用"
-            />
-          )}
-        </ProForm>
-      </Modal>
+        )}
+      </FormModalTemplate>
 
       {/* 执行脚本 Modal */}
       <Modal
@@ -578,117 +577,110 @@ const ScriptListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="脚本详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
-      >
-        {detailLoading ? (
-          <div>加载中...</div>
-        ) : detailData ? (
-          <ProDescriptions
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '脚本名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '脚本代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '脚本类型',
-                dataIndex: 'type',
-              },
-              {
-                title: '脚本描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '是否启用',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '运行状态',
-                dataIndex: 'is_running',
-                render: (value) => (
-                  <Tag color={value ? 'processing' : 'default'}>
-                    {value ? '运行中' : '空闲'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '脚本内容',
-                dataIndex: 'content',
-                render: (value) => (
-                  <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                    {value}
-                  </pre>
-                ),
-              },
-              {
-                title: '脚本配置',
-                dataIndex: 'config',
-                render: (value) => (
-                  value ? (
-                    <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                      {JSON.stringify(value, null, 2)}
-                    </pre>
-                  ) : '-'
-                ),
-              },
-              {
-                title: '最后执行状态',
-                dataIndex: 'last_run_status',
-                render: (value) => {
-                  if (!value) return '-';
-                  const statusMap: Record<string, { color: string; text: string }> = {
-                    success: { color: 'success', text: '成功' },
-                    failed: { color: 'error', text: '失败' },
-                    running: { color: 'processing', text: '运行中' },
-                  };
-                  const statusInfo = statusMap[value] || { color: 'default', text: value };
-                  return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-                },
-              },
-              {
-                title: '最后执行时间',
-                dataIndex: 'last_run_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '最后执行错误',
-                dataIndex: 'last_error',
-                render: (value) => (
-                  value ? (
-                    <pre style={{ maxHeight: '100px', overflow: 'auto', background: '#fff2f0', padding: 8, borderRadius: 4, color: '#ff4d4f' }}>
-                      {value}
-                    </pre>
-                  ) : '-'
-                ),
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        ) : null}
-      </Drawer>
+        loading={detailLoading}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '脚本名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '脚本代码',
+            dataIndex: 'code',
+          },
+          {
+            title: '脚本类型',
+            dataIndex: 'type',
+          },
+          {
+            title: '脚本描述',
+            dataIndex: 'description',
+          },
+          {
+            title: '是否启用',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          {
+            title: '运行状态',
+            dataIndex: 'is_running',
+            render: (value: boolean) => (
+              <Tag color={value ? 'processing' : 'default'}>
+                {value ? '运行中' : '空闲'}
+              </Tag>
+            ),
+          },
+          {
+            title: '脚本内容',
+            dataIndex: 'content',
+            render: (value: string) => (
+              <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+                {value}
+              </pre>
+            ),
+          },
+          {
+            title: '脚本配置',
+            dataIndex: 'config',
+            render: (value: Record<string, any>) => (
+              value ? (
+                <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+                  {JSON.stringify(value, null, 2)}
+                </pre>
+              ) : '-'
+            ),
+          },
+          {
+            title: '最后执行状态',
+            dataIndex: 'last_run_status',
+            render: (value: string) => {
+              if (!value) return '-';
+              const statusMap: Record<string, { color: string; text: string }> = {
+                success: { color: 'success', text: '成功' },
+                failed: { color: 'error', text: '失败' },
+                running: { color: 'processing', text: '运行中' },
+              };
+              const statusInfo = statusMap[value] || { color: 'default', text: value };
+              return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+            },
+          },
+          {
+            title: '最后执行时间',
+            dataIndex: 'last_run_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '最后执行错误',
+            dataIndex: 'last_error',
+            render: (value: string) => (
+              value ? (
+                <pre style={{ maxHeight: '100px', overflow: 'auto', background: '#fff2f0', padding: 8, borderRadius: 4, color: '#ff4d4f' }}>
+                  {value}
+                </pre>
+              ) : '-'
+            ),
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
     </>
   );
 };

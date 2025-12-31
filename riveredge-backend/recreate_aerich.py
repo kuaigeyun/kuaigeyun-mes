@@ -79,3 +79,4 @@ if __name__ == '__main__':
     asyncio.run(recreate_aerich_table())
 
 
+
