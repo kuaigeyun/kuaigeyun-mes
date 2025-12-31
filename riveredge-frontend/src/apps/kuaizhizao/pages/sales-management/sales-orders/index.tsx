@@ -10,9 +10,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, message, Card, Statistic, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { listSalesOrders, getSalesOrder, SalesOrder as APISalesOrder } from '../../../services/sales';
 
 // 使用API服务中的接口定义
@@ -198,55 +199,35 @@ const SalesOrdersPage: React.FC = () => {
 
   return (
     <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="今日订单数"
-                  value={12}
-                  prefix={<FileExcelOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="MTO订单数"
-                  value={8}
-                  prefix={<FileExcelOutlined />}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总订单金额"
-                  value={257500}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="待交付订单"
-                  value={15}
-                  suffix="单"
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* UniTable */}
+      <ListPageTemplate
+        statCards={[
+          {
+            title: '今日订单数',
+            value: 12,
+            prefix: <FileExcelOutlined />,
+            valueStyle: { color: '#1890ff' },
+          },
+          {
+            title: 'MTO订单数',
+            value: 8,
+            prefix: <FileExcelOutlined />,
+            valueStyle: { color: '#722ed1' },
+          },
+          {
+            title: '总订单金额',
+            value: 257500,
+            prefix: '¥',
+            suffix: '',
+            valueStyle: { color: '#52c41a' },
+          },
+          {
+            title: '待交付订单',
+            value: 15,
+            suffix: '单',
+            valueStyle: { color: '#faad14' },
+          },
+        ]}
+      >
         <UniTable<SalesOrder>
           headerTitle="销售订单管理"
           actionRef={actionRef}
@@ -297,15 +278,16 @@ const SalesOrdersPage: React.FC = () => {
           ]}
           scroll={{ x: 1200 }}
         />
-      </div>
+      </ListPageTemplate>
 
       {/* 详情抽屉 */}
-      <Drawer
-        title={`销售订单详情 - ${currentRecord?.orderCode}`}
+      <DetailDrawerTemplate
+        title={`销售订单详情 - ${currentRecord?.order_code || ''}`}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={600}
-      >
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        customContent={
+          currentRecord && (
         {currentRecord && (
           <div>
             <Card title="基本信息" style={{ marginBottom: 16 }}>
