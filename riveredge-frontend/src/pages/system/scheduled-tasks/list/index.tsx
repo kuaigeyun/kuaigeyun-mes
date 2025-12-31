@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getScheduledTaskList,
   getScheduledTaskByUuid,
@@ -32,7 +33,6 @@ const { TextArea } = Input;
 const ScheduledTaskListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑定时任务）
@@ -40,6 +40,7 @@ const ScheduledTaskListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentScheduledTaskUuid, setCurrentScheduledTaskUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [triggerType, setTriggerType] = useState<'cron' | 'interval' | 'date'>('cron');
   const [triggerConfigJson, setTriggerConfigJson] = useState<string>('{}');
   const [taskConfigJson, setTaskConfigJson] = useState<string>('{}');
@@ -58,13 +59,12 @@ const ScheduledTaskListPage: React.FC = () => {
     setTriggerType('cron');
     setTriggerConfigJson('{}');
     setTaskConfigJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       type: 'api_call',
       trigger_type: 'cron',
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -75,13 +75,12 @@ const ScheduledTaskListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentScheduledTaskUuid(record.uuid);
       setTriggerType(record.trigger_type);
-      setModalVisible(true);
       
       // 获取定时任务详情
       const detail = await getScheduledTaskByUuid(record.uuid);
       setTriggerConfigJson(JSON.stringify(detail.trigger_config, null, 2));
       setTaskConfigJson(JSON.stringify(detail.task_config, null, 2));
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
@@ -89,6 +88,7 @@ const ScheduledTaskListPage: React.FC = () => {
         trigger_type: detail.trigger_type,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取定时任务详情失败');
     }
@@ -152,10 +152,9 @@ const ScheduledTaskListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新定时任务）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析触发器配置 JSON
       let triggerConfig: Record<string, any> = {};
@@ -163,7 +162,7 @@ const ScheduledTaskListPage: React.FC = () => {
         triggerConfig = JSON.parse(triggerConfigJson);
       } catch (e) {
         messageApi.error('触发器配置 JSON 格式不正确');
-        return;
+        throw new Error('触发器配置 JSON 格式不正确');
       }
       
       // 解析任务配置 JSON
@@ -172,7 +171,7 @@ const ScheduledTaskListPage: React.FC = () => {
         taskConfig = JSON.parse(taskConfigJson);
       } catch (e) {
         messageApi.error('任务配置 JSON 格式不正确');
-        return;
+        throw new Error('任务配置 JSON 格式不正确');
       }
       
       if (isEdit && currentScheduledTaskUuid) {
@@ -200,9 +199,11 @@ const ScheduledTaskListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -391,84 +392,86 @@ const ScheduledTaskListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<ScheduledTask>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-            limit: params.pageSize || 20,
-          };
-          
-          // 任务类型筛选
-          if (searchFormValues?.type) {
-            apiParams.type = searchFormValues.type;
-          }
-          
-          // 触发器类型筛选
-          if (searchFormValues?.trigger_type) {
-            apiParams.trigger_type = searchFormValues.trigger_type;
-          }
-          
-          // 启用状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          try {
-            const result = await getScheduledTaskList(apiParams);
-            return {
-              data: result,
-              success: true,
-              total: result.length,  // 简化实现，实际应该从后端返回总数
+      <ListPageTemplate>
+        <UniTable<ScheduledTask>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数
+            const apiParams: any = {
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
             };
-          } catch (error: any) {
-            console.error('获取定时任务列表失败:', error);
-            messageApi.error(error?.message || '获取定时任务列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建定时任务
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-      />
+            
+            // 任务类型筛选
+            if (searchFormValues?.type) {
+              apiParams.type = searchFormValues.type;
+            }
+            
+            // 触发器类型筛选
+            if (searchFormValues?.trigger_type) {
+              apiParams.trigger_type = searchFormValues.trigger_type;
+            }
+            
+            // 启用状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
+            
+            try {
+              const result = await getScheduledTaskList(apiParams);
+              return {
+                data: result,
+                success: true,
+                total: result.length,  // 简化实现，实际应该从后端返回总数
+              };
+            } catch (error: any) {
+              console.error('获取定时任务列表失败:', error);
+              messageApi.error(error?.message || '获取定时任务列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          toolBarRender={() => [
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              新建定时任务
+            </Button>,
+          ]}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑定时任务 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑定时任务' : '新建定时任务'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={900}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
           <ProFormText
             name="name"
             label="任务名称"
@@ -562,151 +565,144 @@ const ScheduledTaskListPage: React.FC = () => {
             name="is_active"
             label="是否启用"
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="定时任务详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<ScheduledTask>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '任务名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '任务代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '任务类型',
-                dataIndex: 'type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    python_script: 'Python脚本',
-                    api_call: 'API调用',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '触发器类型',
-                dataIndex: 'trigger_type',
-                render: (value) => {
-                  const triggerMap: Record<string, string> = {
-                    cron: 'Cron',
-                    interval: 'Interval',
-                    date: 'Date',
-                  };
-                  return triggerMap[value] || value;
-                },
-              },
-              {
-                title: '任务描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '触发器配置',
-                dataIndex: 'trigger_config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '200px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '任务配置',
-                dataIndex: 'task_config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '200px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: 'Inngest 函数ID',
-                dataIndex: 'inngest_function_id',
-                render: (value) => value || '-',
-              },
-              {
-                title: '运行状态',
-                dataIndex: 'is_running',
-                render: (value) => (
-                  <Badge status={value ? 'processing' : 'default'} text={value ? '运行中' : '未运行'} />
-                ),
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '最后运行时间',
-                dataIndex: 'last_run_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '最后运行状态',
-                dataIndex: 'last_run_status',
-                render: (value) => {
-                  if (!value) return '-';
-                  const statusMap: Record<string, { color: string; text: string }> = {
-                    success: { color: 'success', text: '成功' },
-                    failed: { color: 'error', text: '失败' },
-                  };
-                  const statusInfo = statusMap[value] || { color: 'default', text: value };
-                  return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-                },
-              },
-              {
-                title: '最后错误',
-                dataIndex: 'last_error',
-                render: (value) => value ? (
-                  <Tag color="error">{value}</Tag>
-                ) : '-',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '任务名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '任务代码',
+            dataIndex: 'code',
+          },
+          {
+            title: '任务类型',
+            dataIndex: 'type',
+            render: (value: string) => {
+              const typeMap: Record<string, string> = {
+                python_script: 'Python脚本',
+                api_call: 'API调用',
+              };
+              return typeMap[value] || value;
+            },
+          },
+          {
+            title: '触发器类型',
+            dataIndex: 'trigger_type',
+            render: (value: string) => {
+              const triggerMap: Record<string, string> = {
+                cron: 'Cron',
+                interval: 'Interval',
+                date: 'Date',
+              };
+              return triggerMap[value] || value;
+            },
+          },
+          {
+            title: '任务描述',
+            dataIndex: 'description',
+          },
+          {
+            title: '触发器配置',
+            dataIndex: 'trigger_config',
+            render: (value: Record<string, any>) => (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '200px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            ),
+          },
+          {
+            title: '任务配置',
+            dataIndex: 'task_config',
+            render: (value: Record<string, any>) => (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '200px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            ),
+          },
+          {
+            title: 'Inngest 函数ID',
+            dataIndex: 'inngest_function_id',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '运行状态',
+            dataIndex: 'is_running',
+            render: (value: boolean) => (
+              <Badge status={value ? 'processing' : 'default'} text={value ? '运行中' : '未运行'} />
+            ),
+          },
+          {
+            title: '启用状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          {
+            title: '最后运行时间',
+            dataIndex: 'last_run_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '最后运行状态',
+            dataIndex: 'last_run_status',
+            render: (value: string) => {
+              if (!value) return '-';
+              const statusMap: Record<string, { color: string; text: string }> = {
+                success: { color: 'success', text: '成功' },
+                failed: { color: 'error', text: '失败' },
+              };
+              const statusInfo = statusMap[value] || { color: 'default', text: value };
+              return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+            },
+          },
+          {
+            title: '最后错误',
+            dataIndex: 'last_error',
+            render: (value: string) => value ? (
+              <Tag color="error">{value}</Tag>
+            ) : '-',
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
     </>
   );
 };

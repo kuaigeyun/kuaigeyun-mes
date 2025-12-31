@@ -1749,7 +1749,7 @@ main() {
         echo
         echo "服务访问地址:"
         echo "  前端界面:    http://localhost:$FRONTEND_PORT"
-        echo "  平台登录:    http://localhost:$FRONTEND_PORT/platform"
+        echo "  平台登录:    http://localhost:$FRONTEND_PORT/infra"
         echo "  后端 API:    http://localhost:$BACKEND_PORT"
         echo "  API 文档:    http://localhost:$BACKEND_PORT/docs"
         if [ -f ".logs/inngest.pid" ]; then
