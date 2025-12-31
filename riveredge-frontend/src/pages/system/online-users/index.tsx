@@ -10,6 +10,7 @@ import { ProTable, ProColumns } from '@ant-design/pro-components';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Tabs } from 'antd';
 import { EyeOutlined, BarChartOutlined, LogoutOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from './card-view';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getOnlineUsers,
   getOnlineUserStats,
@@ -164,6 +165,32 @@ const OnlineUsersPage: React.FC = () => {
     },
   ];
 
+  // 构建统计卡片数据（仅用于列表视图）
+  const statCards = stats ? [
+    {
+      title: '总在线用户数',
+      value: stats.total,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '活跃用户数（最近5分钟）',
+      value: stats.active,
+      valueStyle: { color: '#52c41a' },
+    },
+    ...(Object.keys(stats.by_tenant).length > 0 ? [{
+      title: '按组织统计',
+      value: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+          {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
+            <Tag key={tenantId} color="blue">
+              组织 {tenantId}: {count}
+            </Tag>
+          ))}
+        </div>
+      ),
+    }] : []),
+  ] : undefined;
+
   return (
     <div style={{ padding: '16px' }}>
       {/* 视图切换 */}
@@ -183,48 +210,9 @@ const OnlineUsersPage: React.FC = () => {
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
-        <>
-          {/* 统计卡片 */}
-          {stats && (
-            <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
-              <Card style={{ flex: 1 }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                    {stats.total}
-                  </div>
-                  <div style={{ color: '#666', marginTop: '8px' }}>总在线用户数</div>
-                </div>
-              </Card>
-              <Card style={{ flex: 1 }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
-                    {stats.active}
-                  </div>
-                  <div style={{ color: '#666', marginTop: '8px' }}>活跃用户数（最近5分钟）</div>
-                </div>
-              </Card>
-              {Object.keys(stats.by_tenant).length > 0 && (
-                <Card style={{ flex: 1 }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#faad14', marginBottom: '8px' }}>
-                      按组织统计
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                      {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
-                        <Tag key={tenantId} color="blue">
-                          组织 {tenantId}: {count}
-                        </Tag>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* 在线用户列表 */}
+        <ListPageTemplate statCards={statCards}>
           <Card>
-        <ProTable<OnlineUser>
+            <ProTable<OnlineUser>
           columns={columns}
           manualRequest={!currentUser}
           request={async (params, sorter, filter) => {
@@ -280,53 +268,66 @@ const OnlineUsersPage: React.FC = () => {
           headerTitle="在线用户"
         />
           </Card>
-        </>
+        </ListPageTemplate>
       )}
 
-      {/* 用户详情 Modal */}
-      <Modal
+      {/* 用户详情 Drawer */}
+      <DetailDrawerTemplate
         title="在线用户详情"
         open={detailModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setDetailModalVisible(false);
           setCurrentUserInfo(null);
         }}
-        footer={null}
-        size={800}
-      >
-        {currentUserInfo && (
-          <Descriptions column={1} bordered>
-            <Descriptions.Item label="用户ID">
-              {currentUserInfo.user_id}
-            </Descriptions.Item>
-            <Descriptions.Item label="用户名">
-              {currentUserInfo.username}
-            </Descriptions.Item>
-            <Descriptions.Item label="用户全名">
-              {currentUserInfo.full_name || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="邮箱">
-              {currentUserInfo.email || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="组织ID">
-              {currentUserInfo.tenant_id}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录IP">
-              {currentUserInfo.login_ip || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录时间">
-              {currentUserInfo.login_time
-                ? dayjs(currentUserInfo.login_time).format('YYYY-MM-DD HH:mm:ss')
-                : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="最后活动时间">
-              {currentUserInfo.last_activity_time
-                ? dayjs(currentUserInfo.last_activity_time).format('YYYY-MM-DD HH:mm:ss')
-                : '-'}
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={currentUserInfo}
+        columns={[
+          {
+            title: '用户ID',
+            dataIndex: 'user_id',
+            render: (value: number) => value,
+          },
+          {
+            title: '用户名',
+            dataIndex: 'username',
+            render: (value: string) => value,
+          },
+          {
+            title: '用户全名',
+            dataIndex: 'full_name',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '邮箱',
+            dataIndex: 'email',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '组织ID',
+            dataIndex: 'tenant_id',
+            render: (value: number) => value,
+          },
+          {
+            title: '登录IP',
+            dataIndex: 'login_ip',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '登录时间',
+            dataIndex: 'login_time',
+            render: (value: string) => value
+              ? dayjs(value).format('YYYY-MM-DD HH:mm:ss')
+              : '-',
+          },
+          {
+            title: '最后活动时间',
+            dataIndex: 'last_activity_time',
+            render: (value: string) => value
+              ? dayjs(value).format('YYYY-MM-DD HH:mm:ss')
+              : '-',
+          },
+        ]}
+      />
     </div>
   );
 };
