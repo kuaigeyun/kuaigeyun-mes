@@ -566,15 +566,44 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "FINISHED_GOODS_RECEIPT_CODE", prefix=f"FG{today}")
+            code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
 
-            receipt = await PurchaseReceipt.create(
-                tenant_id=tenant_id,
-                receipt_code=code,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-                **receipt_data.model_dump(exclude_unset=True, exclude={'created_by'})
+            # 创建入库单头
+            receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={'items', 'created_by'})
+            receipt_dict.update({
+                'tenant_id': tenant_id,
+                'receipt_code': code,
+                'created_by': created_by,
+                'created_by_name': user_info["name"],
+            })
+            
+            receipt = await PurchaseReceipt.create(**receipt_dict)
+            
+            # 创建入库单明细
+            total_quantity = Decimal(0)
+            total_amount = Decimal(0)
+            
+            for item_data in receipt_data.items or []:
+                item_dict = item_data.model_dump(exclude_unset=True)
+                item_dict.update({
+                    'tenant_id': tenant_id,
+                    'receipt_id': receipt.id,
+                    'total_amount': item_data.receipt_quantity * item_data.unit_price,
+                    'qualified_quantity': item_data.receipt_quantity,  # 默认合格数量等于入库数量
+                    'unqualified_quantity': Decimal(0),
+                })
+                
+                await PurchaseReceiptItem.create(**item_dict)
+                
+                total_quantity += item_data.receipt_quantity
+                total_amount += item_dict['total_amount']
+            
+            # 更新入库单总数量和总金额
+            await PurchaseReceipt.filter(id=receipt.id).update(
+                total_quantity=total_quantity,
+                total_amount=total_amount
             )
+            
             return PurchaseReceiptResponse.model_validate(receipt)
 
     async def get_purchase_receipt_by_id(self, tenant_id: int, receipt_id: int) -> PurchaseReceiptResponse:

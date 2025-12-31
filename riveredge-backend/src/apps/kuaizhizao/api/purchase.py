@@ -190,6 +190,35 @@ async def confirm_purchase_order(
     )
 
 
+@router.post("/{order_id}/push-to-receipt", summary="下推到采购入库")
+@handle_exceptions
+async def push_purchase_order_to_receipt(
+    order_id: int = Path(..., description="采购订单ID"),
+    receipt_quantities: Optional[dict] = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从采购单下推到采购入库
+    
+    自动生成采购入库单，支持指定入库数量
+    
+    - **order_id**: 采购订单ID
+    - **receipt_quantities**: 入库数量字典 {item_id: quantity}（可选，如果不提供则使用订单未入库数量）
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+    
+    service = PurchaseService()
+    result = await service.push_to_receipt(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        created_by=current_user.id,
+        receipt_quantities=receipt_quantities
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
 @router.get("/{order_id}/print", summary="打印采购订单")
 async def print_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
