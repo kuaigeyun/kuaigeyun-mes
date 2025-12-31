@@ -629,8 +629,6 @@ const IntegrationConfigListPage: React.FC = () => {
           },
         ]}
       />
-      </ListPageTemplate>
-      )}
     </>
   );
 };
