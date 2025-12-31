@@ -6,12 +6,13 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import GroupedFormView from '../grouped-form-view';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getSystemParameterList,
   getSystemParameterByUuid,
@@ -29,7 +30,6 @@ import {
 const SystemParameterListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'form'>('form');
   
@@ -38,6 +38,7 @@ const SystemParameterListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentParameterUuid, setCurrentParameterUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [parameterType, setParameterType] = useState<'string' | 'number' | 'boolean' | 'json'>('string');
   
   // Drawer 相关状态（详情查看）
@@ -52,13 +53,12 @@ const SystemParameterListPage: React.FC = () => {
     setIsEdit(false);
     setCurrentParameterUuid(null);
     setParameterType('string');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       type: 'string',
       is_system: false,
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -69,17 +69,22 @@ const SystemParameterListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentParameterUuid(record.uuid);
       setParameterType(record.type);
-      setModalVisible(true);
       
       // 获取参数详情
       const detail = await getSystemParameterByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      // 格式化值用于显示
+      let displayValue = detail.value;
+      if (detail.type === 'json') {
+        displayValue = JSON.stringify(detail.value, null, 2);
+      }
+      setFormInitialValues({
         key: detail.key,
-        value: detail.value,
+        value: displayValue,
         type: detail.type,
         description: detail.description,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取参数详情失败');
     }
@@ -117,10 +122,9 @@ const SystemParameterListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新参数）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 处理 JSON 类型参数值
       let processedValue = values.value;
@@ -131,7 +135,7 @@ const SystemParameterListPage: React.FC = () => {
           }
         } catch (e) {
           messageApi.error('JSON 格式不正确');
-          return;
+          throw new Error('JSON 格式不正确');
         }
       } else if (values.type === 'number') {
         processedValue = Number(values.value);
@@ -159,9 +163,11 @@ const SystemParameterListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -373,7 +379,7 @@ const SystemParameterListPage: React.FC = () => {
   return (
     <>
       {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
         <Tabs
           activeKey={viewMode}
           onChange={(key) => setViewMode(key as 'list' | 'form')}
@@ -398,7 +404,8 @@ const SystemParameterListPage: React.FC = () => {
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
-        <UniTable<SystemParameter>
+        <ListPageTemplate>
+          <UniTable<SystemParameter>
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -452,22 +459,23 @@ const SystemParameterListPage: React.FC = () => {
             onChange: setSelectedRowKeys,
           }}
         />
+        </ListPageTemplate>
       )}
 
       {/* 创建/编辑参数 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑参数' : '新建参数'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={600}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
           <ProFormText
             name="key"
             label="参数键"
@@ -488,7 +496,7 @@ const SystemParameterListPage: React.FC = () => {
             fieldProps={{
               onChange: (value) => {
                 setParameterType(value);
-                formRef.current?.setFieldsValue({ value: undefined });
+                setFormInitialValues((prev) => prev ? { ...prev, value: undefined } : undefined);
               },
             }}
             disabled={isEdit}
@@ -509,22 +517,17 @@ const SystemParameterListPage: React.FC = () => {
             name="is_active"
             label="是否启用"
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="参数详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<SystemParameter>
-            column={1}
-            dataSource={detailData}
-            columns={[
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
               {
                 title: '参数键',
                 dataIndex: 'key',
@@ -579,10 +582,8 @@ const SystemParameterListPage: React.FC = () => {
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },
-            ]}
-          />
-        )}
-      </Drawer>
+        ]}
+      />
     </>
   );
 };
