@@ -1,0 +1,96 @@
+/**
+ * 详情 Drawer 布局模板
+ *
+ * 提供统一的详情 Drawer 布局，使用 ProDescriptions 展示详情信息
+ * 遵循 Ant Design 设计规范
+ *
+ * Author: Luigi Lu
+ * Date: 2025-12-26
+ */
+
+import React, { ReactNode } from 'react';
+import { Drawer, theme } from 'antd';
+import { ProDescriptions, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { DRAWER_CONFIG } from './constants';
+
+const { useToken } = theme;
+
+/**
+ * 详情 Drawer 模板属性
+ */
+export interface DetailDrawerTemplateProps<T = any> {
+  /** Drawer 标题 */
+  title: string;
+  /** 是否显示 */
+  open: boolean;
+  /** 关闭回调 */
+  onClose: () => void;
+  /** 数据源 */
+  dataSource?: T;
+  /** ProDescriptions 列配置 */
+  columns: ProDescriptionsItemType<T>[];
+  /** Drawer 宽度（默认：标准宽度） */
+  width?: number | string;
+  /** 加载状态 */
+  loading?: boolean;
+  /** 列数（默认：2） */
+  column?: number;
+  /** 自定义内容（可选，如果提供则覆盖默认的 ProDescriptions） */
+  customContent?: ReactNode;
+  /** 自定义样式类名 */
+  className?: string;
+}
+
+/**
+ * 详情 Drawer 布局模板
+ *
+ * @example
+ * ```tsx
+ * <DetailDrawerTemplate
+ *   title="客户详情"
+ *   open={drawerVisible}
+ *   onClose={() => setDrawerVisible(false)}
+ *   dataSource={customerDetail}
+ *   columns={[
+ *     { title: '客户编码', dataIndex: 'code' },
+ *     { title: '客户名称', dataIndex: 'name' },
+ *   ]}
+ * />
+ * ```
+ */
+export const DetailDrawerTemplate = <T extends Record<string, any> = Record<string, any>>({
+  title,
+  open,
+  onClose,
+  dataSource,
+  columns,
+  width = DRAWER_CONFIG.STANDARD_WIDTH,
+  loading = false,
+  column = 2,
+  customContent,
+  className,
+}: DetailDrawerTemplateProps<T>) => {
+  const { token } = useToken();
+
+  return (
+    <Drawer
+      title={title}
+      open={open}
+      onClose={onClose}
+      width={width}
+      loading={loading}
+      className={className}
+    >
+      {customContent || (
+        <ProDescriptions<T>
+          dataSource={dataSource}
+          column={column}
+          columns={columns}
+        />
+      )}
+    </Drawer>
+  );
+};
+
+export default DetailDrawerTemplate;
+

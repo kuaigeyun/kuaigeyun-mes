@@ -27,11 +27,12 @@ from apps.kuaizhizao.services.print_service import DocumentPrintService
 from fastapi.responses import HTMLResponse
 
 
-router = APIRouter(prefix="/purchase-orders", tags=["采购订单管理"])
+# 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
+router = APIRouter(tags=["采购订单管理"])
 
 
 # === 采购订单CRUD接口 ===
-@router.post("", response_model=PurchaseOrderResponse, summary="创建采购订单")
+@router.post("/purchase-orders", response_model=PurchaseOrderResponse, summary="创建采购订单")
 @handle_exceptions
 async def create_purchase_order(
     order: PurchaseOrderCreate,
@@ -54,7 +55,7 @@ async def create_purchase_order(
     )
 
 
-@router.get("", response_model=List[PurchaseOrderListResponse], summary="获取采购订单列表")
+@router.get("/purchase-orders", response_model=List[PurchaseOrderListResponse], summary="获取采购订单列表")
 @handle_exceptions
 async def list_purchase_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
@@ -90,7 +91,7 @@ async def list_purchase_orders(
     return await PurchaseService().list_purchase_orders(tenant_id, params)
 
 
-@router.get("/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")
+@router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")
 @handle_exceptions
 async def get_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
@@ -104,7 +105,7 @@ async def get_purchase_order(
     return await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
 
 
-@router.put("/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")
+@router.put("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")
 @handle_exceptions
 async def update_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
@@ -128,7 +129,7 @@ async def update_purchase_order(
     )
 
 
-@router.delete("/{order_id}", summary="删除采购订单")
+@router.delete("/purchase-orders/{order_id}", summary="删除采购订单")
 @handle_exceptions
 async def delete_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
@@ -146,7 +147,7 @@ async def delete_purchase_order(
 
 
 # === 采购订单业务操作接口 ===
-@router.post("/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
+@router.post("/purchase-orders/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
 @handle_exceptions
 async def approve_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
@@ -168,7 +169,7 @@ async def approve_purchase_order(
     )
 
 
-@router.post("/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="确认采购订单")
+@router.post("/purchase-orders/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="确认采购订单")
 @handle_exceptions
 async def confirm_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
@@ -190,7 +191,7 @@ async def confirm_purchase_order(
     )
 
 
-@router.post("/{order_id}/push-to-receipt", summary="下推到采购入库")
+@router.post("/purchase-orders/{order_id}/push-to-receipt", summary="下推到采购入库")
 @handle_exceptions
 async def push_purchase_order_to_receipt(
     order_id: int = Path(..., description="采购订单ID"),
@@ -219,7 +220,7 @@ async def push_purchase_order_to_receipt(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
-@router.get("/{order_id}/print", summary="打印采购订单")
+@router.get("/purchase-orders/{order_id}/print", summary="打印采购订单")
 async def print_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),

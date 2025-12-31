@@ -43,7 +43,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
     WorkOrderResponse,
-    WorkOrderListResponse
+    WorkOrderListResponse,
+    MaterialShortageResponse
 )
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
@@ -152,7 +153,8 @@ from apps.kuaizhizao.schemas.planning import (
 )
 
 # 创建路由
-router = APIRouter(prefix="/production-execution", tags=["Kuaige Zhizao - Production Execution"])
+# 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
+router = APIRouter(tags=["Kuaige Zhizao - Production Execution"])
 
 
 # ============ 工单管理 API ============
@@ -272,21 +274,101 @@ async def delete_work_order(
     )
 
 
+@router.get("/work-orders/{work_order_id}/check-shortage", response_model=MaterialShortageResponse, summary="检查工单缺料")
+async def check_work_order_shortage(
+    work_order_id: int,
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialShortageResponse:
+    """
+    检查工单缺料情况
+
+    根据工单的BOM和当前库存，检查是否存在缺料。
+
+    - **work_order_id**: 工单ID
+    - **warehouse_id**: 仓库ID（可选，如果为None则查询所有仓库）
+    """
+    result = await WorkOrderService().check_material_shortage(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        warehouse_id=warehouse_id
+    )
+    return MaterialShortageResponse(**result)
+
+
 @router.post("/work-orders/{work_order_id}/release", response_model=WorkOrderResponse, summary="下达工单")
 async def release_work_order(
     work_order_id: int,
+    check_shortage: bool = Query(True, description="是否在下达前检查缺料（默认：True）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderResponse:
     """
     下达工单
 
+    将工单状态从"草稿"更新为"已下达"。
+
     - **work_order_id**: 工单ID
+    - **check_shortage**: 是否在下达前检查缺料（默认：True）。如果为True且存在缺料，将阻止下达并返回错误。
     """
     return await WorkOrderService().release_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
-        released_by=current_user.id
+        released_by=current_user.id,
+        check_shortage=check_shortage
+    )
+
+
+@router.get("/work-orders/delayed", summary="查询延期工单")
+async def get_delayed_work_orders(
+    days_threshold: int = Query(0, ge=0, description="延期天数阈值（默认0，即只要超过计划结束日期就算延期）"),
+    status: Optional[str] = Query(None, description="工单状态过滤（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    查询延期工单
+
+    根据计划结束日期和当前日期，查询所有延期的工单。
+
+    - **days_threshold**: 延期天数阈值（默认0）
+    - **status**: 工单状态过滤（可选）
+    """
+    delayed_orders = await WorkOrderService().check_delayed_work_orders(
+        tenant_id=tenant_id,
+        days_threshold=days_threshold,
+        status=status
+    )
+    return JSONResponse(
+        content={
+            "total": len(delayed_orders),
+            "delayed_orders": delayed_orders
+        },
+        status_code=status.HTTP_200_OK
+    )
+
+
+@router.get("/work-orders/delay-analysis", summary="延期原因分析")
+async def analyze_delay_reasons(
+    work_order_id: Optional[int] = Query(None, description="工单ID（可选，如果为None则分析所有延期工单）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    分析延期原因
+
+    分析工单延期的原因，包括缺料、产能不足、质量问题等。
+
+    - **work_order_id**: 工单ID（可选，如果为None则分析所有延期工单）
+    """
+    result = await WorkOrderService().analyze_delay_reasons(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id
+    )
+    return JSONResponse(
+        content=result,
+        status_code=status.HTTP_200_OK
     )
 
 
@@ -770,7 +852,7 @@ async def create_sales_delivery(
 
     返回创建的销售出库单信息。
     """
-    return await SalesDeliveryService.create_sales_delivery(
+    return await SalesDeliveryService().create_sales_delivery(
         tenant_id=tenant_id,
         delivery_data=delivery,
         created_by=current_user.id
@@ -791,7 +873,7 @@ async def list_sales_deliveries(
 
     支持状态和销售订单筛选。
     """
-    return await SalesDeliveryService.list_sales_deliveries(
+    return await SalesDeliveryService().list_sales_deliveries(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -811,7 +893,7 @@ async def get_sales_delivery(
 
     - **delivery_id**: 出库单ID
     """
-    return await SalesDeliveryService.get_sales_delivery_by_id(
+    return await SalesDeliveryService().get_sales_delivery_by_id(
         tenant_id=tenant_id,
         delivery_id=delivery_id
     )
@@ -828,7 +910,7 @@ async def confirm_sales_delivery(
 
     - **delivery_id**: 出库单ID
     """
-    return await SalesDeliveryService.confirm_delivery(
+    return await SalesDeliveryService().confirm_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
         confirmed_by=current_user.id
@@ -1218,11 +1300,82 @@ async def issue_certificate(
     - **inspection_id**: 检验单ID
     - **certificate_number**: 证书编号
     """
-    return await FinishedGoodsInspectionService.issue_certificate(
+    return await FinishedGoodsInspectionService().issue_certificate(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
         certificate_number=certificate_number,
         issued_by=current_user.id
+    )
+
+
+@router.get("/quality/anomalies", summary="查询质量异常记录")
+async def get_quality_anomalies(
+    inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
+    start_date: Optional[datetime] = Query(None, description="开始日期"),
+    end_date: Optional[datetime] = Query(None, description="结束日期"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID（仅用于来料检验）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    查询质量异常记录（不合格的检验单）
+
+    - **inspection_type**: 检验类型（可选：incoming/process/finished）
+    - **start_date**: 开始日期（可选）
+    - **end_date**: 结束日期（可选）
+    - **material_id**: 物料ID（可选）
+    - **supplier_id**: 供应商ID（可选，仅用于来料检验）
+    """
+    anomalies = await FinishedGoodsInspectionService().get_quality_anomalies(
+        tenant_id=tenant_id,
+        inspection_type=inspection_type,
+        start_date=start_date,
+        end_date=end_date,
+        material_id=material_id,
+        supplier_id=supplier_id
+    )
+    return JSONResponse(
+        content={
+            "total": len(anomalies),
+            "anomalies": anomalies
+        },
+        status_code=status.HTTP_200_OK
+    )
+
+
+@router.get("/quality/statistics", summary="质量统计分析")
+async def get_quality_statistics(
+    inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
+    start_date: Optional[datetime] = Query(None, description="开始日期"),
+    end_date: Optional[datetime] = Query(None, description="结束日期"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID（仅用于来料检验）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取质量统计分析
+
+    统计检验数量、合格率、不合格率等质量指标。
+
+    - **inspection_type**: 检验类型（可选：incoming/process/finished）
+    - **start_date**: 开始日期（可选）
+    - **end_date**: 结束日期（可选）
+    - **material_id**: 物料ID（可选）
+    - **supplier_id**: 供应商ID（可选，仅用于来料检验）
+    """
+    stats = await FinishedGoodsInspectionService().get_quality_statistics(
+        tenant_id=tenant_id,
+        inspection_type=inspection_type,
+        start_date=start_date,
+        end_date=end_date,
+        material_id=material_id,
+        supplier_id=supplier_id
+    )
+    return JSONResponse(
+        content=stats,
+        status_code=status.HTTP_200_OK
     )
 
 
@@ -1243,7 +1396,7 @@ async def create_payable(
 
     返回创建的应付单信息。
     """
-    return await PayableService.create_payable(
+    return await PayableService().create_payable(
         tenant_id=tenant_id,
         payable_data=payable,
         created_by=current_user.id
@@ -1284,7 +1437,7 @@ async def list_payables(
         except ValueError:
             pass
 
-    return await PayableService.list_payables(
+    return await PayableService().list_payables(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1306,7 +1459,7 @@ async def get_payable(
 
     - **payable_id**: 应付单ID
     """
-    return await PayableService.get_payable_by_id(
+    return await PayableService().get_payable_by_id(
         tenant_id=tenant_id,
         payable_id=payable_id
     )
@@ -1325,7 +1478,7 @@ async def record_payment(
     - **payable_id**: 应付单ID
     - **payment**: 付款记录数据
     """
-    return await PayableService.record_payment(
+    return await PayableService().record_payment(
         tenant_id=tenant_id,
         payable_id=payable_id,
         payment_data=payment,
@@ -1346,7 +1499,7 @@ async def approve_payable(
     - **payable_id**: 应付单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await PayableService.approve_payable(
+    return await PayableService().approve_payable(
         tenant_id=tenant_id,
         payable_id=payable_id,
         approved_by=current_user.id,
@@ -1371,7 +1524,7 @@ async def create_purchase_invoice(
 
     返回创建的采购发票信息。
     """
-    return await PurchaseInvoiceService.create_purchase_invoice(
+    return await PurchaseInvoiceService().create_purchase_invoice(
         tenant_id=tenant_id,
         invoice_data=invoice,
         created_by=current_user.id
@@ -1393,7 +1546,7 @@ async def list_purchase_invoices(
 
     支持多种筛选条件的高级搜索。
     """
-    return await PurchaseInvoiceService.list_purchase_invoices(
+    return await PurchaseInvoiceService().list_purchase_invoices(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1414,7 +1567,7 @@ async def get_purchase_invoice(
 
     - **invoice_id**: 发票ID
     """
-    return await PurchaseInvoiceService.get_purchase_invoice_by_id(
+    return await PurchaseInvoiceService().get_purchase_invoice_by_id(
         tenant_id=tenant_id,
         invoice_id=invoice_id
     )
@@ -1433,7 +1586,7 @@ async def approve_purchase_invoice(
     - **invoice_id**: 发票ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await PurchaseInvoiceService.approve_invoice(
+    return await PurchaseInvoiceService().approve_invoice(
         tenant_id=tenant_id,
         invoice_id=invoice_id,
         approved_by=current_user.id,
@@ -1458,7 +1611,7 @@ async def create_receivable(
 
     返回创建的应收单信息。
     """
-    return await ReceivableService.create_receivable(
+    return await ReceivableService().create_receivable(
         tenant_id=tenant_id,
         receivable_data=receivable,
         created_by=current_user.id
@@ -1499,7 +1652,7 @@ async def list_receivables(
         except ValueError:
             pass
 
-    return await ReceivableService.list_receivables(
+    return await ReceivableService().list_receivables(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1521,7 +1674,7 @@ async def get_receivable(
 
     - **receivable_id**: 应收单ID
     """
-    return await ReceivableService.get_receivable_by_id(
+    return await ReceivableService().get_receivable_by_id(
         tenant_id=tenant_id,
         receivable_id=receivable_id
     )
@@ -1540,7 +1693,7 @@ async def record_receipt(
     - **receivable_id**: 应收单ID
     - **receipt**: 收款记录数据
     """
-    return await ReceivableService.record_receipt(
+    return await ReceivableService().record_receipt(
         tenant_id=tenant_id,
         receivable_id=receivable_id,
         receipt_data=receipt,
@@ -1561,7 +1714,7 @@ async def approve_receivable(
     - **receivable_id**: 应收单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await ReceivableService.approve_receivable(
+    return await ReceivableService().approve_receivable(
         tenant_id=tenant_id,
         receivable_id=receivable_id,
         approved_by=current_user.id,
@@ -1990,7 +2143,22 @@ async def get_document_relations(
     """
     获取单据的关联关系（上游和下游单据）
 
-    - **document_type**: 单据类型（如：work_order, sales_forecast, sales_order, mrp_result, lrp_result等）
+    支持的单据类型：
+    - **sales_forecast**: 销售预测
+    - **sales_order**: 销售订单
+    - **mrp_result**: MRP运算结果
+    - **lrp_result**: LRP运算结果
+    - **work_order**: 工单
+    - **production_picking**: 生产领料单
+    - **reporting_record**: 报工记录
+    - **finished_goods_receipt**: 成品入库单
+    - **sales_delivery**: 销售出库单
+    - **purchase_order**: 采购订单
+    - **purchase_receipt**: 采购入库单
+    - **payable**: 应付单
+    - **receivable**: 应收单
+
+    - **document_type**: 单据类型
     - **document_id**: 单据ID
 
     返回：
@@ -2016,11 +2184,16 @@ async def trace_document_chain(
     """
     追溯单据关联链（完整追溯）
 
-    - **document_type**: 单据类型
-    - **document_id**: 单据ID
-    - **direction**: 追溯方向（upstream: 向上追溯, downstream: 向下追溯, both: 双向追溯）
+    支持所有单据类型的完整关联链追溯，包括多层级关联关系。
 
-    返回完整的关联链，支持多层级追溯。
+    - **document_type**: 单据类型（支持所有单据类型，参见关联关系API）
+    - **document_id**: 单据ID
+    - **direction**: 追溯方向
+      - **upstream**: 向上追溯（查找来源单据）
+      - **downstream**: 向下追溯（查找生成单据）
+      - **both**: 双向追溯（默认）
+
+    返回完整的关联链，支持多层级追溯，自动避免循环引用。
     """
     result = await DocumentRelationService().trace_document_chain(
         tenant_id=tenant_id,

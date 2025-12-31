@@ -22,7 +22,7 @@ import type { MenuProps } from 'antd';
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { UniTable } from '../../../../components/uni-table';
-import { TwoColumnLayout } from '../../../../components/two-column-layout';
+import { TwoColumnLayout } from '../../../../components/layout-templates';
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../../../apps/master-data/services/material';

@@ -41,37 +41,37 @@ export const workOrderApi = {
 export const reportingApi = {
   // 获取报工记录列表
   list: async (params?: any) => {
-    return api.get('/apps/kuaizhizao/reporting-records', { params });
+    return api.get('/apps/kuaizhizao/reporting', { params });
   },
 
   // 提交报工
   create: async (data: any) => {
-    return api.post('/apps/kuaizhizao/reporting-records', data);
+    return api.post('/apps/kuaizhizao/reporting', data);
   },
 
   // 更新报工记录
   update: async (id: string, data: any) => {
-    return api.put(`/apps/kuaizhizao/reporting-records/${id}`, data);
+    return api.put(`/apps/kuaizhizao/reporting/${id}`, data);
   },
 
   // 删除报工记录
   delete: async (id: string) => {
-    return api.delete(`/apps/kuaizhizao/reporting-records/${id}`);
+    return api.delete(`/apps/kuaizhizao/reporting/${id}`);
   },
 
   // 获取报工详情
   get: async (id: string) => {
-    return api.get(`/apps/kuaizhizao/reporting-records/${id}`);
+    return api.get(`/apps/kuaizhizao/reporting/${id}`);
   },
 
   // 审核报工记录
   approve: async (id: string, data: any) => {
-    return api.post(`/apps/kuaizhizao/reporting-records/${id}/approve`, data);
+    return api.post(`/apps/kuaizhizao/reporting/${id}/approve`, data);
   },
 
   // 获取报工统计
   getStatistics: async (params?: any) => {
-    return api.get('/apps/kuaizhizao/reporting-records/statistics', { params });
+    return api.get('/apps/kuaizhizao/reporting/statistics', { params });
   },
 };
 

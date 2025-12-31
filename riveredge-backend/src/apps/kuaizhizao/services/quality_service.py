@@ -28,6 +28,8 @@ from apps.kuaizhizao.schemas.quality import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from datetime import timedelta
+from decimal import Decimal
 
 
 class IncomingInspectionService(AppBaseService[IncomingInspection]):
@@ -333,4 +335,319 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
 
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
+
+    # ============ 质量异常检测和统计分析 ============
+
+    async def get_quality_anomalies(
+        self,
+        tenant_id: int,
+        inspection_type: Optional[str] = None,  # "incoming", "process", "finished"
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        material_id: Optional[int] = None,
+        supplier_id: Optional[int] = None
+    ) -> List[dict]:
+        """
+        查询质量异常记录（不合格的检验单）
+
+        Args:
+            tenant_id: 租户ID
+            inspection_type: 检验类型（可选：incoming/process/finished）
+            start_date: 开始日期（可选）
+            end_date: 结束日期（可选）
+            material_id: 物料ID（可选）
+            supplier_id: 供应商ID（可选，仅用于来料检验）
+
+        Returns:
+            List[dict]: 质量异常记录列表
+        """
+        anomalies = []
+
+        # 查询来料检验异常
+        if inspection_type is None or inspection_type == "incoming":
+            query = IncomingInspection.filter(
+                tenant_id=tenant_id,
+                quality_status="不合格",
+                status="已检验"
+            )
+            if start_date:
+                query = query.filter(inspection_time__gte=start_date)
+            if end_date:
+                query = query.filter(inspection_time__lte=end_date)
+            if material_id:
+                query = query.filter(material_id=material_id)
+            if supplier_id:
+                query = query.filter(supplier_id=supplier_id)
+
+            incoming_anomalies = await query.order_by("-inspection_time").limit(100).all()
+            for inspection in incoming_anomalies:
+                anomalies.append({
+                    "inspection_type": "incoming",
+                    "inspection_id": inspection.id,
+                    "inspection_code": inspection.inspection_code,
+                    "material_id": inspection.material_id,
+                    "material_code": inspection.material_code,
+                    "material_name": inspection.material_name,
+                    "supplier_id": inspection.supplier_id,
+                    "supplier_name": inspection.supplier_name,
+                    "inspection_quantity": float(inspection.inspection_quantity),
+                    "qualified_quantity": float(inspection.qualified_quantity),
+                    "unqualified_quantity": float(inspection.unqualified_quantity),
+                    "quality_status": inspection.quality_status,
+                    "nonconformance_reason": inspection.nonconformance_reason,
+                    "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None
+                })
+
+        # 查询过程检验异常
+        if inspection_type is None or inspection_type == "process":
+            query = ProcessInspection.filter(
+                tenant_id=tenant_id,
+                quality_status="不合格",
+                status="已检验"
+            )
+            if start_date:
+                query = query.filter(inspection_time__gte=start_date)
+            if end_date:
+                query = query.filter(inspection_time__lte=end_date)
+            if material_id:
+                query = query.filter(material_id=material_id)
+
+            process_anomalies = await query.order_by("-inspection_time").limit(100).all()
+            for inspection in process_anomalies:
+                anomalies.append({
+                    "inspection_type": "process",
+                    "inspection_id": inspection.id,
+                    "inspection_code": inspection.inspection_code,
+                    "work_order_id": inspection.work_order_id,
+                    "work_order_code": inspection.work_order_code,
+                    "operation_id": inspection.operation_id,
+                    "operation_name": inspection.operation_name,
+                    "material_id": inspection.material_id,
+                    "material_code": inspection.material_code,
+                    "material_name": inspection.material_name,
+                    "inspection_quantity": float(inspection.inspection_quantity),
+                    "qualified_quantity": float(inspection.qualified_quantity),
+                    "unqualified_quantity": float(inspection.unqualified_quantity),
+                    "quality_status": inspection.quality_status,
+                    "nonconformance_reason": inspection.nonconformance_reason,
+                    "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None
+                })
+
+        # 查询成品检验异常
+        if inspection_type is None or inspection_type == "finished":
+            query = FinishedGoodsInspection.filter(
+                tenant_id=tenant_id,
+                quality_status="不合格",
+                status="已检验"
+            )
+            if start_date:
+                query = query.filter(inspection_time__gte=start_date)
+            if end_date:
+                query = query.filter(inspection_time__lte=end_date)
+            if material_id:
+                query = query.filter(material_id=material_id)
+
+            finished_anomalies = await query.order_by("-inspection_time").limit(100).all()
+            for inspection in finished_anomalies:
+                anomalies.append({
+                    "inspection_type": "finished",
+                    "inspection_id": inspection.id,
+                    "inspection_code": inspection.inspection_code,
+                    "work_order_id": inspection.work_order_id,
+                    "work_order_code": inspection.work_order_code,
+                    "material_id": inspection.material_id,
+                    "material_code": inspection.material_code,
+                    "material_name": inspection.material_name,
+                    "inspection_quantity": float(inspection.inspection_quantity),
+                    "qualified_quantity": float(inspection.qualified_quantity),
+                    "unqualified_quantity": float(inspection.unqualified_quantity),
+                    "quality_status": inspection.quality_status,
+                    "nonconformance_reason": inspection.nonconformance_reason,
+                    "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None
+                })
+
+        # 按检验时间降序排序
+        anomalies.sort(key=lambda x: x.get("inspection_time") or "", reverse=True)
+        return anomalies
+
+    async def get_quality_statistics(
+        self,
+        tenant_id: int,
+        inspection_type: Optional[str] = None,  # "incoming", "process", "finished"
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        material_id: Optional[int] = None,
+        supplier_id: Optional[int] = None
+    ) -> dict:
+        """
+        获取质量统计分析
+
+        Args:
+            tenant_id: 租户ID
+            inspection_type: 检验类型（可选：incoming/process/finished）
+            start_date: 开始日期（可选）
+            end_date: 结束日期（可选）
+            material_id: 物料ID（可选）
+            supplier_id: 供应商ID（可选，仅用于来料检验）
+
+        Returns:
+            dict: 质量统计数据
+        """
+        stats = {
+            "total_inspections": 0,
+            "total_quantity": Decimal(0),
+            "qualified_quantity": Decimal(0),
+            "unqualified_quantity": Decimal(0),
+            "by_type": {}
+        }
+
+        # 统计来料检验
+        if inspection_type is None or inspection_type == "incoming":
+            query = IncomingInspection.filter(
+                tenant_id=tenant_id,
+                status="已检验"
+            )
+            if start_date:
+                query = query.filter(inspection_time__gte=start_date)
+            if end_date:
+                query = query.filter(inspection_time__lte=end_date)
+            if material_id:
+                query = query.filter(material_id=material_id)
+            if supplier_id:
+                query = query.filter(supplier_id=supplier_id)
+
+            incoming_inspections = await query.all()
+            incoming_stats = {
+                "total_inspections": len(incoming_inspections),
+                "total_quantity": Decimal(0),
+                "qualified_quantity": Decimal(0),
+                "unqualified_quantity": Decimal(0)
+            }
+
+            for inspection in incoming_inspections:
+                incoming_stats["total_quantity"] += inspection.inspection_quantity
+                incoming_stats["qualified_quantity"] += inspection.qualified_quantity
+                incoming_stats["unqualified_quantity"] += inspection.unqualified_quantity
+
+            if incoming_stats["total_quantity"] > 0:
+                incoming_stats["qualified_rate"] = float(
+                    incoming_stats["qualified_quantity"] / incoming_stats["total_quantity"] * 100
+                )
+                incoming_stats["unqualified_rate"] = float(
+                    incoming_stats["unqualified_quantity"] / incoming_stats["total_quantity"] * 100
+                )
+            else:
+                incoming_stats["qualified_rate"] = 0.0
+                incoming_stats["unqualified_rate"] = 0.0
+
+            stats["by_type"]["incoming"] = incoming_stats
+            stats["total_inspections"] += incoming_stats["total_inspections"]
+            stats["total_quantity"] += incoming_stats["total_quantity"]
+            stats["qualified_quantity"] += incoming_stats["qualified_quantity"]
+            stats["unqualified_quantity"] += incoming_stats["unqualified_quantity"]
+
+        # 统计过程检验
+        if inspection_type is None or inspection_type == "process":
+            query = ProcessInspection.filter(
+                tenant_id=tenant_id,
+                status="已检验"
+            )
+            if start_date:
+                query = query.filter(inspection_time__gte=start_date)
+            if end_date:
+                query = query.filter(inspection_time__lte=end_date)
+            if material_id:
+                query = query.filter(material_id=material_id)
+
+            process_inspections = await query.all()
+            process_stats = {
+                "total_inspections": len(process_inspections),
+                "total_quantity": Decimal(0),
+                "qualified_quantity": Decimal(0),
+                "unqualified_quantity": Decimal(0)
+            }
+
+            for inspection in process_inspections:
+                process_stats["total_quantity"] += inspection.inspection_quantity
+                process_stats["qualified_quantity"] += inspection.qualified_quantity
+                process_stats["unqualified_quantity"] += inspection.unqualified_quantity
+
+            if process_stats["total_quantity"] > 0:
+                process_stats["qualified_rate"] = float(
+                    process_stats["qualified_quantity"] / process_stats["total_quantity"] * 100
+                )
+                process_stats["unqualified_rate"] = float(
+                    process_stats["unqualified_quantity"] / process_stats["total_quantity"] * 100
+                )
+            else:
+                process_stats["qualified_rate"] = 0.0
+                process_stats["unqualified_rate"] = 0.0
+
+            stats["by_type"]["process"] = process_stats
+            stats["total_inspections"] += process_stats["total_inspections"]
+            stats["total_quantity"] += process_stats["total_quantity"]
+            stats["qualified_quantity"] += process_stats["qualified_quantity"]
+            stats["unqualified_quantity"] += process_stats["unqualified_quantity"]
+
+        # 统计成品检验
+        if inspection_type is None or inspection_type == "finished":
+            query = FinishedGoodsInspection.filter(
+                tenant_id=tenant_id,
+                status="已检验"
+            )
+            if start_date:
+                query = query.filter(inspection_time__gte=start_date)
+            if end_date:
+                query = query.filter(inspection_time__lte=end_date)
+            if material_id:
+                query = query.filter(material_id=material_id)
+
+            finished_inspections = await query.all()
+            finished_stats = {
+                "total_inspections": len(finished_inspections),
+                "total_quantity": Decimal(0),
+                "qualified_quantity": Decimal(0),
+                "unqualified_quantity": Decimal(0)
+            }
+
+            for inspection in finished_inspections:
+                finished_stats["total_quantity"] += inspection.inspection_quantity
+                finished_stats["qualified_quantity"] += inspection.qualified_quantity
+                finished_stats["unqualified_quantity"] += inspection.unqualified_quantity
+
+            if finished_stats["total_quantity"] > 0:
+                finished_stats["qualified_rate"] = float(
+                    finished_stats["qualified_quantity"] / finished_stats["total_quantity"] * 100
+                )
+                finished_stats["unqualified_rate"] = float(
+                    finished_stats["unqualified_quantity"] / finished_stats["total_quantity"] * 100
+                )
+            else:
+                finished_stats["qualified_rate"] = 0.0
+                finished_stats["unqualified_rate"] = 0.0
+
+            stats["by_type"]["finished"] = finished_stats
+            stats["total_inspections"] += finished_stats["total_inspections"]
+            stats["total_quantity"] += finished_stats["total_quantity"]
+            stats["qualified_quantity"] += finished_stats["qualified_quantity"]
+            stats["unqualified_quantity"] += finished_stats["unqualified_quantity"]
+
+        # 计算总体合格率
+        if stats["total_quantity"] > 0:
+            stats["qualified_rate"] = float(
+                stats["qualified_quantity"] / stats["total_quantity"] * 100
+            )
+            stats["unqualified_rate"] = float(
+                stats["unqualified_quantity"] / stats["total_quantity"] * 100
+            )
+        else:
+            stats["qualified_rate"] = 0.0
+            stats["unqualified_rate"] = 0.0
+
+        # 转换为float以便JSON序列化
+        stats["total_quantity"] = float(stats["total_quantity"])
+        stats["qualified_quantity"] = float(stats["qualified_quantity"])
+        stats["unqualified_quantity"] = float(stats["unqualified_quantity"])
+
+        return stats
 

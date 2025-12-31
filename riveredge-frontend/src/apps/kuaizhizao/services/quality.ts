@@ -115,7 +115,7 @@ export interface FinishedGoodsInspectionListResponse {
 // 来料检验API
 export async function listIncomingInspections(params: IncomingInspectionListParams = {}): Promise<IncomingInspectionListResponse> {
   return apiRequest<IncomingInspectionListResponse>({
-    url: '/apps/kuaizhizao/quality-management/incoming-inspection',
+    url: '/apps/kuaizhizao/incoming-inspections',
     method: 'GET',
     params,
   });
@@ -123,7 +123,7 @@ export async function listIncomingInspections(params: IncomingInspectionListPara
 
 export async function createIncomingInspection(data: IncomingInspection): Promise<IncomingInspection> {
   return apiRequest<IncomingInspection>({
-    url: '/apps/kuaizhizao/quality-management/incoming-inspection',
+    url: '/apps/kuaizhizao/incoming-inspections',
     method: 'POST',
     data,
   });
@@ -131,7 +131,7 @@ export async function createIncomingInspection(data: IncomingInspection): Promis
 
 export async function updateIncomingInspection(id: number, data: Partial<IncomingInspection>): Promise<IncomingInspection> {
   return apiRequest<IncomingInspection>({
-    url: `/apps/kuaizhizao/quality-management/incoming-inspection/${id}`,
+    url: `/apps/kuaizhizao/incoming-inspections/${id}`,
     method: 'PUT',
     data,
   });
@@ -139,7 +139,7 @@ export async function updateIncomingInspection(id: number, data: Partial<Incomin
 
 export async function performIncomingInspection(id: number, result: 'pass' | 'fail', remarks?: string): Promise<IncomingInspection> {
   return apiRequest<IncomingInspection>({
-    url: `/apps/kuaizhizao/quality-management/incoming-inspection/${id}/inspect`,
+    url: `/apps/kuaizhizao/incoming-inspections/${id}/conduct`,
     method: 'POST',
     data: { result, remarks },
   });
@@ -148,7 +148,7 @@ export async function performIncomingInspection(id: number, result: 'pass' | 'fa
 // 过程检验API
 export async function listProcessInspections(params: ProcessInspectionListParams = {}): Promise<ProcessInspectionListResponse> {
   return apiRequest<ProcessInspectionListResponse>({
-    url: '/apps/kuaizhizao/quality-management/process-inspection',
+    url: '/apps/kuaizhizao/process-inspections',
     method: 'GET',
     params,
   });
@@ -156,7 +156,7 @@ export async function listProcessInspections(params: ProcessInspectionListParams
 
 export async function createProcessInspection(data: ProcessInspection): Promise<ProcessInspection> {
   return apiRequest<ProcessInspection>({
-    url: '/apps/kuaizhizao/quality-management/process-inspection',
+    url: '/apps/kuaizhizao/process-inspections',
     method: 'POST',
     data,
   });
@@ -164,7 +164,7 @@ export async function createProcessInspection(data: ProcessInspection): Promise<
 
 export async function updateProcessInspection(id: number, data: Partial<ProcessInspection>): Promise<ProcessInspection> {
   return apiRequest<ProcessInspection>({
-    url: `/apps/kuaizhizao/quality-management/process-inspection/${id}`,
+    url: `/apps/kuaizhizao/process-inspections/${id}`,
     method: 'PUT',
     data,
   });
@@ -172,7 +172,7 @@ export async function updateProcessInspection(id: number, data: Partial<ProcessI
 
 export async function performProcessInspection(id: number, result: 'pass' | 'fail', remarks?: string): Promise<ProcessInspection> {
   return apiRequest<ProcessInspection>({
-    url: `/apps/kuaizhizao/quality-management/process-inspection/${id}/inspect`,
+    url: `/apps/kuaizhizao/process-inspections/${id}/conduct`,
     method: 'POST',
     data: { result, remarks },
   });
@@ -181,7 +181,7 @@ export async function performProcessInspection(id: number, result: 'pass' | 'fai
 // 成品检验API
 export async function listFinishedGoodsInspections(params: FinishedGoodsInspectionListParams = {}): Promise<FinishedGoodsInspectionListResponse> {
   return apiRequest<FinishedGoodsInspectionListResponse>({
-    url: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+    url: '/apps/kuaizhizao/finished-goods-inspections',
     method: 'GET',
     params,
   });
@@ -189,7 +189,7 @@ export async function listFinishedGoodsInspections(params: FinishedGoodsInspecti
 
 export async function createFinishedGoodsInspection(data: FinishedGoodsInspection): Promise<FinishedGoodsInspection> {
   return apiRequest<FinishedGoodsInspection>({
-    url: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+    url: '/apps/kuaizhizao/finished-goods-inspections',
     method: 'POST',
     data,
   });
@@ -197,7 +197,7 @@ export async function createFinishedGoodsInspection(data: FinishedGoodsInspectio
 
 export async function updateFinishedGoodsInspection(id: number, data: Partial<FinishedGoodsInspection>): Promise<FinishedGoodsInspection> {
   return apiRequest<FinishedGoodsInspection>({
-    url: `/apps/kuaizhizao/quality-management/finished-goods-inspection/${id}`,
+    url: `/apps/kuaizhizao/finished-goods-inspections/${id}`,
     method: 'PUT',
     data,
   });
@@ -210,7 +210,7 @@ export async function performFinishedGoodsInspection(
   remarks?: string
 ): Promise<FinishedGoodsInspection> {
   return apiRequest<FinishedGoodsInspection>({
-    url: `/apps/kuaizhizao/quality-management/finished-goods-inspection/${id}/inspect`,
+    url: `/apps/kuaizhizao/finished-goods-inspections/${id}/conduct`,
     method: 'POST',
     data: { qualifiedQuantity, unqualifiedQuantity, remarks },
   });

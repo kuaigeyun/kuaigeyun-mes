@@ -1,9 +1,13 @@
 /**
  * 两栏布局组件
- * 
+ *
  * 用于统一管理左右两栏布局的页面，左侧一般为搜索、新增等按钮和树形结构，
  * 右侧为标题栏、内容区和状态栏。
- * 
+ * 遵循 Ant Design 设计规范，使用布局常量配置
+ *
+ * Author: Luigi Lu
+ * Date: 2025-12-26
+ *
  * @example
  * ```tsx
  * <TwoColumnLayout
@@ -39,9 +43,10 @@
  */
 
 import React, { ReactNode } from 'react';
-import { Input, Button, Space, Spin, Tree, theme } from 'antd';
+import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
+import { TWO_COLUMN_LAYOUT, PAGE_SPACING } from './constants';
 
 const { useToken } = theme;
 
@@ -194,8 +199,8 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     search,
     actions = [],
     tree,
-    width = 300,
-    minWidth = 200,
+    width = TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
+    minWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
   } = leftPanel;
 
   const {
@@ -226,7 +231,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       style={{
         display: 'flex',
         height: 'calc(100vh - 96px)',
-        padding: '16px',
+        padding: `${PAGE_SPACING.PADDING}px`,
         margin: 0,
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,
