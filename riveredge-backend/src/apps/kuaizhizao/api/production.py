@@ -451,7 +451,7 @@ async def get_reporting_statistics(
         except ValueError:
             pass
 
-    statistics = await ReportingService.get_reporting_statistics(
+    statistics = await reporting_service.get_reporting_statistics(
         tenant_id=tenant_id,
         date_start=date_start_dt,
         date_end=date_end_dt,
