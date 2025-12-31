@@ -333,7 +333,7 @@ const OnlineUsersPage: React.FC = () => {
           },
         ]}
       />
-    </div>
+    </>
   );
 };
 
