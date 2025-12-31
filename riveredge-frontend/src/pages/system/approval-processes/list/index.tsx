@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getApprovalProcessList,
   getApprovalProcessByUuid,
@@ -29,7 +30,6 @@ const { TextArea } = Input;
 const ApprovalProcessListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑审批流程）
@@ -37,6 +37,7 @@ const ApprovalProcessListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentApprovalProcessUuid, setCurrentApprovalProcessUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [nodesJson, setNodesJson] = useState<string>('{"nodes": [], "edges": []}');
   const [configJson, setConfigJson] = useState<string>('{}');
   
@@ -53,11 +54,10 @@ const ApprovalProcessListPage: React.FC = () => {
     setCurrentApprovalProcessUuid(null);
     setNodesJson('{"nodes": [], "edges": []}');
     setConfigJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -67,18 +67,18 @@ const ApprovalProcessListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentApprovalProcessUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取审批流程详情
       const detail = await getApprovalProcessByUuid(record.uuid);
       setNodesJson(JSON.stringify(detail.nodes, null, 2));
       setConfigJson(JSON.stringify(detail.config, null, 2));
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取审批流程详情失败');
     }
@@ -142,7 +142,7 @@ const ApprovalProcessListPage: React.FC = () => {
   /**
    * 处理表单提交
    */
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
       
@@ -154,14 +154,14 @@ const ApprovalProcessListPage: React.FC = () => {
         nodes = JSON.parse(nodesJson);
       } catch (e) {
         messageApi.error('节点配置 JSON 格式错误');
-        return;
+        throw new Error('节点配置 JSON 格式错误');
       }
       
       try {
         config = JSON.parse(configJson);
       } catch (e) {
         messageApi.error('流程配置 JSON 格式错误');
-        return;
+        throw new Error('流程配置 JSON 格式错误');
       }
       
       const data: CreateApprovalProcessData | UpdateApprovalProcessData = {
@@ -179,9 +179,11 @@ const ApprovalProcessListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -285,7 +287,8 @@ const ApprovalProcessListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<ApprovalProcess>
+      <ListPageTemplate>
+        <UniTable<ApprovalProcess>
         headerTitle="审批流程管理"
         actionRef={actionRef}
         columns={columns}
@@ -335,25 +338,22 @@ const ApprovalProcessListPage: React.FC = () => {
           showAdvancedSearch: true,
         }}
       />
+      </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑审批流程' : '新建审批流程'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={null}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-            },
-          }}
-        >
           <ProFormText
             name="name"
             label="流程名称"
@@ -405,23 +405,17 @@ const ApprovalProcessListPage: React.FC = () => {
             name="is_active"
             label="启用状态"
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="审批流程详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
-      >
-        {detailLoading ? (
-          <div>加载中...</div>
-        ) : detailData ? (
-          <ProDescriptions
-            column={1}
-            dataSource={detailData}
-            columns={[
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
               {
                 title: '流程名称',
                 dataIndex: 'name',
@@ -475,10 +469,8 @@ const ApprovalProcessListPage: React.FC = () => {
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },
-            ]}
-          />
-        ) : null}
-      </Drawer>
+        ]}
+      />
     </>
   );
 };

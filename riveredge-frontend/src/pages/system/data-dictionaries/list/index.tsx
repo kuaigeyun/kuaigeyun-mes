@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Table, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getDataDictionaryList,
   getDataDictionaryByUuid,
@@ -34,7 +35,6 @@ import {
 const DataDictionaryListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const itemFormRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -43,6 +43,7 @@ const DataDictionaryListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentDictionaryUuid, setCurrentDictionaryUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -67,12 +68,11 @@ const DataDictionaryListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentDictionaryUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       is_system: false,
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -82,16 +82,16 @@ const DataDictionaryListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentDictionaryUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取字典详情
       const detail = await getDataDictionaryByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取字典详情失败');
     }
@@ -129,10 +129,9 @@ const DataDictionaryListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新字典）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       if (isEdit && currentDictionaryUuid) {
         await updateDataDictionary(currentDictionaryUuid, values as UpdateDataDictionaryData);
@@ -143,9 +142,11 @@ const DataDictionaryListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -460,7 +461,8 @@ const DataDictionaryListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<DataDictionary>
+      <ListPageTemplate>
+        <UniTable<DataDictionary>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -521,21 +523,22 @@ const DataDictionaryListPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 创建/编辑字典 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑字典' : '新建字典'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={600}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
           <ProFormText
             name="name"
             label="字典名称"
@@ -558,22 +561,17 @@ const DataDictionaryListPage: React.FC = () => {
             name="is_active"
             label="是否启用"
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="字典详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<DataDictionary>
-            column={1}
-            dataSource={detailData}
-            columns={[
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
               {
                 title: '字典名称',
                 dataIndex: 'name',
@@ -606,10 +604,8 @@ const DataDictionaryListPage: React.FC = () => {
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },
-            ]}
-          />
-        )}
-      </Drawer>
+        ]}
+      />
 
       {/* 字典项管理 Drawer */}
       <Drawer
