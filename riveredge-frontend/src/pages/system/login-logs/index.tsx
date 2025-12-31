@@ -7,8 +7,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Tag, Space, message, Modal, Descriptions } from 'antd';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Statistic } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getLoginLogs,
   getLoginLogStats,
@@ -181,62 +182,49 @@ const LoginLogsPage: React.FC = () => {
     },
   ];
 
-  return (
-    <div style={{ padding: '16px' }}>
-      {/* 统计卡片 */}
-      {stats && (
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                {stats.total}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>总登录数</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
-                {stats.success_count}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>成功登录</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff4d4f' }}>
-                {stats.failed_count}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>失败登录</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#faad14', marginBottom: '8px' }}>
-                按状态统计
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                {Object.entries(stats.by_status).map(([status, count]) => {
-                  const statusMap: Record<string, { color: string; text: string }> = {
-                    success: { color: 'success', text: '成功' },
-                    failed: { color: 'error', text: '失败' },
-                  };
-                  const statusInfo = statusMap[status] || { color: 'default', text: status };
-                  return (
-                    <Tag key={status} color={statusInfo.color}>
-                      {statusInfo.text}: {count}
-                    </Tag>
-                  );
-                })}
-              </div>
-            </div>
-          </Card>
+  // 构建统计卡片数据
+  const statCards = stats ? [
+    {
+      title: '总登录数',
+      value: stats.total,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '成功登录',
+      value: stats.success_count,
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '失败登录',
+      value: stats.failed_count,
+      valueStyle: { color: '#ff4d4f' },
+    },
+    {
+      title: '按状态统计',
+      value: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+          {Object.entries(stats.by_status).map(([status, count]) => {
+            const statusMap: Record<string, { color: string; text: string }> = {
+              success: { color: 'success', text: '成功' },
+              failed: { color: 'error', text: '失败' },
+            };
+            const statusInfo = statusMap[status] || { color: 'default', text: status };
+            return (
+              <Tag key={status} color={statusInfo.color}>
+                {statusInfo.text}: {count}
+              </Tag>
+            );
+          })}
         </div>
-      )}
+      ),
+    },
+  ] : undefined;
 
-            {/* 登录日志列表 */}
-            <Card>
-              <ProTable<LoginLog>
+  return (
+    <>
+      <ListPageTemplate statCards={statCards}>
+        <Card>
+          <ProTable<LoginLog>
                 columns={columns}
                 manualRequest={!currentUser}
                 request={async (params, sorter, filter) => {
@@ -305,54 +293,72 @@ const LoginLogsPage: React.FC = () => {
           ]}
           headerTitle="登录日志"
         />
-      </Card>
+        </Card>
+      </ListPageTemplate>
 
-      {/* 日志详情 Modal */}
-      <Modal
+      {/* 日志详情 Drawer */}
+      <DetailDrawerTemplate
         title="登录日志详情"
         open={detailModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setDetailModalVisible(false);
           setCurrentLog(null);
         }}
-        footer={null}
-        size={800}
-      >
-        {currentLog && (
-          <Descriptions column={1} bordered>
-            <Descriptions.Item label="登录状态">
-              {getLoginStatusTag(currentLog.login_status)}
-            </Descriptions.Item>
-            <Descriptions.Item label="用户名">
-              {currentLog.username || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="用户ID">
-              {currentLog.user_id || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录IP">
-              {currentLog.login_ip || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录地点">
-              {currentLog.login_location || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录设备">
-              {currentLog.login_device || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录浏览器">
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={currentLog}
+        columns={[
+          {
+            title: '登录状态',
+            dataIndex: 'login_status',
+            render: (value: string) => getLoginStatusTag(value),
+          },
+          {
+            title: '用户名',
+            dataIndex: 'username',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '用户ID',
+            dataIndex: 'user_id',
+            render: (value: number) => value || '-',
+          },
+          {
+            title: '登录IP',
+            dataIndex: 'login_ip',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '登录地点',
+            dataIndex: 'login_location',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '登录设备',
+            dataIndex: 'login_device',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '登录浏览器',
+            dataIndex: 'login_browser',
+            render: (value: string) => (
               <div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto' }}>
-                {currentLog.login_browser || '-'}
+                {value || '-'}
               </div>
-            </Descriptions.Item>
-            <Descriptions.Item label="失败原因">
-              {currentLog.failure_reason || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="登录时间">
-              {dayjs(currentLog.created_at).format('YYYY-MM-DD HH:mm:ss')}
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
-    </div>
+            ),
+          },
+          {
+            title: '失败原因',
+            dataIndex: 'failure_reason',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '登录时间',
+            dataIndex: 'created_at',
+            render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
+          },
+        ]}
+      />
+    </>
   );
 };
 
