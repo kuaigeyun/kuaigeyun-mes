@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSwitch, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit, ProFormDateTimePicker, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getInvitationCodeList,
   getInvitationCodeByUuid,
@@ -27,7 +28,6 @@ import {
 const InvitationCodeListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑邀请码）
@@ -35,6 +35,7 @@ const InvitationCodeListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentCodeUuid, setCurrentCodeUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -47,12 +48,11 @@ const InvitationCodeListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentCodeUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       max_uses: 1,
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -62,17 +62,17 @@ const InvitationCodeListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentCodeUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取邀请码详情
       const detail = await getInvitationCodeByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         email: detail.email,
         role_id: detail.role_id,
         max_uses: detail.max_uses,
         expires_at: detail.expires_at,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取邀请码详情失败');
     }
@@ -121,10 +121,9 @@ const InvitationCodeListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新邀请码）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       if (isEdit && currentCodeUuid) {
         await updateInvitationCode(currentCodeUuid, values as UpdateInvitationCodeData);
@@ -135,9 +134,11 @@ const InvitationCodeListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -274,185 +275,180 @@ const InvitationCodeListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<InvitationCode>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-          };
-          
-          // 状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          try {
-            const response = await getInvitationCodeList(apiParams);
-            return {
-              data: response.items,
-              success: true,
-              total: response.total,
+      <ListPageTemplate>
+        <UniTable<InvitationCode>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数
+            const apiParams: any = {
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
             };
-          } catch (error: any) {
-            console.error('获取邀请码列表失败:', error);
-            messageApi.error(error?.message || '获取邀请码列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            生成邀请码
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-      />
+            
+            // 状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
+            
+            try {
+              const response = await getInvitationCodeList(apiParams);
+              return {
+                data: response.items,
+                success: true,
+                total: response.total,
+              };
+            } catch (error: any) {
+              console.error('获取邀请码列表失败:', error);
+              messageApi.error(error?.message || '获取邀请码列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          toolBarRender={() => [
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              生成邀请码
+            </Button>,
+          ]}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑邀请码 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑邀请码' : '生成邀请码'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={600}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="email"
-            label="邀请邮箱（可选）"
-            placeholder="请输入邀请邮箱"
-          />
-          <ProFormDigit
-            name="role_id"
-            label="默认角色ID（可选）"
-            placeholder="请输入默认角色ID"
-          />
-          <ProFormDigit
-            name="max_uses"
-            label="最大使用次数"
-            fieldProps={{ min: 1 }}
-            initialValue={1}
-            extra="邀请码最多可以使用多少次"
-          />
-          <ProFormDateTimePicker
-            name="expires_at"
-            label="过期时间（可选）"
-            placeholder="请选择过期时间"
-            extra="留空表示永不过期"
-          />
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-        </ProForm>
-      </Modal>
+        <ProFormText
+          name="email"
+          label="邀请邮箱（可选）"
+          placeholder="请输入邀请邮箱"
+        />
+        <ProFormDigit
+          name="role_id"
+          label="默认角色ID（可选）"
+          placeholder="请输入默认角色ID"
+        />
+        <ProFormDigit
+          name="max_uses"
+          label="最大使用次数"
+          fieldProps={{ min: 1 }}
+          initialValue={1}
+          extra="邀请码最多可以使用多少次"
+        />
+        <ProFormDateTimePicker
+          name="expires_at"
+          label="过期时间（可选）"
+          placeholder="请选择过期时间"
+          extra="留空表示永不过期"
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+        />
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="邀请码详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<InvitationCode>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '邀请码',
-                dataIndex: 'code',
-                render: (value) => (
-                  <Space>
-                    <span style={{ fontFamily: 'monospace', fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={() => handleCopy(value)}
-                    >
-                      复制
-                    </Button>
-                  </Space>
-                ),
-              },
-              {
-                title: '邀请邮箱',
-                dataIndex: 'email',
-                render: (value) => value || '-',
-              },
-              {
-                title: '默认角色ID',
-                dataIndex: 'role_id',
-                render: (value) => value || '-',
-              },
-              {
-                title: '使用次数',
-                dataIndex: 'used_count',
-                render: (_, record) => `${record.used_count} / ${record.max_uses}`,
-              },
-              {
-                title: '过期时间',
-                dataIndex: 'expires_at',
-                render: (value) => value || '永不过期',
-              },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value, record) => {
-                  const valid = isCodeValid(record);
-                  return (
-                    <Space>
-                      <Tag color={value ? 'success' : 'default'}>
-                        {value ? '启用' : '禁用'}
-                      </Tag>
-                      {!valid && value && (
-                        <Tag color="error">已失效</Tag>
-                      )}
-                    </Space>
-                  );
-                },
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '邀请码',
+            dataIndex: 'code',
+            render: (value: string) => (
+              <Space>
+                <span style={{ fontFamily: 'monospace', fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => handleCopy(value)}
+                >
+                  复制
+                </Button>
+              </Space>
+            ),
+          },
+          {
+            title: '邀请邮箱',
+            dataIndex: 'email',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '默认角色ID',
+            dataIndex: 'role_id',
+            render: (value: number) => value || '-',
+          },
+          {
+            title: '使用次数',
+            dataIndex: 'used_count',
+            render: (_: any, record: InvitationCode) => `${record.used_count} / ${record.max_uses}`,
+          },
+          {
+            title: '过期时间',
+            dataIndex: 'expires_at',
+            render: (value: string) => value || '永不过期',
+          },
+          {
+            title: '状态',
+            dataIndex: 'is_active',
+            render: (value: boolean, record: InvitationCode) => {
+              const valid = isCodeValid(record);
+              return (
+                <Space>
+                  <Tag color={value ? 'success' : 'default'}>
+                    {value ? '启用' : '禁用'}
+                  </Tag>
+                  {!valid && value && (
+                    <Tag color="error">已失效</Tag>
+                  )}
+                </Space>
+              );
+            },
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
     </>
   );
 };

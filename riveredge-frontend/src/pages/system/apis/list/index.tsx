@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProFormJsonSchema, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getAPIList,
   getAPIByUuid,
@@ -34,7 +35,6 @@ const { Text, Paragraph } = Typography;
 const APIListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑接口）
@@ -42,6 +42,7 @@ const APIListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentApiUuid, setCurrentApiUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // JSON 字段状态
   const [requestHeadersJson, setRequestHeadersJson] = useState<string>('{}');
@@ -73,13 +74,12 @@ const APIListPage: React.FC = () => {
     setRequestBodyJson('{}');
     setResponseFormatJson('{}');
     setResponseExampleJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       method: 'GET',
       is_active: true,
       is_system: false,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -89,7 +89,6 @@ const APIListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentApiUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取接口详情
       const detail = await getAPIByUuid(record.uuid);
@@ -192,10 +191,9 @@ const APIListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新接口）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析 JSON 字段
       let requestHeaders: Record<string, any> = {};
@@ -208,35 +206,35 @@ const APIListPage: React.FC = () => {
         requestHeaders = JSON.parse(requestHeadersJson);
       } catch (e) {
         messageApi.error('请求头 JSON 格式不正确');
-        return;
+        throw new Error('请求头 JSON 格式不正确');
       }
       
       try {
         requestParams = JSON.parse(requestParamsJson);
       } catch (e) {
         messageApi.error('请求参数 JSON 格式不正确');
-        return;
+        throw new Error('请求参数 JSON 格式不正确');
       }
       
       try {
         requestBody = JSON.parse(requestBodyJson);
       } catch (e) {
         messageApi.error('请求体 JSON 格式不正确');
-        return;
+        throw new Error('请求体 JSON 格式不正确');
       }
       
       try {
         responseFormat = JSON.parse(responseFormatJson);
       } catch (e) {
         messageApi.error('响应格式 JSON 格式不正确');
-        return;
+        throw new Error('响应格式 JSON 格式不正确');
       }
       
       try {
         responseExample = JSON.parse(responseExampleJson);
       } catch (e) {
         messageApi.error('响应示例 JSON 格式不正确');
-        return;
+        throw new Error('响应示例 JSON 格式不正确');
       }
       
       if (isEdit && currentApiUuid) {
@@ -273,9 +271,11 @@ const APIListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -415,8 +415,9 @@ const APIListPage: React.FC = () => {
   ];
 
   return (
-    <div>
-      <UniTable<API>
+    <>
+      <ListPageTemplate>
+        <UniTable<API>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -479,22 +480,22 @@ const APIListPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 创建/编辑接口 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑接口' : '新建接口'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={900}
-        style={{ top: 20 }}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
           <ProFormText
             name="name"
             label="接口名称"
@@ -604,22 +605,17 @@ const APIListPage: React.FC = () => {
               label="是否系统接口"
             />
           )}
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="接口详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<API>
-            column={1}
-            dataSource={detailData}
-            columns={[
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
               {
                 title: '接口名称',
                 dataIndex: 'name',
@@ -752,10 +748,8 @@ const APIListPage: React.FC = () => {
                 dataIndex: 'updated_at',
                 valueType: 'dateTime',
               },
-            ]}
-          />
-        )}
-      </Drawer>
+        ]}
+      />
 
       {/* 接口测试 Drawer */}
       <Drawer
@@ -842,7 +836,7 @@ const APIListPage: React.FC = () => {
           </>
         )}
       </Drawer>
-    </div>
+    </>
   );
 };
 
