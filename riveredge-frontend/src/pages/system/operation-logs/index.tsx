@@ -7,8 +7,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Tag, Space, message, Modal, Descriptions } from 'antd';
+import { App, Card, Tag, Space, message, Modal, Descriptions, Statistic } from 'antd';
 import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getOperationLogs,
   getOperationLogStats,
@@ -190,67 +191,58 @@ const OperationLogsPage: React.FC = () => {
     },
   ];
 
-  return (
-    <div style={{ padding: '16px' }}>
-      {/* 统计卡片 */}
-      {stats && (
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                {stats.total}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>总操作数</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#52c41a', marginBottom: '8px' }}>
-                按类型统计
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                {Object.entries(stats.by_type).map(([type, count]) => {
-                  const typeMap: Record<string, { color: string; text: string }> = {
-                    create: { color: 'success', text: '创建' },
-                    update: { color: 'processing', text: '更新' },
-                    delete: { color: 'error', text: '删除' },
-                    view: { color: 'default', text: '查看' },
-                    error: { color: 'error', text: '错误' },
-                    unknown: { color: 'default', text: '未知' },
-                  };
-                  const typeInfo = typeMap[type] || { color: 'default', text: type };
-                  return (
-                    <Tag key={type} color={typeInfo.color}>
-                      {typeInfo.text}: {count}
-                    </Tag>
-                  );
-                })}
-              </div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#faad14', marginBottom: '8px' }}>
-                按模块统计
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                {Object.entries(stats.by_module).slice(0, 5).map(([module, count]) => (
-                  <Tag key={module}>
-                    {module}: {count}
-                  </Tag>
-                ))}
-                {Object.keys(stats.by_module).length > 5 && (
-                  <Tag>...</Tag>
-                )}
-              </div>
-            </div>
-          </Card>
+  // 构建统计卡片数据
+  const statCards = stats ? [
+    {
+      title: '总操作数',
+      value: stats.total,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '按类型统计',
+      value: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+          {Object.entries(stats.by_type).map(([type, count]) => {
+            const typeMap: Record<string, { color: string; text: string }> = {
+              create: { color: 'success', text: '创建' },
+              update: { color: 'processing', text: '更新' },
+              delete: { color: 'error', text: '删除' },
+              view: { color: 'default', text: '查看' },
+              error: { color: 'error', text: '错误' },
+              unknown: { color: 'default', text: '未知' },
+            };
+            const typeInfo = typeMap[type] || { color: 'default', text: type };
+            return (
+              <Tag key={type} color={typeInfo.color}>
+                {typeInfo.text}: {count}
+              </Tag>
+            );
+          })}
         </div>
-      )}
+      ),
+    },
+    {
+      title: '按模块统计',
+      value: (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+          {Object.entries(stats.by_module).slice(0, 5).map(([module, count]) => (
+            <Tag key={module}>
+              {module}: {count}
+            </Tag>
+          ))}
+          {Object.keys(stats.by_module).length > 5 && (
+            <Tag>...</Tag>
+          )}
+        </div>
+      ),
+    },
+  ] : undefined;
 
-      {/* 操作日志列表 */}
-      <Card>
-        <ProTable<OperationLog>
+  return (
+    <>
+      <ListPageTemplate statCards={statCards}>
+        <Card>
+          <ProTable<OperationLog>
           columns={columns}
           manualRequest={!currentUser}
           request={async (params, sorter, filter) => {
@@ -319,65 +311,91 @@ const OperationLogsPage: React.FC = () => {
           ]}
           headerTitle="操作日志"
         />
-      </Card>
+        </Card>
+      </ListPageTemplate>
 
-      {/* 日志详情 Modal */}
-      <Modal
+      {/* 日志详情 Drawer */}
+      <DetailDrawerTemplate
         title="操作日志详情"
         open={detailModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setDetailModalVisible(false);
           setCurrentLog(null);
         }}
-        footer={null}
-        size={800}
-      >
-        {currentLog && (
-          <Descriptions column={1} bordered>
-            <Descriptions.Item label="操作类型">
-              {getOperationTypeTag(currentLog.operation_type)}
-            </Descriptions.Item>
-            <Descriptions.Item label="操作模块">
-              {currentLog.operation_module || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="操作对象类型">
-              {currentLog.operation_object_type || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="操作对象ID">
-              {currentLog.operation_object_id || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="操作对象UUID">
-              {currentLog.operation_object_uuid || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="操作内容">
-              {currentLog.operation_content || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="用户ID">
-              {currentLog.user_id}
-            </Descriptions.Item>
-            <Descriptions.Item label="IP地址">
-              {currentLog.ip_address || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="用户代理">
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={currentLog}
+        columns={[
+          {
+            title: '操作类型',
+            dataIndex: 'operation_type',
+            render: (value: string) => getOperationTypeTag(value),
+          },
+          {
+            title: '操作模块',
+            dataIndex: 'operation_module',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '操作对象类型',
+            dataIndex: 'operation_object_type',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '操作对象ID',
+            dataIndex: 'operation_object_id',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '操作对象UUID',
+            dataIndex: 'operation_object_uuid',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '操作内容',
+            dataIndex: 'operation_content',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '用户ID',
+            dataIndex: 'user_id',
+            render: (value: number) => value,
+          },
+          {
+            title: 'IP地址',
+            dataIndex: 'ip_address',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '用户代理',
+            dataIndex: 'user_agent',
+            render: (value: string) => (
               <div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto' }}>
-                {currentLog.user_agent || '-'}
+                {value || '-'}
               </div>
-            </Descriptions.Item>
-            <Descriptions.Item label="请求方法">
-              {currentLog.request_method || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="请求路径">
+            ),
+          },
+          {
+            title: '请求方法',
+            dataIndex: 'request_method',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '请求路径',
+            dataIndex: 'request_path',
+            render: (value: string) => (
               <div style={{ wordBreak: 'break-word' }}>
-                {currentLog.request_path || '-'}
+                {value || '-'}
               </div>
-            </Descriptions.Item>
-            <Descriptions.Item label="操作时间">
-              {dayjs(currentLog.created_at).format('YYYY-MM-DD HH:mm:ss')}
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
-    </div>
+            ),
+          },
+          {
+            title: '操作时间',
+            dataIndex: 'created_at',
+            render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
+          },
+        ]}
+      />
+    </>
   );
 };
 
