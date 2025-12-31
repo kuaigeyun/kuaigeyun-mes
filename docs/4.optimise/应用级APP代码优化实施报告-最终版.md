@@ -38,6 +38,7 @@
 12. ✅ `PayableService` - 应付单服务
 13. ✅ `PurchaseInvoiceService` - 采购发票服务
 14. ✅ `ReceivableService` - 应收单服务
+15. ✅ `ReportingService` - 报工服务（已统一，保留特殊业务逻辑）
 
 ### 3. BOM管理精简
 
@@ -79,22 +80,33 @@
 - ✅ **减少代码重复：** 避免两个APP中重复实现BOM管理
 - ✅ **代码可维护性：** 统一的实现模式，易于维护和扩展
 
-## 🔄 待处理事项
+## ✅ 低优先级事项完成情况
 
-### 低优先级
+### 1. ReportingService统一 - 已完成
 
-1. **ReportingService统一**
-   - 检查是否需要统一为继承 `AppBaseService`
-   - 如果统一，需要重构报工记录相关的业务逻辑
+**完成内容：**
+- ✅ `ReportingService` 继承 `AppBaseService`
+- ✅ 统一用户信息获取：使用 `self.get_user_name()` 替换 `UserService.get_user_by_id()`
+- ✅ 将静态方法改为实例方法
+- ✅ 更新API端点使用服务实例
 
-2. **ProductionPlanningService**
-   - 计划服务，暂不统一（非业务单据服务）
-   - 保持当前实现方式
+**说明：** 报工记录虽然是业务单据，但不需要代码生成，因此保留了特殊的业务逻辑方法（如 `get_reporting_statistics`、`_update_work_order_progress`）。
 
-3. **统一事务管理**
-   - 明确事务边界
-   - 统一事务使用规范
-   - 文档化事务使用最佳实践
+### 2. ProductionPlanningService
+
+**决定：** 暂不统一
+- 计划服务，非业务单据服务
+- 保持当前实现方式（继承 `BaseService`）
+
+### 3. 统一事务管理 - 已完成
+
+**完成内容：**
+- ✅ 创建事务管理最佳实践文档
+- ✅ 明确事务边界原则
+- ✅ 统一事务使用规范
+- ✅ 文档化事务使用最佳实践
+
+**文档：** [事务管理最佳实践](./事务管理最佳实践.md)
 
 ## 📝 后续建议
 

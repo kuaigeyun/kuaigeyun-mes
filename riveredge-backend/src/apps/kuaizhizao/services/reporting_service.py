@@ -2,6 +2,9 @@
 报工业务服务模块
 
 提供报工记录相关的业务逻辑处理，包括报工、审核等。
+
+Author: Luigi Lu
+Date: 2025-01-01
 """
 
 import uuid
@@ -12,9 +15,6 @@ from decimal import Decimal
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
-from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.services.user_service import UserService
-
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.schemas.reporting_record import (
@@ -24,16 +24,22 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordListResponse
 )
 
+from apps.base_service import AppBaseService
+from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-class ReportingService:
+
+class ReportingService(AppBaseService[ReportingRecord]):
     """
     报工服务类
 
     处理报工记录相关的所有业务逻辑。
     """
 
-    @staticmethod
+    def __init__(self):
+        super().__init__(ReportingRecord)
+
     async def create_reporting_record(
+        self,
         tenant_id: int,
         reporting_data: ReportingRecordCreate,
         reported_by: int
@@ -104,8 +110,8 @@ class ReportingService:
 
             return ReportingRecordResponse.model_validate(reporting_record)
 
-    @staticmethod
     async def get_reporting_record_by_id(
+        self,
         tenant_id: int,
         record_id: int
     ) -> ReportingRecordResponse:
@@ -133,8 +139,8 @@ class ReportingService:
 
         return ReportingRecordResponse.model_validate(record)
 
-    @staticmethod
     async def list_reporting_records(
+        self,
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
@@ -189,8 +195,8 @@ class ReportingService:
 
         return [ReportingRecordListResponse.model_validate(record) for record in records]
 
-    @staticmethod
     async def approve_reporting_record(
+        self,
         tenant_id: int,
         record_id: int,
         approved_by: int,
@@ -226,8 +232,7 @@ class ReportingService:
                 raise ValidationError("只能审核待审核状态的报工记录")
 
             # 获取审核人信息
-            approver = await UserService.get_user_by_id(approved_by)
-            approved_by_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approved_by_name = await self.get_user_name(approved_by)
 
             # 更新审核信息
             record.approved_at = datetime.now()
@@ -245,12 +250,12 @@ class ReportingService:
 
             # 如果审核通过，更新工单完成数量
             if record.status == 'approved':
-                await ReportingService._update_work_order_progress(tenant_id, record.work_order_id)
+                await self._update_work_order_progress(tenant_id, record.work_order_id)
 
             return ReportingRecordResponse.model_validate(record)
 
-    @staticmethod
     async def delete_reporting_record(
+        self,
         tenant_id: int,
         record_id: int
     ) -> None:
@@ -282,8 +287,8 @@ class ReportingService:
         record.deleted_at = datetime.now()
         await record.save()
 
-    @staticmethod
     async def get_reporting_statistics(
+        self,
         tenant_id: int,
         date_start: Optional[datetime] = None,
         date_end: Optional[datetime] = None,
@@ -331,8 +336,8 @@ class ReportingService:
             'qualification_rate': (total_qualified_quantity / total_reported_quantity * 100) if total_reported_quantity > 0 else 0,
         }
 
-    @staticmethod
     async def _update_work_order_progress(
+        self,
         tenant_id: int,
         work_order_id: int
     ) -> None:
