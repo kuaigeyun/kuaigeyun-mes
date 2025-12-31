@@ -658,17 +658,19 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
                 
                 # 创建应付单
+                total_amount = Decimal(str(receipt.total_amount))
                 payable_data = PayableCreate(
                     source_type="采购入库",
                     source_id=receipt_id,
                     source_code=receipt.receipt_code,
                     supplier_id=receipt.supplier_id,
                     supplier_name=receipt.supplier_name,
-                    payable_amount=receipt.total_amount,
-                    paid_amount=Decimal(0),
+                    total_amount=float(total_amount),
+                    paid_amount=0.0,
+                    remaining_amount=float(total_amount),
                     due_date=(datetime.now() + timedelta(days=30)).date(),  # 默认30天账期
-                    currency="CNY",
-                    status="待付款",
+                    business_date=datetime.now().date(),
+                    status="未付款",
                     notes=f"由采购入库单 {receipt.receipt_code} 自动生成"
                 )
                 
