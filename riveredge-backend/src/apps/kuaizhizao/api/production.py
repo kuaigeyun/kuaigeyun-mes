@@ -1786,7 +1786,10 @@ async def list_sales_orders(
         except ValueError:
             pass
 
-    return await SalesOrderService.list_sales_orders(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.list_sales_orders(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1809,7 +1812,10 @@ async def get_sales_order(
 
     - **order_id**: 销售订单ID
     """
-    return await SalesOrderService.get_sales_order_by_id(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.get_sales_order_by_id(
         tenant_id=tenant_id,
         order_id=order_id
     )
@@ -1828,12 +1834,45 @@ async def approve_sales_order(
     - **order_id**: 销售订单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await SalesOrderService.approve_order(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.approve_order(
         tenant_id=tenant_id,
         order_id=order_id,
         approved_by=current_user.id,
         rejection_reason=rejection_reason
     )
+
+
+@router.post("/sales-orders/{order_id}/push-to-lrp", summary="下推到LRP运算")
+async def push_sales_order_to_lrp(
+    order_id: int = Path(..., description="销售订单ID"),
+    planning_horizon: int = Query(3, ge=1, le=12, description="计划周期（月数）"),
+    consider_capacity: bool = Query(False, description="是否考虑产能"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售订单下推到LRP运算
+    
+    自动执行LRP计算，生成详细的生产和采购计划
+    
+    - **order_id**: 销售订单ID
+    - **planning_horizon**: 计划周期（月数，默认3个月）
+    - **consider_capacity**: 是否考虑产能（默认：False）
+    """
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    result = await service.push_to_lrp(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        planning_horizon=planning_horizon,
+        consider_capacity=consider_capacity,
+        user_id=current_user.id
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
 @router.post("/sales-orders/{order_id}/confirm", response_model=SalesOrderResponse, summary="确认销售订单")
@@ -1847,7 +1886,10 @@ async def confirm_sales_order(
 
     - **order_id**: 销售订单ID
     """
-    return await SalesOrderService.confirm_order(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.confirm_order(
         tenant_id=tenant_id,
         order_id=order_id,
         confirmed_by=current_user.id
@@ -1867,7 +1909,10 @@ async def add_sales_order_item(
     - **order_id**: 销售订单ID
     - **item**: 订单明细数据
     """
-    return await SalesOrderService.add_order_item(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.add_order_item(
         tenant_id=tenant_id,
         order_id=order_id,
         item_data=item
@@ -1885,7 +1930,10 @@ async def get_sales_order_items(
 
     - **order_id**: 销售订单ID
     """
-    return await SalesOrderService.get_order_items(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.get_order_items(
         tenant_id=tenant_id,
         order_id=order_id
     )
@@ -1906,7 +1954,10 @@ async def update_delivery_status(
     - **item_id**: 订单明细ID
     - **delivered_quantity**: 本次交货数量
     """
-    return await SalesOrderService.update_delivery_status(
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.update_delivery_status(
         tenant_id=tenant_id,
         order_id=order_id,
         item_id=item_id,
