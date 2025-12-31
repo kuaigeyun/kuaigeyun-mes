@@ -1586,7 +1586,8 @@ async def create_sales_forecast(
 
     返回创建的销售预测信息。
     """
-    return await SalesForecastService.create_sales_forecast(
+    service = SalesForecastService()
+    return await service.create_sales_forecast(
         tenant_id=tenant_id,
         forecast_data=forecast,
         created_by=current_user.id
@@ -1607,7 +1608,8 @@ async def list_sales_forecasts(
 
     支持多种筛选条件的高级搜索。
     """
-    return await SalesForecastService.list_sales_forecasts(
+    service = SalesForecastService()
+    return await service.list_sales_forecasts(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1627,10 +1629,41 @@ async def get_sales_forecast(
 
     - **forecast_id**: 销售预测ID
     """
-    return await SalesForecastService.get_sales_forecast_by_id(
+    service = SalesForecastService()
+    return await service.get_sales_forecast_by_id(
         tenant_id=tenant_id,
         forecast_id=forecast_id
     )
+
+
+@router.post("/sales-forecasts/{forecast_id}/push-to-mrp", summary="下推到MRP运算")
+async def push_sales_forecast_to_mrp(
+    forecast_id: int = Path(..., description="销售预测ID"),
+    planning_horizon: int = Query(12, ge=1, le=24, description="计划周期（月数）"),
+    time_bucket: str = Query("week", description="时间粒度（week/month）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售预测下推到MRP运算
+    
+    自动执行MRP计算，生成物料需求计划
+    
+    - **forecast_id**: 销售预测ID
+    - **planning_horizon**: 计划周期（月数，默认12个月）
+    - **time_bucket**: 时间粒度（week/month，默认week）
+    """
+    from apps.kuaizhizao.services.sales_service import SalesForecastService
+    
+    service = SalesForecastService()
+    result = await service.push_to_mrp(
+        tenant_id=tenant_id,
+        forecast_id=forecast_id,
+        planning_horizon=planning_horizon,
+        time_bucket=time_bucket,
+        user_id=current_user.id
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
 @router.post("/sales-forecasts/{forecast_id}/approve", response_model=SalesForecastResponse, summary="审核销售预测")
@@ -1646,7 +1679,8 @@ async def approve_sales_forecast(
     - **forecast_id**: 销售预测ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await SalesForecastService.approve_forecast(
+    service = SalesForecastService()
+    return await service.approve_forecast(
         tenant_id=tenant_id,
         forecast_id=forecast_id,
         approved_by=current_user.id,
@@ -1667,7 +1701,8 @@ async def add_sales_forecast_item(
     - **forecast_id**: 销售预测ID
     - **item**: 预测明细数据
     """
-    return await SalesForecastService.add_forecast_item(
+    service = SalesForecastService()
+    return await service.add_forecast_item(
         tenant_id=tenant_id,
         forecast_id=forecast_id,
         item_data=item
@@ -1685,7 +1720,8 @@ async def get_sales_forecast_items(
 
     - **forecast_id**: 销售预测ID
     """
-    return await SalesForecastService.get_forecast_items(
+    service = SalesForecastService()
+    return await service.get_forecast_items(
         tenant_id=tenant_id,
         forecast_id=forecast_id
     )

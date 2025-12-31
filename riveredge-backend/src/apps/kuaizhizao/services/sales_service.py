@@ -130,6 +130,63 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by('forecast_date')
         return [SalesForecastItemResponse.model_validate(item) for item in items]
 
+    async def push_to_mrp(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        planning_horizon: int = 12,
+        time_bucket: str = "week",
+        user_id: int = None
+    ) -> Dict[str, Any]:
+        """
+        下推到MRP运算
+        
+        从销售预测下推到MRP运算，自动执行MRP计算
+        
+        Args:
+            tenant_id: 租户ID
+            forecast_id: 销售预测ID
+            planning_horizon: 计划周期（月数，默认12个月）
+            time_bucket: 时间粒度（week/month，默认week）
+            user_id: 用户ID（可选）
+            
+        Returns:
+            Dict: MRP运算结果
+            
+        Raises:
+            NotFoundError: 销售预测不存在
+            BusinessLogicError: 销售预测未审核
+        """
+        from apps.kuaizhizao.services.planning_service import ProductionPlanningService
+        from apps.kuaizhizao.schemas.planning import MRPComputationRequest
+        
+        # 验证销售预测存在且已审核
+        forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+        if forecast.review_status != "通过" or forecast.status != "已审核":
+            raise BusinessLogicError("只有已审核通过的销售预测才能下推到MRP运算")
+        
+        # 创建MRP运算请求
+        mrp_request = MRPComputationRequest(
+            forecast_id=forecast_id,
+            planning_horizon=planning_horizon,
+            time_bucket=time_bucket
+        )
+        
+        # 执行MRP运算
+        planning_service = ProductionPlanningService()
+        mrp_result = await planning_service.run_mrp_computation(
+            tenant_id=tenant_id,
+            request=mrp_request,
+            user_id=user_id or forecast.created_by
+        )
+        
+        return {
+            "forecast_id": forecast_id,
+            "forecast_code": forecast.forecast_code,
+            "mrp_result": mrp_result.model_dump() if hasattr(mrp_result, 'model_dump') else mrp_result,
+            "message": "MRP运算执行成功"
+        }
+
 
 
 class SalesOrderService(AppBaseService[SalesOrder]):
@@ -262,6 +319,63 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         """获取销售订单明细"""
         items = await SalesOrderItem.filter(tenant_id=tenant_id, sales_order_id=order_id).order_by('delivery_date')
         return [SalesOrderItemResponse.model_validate(item) for item in items]
+
+    async def push_to_lrp(
+        self,
+        tenant_id: int,
+        order_id: int,
+        planning_horizon: int = 3,
+        consider_capacity: bool = False,
+        user_id: int = None
+    ) -> Dict[str, Any]:
+        """
+        下推到LRP运算
+        
+        从销售订单下推到LRP运算，自动执行LRP计算
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 销售订单ID
+            planning_horizon: 计划周期（月数，默认3个月）
+            consider_capacity: 是否考虑产能（默认：False）
+            user_id: 用户ID（可选）
+            
+        Returns:
+            Dict: LRP运算结果
+            
+        Raises:
+            NotFoundError: 销售订单不存在
+            BusinessLogicError: 销售订单未审核
+        """
+        from apps.kuaizhizao.services.planning_service import ProductionPlanningService
+        from apps.kuaizhizao.schemas.planning import LRPComputationRequest
+        
+        # 验证销售订单存在且已审核
+        order = await self.get_sales_order_by_id(tenant_id, order_id)
+        if order.review_status != "通过" or order.status not in ["已审核", "已确认"]:
+            raise BusinessLogicError("只有已审核通过或已确认的销售订单才能下推到LRP运算")
+        
+        # 创建LRP运算请求
+        lrp_request = LRPComputationRequest(
+            sales_order_id=order_id,
+            planning_horizon=planning_horizon,
+            consider_capacity=consider_capacity
+        )
+        
+        # 执行LRP运算
+        planning_service = ProductionPlanningService()
+        lrp_result = await planning_service.run_lrp_computation(
+            tenant_id=tenant_id,
+            request=lrp_request,
+            user_id=user_id or order.created_by
+        )
+        
+        return {
+            "order_id": order_id,
+            "order_code": order.order_code,
+            "lrp_result": lrp_result.model_dump() if hasattr(lrp_result, 'model_dump') else lrp_result,
+            "message": "LRP运算执行成功"
+        }
 
     async def update_delivery_status(self, tenant_id: int, order_id: int, item_id: int, delivered_quantity: float, updated_by: int) -> SalesOrderItemResponse:
         """更新交货状态"""
