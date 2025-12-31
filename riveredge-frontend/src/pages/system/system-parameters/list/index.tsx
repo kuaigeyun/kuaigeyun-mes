@@ -379,7 +379,12 @@ const SystemParameterListPage: React.FC = () => {
   return (
     <>
       {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
+      <div style={{ 
+        padding: '16px 16px 0 16px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center' 
+      }}>
         <Tabs
           activeKey={viewMode}
           onChange={(key) => setViewMode(key as 'list' | 'form')}
@@ -400,7 +405,7 @@ const SystemParameterListPage: React.FC = () => {
       </div>
 
       {/* 分组表单视图 */}
-      {viewMode === 'form' && <GroupedFormView />}
+      {viewMode === 'form' && <div style={{ padding: '0 16px 16px 16px' }}><GroupedFormView /></div>}
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
