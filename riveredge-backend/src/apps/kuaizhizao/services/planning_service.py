@@ -25,7 +25,7 @@ from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
 from apps.master_data.models.material import Material
-from apps.kuaizhizao.models.supplier import Supplier
+from apps.master_data.models.supplier import Supplier
 
 from apps.kuaizhizao.schemas.planning import (
     # 生产计划
@@ -455,6 +455,316 @@ class ProductionPlanningService(BaseService):
             return "生产"
         else:
             return "采购"
+
+    async def get_mrp_result_by_id(self, tenant_id: int, result_id: int) -> MRPResultResponse:
+        """根据ID获取MRP运算结果"""
+        result = await MRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
+        if not result:
+            raise NotFoundError(f"MRP运算结果不存在: {result_id}")
+        return MRPResultResponse.model_validate(result)
+    
+    async def list_mrp_results(
+        self,
+        tenant_id: int,
+        forecast_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[MRPResultListResponse]:
+        """获取MRP运算结果列表"""
+        query = MRPResult.filter(tenant_id=tenant_id)
+        
+        if forecast_id:
+            query = query.filter(forecast_id=forecast_id)
+        
+        results = await query.offset(skip).limit(limit).order_by('-computation_time')
+        return [MRPResultListResponse.model_validate(result) for result in results]
+    
+    async def get_lrp_result_by_id(self, tenant_id: int, result_id: int) -> LRPResultResponse:
+        """根据ID获取LRP运算结果"""
+        result = await LRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
+        if not result:
+            raise NotFoundError(f"LRP运算结果不存在: {result_id}")
+        return LRPResultResponse.model_validate(result)
+    
+    async def list_lrp_results(
+        self,
+        tenant_id: int,
+        sales_order_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[LRPResultListResponse]:
+        """获取LRP运算结果列表"""
+        query = LRPResult.filter(tenant_id=tenant_id)
+        
+        if sales_order_id:
+            query = query.filter(sales_order_id=sales_order_id)
+        
+        results = await query.offset(skip).limit(limit).order_by('-computation_time')
+        return [LRPResultListResponse.model_validate(result) for result in results]
+    
+    async def generate_orders_from_mrp_result(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        created_by: int,
+        generate_work_orders: bool = True,
+        generate_purchase_orders: bool = True,
+        selected_material_ids: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """
+        从MRP运算结果一键生成工单和采购单
+        
+        Args:
+            tenant_id: 租户ID
+            forecast_id: 销售预测ID
+            created_by: 创建人ID
+            generate_work_orders: 是否生成工单
+            generate_purchase_orders: 是否生成采购单
+            selected_material_ids: 选中的物料ID列表（如果为None则生成所有）
+            
+        Returns:
+            Dict: 包含生成的工单和采购单信息
+        """
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from apps.master_data.models.material import Material
+        from decimal import Decimal
+        
+        async with in_transaction():
+            # 获取MRP运算结果
+            query = MRPResult.filter(tenant_id=tenant_id, forecast_id=forecast_id)
+            if selected_material_ids:
+                query = query.filter(material_id__in=selected_material_ids)
+            
+            mrp_results = await query.all()
+            
+            if not mrp_results:
+                raise NotFoundError(f"未找到销售预测 {forecast_id} 的MRP运算结果")
+            
+            generated_work_orders = []
+            generated_purchase_orders = []
+            
+            for mrp_result in mrp_results:
+                # 获取物料信息
+                material = await Material.get_or_none(tenant_id=tenant_id, id=mrp_result.material_id)
+                if not material:
+                    logger.warning(f"物料 {mrp_result.material_id} 不存在，跳过")
+                    continue
+                
+                # 判断物料类型
+                is_self_made = material.material_type == "自制" or material.material_type == "成品"
+                
+                # 生成工单
+                if generate_work_orders and is_self_made and mrp_result.suggested_work_orders > 0:
+                    try:
+                        work_order_data = WorkOrderCreate(
+                            name=f"{material.material_name}-MRP工单",
+                            product_id=material.id,
+                            product_code=material.material_code,
+                            product_name=material.material_name,
+                            quantity=Decimal(str(mrp_result.total_net_requirement)),
+                            production_mode="MTS",
+                            status="草稿",
+                            priority="normal"
+                        )
+                        
+                        work_order = await WorkOrderService().create_work_order(
+                            tenant_id=tenant_id,
+                            work_order_data=work_order_data,
+                            created_by=created_by
+                        )
+                        generated_work_orders.append(work_order)
+                    except Exception as e:
+                        logger.error(f"生成工单失败，物料ID: {mrp_result.material_id}, 错误: {str(e)}")
+                        continue
+                
+                # 生成采购单
+                if generate_purchase_orders and not is_self_made and mrp_result.suggested_purchase_orders > 0:
+                    try:
+                        # 查找供应商（简化实现，使用第一个供应商）
+                        supplier = await Supplier.filter(tenant_id=tenant_id).first()
+                        if not supplier:
+                            logger.warning(f"未找到供应商，物料 {mrp_result.material_id} 无法生成采购单")
+                            continue
+                        
+                        from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
+                        
+                        purchase_order_data = PurchaseOrderCreate(
+                            supplier_id=supplier.id,
+                            supplier_name=supplier.name,
+                            order_date=datetime.now().date(),
+                            delivery_date=(datetime.now() + timedelta(days=30)).date(),
+                            order_type="标准采购",
+                            tax_rate=Decimal('0.13'),
+                            currency="CNY",
+                            exchange_rate=Decimal('1.0'),
+                            items=[
+                                PurchaseOrderItemCreate(
+                                    material_id=mrp_result.material_id,
+                                    material_code=material.material_code,
+                                    material_name=material.material_name,
+                                    ordered_quantity=Decimal(str(mrp_result.total_net_requirement)),
+                                    unit=material.base_unit or "件",
+                                    unit_price=Decimal('0.00'),  # TODO: 从价格表获取
+                                    required_date=(datetime.now() + timedelta(days=30)).date(),
+                                    inspection_required=True,
+                                )
+                            ]
+                        )
+                        
+                        purchase_order = await self.purchase_service.create_purchase_order(
+                            tenant_id=tenant_id,
+                            order_data=purchase_order_data,
+                            created_by=created_by
+                        )
+                        generated_purchase_orders.append(purchase_order)
+                    except Exception as e:
+                        logger.error(f"生成采购单失败，物料ID: {mrp_result.material_id}, 错误: {str(e)}")
+                        continue
+            
+            return {
+                "forecast_id": forecast_id,
+                "generated_work_orders": len(generated_work_orders),
+                "generated_purchase_orders": len(generated_purchase_orders),
+                "work_orders": generated_work_orders,
+                "purchase_orders": generated_purchase_orders
+            }
+    
+    async def generate_orders_from_lrp_result(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        generate_work_orders: bool = True,
+        generate_purchase_orders: bool = True,
+        selected_material_ids: Optional[List[int]] = None
+    ) -> Dict[str, Any]:
+        """
+        从LRP运算结果一键生成工单和采购单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+            created_by: 创建人ID
+            generate_work_orders: 是否生成工单
+            generate_purchase_orders: 是否生成采购单
+            selected_material_ids: 选中的物料ID列表（如果为None则生成所有）
+            
+        Returns:
+            Dict: 包含生成的工单和采购单信息
+        """
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.master_data.models.material import Material
+        from decimal import Decimal
+        
+        async with in_transaction():
+            # 获取销售订单
+            sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+            if not sales_order:
+                raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+            
+            # 获取LRP运算结果
+            query = LRPResult.filter(tenant_id=tenant_id, sales_order_id=sales_order_id)
+            if selected_material_ids:
+                query = query.filter(material_id__in=selected_material_ids)
+            
+            lrp_results = await query.all()
+            
+            if not lrp_results:
+                raise NotFoundError(f"未找到销售订单 {sales_order_id} 的LRP运算结果")
+            
+            generated_work_orders = []
+            generated_purchase_orders = []
+            
+            for lrp_result in lrp_results:
+                # 获取物料信息
+                material = await Material.get_or_none(tenant_id=tenant_id, id=lrp_result.material_id)
+                if not material:
+                    logger.warning(f"物料 {lrp_result.material_id} 不存在，跳过")
+                    continue
+                
+                # 生成工单
+                if generate_work_orders and lrp_result.planned_production > 0:
+                    try:
+                        work_order_data = WorkOrderCreate(
+                            name=f"{material.material_name}-LRP工单",
+                            product_id=material.id,
+                            product_code=material.material_code,
+                            product_name=material.material_name,
+                            quantity=Decimal(str(lrp_result.planned_production)),
+                            production_mode="MTO",
+                            sales_order_id=sales_order_id,
+                            sales_order_code=sales_order.order_code,
+                            sales_order_name=sales_order.order_name,
+                            status="草稿",
+                            priority="normal",
+                            planned_start_date=lrp_result.production_start_date,
+                            planned_end_date=lrp_result.production_completion_date
+                        )
+                        
+                        work_order = await WorkOrderService().create_work_order(
+                            tenant_id=tenant_id,
+                            work_order_data=work_order_data,
+                            created_by=created_by
+                        )
+                        generated_work_orders.append(work_order)
+                    except Exception as e:
+                        logger.error(f"生成工单失败，物料ID: {lrp_result.material_id}, 错误: {str(e)}")
+                        continue
+                
+                # 生成采购单
+                if generate_purchase_orders and lrp_result.planned_procurement > 0:
+                    try:
+                        # 查找供应商（简化实现，使用第一个供应商）
+                        supplier = await Supplier.filter(tenant_id=tenant_id).first()
+                        if not supplier:
+                            logger.warning(f"未找到供应商，物料 {lrp_result.material_id} 无法生成采购单")
+                            continue
+                        
+                        from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
+                        
+                        purchase_order_data = PurchaseOrderCreate(
+                            supplier_id=supplier.id,
+                            supplier_name=supplier.name,
+                            order_date=datetime.now().date(),
+                            delivery_date=lrp_result.procurement_completion_date or (datetime.now() + timedelta(days=30)).date(),
+                            order_type="标准采购",
+                            tax_rate=Decimal('0.13'),
+                            currency="CNY",
+                            exchange_rate=Decimal('1.0'),
+                            items=[
+                                PurchaseOrderItemCreate(
+                                    material_id=lrp_result.material_id,
+                                    material_code=material.material_code,
+                                    material_name=material.material_name,
+                                    ordered_quantity=Decimal(str(lrp_result.planned_procurement)),
+                                    unit=material.base_unit or "件",
+                                    unit_price=Decimal('0.00'),  # TODO: 从价格表获取
+                                    required_date=lrp_result.procurement_completion_date or (datetime.now() + timedelta(days=30)).date(),
+                                    inspection_required=True,
+                                )
+                            ]
+                        )
+                        
+                        purchase_order = await self.purchase_service.create_purchase_order(
+                            tenant_id=tenant_id,
+                            order_data=purchase_order_data,
+                            created_by=created_by
+                        )
+                        generated_purchase_orders.append(purchase_order)
+                    except Exception as e:
+                        logger.error(f"生成采购单失败，物料ID: {lrp_result.material_id}, 错误: {str(e)}")
+                        continue
+            
+            return {
+                "sales_order_id": sales_order_id,
+                "generated_work_orders": len(generated_work_orders),
+                "generated_purchase_orders": len(generated_purchase_orders),
+                "work_orders": generated_work_orders,
+                "purchase_orders": generated_purchase_orders
+            }
 
     @staticmethod
     async def _generate_plan_code(tenant_id: int, plan_type: str) -> str:

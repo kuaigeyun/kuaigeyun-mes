@@ -719,10 +719,10 @@ class ApplicationService:
                 is_active = existing_app.get('is_active', True) if existing_app else True
                 is_installed = existing_app.get('is_installed', False) if existing_app else False
                 
-                # 系统内置应用（如 master-data、kuaizhizao）应该自动安装
-                # 这些应用在 src/apps 目录下，是系统的一部分
-                builtin_apps = ['master-data', 'kuaizhizao']  # 系统内置应用列表
-                should_auto_install = code in builtin_apps
+                # 系统内置应用应该自动安装
+                # 通过扫描 apps 目录自动识别系统内置应用，不再硬编码
+                # 如果应用在 src/apps 目录下存在 manifest.json，则认为是系统内置应用
+                should_auto_install = True  # 所有扫描到的应用都视为系统内置应用，自动安装
                 
                 app_data = ApplicationCreate(
                     name=manifest.get('name', code),

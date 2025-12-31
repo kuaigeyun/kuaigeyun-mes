@@ -38,8 +38,7 @@ from .sales_order import SalesOrder
 from .sales_order_item import SalesOrderItem
 
 # BOM管理模块
-from .bill_of_materials import BillOfMaterials
-from .bill_of_materials_item import BillOfMaterialsItem
+# BOM管理已移至master_data APP，不再需要BillOfMaterials模型
 
 # 生产计划模块
 from .production_plan import ProductionPlan
@@ -83,8 +82,7 @@ __all__ = [
     'SalesOrderItem',
 
     # BOM管理模块
-    'BillOfMaterials',
-    'BillOfMaterialsItem',
+    # BillOfMaterials和BillOfMaterialsItem已移除，BOM管理在master_data APP中
 
     # 生产计划模块
     'ProductionPlan',

@@ -24,7 +24,9 @@ from .purchase import *
 from .sales import *
 
 # BOM管理模块
-from .bom import *
+# BOM管理相关schema已移至master_data APP
+# 只保留MaterialRequirement和MRPRequirement用于MRP计算
+from .bom import MaterialRequirement, MRPRequirement
 
 # 生产计划模块
 from .planning import *
@@ -160,15 +162,8 @@ __all__ = [
     'SalesOrderItemResponse',
 
     # BOM物料清单相关
-    'BillOfMaterialsBase',
-    'BillOfMaterialsCreate',
-    'BillOfMaterialsUpdate',
-    'BillOfMaterialsResponse',
-    'BillOfMaterialsListResponse',
-    'BillOfMaterialsItemBase',
-    'BillOfMaterialsItemCreate',
-    'BillOfMaterialsItemUpdate',
-    'BillOfMaterialsItemResponse',
+    # BOM管理相关schema已移至master_data APP
+    # 只保留MaterialRequirement和MRPRequirement用于MRP计算
 
     # BOM展开和计算相关
     'BOMExpansionItem',

@@ -34,9 +34,8 @@ from apps.kuaizhizao.services.sales_service import (
     SalesForecastService,
     SalesOrderService,
 )
-from apps.kuaizhizao.services.bom_service import BOMService
+# BOM管理已移至master_data APP，不再需要BOMService
 from apps.kuaizhizao.services.planning_service import ProductionPlanningService
-from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -126,18 +125,11 @@ from apps.kuaizhizao.schemas.sales import (
     SalesOrderItemUpdate,
     SalesOrderItemResponse,
 )
+# BOM管理相关schema已移至master_data APP
+# 只保留MaterialRequirement和MRPRequirement用于MRP计算
 from apps.kuaizhizao.schemas.bom import (
-    # BOM物料清单
-    BillOfMaterialsCreate,
-    BillOfMaterialsUpdate,
-    BillOfMaterialsResponse,
-    BillOfMaterialsListResponse,
-    BillOfMaterialsItemCreate,
-    BillOfMaterialsItemUpdate,
-    BillOfMaterialsItemResponse,
-    # BOM展开和计算
-    BOMExpansionResult,
     MaterialRequirement,
+    MRPRequirement,
 )
 from apps.kuaizhizao.schemas.planning import (
     # 生产计划
@@ -147,18 +139,13 @@ from apps.kuaizhizao.schemas.planning import (
     # MRP运算
     MRPComputationRequest,
     MRPComputationResult,
+    MRPResultResponse,
+    MRPResultListResponse,
     # LRP运算
     LRPComputationRequest,
     LRPComputationResult,
-)
-from apps.kuaizhizao.schemas.purchase import (
-    PurchaseOrderCreate,
-    PurchaseOrderUpdate,
-    PurchaseOrderResponse,
-    PurchaseOrderListResponse,
-    PurchaseOrderApprove,
-    PurchaseOrderConfirm,
-    PurchaseOrderListParams,
+    LRPResultResponse,
+    LRPResultListResponse,
 )
 
 # 创建路由
@@ -182,7 +169,7 @@ async def create_work_order(
 
     返回创建的工单信息。
     """
-    return await WorkOrderService.create_work_order(
+    return await WorkOrderService().create_work_order(
         tenant_id=tenant_id,
         work_order_data=work_order,
         created_by=current_user.id
@@ -208,7 +195,7 @@ async def list_work_orders(
 
     支持多种筛选条件的高级搜索。
     """
-    return await WorkOrderService.list_work_orders(
+    return await WorkOrderService().list_work_orders(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -233,7 +220,7 @@ async def get_work_order(
 
     - **work_order_id**: 工单ID
     """
-    return await WorkOrderService.get_work_order_by_id(
+    return await WorkOrderService().get_work_order_by_id(
         tenant_id=tenant_id,
         work_order_id=work_order_id
     )
@@ -252,7 +239,7 @@ async def update_work_order(
     - **work_order_id**: 工单ID
     - **work_order**: 工单更新数据
     """
-    return await WorkOrderService.update_work_order(
+    return await WorkOrderService().update_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         work_order_data=work_order,
@@ -271,7 +258,7 @@ async def delete_work_order(
 
     - **work_order_id**: 工单ID
     """
-    await WorkOrderService.delete_work_order(
+    await WorkOrderService().delete_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id
     )
@@ -293,7 +280,7 @@ async def release_work_order(
 
     - **work_order_id**: 工单ID
     """
-    return await WorkOrderService.release_work_order(
+    return await WorkOrderService().release_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         released_by=current_user.id
@@ -475,6 +462,68 @@ async def get_reporting_statistics(
 
 # ============ 生产领料管理 API ============
 
+@router.post("/production-pickings/quick-pick", response_model=ProductionPickingResponse, summary="一键领料（从工单下推）")
+async def quick_pick_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选，如果不提供则使用物料默认仓库）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    """
+    一键领料：从工单下推，根据BOM自动生成领料需求
+
+    - **work_order_id**: 工单ID
+    - **warehouse_id**: 仓库ID（可选）
+    - **warehouse_name**: 仓库名称（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    系统会自动：
+    1. 获取工单信息
+    2. 根据工单产品获取BOM
+    3. 根据BOM和工单数量计算物料需求
+    4. 创建生产领料单和明细
+
+    返回创建的生产领料单信息。
+    """
+    return await ProductionPickingService().quick_pick_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
+@router.post("/production-pickings/batch-pick", response_model=List[ProductionPickingResponse], summary="批量领料（多工单）")
+async def batch_pick_from_work_orders(
+    work_order_ids: List[int] = Query(..., description="工单ID列表"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ProductionPickingResponse]:
+    """
+    批量领料：从多个工单下推，批量创建领料单
+
+    - **work_order_ids**: 工单ID列表
+    - **warehouse_id**: 仓库ID（可选）
+    - **warehouse_name**: 仓库名称（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的生产领料单列表。
+    """
+    return await ProductionPickingService().batch_pick_from_work_orders(
+        tenant_id=tenant_id,
+        work_order_ids=work_order_ids,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
 @router.post("/production-pickings", response_model=ProductionPickingResponse, summary="创建生产领料单")
 async def create_production_picking(
     picking: ProductionPickingCreate,
@@ -490,7 +539,7 @@ async def create_production_picking(
 
     返回创建的生产领料单信息。
     """
-    return await ProductionPickingService.create_production_picking(
+    return await ProductionPickingService().create_production_picking(
         tenant_id=tenant_id,
         picking_data=picking,
         created_by=current_user.id
@@ -511,7 +560,7 @@ async def list_production_pickings(
 
     支持状态和工单筛选。
     """
-    return await ProductionPickingService.list_production_pickings(
+    return await ProductionPickingService().list_production_pickings(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -531,7 +580,7 @@ async def get_production_picking(
 
     - **picking_id**: 领料单ID
     """
-    return await ProductionPickingService.get_production_picking_by_id(
+    return await ProductionPickingService().get_production_picking_by_id(
         tenant_id=tenant_id,
         picking_id=picking_id
     )
@@ -548,7 +597,7 @@ async def confirm_production_picking(
 
     - **picking_id**: 领料单ID
     """
-    return await ProductionPickingService.confirm_picking(
+    return await ProductionPickingService().confirm_picking(
         tenant_id=tenant_id,
         picking_id=picking_id,
         confirmed_by=current_user.id
@@ -556,6 +605,70 @@ async def confirm_production_picking(
 
 
 # ============ 成品入库管理 API ============
+
+@router.post("/finished-goods-receipts/quick-receipt", response_model=FinishedGoodsReceiptResponse, summary="一键入库（从工单下推）")
+async def quick_receipt_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（必填）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    receipt_quantity: Optional[float] = Query(None, description="入库数量（可选，如果不提供则使用报工合格数量）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptResponse:
+    """
+    一键入库：从工单下推，根据报工记录自动生成入库单
+
+    - **work_order_id**: 工单ID
+    - **warehouse_id**: 仓库ID（必填）
+    - **warehouse_name**: 仓库名称（可选）
+    - **receipt_quantity**: 入库数量（可选，如果不提供则使用报工合格数量）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    系统会自动：
+    1. 获取工单信息
+    2. 从报工记录获取合格数量（如果未指定入库数量）
+    3. 创建成品入库单和明细
+
+    返回创建的成品入库单信息。
+    """
+    return await FinishedGoodsReceiptService().quick_receipt_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        receipt_quantity=receipt_quantity
+    )
+
+
+@router.post("/finished-goods-receipts/batch-receipt", response_model=List[FinishedGoodsReceiptResponse], summary="批量入库（多工单）")
+async def batch_receipt_from_work_orders(
+    work_order_ids: List[int] = Query(..., description="工单ID列表"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[FinishedGoodsReceiptResponse]:
+    """
+    批量入库：从多个工单下推，批量创建入库单
+
+    - **work_order_ids**: 工单ID列表
+    - **warehouse_id**: 仓库ID（可选）
+    - **warehouse_name**: 仓库名称（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的成品入库单列表。
+    """
+    return await FinishedGoodsReceiptService().batch_receipt_from_work_orders(
+        tenant_id=tenant_id,
+        work_order_ids=work_order_ids,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
 
 @router.post("/finished-goods-receipts", response_model=FinishedGoodsReceiptResponse, summary="创建成品入库单")
 async def create_finished_goods_receipt(
@@ -572,7 +685,7 @@ async def create_finished_goods_receipt(
 
     返回创建的成品入库单信息。
     """
-    return await FinishedGoodsReceiptService.create_finished_goods_receipt(
+    return await FinishedGoodsReceiptService().create_finished_goods_receipt(
         tenant_id=tenant_id,
         receipt_data=receipt,
         created_by=current_user.id
@@ -593,7 +706,7 @@ async def list_finished_goods_receipts(
 
     支持状态和工单筛选。
     """
-    return await FinishedGoodsReceiptService.list_finished_goods_receipts(
+    return await FinishedGoodsReceiptService().list_finished_goods_receipts(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -613,7 +726,7 @@ async def get_finished_goods_receipt(
 
     - **receipt_id**: 入库单ID
     """
-    return await FinishedGoodsReceiptService.get_finished_goods_receipt_by_id(
+    return await FinishedGoodsReceiptService().get_finished_goods_receipt_by_id(
         tenant_id=tenant_id,
         receipt_id=receipt_id
     )
@@ -630,7 +743,7 @@ async def confirm_finished_goods_receipt(
 
     - **receipt_id**: 入库单ID
     """
-    return await FinishedGoodsReceiptService.confirm_receipt(
+    return await FinishedGoodsReceiptService().confirm_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
         confirmed_by=current_user.id
@@ -1764,166 +1877,426 @@ async def update_delivery_status(
 
 
 # ============ BOM物料清单管理 API ============
+# 注意：BOM管理已移至master_data APP
+# 如需管理BOM，请使用master_data APP的API：/api/apps/master-data/materials/bom
+# 本APP只提供基于BOM的业务功能（如物料需求计算）
 
-@router.post("/boms", response_model=BillOfMaterialsResponse, summary="创建BOM物料清单")
-async def create_bom(
-    bom: BillOfMaterialsCreate,
+
+# ============ 单据关联管理 API ============
+
+from apps.kuaizhizao.services.document_relation_service import DocumentRelationService
+from apps.kuaizhizao.schemas.document_relation import (
+    DocumentRelationResponse,
+    DocumentTraceResponse,
+)
+
+@router.get("/documents/{document_type}/{document_id}/relations", response_model=DocumentRelationResponse, summary="获取单据关联关系")
+async def get_document_relations(
+    document_type: str = Path(..., description="单据类型（如：work_order, sales_forecast等）"),
+    document_id: int = Path(..., description="单据ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> BillOfMaterialsResponse:
+) -> DocumentRelationResponse:
     """
-    创建BOM物料清单
+    获取单据的关联关系（上游和下游单据）
 
-    - **bom**: BOM创建数据
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
+    - **document_type**: 单据类型（如：work_order, sales_forecast, sales_order, mrp_result, lrp_result等）
+    - **document_id**: 单据ID
 
-    返回创建的BOM信息。
+    返回：
+    - upstream_documents: 上游单据列表（来源单据）
+    - downstream_documents: 下游单据列表（生成单据）
     """
-    return await BOMService.create_bom(
+    result = await DocumentRelationService().get_document_relations(
         tenant_id=tenant_id,
-        bom_data=bom,
+        document_type=document_type,
+        document_id=document_id
+    )
+    return DocumentRelationResponse(**result)
+
+
+@router.get("/documents/{document_type}/{document_id}/trace", response_model=DocumentTraceResponse, summary="追溯单据关联链")
+async def trace_document_chain(
+    document_type: str = Path(..., description="单据类型"),
+    document_id: int = Path(..., description="单据ID"),
+    direction: str = Query("both", description="追溯方向（upstream: 向上追溯, downstream: 向下追溯, both: 双向追溯）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DocumentTraceResponse:
+    """
+    追溯单据关联链（完整追溯）
+
+    - **document_type**: 单据类型
+    - **document_id**: 单据ID
+    - **direction**: 追溯方向（upstream: 向上追溯, downstream: 向下追溯, both: 双向追溯）
+
+    返回完整的关联链，支持多层级追溯。
+    """
+    result = await DocumentRelationService().trace_document_chain(
+        tenant_id=tenant_id,
+        document_type=document_type,
+        document_id=document_id,
+        direction=direction
+    )
+    return DocumentTraceResponse(**result)
+
+
+# ============ 单据打印 API ============
+
+from apps.kuaizhizao.services.print_service import DocumentPrintService
+from fastapi.responses import HTMLResponse, Response
+
+@router.get("/documents/{document_type}/{document_id}/print", summary="打印单据")
+async def print_document(
+    document_type: str = Path(..., description="单据类型（如：work_order, production_picking等）"),
+    document_id: int = Path(..., description="单据ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码（可选，如果不提供则使用默认模板）"),
+    output_format: str = Query("html", description="输出格式（html/pdf）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    打印单据
+
+    - **document_type**: 单据类型（如：work_order, production_picking, finished_goods_receipt, sales_delivery, purchase_order, purchase_receipt, sales_forecast, sales_order）
+    - **document_id**: 单据ID
+    - **template_code**: 打印模板代码（可选，如果不提供则使用默认模板）
+    - **output_format**: 输出格式（html/pdf，默认：html）
+
+    返回渲染后的打印内容（HTML或PDF）
+    """
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type=document_type,
+        document_id=document_id,
+        template_code=template_code,
+        output_format=output_format
+    )
+    
+    if output_format == "pdf":
+        # TODO: 实现PDF生成
+        # 目前返回HTML，后续可以集成weasyprint或reportlab生成PDF
+        return HTMLResponse(content=result["content"], status_code=200)
+    else:
+        return HTMLResponse(content=result["content"], status_code=200)
+
+
+@router.get("/work-orders/{id}/print", summary="打印工单")
+async def print_work_order(
+    id: int = Path(..., description="工单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    output_format: str = Query("html", description="输出格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印工单"""
+    return await print_document(
+        document_type="work_order",
+        document_id=id,
+        template_code=template_code,
+        output_format=output_format,
+        current_user=current_user,
+        tenant_id=tenant_id
+    )
+
+
+@router.get("/production-pickings/{id}/print", summary="打印生产领料单")
+async def print_production_picking(
+    id: int = Path(..., description="生产领料单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    output_format: str = Query("html", description="输出格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印生产领料单"""
+    return await print_document(
+        document_type="production_picking",
+        document_id=id,
+        template_code=template_code,
+        output_format=output_format,
+        current_user=current_user,
+        tenant_id=tenant_id
+    )
+
+
+@router.get("/finished-goods-receipts/{id}/print", summary="打印成品入库单")
+async def print_finished_goods_receipt(
+    id: int = Path(..., description="成品入库单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    output_format: str = Query("html", description="输出格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印成品入库单"""
+    return await print_document(
+        document_type="finished_goods_receipt",
+        document_id=id,
+        template_code=template_code,
+        output_format=output_format,
+        current_user=current_user,
+        tenant_id=tenant_id
+    )
+
+
+# ============ 批量操作 API ============
+
+from apps.kuaizhizao.services.batch_service import BatchOperationService
+from apps.kuaizhizao.schemas.batch import (
+    BatchCreateRequest,
+    BatchUpdateRequest,
+    BatchDeleteRequest,
+    BatchResponse,
+)
+from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.sales_forecast import SalesForecast
+from apps.kuaizhizao.models.sales_order import SalesOrder
+# 批量操作相关的schema导入在函数内部进行，避免循环导入
+
+@router.post("/work-orders/batch-create", response_model=BatchResponse, summary="批量创建工单")
+async def batch_create_work_orders(
+    request: BatchCreateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchResponse:
+    """
+    批量创建工单
+
+    - **items**: 工单创建数据列表（最多100条）
+    """
+    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+    
+    # 验证数据格式
+    validated_items = []
+    for item in request.items:
+        try:
+            validated_item = WorkOrderCreate(**item).model_dump()
+            validated_items.append(validated_item)
+        except Exception as e:
+            logger.error(f"工单数据验证失败: {e}")
+            # 跳过无效数据，会在批量操作结果中标记为失败
+    
+    result = await BatchOperationService().batch_create(
+        tenant_id=tenant_id,
+        model_class=WorkOrder,
+        create_data_list=validated_items,
         created_by=current_user.id
     )
-
-
-@router.get("/boms", response_model=List[BillOfMaterialsListResponse], summary="获取BOM列表")
-async def list_boms(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    status: Optional[str] = Query(None, description="BOM状态"),
-    finished_product_id: Optional[int] = Query(None, description="成品物料ID"),
-    bom_type: Optional[str] = Query(None, description="BOM类型"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[BillOfMaterialsListResponse]:
-    """
-    获取BOM列表
-
-    支持多种筛选条件的高级搜索。
-    """
-    return await BOMService.list_boms(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        status=status,
-        finished_product_id=finished_product_id,
-        bom_type=bom_type,
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功创建 {result['success_count']} 个工单，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
-@router.get("/boms/{bom_id}", response_model=BillOfMaterialsResponse, summary="获取BOM详情")
-async def get_bom(
-    bom_id: int,
+@router.put("/work-orders/batch-update", response_model=BatchResponse, summary="批量更新工单")
+async def batch_update_work_orders(
+    request: BatchUpdateRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> BillOfMaterialsResponse:
+) -> BatchResponse:
     """
-    根据ID获取BOM详情
+    批量更新工单
 
-    - **bom_id**: BOM ID
+    - **items**: 工单更新数据列表（必须包含id字段，最多100条）
     """
-    return await BOMService.get_bom_by_id(
+    from apps.kuaizhizao.schemas.work_order import WorkOrderUpdate
+    
+    # 验证数据格式
+    validated_items = []
+    for item in request.items:
+        try:
+            # 提取ID
+            item_id = item.get("id")
+            if not item_id:
+                continue
+            
+            # 验证更新数据
+            validated_item = WorkOrderUpdate(**{k: v for k, v in item.items() if k != "id"}).model_dump(exclude_unset=True)
+            validated_item["id"] = item_id
+            validated_items.append(validated_item)
+        except Exception as e:
+            logger.error(f"工单更新数据验证失败: {e}")
+    
+    result = await BatchOperationService().batch_update(
         tenant_id=tenant_id,
-        bom_id=bom_id
+        model_class=WorkOrder,
+        update_data_list=validated_items,
+        updated_by=current_user.id
+    )
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功更新 {result['success_count']} 个工单，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
-@router.post("/boms/{bom_id}/approve", response_model=BillOfMaterialsResponse, summary="审核BOM")
-async def approve_bom(
-    bom_id: int,
-    rejection_reason: Optional[str] = Query(None, description="驳回原因"),
+@router.delete("/work-orders/batch-delete", response_model=BatchResponse, summary="批量删除工单")
+async def batch_delete_work_orders(
+    request: BatchDeleteRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> BillOfMaterialsResponse:
+) -> BatchResponse:
     """
-    审核BOM
+    批量删除工单
 
-    - **bom_id**: BOM ID
-    - **rejection_reason**: 驳回原因（可选，不填则通过）
+    - **ids**: 要删除的工单ID列表（最多100条）
+    
+    注意：只能删除草稿状态的工单
     """
-    return await BOMService.approve_bom(
+    def validate_work_order(work_order):
+        """验证工单是否可以删除"""
+        if work_order.status != "草稿":
+            raise BusinessLogicError(f"工单 {work_order.id} 状态为 {work_order.status}，无法删除。只有草稿状态的工单才能删除。")
+    
+    result = await BatchOperationService().batch_delete(
         tenant_id=tenant_id,
-        bom_id=bom_id,
-        approved_by=current_user.id,
-        rejection_reason=rejection_reason
+        model_class=WorkOrder,
+        record_ids=request.ids,
+        validate_func=validate_work_order
+    )
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功删除 {result['success_count']} 个工单，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
-@router.post("/boms/{bom_id}/items", response_model=BillOfMaterialsItemResponse, summary="添加BOM明细")
-async def add_bom_item(
-    bom_id: int,
-    item: BillOfMaterialsItemCreate,
+@router.post("/sales-forecasts/batch-create", response_model=BatchResponse, summary="批量创建销售预测")
+async def batch_create_sales_forecasts(
+    request: BatchCreateRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> BillOfMaterialsItemResponse:
+) -> BatchResponse:
     """
-    添加BOM明细
+    批量创建销售预测
 
-    - **bom_id**: BOM ID
-    - **item**: BOM明细数据
+    - **items**: 销售预测创建数据列表（最多100条）
     """
-    return await BOMService.add_bom_item(
+    from apps.kuaizhizao.schemas.sales import SalesForecastCreate
+    
+    # 验证数据格式
+    validated_items = []
+    for item in request.items:
+        try:
+            validated_item = SalesForecastCreate(**item).model_dump()
+            validated_items.append(validated_item)
+        except Exception as e:
+            logger.error(f"销售预测数据验证失败: {e}")
+    
+    result = await BatchOperationService().batch_create(
         tenant_id=tenant_id,
-        bom_id=bom_id,
-        item_data=item
+        model_class=SalesForecast,
+        create_data_list=validated_items,
+        created_by=current_user.id
+    )
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功创建 {result['success_count']} 个销售预测，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
-@router.get("/boms/{bom_id}/items", response_model=List[BillOfMaterialsItemResponse], summary="获取BOM明细")
-async def get_bom_items(
-    bom_id: int,
+@router.delete("/sales-forecasts/batch-delete", response_model=BatchResponse, summary="批量删除销售预测")
+async def batch_delete_sales_forecasts(
+    request: BatchDeleteRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[BillOfMaterialsItemResponse]:
+) -> BatchResponse:
     """
-    获取BOM明细列表
+    批量删除销售预测
 
-    - **bom_id**: BOM ID
+    - **ids**: 要删除的销售预测ID列表（最多100条）
+    
+    注意：只能删除草稿状态的销售预测
     """
-    return await BOMService.get_bom_items(
+    def validate_sales_forecast(forecast):
+        """验证销售预测是否可以删除"""
+        if forecast.status != "草稿":
+            raise BusinessLogicError(f"销售预测 {forecast.id} 状态为 {forecast.status}，无法删除。只有草稿状态的销售预测才能删除。")
+    
+    result = await BatchOperationService().batch_delete(
         tenant_id=tenant_id,
-        bom_id=bom_id
+        model_class=SalesForecast,
+        record_ids=request.ids,
+        validate_func=validate_sales_forecast
+    )
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功删除 {result['success_count']} 个销售预测，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
-@router.get("/boms/{bom_id}/expand", response_model=BOMExpansionResult, summary="展开BOM")
-async def expand_bom(
-    bom_id: int,
-    quantity: float = Query(1.0, gt=0, description="展开数量"),
+@router.post("/sales-orders/batch-create", response_model=BatchResponse, summary="批量创建销售订单")
+async def batch_create_sales_orders(
+    request: BatchCreateRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> BOMExpansionResult:
+) -> BatchResponse:
     """
-    展开BOM，计算所有层级的物料需求
+    批量创建销售订单
 
-    - **bom_id**: BOM ID
-    - **quantity**: 展开数量（默认为1.0）
+    - **items**: 销售订单创建数据列表（最多100条）
     """
-    return await BOMService.expand_bom(
+    from apps.kuaizhizao.schemas.sales import SalesOrderCreate
+    
+    # 验证数据格式
+    validated_items = []
+    for item in request.items:
+        try:
+            validated_item = SalesOrderCreate(**item).model_dump()
+            validated_items.append(validated_item)
+        except Exception as e:
+            logger.error(f"销售订单数据验证失败: {e}")
+    
+    result = await BatchOperationService().batch_create(
         tenant_id=tenant_id,
-        bom_id=bom_id,
-        quantity=quantity
+        model_class=SalesOrder,
+        create_data_list=validated_items,
+        created_by=current_user.id
+    )
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功创建 {result['success_count']} 个销售订单，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
-@router.get("/boms/{bom_id}/material-requirements", response_model=List[MaterialRequirement], summary="计算物料需求")
-async def calculate_material_requirements(
-    bom_id: int,
-    required_quantity: float = Query(1.0, gt=0, description="需求数量"),
+@router.delete("/sales-orders/batch-delete", response_model=BatchResponse, summary="批量删除销售订单")
+async def batch_delete_sales_orders(
+    request: BatchDeleteRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[MaterialRequirement]:
+) -> BatchResponse:
     """
-    计算BOM的物料需求
+    批量删除销售订单
 
-    - **bom_id**: BOM ID
-    - **required_quantity**: 需求数量
+    - **ids**: 要删除的销售订单ID列表（最多100条）
+    
+    注意：只能删除草稿状态的销售订单
     """
-    return await BOMService.calculate_material_requirements(
+    def validate_sales_order(order):
+        """验证销售订单是否可以删除"""
+        if order.status != "草稿":
+            raise BusinessLogicError(f"销售订单 {order.id} 状态为 {order.status}，无法删除。只有草稿状态的销售订单才能删除。")
+    
+    result = await BatchOperationService().batch_delete(
         tenant_id=tenant_id,
-        bom_id=bom_id,
-        required_quantity=required_quantity
+        model_class=SalesOrder,
+        record_ids=request.ids,
+        validate_func=validate_sales_order
+    )
+    
+    return BatchResponse(
+        success=result["failed_count"] == 0,
+        message=f"成功删除 {result['success_count']} 个销售订单，失败 {result['failed_count']} 个",
+        data=result
     )
 
 
@@ -1942,7 +2315,7 @@ async def run_mrp_computation(
 
     - **mrp_request**: MRP运算请求参数
     """
-    return await ProductionPlanningService.run_mrp_computation(
+    return await ProductionPlanningService().run_mrp_computation(
         tenant_id=tenant_id,
         request=mrp_request,
         user_id=current_user.id
@@ -1962,11 +2335,169 @@ async def run_lrp_computation(
 
     - **lrp_request**: LRP运算请求参数
     """
-    return await ProductionPlanningService.run_lrp_computation(
+    return await ProductionPlanningService().run_lrp_computation(
         tenant_id=tenant_id,
         request=lrp_request,
         user_id=current_user.id
     )
+
+
+# ============ MRP/LRP运算结果查看 API ============
+
+@router.get("/mrp/results", response_model=List[MRPResultListResponse], summary="获取MRP运算结果列表")
+async def list_mrp_results(
+    forecast_id: Optional[int] = Query(None, description="销售预测ID"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[MRPResultListResponse]:
+    """
+    获取MRP运算结果列表
+
+    - **forecast_id**: 销售预测ID（可选，用于筛选）
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    """
+    return await ProductionPlanningService().list_mrp_results(
+        tenant_id=tenant_id,
+        forecast_id=forecast_id,
+        skip=skip,
+        limit=limit
+    )
+
+
+@router.get("/mrp/results/{result_id}", response_model=MRPResultResponse, summary="获取MRP运算结果详情")
+async def get_mrp_result(
+    result_id: int = Path(..., description="MRP运算结果ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MRPResultResponse:
+    """
+    根据ID获取MRP运算结果详情
+
+    - **result_id**: MRP运算结果ID
+    """
+    return await ProductionPlanningService().get_mrp_result_by_id(
+        tenant_id=tenant_id,
+        result_id=result_id
+    )
+
+
+@router.get("/lrp/results", response_model=List[LRPResultListResponse], summary="获取LRP运算结果列表")
+async def list_lrp_results(
+    sales_order_id: Optional[int] = Query(None, description="销售订单ID"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[LRPResultListResponse]:
+    """
+    获取LRP运算结果列表
+
+    - **sales_order_id**: 销售订单ID（可选，用于筛选）
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    """
+    return await ProductionPlanningService().list_lrp_results(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+        skip=skip,
+        limit=limit
+    )
+
+
+@router.get("/lrp/results/{result_id}", response_model=LRPResultResponse, summary="获取LRP运算结果详情")
+async def get_lrp_result(
+    result_id: int = Path(..., description="LRP运算结果ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> LRPResultResponse:
+    """
+    根据ID获取LRP运算结果详情
+
+    - **result_id**: LRP运算结果ID
+    """
+    return await ProductionPlanningService().get_lrp_result_by_id(
+        tenant_id=tenant_id,
+        result_id=result_id
+    )
+
+
+# ============ 一键生成工单和采购单 API ============
+
+@router.post("/mrp/results/{forecast_id}/generate-orders", summary="从MRP运算结果一键生成工单和采购单")
+async def generate_orders_from_mrp(
+    forecast_id: int = Path(..., description="销售预测ID"),
+    generate_work_orders: bool = Query(True, description="是否生成工单"),
+    generate_purchase_orders: bool = Query(True, description="是否生成采购单"),
+    selected_material_ids: Optional[List[int]] = Query(None, description="选中的物料ID列表（可选，如果不提供则生成所有）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从MRP运算结果一键生成工单和采购单
+
+    - **forecast_id**: 销售预测ID
+    - **generate_work_orders**: 是否生成工单（默认：是）
+    - **generate_purchase_orders**: 是否生成采购单（默认：是）
+    - **selected_material_ids**: 选中的物料ID列表（可选，如果不提供则生成所有）
+
+    系统会自动：
+    1. 获取MRP运算结果
+    2. 根据物料类型和运算结果生成工单或采购单
+    3. 返回生成的工单和采购单信息
+    """
+    result = await ProductionPlanningService().generate_orders_from_mrp_result(
+        tenant_id=tenant_id,
+        forecast_id=forecast_id,
+        created_by=current_user.id,
+        generate_work_orders=generate_work_orders,
+        generate_purchase_orders=generate_purchase_orders,
+        selected_material_ids=selected_material_ids
+    )
+    return JSONResponse(content={
+        "success": True,
+        "message": f"成功生成 {result['generated_work_orders']} 个工单和 {result['generated_purchase_orders']} 个采购单",
+        "data": result
+    })
+
+
+@router.post("/lrp/results/{sales_order_id}/generate-orders", summary="从LRP运算结果一键生成工单和采购单")
+async def generate_orders_from_lrp(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    generate_work_orders: bool = Query(True, description="是否生成工单"),
+    generate_purchase_orders: bool = Query(True, description="是否生成采购单"),
+    selected_material_ids: Optional[List[int]] = Query(None, description="选中的物料ID列表（可选，如果不提供则生成所有）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从LRP运算结果一键生成工单和采购单
+
+    - **sales_order_id**: 销售订单ID
+    - **generate_work_orders**: 是否生成工单（默认：是）
+    - **generate_purchase_orders**: 是否生成采购单（默认：是）
+    - **selected_material_ids**: 选中的物料ID列表（可选，如果不提供则生成所有）
+
+    系统会自动：
+    1. 获取LRP运算结果
+    2. 根据运算结果生成工单或采购单（关联销售订单）
+    3. 返回生成的工单和采购单信息
+    """
+    result = await ProductionPlanningService().generate_orders_from_lrp_result(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+        created_by=current_user.id,
+        generate_work_orders=generate_work_orders,
+        generate_purchase_orders=generate_purchase_orders,
+        selected_material_ids=selected_material_ids
+    )
+    return JSONResponse(content={
+        "success": True,
+        "message": f"成功生成 {result['generated_work_orders']} 个工单和 {result['generated_purchase_orders']} 个采购单",
+        "data": result
+    })
 
 
 @router.get("/production-plans", response_model=List[ProductionPlanListResponse], summary="获取生产计划列表")
@@ -1983,7 +2514,7 @@ async def list_production_plans(
 
     支持多种筛选条件的高级搜索。
     """
-    return await ProductionPlanningService.list_production_plans(
+    return await ProductionPlanningService().list_production_plans(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -2003,7 +2534,7 @@ async def get_production_plan(
 
     - **plan_id**: 生产计划ID
     """
-    return await ProductionPlanningService.get_production_plan_by_id(
+    return await ProductionPlanningService().get_production_plan_by_id(
         tenant_id=tenant_id,
         plan_id=plan_id
     )
@@ -2020,7 +2551,7 @@ async def get_production_plan_items(
 
     - **plan_id**: 生产计划ID
     """
-    return await ProductionPlanningService.get_plan_items(
+    return await ProductionPlanningService().get_plan_items(
         tenant_id=tenant_id,
         plan_id=plan_id
     )
@@ -2039,7 +2570,7 @@ async def execute_production_plan(
 
     - **plan_id**: 生产计划ID
     """
-    return await ProductionPlanningService.execute_plan(
+    return await ProductionPlanningService().execute_plan(
         tenant_id=tenant_id,
         plan_id=plan_id,
         executed_by=current_user.id
@@ -2047,153 +2578,5 @@ async def execute_production_plan(
 
 
 # ============ 采购订单管理 API ============
-
-@router.post("/purchase-orders", response_model=PurchaseOrderResponse, summary="创建采购订单")
-async def create_purchase_order(
-    order: PurchaseOrderCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> PurchaseOrderResponse:
-    """
-    创建采购订单
-
-    - **order**: 采购订单创建数据
-    - **current_user**: 当前登录用户
-    - **tenant_id**: 当前租户ID
-
-    返回创建的采购订单信息
-    """
-    return await PurchaseService().create_purchase_order(
-        tenant_id=tenant_id,
-        order_data=order,
-        created_by=current_user.id
-    )
-
-
-@router.get("/purchase-orders", response_model=List[PurchaseOrderListResponse], summary="获取采购订单列表")
-async def list_purchase_orders(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(20, ge=1, le=100, description="返回数量"),
-    supplier_id: Optional[int] = Query(None, description="供应商ID"),
-    status: Optional[str] = Query(None, description="订单状态"),
-    review_status: Optional[str] = Query(None, description="审核状态"),
-    order_date_from: Optional[date] = Query(None, description="订单日期从"),
-    order_date_to: Optional[date] = Query(None, description="订单日期到"),
-    delivery_date_from: Optional[date] = Query(None, description="到货日期从"),
-    delivery_date_to: Optional[date] = Query(None, description="到货日期到"),
-    keyword: Optional[str] = Query(None, description="关键词搜索"),
-    tenant_id: int = Depends(get_current_tenant)
-) -> List[PurchaseOrderListResponse]:
-    """
-    获取采购订单列表
-
-    支持多种筛选条件和分页查询
-    """
-    params = PurchaseOrderListParams(
-        skip=skip,
-        limit=limit,
-        supplier_id=supplier_id,
-        status=status,
-        review_status=review_status,
-        order_date_from=order_date_from,
-        order_date_to=order_date_to,
-        delivery_date_from=delivery_date_from,
-        delivery_date_to=delivery_date_to,
-        keyword=keyword
-    )
-
-    return await PurchaseService().list_purchase_orders(tenant_id, params)
-
-
-@router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")
-async def get_purchase_order(
-    tenant_id: int = Depends(get_current_tenant),
-    order_id: int = Path(..., description="采购订单ID")
-) -> PurchaseOrderResponse:
-    """
-    根据ID获取采购订单详情
-
-    - **order_id**: 采购订单ID
-    """
-    return await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
-
-
-@router.put("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")
-async def update_purchase_order(
-    order: PurchaseOrderUpdate,
-    order_id: int = Path(..., description="采购订单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
-) -> PurchaseOrderResponse:
-    """
-    更新采购订单信息
-
-    只能更新草稿状态的订单
-
-    - **order_id**: 采购订单ID
-    - **order**: 采购订单更新数据
-    """
-    return await PurchaseService().update_purchase_order(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        order_data=order,
-        updated_by=current_user.id
-    )
-
-
-@router.delete("/purchase-orders/{order_id}", summary="删除采购订单")
-async def delete_purchase_order(
-    tenant_id: int = Depends(get_current_tenant),
-    order_id: int = Path(..., description="采购订单ID")
-):
-    """
-    删除采购订单
-
-    只能删除草稿状态的订单
-
-    - **order_id**: 采购订单ID
-    """
-    result = await PurchaseService().delete_purchase_order(tenant_id, order_id)
-    return JSONResponse(content={"success": result, "message": "删除成功"})
-
-
-@router.post("/purchase-orders/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
-async def approve_purchase_order(
-    approve_data: PurchaseOrderApprove,
-    order_id: int = Path(..., description="采购订单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
-) -> PurchaseOrderResponse:
-    """
-    审核采购订单
-
-    - **order_id**: 采购订单ID
-    - **approve_data**: 审核数据
-    """
-    return await PurchaseService().approve_purchase_order(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        approve_data=approve_data,
-        approved_by=current_user.id
-    )
-
-
-@router.post("/purchase-orders/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="确认采购订单")
-async def confirm_purchase_order(
-    confirm_data: PurchaseOrderConfirm,
-    order_id: int = Path(..., description="采购订单ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
-) -> PurchaseOrderResponse:
-    """
-    确认采购订单（供应商确认）
-
-    - **order_id**: 采购订单ID
-    - **confirm_data**: 确认数据
-    """
-    return await PurchaseService().confirm_purchase_order(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        confirm_data=confirm_data,
-        confirmed_by=current_user.id
-    )
+# 注意：采购订单API已移至 purchase.py，此处不再重复实现
+# 请使用 /purchase-orders 路径访问采购订单API

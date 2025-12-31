@@ -23,6 +23,8 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderListParams
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.services.print_service import DocumentPrintService
+from fastapi.responses import HTMLResponse
 
 
 router = APIRouter(prefix="/purchase-orders", tags=["采购订单管理"])
@@ -187,4 +189,30 @@ async def confirm_purchase_order(
         confirmed_by=current_user.id
     )
 
+
+@router.get("/{order_id}/print", summary="打印采购订单")
+async def print_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    output_format: str = Query("html", description="输出格式"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印采购订单"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse
+    
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="purchase_order",
+        document_id=order_id,
+        template_code=template_code,
+        output_format=output_format
+    )
+    
+    if output_format == "pdf":
+        # TODO: 实现PDF生成
+        return HTMLResponse(content=result["content"], status_code=200)
+    else:
+        return HTMLResponse(content=result["content"], status_code=200)
 

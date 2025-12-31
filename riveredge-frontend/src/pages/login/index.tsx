@@ -452,6 +452,9 @@ export default function LoginPage() {
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
 
+      // 触发用户登录事件，通知布局组件清除菜单缓存
+      window.dispatchEvent(new CustomEvent('user-logged-in'));
+      
       // 延迟执行消息提示和导航，避免阻塞主线程
       setTimeout(() => {
         message.success('登录成功');
@@ -495,6 +498,9 @@ export default function LoginPage() {
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
 
+      // 触发用户登录事件，通知布局组件清除菜单缓存
+      window.dispatchEvent(new CustomEvent('user-logged-in'));
+      
       // 延迟执行消息提示和导航，避免阻塞主线程
       const urlParams = new URL(window.location.href).searchParams;
       setTimeout(() => {

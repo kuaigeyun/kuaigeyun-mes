@@ -160,9 +160,18 @@ class DynamicDatabaseConfigService:
 
         except Exception as e:
             logger.error(f"从数据库查询活跃应用失败: {e}", exc_info=True)
-            # 回退到临时方案
-            active_app_codes = ['master-data']
-            logger.info(f"📋 使用临时方案，活跃应用: {active_app_codes}")
+            # 回退方案：从文件系统扫描应用目录，自动发现应用
+            active_app_codes = []
+            try:
+                from core.services.application.application_service import ApplicationService
+                discovered_plugins = ApplicationService._scan_plugin_manifests()
+                active_app_codes = [plugin.get('code') for plugin in discovered_plugins if plugin.get('code')]
+                logger.info(f"📋 从文件系统扫描到 {len(active_app_codes)} 个应用: {active_app_codes}")
+            except Exception as scan_error:
+                logger.error(f"❌ 从文件系统扫描应用失败: {scan_error}")
+                # 最后的回退：返回空列表，避免系统崩溃
+                active_app_codes = []
+                logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
 
         logger.info(f"📋 将处理的活跃应用代码: {active_app_codes}")
 
@@ -278,9 +287,19 @@ class DynamicDatabaseConfigService:
                 await conn.close()
 
         except Exception as e:
-            logger.warning(f"从数据库查询活跃应用失败，使用临时方案: {e}")
-            # 回退到临时方案
-            active_app_codes = ['master-data']
+            logger.warning(f"从数据库查询活跃应用失败，尝试从文件系统扫描: {e}")
+            # 回退方案：从文件系统扫描应用目录，自动发现应用
+            active_app_codes = []
+            try:
+                from core.services.application.application_service import ApplicationService
+                discovered_plugins = ApplicationService._scan_plugin_manifests()
+                active_app_codes = [plugin.get('code') for plugin in discovered_plugins if plugin.get('code')]
+                logger.info(f"📋 从文件系统扫描到 {len(active_app_codes)} 个应用: {active_app_codes}")
+            except Exception as scan_error:
+                logger.error(f"❌ 从文件系统扫描应用失败: {scan_error}")
+                # 最后的回退：返回空列表，避免系统崩溃
+                active_app_codes = []
+                logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
 
         logger.info(f"📋 将处理的活跃应用代码: {active_app_codes}")
 

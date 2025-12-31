@@ -2,6 +2,9 @@
 工单业务服务模块
 
 提供工单相关的业务逻辑处理，包括CRUD操作、状态流转等。
+
+Author: Luigi Lu
+Date: 2025-01-01
 """
 
 import uuid
@@ -12,9 +15,9 @@ from decimal import Decimal
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
-from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.services.user_service import UserService
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
+from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
@@ -24,15 +27,18 @@ from apps.kuaizhizao.schemas.work_order import (
 )
 
 
-class WorkOrderService:
+class WorkOrderService(AppBaseService[WorkOrder]):
     """
     工单服务类
 
     处理工单相关的所有业务逻辑。
     """
 
-    @staticmethod
+    def __init__(self):
+        super().__init__(WorkOrder)
+
     async def create_work_order(
+        self,
         tenant_id: int,
         work_order_data: WorkOrderCreate,
         created_by: int
@@ -52,12 +58,16 @@ class WorkOrderService:
             ValidationError: 数据验证失败
         """
         async with in_transaction():
-            # 获取创建人信息
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-
             # 生成工单编码
-            code = await WorkOrderService._generate_work_order_code(tenant_id)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="WORK_ORDER_CODE",
+                prefix=f"WO{today}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
 
             # 创建工单
             work_order = await WorkOrder.create(
@@ -88,13 +98,13 @@ class WorkOrderService:
                 unqualified_quantity=work_order_data.unqualified_quantity,
                 remarks=work_order_data.remarks,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
             )
 
             return WorkOrderResponse.model_validate(work_order)
 
-    @staticmethod
     async def get_work_order_by_id(
+        self,
         tenant_id: int,
         work_order_id: int
     ) -> WorkOrderResponse:
@@ -111,19 +121,11 @@ class WorkOrderService:
         Raises:
             NotFoundError: 工单不存在
         """
-        work_order = await WorkOrder.get_or_none(
-            id=work_order_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-
-        if not work_order:
-            raise NotFoundError(f"工单不存在: {work_order_id}")
-
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
         return WorkOrderResponse.model_validate(work_order)
 
-    @staticmethod
     async def list_work_orders(
+        self,
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
@@ -178,8 +180,8 @@ class WorkOrderService:
 
         return [WorkOrderListResponse.model_validate(wo) for wo in work_orders]
 
-    @staticmethod
     async def update_work_order(
+        self,
         tenant_id: int,
         work_order_id: int,
         work_order_data: WorkOrderUpdate,
@@ -202,31 +204,20 @@ class WorkOrderService:
             ValidationError: 数据验证失败
         """
         async with in_transaction():
-            work_order = await WorkOrder.get_or_none(
-                id=work_order_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
-            )
-
-            if not work_order:
-                raise NotFoundError(f"工单不存在: {work_order_id}")
-
-            # 获取更新人信息
-            updater = await UserService.get_user_by_id(updated_by)
-            updated_by_name = f"{updater.first_name or ''} {updater.last_name or ''}".strip() or updater.username
-
             # 更新字段
             update_data = work_order_data.model_dump(exclude_unset=True)
-            update_data['updated_by'] = updated_by
-            update_data['updated_by_name'] = updated_by_name
-            update_data['updated_at'] = datetime.now()
-
-            await work_order.update_from_dict(update_data).save()
+            
+            work_order = await self.update_with_user(
+                tenant_id=tenant_id,
+                record_id=work_order_id,
+                updated_by=updated_by,
+                **update_data
+            )
 
             return WorkOrderResponse.model_validate(work_order)
 
-    @staticmethod
     async def delete_work_order(
+        self,
         tenant_id: int,
         work_order_id: int
     ) -> None:
@@ -241,25 +232,20 @@ class WorkOrderService:
             NotFoundError: 工单不存在
             ValidationError: 不允许删除的工单状态
         """
-        work_order = await WorkOrder.get_or_none(
-            id=work_order_id,
+        def validate_work_order(work_order):
+            """验证工单是否可以删除"""
+            if work_order.status not in ['draft', 'cancelled']:
+                raise ValidationError("只能删除草稿状态或已取消的工单")
+
+        await self.delete_with_validation(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            record_id=work_order_id,
+            validate_func=validate_work_order,
+            soft_delete=True
         )
 
-        if not work_order:
-            raise NotFoundError(f"工单不存在: {work_order_id}")
-
-        # 检查是否可以删除
-        if work_order.status not in ['draft', 'cancelled']:
-            raise ValidationError("只能删除草稿状态或已取消的工单")
-
-        # 软删除
-        work_order.deleted_at = datetime.now()
-        await work_order.save()
-
-    @staticmethod
     async def release_work_order(
+        self,
         tenant_id: int,
         work_order_id: int,
         released_by: int
@@ -279,57 +265,45 @@ class WorkOrderService:
             NotFoundError: 工单不存在
             ValidationError: 不允许下达的工单状态
         """
-        work_order = await WorkOrder.get_or_none(
-            id=work_order_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-        if not work_order:
-            raise NotFoundError(f"工单不存在: {work_order_id}")
+            if work_order.status != 'draft':
+                raise ValidationError("只能下达草稿状态的工单")
 
-        if work_order.status != 'draft':
-            raise ValidationError("只能下达草稿状态的工单")
+            # 更新状态
+            work_order = await self.update_with_user(
+                tenant_id=tenant_id,
+                record_id=work_order_id,
+                updated_by=released_by,
+                status='released'
+            )
 
-        # 更新状态
-        work_order.status = 'released'
-        work_order.updated_by = released_by
-        work_order.updated_at = datetime.now()
+            return WorkOrderResponse.model_validate(work_order)
 
-        await work_order.save()
-
-        return WorkOrderResponse.model_validate(work_order)
-
-    @staticmethod
-    async def _generate_work_order_code(tenant_id: int) -> str:
+    async def update_work_order_status(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        status: str,
+        updated_by: int
+    ) -> WorkOrderResponse:
         """
-        生成工单编码
-
-        格式：WO{YYYYMMDD}{序号}
+        更新工单状态
 
         Args:
             tenant_id: 组织ID
+            work_order_id: 工单ID
+            status: 新状态
+            updated_by: 更新人ID
 
         Returns:
-            str: 工单编码
+            WorkOrderResponse: 更新后的工单信息
         """
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"WO{today}"
-
-        # 查询今天已有的最大序号
-        existing_codes = await WorkOrder.filter(
+        work_order = await self.update_with_user(
             tenant_id=tenant_id,
-            code__startswith=prefix,
-            deleted_at__isnull=True
-        ).values_list('code', flat=True)
-
-        max_sequence = 0
-        for code in existing_codes:
-            try:
-                sequence = int(code[len(prefix):])
-                max_sequence = max(max_sequence, sequence)
-            except ValueError:
-                continue
-
-        new_sequence = max_sequence + 1
-        return f"{prefix}{new_sequence:03d}"
+            record_id=work_order_id,
+            updated_by=updated_by,
+            status=status
+        )
+        return WorkOrderResponse.model_validate(work_order)

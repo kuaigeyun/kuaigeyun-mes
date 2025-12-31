@@ -39,8 +39,7 @@ from .sales_service import (
     SalesOrderService,
 )
 
-# BOM管理模块
-from .bom_service import BOMService
+# BOM管理已移至master_data APP，不再需要BOMService
 
 # 生产计划模块
 from .planning_service import ProductionPlanningService
@@ -74,7 +73,7 @@ __all__ = [
     'SalesOrderService',
 
     # BOM管理模块
-    'BOMService',
+    # BOMService已移除，BOM管理在master_data APP中
 
     # 生产计划模块
     'ProductionPlanningService',

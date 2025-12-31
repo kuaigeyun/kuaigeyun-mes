@@ -885,20 +885,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [queryClient]);
   
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
-  // 优化缓存策略：应用状态变更后立即刷新菜单
+  // 优化缓存策略：确保用户刷新或重新登录时能获取最新菜单
+  const queryClient = useQueryClient();
   const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
     queryKey: ['applicationMenus'],
     queryFn: () => getMenuTree({ is_active: true }),
-    staleTime: process.env.NODE_ENV === 'development' ? 0 : 5 * 60 * 1000, // 开发环境不缓存，生产环境5分钟缓存（从1分钟增加到5分钟）
+    staleTime: process.env.NODE_ENV === 'development' ? 0 : 2 * 60 * 1000, // 开发环境不缓存，生产环境2分钟缓存（降低缓存时间，确保新菜单及时显示）
     refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
-    refetchOnWindowFocus: process.env.NODE_ENV === 'development' ? true : false, // 开发环境窗口聚焦时刷新
-    refetchOnMount: true, // 组件挂载时刷新
+    refetchOnWindowFocus: true, // 窗口聚焦时刷新（用户切换标签页回来时获取最新菜单）
+    refetchOnMount: true, // 组件挂载时刷新（用户刷新页面时获取最新菜单）
+    refetchOnReconnect: true, // 网络重连时刷新
     select: (data) => {
       // 只返回应用菜单（application_uuid 不为空）
       const appMenus = data.filter(menu => menu.application_uuid);
       return appMenus;
     },
   });
+  
+  // 监听用户登录事件，清除菜单缓存（确保重新登录时获取最新菜单）
+  useEffect(() => {
+    const handleUserLogin = () => {
+      console.log('🔄 用户登录，清除菜单缓存...');
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+    };
+
+    // 监听自定义事件（在登录页面触发）
+    window.addEventListener('user-logged-in', handleUserLogin);
+
+    return () => {
+      window.removeEventListener('user-logged-in', handleUserLogin);
+    };
+  }, [queryClient]);
 
   // 监听应用状态变更事件，主动刷新菜单
   useEffect(() => {
