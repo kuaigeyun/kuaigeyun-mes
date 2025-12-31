@@ -5,8 +5,10 @@
 """
 
 import os
+import time
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from typing import Optional, List, Dict, Any
+from loguru import logger
 
 from core.schemas.menu import (
     MenuCreate,
@@ -20,6 +22,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.infrastructure.cache.cache_manager import cache_manager
 
 router = APIRouter(prefix="/menus", tags=["Menus"])
 
@@ -100,8 +103,29 @@ async def get_menu_tree(
     Returns:
         List[MenuTreeResponse]: 菜单树列表
     """
-    # 开发环境下：自动扫描并同步插件菜单，确保菜单配置修改后立即生效
-    if os.getenv("ENVIRONMENT", "development") == "development" or os.getenv("DEBUG", "false").lower() == "true":
+    # 自动扫描并同步插件菜单，确保菜单配置修改后立即生效
+    # 优化：生产环境也自动扫描，但使用时间戳控制频率（避免频繁扫描影响性能）
+    # 检查上次扫描时间（使用缓存存储，避免频繁扫描）
+    last_scan_cache_key = f"menu_scan_timestamp:{tenant_id}"
+    should_scan = False
+    
+    try:
+        last_scan_time = await cache_manager.get("menu", last_scan_cache_key)
+        current_time = time.time()
+        
+        # 开发环境：每次请求都扫描（立即生效）
+        # 生产环境：每5分钟扫描一次（平衡性能和实时性）
+        scan_interval = 60 if os.getenv("ENVIRONMENT", "development") == "development" else 300  # 开发环境1分钟，生产环境5分钟
+        
+        if not last_scan_time or (current_time - last_scan_time) > scan_interval:
+            should_scan = True
+            # 更新扫描时间戳
+            await cache_manager.set("menu", last_scan_cache_key, current_time, ttl=3600)
+    except Exception:
+        # 缓存失败时，默认扫描（确保菜单能同步）
+        should_scan = True
+    
+    if should_scan:
         try:
             from core.services.application.application_service import ApplicationService
             # 自动扫描并注册插件（只扫描，不阻塞主流程）
@@ -111,9 +135,10 @@ async def get_menu_tree(
             await MenuService._clear_menu_cache(tenant_id)
         except Exception as e:
             # 扫描失败不影响菜单获取
-            print(f"⚠️ 开发环境自动扫描插件失败（不影响菜单获取）: {e}")
+            logger.warning(f"⚠️ 自动扫描插件失败（不影响菜单获取）: {e}")
     
     # 开发环境下禁用缓存，确保菜单实时刷新
+    # 生产环境使用缓存，但通过定期扫描确保菜单更新
     use_cache = os.getenv("ENVIRONMENT", "development") != "development" and os.getenv("DEBUG", "false").lower() != "true"
     
     return await MenuService.get_menu_tree(

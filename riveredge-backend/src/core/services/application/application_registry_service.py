@@ -106,43 +106,45 @@ class ApplicationRegistryService:
             return apps
 
         except Exception as e:
-            logger.warning(f"⚠️ 数据库查询失败，使用默认应用列表: {e}")
+            logger.warning(f"⚠️ 数据库查询失败，尝试从文件系统扫描应用: {e}")
 
-            # 回退到硬编码的默认应用
-            apps = [
-                {
-                    "uuid": "master-data-uuid",
-                    "code": "master-data",
-                    "name": "主数据管理",
-                    "description": "基础数据管理应用",
-                    "version": "1.0.0",
-                    "route_path": "/apps/master-data",
-                    "entry_point": "apps.master_data.api.router",
-                    "menu_config": None,
-                    "is_system": False,
-                    "is_active": True,
-                    "is_installed": True,
-                    "created_at": None,
-                    "updated_at": None
-                },
-                {
-                    "uuid": "kuaizhizao-uuid",
-                    "code": "kuaizhizao",
-                    "name": "快格轻制造",
-                    "description": "轻量级MES系统，专注生产执行核心流程",
-                    "version": "1.0.5",
-                    "route_path": "/apps/kuaizhizao",
-                    "entry_point": "apps.kuaizhizao.api.router",
-                    "menu_config": None,
-                    "is_system": False,
-                    "is_active": True,
-                    "is_installed": True,
-                    "created_at": None,
-                    "updated_at": None
-                }
-            ]
+            # 回退方案：从文件系统扫描应用目录，自动发现应用
+            # 不再硬编码应用列表，而是动态扫描 apps 目录
+            apps = []
+            try:
+                # 使用 ApplicationService 的扫描方法
+                from core.services.application.application_service import ApplicationService
+                discovered_plugins = ApplicationService._scan_plugin_manifests()
+                
+                for manifest in discovered_plugins:
+                    app_code = manifest.get('code')
+                    if not app_code:
+                        continue
+                    
+                    # 构建应用数据（从 manifest.json 读取）
+                    apps.append({
+                        "uuid": f"{app_code}-fallback-uuid",
+                        "code": app_code,
+                        "name": manifest.get('name', app_code),
+                        "description": manifest.get('description', ''),
+                        "version": manifest.get('version', '1.0.0'),
+                        "route_path": manifest.get('route_path', f"/apps/{app_code}"),
+                        "entry_point": manifest.get('entry_point', f"apps.{app_code.replace('-', '_')}.api.router"),
+                        "menu_config": manifest.get('menu_config'),
+                        "is_system": False,
+                        "is_active": True,
+                        "is_installed": True,
+                        "created_at": None,
+                        "updated_at": None
+                    })
+                
+                logger.info(f"📋 从文件系统扫描到 {len(apps)} 个应用: {[app['name'] for app in apps]}")
+            except Exception as scan_error:
+                logger.error(f"❌ 从文件系统扫描应用失败: {scan_error}")
+                # 最后的回退：返回空列表，避免系统崩溃
+                apps = []
+                logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
 
-            logger.info(f"📋 使用默认应用列表: {[app['name'] for app in apps]}")
             return apps
 
     @classmethod

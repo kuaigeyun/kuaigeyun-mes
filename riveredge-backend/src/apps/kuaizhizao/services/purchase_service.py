@@ -14,8 +14,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 
-from core.services.base import BaseService
-from core.services.business.code_generation_service import CodeGenerationService
+from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 from apps.kuaizhizao.models import (
@@ -30,11 +29,11 @@ from apps.kuaizhizao.schemas.purchase import (
 )
 
 
-class PurchaseService(BaseService):
+class PurchaseService(AppBaseService[PurchaseOrder]):
     """采购订单服务类"""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(PurchaseOrder)
 
     async def create_purchase_order(
         self,
@@ -56,7 +55,8 @@ class PurchaseService(BaseService):
         async with in_transaction():
             # 生成订单编码
             if not order_data.order_code:
-                order_data.order_code = await CodeGenerationService.generate_code(tenant_id, "PO")
+                today = datetime.now().strftime("%Y%m%d")
+                order_data.order_code = await self.generate_code(tenant_id, "PURCHASE_ORDER_CODE", prefix=f"PO{today}")
 
             # 验证供应商
             supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=order_data.supplier_id)

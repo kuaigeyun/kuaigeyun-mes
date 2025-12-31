@@ -26,12 +26,11 @@ from apps.kuaizhizao.schemas.quality import (
     FinishedGoodsInspectionCreate, FinishedGoodsInspectionUpdate, FinishedGoodsInspectionResponse, FinishedGoodsInspectionListResponse,
 )
 
-from core.services.base import BaseService
+from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
-from infra.services.user_service import UserService
 
 
-class IncomingInspectionService(BaseService):
+class IncomingInspectionService(AppBaseService[IncomingInspection]):
     """来料检验单服务"""
 
     def __init__(self):
@@ -40,15 +39,15 @@ class IncomingInspectionService(BaseService):
     async def create_incoming_inspection(self, tenant_id: int, inspection_data: IncomingInspectionCreate, created_by: int) -> IncomingInspectionResponse:
         """创建来料检验单"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_inspection_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}")
 
             inspection = await IncomingInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return IncomingInspectionResponse.model_validate(inspection)
@@ -96,8 +95,7 @@ class IncomingInspectionService(BaseService):
             if inspection.status != '待检验':
                 raise BusinessLogicError("只有待检验状态的检验单才能执行检验")
 
-            inspector = await UserService.get_user_by_id(inspected_by)
-            inspector_name = f"{inspector.first_name or ''} {inspector.last_name or ''}".strip() or inspector.username
+            inspector_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
@@ -132,8 +130,7 @@ class IncomingInspectionService(BaseService):
             if inspection.review_status != '待审核':
                 raise BusinessLogicError("检验单审核状态不是待审核")
 
-            approver = await UserService.get_user_by_id(approved_by)
-            approver_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approver_name = await self.get_user_name(approved_by)
 
             review_status = "驳回" if rejection_reason else "通过"
             status = "已驳回" if rejection_reason else "已审核"
@@ -151,16 +148,9 @@ class IncomingInspectionService(BaseService):
             updated_inspection = await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
 
-    @staticmethod
-    async def _generate_inspection_code(tenant_id: int) -> str:
-        """生成来料检验单编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"IQ{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "INCOMING_INSPECTION_CODE", {"prefix": prefix})
 
 
-class ProcessInspectionService(BaseService):
+class ProcessInspectionService(AppBaseService[ProcessInspection]):
     """过程检验单服务"""
 
     def __init__(self):
@@ -169,15 +159,15 @@ class ProcessInspectionService(BaseService):
     async def create_process_inspection(self, tenant_id: int, inspection_data: ProcessInspectionCreate, created_by: int) -> ProcessInspectionResponse:
         """创建过程检验单"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_inspection_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", prefix=f"PQ{today}")
 
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return ProcessInspectionResponse.model_validate(inspection)
@@ -214,8 +204,7 @@ class ProcessInspectionService(BaseService):
             if inspection.status != '待检验':
                 raise BusinessLogicError("只有待检验状态的检验单才能执行检验")
 
-            inspector = await UserService.get_user_by_id(inspected_by)
-            inspector_name = f"{inspector.first_name or ''} {inspector.last_name or ''}".strip() or inspector.username
+            inspector_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
@@ -242,16 +231,9 @@ class ProcessInspectionService(BaseService):
             updated_inspection = await self.get_process_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
 
-    @staticmethod
-    async def _generate_inspection_code(tenant_id: int) -> str:
-        """生成过程检验单编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"PQ{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "PROCESS_INSPECTION_CODE", {"prefix": prefix})
 
 
-class FinishedGoodsInspectionService(BaseService):
+class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
     """成品检验单服务"""
 
     def __init__(self):
@@ -260,15 +242,15 @@ class FinishedGoodsInspectionService(BaseService):
     async def create_finished_goods_inspection(self, tenant_id: int, inspection_data: FinishedGoodsInspectionCreate, created_by: int) -> FinishedGoodsInspectionResponse:
         """创建成品检验单"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_inspection_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", prefix=f"FQ{today}")
 
             inspection = await FinishedGoodsInspection.create(
                 tenant_id=tenant_id,
                 inspection_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **inspection_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return FinishedGoodsInspectionResponse.model_validate(inspection)
@@ -305,8 +287,7 @@ class FinishedGoodsInspectionService(BaseService):
             if inspection.status != '待检验':
                 raise BusinessLogicError("只有待检验状态的检验单才能执行检验")
 
-            inspector = await UserService.get_user_by_id(inspected_by)
-            inspector_name = f"{inspector.first_name or ''} {inspector.last_name or ''}".strip() or inspector.username
+            inspector_name = await self.get_user_name(inspected_by)
 
             # 计算合格/不合格数量
             qualified_quantity = inspection_data.get('qualified_quantity', 0)
@@ -353,10 +334,3 @@ class FinishedGoodsInspectionService(BaseService):
             updated_inspection = await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
             return updated_inspection
 
-    @staticmethod
-    async def _generate_inspection_code(tenant_id: int) -> str:
-        """生成成品检验单编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"FQ{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "FINISHED_GOODS_INSPECTION_CODE", {"prefix": prefix})

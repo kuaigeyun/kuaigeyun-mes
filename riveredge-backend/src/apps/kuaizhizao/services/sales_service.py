@@ -28,12 +28,12 @@ from apps.kuaizhizao.schemas.sales import (
     SalesOrderItemCreate, SalesOrderItemUpdate, SalesOrderItemResponse,
 )
 
-from core.services.base import BaseService
+from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.user_service import UserService
 
 
-class SalesForecastService(BaseService):
+class SalesForecastService(AppBaseService[SalesForecast]):
     """销售预测服务"""
 
     def __init__(self):
@@ -42,15 +42,15 @@ class SalesForecastService(BaseService):
     async def create_sales_forecast(self, tenant_id: int, forecast_data: SalesForecastCreate, created_by: int) -> SalesForecastResponse:
         """创建销售预测"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_forecast_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
 
             forecast = await SalesForecast.create(
                 tenant_id=tenant_id,
                 forecast_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **forecast_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return SalesForecastResponse.model_validate(forecast)
@@ -94,8 +94,7 @@ class SalesForecastService(BaseService):
             if forecast.review_status != '待审核':
                 raise BusinessLogicError("销售预测审核状态不是待审核")
 
-            approver = await UserService.get_user_by_id(approved_by)
-            approver_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approver_name = await self.get_user_name(approved_by)
 
             review_status = "驳回" if rejection_reason else "通过"
             status = "已驳回" if rejection_reason else "已审核"
@@ -131,16 +130,9 @@ class SalesForecastService(BaseService):
         items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by('forecast_date')
         return [SalesForecastItemResponse.model_validate(item) for item in items]
 
-    @staticmethod
-    async def _generate_forecast_code(tenant_id: int) -> str:
-        """生成销售预测编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"SF{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "SALES_FORECAST_CODE", {"prefix": prefix})
 
 
-class SalesOrderService(BaseService):
+class SalesOrderService(AppBaseService[SalesOrder]):
     """销售订单服务"""
 
     def __init__(self):
@@ -149,15 +141,15 @@ class SalesOrderService(BaseService):
     async def create_sales_order(self, tenant_id: int, order_data: SalesOrderCreate, created_by: int) -> SalesOrderResponse:
         """创建销售订单"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_order_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "SALES_ORDER_CODE", prefix=f"SO{today}")
 
             order = await SalesOrder.create(
                 tenant_id=tenant_id,
                 order_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **order_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return SalesOrderResponse.model_validate(order)
@@ -207,8 +199,7 @@ class SalesOrderService(BaseService):
             if order.review_status != '待审核':
                 raise BusinessLogicError("销售订单审核状态不是待审核")
 
-            approver = await UserService.get_user_by_id(approved_by)
-            approver_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approver_name = await self.get_user_name(approved_by)
 
             review_status = "驳回" if rejection_reason else "通过"
             status = "已驳回" if rejection_reason else "已审核"
@@ -327,9 +318,3 @@ class SalesOrderService(BaseService):
         )
 
     @staticmethod
-    async def _generate_order_code(tenant_id: int) -> str:
-        """生成销售订单编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"SO{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "SALES_ORDER_CODE", {"prefix": prefix})

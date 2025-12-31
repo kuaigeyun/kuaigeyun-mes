@@ -30,12 +30,11 @@ from apps.kuaizhizao.schemas.finance import (
     ReceiptRecordCreate, ReceiptRecordResponse,
 )
 
-from core.services.base import BaseService
+from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
-from infra.services.user_service import UserService
 
 
-class PayableService(BaseService):
+class PayableService(AppBaseService[Payable]):
     """应付单服务"""
 
     def __init__(self):
@@ -44,15 +43,15 @@ class PayableService(BaseService):
     async def create_payable(self, tenant_id: int, payable_data: PayableCreate, created_by: int) -> PayableResponse:
         """创建应付单"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_payable_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "PAYABLE_CODE", prefix=f"PY{today}")
 
             payable = await Payable.create(
                 tenant_id=tenant_id,
                 payable_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **payable_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return PayableResponse.model_validate(payable)
@@ -130,8 +129,7 @@ class PayableService(BaseService):
             if payable.review_status != '待审核':
                 raise BusinessLogicError("应付单审核状态不是待审核")
 
-            approver = await UserService.get_user_by_id(approved_by)
-            approver_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approver_name = await self.get_user_name(approved_by)
 
             review_status = "驳回" if rejection_reason else "通过"
 
@@ -148,15 +146,9 @@ class PayableService(BaseService):
             return updated_payable
 
     @staticmethod
-    async def _generate_payable_code(tenant_id: int) -> str:
-        """生成应付单编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"PY{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "PAYABLE_CODE", {"prefix": prefix})
 
 
-class PurchaseInvoiceService(BaseService):
+class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     """采购发票服务"""
 
     def __init__(self):
@@ -165,15 +157,15 @@ class PurchaseInvoiceService(BaseService):
     async def create_purchase_invoice(self, tenant_id: int, invoice_data: PurchaseInvoiceCreate, created_by: int) -> PurchaseInvoiceResponse:
         """创建采购发票"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_invoice_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
 
             invoice = await PurchaseInvoice.create(
                 tenant_id=tenant_id,
                 invoice_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **invoice_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return PurchaseInvoiceResponse.model_validate(invoice)
@@ -208,8 +200,7 @@ class PurchaseInvoiceService(BaseService):
             if invoice.review_status != '待审核':
                 raise BusinessLogicError("发票审核状态不是待审核")
 
-            approver = await UserService.get_user_by_id(approved_by)
-            approver_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approver_name = await self.get_user_name(approved_by)
 
             review_status = "驳回" if rejection_reason else "通过"
             status = "已驳回" if rejection_reason else "已审核"
@@ -235,16 +226,9 @@ class PurchaseInvoiceService(BaseService):
             updated_invoice = await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
             return updated_invoice
 
-    @staticmethod
-    async def _generate_invoice_code(tenant_id: int) -> str:
-        """生成采购发票编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"PI{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", {"prefix": prefix})
 
 
-class ReceivableService(BaseService):
+class ReceivableService(AppBaseService[Receivable]):
     """应收单服务"""
 
     def __init__(self):
@@ -253,15 +237,15 @@ class ReceivableService(BaseService):
     async def create_receivable(self, tenant_id: int, receivable_data: ReceivableCreate, created_by: int) -> ReceivableResponse:
         """创建应收单"""
         async with in_transaction():
-            creator = await UserService.get_user_by_id(created_by)
-            created_by_name = f"{creator.first_name or ''} {creator.last_name or ''}".strip() or creator.username
-            code = await self._generate_receivable_code(tenant_id)
+            user_info = await self.get_user_info(created_by)
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(tenant_id, "RECEIVABLE_CODE", prefix=f"YS{today}")
 
             receivable = await Receivable.create(
                 tenant_id=tenant_id,
                 receivable_code=code,
                 created_by=created_by,
-                created_by_name=created_by_name,
+                created_by_name=user_info["name"],
                 **receivable_data.model_dump(exclude_unset=True, exclude={'created_by'})
             )
             return ReceivableResponse.model_validate(receivable)
@@ -328,8 +312,7 @@ class ReceivableService(BaseService):
             if receivable.review_status != '待审核':
                 raise BusinessLogicError("应收单审核状态不是待审核")
 
-            approver = await UserService.get_user_by_id(approved_by)
-            approver_name = f"{approver.first_name or ''} {approver.last_name or ''}".strip() or approver.username
+            approver_name = await self.get_user_name(approved_by)
 
             review_status = "驳回" if rejection_reason else "通过"
 
@@ -345,10 +328,3 @@ class ReceivableService(BaseService):
             updated_receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
             return updated_receivable
 
-    @staticmethod
-    async def _generate_receivable_code(tenant_id: int) -> str:
-        """生成应收单编码"""
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"YS{today}"
-        from core.services.business.code_generation_service import CodeGenerationService
-        return await CodeGenerationService.generate_code(tenant_id, "RECEIVABLE_CODE", {"prefix": prefix})
