@@ -316,7 +316,7 @@ class PurchaseReceiptBase(BaseSchema):
 
 class PurchaseReceiptCreate(PurchaseReceiptBase):
     """采购入库单创建schema"""
-    pass
+    items: Optional[List[PurchaseReceiptItemCreate]] = Field(default_factory=list, description="入库单明细列表")
 
 
 class PurchaseReceiptUpdate(PurchaseReceiptBase):

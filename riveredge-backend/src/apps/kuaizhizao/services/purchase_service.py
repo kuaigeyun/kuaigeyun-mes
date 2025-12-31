@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 from decimal import Decimal
 
 from tortoise.transactions import in_transaction
@@ -372,3 +372,112 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         await order.delete()
 
         return True
+
+    async def push_to_receipt(
+        self,
+        tenant_id: int,
+        order_id: int,
+        created_by: int,
+        receipt_quantities: Optional[Dict[int, float]] = None
+    ) -> Dict[str, Any]:
+        """
+        下推到采购入库
+        
+        从采购单下推，自动生成采购入库单
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 采购单ID
+            created_by: 创建人ID
+            receipt_quantities: 入库数量字典 {item_id: quantity}，如果不提供则使用订单数量
+            
+        Returns:
+            Dict: 包含创建的采购入库单信息
+            
+        Raises:
+            NotFoundError: 采购单不存在
+            BusinessLogicError: 采购单未审核或已全部入库
+        """
+        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
+        from decimal import Decimal
+        
+        # 验证采购单存在且已审核
+        order = await self.get_purchase_order_by_id(tenant_id, order_id)
+        if order.status not in ["已审核", "已确认"]:
+            raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
+        
+        # 获取订单明细
+        order_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id=order_id
+        ).all()
+        
+        if not order_items:
+            raise BusinessLogicError("采购单没有明细，无法生成入库单")
+        
+        # 检查是否有未入库的明细
+        has_outstanding = any(item.outstanding_quantity > 0 for item in order_items)
+        if not has_outstanding:
+            raise BusinessLogicError("采购单已全部入库，无法再次生成入库单")
+        
+        # 创建采购入库单
+        receipt_service = PurchaseReceiptService()
+        
+        # 构建入库单明细
+        receipt_items = []
+        for item in order_items:
+            # 确定入库数量
+            if receipt_quantities and item.id in receipt_quantities:
+                receipt_quantity = Decimal(str(receipt_quantities[item.id]))
+            else:
+                receipt_quantity = item.outstanding_quantity
+            
+            # 跳过数量为0的明细
+            if receipt_quantity <= 0:
+                continue
+            
+            # 验证入库数量不超过未入库数量
+            if receipt_quantity > item.outstanding_quantity:
+                raise ValidationError(f"物料 {item.material_code} 的入库数量 {receipt_quantity} 超过未入库数量 {item.outstanding_quantity}")
+            
+            receipt_items.append(PurchaseReceiptItemCreate(
+                purchase_order_item_id=item.id,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_unit=item.unit,
+                receipt_quantity=receipt_quantity,
+                unit_price=item.unit_price,
+                total_amount=receipt_quantity * item.unit_price
+            ))
+        
+        if not receipt_items:
+            raise BusinessLogicError("没有可入库的明细")
+        
+        # 创建入库单
+        receipt_data = PurchaseReceiptCreate(
+            purchase_order_id=order_id,
+            purchase_order_code=order.order_code,
+            supplier_id=order.supplier_id,
+            supplier_name=order.supplier_name,
+            receipt_date=datetime.now().date(),
+            warehouse_id=None,  # TODO: 从物料或订单获取默认仓库
+            warehouse_name=None,
+            status="待入库",
+            items=receipt_items
+        )
+        
+        receipt = await receipt_service.create_purchase_receipt(
+            tenant_id=tenant_id,
+            receipt_data=receipt_data,
+            created_by=created_by
+        )
+        
+        return {
+            "order_id": order_id,
+            "order_code": order.order_code,
+            "receipt_id": receipt.id if hasattr(receipt, 'id') else None,
+            "receipt_code": receipt.receipt_code if hasattr(receipt, 'receipt_code') else None,
+            "message": "采购入库单创建成功"
+        }
