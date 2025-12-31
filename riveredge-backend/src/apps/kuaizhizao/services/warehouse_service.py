@@ -646,6 +646,40 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             # TODO: 更新库存
             # TODO: 更新采购订单状态
+            
+            # 自动生成应付单
+            try:
+                from apps.kuaizhizao.services.finance_service import PayableService
+                from apps.kuaizhizao.schemas.finance import PayableCreate
+                
+                payable_service = PayableService()
+                
+                # 获取入库单信息
+                receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                
+                # 创建应付单
+                payable_data = PayableCreate(
+                    source_type="采购入库",
+                    source_id=receipt_id,
+                    source_code=receipt.receipt_code,
+                    supplier_id=receipt.supplier_id,
+                    supplier_name=receipt.supplier_name,
+                    payable_amount=receipt.total_amount,
+                    paid_amount=Decimal(0),
+                    due_date=(datetime.now() + timedelta(days=30)).date(),  # 默认30天账期
+                    currency="CNY",
+                    status="待付款",
+                    notes=f"由采购入库单 {receipt.receipt_code} 自动生成"
+                )
+                
+                await payable_service.create_payable(
+                    tenant_id=tenant_id,
+                    payable_data=payable_data,
+                    created_by=confirmed_by
+                )
+            except Exception as e:
+                logger.error(f"自动生成应付单失败: {str(e)}")
+                # 不抛出异常，避免影响入库确认
 
             updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
             return updated_receipt
