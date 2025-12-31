@@ -886,7 +886,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
   // 优化缓存策略：确保用户刷新或重新登录时能获取最新菜单
-  const queryClient = useQueryClient();
   const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
     queryKey: ['applicationMenus'],
     queryFn: () => getMenuTree({ is_active: true }),
@@ -2369,9 +2368,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-page-container .ant-pro-page-container-children-content {
           padding: 0 !important;
         }
-        /* 全局页面边距：16px */
+        /* 全局页面边距：已由 ListPageTemplate 统一管理，不再需要全局样式 */
+        /* 注意：未使用 ListPageTemplate 的页面需要自行管理 padding */
         .uni-tabs-content .ant-pro-table {
-          padding: 16px !important;
+          padding: 0 !important;
         }
         /* 侧边栏收起时，确保内容区域左边距正确 - 只在侧边栏收起时生效 */
         .ant-pro-layout.ant-pro-layout-has-mix .ant-pro-sider-collapsed ~ .ant-pro-layout-content,

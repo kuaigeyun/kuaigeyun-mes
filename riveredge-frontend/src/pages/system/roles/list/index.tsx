@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Tree, message } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, Tree, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getRoleList,
   getRoleByUuid,
@@ -31,7 +32,6 @@ import {
 const RoleListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
@@ -39,6 +39,7 @@ const RoleListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentRoleUuid, setCurrentRoleUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -57,8 +58,10 @@ const RoleListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentRoleUuid(null);
+    setFormInitialValues({
+      is_active: true,
+    });
     setModalVisible(true);
-    formRef.current?.resetFields();
   };
 
   // 导入处理函数
@@ -84,17 +87,17 @@ const RoleListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentRoleUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取角色详情
       const detail = await getRoleByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
         is_system: detail.is_system,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取角色详情失败');
     }
@@ -132,10 +135,9 @@ const RoleListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       if (isEdit && currentRoleUuid) {
         await updateRole(currentRoleUuid, values as UpdateRoleData);
@@ -146,9 +148,11 @@ const RoleListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -345,143 +349,138 @@ const RoleListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<Role>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, filter, searchFormValues) => {
-          // ⚠️ 修复：正确处理高级搜索参数
-          // 1. name 字段转换为 keyword（后端使用 keyword 搜索名称）
-          // 2. is_system 字段直接传递（后端支持 is_system 筛选）
-          // 3. is_active 字段直接传递（后端支持 is_active 筛选）
-          const apiParams: any = {
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-          };
-          
-          // 处理 keyword（优先使用 searchFormValues.keyword，如果没有则使用 name）
-          if (searchFormValues?.keyword) {
-            apiParams.keyword = searchFormValues.keyword;
-          } else if (searchFormValues?.name) {
-            apiParams.keyword = searchFormValues.name;
-          }
-          
-          // 处理 is_system（需要转换为 boolean）
-          if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '') {
-            apiParams.is_system = searchFormValues.is_system === 'true' || searchFormValues.is_system === true;
-          }
-          
-          // 处理 is_active（需要转换为 boolean）
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '') {
-            apiParams.is_active = searchFormValues.is_active === 'true' || searchFormValues.is_active === true;
-          }
-          
-          const response = await getRoleList(apiParams);
-          return {
-            data: response.items,
-            success: true,
-            total: response.total,
-          };
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-        }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" onClick={handleCreate}>
-            新建角色
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        showImportButton={true}
-        onImport={handleImport}
-        showExportButton={true}
-        onExport={handleExport}
-      />
+      <ListPageTemplate>
+        <UniTable<Role>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, filter, searchFormValues) => {
+            // ⚠️ 修复：正确处理高级搜索参数
+            // 1. name 字段转换为 keyword（后端使用 keyword 搜索名称）
+            // 2. is_system 字段直接传递（后端支持 is_system 筛选）
+            // 3. is_active 字段直接传递（后端支持 is_active 筛选）
+            const apiParams: any = {
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
+            };
+            
+            // 处理 keyword（优先使用 searchFormValues.keyword，如果没有则使用 name）
+            if (searchFormValues?.keyword) {
+              apiParams.keyword = searchFormValues.keyword;
+            } else if (searchFormValues?.name) {
+              apiParams.keyword = searchFormValues.name;
+            }
+            
+            // 处理 is_system（需要转换为 boolean）
+            if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '') {
+              apiParams.is_system = searchFormValues.is_system === 'true' || searchFormValues.is_system === true;
+            }
+            
+            // 处理 is_active（需要转换为 boolean）
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '') {
+              apiParams.is_active = searchFormValues.is_active === 'true' || searchFormValues.is_active === true;
+            }
+            
+            const response = await getRoleList(apiParams);
+            return {
+              data: response.items,
+              success: true,
+              total: response.total,
+            };
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+          }}
+          toolBarRender={() => [
+            <Button key="create" type="primary" onClick={handleCreate}>
+              新建角色
+            </Button>,
+          ]}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          showImportButton={true}
+          onImport={handleImport}
+          showExportButton={true}
+          onExport={handleExport}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑角色' : '新建角色'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={handleSubmit}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label="角色名称"
-            rules={[{ required: true, message: '请输入角色名称' }]}
-            placeholder="请输入角色名称"
-          />
-          <ProFormText
-            name="code"
-            label="角色代码"
-            rules={[
-              { required: true, message: '请输入角色代码' },
-              { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线' },
-            ]}
-            placeholder="请输入角色代码（如：admin、user）"
-            disabled={isEdit}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入角色描述"
-          />
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-            initialValue={true}
-          />
-        </ProForm>
-      </Modal>
+        <ProFormText
+          name="name"
+          label="角色名称"
+          rules={[{ required: true, message: '请输入角色名称' }]}
+          placeholder="请输入角色名称"
+        />
+        <ProFormText
+          name="code"
+          label="角色代码"
+          rules={[
+            { required: true, message: '请输入角色代码' },
+            { pattern: /^[a-zA-Z0-9_]+$/, message: '角色代码只能包含字母、数字和下划线' },
+          ]}
+          placeholder="请输入角色代码（如：admin、user）"
+          disabled={isEdit}
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入角色描述"
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+          initialValue={true}
+        />
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="角色详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions
-            column={2}
-            dataSource={detailData}
-            columns={[
-              { title: '角色名称', dataIndex: 'name' },
-              { title: '角色代码', dataIndex: 'code' },
-              { title: '描述', dataIndex: 'description', span: 2 },
-              {
-                title: '系统角色',
-                dataIndex: 'is_system',
-                render: (value) => (value ? '是' : '否'),
-              },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
-              },
-              { title: '权限数', dataIndex: 'permission_count' },
-              { title: '用户数', dataIndex: 'user_count' },
-              { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-              { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
+          { title: '角色名称', dataIndex: 'name' },
+          { title: '角色代码', dataIndex: 'code' },
+          { title: '描述', dataIndex: 'description', span: 2 },
+          {
+            title: '系统角色',
+            dataIndex: 'is_system',
+            render: (value: boolean) => (value ? '是' : '否'),
+          },
+          {
+            title: '状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (value ? '启用' : '禁用'),
+          },
+          { title: '权限数', dataIndex: 'permission_count' },
+          { title: '用户数', dataIndex: 'user_count' },
+          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+        ]}
+      />
 
       {/* 权限分配 Modal */}
       <Modal
