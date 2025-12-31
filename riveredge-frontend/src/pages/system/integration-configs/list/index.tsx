@@ -335,9 +335,14 @@ const IntegrationConfigListPage: React.FC = () => {
   ];
 
   return (
-    <div>
+    <>
       {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
+      <div style={{ 
+        padding: '16px 16px 0 16px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center' 
+      }}>
         <Tabs
           activeKey={viewMode}
           onChange={(key) => setViewMode(key as 'card' | 'list')}
@@ -358,7 +363,7 @@ const IntegrationConfigListPage: React.FC = () => {
       </div>
 
       {/* 卡片视图 */}
-      {viewMode === 'card' && <CardView />}
+      {viewMode === 'card' && <div style={{ padding: '0 16px 16px 16px' }}><CardView /></div>}
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
@@ -624,7 +629,9 @@ const IntegrationConfigListPage: React.FC = () => {
           },
         ]}
       />
-    </div>
+      </ListPageTemplate>
+      )}
+    </>
   );
 };
 
