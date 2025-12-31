@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getPositionList,
   getPositionByUuid,
@@ -29,7 +30,6 @@ import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/depa
 const PositionListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   
@@ -38,6 +38,7 @@ const PositionListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentPositionUuid, setCurrentPositionUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -79,12 +80,11 @@ const PositionListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentPositionUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       is_active: true,
       sort_order: 0,
     });
+    setModalVisible(true);
   };
 
   // 导入处理函数
@@ -110,10 +110,9 @@ const PositionListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentPositionUuid(record.uuid);
-      setModalVisible(true);
       
       const detail = await getPositionByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
@@ -121,6 +120,7 @@ const PositionListPage: React.FC = () => {
         sort_order: detail.sort_order,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取职位详情失败');
     }
@@ -158,10 +158,9 @@ const PositionListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       if (isEdit && currentPositionUuid) {
         await updatePosition(currentPositionUuid, values as UpdatePositionData);
@@ -175,6 +174,7 @@ const PositionListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error; // 重新抛出错误，让 FormModalTemplate 处理
     } finally {
       setFormLoading(false);
     }
@@ -286,127 +286,122 @@ const PositionListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<Position>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, filter, searchFormValues) => {
-          const response = await getPositionList({
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-            keyword: searchFormValues?.keyword,
-            department_uuid: searchFormValues?.department_uuid,
-            is_active: searchFormValues?.is_active,
-          });
-          return {
-            data: response.items,
-            success: true,
-            total: response.total,
-          };
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-        }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" onClick={handleCreate}>
-            新建职位
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        showImportButton={true}
-        onImport={handleImport}
-        showExportButton={true}
-        onExport={handleExport}
-      />
+      <ListPageTemplate>
+        <UniTable<Position>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, filter, searchFormValues) => {
+            const response = await getPositionList({
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
+              keyword: searchFormValues?.keyword,
+              department_uuid: searchFormValues?.department_uuid,
+              is_active: searchFormValues?.is_active,
+            });
+            return {
+              data: response.items,
+              success: true,
+              total: response.total,
+            };
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+          }}
+          toolBarRender={() => [
+            <Button key="create" type="primary" onClick={handleCreate}>
+              新建职位
+            </Button>,
+          ]}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          showImportButton={true}
+          onImport={handleImport}
+          showExportButton={true}
+          onExport={handleExport}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑职位' : '新建职位'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={handleSubmit}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label="职位名称"
-            rules={[{ required: true, message: '请输入职位名称' }]}
-            placeholder="请输入职位名称"
-          />
-          <ProFormText
-            name="code"
-            label="职位代码"
-            placeholder="请输入职位代码（可选）"
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入职位描述"
-          />
-          <SafeProFormSelect
-            name="department_uuid"
-            label="所属部门"
-            placeholder="请选择所属部门（可选）"
-            options={departmentOptions}
-            allowClear
-          />
-          <ProFormText
-            name="sort_order"
-            label="排序"
-            initialValue={0}
-            fieldProps={{ type: 'number' }}
-          />
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-            initialValue={true}
-          />
-        </ProForm>
-      </Modal>
+        <ProFormText
+          name="name"
+          label="职位名称"
+          rules={[{ required: true, message: '请输入职位名称' }]}
+          placeholder="请输入职位名称"
+        />
+        <ProFormText
+          name="code"
+          label="职位代码"
+          placeholder="请输入职位代码（可选）"
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入职位描述"
+        />
+        <SafeProFormSelect
+          name="department_uuid"
+          label="所属部门"
+          placeholder="请选择所属部门（可选）"
+          options={departmentOptions}
+          allowClear
+        />
+        <ProFormText
+          name="sort_order"
+          label="排序"
+          initialValue={0}
+          fieldProps={{ type: 'number' }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+          initialValue={true}
+        />
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="职位详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions
-            column={2}
-            dataSource={detailData}
-            columns={[
-              { title: '职位名称', dataIndex: 'name' },
-              { title: '职位代码', dataIndex: 'code' },
-              { title: '描述', dataIndex: 'description', span: 2 },
-              { title: '所属部门', dataIndex: ['department', 'name'], render: (_, record) => record.department?.name || '-' },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
-              },
-              { title: '用户数', dataIndex: 'user_count' },
-              { title: '排序', dataIndex: 'sort_order' },
-              { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-              { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
+          { title: '职位名称', dataIndex: 'name' },
+          { title: '职位代码', dataIndex: 'code' },
+          { title: '描述', dataIndex: 'description', span: 2 },
+          { title: '所属部门', dataIndex: ['department', 'name'], render: (_, record: any) => record.department?.name || '-' },
+          {
+            title: '状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (value ? '启用' : '禁用'),
+          },
+          { title: '用户数', dataIndex: 'user_count' },
+          { title: '排序', dataIndex: 'sort_order' },
+          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+        ]}
+      />
     </>
   );
 };
