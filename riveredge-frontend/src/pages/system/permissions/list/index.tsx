@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Drawer } from 'antd';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Button, Tag, message } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getPermissionList,
   getPermissionByUuid,
@@ -152,83 +153,79 @@ const PermissionListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<Permission>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, filter, searchFormValues) => {
-          const response = await getPermissionList({
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-            keyword: searchFormValues?.keyword,
-            resource: searchFormValues?.resource,
-            permission_type: searchFormValues?.permission_type,
-          });
-          return {
-            data: response.items,
-            success: true,
-            total: response.total,
-          };
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-        }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" onClick={handleCreate}>
-            新建权限
-          </Button>,
-        ]}
-        showImportButton={true}
-        onImport={handleImport}
-        showExportButton={true}
-        onExport={handleExport}
-      />
+      <ListPageTemplate>
+        <UniTable<Permission>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, filter, searchFormValues) => {
+            const response = await getPermissionList({
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
+              keyword: searchFormValues?.keyword,
+              resource: searchFormValues?.resource,
+              permission_type: searchFormValues?.permission_type,
+            });
+            return {
+              data: response.items,
+              success: true,
+              total: response.total,
+            };
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+          }}
+          toolBarRender={() => [
+            <Button key="create" type="primary" onClick={handleCreate}>
+              新建权限
+            </Button>,
+          ]}
+          showImportButton={true}
+          onImport={handleImport}
+          showExportButton={true}
+          onExport={handleExport}
+        />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="权限详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions
-            column={2}
-            dataSource={detailData}
-            columns={[
-              { title: '权限名称', dataIndex: 'name' },
-              { title: '权限代码', dataIndex: 'code' },
-              { title: '资源', dataIndex: 'resource' },
-              { title: '操作', dataIndex: 'action' },
-              {
-                title: '权限类型',
-                dataIndex: 'permission_type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    function: '功能权限',
-                    data: '数据权限',
-                    field: '字段权限',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '系统权限',
-                dataIndex: 'is_system',
-                render: (value) => (value ? '是' : '否'),
-              },
-              { title: '描述', dataIndex: 'description', span: 2 },
-              { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-              { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
+          { title: '权限名称', dataIndex: 'name' },
+          { title: '权限代码', dataIndex: 'code' },
+          { title: '资源', dataIndex: 'resource' },
+          { title: '操作', dataIndex: 'action' },
+          {
+            title: '权限类型',
+            dataIndex: 'permission_type',
+            render: (value: string) => {
+              const typeMap: Record<string, string> = {
+                function: '功能权限',
+                data: '数据权限',
+                field: '字段权限',
+              };
+              return typeMap[value] || value;
+            },
+          },
+          {
+            title: '系统权限',
+            dataIndex: 'is_system',
+            render: (value: boolean) => (value ? '是' : '否'),
+          },
+          { title: '描述', dataIndex: 'description', span: 2 },
+          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+        ]}
+      />
     </>
   );
 };

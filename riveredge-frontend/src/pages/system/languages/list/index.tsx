@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Table, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getLanguageList,
   getLanguageByUuid,
@@ -30,7 +31,6 @@ import {
 const LanguageListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑语言）
@@ -38,6 +38,7 @@ const LanguageListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentLanguageUuid, setCurrentLanguageUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -59,13 +60,12 @@ const LanguageListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentLanguageUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       is_default: false,
       is_active: true,
       sort_order: 0,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -75,11 +75,10 @@ const LanguageListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentLanguageUuid(record.uuid);
-      setModalVisible(true);
       
       // 获取语言详情
       const detail = await getLanguageByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         code: detail.code,
         name: detail.name,
         native_name: detail.native_name,
@@ -87,6 +86,7 @@ const LanguageListPage: React.FC = () => {
         is_active: detail.is_active,
         sort_order: detail.sort_order,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取语言详情失败');
     }
@@ -191,10 +191,9 @@ const LanguageListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新语言）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       if (isEdit && currentLanguageUuid) {
         await updateLanguage(currentLanguageUuid, values as UpdateLanguageData);
@@ -205,9 +204,11 @@ const LanguageListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -383,183 +384,178 @@ const LanguageListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<Language>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-          };
-          
-          // 状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          // 搜索条件处理：code 和 name 使用模糊搜索
-          if (searchFormValues?.code) {
-            apiParams.code = searchFormValues.code as string;
-          }
-          if (searchFormValues?.name) {
-            apiParams.name = searchFormValues.name as string;
-          }
-          
-          try {
-            const response = await getLanguageList(apiParams);
-            return {
-              data: response.items,
-              success: true,
-              total: response.total,
+      <ListPageTemplate>
+        <UniTable<Language>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数
+            const apiParams: any = {
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
             };
-          } catch (error: any) {
-            console.error('获取语言列表失败:', error);
-            messageApi.error(error?.message || '获取语言列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建语言
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-      />
+            
+            // 状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
+            
+            // 搜索条件处理：code 和 name 使用模糊搜索
+            if (searchFormValues?.code) {
+              apiParams.code = searchFormValues.code as string;
+            }
+            if (searchFormValues?.name) {
+              apiParams.name = searchFormValues.name as string;
+            }
+            
+            try {
+              const response = await getLanguageList(apiParams);
+              return {
+                data: response.items,
+                success: true,
+                total: response.total,
+              };
+            } catch (error: any) {
+              console.error('获取语言列表失败:', error);
+              messageApi.error(error?.message || '获取语言列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          toolBarRender={() => [
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              新建语言
+            </Button>,
+          ]}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑语言 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑语言' : '新建语言'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={600}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <SafeProFormSelect
-            name="code"
-            label="语言代码"
-            rules={[{ required: true, message: '请选择语言代码' }]}
-            disabled={isEdit}
-            extra="语言代码用于程序识别，创建后不可修改"
-            options={[
-              { label: '简体中文 (zh-CN)', value: 'zh-CN' },
-              { label: 'English (en-US)', value: 'en-US' },
-            ]}
-          />
-          <ProFormText
-            name="name"
-            label="语言名称"
-            rules={[{ required: true, message: '请输入语言名称' }]}
-            placeholder="例如：中文、English、日本語"
-          />
-          <ProFormText
-            name="native_name"
-            label="本地名称"
-            placeholder="例如：中文、English、日本語"
-          />
-          <ProFormSwitch
-            name="is_default"
-            label="是否默认语言"
-          />
-          <ProFormDigit
-            name="sort_order"
-            label="排序顺序"
-            fieldProps={{ min: 0 }}
-            initialValue={0}
-          />
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-        </ProForm>
-      </Modal>
+        <SafeProFormSelect
+          name="code"
+          label="语言代码"
+          rules={[{ required: true, message: '请选择语言代码' }]}
+          disabled={isEdit}
+          extra="语言代码用于程序识别，创建后不可修改"
+          options={[
+            { label: '简体中文 (zh-CN)', value: 'zh-CN' },
+            { label: 'English (en-US)', value: 'en-US' },
+          ]}
+        />
+        <ProFormText
+          name="name"
+          label="语言名称"
+          rules={[{ required: true, message: '请输入语言名称' }]}
+          placeholder="例如：中文、English、日本語"
+        />
+        <ProFormText
+          name="native_name"
+          label="本地名称"
+          placeholder="例如：中文、English、日本語"
+        />
+        <ProFormSwitch
+          name="is_default"
+          label="是否默认语言"
+        />
+        <ProFormDigit
+          name="sort_order"
+          label="排序顺序"
+          fieldProps={{ min: 0 }}
+          initialValue={0}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+        />
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="语言详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<Language>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '语言代码',
-                dataIndex: 'code',
-                render: (value) => (
-                  <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{value}</span>
-                ),
-              },
-              {
-                title: '语言名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '本地名称',
-                dataIndex: 'native_name',
-                render: (value) => value || '-',
-              },
-              {
-                title: '翻译数量',
-                dataIndex: 'translations',
-                render: (value) => Object.keys(value || {}).length,
-              },
-              {
-                title: '默认语言',
-                dataIndex: 'is_default',
-                render: (value) => (value ? '是' : '否'),
-              },
-              {
-                title: '排序顺序',
-                dataIndex: 'sort_order',
-              },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '语言代码',
+            dataIndex: 'code',
+            render: (value: string) => (
+              <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{value}</span>
+            ),
+          },
+          {
+            title: '语言名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '本地名称',
+            dataIndex: 'native_name',
+            render: (value: string) => value || '-',
+          },
+          {
+            title: '翻译数量',
+            dataIndex: 'translations',
+            render: (value: Record<string, string>) => Object.keys(value || {}).length,
+          },
+          {
+            title: '默认语言',
+            dataIndex: 'is_default',
+            render: (value: boolean) => (value ? '是' : '否'),
+          },
+          {
+            title: '排序顺序',
+            dataIndex: 'sort_order',
+          },
+          {
+            title: '状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (value ? '启用' : '禁用'),
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
 
       {/* 翻译管理 Drawer */}
       <Drawer

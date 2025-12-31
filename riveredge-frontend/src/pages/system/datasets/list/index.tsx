@@ -6,11 +6,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getDatasetList,
   getDatasetByUuid,
@@ -36,7 +37,6 @@ const { TextArea } = Input;
 const DatasetListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑数据集）
@@ -44,6 +44,7 @@ const DatasetListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentDatasetUuid, setCurrentDatasetUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [queryType, setQueryType] = useState<'sql' | 'api'>('sql');
   const [queryConfigJson, setQueryConfigJson] = useState<string>('{}');
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
@@ -82,12 +83,11 @@ const DatasetListPage: React.FC = () => {
     setCurrentDatasetUuid(null);
     setQueryType('sql');
     setQueryConfigJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       query_type: 'sql',
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -98,12 +98,11 @@ const DatasetListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentDatasetUuid(record.uuid);
       setQueryType(record.query_type);
-      setModalVisible(true);
       
       // 获取数据集详情
       const detail = await getDatasetByUuid(record.uuid);
       setQueryConfigJson(JSON.stringify(detail.query_config, null, 2));
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         code: detail.code,
         description: detail.description,
@@ -111,6 +110,7 @@ const DatasetListPage: React.FC = () => {
         data_source_uuid: detail.data_source_uuid,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取数据集详情失败');
     }
@@ -185,10 +185,9 @@ const DatasetListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新数据集）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析查询配置 JSON
       let queryConfig: Record<string, any> = {};
@@ -196,7 +195,7 @@ const DatasetListPage: React.FC = () => {
         queryConfig = JSON.parse(queryConfigJson);
       } catch (e) {
         messageApi.error('查询配置 JSON 格式不正确');
-        return;
+        throw new Error('查询配置 JSON 格式不正确');
       }
       
       if (isEdit && currentDatasetUuid) {
@@ -223,9 +222,11 @@ const DatasetListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -363,269 +364,264 @@ const DatasetListPage: React.FC = () => {
 
   return (
     <>
-      <UniTable<Dataset>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数
-          const apiParams: any = {
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-          };
-          
-          // 搜索关键词
-          if (searchFormValues?.search) {
-            apiParams.search = searchFormValues.search;
-          }
-          
-          // 查询类型筛选
-          if (searchFormValues?.query_type) {
-            apiParams.query_type = searchFormValues.query_type;
-          }
-          
-          // 数据源筛选
-          if (searchFormValues?.data_source_uuid) {
-            apiParams.data_source_uuid = searchFormValues.data_source_uuid;
-          }
-          
-          // 启用状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          try {
-            const result = await getDatasetList(apiParams);
-            return {
-              data: result.items,
-              success: true,
-              total: result.total,
+      <ListPageTemplate>
+        <UniTable<Dataset>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数
+            const apiParams: any = {
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
             };
-          } catch (error: any) {
-            console.error('获取数据集列表失败:', error);
-            messageApi.error(error?.message || '获取数据集列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建数据集
-          </Button>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-      />
+            
+            // 搜索关键词
+            if (searchFormValues?.search) {
+              apiParams.search = searchFormValues.search;
+            }
+            
+            // 查询类型筛选
+            if (searchFormValues?.query_type) {
+              apiParams.query_type = searchFormValues.query_type;
+            }
+            
+            // 数据源筛选
+            if (searchFormValues?.data_source_uuid) {
+              apiParams.data_source_uuid = searchFormValues.data_source_uuid;
+            }
+            
+            // 启用状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
+            
+            try {
+              const result = await getDatasetList(apiParams);
+              return {
+                data: result.items,
+                success: true,
+                total: result.total,
+              };
+            } catch (error: any) {
+              console.error('获取数据集列表失败:', error);
+              messageApi.error(error?.message || '获取数据集列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+          toolBarRender={() => [
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              新建数据集
+            </Button>,
+          ]}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑数据集 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑数据集' : '新建数据集'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label="数据集名称"
-            rules={[{ required: true, message: '请输入数据集名称' }]}
-            placeholder="请输入数据集名称"
-          />
-          <ProFormText
-            name="code"
-            label="数据集代码"
-            rules={[
-              { required: true, message: '请输入数据集代码' },
-              { pattern: /^[a-z0-9_]+$/, message: '数据集代码只能包含小写字母、数字和下划线' },
-            ]}
-            placeholder="请输入数据集代码（唯一标识，如：user_list）"
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="data_source_uuid"
-            label="数据源"
-            rules={[{ required: true, message: '请选择数据源' }]}
-            options={dataSources.map(ds => ({
-              label: `${ds.name} (${ds.type})`,
-              value: ds.uuid,
-            }))}
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="query_type"
-            label="查询类型"
-            rules={[{ required: true, message: '请选择查询类型' }]}
-            options={[
-              { label: 'SQL', value: 'sql' },
-              { label: 'API', value: 'api' },
-            ]}
-            fieldProps={{
-              onChange: (value) => {
-                setQueryType(value);
-                // 根据类型设置默认配置
-                const defaultConfigs: Record<string, Record<string, any>> = {
-                  sql: {
-                    sql: 'SELECT * FROM table_name WHERE condition = :param',
-                    parameters: {
-                      param: 'value',
-                    },
+        <ProFormText
+          name="name"
+          label="数据集名称"
+          rules={[{ required: true, message: '请输入数据集名称' }]}
+          placeholder="请输入数据集名称"
+        />
+        <ProFormText
+          name="code"
+          label="数据集代码"
+          rules={[
+            { required: true, message: '请输入数据集代码' },
+            { pattern: /^[a-z0-9_]+$/, message: '数据集代码只能包含小写字母、数字和下划线' },
+          ]}
+          placeholder="请输入数据集代码（唯一标识，如：user_list）"
+          disabled={isEdit}
+        />
+        <SafeProFormSelect
+          name="data_source_uuid"
+          label="数据源"
+          rules={[{ required: true, message: '请选择数据源' }]}
+          options={dataSources.map(ds => ({
+            label: `${ds.name} (${ds.type})`,
+            value: ds.uuid,
+          }))}
+          disabled={isEdit}
+        />
+        <SafeProFormSelect
+          name="query_type"
+          label="查询类型"
+          rules={[{ required: true, message: '请选择查询类型' }]}
+          options={[
+            { label: 'SQL', value: 'sql' },
+            { label: 'API', value: 'api' },
+          ]}
+          fieldProps={{
+            onChange: (value) => {
+              setQueryType(value);
+              // 根据类型设置默认配置
+              const defaultConfigs: Record<string, Record<string, any>> = {
+                sql: {
+                  sql: 'SELECT * FROM table_name WHERE condition = :param',
+                  parameters: {
+                    param: 'value',
                   },
-                  api: {
-                    endpoint: '/api/data',
-                    method: 'GET',
-                    params: {},
-                    headers: {},
-                  },
-                };
-                setQueryConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
-              },
-            }}
-            disabled={isEdit}
+                },
+                api: {
+                  endpoint: '/api/data',
+                  method: 'GET',
+                  params: {},
+                  headers: {},
+                },
+              };
+              setQueryConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
+            },
+          }}
+          disabled={isEdit}
+        />
+        <ProFormTextArea
+          name="description"
+          label="数据集描述"
+          placeholder="请输入数据集描述"
+        />
+        <div>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+            查询配置（JSON）
+          </label>
+          <TextArea
+            value={queryConfigJson}
+            onChange={(e) => setQueryConfigJson(e.target.value)}
+            rows={10}
+            placeholder={queryType === 'sql' 
+              ? '请输入 SQL 查询配置（JSON 格式），例如：{"sql": "SELECT * FROM users WHERE status = :status", "parameters": {"status": "active"}}'
+              : '请输入 API 查询配置（JSON 格式），例如：{"endpoint": "/api/users", "method": "GET", "params": {"status": "active"}}'
+            }
+            style={{ fontFamily: 'monospace' }}
           />
-          <ProFormTextArea
-            name="description"
-            label="数据集描述"
-            placeholder="请输入数据集描述"
-          />
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              查询配置（JSON）
-            </label>
-            <TextArea
-              value={queryConfigJson}
-              onChange={(e) => setQueryConfigJson(e.target.value)}
-              rows={10}
-              placeholder={queryType === 'sql' 
-                ? '请输入 SQL 查询配置（JSON 格式），例如：{"sql": "SELECT * FROM users WHERE status = :status", "parameters": {"status": "active"}}'
-                : '请输入 API 查询配置（JSON 格式），例如：{"endpoint": "/api/users", "method": "GET", "params": {"status": "active"}}'
-              }
-              style={{ fontFamily: 'monospace' }}
-            />
-          </div>
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-        </ProForm>
-      </Modal>
+        </div>
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+        />
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="数据集详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<Dataset>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '数据集名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '数据集代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '数据源',
-                dataIndex: 'data_source_uuid',
-                render: (value) => {
-                  const dataSource = dataSources.find(ds => ds.uuid === value);
-                  return dataSource ? `${dataSource.name} (${dataSource.type})` : value;
-                },
-              },
-              {
-                title: '查询类型',
-                dataIndex: 'query_type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    sql: 'SQL',
-                    api: 'API',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '数据集描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '查询配置',
-                dataIndex: 'query_config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '300px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '最后执行时间',
-                dataIndex: 'last_executed_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '最后错误',
-                dataIndex: 'last_error',
-                render: (value) => value ? (
-                  <Tag color="error">{value}</Tag>
-                ) : '-',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '数据集名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '数据集代码',
+            dataIndex: 'code',
+          },
+          {
+            title: '数据源',
+            dataIndex: 'data_source_uuid',
+            render: (value: string) => {
+              const dataSource = dataSources.find(ds => ds.uuid === value);
+              return dataSource ? `${dataSource.name} (${dataSource.type})` : value;
+            },
+          },
+          {
+            title: '查询类型',
+            dataIndex: 'query_type',
+            render: (value: string) => {
+              const typeMap: Record<string, string> = {
+                sql: 'SQL',
+                api: 'API',
+              };
+              return typeMap[value] || value;
+            },
+          },
+          {
+            title: '数据集描述',
+            dataIndex: 'description',
+          },
+          {
+            title: '查询配置',
+            dataIndex: 'query_config',
+            render: (value: Record<string, any>) => (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '300px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            ),
+          },
+          {
+            title: '启用状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          {
+            title: '最后执行时间',
+            dataIndex: 'last_executed_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '最后错误',
+            dataIndex: 'last_error',
+            render: (value: string) => value ? (
+              <Tag color="error">{value}</Tag>
+            ) : '-',
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
 
       {/* 执行查询结果 Modal */}
       <Modal

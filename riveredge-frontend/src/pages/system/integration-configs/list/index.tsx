@@ -6,12 +6,13 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import CardView from '../card-view';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getIntegrationConfigList,
   getIntegrationConfigByUuid,
@@ -30,7 +31,6 @@ import {
 const IntegrationConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   
@@ -39,6 +39,7 @@ const IntegrationConfigListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentIntegrationUuid, setCurrentIntegrationUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [integrationType, setIntegrationType] = useState<'OAuth' | 'API' | 'Webhook' | 'Database'>('API');
   const [configJson, setConfigJson] = useState<string>('{}');
   
@@ -58,12 +59,11 @@ const IntegrationConfigListPage: React.FC = () => {
     setCurrentIntegrationUuid(null);
     setIntegrationType('API');
     setConfigJson('{}');
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       type: 'API',
       is_active: true,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -74,17 +74,17 @@ const IntegrationConfigListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentIntegrationUuid(record.uuid);
       setIntegrationType(record.type);
-      setModalVisible(true);
       
       // 获取集成配置详情
       const detail = await getIntegrationConfigByUuid(record.uuid);
       setConfigJson(JSON.stringify(detail.config, null, 2));
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         name: detail.name,
         description: detail.description,
         type: detail.type,
         is_active: detail.is_active,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取集成配置详情失败');
     }
@@ -142,10 +142,9 @@ const IntegrationConfigListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新集成配置）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析配置 JSON
       let config: Record<string, any> = {};
@@ -153,7 +152,7 @@ const IntegrationConfigListPage: React.FC = () => {
         config = JSON.parse(configJson);
       } catch (e) {
         messageApi.error('配置 JSON 格式不正确');
-        return;
+        throw new Error('配置 JSON 格式不正确');
       }
       
       if (isEdit && currentIntegrationUuid) {
@@ -177,9 +176,11 @@ const IntegrationConfigListPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -336,7 +337,7 @@ const IntegrationConfigListPage: React.FC = () => {
   return (
     <div>
       {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
         <Tabs
           activeKey={viewMode}
           onChange={(key) => setViewMode(key as 'card' | 'list')}
@@ -361,7 +362,8 @@ const IntegrationConfigListPage: React.FC = () => {
 
       {/* 列表视图 */}
       {viewMode === 'list' && (
-        <UniTable<IntegrationConfig>
+        <ListPageTemplate>
+          <UniTable<IntegrationConfig>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -420,214 +422,208 @@ const IntegrationConfigListPage: React.FC = () => {
             新建集成
           </Button>,
         ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
         />
+        </ListPageTemplate>
       )}
 
       {/* 创建/编辑集成配置 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑集成配置' : '新建集成配置'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          <ProFormText
-            name="name"
-            label="集成名称"
-            rules={[{ required: true, message: '请输入集成名称' }]}
-            placeholder="请输入集成名称"
+        <ProFormText
+          name="name"
+          label="集成名称"
+          rules={[{ required: true, message: '请输入集成名称' }]}
+          placeholder="请输入集成名称"
+        />
+        <ProFormText
+          name="code"
+          label="集成代码"
+          rules={[
+            { required: true, message: '请输入集成代码' },
+            { pattern: /^[a-z0-9_]+$/, message: '集成代码只能包含小写字母、数字和下划线' },
+          ]}
+          placeholder="请输入集成代码（唯一标识，如：wechat_oauth）"
+          disabled={isEdit}
+        />
+        <SafeProFormSelect
+          name="type"
+          label="集成类型"
+          rules={[{ required: true, message: '请选择集成类型' }]}
+          options={[
+            { label: 'OAuth', value: 'OAuth' },
+            { label: 'API', value: 'API' },
+            { label: 'Webhook', value: 'Webhook' },
+            { label: 'Database', value: 'Database' },
+          ]}
+          fieldProps={{
+            onChange: (value) => {
+              setIntegrationType(value);
+              // 根据类型设置默认配置
+              const defaultConfigs: Record<string, Record<string, any>> = {
+                OAuth: {
+                  client_id: '',
+                  client_secret: '',
+                  authorization_url: '',
+                  token_url: '',
+                },
+                API: {
+                  url: '',
+                  method: 'GET',
+                  headers: {},
+                },
+                Webhook: {
+                  url: '',
+                  method: 'POST',
+                  headers: {},
+                },
+                Database: {
+                  host: '',
+                  port: 5432,
+                  database: '',
+                  user: '',
+                  password: '',
+                },
+              };
+              setConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
+            },
+          }}
+          disabled={isEdit}
+        />
+        <ProFormTextArea
+          name="description"
+          label="集成描述"
+          placeholder="请输入集成描述"
+        />
+        <div>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+            配置信息（JSON）
+          </label>
+          <Input.TextArea
+            value={configJson}
+            onChange={(e) => setConfigJson(e.target.value)}
+            rows={10}
+            placeholder='请输入配置信息（JSON 格式），例如：{"url": "https://api.example.com", "method": "GET", "headers": {}}'
+            style={{ fontFamily: 'monospace' }}
           />
-          <ProFormText
-            name="code"
-            label="集成代码"
-            rules={[
-              { required: true, message: '请输入集成代码' },
-              { pattern: /^[a-z0-9_]+$/, message: '集成代码只能包含小写字母、数字和下划线' },
-            ]}
-            placeholder="请输入集成代码（唯一标识，如：wechat_oauth）"
-            disabled={isEdit}
-          />
-          <SafeProFormSelect
-            name="type"
-            label="集成类型"
-            rules={[{ required: true, message: '请选择集成类型' }]}
-            options={[
-              { label: 'OAuth', value: 'OAuth' },
-              { label: 'API', value: 'API' },
-              { label: 'Webhook', value: 'Webhook' },
-              { label: 'Database', value: 'Database' },
-            ]}
-            fieldProps={{
-              onChange: (value) => {
-                setIntegrationType(value);
-                // 根据类型设置默认配置
-                const defaultConfigs: Record<string, Record<string, any>> = {
-                  OAuth: {
-                    client_id: '',
-                    client_secret: '',
-                    authorization_url: '',
-                    token_url: '',
-                  },
-                  API: {
-                    url: '',
-                    method: 'GET',
-                    headers: {},
-                  },
-                  Webhook: {
-                    url: '',
-                    method: 'POST',
-                    headers: {},
-                  },
-                  Database: {
-                    host: '',
-                    port: 5432,
-                    database: '',
-                    user: '',
-                    password: '',
-                  },
-                };
-                setConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
-              },
-            }}
-            disabled={isEdit}
-          />
-          <ProFormTextArea
-            name="description"
-            label="集成描述"
-            placeholder="请输入集成描述"
-          />
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-              配置信息（JSON）
-            </label>
-            <Input.TextArea
-              value={configJson}
-              onChange={(e) => setConfigJson(e.target.value)}
-              rows={10}
-              placeholder='请输入配置信息（JSON 格式），例如：{"url": "https://api.example.com", "method": "GET", "headers": {}}'
-              style={{ fontFamily: 'monospace' }}
-            />
-          </div>
-          <ProFormSwitch
-            name="is_active"
-            label="是否启用"
-          />
-        </ProForm>
-      </Modal>
+        </div>
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+        />
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate
         title="集成配置详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<IntegrationConfig>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '集成名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '集成代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '集成类型',
-                dataIndex: 'type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    OAuth: 'OAuth',
-                    API: 'API',
-                    Webhook: 'Webhook',
-                    Database: 'Database',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '集成描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '配置信息',
-                dataIndex: 'config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '300px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '连接状态',
-                dataIndex: 'is_connected',
-                render: (value) => (
-                  <Space>
-                    {value ? (
-                      <Badge status="success" text="已连接" />
-                    ) : (
-                      <Badge status="default" text="未连接" />
-                    )}
-                  </Space>
-                ),
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '最后连接时间',
-                dataIndex: 'last_connected_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '最后错误',
-                dataIndex: 'last_error',
-                render: (value) => value ? (
-                  <Tag color="error">{value}</Tag>
-                ) : '-',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        dataSource={detailData}
+        columns={[
+          {
+            title: '集成名称',
+            dataIndex: 'name',
+          },
+          {
+            title: '集成代码',
+            dataIndex: 'code',
+          },
+          {
+            title: '集成类型',
+            dataIndex: 'type',
+            render: (value: string) => {
+              const typeMap: Record<string, string> = {
+                OAuth: 'OAuth',
+                API: 'API',
+                Webhook: 'Webhook',
+                Database: 'Database',
+              };
+              return typeMap[value] || value;
+            },
+          },
+          {
+            title: '集成描述',
+            dataIndex: 'description',
+          },
+          {
+            title: '配置信息',
+            dataIndex: 'config',
+            render: (value: Record<string, any>) => (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '300px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            ),
+          },
+          {
+            title: '连接状态',
+            dataIndex: 'is_connected',
+            render: (value: boolean) => (
+              <Space>
+                {value ? (
+                  <Badge status="success" text="已连接" />
+                ) : (
+                  <Badge status="default" text="未连接" />
+                )}
+              </Space>
+            ),
+          },
+          {
+            title: '启用状态',
+            dataIndex: 'is_active',
+            render: (value: boolean) => (
+              <Tag color={value ? 'success' : 'default'}>
+                {value ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          {
+            title: '最后连接时间',
+            dataIndex: 'last_connected_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '最后错误',
+            dataIndex: 'last_error',
+            render: (value: string) => value ? (
+              <Tag color="error">{value}</Tag>
+            ) : '-',
+          },
+          {
+            title: '创建时间',
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '更新时间',
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
     </div>
   );
 };
