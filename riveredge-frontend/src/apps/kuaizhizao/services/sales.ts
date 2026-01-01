@@ -9,6 +9,9 @@
 
 import { apiRequest } from '../../../services/api';
 
+// 导出销售预测API（重新导出，方便使用）
+export * from './sales-forecast';
+
 /**
  * 销售订单接口定义
  */

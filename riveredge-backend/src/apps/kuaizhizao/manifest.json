@@ -16,17 +16,11 @@
                 "title": "计划管理",
                 "icon": "planning",
                 "sort_order": 1,
-                "children": [{
+                "children": [                    {
                         "title": "需求管理",
                         "path": "/apps/kuaizhizao/plan-management/demand-management",
                         "permission": "kuaizhizao:demand:view",
                         "sort_order": 1
-                    },
-                    {
-                        "title": "BOM管理",
-                        "path": "/apps/kuaizhizao/plan-management/bill-of-materials",
-                        "permission": "kuaizhizao:bom:view",
-                        "sort_order": 1.5
                     },
                     {
                         "title": "MRP运算",
@@ -203,12 +197,6 @@
         "kuaizhizao:demand:create",
         "kuaizhizao:demand:update",
         "kuaizhizao:demand:delete",
-        "kuaizhizao:bom:view",
-        "kuaizhizao:bom:create",
-        "kuaizhizao:bom:update",
-        "kuaizhizao:bom:delete",
-        "kuaizhizao:bom:approve",
-        "kuaizhizao:bom:expand",
         "kuaizhizao:scheduling:view",
         "kuaizhizao:scheduling:create",
         "kuaizhizao:scheduling:update",

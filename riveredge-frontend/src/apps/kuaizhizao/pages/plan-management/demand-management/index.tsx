@@ -11,6 +11,7 @@ import { PlusOutlined, EyeOutlined, EditOutlined, CalculatorOutlined } from '@an
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
+import { listSalesForecasts, getSalesForecast, createSalesForecast, updateSalesForecast, approveSalesForecast } from '../../../services/sales-forecast';
 
 // 使用后端销售预测接口定义
 interface DemandForecast {
@@ -80,8 +81,10 @@ const DemandManagementPage: React.FC = () => {
   const handleFormFinish = async (values: any) => {
     try {
       if (isEdit && currentForecast?.id) {
+        await updateSalesForecast(currentForecast.id, values);
         messageApi.success('销售预测更新成功');
       } else {
+        await createSalesForecast(values);
         messageApi.success('销售预测创建成功');
       }
       setModalVisible(false);
@@ -97,7 +100,7 @@ const DemandManagementPage: React.FC = () => {
    */
   const handleDetail = async (record: DemandForecast) => {
     try {
-      const detail = await planningApi.productionPlan.get(record.id!.toString());
+      const detail = await getSalesForecast(record.id!);
       setCurrentForecast(detail);
       setDetailDrawerVisible(true);
     } catch (error) {
@@ -114,7 +117,7 @@ const DemandManagementPage: React.FC = () => {
       content: `确定要审核通过销售预测 "${record.forecast_name}" 吗？审核后将可用于MRP运算。`,
       onOk: async () => {
         try {
-          // 这里应该调用审核API，暂时模拟
+          await approveSalesForecast(record.id!);
           messageApi.success('销售预测审核成功');
           actionRef.current?.reload();
         } catch (error) {
@@ -258,15 +261,15 @@ const DemandManagementPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params) => {
           try {
-            const response = await planningApi.productionPlan.list({
+            const response = await listSalesForecasts({
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
               ...params,
             });
             return {
-              data: response.data,
-              success: response.success,
-              total: response.total,
+              data: response.data || [],
+              success: response.success !== false,
+              total: response.total || 0,
             };
           } catch (error) {
             messageApi.error('获取销售预测列表失败');

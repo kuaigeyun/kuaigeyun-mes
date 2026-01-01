@@ -7,7 +7,6 @@ import { Routes, Route } from 'react-router-dom';
 
 // 计划管理页面
 import DemandManagementPage from './pages/plan-management/demand-management';
-import BOMManagementPage from './pages/plan-management/bill-of-materials';
 import MRPComputationPage from './pages/plan-management/mrp-computation';
 import LRPComputationPage from './pages/plan-management/lrp-computation';
 import ProductionPlansPage from './pages/plan-management/production-plans';
@@ -38,9 +37,6 @@ import InventoryReportPage from './pages/reports/inventory-report';
 import ProductionReportPage from './pages/reports/production-report';
 import QualityReportPage from './pages/reports/quality-report';
 
-// 通用功能页面
-import BusinessConfigPage from './pages/common/business-config';
-
 // 仓储管理页面
 import InventoryPage from './pages/warehouse-management/inventory';
 import InboundPage from './pages/warehouse-management/inbound';
@@ -53,7 +49,6 @@ const KuaizhizaoApp: React.FC = () => {
     <Routes>
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={<DemandManagementPage />} />
-      <Route path="plan-management/bill-of-materials" element={<BOMManagementPage />} />
       <Route path="plan-management/mrp-computation" element={<MRPComputationPage />} />
       <Route path="plan-management/lrp-computation" element={<LRPComputationPage />} />
       <Route path="plan-management/production-plans" element={<ProductionPlansPage />} />
@@ -83,9 +78,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="reports/inventory-report" element={<InventoryReportPage />} />
       <Route path="reports/production-report" element={<ProductionReportPage />} />
       <Route path="reports/quality-report" element={<QualityReportPage />} />
-
-      {/* 通用功能路由 */}
-      <Route path="common/business-config" element={<BusinessConfigPage />} />
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />

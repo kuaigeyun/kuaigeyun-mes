@@ -354,30 +354,3 @@ export const planningApi = {
   },
 };
 
-// BOM管理相关接口
-export const bomApi = {
-  // 物料清单
-  billOfMaterials: {
-    list: async (params?: any) => {
-      return api.get('/apps/kuaizhizao/bill-of-materials', { params });
-    },
-    create: async (data: any) => {
-      return api.post('/apps/kuaizhizao/bill-of-materials', data);
-    },
-    update: async (id: string, data: any) => {
-      return api.put(`/apps/kuaizhizao/bill-of-materials/${id}`, data);
-    },
-    delete: async (id: string) => {
-      return api.delete(`/apps/kuaizhizao/bill-of-materials/${id}`);
-    },
-    get: async (id: string) => {
-      return api.get(`/apps/kuaizhizao/bill-of-materials/${id}`);
-    },
-    expand: async (id: string, data: any) => {
-      return api.post(`/apps/kuaizhizao/bill-of-materials/${id}/expand`, data);
-    },
-    calculateRequirements: async (id: string, data: any) => {
-      return api.post(`/apps/kuaizhizao/bill-of-materials/${id}/calculate-requirements`, data);
-    },
-  },
-};
