@@ -456,7 +456,7 @@ const OnlineUsersPage: React.FC = () => {
           ]}
           headerTitle="在线用户"
           viewTypes={['table', 'card']}
-          defaultViewType="card"
+          defaultViewType="table"
           cardViewConfig={{
             renderCard,
           }}
