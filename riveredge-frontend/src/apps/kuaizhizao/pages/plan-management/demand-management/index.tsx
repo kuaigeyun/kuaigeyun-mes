@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, message, Form, Table, Input, Select } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { planningApi } from '../../../services/production';
 
 // 使用后端销售预测接口定义
@@ -51,6 +52,7 @@ const DemandManagementPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentForecast, setCurrentForecast] = useState<DemandForecast | null>(null);
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -62,6 +64,7 @@ const DemandManagementPage: React.FC = () => {
     setIsEdit(false);
     setCurrentForecast(null);
     setModalVisible(true);
+    formRef.current?.resetFields();
   };
 
   /**
@@ -71,6 +74,22 @@ const DemandManagementPage: React.FC = () => {
     setIsEdit(true);
     setCurrentForecast(record);
     setModalVisible(true);
+    formRef.current?.setFieldsValue(record);
+  };
+
+  const handleFormFinish = async (values: any) => {
+    try {
+      if (isEdit && currentForecast?.id) {
+        messageApi.success('销售预测更新成功');
+      } else {
+        messageApi.success('销售预测创建成功');
+      }
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
   };
 
   /**
@@ -230,7 +249,7 @@ const DemandManagementPage: React.FC = () => {
   ];
 
   return (
-    <>
+    <ListPageTemplate>
       <UniTable
         headerTitle="需求管理 - 销售预测"
         actionRef={actionRef}
@@ -274,148 +293,148 @@ const DemandManagementPage: React.FC = () => {
         ]}
       />
 
-      {/* 创建/编辑销售预测 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑销售预测' : '新建销售预测'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={() => {
-          messageApi.success(isEdit ? '销售预测更新成功' : '销售预测创建成功');
-          setModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={800}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleFormFinish}
+        isEdit={isEdit}
+        initialValues={currentForecast || { productionMode: 'MTS', unit: '个' }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        grid={true}
       >
-        <Form layout="vertical" style={{ padding: '16px 0' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <Form.Item
-              label="预测名称"
-              required
-            >
-              <Input placeholder="请输入预测名称" />
-            </Form.Item>
+        <ProFormText
+          name="forecast_name"
+          label="预测名称"
+          placeholder="请输入预测名称"
+          rules={[{ required: true, message: '请输入预测名称' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="productionMode"
+          label="生产模式"
+          rules={[{ required: true, message: '请选择生产模式' }]}
+          options={[
+            { label: '按库存生产 (MTS)', value: 'MTS' },
+            { label: '按订单生产 (MTO)', value: 'MTO' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="productCode"
+          label="产品"
+          placeholder="选择产品"
+          rules={[{ required: true, message: '请选择产品' }]}
+          options={[
+            { label: '产品A', value: 'FIN001' },
+            { label: '产品B', value: 'FIN002' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="forecastPeriod"
+          label="预测周期"
+          placeholder="例如：2026-01"
+          rules={[{ required: true, message: '请输入预测周期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="forecastQuantity"
+          label="预测数量"
+          placeholder="请输入预测数量"
+          rules={[{ required: true, message: '请输入预测数量' }]}
+          min={0}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="unit"
+          label="单位"
+          placeholder="例如：个、kg"
+          rules={[{ required: true, message: '请输入单位' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="notes"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
 
-            <Form.Item
-              label="生产模式"
-              required
-            >
-              <Select defaultValue="MTS">
-                <Select.Option value="MTS">按库存生产 (MTS)</Select.Option>
-                <Select.Option value="MTO">按订单生产 (MTO)</Select.Option>
-              </Select>
-            </Form.Item>
-
-            <Form.Item
-              label="产品"
-              required
-            >
-              <Select placeholder="选择产品">
-                <Select.Option value="FIN001">产品A</Select.Option>
-                <Select.Option value="FIN002">产品B</Select.Option>
-              </Select>
-            </Form.Item>
-
-            <Form.Item
-              label="预测周期"
-              required
-            >
-              <Input placeholder="例如：2026-01" />
-            </Form.Item>
-
-            <Form.Item
-              label="预测数量"
-              required
-            >
-              <Input type="number" placeholder="请输入预测数量" />
-            </Form.Item>
-
-            <Form.Item
-              label="单位"
-              required
-            >
-              <Input placeholder="例如：个、kg" defaultValue="个" />
-            </Form.Item>
-          </div>
-
-          <Form.Item
-            label="备注"
-          >
-            <Input.TextArea rows={3} placeholder="请输入备注信息" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 销售预测详情 Drawer */}
-      <Drawer
-        title="销售预测详情"
-        size="large"
+      <DetailDrawerTemplate
+        title={`销售预测详情 - ${currentForecast?.forecast_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-      >
-        {currentForecast && (
-          <div style={{ padding: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-              <div><strong>预测编号：</strong>{currentForecast.forecast_code}</div>
-              <div><strong>预测名称：</strong>{currentForecast.forecast_name}</div>
-              <div><strong>预测期间：</strong>{currentForecast.start_date} ~ {currentForecast.end_date}</div>
-              <div><strong>状态：</strong>
-                <Tag color={
-                  currentForecast.status === '已审核' ? 'processing' :
-                  currentForecast.status === '已完成' ? 'success' :
-                  currentForecast.status === '已取消' ? 'error' : 'default'
-                }>
-                  {currentForecast.status}
-                </Tag>
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        columns={[]}
+        customContent={
+          currentForecast ? (
+            <div style={{ padding: '16px 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                <div><strong>预测编号：</strong>{currentForecast.forecast_code}</div>
+                <div><strong>预测名称：</strong>{currentForecast.forecast_name}</div>
+                <div><strong>预测期间：</strong>{currentForecast.start_date} ~ {currentForecast.end_date}</div>
+                <div><strong>状态：</strong>
+                  <Tag color={
+                    currentForecast.status === '已审核' ? 'processing' :
+                    currentForecast.status === '已完成' ? 'success' :
+                    currentForecast.status === '已取消' ? 'error' : 'default'
+                  }>
+                    {currentForecast.status}
+                  </Tag>
+                </div>
+                <div><strong>审核状态：</strong>
+                  <Tag color={
+                    currentForecast.review_status === '审核通过' ? 'success' :
+                    currentForecast.review_status === '审核驳回' ? 'error' : 'default'
+                  }>
+                    {currentForecast.review_status}
+                  </Tag>
+                </div>
+                <div><strong>审核人：</strong>{currentForecast.reviewer_name}</div>
+                <div><strong>审核时间：</strong>{currentForecast.review_time}</div>
+                <div><strong>创建时间：</strong>{currentForecast.created_at}</div>
               </div>
-              <div><strong>审核状态：</strong>
-                <Tag color={
-                  currentForecast.review_status === '审核通过' ? 'success' :
-                  currentForecast.review_status === '审核驳回' ? 'error' : 'default'
-                }>
-                  {currentForecast.review_status}
-                </Tag>
-              </div>
-              <div><strong>审核人：</strong>{currentForecast.reviewer_name}</div>
-              <div><strong>审核时间：</strong>{currentForecast.review_time}</div>
-              <div><strong>创建时间：</strong>{currentForecast.created_at}</div>
+
+              {currentForecast.review_remarks && (
+                <div style={{ marginBottom: '24px' }}>
+                  <strong>审核备注：</strong>{currentForecast.review_remarks}
+                </div>
+              )}
+
+              {currentForecast.notes && (
+                <div style={{ marginBottom: '24px' }}>
+                  <strong>备注：</strong>{currentForecast.notes}
+                </div>
+              )}
+
+              {/* 预测明细表格 */}
+              {currentForecast.forecast_items && currentForecast.forecast_items.length > 0 && (
+                <div>
+                  <h4>预测明细</h4>
+                  <Table
+                    size="small"
+                    columns={[
+                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                      { title: '类型', dataIndex: 'component_type', width: 100 },
+                      { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
+                      { title: '预测数量', dataIndex: 'forecast_quantity', width: 120, align: 'right' },
+                    ]}
+                    dataSource={currentForecast.forecast_items}
+                    pagination={false}
+                    bordered
+                    rowKey="id"
+                  />
+                </div>
+              )}
             </div>
-
-            {currentForecast.review_remarks && (
-              <div style={{ marginBottom: '24px' }}>
-                <strong>审核备注：</strong>{currentForecast.review_remarks}
-              </div>
-            )}
-
-            {currentForecast.notes && (
-              <div style={{ marginBottom: '24px' }}>
-                <strong>备注：</strong>{currentForecast.notes}
-              </div>
-            )}
-
-            {/* 预测明细表格 */}
-            {currentForecast.forecast_items && currentForecast.forecast_items.length > 0 && (
-              <div>
-                <h4>预测明细</h4>
-                <Table
-                  size="small"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    { title: '类型', dataIndex: 'component_type', width: 100 },
-                    { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
-                    { title: '预测数量', dataIndex: 'forecast_quantity', width: 120, align: 'right' },
-                  ]}
-                  dataSource={currentForecast.forecast_items}
-                  pagination={false}
-                  bordered
-                  rowKey="id"
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

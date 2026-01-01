@@ -9,9 +9,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Tree, Card, Row, Col, Statistic, Input, Select, message, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, NodeIndexOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Drawer, Card, Row, Col, Statistic, Table } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, NodeIndexOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { bomApi } from '../../../services/production';
 
 // BOM接口定义
@@ -69,9 +70,10 @@ const BOMManagementPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
   const [currentBOM, setCurrentBOM] = useState<BillOfMaterials | null>(null);
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -207,68 +209,66 @@ const BOMManagementPage: React.FC = () => {
 
   // 处理编辑
   const handleEdit = (record: BillOfMaterials) => {
+    setIsEdit(true);
     setCurrentBOM(record);
-    setEditModalVisible(true);
+    setModalVisible(true);
+    formRef.current?.setFieldsValue(record);
   };
 
   // 处理创建
   const handleCreate = () => {
+    setIsEdit(false);
     setCurrentBOM(null);
-    setCreateModalVisible(true);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+  };
+
+  const handleFormFinish = async (values: any) => {
+    try {
+      if (isEdit && currentBOM?.id) {
+        messageApi.success('BOM更新成功');
+      } else {
+        messageApi.success('BOM创建成功');
+      }
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
   };
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总BOM数量"
-                  value={25}
-                  prefix={<NodeIndexOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="生效中BOM"
-                  value={18}
-                  prefix={<ExperimentOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="草稿BOM"
-                  value={5}
-                  suffix="个"
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="平均层级"
-                  value={2.3}
-                  suffix="级"
-                  precision={1}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* BOM管理表格 */}
-        <UniTable
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '总BOM数量',
+          value: 25,
+          prefix: <NodeIndexOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '生效中BOM',
+          value: 18,
+          prefix: <ExperimentOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '草稿BOM',
+          value: 5,
+          suffix: '个',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '平均层级',
+          value: 2.3,
+          suffix: '级',
+          precision: 1,
+          valueStyle: { color: '#722ed1' },
+        },
+      ]}
+    >
+      <UniTable
           headerTitle="BOM管理"
           actionRef={actionRef}
           rowKey="id"
@@ -311,116 +311,94 @@ const BOMManagementPage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
 
-      {/* 创建BOM Modal */}
-      <Modal
-        title="新建BOM"
-        open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        onOk={() => {
-          messageApi.success('BOM创建成功');
-          setCreateModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={600}
+      <FormModalTemplate
+        title={isEdit ? '编辑BOM' : '新建BOM'}
+        open={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleFormFinish}
+        isEdit={isEdit}
+        initialValues={currentBOM || {}}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
-        <div style={{ padding: '16px 0' }}>
-          {/* 这里可以添加BOM创建表单组件 */}
-          <p>BOM创建表单开发中...</p>
-        </div>
-      </Modal>
+        {/* BOM创建/编辑表单开发中 */}
+        <p>BOM创建/编辑表单开发中...</p>
+      </FormModalTemplate>
 
-      {/* 编辑BOM Modal */}
-      <Modal
-        title="编辑BOM"
-        open={editModalVisible}
-        onCancel={() => setEditModalVisible(false)}
-        onOk={() => {
-          messageApi.success('BOM更新成功');
-          setEditModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={600}
-      >
-        <div style={{ padding: '16px 0' }}>
-          {/* 这里可以添加BOM编辑表单组件 */}
-          <p>BOM编辑表单开发中...</p>
-        </div>
-      </Modal>
-
-      {/* BOM详情 Drawer */}
-      <Drawer
-        title={`BOM详情 - ${currentBOM?.bom_code}`}
+      <DetailDrawerTemplate
+        title={`BOM详情 - ${currentBOM?.bom_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={700}
-      >
-        {currentBOM && (
-          <div style={{ padding: '16px 0' }}>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>BOM编码：</strong>{currentBOM.bom_code}
-                </Col>
-                <Col span={12}>
-                  <strong>BOM名称：</strong>{currentBOM.bom_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>产品编码：</strong>{currentBOM.product_code}
-                </Col>
-                <Col span={12}>
-                  <strong>产品名称：</strong>{currentBOM.product_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <strong>版本：</strong>{currentBOM.version}
-                </Col>
-                <Col span={8}>
-                  <strong>状态：</strong>
-                  <Tag color={currentBOM.status === '已生效' ? 'success' : 'default'}>
-                    {currentBOM.status}
-                  </Tag>
-                </Col>
-                <Col span={8}>
-                  <strong>创建时间：</strong>{currentBOM.created_at}
-                </Col>
-              </Row>
-            </Card>
-
-            {/* BOM明细 */}
-            {currentBOM.items && currentBOM.items.length > 0 && (
-              <Card title="BOM明细">
-                <Table
-                  size="small"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'component_material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'component_material_name', width: 150 },
-                    { title: '数量', dataIndex: 'quantity', width: 80, align: 'right' },
-                    { title: '单位', dataIndex: 'unit', width: 60 },
-                    { title: '层级', dataIndex: 'level', width: 60 },
-                    { title: '是否虚拟件', dataIndex: 'is_phantom', width: 100, render: (val) => val ? '是' : '否' },
-                  ]}
-                  dataSource={currentBOM.items}
-                  pagination={false}
-                  rowKey="id"
-                  bordered
-                />
+        width={DRAWER_CONFIG.SMALL_WIDTH}
+        columns={[]}
+        customContent={
+          currentBOM ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>BOM编码：</strong>{currentBOM.bom_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>BOM名称：</strong>{currentBOM.bom_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>产品编码：</strong>{currentBOM.product_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>产品名称：</strong>{currentBOM.product_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}>
+                    <strong>版本：</strong>{currentBOM.version}
+                  </Col>
+                  <Col span={8}>
+                    <strong>状态：</strong>
+                    <Tag color={currentBOM.status === '已生效' ? 'success' : 'default'}>
+                      {currentBOM.status}
+                    </Tag>
+                  </Col>
+                  <Col span={8}>
+                    <strong>创建时间：</strong>{currentBOM.created_at}
+                  </Col>
+                </Row>
               </Card>
-            )}
-          </div>
-        )}
-      </Drawer>
 
-      {/* BOM展开结果 Drawer */}
+              {/* BOM明细 */}
+              {currentBOM.items && currentBOM.items.length > 0 && (
+                <Card title="BOM明细">
+                  <Table
+                    size="small"
+                    columns={[
+                      { title: '物料编码', dataIndex: 'component_material_code', width: 120 },
+                      { title: '物料名称', dataIndex: 'component_material_name', width: 150 },
+                      { title: '数量', dataIndex: 'quantity', width: 80, align: 'right' },
+                      { title: '单位', dataIndex: 'unit', width: 60 },
+                      { title: '层级', dataIndex: 'level', width: 60 },
+                      { title: '是否虚拟件', dataIndex: 'is_phantom', width: 100, render: (val) => val ? '是' : '否' },
+                    ]}
+                    dataSource={currentBOM.items}
+                    pagination={false}
+                    rowKey="id"
+                    bordered
+                  />
+                </Card>
+              )}
+            </div>
+          ) : null
+        }
+      />
+
+      {/* BOM展开结果 Drawer - 保留原有Drawer，因为这是特殊功能 */}
       <Drawer
         title="BOM展开结果"
         open={expansionDrawerVisible}
         onClose={() => setExpansionDrawerVisible(false)}
-        width={800}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
       >
         {expansionResult && (
           <div style={{ padding: '16px 0' }}>
