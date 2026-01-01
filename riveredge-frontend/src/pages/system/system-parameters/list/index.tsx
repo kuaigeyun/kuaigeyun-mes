@@ -8,11 +8,11 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Tabs } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import GroupedFormView from '../grouped-form-view';
+import { App, Popconfirm, Button, Tag, Space, Card, Typography } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
+import { theme } from 'antd';
 import {
   getSystemParameterList,
   getSystemParameterByUuid,
@@ -29,9 +29,9 @@ import {
  */
 const SystemParameterListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [viewMode, setViewMode] = useState<'list' | 'form'>('form');
   
   // Modal 相关状态（创建/编辑参数）
   const [modalVisible, setModalVisible] = useState(false);
@@ -181,6 +181,101 @@ const SystemParameterListPage: React.FC = () => {
       return JSON.stringify(value, null, 2);
     }
     return String(value);
+  };
+
+  /**
+   * 渲染参数卡片
+   */
+  const renderParameterCard = (item: SystemParameter, index: number) => {
+    const displayValue = formatValue(item.value, item.type);
+    const typeMap: Record<string, { color: string; text: string }> = {
+      string: { color: 'default', text: '字符串' },
+      number: { color: 'blue', text: '数字' },
+      boolean: { color: 'green', text: '布尔' },
+      json: { color: 'orange', text: 'JSON' },
+    };
+    const typeInfo = typeMap[item.type] || { color: 'default', text: item.type };
+
+    return (
+      <Card
+        key={item.uuid}
+        hoverable
+        style={{
+          height: '100%',
+          borderRadius: themeToken.borderRadiusLG,
+        }}
+        actions={[
+          <Button
+            key="view"
+            type="link"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(item)}
+          >
+            查看
+          </Button>,
+          <Button
+            key="edit"
+            type="link"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(item)}
+          >
+            编辑
+          </Button>,
+          <Popconfirm
+            key="delete"
+            title="确定要删除这个参数吗？"
+            onConfirm={() => handleDelete(item)}
+            disabled={item.is_system}
+          >
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={item.is_system}
+            >
+              删除
+            </Button>
+          </Popconfirm>,
+        ]}
+      >
+        <Card.Meta
+          title={
+            <Space>
+              <Typography.Text strong>{item.key}</Typography.Text>
+              <Tag color={typeInfo.color}>{typeInfo.text}</Tag>
+              {item.is_system && <Tag color="default">系统参数</Tag>}
+              <Tag color={item.is_active ? 'success' : 'default'}>
+                {item.is_active ? '启用' : '禁用'}
+              </Tag>
+            </Space>
+          }
+          description={
+            <div>
+              {item.description && (
+                <Typography.Paragraph
+                  ellipsis={{ rows: 2 }}
+                  style={{ marginBottom: 8, color: themeToken.colorTextSecondary }}
+                >
+                  {item.description}
+                </Typography.Paragraph>
+              )}
+              <Typography.Text
+                type="secondary"
+                style={{
+                  fontSize: '12px',
+                  wordBreak: 'break-all',
+                  display: 'block',
+                  maxHeight: '60px',
+                  overflow: 'hidden',
+                }}
+              >
+                {displayValue.length > 100 ? `${displayValue.substring(0, 100)}...` : displayValue}
+              </Typography.Text>
+            </div>
+          }
+        />
+      </Card>
+    );
   };
 
   /**
@@ -378,39 +473,8 @@ const SystemParameterListPage: React.FC = () => {
 
   return (
     <>
-      {/* 视图切换 */}
-      <div style={{ 
-        padding: '16px 16px 0 16px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
-      }}>
-        <Tabs
-          activeKey={viewMode}
-          onChange={(key) => setViewMode(key as 'list' | 'form')}
-          items={[
-            { key: 'form', label: '分组表单视图', icon: <AppstoreOutlined /> },
-            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
-          ]}
-        />
-        {viewMode === 'list' && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建参数
-          </Button>
-        )}
-      </div>
-
-      {/* 分组表单视图 */}
-      {viewMode === 'form' && <div style={{ padding: '0 16px 16px 16px' }}><GroupedFormView /></div>}
-
-      {/* 列表视图 */}
-      {viewMode === 'list' && (
-        <ListPageTemplate>
-          <UniTable<SystemParameter>
+      <ListPageTemplate>
+        <UniTable<SystemParameter>
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -463,9 +527,16 @@ const SystemParameterListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          showCreateButton={true}
+          onCreate={handleCreate}
+          viewTypes={['table', 'card']}
+          defaultViewType="table"
+          cardViewConfig={{
+            renderCard: renderParameterCard,
+            columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },
+          }}
         />
-        </ListPageTemplate>
-      )}
+      </ListPageTemplate>
 
       {/* 创建/编辑参数 Modal */}
       <FormModalTemplate
