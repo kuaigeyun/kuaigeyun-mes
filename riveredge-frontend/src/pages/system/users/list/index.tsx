@@ -11,7 +11,7 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, AutoComplete, Select } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import FormModal from '../../../../components/form-modal';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getUserList,
   getUserByUuid,
@@ -631,9 +631,55 @@ const UserListPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '用户名', dataIndex: 'username' },
+    { title: '邮箱', dataIndex: 'email' },
+    { title: '姓名', dataIndex: 'full_name' },
+    { title: '手机号', dataIndex: 'phone' },
+    { 
+      title: '部门', 
+      dataIndex: ['department', 'name'], 
+      render: (_: any, record: User) => record.department?.name || '-' 
+    },
+    { 
+      title: '职位', 
+      dataIndex: ['position', 'name'], 
+      render: (_: any, record: User) => record.position?.name || '-' 
+    },
+    {
+      title: '角色',
+      dataIndex: 'roles',
+      span: 2,
+      render: (_: any, record: User) => (
+        <Space>
+          {record.roles?.map(role => (
+            <Tag key={role.uuid}>{role.name}</Tag>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (value ? '启用' : '禁用'),
+    },
+    {
+      title: '组织管理员',
+      dataIndex: 'is_tenant_admin',
+      render: (value: boolean) => (value ? '是' : '否'),
+    },
+    { title: '最后登录', dataIndex: 'last_login', valueType: 'dateTime' },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
   return (
     <>
-      <UniTable<User>
+      <ListPageTemplate>
+        <UniTable<User>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, filter, searchFormValues) => {
@@ -660,11 +706,6 @@ const UserListPage: React.FC = () => {
           showQuickJumper: true,
           pageSizeOptions: ['10', '20', '50', '100'],
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" onClick={handleCreate}>
-            新建用户
-          </Button>,
-        ]}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -673,16 +714,20 @@ const UserListPage: React.FC = () => {
         onImport={handleImport}
         showExportButton={true}
         onExport={handleExport}
-      />
+        showCreateButton
+        onCreate={handleCreate}
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
-      <FormModal
+      <FormModalTemplate
         title={isEdit ? '编辑用户' : '新建用户'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={handleSubmit}
-        confirmLoading={formLoading}
-        width={1000}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -832,56 +877,18 @@ const UserListPage: React.FC = () => {
             />
           </div>
         </ProForm>
-      </FormModal>
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<User>
         title="用户详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions
-            column={2}
-            dataSource={detailData}
-            columns={[
-              { title: '用户名', dataIndex: 'username' },
-              { title: '邮箱', dataIndex: 'email' },
-              { title: '姓名', dataIndex: 'full_name' },
-              { title: '手机号', dataIndex: 'phone' },
-              { title: '部门', dataIndex: ['department', 'name'], render: (_, record) => record.department?.name || '-' },
-              { title: '职位', dataIndex: ['position', 'name'], render: (_, record) => record.position?.name || '-' },
-              {
-                title: '角色',
-                dataIndex: 'roles',
-                span: 2,
-                render: (_, record) => (
-                  <Space>
-                    {record.roles?.map(role => (
-                      <Tag key={role.uuid}>{role.name}</Tag>
-                    ))}
-                  </Space>
-                ),
-              },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
-              },
-              {
-                title: '组织管理员',
-                dataIndex: 'is_tenant_admin',
-                render: (value) => (value ? '是' : '否'),
-              },
-              { title: '最后登录', dataIndex: 'last_login', valueType: 'dateTime' },
-              { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-              { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+      />
     </>
   );
 };

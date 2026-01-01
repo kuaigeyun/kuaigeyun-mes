@@ -11,6 +11,7 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getMessageTemplateList,
   getMessageTemplateByUuid,
@@ -114,10 +115,9 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新消息模板）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析变量 JSON
       let variables: Record<string, any> | undefined = undefined;
@@ -158,6 +158,7 @@ const MessageTemplateListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -276,9 +277,79 @@ const MessageTemplateListPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '模板名称', dataIndex: 'name' },
+    { title: '模板代码', dataIndex: 'code' },
+    {
+      title: '消息类型',
+      dataIndex: 'type',
+      render: (value: string) => {
+        const typeMap: Record<string, string> = {
+          email: '邮件',
+          sms: '短信',
+          internal: '站内信',
+          push: '推送通知',
+        };
+        return typeMap[value] || value;
+      },
+    },
+    { title: '主题', dataIndex: 'subject' },
+    {
+      title: '模板内容',
+      dataIndex: 'content',
+      render: (value: string) => (
+        <pre style={{
+          margin: 0,
+          padding: '8px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          overflow: 'auto',
+          maxHeight: '200px',
+          fontSize: 12,
+          whiteSpace: 'pre-wrap',
+        }}>
+          {value}
+        </pre>
+      ),
+    },
+    {
+      title: '模板变量',
+      dataIndex: 'variables',
+      render: (value: Record<string, any>) => value ? (
+        <pre style={{
+          margin: 0,
+          padding: '8px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          overflow: 'auto',
+          maxHeight: '200px',
+          fontSize: 12,
+        }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ) : '-',
+    },
+    { title: '模板描述', dataIndex: 'description' },
+    {
+      title: '启用状态',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
   return (
     <>
-      <UniTable<MessageTemplate>
+      <ListPageTemplate>
+        <UniTable<MessageTemplate>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -321,30 +392,24 @@ const MessageTemplateListPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建消息模板
-          </Button>,
-        ]}
+        showCreateButton
+        onCreate={handleCreate}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
-      />
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑消息模板 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑消息模板' : '新建消息模板'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -411,108 +476,19 @@ const MessageTemplateListPage: React.FC = () => {
             label="是否启用"
           />
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<MessageTemplate>
         title="消息模板详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<MessageTemplate>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '模板名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '模板代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '消息类型',
-                dataIndex: 'type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    email: '邮件',
-                    sms: '短信',
-                    internal: '站内信',
-                    push: '推送通知',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '主题',
-                dataIndex: 'subject',
-              },
-              {
-                title: '模板内容',
-                dataIndex: 'content',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '200px',
-                    fontSize: 12,
-                    whiteSpace: 'pre-wrap',
-                  }}>
-                    {value}
-                  </pre>
-                ),
-              },
-              {
-                title: '模板变量',
-                dataIndex: 'variables',
-                render: (value) => value ? (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '200px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ) : '-',
-              },
-              {
-                title: '模板描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+      />
     </>
   );
 };
