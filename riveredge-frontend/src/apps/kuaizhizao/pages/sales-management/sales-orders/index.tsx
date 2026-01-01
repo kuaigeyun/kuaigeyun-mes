@@ -305,13 +305,6 @@ const SalesOrdersPage: React.FC = () => {
             >
               新建订单
             </Button>,
-            <Button
-              key="import"
-              icon={<FileExcelOutlined />}
-              onClick={handleExcelImport}
-            >
-              Excel导入
-            </Button>,
           ]}
           scroll={{ x: 1200 }}
         />
