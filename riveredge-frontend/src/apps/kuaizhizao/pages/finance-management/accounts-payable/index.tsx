@@ -14,6 +14,7 @@ import { DollarOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { financeApi } from '../../../services/production';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
 // 应付单接口定义
 interface AccountsPayable {
@@ -46,6 +47,7 @@ const AccountsPayablePage: React.FC = () => {
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [payableDetail, setPayableDetail] = useState<AccountsPayable | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -93,6 +95,16 @@ const AccountsPayablePage: React.FC = () => {
     try {
       const detail = await financeApi.payable.get(record.id!.toString());
       setPayableDetail(detail);
+      
+      // 获取单据关联关系
+      try {
+        const relations = await getDocumentRelations('payable', record.id!);
+        setDocumentRelations(relations);
+      } catch (error) {
+        console.error('获取单据关联关系失败:', error);
+        setDocumentRelations(null);
+      }
+      
       setDetailVisible(true);
     } catch (error) {
       messageApi.error('获取应付单详情失败');
@@ -334,8 +346,12 @@ const AccountsPayablePage: React.FC = () => {
       <DetailDrawerTemplate
         title={`应付单详情 - ${payableDetail?.payable_code || ''}`}
         open={detailVisible}
-        onClose={() => setDetailVisible(false)}
-        width={DRAWER_CONFIG.SMALL_WIDTH}
+        onClose={() => {
+          setDetailVisible(false);
+          setPayableDetail(null);
+          setDocumentRelations(null);
+        }}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={[]}
         customContent={
           payableDetail ? (
@@ -366,7 +382,7 @@ const AccountsPayablePage: React.FC = () => {
                 </Row>
               </Card>
 
-              <Card title="财务信息">
+              <Card title="财务信息" style={{ marginBottom: 16 }}>
                 <Row gutter={16}>
                   <Col span={12}>
                     <strong>应付金额：</strong>¥{payableDetail.total_amount?.toLocaleString() || 0}
@@ -388,6 +404,67 @@ const AccountsPayablePage: React.FC = () => {
                   </Row>
                 )}
               </Card>
+
+              {/* 单据关联 */}
+              {documentRelations && (
+                <Card title="单据关联">
+                  {documentRelations.upstream_count > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        上游单据 ({documentRelations.upstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.upstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.downstream_count > 0 && (
+                    <div>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        下游单据 ({documentRelations.downstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.downstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
+                    <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                      暂无关联单据
+                    </div>
+                  )}
+                </Card>
+              )}
             </div>
           ) : null
         }

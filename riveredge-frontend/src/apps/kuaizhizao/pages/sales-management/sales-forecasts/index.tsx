@@ -8,12 +8,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, message } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CalculatorOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CalculatorOutlined, UploadOutlined, DownloadOutlined, SendOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { listSalesForecasts, getSalesForecast, createSalesForecast, updateSalesForecast, approveSalesForecast, SalesForecast as APISalesForecast } from '../../../services/sales-forecast';
+import { UniImport } from '../../../../../components/uni-import';
+import { listSalesForecasts, getSalesForecast, createSalesForecast, updateSalesForecast, approveSalesForecast, submitSalesForecast, importSalesForecasts, exportSalesForecasts, getDocumentRelations, SalesForecast as APISalesForecast, DocumentRelation } from '../../../services/sales-forecast';
+import { downloadFile } from '../../../services/common';
 
 // 使用API服务中的接口定义
 type SalesForecast = APISalesForecast;
@@ -32,6 +34,10 @@ const SalesForecastsPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [forecastDetail, setForecastDetail] = useState<SalesForecast | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+
+  // 导入导出相关状态
+  const [importVisible, setImportVisible] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<SalesForecast>[] = [
@@ -118,15 +124,26 @@ const SalesForecastsPage: React.FC = () => {
             编辑
           </Button>
           {record.status === '草稿' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleApprove(record)}
-              style={{ color: '#52c41a' }}
-            >
-              审核
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<SendOutlined />}
+                onClick={() => handleSubmit(record)}
+                style={{ color: '#1890ff' }}
+              >
+                提交
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleApprove(record)}
+                style={{ color: '#52c41a' }}
+              >
+                审核
+              </Button>
+            </>
           )}
           {record.status === '已审核' && (
             <Button
@@ -149,9 +166,71 @@ const SalesForecastsPage: React.FC = () => {
     try {
       const detail = await getSalesForecast(record.id!);
       setForecastDetail(detail);
+      
+      // 获取单据关联关系
+      try {
+        const relations = await getDocumentRelations('sales_forecast', record.id!);
+        setDocumentRelations(relations);
+      } catch (error) {
+        console.error('获取单据关联关系失败:', error);
+        setDocumentRelations(null);
+      }
+      
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取销售预测详情失败');
+    }
+  };
+
+  // 处理提交
+  const handleSubmit = async (record: SalesForecast) => {
+    Modal.confirm({
+      title: '提交销售预测',
+      content: `确定要提交销售预测 "${record.forecast_name}" 吗？提交后将进入待审核状态。`,
+      onOk: async () => {
+        try {
+          await submitSalesForecast(record.id!);
+          messageApi.success('销售预测提交成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '销售预测提交失败');
+        }
+      },
+    });
+  };
+
+  // 处理批量导入
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await importSalesForecasts(data);
+      if (result.success) {
+        messageApi.success(`导入成功：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`);
+        actionRef.current?.reload();
+      } else {
+        messageApi.warning(`导入完成：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`);
+        if (result.errors && result.errors.length > 0) {
+          const errorMsg = result.errors.slice(0, 5).map(e => `第${e.row}行: ${e.error}`).join('\n');
+          Modal.error({
+            title: '导入错误详情',
+            content: errorMsg + (result.errors.length > 5 ? `\n...还有${result.errors.length - 5}个错误` : ''),
+          });
+        }
+      }
+      setImportVisible(false);
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  // 处理批量导出
+  const handleExport = async () => {
+    try {
+      const blob = await exportSalesForecasts();
+      const filename = `销售预测_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
     }
   };
 
@@ -256,9 +335,8 @@ const SalesForecastsPage: React.FC = () => {
         },
         {
           title: '预测准确率',
-          value: 92.5,
+          value: '92.5',
           suffix: '%',
-          precision: 1,
           valueStyle: { color: '#722ed1' },
         },
       ]}
@@ -303,6 +381,20 @@ const SalesForecastsPage: React.FC = () => {
               onClick={handleCreate}
             >
               新建销售预测
+            </Button>,
+            <Button
+              key="import"
+              icon={<UploadOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              批量导入
+            </Button>,
+            <Button
+              key="export"
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+            >
+              批量导出
             </Button>,
           ]}
           scroll={{ x: 1200 }}
@@ -401,7 +493,7 @@ const SalesForecastsPage: React.FC = () => {
 
               {/* 预测明细 */}
               {forecastDetail.forecast_items && forecastDetail.forecast_items.length > 0 && (
-                <Card title="预测明细">
+                <Card title="预测明细" style={{ marginBottom: 16 }}>
                   <Table
                     size="small"
                     columns={[
@@ -417,9 +509,69 @@ const SalesForecastsPage: React.FC = () => {
                   />
                 </Card>
               )}
+
+              {/* 单据关联 */}
+              {documentRelations && (
+                <Card title="单据关联" style={{ marginBottom: 16 }}>
+                  {documentRelations.downstream_count > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        下游单据 ({documentRelations.downstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.downstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.downstream_count === 0 && (
+                    <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                      暂无下游关联单据
+                    </div>
+                  )}
+                </Card>
+              )}
             </div>
           ) : null
         }
+      />
+
+      {/* 批量导入弹窗 */}
+      <UniImport
+        visible={importVisible}
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        title="批量导入销售预测"
+        headers={[
+          '预测名称',
+          '预测类型',
+          '预测周期',
+          '开始日期',
+          '结束日期',
+          '备注'
+        ]}
+        exampleRow={[
+          '2026年1月销售预测',
+          'MTS',
+          '2026-01',
+          '2026-01-01',
+          '2026-01-31',
+          '1月份销售预测'
+        ]}
       />
     </ListPageTemplate>
   );

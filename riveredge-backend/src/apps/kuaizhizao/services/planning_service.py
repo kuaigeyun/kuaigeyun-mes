@@ -456,12 +456,28 @@ class ProductionPlanningService(BaseService):
         else:
             return "采购"
 
-    async def get_mrp_result_by_id(self, tenant_id: int, result_id: int) -> MRPResultResponse:
-        """根据ID获取MRP运算结果"""
+    async def get_mrp_result_by_id(self, tenant_id: int, result_id: int) -> Dict[str, Any]:
+        """
+        根据ID获取MRP运算结果
+        
+        Returns:
+            Dict: MRP运算结果（包含物料信息）
+        """
         result = await MRPResult.get_or_none(tenant_id=tenant_id, id=result_id)
         if not result:
             raise NotFoundError(f"MRP运算结果不存在: {result_id}")
-        return MRPResultResponse.model_validate(result)
+        
+        # 转换为字典
+        result_dict = MRPResultResponse.model_validate(result).model_dump()
+        
+        # 获取物料信息
+        from apps.master_data.models.material import Material
+        material = await Material.get_or_none(tenant_id=tenant_id, id=result.material_id)
+        if material:
+            result_dict['material_code'] = material.material_code
+            result_dict['material_name'] = material.material_name
+        
+        return result_dict
     
     async def list_mrp_results(
         self,
@@ -469,15 +485,41 @@ class ProductionPlanningService(BaseService):
         forecast_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 100
-    ) -> List[MRPResultListResponse]:
-        """获取MRP运算结果列表"""
+    ) -> Dict[str, Any]:
+        """
+        获取MRP运算结果列表
+        
+        Returns:
+            Dict: 包含data（结果列表）和total（总数）的字典
+        """
         query = MRPResult.filter(tenant_id=tenant_id)
         
         if forecast_id:
             query = query.filter(forecast_id=forecast_id)
         
+        # 获取总数
+        total = await query.count()
+        
+        # 获取分页结果
         results = await query.offset(skip).limit(limit).order_by('-computation_time')
-        return [MRPResultListResponse.model_validate(result) for result in results]
+        
+        # 获取物料信息（扩展结果）
+        from apps.master_data.models.material import Material
+        result_list = []
+        for result in results:
+            result_dict = MRPResultListResponse.model_validate(result).model_dump()
+            # 获取物料信息
+            material = await Material.get_or_none(tenant_id=tenant_id, id=result.material_id)
+            if material:
+                result_dict['material_code'] = material.material_code
+                result_dict['material_name'] = material.material_name
+            result_list.append(result_dict)
+        
+        return {
+            "data": result_list,
+            "total": total,
+            "success": True
+        }
     
     async def get_lrp_result_by_id(self, tenant_id: int, result_id: int) -> LRPResultResponse:
         """根据ID获取LRP运算结果"""
@@ -501,6 +543,81 @@ class ProductionPlanningService(BaseService):
         
         results = await query.offset(skip).limit(limit).order_by('-computation_time')
         return [LRPResultListResponse.model_validate(result) for result in results]
+
+    async def export_mrp_results_to_excel(
+        self,
+        tenant_id: int,
+        forecast_id: Optional[int] = None,
+        **filters
+    ) -> str:
+        """
+        导出MRP运算结果到Excel文件
+        
+        Args:
+            tenant_id: 租户ID
+            forecast_id: 销售预测ID（可选）
+            **filters: 其他过滤条件
+            
+        Returns:
+            str: Excel文件路径
+        """
+        import csv
+        import os
+        import tempfile
+        from datetime import datetime
+        from apps.master_data.models.material import Material
+        
+        # 查询MRP运算结果
+        results = await self.list_mrp_results(
+            tenant_id=tenant_id,
+            forecast_id=forecast_id,
+            skip=0,
+            limit=10000
+        )
+        
+        # 创建导出目录
+        export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"mrp_results_{timestamp}.csv"
+        file_path = os.path.join(export_dir, filename)
+        
+        # 写入CSV文件
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            
+            # 写入表头
+            writer.writerow([
+                '物料编码', '物料名称', '当前库存', '安全库存', '再订货点',
+                '总毛需求', '总净需求', '总计划入库', '总计划发放',
+                '建议工单数', '建议采购单数', '运算时间'
+            ])
+            
+            # 写入数据
+            for result in results:
+                # 获取物料信息
+                material = await Material.get_or_none(tenant_id=tenant_id, id=result.material_id)
+                material_code = material.material_code if material else ''
+                material_name = material.material_name if material else ''
+                
+                writer.writerow([
+                    material_code,
+                    material_name,
+                    str(result.current_inventory or 0),
+                    str(result.safety_stock or 0),
+                    str(result.reorder_point or 0),
+                    str(result.total_gross_requirement or 0),
+                    str(result.total_net_requirement or 0),
+                    str(result.total_planned_receipt or 0),
+                    str(result.total_planned_release or 0),
+                    str(result.suggested_work_orders or 0),
+                    str(result.suggested_purchase_orders or 0),
+                    result.computation_time.strftime('%Y-%m-%d %H:%M:%S') if result.computation_time else '',
+                ])
+        
+        return file_path
     
     async def generate_orders_from_mrp_result(
         self,

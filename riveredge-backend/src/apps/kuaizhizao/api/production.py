@@ -5,12 +5,14 @@
 """
 
 from datetime import date
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status, Path
-from fastapi.responses import JSONResponse
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
+from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
+from infra.exceptions.exceptions import ValidationError, BusinessLogicError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
@@ -1872,6 +1874,27 @@ async def delete_sales_forecast(
         return JSONResponse(content={"message": "销售预测删除失败"}, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+@router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="提交销售预测")
+async def submit_sales_forecast(
+    forecast_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesForecastResponse:
+    """
+    提交销售预测
+
+    将草稿状态的销售预测提交为待审核状态
+
+    - **forecast_id**: 销售预测ID
+    """
+    service = SalesForecastService()
+    return await service.submit_forecast(
+        tenant_id=tenant_id,
+        forecast_id=forecast_id,
+        submitted_by=current_user.id
+    )
+
+
 @router.post("/sales-forecasts/{forecast_id}/approve", response_model=SalesForecastResponse, summary="审核销售预测")
 async def approve_sales_forecast(
     forecast_id: int,
@@ -2143,6 +2166,35 @@ async def get_sales_order_items(
         tenant_id=tenant_id,
         order_id=order_id
     )
+
+
+@router.post("/sales-orders/{order_id}/push-to-delivery", summary="下推到销售出库")
+async def push_sales_order_to_delivery(
+    order_id: int = Path(..., description="销售订单ID"),
+    delivery_quantities: Optional[dict] = None,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售订单下推到销售出库
+    
+    自动生成销售出库单，支持指定出库数量
+    
+    - **order_id**: 销售订单ID
+    - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选，如果不提供则使用订单未出库数量）
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    result = await service.push_to_delivery(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        created_by=current_user.id,
+        delivery_quantities=delivery_quantities
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
 @router.post("/sales-orders/{order_id}/items/{item_id}/delivery", response_model=SalesOrderItemResponse, summary="更新交货状态")
@@ -2543,9 +2595,112 @@ async def batch_delete_sales_forecasts(
     
     return BatchResponse(
         success=result["failed_count"] == 0,
-        message=f"成功删除 {result['success_count']} 个销售预测，失败 {result['failed_count']} 个",
+        message=f"成功删除 {result['success_count']} 个销售预测，失败 {result['failure_count']} 个",
         data=result
     )
+
+
+@router.post("/sales-forecasts/import", summary="批量导入销售预测")
+async def import_sales_forecasts(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入销售预测
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建销售预测。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+    """
+    from fastapi import HTTPException
+    
+    try:
+        # 获取二维数组数据
+        data = request.get("data", [])
+        if not data:
+            raise ValidationError("导入数据为空")
+        
+        service = SalesForecastService()
+        result = await service.import_from_data(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        
+        return result
+                
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"导入销售预测失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}"
+        )
+
+
+@router.get("/sales-forecasts/export", response_class=FileResponse, summary="批量导出销售预测")
+async def export_sales_forecasts(
+    status: Optional[str] = Query(None, description="预测状态筛选"),
+    forecast_period: Optional[str] = Query(None, description="预测周期筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出销售预测到Excel文件
+    
+    Args:
+        status: 预测状态筛选
+        forecast_period: 预测周期筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    import os
+    
+    try:
+        service = SalesForecastService()
+        file_path = await service.export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            forecast_period=forecast_period
+        )
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="导出文件生成失败"
+            )
+        
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type='application/vnd.ms-excel'
+        )
+                
+    except Exception as e:
+        logger.error(f"导出销售预测失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 @router.post("/sales-orders/batch-create", response_model=BatchResponse, summary="批量创建销售订单")
@@ -2660,20 +2815,23 @@ async def run_lrp_computation(
 
 # ============ MRP/LRP运算结果查看 API ============
 
-@router.get("/mrp/results", response_model=List[MRPResultListResponse], summary="获取MRP运算结果列表")
+@router.get("/mrp/results", summary="获取MRP运算结果列表")
 async def list_mrp_results(
     forecast_id: Optional[int] = Query(None, description="销售预测ID"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[MRPResultListResponse]:
+):
     """
     获取MRP运算结果列表
 
     - **forecast_id**: 销售预测ID（可选，用于筛选）
     - **skip**: 跳过数量
     - **limit**: 限制数量
+    
+    Returns:
+        Dict: 包含data（结果列表）和total（总数）的字典
     """
     return await ProductionPlanningService().list_mrp_results(
         tenant_id=tenant_id,
@@ -2683,21 +2841,120 @@ async def list_mrp_results(
     )
 
 
-@router.get("/mrp/results/{result_id}", response_model=MRPResultResponse, summary="获取MRP运算结果详情")
+@router.get("/mrp/results/{result_id}", summary="获取MRP运算结果详情")
 async def get_mrp_result(
     result_id: int = Path(..., description="MRP运算结果ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> MRPResultResponse:
+):
     """
     根据ID获取MRP运算结果详情
 
     - **result_id**: MRP运算结果ID
+    
+    Returns:
+        Dict: MRP运算结果（包含物料信息）
     """
     return await ProductionPlanningService().get_mrp_result_by_id(
         tenant_id=tenant_id,
         result_id=result_id
     )
+
+
+@router.get("/mrp/results/export", response_class=FileResponse, summary="导出MRP运算结果（按预测ID）")
+async def export_mrp_results(
+    forecast_id: Optional[int] = Query(None, description="销售预测ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出MRP运算结果到Excel文件
+    
+    Args:
+        forecast_id: 销售预测ID筛选（可选）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    import os
+    
+    try:
+        service = ProductionPlanningService()
+        file_path = await service.export_mrp_results_to_excel(
+            tenant_id=tenant_id,
+            forecast_id=forecast_id
+        )
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="导出文件生成失败"
+            )
+        
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type='application/vnd.ms-excel'
+        )
+                
+    except Exception as e:
+        logger.error(f"导出MRP运算结果失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
+
+
+@router.get("/mrp/results/{result_id}/export", response_class=FileResponse, summary="导出单个MRP运算结果")
+async def export_mrp_result_by_id(
+    result_id: int = Path(..., description="MRP运算结果ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    导出单个MRP运算结果到Excel文件
+    
+    Args:
+        result_id: MRP运算结果ID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    import os
+    
+    try:
+        # 获取MRP结果详情
+        service = ProductionPlanningService()
+        result = await service.get_mrp_result_by_id(tenant_id, result_id)
+        
+        # 使用forecast_id导出
+        file_path = await service.export_mrp_results_to_excel(
+            tenant_id=tenant_id,
+            forecast_id=result.forecast_id
+        )
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="导出文件生成失败"
+            )
+        
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type='application/vnd.ms-excel'
+        )
+                
+    except Exception as e:
+        logger.error(f"导出MRP运算结果失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 @router.get("/lrp/results", response_model=List[LRPResultListResponse], summary="获取LRP运算结果列表")

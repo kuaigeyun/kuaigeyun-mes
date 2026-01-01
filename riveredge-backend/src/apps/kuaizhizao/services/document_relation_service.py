@@ -127,6 +127,11 @@ class DocumentRelationService:
             upstream_documents = await self._get_receivable_upstream(tenant_id, document_id)
             downstream_documents = []
 
+        elif document_type == "sales_delivery":
+            # 销售出库单的上游：销售订单/销售预测、工单、成品入库单，下游：应收单
+            upstream_documents = await self._get_sales_delivery_upstream(tenant_id, document_id)
+            downstream_documents = await self._get_sales_delivery_downstream(tenant_id, document_id)
+
         return {
             "document_type": document_type,
             "document_id": document_id,
@@ -526,6 +531,96 @@ class DocumentRelationService:
                     })
 
         return upstream
+
+    async def _get_sales_delivery_upstream(
+        self,
+        tenant_id: int,
+        delivery_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取销售出库单的上游单据（销售订单、工单、成品入库单）"""
+        delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=delivery_id)
+        if not delivery:
+            return []
+
+        upstream = []
+
+        # 关联销售订单
+        if delivery.sales_order_id:
+            order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=delivery.sales_order_id)
+            if order:
+                upstream.append({
+                    "document_type": "sales_order",
+                    "document_id": order.id,
+                    "document_code": order.order_code,
+                    "document_name": order.order_name if hasattr(order, 'order_name') else None,
+                    "status": order.status,
+                    "created_at": order.created_at.isoformat() if order.created_at else None
+                })
+
+        # 关联工单（通过销售订单查找）
+        if delivery.sales_order_id:
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                sales_order_id=delivery.sales_order_id
+            ).limit(10)
+            for wo in work_orders:
+                upstream.append({
+                    "document_type": "work_order",
+                    "document_id": wo.id,
+                    "document_code": wo.code,
+                    "document_name": wo.name,
+                    "status": wo.status,
+                    "created_at": wo.created_at.isoformat() if wo.created_at else None
+                })
+
+        # 关联成品入库单（通过工单查找）
+        if delivery.sales_order_id:
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                sales_order_id=delivery.sales_order_id
+            ).limit(10)
+            for wo in work_orders:
+                receipts = await FinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=wo.id
+                ).limit(10)
+                for receipt in receipts:
+                    upstream.append({
+                        "document_type": "finished_goods_receipt",
+                        "document_id": receipt.id,
+                        "document_code": receipt.receipt_code if hasattr(receipt, 'receipt_code') else None,
+                        "document_name": None,
+                        "status": receipt.status if hasattr(receipt, 'status') else None,
+                        "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                    })
+
+        return upstream
+
+    async def _get_sales_delivery_downstream(
+        self,
+        tenant_id: int,
+        delivery_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取销售出库单的下游单据（应收单）"""
+        downstream = []
+
+        # 通过source_type和source_id查找应收单
+        receivables = await Receivable.filter(
+            tenant_id=tenant_id,
+            source_type="销售出库",
+            source_id=delivery_id
+        ).limit(10)
+        for receivable in receivables:
+            downstream.append({
+                "document_type": "receivable",
+                "document_id": receivable.id,
+                "document_code": receivable.receivable_code if hasattr(receivable, 'receivable_code') else None,
+                "document_name": None,
+                "status": receivable.status if hasattr(receivable, 'status') else None,
+                "created_at": receivable.created_at.isoformat() if receivable.created_at else None
+            })
+
+        return downstream
 
     async def _get_receivable_upstream(
         self,
