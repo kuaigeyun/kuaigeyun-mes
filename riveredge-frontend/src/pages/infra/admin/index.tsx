@@ -5,11 +5,12 @@
  * 平台超级管理员是平台唯一的，只能有一个
  */
 
-import { ProCard, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, message } from 'antd';
-import { EditOutlined, LogoutOutlined } from '@ant-design/icons';
+import { ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Space, Modal } from 'antd';
+import { LogoutOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ListPageTemplate } from '../../../components/layout-templates';
 import { 
   getInfraSuperAdmin, 
   updateInfraSuperAdmin,
@@ -95,103 +96,67 @@ export default function InfraSuperAdminPage() {
   };
 
   return (
-    <div style={{ padding: '16px' }}>
-      <ProCard
-        title="平台管理员信息"
-        extra={
-          <Space>
-            {/* <Button
-              type="primary"
-              icon={<EditOutlined />}
-              onClick={handleEdit}
-              loading={isLoading}
-            >
-              编辑
-            </Button> */}
-            <Button
-              icon={<LogoutOutlined />}
-              onClick={handleLogout}
-            >
-              退出登录
-            </Button>
-          </Space>
-        }
-        loading={isLoading}
-      >
-        {admin && (
-          <ProDescriptions<InfraSuperAdmin>
-            column={2}
-            dataSource={admin}
-            columns={[
-              {
-                title: 'ID',
-                dataIndex: 'id',
+    <ListPageTemplate>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h2 style={{ margin: 0 }}>平台管理员信息</h2>
+        <Button
+          icon={<LogoutOutlined />}
+          onClick={handleLogout}
+        >
+          退出登录
+        </Button>
+      </div>
+      {admin && (
+        <ProDescriptions<InfraSuperAdmin>
+          column={2}
+          dataSource={admin}
+          loading={isLoading}
+          columns={[
+            {
+              title: 'ID',
+              dataIndex: 'id',
+            },
+            {
+              title: '用户名',
+              dataIndex: 'username',
+            },
+            {
+              title: '邮箱',
+              dataIndex: 'email',
+            },
+            {
+              title: '全名',
+              dataIndex: 'full_name',
+            },
+            {
+              title: '状态',
+              dataIndex: 'is_active',
+              valueType: 'switch',
+              valueEnum: {
+                true: { text: '激活', status: 'Success' },
+                false: { text: '未激活', status: 'Error' },
               },
-              {
-                title: '用户名',
-                dataIndex: 'username',
-              },
-              {
-                title: '邮箱',
-                dataIndex: 'email',
-              },
-              {
-                title: '全名',
-                dataIndex: 'full_name',
-              },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                valueType: 'switch',
-                valueEnum: {
-                  true: { text: '激活', status: 'Success' },
-                  false: { text: '未激活', status: 'Error' },
-                },
-              },
-              {
-                title: '最后登录时间',
-                dataIndex: 'last_login',
-                valueType: 'dateTime',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </ProCard>
+            },
+            {
+              title: '最后登录时间',
+              dataIndex: 'last_login',
+              valueType: 'dateTime',
+            },
+            {
+              title: '创建时间',
+              dataIndex: 'created_at',
+              valueType: 'dateTime',
+            },
+            {
+              title: '更新时间',
+              dataIndex: 'updated_at',
+              valueType: 'dateTime',
+            },
+          ]}
+        />
+      )}
 
-      {/* 编辑弹窗 - 暂时注释掉，等待后续实现 */}
-      {/* <Modal
-        title="编辑平台超级管理员"
-        open={editModalVisible}
-        onCancel={() => {
-          setEditModalVisible(false);
-          setEditFormData(null);
-        }}
-        footer={null}
-        size={600}
-      >
-        {editFormData && (
-          <InfraSuperAdminForm
-            initialValues={editFormData}
-            onSubmit={handleSave}
-            onCancel={() => {
-              setEditModalVisible(false);
-              setEditFormData(null);
-            }}
-            loading={updateMutation.isPending}
-          />
-        )}
-      </Modal> */}
-    </div>
+    </ListPageTemplate>
   );
 }
 

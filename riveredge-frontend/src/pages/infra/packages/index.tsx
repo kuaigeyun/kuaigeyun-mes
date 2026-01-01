@@ -4,12 +4,13 @@
  * 用于管理平台套餐信息（查看、编辑、创建、删除）
  */
 
-import { App, Button, Space, Modal, Popconfirm, Tag } from 'antd';
+import { App, Button, Space, Popconfirm, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPackageList, deletePackage, type Package, TenantPlan } from '../../../services/tenant';
 import { UniTable } from '../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import PackageForm from './form';
 import type { ActionType } from '@ant-design/pro-components';
 
@@ -273,7 +274,8 @@ export default function PackageManagementPage() {
   ];
 
   return (
-      <>
+    <>
+      <ListPageTemplate>
         <UniTable<Package>
           actionRef={actionRef}
           columns={columns}
@@ -289,17 +291,18 @@ export default function PackageManagementPage() {
           defaultPageSize={10}
           showQuickJumper={true}
         />
+      </ListPageTemplate>
 
       {/* 编辑弹窗 */}
-      <Modal
+      <FormModalTemplate
         title="编辑套餐"
         open={editModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setEditModalVisible(false);
           setEditFormData(null);
         }}
-        footer={null}
-        size={600}
+        onFinish={handleSave}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         {editFormData && (
           <PackageForm
@@ -311,21 +314,21 @@ export default function PackageManagementPage() {
             }}
           />
         )}
-      </Modal>
+      </FormModalTemplate>
 
       {/* 创建弹窗 */}
-      <Modal
+      <FormModalTemplate
         title="新建套餐"
         open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        footer={null}
-        size={600}
+        onClose={() => setCreateModalVisible(false)}
+        onFinish={handleSave}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <PackageForm
           onSubmit={handleSave}
           onCancel={() => setCreateModalVisible(false)}
         />
-      </Modal>
+      </FormModalTemplate>
     </>
   );
 }
