@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -56,6 +56,7 @@ const WorkOrdersPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null);
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -68,15 +69,45 @@ const WorkOrdersPage: React.FC = () => {
     setIsEdit(false);
     setCurrentWorkOrder(null);
     setModalVisible(true);
+    formRef.current?.resetFields();
   };
 
   /**
    * 处理编辑工单
    */
-  const handleEdit = (record: WorkOrder) => {
-    setIsEdit(true);
-    setCurrentWorkOrder(record);
-    setModalVisible(true);
+  const handleEdit = async (record: WorkOrder) => {
+    try {
+      // 加载完整详情
+      const detail = await workOrderApi.get(record.id!.toString());
+      setIsEdit(true);
+      setCurrentWorkOrder(detail);
+      setModalVisible(true);
+      // 延迟设置表单值，确保表单已渲染
+      setTimeout(() => {
+        formRef.current?.setFieldsValue({
+          name: detail.name,
+          product_id: detail.product_id,
+          product_code: detail.product_code,
+          product_name: detail.product_name,
+          quantity: detail.quantity,
+          production_mode: detail.production_mode,
+          sales_order_id: detail.sales_order_id,
+          sales_order_code: detail.sales_order_code,
+          sales_order_name: detail.sales_order_name,
+          workshop_id: detail.workshop_id,
+          workshop_name: detail.workshop_name,
+          work_center_id: detail.work_center_id,
+          work_center_name: detail.work_center_name,
+          status: detail.status,
+          priority: detail.priority,
+          planned_start_date: detail.planned_start_date,
+          planned_end_date: detail.planned_end_date,
+          remarks: detail.remarks,
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取工单详情失败');
+    }
   };
 
   /**
@@ -101,12 +132,12 @@ const WorkOrdersPage: React.FC = () => {
       content: `确定要删除 ${keys.length} 个工单吗？`,
       onOk: async () => {
         try {
-          // 这里添加删除逻辑
-          // await workOrderApi.batchDelete(keys);
+          // 批量删除
+          await Promise.all(keys.map(key => workOrderApi.delete(key.toString())));
           messageApi.success('删除成功');
           actionRef.current?.reload();
-        } catch (error) {
-          messageApi.error('删除失败');
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
         }
       },
     });
@@ -117,13 +148,13 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
-      // 这里添加创建/更新逻辑
-      // if (isEdit && currentWorkOrder?.id) {
-      //   await workOrderApi.update(currentWorkOrder.id.toString(), values);
-      // } else {
-      //   await workOrderApi.create(values);
-      // }
-      messageApi.success(isEdit ? '工单更新成功' : '工单创建成功');
+      if (isEdit && currentWorkOrder?.id) {
+        await workOrderApi.update(currentWorkOrder.id.toString(), values);
+        messageApi.success('工单更新成功');
+      } else {
+        await workOrderApi.create(values);
+        messageApi.success('工单创建成功');
+      }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
@@ -415,15 +446,88 @@ const WorkOrdersPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑工单' : '新建工单'}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setCurrentWorkOrder(null);
+          formRef.current?.resetFields();
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
       >
-        {/* 这里可以添加工单表单组件 */}
-        <div style={{ padding: '16px 0', textAlign: 'center' }}>
-          <p>工单表单开发中...</p>
-        </div>
+        <ProFormText
+          name="name"
+          label="工单名称"
+          placeholder="请输入工单名称"
+          rules={[{ required: true, message: '请输入工单名称' }]}
+          disabled={isEdit}
+        />
+        <ProFormSelect
+          name="production_mode"
+          label="生产模式"
+          placeholder="请选择生产模式"
+          options={[
+            { label: '按库存生产(MTS)', value: 'MTS' },
+            { label: '按订单生产(MTO)', value: 'MTO' },
+          ]}
+          rules={[{ required: true, message: '请选择生产模式' }]}
+          disabled={isEdit}
+        />
+        <ProFormText
+          name="product_code"
+          label="产品编码"
+          placeholder="请输入产品编码"
+          rules={[{ required: true, message: '请输入产品编码' }]}
+          disabled={isEdit}
+        />
+        <ProFormText
+          name="product_name"
+          label="产品名称"
+          placeholder="请输入产品名称"
+          rules={[{ required: true, message: '请输入产品名称' }]}
+          disabled={isEdit}
+        />
+        <ProFormDigit
+          name="quantity"
+          label="计划数量"
+          placeholder="请输入计划生产数量"
+          min={0}
+          precision={2}
+          rules={[{ required: true, message: '请输入计划数量' }]}
+        />
+        <ProFormSelect
+          name="priority"
+          label="优先级"
+          placeholder="请选择优先级"
+          options={[
+            { label: '低', value: 'low' },
+            { label: '正常', value: 'normal' },
+            { label: '高', value: 'high' },
+            { label: '紧急', value: 'urgent' },
+          ]}
+          initialValue="normal"
+        />
+        <ProFormDatePicker
+          name="planned_start_date"
+          label="计划开始时间"
+          placeholder="请选择计划开始时间"
+          width="md"
+        />
+        <ProFormDatePicker
+          name="planned_end_date"
+          label="计划结束时间"
+          placeholder="请选择计划结束时间"
+          width="md"
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{
+            rows: 4,
+          }}
+        />
       </FormModalTemplate>
 
       {/* 工单详情 Drawer */}
