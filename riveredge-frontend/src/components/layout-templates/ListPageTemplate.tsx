@@ -88,12 +88,12 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
             {statCards.map((card, index) => (
               <Col
                 key={index}
-                xs={STAT_CARD_CONFIG.COLUMNS.xs * 24}
-                sm={STAT_CARD_CONFIG.COLUMNS.sm * 12}
-                md={STAT_CARD_CONFIG.COLUMNS.md * 12}
-                lg={STAT_CARD_CONFIG.COLUMNS.lg * 6}
-                xl={STAT_CARD_CONFIG.COLUMNS.xl * 6}
-                xxl={STAT_CARD_CONFIG.COLUMNS.xxl * 6}
+                xs={24 / STAT_CARD_CONFIG.COLUMNS.xs}
+                sm={24 / STAT_CARD_CONFIG.COLUMNS.sm}
+                md={24 / STAT_CARD_CONFIG.COLUMNS.md}
+                lg={24 / STAT_CARD_CONFIG.COLUMNS.lg}
+                xl={24 / STAT_CARD_CONFIG.COLUMNS.xl}
+                xxl={24 / STAT_CARD_CONFIG.COLUMNS.xxl}
               >
                 <Card
                   hoverable={!!card.onClick}
