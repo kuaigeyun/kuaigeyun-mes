@@ -3,10 +3,14 @@
  * 
  * 用于系统管理员查看和管理组织内的文件。
  * 支持文件的 CRUD 操作、上传、下载、预览功能。
+ *
+ * Author: Luigi Lu
+ * Date: 2025-12-30
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { App, Button, Space, Modal, Upload, Tree, Breadcrumb, Table, Menu, Input, Tooltip, Divider, theme } from 'antd';
+import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { 
   EditOutlined, 
   DeleteOutlined, 
@@ -635,207 +639,147 @@ const FileListPage: React.FC = () => {
   }, 0);
 
   return (
-    <div 
-      className="file-management-page" 
-      style={{ 
-        display: 'flex', 
-        height: 'calc(100vh - 96px)', 
-        padding: '16px', 
-        margin: 0, 
-        boxSizing: 'border-box',
-        borderRadius: token.borderRadiusLG || token.borderRadius,
-        overflow: 'hidden',
-      }}
-    >
-      
-      {/* 左侧文件夹树 */}
-      <div
-        style={{
-          width: '300px',
-          borderTop: `1px solid ${token.colorBorder}`,
-          borderBottom: `1px solid ${token.colorBorder}`,
-          borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: 'none',
-          backgroundColor: token.colorFillAlter || '#fafafa',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
-          borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
+    <>
+      <TwoColumnLayout
+        leftPanel={{
+          search: {
+            placeholder: '搜索文件夹',
+            value: treeSearchValue,
+            onChange: setTreeSearchValue,
+            allowClear: true,
+          },
+          tree: {
+            treeData: filteredTreeData.length > 0 || !treeSearchValue.trim() ? filteredTreeData : treeData,
+            selectedKeys: selectedTreeKeys,
+            expandedKeys: expandedKeys,
+            onSelect: handleTreeSelect,
+            onExpand: setExpandedKeys,
+            showIcon: true,
+            blockNode: true,
+            className: 'file-manager-tree',
+          },
         }}
-      >
-        {/* 搜索栏 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Input
-            placeholder="搜索文件夹"
-            prefix={<SearchOutlined />}
-            value={treeSearchValue}
-            onChange={(e) => setTreeSearchValue(e.target.value)}
-            allowClear
-            size="middle"
-          />
-        </div>
-        
-        {/* 文件夹树 */}
-        <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          <Tree
-            className="file-manager-tree"
-            treeData={filteredTreeData.length > 0 || !treeSearchValue.trim() ? filteredTreeData : treeData}
-            selectedKeys={selectedTreeKeys}
-            expandedKeys={expandedKeys}
-            onSelect={handleTreeSelect}
-            onExpand={setExpandedKeys}
-            showIcon
-            blockNode
-          />
-        </div>
-      </div>
-
-      {/* 右侧主内容区 */}
-      <div style={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        backgroundColor: token.colorBgContainer,
-        border: `1px solid ${token.colorBorder}`,
-        borderLeft: 'none',
-        borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
-        borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
-      }}>
-        {/* 顶部工具栏 */}
-        <div
-          style={{
-            borderBottom: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} disabled />
-            <Button icon={<ArrowRightOutlined />} disabled />
-            <Button icon={<UpOutlined />} disabled />
-            <Button icon={<ReloadOutlined />} onClick={() => loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string)} />
-          </Space>
-          
-          {/* 地址栏 */}
-          <Breadcrumb
-            style={{ flex: 1 }}
-            items={currentPath.map((path, index) => ({
-              title: index === currentPath.length - 1 ? (
-                <span style={{ fontWeight: 500 }}>{path}</span>
-              ) : (
-                <a onClick={() => {
-                  // TODO: 实现路径导航
-                }}>{path}</a>
-              ),
-            }))}
-          />
-          
-          {/* 视图切换 */}
-          <Space>
-            <Tooltip title="图标视图">
-              <Button
-                type={viewType === 'icons' ? 'primary' : 'default'}
-                icon={<AppstoreOutlined />}
-                onClick={() => setViewType('icons')}
+        rightPanel={{
+          header: {
+            left: (
+              <Space>
+                <Button icon={<ArrowLeftOutlined />} disabled />
+                <Button icon={<ArrowRightOutlined />} disabled />
+                <Button icon={<UpOutlined />} disabled />
+                <Button icon={<ReloadOutlined />} onClick={() => loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string)} />
+              </Space>
+            ),
+            center: (
+              <Breadcrumb
+                items={currentPath.map((path, index) => ({
+                  title: index === currentPath.length - 1 ? (
+                    <span style={{ fontWeight: 500 }}>{path}</span>
+                  ) : (
+                    <a onClick={() => {
+                      // TODO: 实现路径导航
+                    }}>{path}</a>
+                  ),
+                }))}
               />
-            </Tooltip>
-            <Tooltip title="列表视图">
-              <Button
-                type={viewType === 'list' ? 'primary' : 'default'}
-                icon={<UnorderedListOutlined />}
-                onClick={() => setViewType('list')}
-              />
-            </Tooltip>
-            <Tooltip title="详细信息">
-              <Button
-                type={viewType === 'details' ? 'primary' : 'default'}
-                icon={<UnorderedListOutlined />}
-                onClick={() => setViewType('details')}
-              />
-            </Tooltip>
-          </Space>
-        </div>
+            ),
+            right: (
+              <Space>
+                <Tooltip title="图标视图">
+                  <Button
+                    type={viewType === 'icons' ? 'primary' : 'default'}
+                    icon={<AppstoreOutlined />}
+                    onClick={() => setViewType('icons')}
+                  />
+                </Tooltip>
+                <Tooltip title="列表视图">
+                  <Button
+                    type={viewType === 'list' ? 'primary' : 'default'}
+                    icon={<UnorderedListOutlined />}
+                    onClick={() => setViewType('list')}
+                  />
+                </Tooltip>
+                <Tooltip title="详细信息">
+                  <Button
+                    type={viewType === 'details' ? 'primary' : 'default'}
+                    icon={<UnorderedListOutlined />}
+                    onClick={() => setViewType('details')}
+                  />
+                </Tooltip>
+              </Space>
+            ),
+          },
+          content: (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              {/* 操作工具栏 */}
+              <div
+                style={{
+                  borderBottom: `1px solid ${token.colorBorder}`,
+                  padding: '8px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <Button
+                  type="primary"
+                  icon={<UploadOutlined />}
+                  onClick={() => setUploadVisible(true)}
+                >
+                  上传
+                </Button>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => setCreateFolderVisible(true)}
+                >
+                  新建文件夹
+                </Button>
+                <Button
+                  danger
+                  disabled={selectedRowKeys.length === 0}
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDelete()}
+                >
+                  删除
+                </Button>
+              </div>
 
-        {/* 操作工具栏 */}
-        <div
-          style={{
-            borderBottom: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Button
-            type="primary"
-            icon={<UploadOutlined />}
-            onClick={() => setUploadVisible(true)}
-          >
-            上传
-          </Button>
-          <Button
-            icon={<PlusOutlined />}
-            onClick={() => setCreateFolderVisible(true)}
-          >
-            新建文件夹
-          </Button>
-          <Button
-            danger
-            disabled={selectedRowKeys.length === 0}
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete()}
-          >
-            删除
-          </Button>
-        </div>
-
-        {/* 文件列表区域 */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {viewType === 'icons' && renderIconsView()}
-          {viewType === 'list' && renderListView()}
-          {viewType === 'details' && (
-            <Table<File>
-              columns={columns}
-              dataSource={fileList}
-              rowKey="uuid"
-              loading={loading}
-              rowSelection={{
-                selectedRowKeys,
-                onChange: setSelectedRowKeys,
-              }}
-              onRow={(record) => ({
-                onDoubleClick: () => handlePreview(record),
-                onContextMenu: (e) => handleContextMenu(e, record),
-              })}
-              pagination={false}
-              size="small"
-            />
-          )}
-        </div>
-
-        {/* 底部状态栏 */}
-        <div
-          style={{
-            borderTop: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '12px',
-            color: token.colorTextSecondary,
-          }}
-        >
-          <span>
-            {selectedRowKeys.length > 0
-              ? `已选择 ${selectedRowKeys.length} 项，共 ${formatFileSize(selectedFilesSize)}`
-              : `共 ${fileList.length} 项`}
-          </span>
-          <span>{formatFileSize(fileList.reduce((total, file) => total + file.file_size, 0))}</span>
-        </div>
-      </div>
+              {/* 文件列表区域 */}
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                {viewType === 'icons' && renderIconsView()}
+                {viewType === 'list' && renderListView()}
+                {viewType === 'details' && (
+                  <Table<File>
+                    columns={columns}
+                    dataSource={fileList}
+                    rowKey="uuid"
+                    loading={loading}
+                    rowSelection={{
+                      selectedRowKeys,
+                      onChange: setSelectedRowKeys,
+                    }}
+                    onRow={(record) => ({
+                      onDoubleClick: () => handlePreview(record),
+                      onContextMenu: (e) => handleContextMenu(e, record),
+                    })}
+                    pagination={false}
+                    size="small"
+                  />
+                )}
+              </div>
+            </div>
+          ),
+          footer: (
+            <>
+              <span>
+                {selectedRowKeys.length > 0
+                  ? `已选择 ${selectedRowKeys.length} 项，共 ${formatFileSize(selectedFilesSize)}`
+                  : `共 ${fileList.length} 项`}
+              </span>
+              <span>{formatFileSize(fileList.reduce((total, file) => total + file.file_size, 0))}</span>
+            </>
+          ),
+        }}
+      />
 
       {/* 上传文件 Modal */}
       <Modal
@@ -939,7 +883,7 @@ const FileListPage: React.FC = () => {
           />
         </div>
       )}
-    </div>
+    </>
   );
 };
 
