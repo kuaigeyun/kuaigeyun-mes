@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Input, Select, DatePicker } from 'antd';
-import { DollarOutlined, EyeOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Row, Col } from 'antd';
+import { DollarOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { financeApi } from '../../../services/production';
 
 // 应付单接口定义
@@ -40,7 +41,7 @@ const AccountsPayablePage: React.FC = () => {
   // 付款Modal状态
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [currentPayable, setCurrentPayable] = useState<AccountsPayable | null>(null);
-  const [paymentForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
@@ -58,8 +59,7 @@ const AccountsPayablePage: React.FC = () => {
   const handlePayment = (record: AccountsPayable) => {
     setCurrentPayable(record);
     setPaymentModalVisible(true);
-
-    paymentForm.setFieldsValue({
+    formRef.current?.setFieldsValue({
       paymentMethod: 'bank_transfer',
       paymentDate: null,
       remarks: '',
@@ -71,7 +71,7 @@ const AccountsPayablePage: React.FC = () => {
     try {
       if (currentPayable?.id) {
         await financeApi.payable.recordPayment(currentPayable.id.toString(), {
-          payment_amount: values.paymentAmount,
+          payment_amount: currentPayable.total_amount || 0,
           payment_method: values.paymentMethod,
           payment_date: values.paymentDate,
           remarks: values.remarks,
@@ -79,13 +79,12 @@ const AccountsPayablePage: React.FC = () => {
       }
 
       messageApi.success('付款记录成功');
-
       setPaymentModalVisible(false);
-      paymentForm.resetFields();
+      formRef.current?.resetFields();
       actionRef.current?.reload();
-
     } catch (error: any) {
       messageApi.error('付款记录失败');
+      throw error;
     }
   };
 
@@ -141,10 +140,11 @@ const AccountsPayablePage: React.FC = () => {
     },
     {
       title: '到期日期',
-      dataIndex: 'dueDate',
+      dataIndex: 'due_date',
       width: 120,
       valueType: 'date',
       render: (date) => {
+        if (!date) return '-';
         const dueDate = new Date(date);
         const today = new Date();
         const isOverdue = dueDate < today;
@@ -210,60 +210,35 @@ const AccountsPayablePage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总应付金额"
-                  value={stats.totalPayable}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="已付金额"
-                  value={stats.paidAmount}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="待付金额"
-                  value={stats.pendingAmount}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="逾期金额"
-                  value={stats.overdueAmount}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#f5222d' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* UniTable */}
-        <UniTable<AccountsPayable>
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '总应付金额',
+          value: stats.totalPayable,
+          prefix: '¥',
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '已付金额',
+          value: stats.paidAmount,
+          prefix: '¥',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '待付金额',
+          value: stats.pendingAmount,
+          prefix: '¥',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '逾期金额',
+          value: stats.overdueAmount,
+          prefix: '¥',
+          valueStyle: { color: '#f5222d' },
+        },
+      ]}
+    >
+      <UniTable<AccountsPayable>
           headerTitle="应付管理"
           actionRef={actionRef}
           rowKey="id"
@@ -307,176 +282,117 @@ const AccountsPayablePage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
 
-      {/* 付款Modal */}
-      <Modal
-        title={`付款确认 - ${currentPayable?.payableCode}`}
+      <FormModalTemplate
+        title={`付款确认 - ${currentPayable?.payable_code || ''}`}
         open={paymentModalVisible}
-        onCancel={() => setPaymentModalVisible(false)}
-        onOk={() => paymentForm.submit()}
-        okText="确认付款"
-        cancelText="取消"
-        width={500}
+        onClose={() => setPaymentModalVisible(false)}
+        onFinish={handlePaymentSubmit}
+        isEdit={false}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
         {currentPayable && (
-          <div style={{ marginBottom: 24 }}>
-            <Card title="付款信息" size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>供应商：</strong>{currentPayable.supplierName}
-                </Col>
-                <Col span={12}>
-                  <strong>采购订单：</strong>{currentPayable.purchaseOrderCode}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>物料：</strong>{currentPayable.materialName}
-                </Col>
-                <Col span={12}>
-                  <strong>应付金额：</strong>¥{currentPayable.totalAmount.toLocaleString()}
-                </Col>
-              </Row>
-            </Card>
-
-            <Form
-              form={paymentForm}
-              layout="vertical"
-              onFinish={handlePaymentSubmit}
-            >
-              <Form.Item
-                name="paymentMethod"
-                label="付款方式"
-                rules={[{ required: true, message: '请选择付款方式' }]}
-              >
-                <Select placeholder="请选择付款方式">
-                  <Select.Option value="bank_transfer">银行转账</Select.Option>
-                  <Select.Option value="check">支票</Select.Option>
-                  <Select.Option value="cash">现金</Select.Option>
-                  <Select.Option value="alipay">支付宝</Select.Option>
-                  <Select.Option value="wechat">微信支付</Select.Option>
-                </Select>
-              </Form.Item>
-
-              <Form.Item
-                name="paymentDate"
-                label="付款日期"
-                rules={[{ required: true, message: '请选择付款日期' }]}
-              >
-                <DatePicker
-                  style={{ width: '100%' }}
-                  placeholder="选择付款日期"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="remarks"
-                label="付款备注"
-              >
-                <Input.TextArea
-                  rows={2}
-                  placeholder="请输入付款备注信息"
-                />
-              </Form.Item>
-            </Form>
-          </div>
+          <Card title="付款信息" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <strong>供应商：</strong>{currentPayable.supplier_name}
+              </Col>
+              <Col span={12}>
+                <strong>应付金额：</strong>¥{currentPayable.total_amount?.toLocaleString() || 0}
+              </Col>
+            </Row>
+          </Card>
         )}
-      </Modal>
+        <ProFormSelect
+          name="paymentMethod"
+          label="付款方式"
+          placeholder="请选择付款方式"
+          rules={[{ required: true, message: '请选择付款方式' }]}
+          options={[
+            { label: '银行转账', value: 'bank_transfer' },
+            { label: '支票', value: 'check' },
+            { label: '现金', value: 'cash' },
+            { label: '支付宝', value: 'alipay' },
+            { label: '微信支付', value: 'wechat' },
+          ]}
+        />
+        <ProFormDatePicker
+          name="paymentDate"
+          label="付款日期"
+          placeholder="选择付款日期"
+          rules={[{ required: true, message: '请选择付款日期' }]}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="付款备注"
+          placeholder="请输入付款备注信息"
+          fieldProps={{ rows: 2 }}
+        />
+      </FormModalTemplate>
 
-      {/* 详情Drawer */}
-      <Drawer
-        title={`应付单详情 - ${payableDetail?.payableCode}`}
+      <DetailDrawerTemplate
+        title={`应付单详情 - ${payableDetail?.payable_code || ''}`}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={600}
-      >
-        {payableDetail && (
-          <div>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>应付单号：</strong>{payableDetail.payableCode}
-                </Col>
-                <Col span={12}>
-                  <strong>采购订单：</strong>{payableDetail.purchaseOrderCode}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>供应商：</strong>{payableDetail.supplierName}
-                </Col>
-                <Col span={12}>
-                  <strong>状态：</strong>
-                  <Tag color={
-                    payableDetail.status === 'paid' ? 'success' :
-                    payableDetail.status === 'confirmed' ? 'processing' :
-                    payableDetail.status === 'overdue' ? 'error' : 'default'
-                  }>
-                    {payableDetail.status === 'paid' ? '已付款' :
-                     payableDetail.status === 'confirmed' ? '待付款' :
-                     payableDetail.status === 'overdue' ? '逾期' : '草稿'}
-                  </Tag>
-                </Col>
-              </Row>
-            </Card>
-
-            <Card title="财务信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <strong>数量：</strong>{payableDetail.quantity}
-                </Col>
-                <Col span={8}>
-                  <strong>单价：</strong>¥{payableDetail.unitPrice.toFixed(2)}
-                </Col>
-                <Col span={8}>
-                  <strong>总金额：</strong>¥{payableDetail.totalAmount.toLocaleString()}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <strong>税率：</strong>{payableDetail.taxRate}%
-                </Col>
-                <Col span={8}>
-                  <strong>税额：</strong>¥{payableDetail.taxAmount.toFixed(2)}
-                </Col>
-                <Col span={8}>
-                  <strong>净额：</strong>¥{payableDetail.netAmount.toFixed(2)}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>到期日期：</strong>{payableDetail.dueDate}
-                </Col>
-                <Col span={12}>
-                  <strong>货币：</strong>{payableDetail.currency}
-                </Col>
-              </Row>
-            </Card>
-
-            {payableDetail.status === 'paid' && (
-              <Card title="付款信息">
+        width={DRAWER_CONFIG.SMALL_WIDTH}
+        columns={[]}
+        customContent={
+          payableDetail ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <strong>付款方式：</strong>{payableDetail.paymentMethod}
+                    <strong>应付单号：</strong>{payableDetail.payable_code}
                   </Col>
                   <Col span={12}>
-                    <strong>付款日期：</strong>{payableDetail.paymentDate}
+                    <strong>供应商：</strong>{payableDetail.supplier_name}
                   </Col>
                 </Row>
-                {payableDetail.remarks && (
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>状态：</strong>
+                    <Tag color={
+                      payableDetail.status === '已结清' ? 'success' :
+                      payableDetail.status === '已审核' ? 'processing' :
+                      payableDetail.status === '已取消' ? 'error' : 'default'
+                    }>
+                      {payableDetail.status}
+                    </Tag>
+                  </Col>
+                  <Col span={12}>
+                    <strong>到期日期：</strong>{payableDetail.due_date || '-'}
+                  </Col>
+                </Row>
+              </Card>
+
+              <Card title="财务信息">
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>应付金额：</strong>¥{payableDetail.total_amount?.toLocaleString() || 0}
+                  </Col>
+                  <Col span={12}>
+                    <strong>已付金额：</strong>¥{payableDetail.paid_amount?.toLocaleString() || 0}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={24}>
+                    <strong>剩余金额：</strong>¥{((payableDetail.total_amount || 0) - (payableDetail.paid_amount || 0)).toLocaleString()}
+                  </Col>
+                </Row>
+                {payableDetail.notes && (
                   <Row style={{ marginTop: 8 }}>
                     <Col span={24}>
-                      <strong>备注：</strong>{payableDetail.remarks}
+                      <strong>备注：</strong>{payableDetail.notes}
                     </Col>
                   </Row>
                 )}
               </Card>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

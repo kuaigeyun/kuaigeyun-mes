@@ -9,9 +9,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Input, Select, DatePicker, Table, message } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, message } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
 // 销售预测接口定义
 interface SalesForecast {
@@ -49,9 +50,10 @@ const SalesForecastsPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
   const [currentForecast, setCurrentForecast] = useState<SalesForecast | null>(null);
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -212,68 +214,66 @@ const SalesForecastsPage: React.FC = () => {
 
   // 处理编辑
   const handleEdit = (record: SalesForecast) => {
+    setIsEdit(true);
     setCurrentForecast(record);
-    setEditModalVisible(true);
+    setModalVisible(true);
+    formRef.current?.setFieldsValue(record);
   };
 
   // 处理创建
   const handleCreate = () => {
+    setIsEdit(false);
     setCurrentForecast(null);
-    setCreateModalVisible(true);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+  };
+
+  const handleFormFinish = async (values: any) => {
+    try {
+      if (isEdit && currentForecast?.id) {
+        messageApi.success('销售预测更新成功');
+      } else {
+        messageApi.success('销售预测创建成功');
+      }
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
   };
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总预测数"
-                  value={12}
-                  prefix={<CalculatorOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="已审核预测"
-                  value={8}
-                  suffix="个"
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="草稿预测"
-                  value={3}
-                  suffix="个"
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="预测准确率"
-                  value={92.5}
-                  suffix="%"
-                  precision={1}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* 销售预测表格 */}
-        <UniTable
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '总预测数',
+          value: 12,
+          prefix: <CalculatorOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '已审核预测',
+          value: 8,
+          suffix: '个',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '草稿预测',
+          value: 3,
+          suffix: '个',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '预测准确率',
+          value: 92.5,
+          suffix: '%',
+          precision: 1,
+          valueStyle: { color: '#722ed1' },
+        },
+      ]}
+    >
+      <UniTable
           headerTitle="销售预测管理"
           actionRef={actionRef}
           rowKey="id"
@@ -335,108 +335,86 @@ const SalesForecastsPage: React.FC = () => {
           ]}
           scroll={{ x: 1200 }}
         />
-      </div>
 
-      {/* 创建销售预测 Modal */}
-      <Modal
-        title="新建销售预测"
-        open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        onOk={() => {
-          messageApi.success('销售预测创建成功');
-          setCreateModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={600}
+      <FormModalTemplate
+        title={isEdit ? '编辑销售预测' : '新建销售预测'}
+        open={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleFormFinish}
+        isEdit={isEdit}
+        initialValues={currentForecast || {}}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
-        <div style={{ padding: '16px 0' }}>
-          {/* 这里可以添加销售预测创建表单组件 */}
-          <p>销售预测创建表单开发中...</p>
-        </div>
-      </Modal>
+        {/* 销售预测创建/编辑表单开发中 */}
+        <p>销售预测创建/编辑表单开发中...</p>
+      </FormModalTemplate>
 
-      {/* 编辑销售预测 Modal */}
-      <Modal
-        title="编辑销售预测"
-        open={editModalVisible}
-        onCancel={() => setEditModalVisible(false)}
-        onOk={() => {
-          messageApi.success('销售预测更新成功');
-          setEditModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={600}
-      >
-        <div style={{ padding: '16px 0' }}>
-          {/* 这里可以添加销售预测编辑表单组件 */}
-          <p>销售预测编辑表单开发中...</p>
-        </div>
-      </Modal>
-
-      {/* 销售预测详情 Drawer */}
-      <Drawer
-        title={`销售预测详情 - ${forecastDetail?.forecast_code}`}
+      <DetailDrawerTemplate
+        title={`销售预测详情 - ${forecastDetail?.forecast_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={700}
-      >
-        {forecastDetail && (
-          <div style={{ padding: '16px 0' }}>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>预测编号：</strong>{forecastDetail.forecast_code}
-                </Col>
-                <Col span={12}>
-                  <strong>预测名称：</strong>{forecastDetail.forecast_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>预测期间：</strong>{forecastDetail.start_date} ~ {forecastDetail.end_date}
-                </Col>
-                <Col span={12}>
-                  <strong>状态：</strong>
-                  <Tag color={forecastDetail.status === '已审核' ? 'success' : 'default'}>
-                    {forecastDetail.status}
-                  </Tag>
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>审核状态：</strong>
-                  <Tag color={forecastDetail.review_status === '审核通过' ? 'success' : 'default'}>
-                    {forecastDetail.review_status}
-                  </Tag>
-                </Col>
-                <Col span={12}>
-                  <strong>审核人：</strong>{forecastDetail.reviewer_name}
-                </Col>
-              </Row>
-            </Card>
-
-            {/* 预测明细 */}
-            {forecastDetail.forecast_items && forecastDetail.forecast_items.length > 0 && (
-              <Card title="预测明细">
-                <Table
-                  size="small"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
-                    { title: '预测数量', dataIndex: 'forecast_quantity', width: 120, align: 'right' },
-                  ]}
-                  dataSource={forecastDetail.forecast_items}
-                  pagination={false}
-                  rowKey="id"
-                  bordered
-                />
+        width={DRAWER_CONFIG.SMALL_WIDTH}
+        columns={[]}
+        customContent={
+          forecastDetail ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>预测编号：</strong>{forecastDetail.forecast_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>预测名称：</strong>{forecastDetail.forecast_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>预测期间：</strong>{forecastDetail.start_date} ~ {forecastDetail.end_date}
+                  </Col>
+                  <Col span={12}>
+                    <strong>状态：</strong>
+                    <Tag color={forecastDetail.status === '已审核' ? 'success' : 'default'}>
+                      {forecastDetail.status}
+                    </Tag>
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>审核状态：</strong>
+                    <Tag color={forecastDetail.review_status === '审核通过' ? 'success' : 'default'}>
+                      {forecastDetail.review_status}
+                    </Tag>
+                  </Col>
+                  <Col span={12}>
+                    <strong>审核人：</strong>{forecastDetail.reviewer_name}
+                  </Col>
+                </Row>
               </Card>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+
+              {/* 预测明细 */}
+              {forecastDetail.forecast_items && forecastDetail.forecast_items.length > 0 && (
+                <Card title="预测明细">
+                  <Table
+                    size="small"
+                    columns={[
+                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                      { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
+                      { title: '预测数量', dataIndex: 'forecast_quantity', width: 120, align: 'right' },
+                    ]}
+                    dataSource={forecastDetail.forecast_items}
+                    pagination={false}
+                    rowKey="id"
+                    bordered
+                  />
+                </Card>
+              )}
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

@@ -6,9 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Row, Col, Statistic, Table } from 'antd';
+import { App, Button, Tag, Space } from 'antd';
 import { ReloadOutlined, ExportOutlined, SearchOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 interface InventoryRecord {
   id: number;
@@ -119,55 +120,35 @@ const InventoryPage: React.FC = () => {
   ];
 
   return (
-    <div>
-      {/* 库存统计卡片 */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="库存总品种数"
-                value={stats.totalItems}
-                prefix={<SearchOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="库存总价值"
-                value={stats.totalValue}
-                prefix="¥"
-                precision={2}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="低库存预警"
-                value={stats.lowStockItems}
-                suffix="种"
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="临近过期"
-                value={stats.expiringItems}
-                suffix="种"
-                valueStyle={{ color: '#f5222d' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
-
-      {/* UniTable */}
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '库存总品种数',
+          value: stats.totalItems,
+          prefix: <SearchOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '库存总价值',
+          value: stats.totalValue,
+          prefix: '¥',
+          precision: 2,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '低库存预警',
+          value: stats.lowStockItems,
+          suffix: '种',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '临近过期',
+          value: stats.expiringItems,
+          suffix: '种',
+          valueStyle: { color: '#f5222d' },
+        },
+      ]}
+    >
       <UniTable
         headerTitle="库存查询"
         actionRef={actionRef}
@@ -256,7 +237,7 @@ const InventoryPage: React.FC = () => {
           syncToUrl: true,
         }}
       />
-    </div>
+    </ListPageTemplate>
   );
 };
 
