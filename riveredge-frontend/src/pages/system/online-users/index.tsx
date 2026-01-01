@@ -5,11 +5,11 @@
  * 支持查看在线用户列表、统计、强制下线等功能。
  */
 
-import React, { useState, useEffect } from 'react';
-import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Tabs } from 'antd';
-import { EyeOutlined, BarChartOutlined, LogoutOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import CardView from './card-view';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Card, Avatar, Tag, Space, message, Popconfirm, Button, Badge, Typography, Tooltip } from 'antd';
+import { EyeOutlined, BarChartOutlined, LogoutOutlined, UserOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
 import {
   getOnlineUsers,
@@ -21,6 +21,66 @@ import {
 } from '../../../services/onlineUser';
 import { useGlobalStore } from '../../../stores';
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
+
+const { Text } = Typography;
+
+/**
+ * 获取用户状态
+ */
+const getUserStatus = (user: OnlineUser): { status: 'success' | 'warning' | 'default'; text: string } => {
+  if (!user.last_activity_time) {
+    return { status: 'default', text: '未知' };
+  }
+  
+  const lastActivity = dayjs(user.last_activity_time);
+  const now = dayjs();
+  const minutesAgo = now.diff(lastActivity, 'minute');
+  
+  if (minutesAgo <= 5) {
+    return { status: 'success', text: '活跃' };
+  } else if (minutesAgo <= 15) {
+    return { status: 'warning', text: '空闲' };
+  } else {
+    return { status: 'default', text: '离线' };
+  }
+};
+
+/**
+ * 获取在线时长
+ */
+const getOnlineDuration = (user: OnlineUser): string => {
+  if (!user.login_time) {
+    return '-';
+  }
+  
+  const loginTime = dayjs(user.login_time);
+  const now = dayjs();
+  return dayjs.duration(now.diff(loginTime)).humanize();
+};
+
+/**
+ * 获取最后活动时间显示
+ */
+const getLastActivityDisplay = (user: OnlineUser): string => {
+  if (!user.last_activity_time) {
+    return '-';
+  }
+  
+  const lastActivity = dayjs(user.last_activity_time);
+  const now = dayjs();
+  const minutesAgo = now.diff(lastActivity, 'minute');
+  
+  if (minutesAgo < 1) {
+    return '刚刚';
+  } else if (minutesAgo < 60) {
+    return `${minutesAgo} 分钟前`;
+  } else {
+    return lastActivity.format('YYYY-MM-DD HH:mm:ss');
+  }
+};
 
 /**
  * 在线用户页面组件
@@ -28,10 +88,11 @@ import dayjs from 'dayjs';
 const OnlineUsersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { currentUser } = useGlobalStore();
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<OnlineUserStats | null>(null);
-  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentUserInfo, setCurrentUserInfo] = useState<OnlineUser | null>(null);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
    * 加载统计信息
@@ -61,11 +122,29 @@ const OnlineUsersPage: React.FC = () => {
   }, [currentUser, loadStats]);
 
   /**
+   * 设置自动刷新（每30秒刷新一次）
+   */
+  useEffect(() => {
+    if (currentUser) {
+      refreshIntervalRef.current = setInterval(() => {
+        loadStats();
+        actionRef.current?.reload();
+      }, 30000);
+      
+      return () => {
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+        }
+      };
+    }
+  }, [currentUser, loadStats]);
+
+  /**
    * 查看用户详情
    */
   const handleViewDetail = (record: OnlineUser) => {
     setCurrentUserInfo(record);
-    setDetailModalVisible(true);
+    setDetailDrawerVisible(true);
   };
 
   /**
@@ -77,11 +156,151 @@ const OnlineUsersPage: React.FC = () => {
       messageApi.success('强制下线成功');
       // 刷新列表和统计
       loadStats();
-      // 触发表格刷新（通过 key 或手动刷新）
-      window.location.reload();
+      actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '强制下线失败');
     }
+  };
+
+  /**
+   * 构建统计卡片数据
+   */
+  const statCards = useMemo(() => {
+    if (!stats) return undefined;
+    
+    return [
+      {
+        title: '总在线用户数',
+        value: stats.total,
+        valueStyle: { color: '#1890ff' },
+      },
+      {
+        title: '活跃用户数（最近5分钟）',
+        value: stats.active,
+        valueStyle: { color: '#52c41a' },
+      },
+      ...(Object.keys(stats.by_tenant).length > 0 ? [{
+        title: '按组织统计',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+            {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
+              <Tag key={tenantId} color="blue">
+                组织 {tenantId}: {count}
+              </Tag>
+            ))}
+          </div>
+        ),
+      }] : []),
+    ];
+  }, [stats]);
+
+  /**
+   * 卡片渲染函数
+   */
+  const renderCard = (user: OnlineUser, index: number) => {
+    const userStatus = getUserStatus(user);
+    
+    return (
+      <Card
+        key={user.user_id}
+        hoverable
+        style={{ height: '100%' }}
+        actions={[
+          <Tooltip key="view" title="查看详情">
+            <EyeOutlined
+              onClick={() => handleViewDetail(user)}
+              style={{ fontSize: 16 }}
+            />
+          </Tooltip>,
+          <Popconfirm
+            key="logout"
+            title="确定要强制该用户下线吗？"
+            onConfirm={() => handleForceLogout(user)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Tooltip title="强制下线">
+              <LogoutOutlined
+                style={{ fontSize: 16, color: '#ff4d4f' }}
+              />
+            </Tooltip>
+          </Popconfirm>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Avatar size={48} icon={<UserOutlined />} />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {user.username}
+                  </Text>
+                  <Badge
+                    status={userStatus.status}
+                    text={userStatus.text}
+                  />
+                </div>
+                {user.full_name && (
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                    {user.full_name}
+                  </Text>
+                )}
+              </div>
+            </div>
+          </Space>
+        </div>
+        
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            {user.email && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>邮箱：</Text>
+                <Text style={{ fontSize: 12 }} ellipsis={{ tooltip: user.email }}>
+                  {user.email}
+                </Text>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <GlobalOutlined /> IP：
+              </Text>
+              <Text style={{ fontSize: 12 }}>{user.login_ip || '-'}</Text>
+            </div>
+            
+            {user.login_time && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  <ClockCircleOutlined /> 登录时间：
+                </Text>
+                <Text style={{ fontSize: 12 }}>
+                  {dayjs(user.login_time).format('MM-DD HH:mm')}
+                </Text>
+              </div>
+            )}
+            
+            {user.last_activity_time && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>最后活动：</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {getLastActivityDisplay(user)}
+                </Text>
+              </div>
+            )}
+            
+            {user.login_time && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>在线时长：</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {getOnlineDuration(user)}
+                </Text>
+              </div>
+            )}
+          </Space>
+        </div>
+      </Card>
+    );
   };
 
   /**
@@ -140,87 +359,61 @@ const OnlineUsersPage: React.FC = () => {
         record.last_activity_time ? dayjs(record.last_activity_time).format('YYYY-MM-DD HH:mm:ss') : '-',
       width: 180,
     },
+  ];
+
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
     {
-      title: '操作',
-      key: 'action',
-      hideInSearch: true,
-      width: 150,
-      render: (_: any, record: OnlineUser) => (
-        <Space>
-          <a onClick={() => handleViewDetail(record)}>
-            <EyeOutlined /> 查看
-          </a>
-          <Popconfirm
-            title="确定要强制该用户下线吗？"
-            onConfirm={() => handleForceLogout(record)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <a style={{ color: '#ff4d4f' }}>
-              <LogoutOutlined /> 强制下线
-            </a>
-          </Popconfirm>
-        </Space>
-      ),
+      title: '用户ID',
+      dataIndex: 'user_id',
+      render: (value: number) => value,
+    },
+    {
+      title: '用户名',
+      dataIndex: 'username',
+      render: (value: string) => value,
+    },
+    {
+      title: '用户全名',
+      dataIndex: 'full_name',
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '邮箱',
+      dataIndex: 'email',
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '组织ID',
+      dataIndex: 'tenant_id',
+      render: (value: number) => value,
+    },
+    {
+      title: '登录IP',
+      dataIndex: 'login_ip',
+      render: (value: string) => value || '-',
+    },
+    {
+      title: '登录时间',
+      dataIndex: 'login_time',
+      valueType: 'dateTime',
+    },
+    {
+      title: '最后活动时间',
+      dataIndex: 'last_activity_time',
+      valueType: 'dateTime',
     },
   ];
 
-  // 构建统计卡片数据（仅用于列表视图）
-  const statCards = stats ? [
-    {
-      title: '总在线用户数',
-      value: stats.total,
-      valueStyle: { color: '#1890ff' },
-    },
-    {
-      title: '活跃用户数（最近5分钟）',
-      value: stats.active,
-      valueStyle: { color: '#52c41a' },
-    },
-    ...(Object.keys(stats.by_tenant).length > 0 ? [{
-      title: '按组织统计',
-      value: (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-          {Object.entries(stats.by_tenant).map(([tenantId, count]) => (
-            <Tag key={tenantId} color="blue">
-              组织 {tenantId}: {count}
-            </Tag>
-          ))}
-        </div>
-      ),
-    }] : []),
-  ] : undefined;
-
   return (
     <>
-      {/* 视图切换 */}
-      <div style={{ 
-        padding: '16px 16px 0 16px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
-      }}>
-        <Tabs
-          activeKey={viewMode}
-          onChange={(key) => setViewMode(key as 'card' | 'list')}
-          items={[
-            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
-            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
-          ]}
-        />
-      </div>
-
-      {/* 卡片视图 */}
-      {viewMode === 'card' && <div style={{ padding: '16px' }}><CardView /></div>}
-
-      {/* 列表视图 */}
-      {viewMode === 'list' && (
-        <ListPageTemplate statCards={statCards}>
-          <Card>
-            <ProTable<OnlineUser>
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<OnlineUser>
+          actionRef={actionRef}
           columns={columns}
-          manualRequest={!currentUser}
-          request={async (params, sorter, filter) => {
+          request={async (params, sort, _filter, searchFormValues) => {
             // 检查 currentUser，如果用户未登录则直接返回空数据
             if (!currentUser) {
               return {
@@ -255,87 +448,35 @@ const OnlineUsersPage: React.FC = () => {
             }
           }}
           rowKey="user_id"
-          search={{
-            labelWidth: 'auto',
-            defaultCollapsed: false,
-            filterType: 'query',
-          }}
-          pagination={{
-            defaultPageSize: 20,
-            showSizeChanger: true,
-            showQuickJumper: true,
-          }}
-          toolBarRender={() => [
+          showAdvancedSearch={true}
+          toolBarActions={[
             <Button key="refresh" onClick={loadStats}>
               <BarChartOutlined /> 刷新统计
             </Button>,
           ]}
           headerTitle="在线用户"
+          viewTypes={['table', 'card']}
+          defaultViewType="card"
+          cardViewConfig={{
+            renderCard,
+          }}
         />
-          </Card>
-        </ListPageTemplate>
-      )}
+      </ListPageTemplate>
 
       {/* 用户详情 Drawer */}
-      <DetailDrawerTemplate
+      <DetailDrawerTemplate<OnlineUser>
         title="在线用户详情"
-        open={detailModalVisible}
+        open={detailDrawerVisible}
         onClose={() => {
-          setDetailModalVisible(false);
+          setDetailDrawerVisible(false);
           setCurrentUserInfo(null);
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={currentUserInfo}
-        columns={[
-          {
-            title: '用户ID',
-            dataIndex: 'user_id',
-            render: (value: number) => value,
-          },
-          {
-            title: '用户名',
-            dataIndex: 'username',
-            render: (value: string) => value,
-          },
-          {
-            title: '用户全名',
-            dataIndex: 'full_name',
-            render: (value: string) => value || '-',
-          },
-          {
-            title: '邮箱',
-            dataIndex: 'email',
-            render: (value: string) => value || '-',
-          },
-          {
-            title: '组织ID',
-            dataIndex: 'tenant_id',
-            render: (value: number) => value,
-          },
-          {
-            title: '登录IP',
-            dataIndex: 'login_ip',
-            render: (value: string) => value || '-',
-          },
-          {
-            title: '登录时间',
-            dataIndex: 'login_time',
-            render: (value: string) => value
-              ? dayjs(value).format('YYYY-MM-DD HH:mm:ss')
-              : '-',
-          },
-          {
-            title: '最后活动时间',
-            dataIndex: 'last_activity_time',
-            render: (value: string) => value
-              ? dayjs(value).format('YYYY-MM-DD HH:mm:ss')
-              : '-',
-          },
-        ]}
+        dataSource={currentUserInfo || {}}
+        columns={detailColumns}
       />
     </>
   );
 };
 
 export default OnlineUsersPage;
-
