@@ -1276,10 +1276,6 @@ const SuperAdminTenantList: React.FC = () => {
             },
           ]}
         />
-      ) : (
-        <div>加载中...</div>
-      )}
-    </Drawer>
     
     {/* 新建/编辑组织 Modal */}
     <FormModalTemplate
@@ -1375,7 +1371,6 @@ const SuperAdminTenantList: React.FC = () => {
           placeholder="请选择过期时间（留空则永不过期）"
           colProps={{ span: 12 }}
         />
-      </ProForm>
     </FormModalTemplate>
     </>
   );

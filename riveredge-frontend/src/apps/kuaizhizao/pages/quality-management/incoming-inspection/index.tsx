@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Radio, Input, Select } from 'antd';
-import { PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Row, Col } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { qualityApi } from '../../../services/production';
 
 // 来料检验接口定义
@@ -44,7 +45,7 @@ const IncomingInspectionPage: React.FC = () => {
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<IncomingInspection | null>(null);
-  const [inspectionForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
@@ -62,10 +63,10 @@ const IncomingInspectionPage: React.FC = () => {
   const handleInspect = (record: IncomingInspection) => {
     setCurrentInspection(record);
     setInspectionModalVisible(true);
-
     // 设置表单初始值
-    inspectionForm.setFieldsValue({
-      inspectionResult: 'pending',
+    formRef.current?.setFieldsValue({
+      qualifiedQuantity: record.quantity,
+      unqualifiedQuantity: 0,
       remarks: '',
     });
   };
@@ -82,13 +83,12 @@ const IncomingInspectionPage: React.FC = () => {
       }
 
       messageApi.success('来料检验完成');
-
       setInspectionModalVisible(false);
-      inspectionForm.resetFields();
+      formRef.current?.resetFields();
       actionRef.current?.reload();
-
     } catch (error: any) {
       messageApi.error('检验提交失败');
+      throw error;
     }
   };
 
@@ -206,56 +206,35 @@ const IncomingInspectionPage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="待检验数量"
-                  value={stats.pendingCount}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="合格数量"
-                  value={stats.qualifiedCount}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="不合格数量"
-                  value={stats.unqualifiedCount}
-                  prefix={<CloseCircleOutlined />}
-                  valueStyle={{ color: '#f5222d' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总检验数量"
-                  value={stats.totalInspected}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* UniTable */}
-        <UniTable<IncomingInspection>
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '待检验数量',
+          value: stats.pendingCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '合格数量',
+          value: stats.qualifiedCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '不合格数量',
+          value: stats.unqualifiedCount,
+          prefix: <CloseCircleOutlined />,
+          valueStyle: { color: '#f5222d' },
+        },
+        {
+          title: '总检验数量',
+          value: stats.totalInspected,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+      ]}
+    >
+      <UniTable<IncomingInspection>
           headerTitle="来料检验管理"
           actionRef={actionRef}
           rowKey="id"
@@ -299,171 +278,160 @@ const IncomingInspectionPage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
 
-      {/* 检验Modal */}
-      <Modal
-        title={`来料检验 - ${currentInspection?.inspection_code}`}
+      <FormModalTemplate
+        title={`来料检验 - ${currentInspection?.inspection_code || ''}`}
         open={inspectionModalVisible}
-        onCancel={() => setInspectionModalVisible(false)}
-        onOk={() => inspectionForm.submit()}
-        okText="提交检验结果"
-        cancelText="取消"
-        width={600}
+        onClose={() => setInspectionModalVisible(false)}
+        onFinish={handleInspectionSubmit}
+        isEdit={false}
+        initialValues={
+          currentInspection ? {
+            qualifiedQuantity: currentInspection.quantity,
+            unqualifiedQuantity: 0,
+          } : {}
+        }
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
         {currentInspection && (
-          <div style={{ marginBottom: 24 }}>
-            <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>物料编码：</strong>{currentInspection.material_code}
-                </Col>
-                <Col span={12}>
-                  <strong>物料名称：</strong>{currentInspection.material_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={24}>
-                  <strong>检验数量：</strong>{currentInspection.quantity}
-                </Col>
-              </Row>
-            </Card>
-
-            <Form
-              form={inspectionForm}
-              layout="vertical"
-              onFinish={handleInspectionSubmit}
-              initialValues={{
-                qualifiedQuantity: currentInspection.quantity,
-                unqualifiedQuantity: 0,
-              }}
-            >
-              <Form.Item
-                name="qualifiedQuantity"
-                label="合格数量"
-                rules={[
-                  { required: true, message: '请输入合格数量' },
-                  { type: 'number', min: 0, message: '合格数量不能小于0' },
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      const unqualifiedQuantity = getFieldValue('unqualifiedQuantity') || 0;
-                      if (value + unqualifiedQuantity > currentInspection.quantity) {
-                        return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
-                      }
-                      return Promise.resolve();
-                    },
-                  }),
-                ]}
-              >
-                <Input type="number" placeholder="请输入合格数量" />
-              </Form.Item>
-
-              <Form.Item
-                name="unqualifiedQuantity"
-                label="不合格数量"
-                rules={[
-                  { required: true, message: '请输入不合格数量' },
-                  { type: 'number', min: 0, message: '不合格数量不能小于0' },
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      const qualifiedQuantity = getFieldValue('qualifiedQuantity') || 0;
-                      if (qualifiedQuantity + value > currentInspection.quantity) {
-                        return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
-                      }
-                      return Promise.resolve();
-                    },
-                  }),
-                ]}
-              >
-                <Input type="number" placeholder="请输入不合格数量" />
-              </Form.Item>
-
-              <Form.Item
-                name="remarks"
-                label="检验备注"
-              >
-                <Input.TextArea
-                  rows={3}
-                  placeholder="请输入检验详情、发现的问题或处理意见"
-                />
-              </Form.Item>
-            </Form>
-          </div>
+          <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <strong>物料编码：</strong>{currentInspection.material_code}
+              </Col>
+              <Col span={12}>
+                <strong>物料名称：</strong>{currentInspection.material_name}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={24}>
+                <strong>检验数量：</strong>{currentInspection.quantity}
+              </Col>
+            </Row>
+          </Card>
         )}
-      </Modal>
+        <ProFormDigit
+          name="qualifiedQuantity"
+          label="合格数量"
+          placeholder="请输入合格数量"
+          rules={[
+            { required: true, message: '请输入合格数量' },
+            { type: 'number', min: 0, message: '合格数量不能小于0' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!currentInspection) return Promise.resolve();
+                const unqualifiedQuantity = getFieldValue('unqualifiedQuantity') || 0;
+                if (value + unqualifiedQuantity > currentInspection.quantity) {
+                  return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+          fieldProps={{ precision: 0 }}
+        />
+        <ProFormDigit
+          name="unqualifiedQuantity"
+          label="不合格数量"
+          placeholder="请输入不合格数量"
+          rules={[
+            { required: true, message: '请输入不合格数量' },
+            { type: 'number', min: 0, message: '不合格数量不能小于0' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!currentInspection) return Promise.resolve();
+                const qualifiedQuantity = getFieldValue('qualifiedQuantity') || 0;
+                if (qualifiedQuantity + value > currentInspection.quantity) {
+                  return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+          fieldProps={{ precision: 0 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="检验备注"
+          placeholder="请输入检验详情、发现的问题或处理意见"
+          fieldProps={{ rows: 3 }}
+        />
+      </FormModalTemplate>
 
-      {/* 详情Drawer */}
-      <Drawer
-        title={`检验详情 - ${inspectionDetail?.inspection_code}`}
+      <DetailDrawerTemplate
+        title={`检验详情 - ${inspectionDetail?.inspection_code || ''}`}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={600}
-      >
-        {inspectionDetail && (
-          <div>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>检验单号：</strong>{inspectionDetail.inspection_code}
-                </Col>
-                <Col span={12}>
-                  <strong>物料编码：</strong>{inspectionDetail.material_code}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={24}>
-                  <strong>物料名称：</strong>{inspectionDetail.material_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <strong>检验数量：</strong>{inspectionDetail.quantity}
-                </Col>
-                <Col span={8}>
-                  <strong>合格数量：</strong>{inspectionDetail.qualified_quantity || 0}
-                </Col>
-                <Col span={8}>
-                  <strong>不合格数量：</strong>{inspectionDetail.unqualified_quantity || 0}
-                </Col>
-              </Row>
-            </Card>
-
-            <Card title="检验结果">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>检验状态：</strong>
-                  <Tag color={
-                    inspectionDetail.status === '已完成' ? 'success' :
-                    inspectionDetail.status === '已审核' ? 'processing' :
-                    inspectionDetail.status === '已取消' ? 'error' : 'default'
-                  }>
-                    {inspectionDetail.status}
-                  </Tag>
-                </Col>
-                <Col span={12}>
-                  <strong>证书编号：</strong>{inspectionDetail.certificate_number || '无'}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>检验员：</strong>{inspectionDetail.inspector_name}
-                </Col>
-                <Col span={12}>
-                  <strong>检验日期：</strong>{inspectionDetail.inspection_date}
-                </Col>
-              </Row>
-              {inspectionDetail.notes && (
-                <Row style={{ marginTop: 8 }}>
-                  <Col span={24}>
-                    <strong>检验备注：</strong>{inspectionDetail.notes}
+        width={DRAWER_CONFIG.SMALL_WIDTH}
+        columns={[]}
+        customContent={
+          inspectionDetail ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>检验单号：</strong>{inspectionDetail.inspection_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>物料编码：</strong>{inspectionDetail.material_code}
                   </Col>
                 </Row>
-              )}
-            </Card>
-          </div>
-        )}
-      </Drawer>
-    </>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={24}>
+                    <strong>物料名称：</strong>{inspectionDetail.material_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}>
+                    <strong>检验数量：</strong>{inspectionDetail.quantity}
+                  </Col>
+                  <Col span={8}>
+                    <strong>合格数量：</strong>{inspectionDetail.qualified_quantity || 0}
+                  </Col>
+                  <Col span={8}>
+                    <strong>不合格数量：</strong>{inspectionDetail.unqualified_quantity || 0}
+                  </Col>
+                </Row>
+              </Card>
+
+              <Card title="检验结果">
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>检验状态：</strong>
+                    <Tag color={
+                      inspectionDetail.status === '已完成' ? 'success' :
+                      inspectionDetail.status === '已审核' ? 'processing' :
+                      inspectionDetail.status === '已取消' ? 'error' : 'default'
+                    }>
+                      {inspectionDetail.status}
+                    </Tag>
+                  </Col>
+                  <Col span={12}>
+                    <strong>证书编号：</strong>{inspectionDetail.certificate_number || '无'}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>检验员：</strong>{inspectionDetail.inspector_name}
+                  </Col>
+                  <Col span={12}>
+                    <strong>检验日期：</strong>{inspectionDetail.inspection_date}
+                  </Col>
+                </Row>
+                {inspectionDetail.notes && (
+                  <Row style={{ marginTop: 8 }}>
+                    <Col span={24}>
+                      <strong>检验备注：</strong>{inspectionDetail.notes}
+                    </Col>
+                  </Row>
+                )}
+              </Card>
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

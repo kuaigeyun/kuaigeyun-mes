@@ -5,14 +5,16 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { sopApi, operationApi } from '../../../services/process';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
+import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 
 /**
  * SOP管理列表页面组件
@@ -286,7 +288,7 @@ const SOPPage: React.FC = () => {
   ];
 
   return (
-    <>
+    <ListPageTemplate>
       <UniTable<SOP>
         actionRef={actionRef}
         columns={columns}
@@ -346,166 +348,117 @@ const SOPPage: React.FC = () => {
         }}
       />
 
-      {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<SOP>
         title="SOP详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<SOP>
-          dataSource={sopDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: 'SOP编码',
-              dataIndex: 'code',
-            },
-            {
-              title: 'SOP名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '关联工序',
-              dataIndex: 'operationId',
-              render: (_, record) => getOperationName(record.operationId),
-            },
-            {
-              title: '版本号',
-              dataIndex: 'version',
-            },
-            {
-              title: 'SOP内容',
-              dataIndex: 'content',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={sopDetail || undefined}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        columns={[
+          { title: 'SOP编码', dataIndex: 'code' },
+          { title: 'SOP名称', dataIndex: 'name' },
+          { title: '关联工序', dataIndex: 'operationId', render: (_, record) => getOperationName(record.operationId) },
+          { title: '版本号', dataIndex: 'version' },
+          { title: 'SOP内容', dataIndex: 'content', span: 2 },
+          {
+            title: '启用状态',
+            dataIndex: 'isActive',
+            render: (_, record) => (
+              <Tag color={record.isActive ? 'success' : 'default'}>
+                {record.isActive ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
+          { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+        ]}
+      />
 
-      {/* 创建/编辑SOP Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑SOP' : '新建SOP'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{ isActive: true }}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
+        <SafeProFormSelect
+          name="operationId"
+          label="关联工序"
+          placeholder="请选择关联工序（可选）"
+          colProps={{ span: 12 }}
+          options={operations.map(o => ({
+            label: `${o.code} - ${o.name}`,
+            value: o.id,
+          }))}
+          fieldProps={{
+            loading: operationsLoading,
+            showSearch: true,
+            allowClear: true,
+            filterOption: (input, option) => {
+              const label = option?.label as string || '';
+              return label.toLowerCase().includes(input.toLowerCase());
             },
           }}
-          initialValues={{
-            isActive: true,
+        />
+        <ProFormText
+          name="code"
+          label="SOP编码"
+          placeholder="请输入SOP编码"
+          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入SOP编码' },
+            { max: 50, message: 'SOP编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            style: { textTransform: 'uppercase' },
           }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
-          <SafeProFormSelect
-            name="operationId"
-            label="关联工序"
-            placeholder="请选择关联工序（可选）"
-            colProps={{ span: 12 }}
-            options={operations.map(o => ({
-              label: `${o.code} - ${o.name}`,
-              value: o.id,
-            }))}
-            fieldProps={{
-              loading: operationsLoading,
-              showSearch: true,
-              allowClear: true,
-              filterOption: (input, option) => {
-                const label = option?.label as string || '';
-                return label.toLowerCase().includes(input.toLowerCase());
-              },
-            }}
-          />
-          <ProFormText
-            name="code"
-            label="SOP编码"
-            placeholder="请输入SOP编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入SOP编码' },
-              { max: 50, message: 'SOP编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="SOP名称"
-            placeholder="请输入SOP名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入SOP名称' },
-              { max: 200, message: 'SOP名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormText
-            name="version"
-            label="版本号"
-            placeholder="请输入版本号（如：v1.0）"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 20, message: '版本号不能超过20个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="content"
-            label="SOP内容"
-            placeholder="请输入SOP内容（支持富文本）"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 8,
-              maxLength: 5000,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
-          <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, gridColumn: '1 / -1' }}>
-            <div style={{ color: '#666', fontSize: 12 }}>
-              提示：附件（attachments）字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
-            </div>
+        />
+        <ProFormText
+          name="name"
+          label="SOP名称"
+          placeholder="请输入SOP名称"
+          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入SOP名称' },
+            { max: 200, message: 'SOP名称不能超过200个字符' },
+          ]}
+        />
+        <ProFormText
+          name="version"
+          label="版本号"
+          placeholder="请输入版本号（如：v1.0）"
+          colProps={{ span: 12 }}
+          rules={[
+            { max: 20, message: '版本号不能超过20个字符' },
+          ]}
+        />
+        <ProFormTextArea
+          name="content"
+          label="SOP内容"
+          placeholder="请输入SOP内容（支持富文本）"
+          colProps={{ span: 24 }}
+          fieldProps={{
+            rows: 8,
+            maxLength: 5000,
+          }}
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+          colProps={{ span: 12 }}
+        />
+        <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, gridColumn: '1 / -1' }}>
+          <div style={{ color: '#666', fontSize: 12 }}>
+            提示：附件（attachments）字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
           </div>
-        </ProForm>
-      </Modal>
-    </>
+        </div>
+      </FormModalTemplate>
+    </ListPageTemplate>
   );
 };
 

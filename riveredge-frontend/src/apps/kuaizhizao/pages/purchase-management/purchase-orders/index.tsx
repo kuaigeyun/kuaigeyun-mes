@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, message, Table } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
 // 采购订单接口定义
 interface PurchaseOrder {
@@ -66,8 +67,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
 
   // Drawer 相关状态
@@ -251,92 +252,161 @@ const PurchaseOrdersPage: React.FC = () => {
 
   // 处理编辑
   const handleEdit = (record: PurchaseOrder) => {
+    setIsEdit(true);
     setCurrentOrder(record);
-    setEditModalVisible(true);
+    setModalVisible(true);
   };
 
   // 处理创建
   const handleCreate = () => {
+    setIsEdit(false);
     setCurrentOrder(null);
-    setCreateModalVisible(true);
+    setModalVisible(true);
   };
+
+  // 处理提交表单（创建/更新）
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      // 这里添加创建/更新逻辑
+      // if (isEdit && currentOrder?.id) {
+      //   await purchaseOrderApi.update(currentOrder.id.toString(), values);
+      // } else {
+      //   await purchaseOrderApi.create(values);
+      // }
+      messageApi.success(isEdit ? '采购订单更新成功' : '采购订单创建成功');
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
+  };
+
+  // 详情列定义
+  const detailColumns: ProDescriptionsItemType<PurchaseOrderDetail>[] = [
+    {
+      title: '订单编号',
+      dataIndex: 'order_code',
+    },
+    {
+      title: '供应商',
+      dataIndex: 'supplier_name',
+    },
+    {
+      title: '订单类型',
+      dataIndex: 'order_type',
+    },
+    {
+      title: '订单日期',
+      dataIndex: 'order_date',
+      valueType: 'date',
+    },
+    {
+      title: '交货日期',
+      dataIndex: 'delivery_date',
+      valueType: 'date',
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      render: (status) => {
+        const statusMap: Record<string, { text: string; color: string }> = {
+          '草稿': { text: '草稿', color: 'default' },
+          '已审核': { text: '已审核', color: 'processing' },
+          '已确认': { text: '已确认', color: 'success' },
+          '已完成': { text: '已完成', color: 'success' },
+          '已取消': { text: '已取消', color: 'error' },
+        };
+        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
+    {
+      title: '审核状态',
+      dataIndex: 'review_status',
+      render: (status) => {
+        const statusMap: Record<string, { text: string; color: string }> = {
+          '待审核': { text: '待审核', color: 'default' },
+          '审核通过': { text: '审核通过', color: 'success' },
+          '审核驳回': { text: '审核驳回', color: 'error' },
+        };
+        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
+    {
+      title: '订单金额',
+      dataIndex: 'total_amount',
+      render: (text) => `¥${text?.toLocaleString() || 0}`,
+    },
+    {
+      title: '税率',
+      dataIndex: 'tax_rate',
+      render: (text) => text ? `${text}%` : '-',
+    },
+    {
+      title: '税额',
+      dataIndex: 'tax_amount',
+      render: (text) => text ? `¥${text.toLocaleString()}` : '-',
+    },
+    {
+      title: '含税金额',
+      dataIndex: 'net_amount',
+      render: (text) => text ? `¥${text.toLocaleString()}` : '-',
+    },
+    {
+      title: '备注',
+      dataIndex: 'notes',
+      span: 2,
+      render: (text) => text || '-',
+    },
+  ];
 
   return (
     <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={4}>
-              <Card>
-                <Statistic
-                  title="总订单数"
-                  value={25}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card>
-                <Statistic
-                  title="待审核订单"
-                  value={5}
-                  suffix="个"
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card>
-                <Statistic
-                  title="已审核订单"
-                  value={18}
-                  suffix="个"
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card>
-                <Statistic
-                  title="订单总金额"
-                  value={125000}
-                  prefix="¥"
-                  suffix="万"
-                  precision={1}
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card>
-                <Statistic
-                  title="本月采购额"
-                  value={45000}
-                  prefix="¥"
-                  suffix="万"
-                  precision={1}
-                  valueStyle={{ color: '#13c2c2' }}
-                />
-              </Card>
-            </Col>
-            <Col span={4}>
-              <Card>
-                <Statistic
-                  title="准时交货率"
-                  value={92.5}
-                  suffix="%"
-                  precision={1}
-                  valueStyle={{ color: '#eb2f96' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* 采购订单表格 */}
-        <UniTable
+      <ListPageTemplate
+        statCards={[
+          {
+            title: '总订单数',
+            value: 25,
+            prefix: <CheckCircleOutlined />,
+            valueStyle: { color: '#1890ff' },
+          },
+          {
+            title: '待审核订单',
+            value: 5,
+            suffix: '个',
+            valueStyle: { color: '#faad14' },
+          },
+          {
+            title: '已审核订单',
+            value: 18,
+            suffix: '个',
+            valueStyle: { color: '#52c41a' },
+          },
+          {
+            title: '订单总金额',
+            value: 125000,
+            prefix: '¥',
+            suffix: '万',
+            valueStyle: { color: '#722ed1' },
+          },
+          {
+            title: '本月采购额',
+            value: 45000,
+            prefix: '¥',
+            suffix: '万',
+            valueStyle: { color: '#13c2c2' },
+          },
+          {
+            title: '准时交货率',
+            value: 92.5,
+            suffix: '%',
+            valueStyle: { color: '#eb2f96' },
+          },
+        ]}
+      >
+        <UniTable<PurchaseOrder>
           headerTitle="采购订单管理"
           actionRef={actionRef}
           rowKey="id"
@@ -395,129 +465,111 @@ const PurchaseOrdersPage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
+      </ListPageTemplate>
 
-      {/* 创建采购订单 Modal */}
-      <Modal
-        title="新建采购订单"
-        open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        onOk={() => {
-          messageApi.success('采购订单创建成功');
-          setCreateModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={800}
+      {/* 创建/编辑采购订单 Modal */}
+      <FormModalTemplate
+        title={isEdit ? '编辑采购订单' : '新建采购订单'}
+        open={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <div style={{ padding: '16px 0' }}>
-          {/* 这里可以添加采购订单创建表单组件 */}
-          <p>采购订单创建表单开发中...</p>
+        <div style={{ padding: '16px 0', textAlign: 'center' }}>
+          {/* 这里可以添加采购订单表单组件 */}
+          <p>采购订单表单开发中...</p>
         </div>
-      </Modal>
-
-      {/* 编辑采购订单 Modal */}
-      <Modal
-        title="编辑采购订单"
-        open={editModalVisible}
-        onCancel={() => setEditModalVisible(false)}
-        onOk={() => {
-          messageApi.success('采购订单更新成功');
-          setEditModalVisible(false);
-          actionRef.current?.reload();
-        }}
-        width={800}
-      >
-        <div style={{ padding: '16px 0' }}>
-          {/* 这里可以添加采购订单编辑表单组件 */}
-          <p>采购订单编辑表单开发中...</p>
-        </div>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 采购订单详情 Drawer */}
-      <Drawer
-        title={`采购订单详情 - ${orderDetail?.order_code}`}
+      <DetailDrawerTemplate<PurchaseOrderDetail>
+        title={`采购订单详情 - ${orderDetail?.order_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={900}
-      >
-        {orderDetail && (
-          <div style={{ padding: '16px 0' }}>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <strong>订单编号：</strong>{orderDetail.order_code}
-                </Col>
-                <Col span={8}>
-                  <strong>供应商：</strong>{orderDetail.supplier_name}
-                </Col>
-                <Col span={8}>
-                  <strong>订单类型：</strong>{orderDetail.order_type}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={6}>
-                  <strong>订单日期：</strong>{orderDetail.order_date}
-                </Col>
-                <Col span={6}>
-                  <strong>交货日期：</strong>{orderDetail.delivery_date}
-                </Col>
-                <Col span={6}>
-                  <strong>状态：</strong>
-                  <Tag color={orderDetail.status === '已审核' ? 'success' : 'default'}>
-                    {orderDetail.status}
-                  </Tag>
-                </Col>
-                <Col span={6}>
-                  <strong>审核状态：</strong>
-                  <Tag color={orderDetail.review_status === '审核通过' ? 'success' : 'default'}>
-                    {orderDetail.review_status}
-                  </Tag>
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={6}>
-                  <strong>订单金额：</strong>¥{orderDetail.total_amount?.toLocaleString()}
-                </Col>
-                <Col span={6}>
-                  <strong>税率：</strong>{orderDetail.tax_rate}%
-                </Col>
-                <Col span={6}>
-                  <strong>税额：</strong>¥{orderDetail.tax_amount?.toLocaleString()}
-                </Col>
-                <Col span={6}>
-                  <strong>含税金额：</strong>¥{orderDetail.net_amount?.toLocaleString()}
-                </Col>
-              </Row>
-            </Card>
-
-            {/* 订单明细 */}
-            {orderDetail.items && orderDetail.items.length > 0 && (
-              <Card title="订单明细">
-                <Table
-                  size="small"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
-                    { title: '单位', dataIndex: 'unit', width: 60 },
-                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text}` },
-                    { title: '总价', dataIndex: 'total_price', width: 120, align: 'right', render: (text) => `¥${text?.toLocaleString()}` },
-                    { title: '已到货', dataIndex: 'received_quantity', width: 100, align: 'right' },
-                    { title: '未到货', dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
-                    { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
-                    { title: '是否检验', dataIndex: 'inspection_required', width: 100, render: (val) => val ? '是' : '否' },
-                  ]}
-                  dataSource={orderDetail.items}
-                  pagination={false}
-                  rowKey="id"
-                  bordered
-                  scroll={{ x: 1000 }}
-                />
+        dataSource={orderDetail || undefined}
+        columns={detailColumns}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        customContent={
+          orderDetail && (
+            <div>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <strong>订单编号：</strong>{orderDetail.order_code}
+                  </Col>
+                  <Col span={8}>
+                    <strong>供应商：</strong>{orderDetail.supplier_name}
+                  </Col>
+                  <Col span={8}>
+                    <strong>订单类型：</strong>{orderDetail.order_type || '-'}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={6}>
+                    <strong>订单日期：</strong>{orderDetail.order_date}
+                  </Col>
+                  <Col span={6}>
+                    <strong>交货日期：</strong>{orderDetail.delivery_date}
+                  </Col>
+                  <Col span={6}>
+                    <strong>状态：</strong>
+                    <Tag color={orderDetail.status === '已审核' ? 'success' : 'default'}>
+                      {orderDetail.status}
+                    </Tag>
+                  </Col>
+                  <Col span={6}>
+                    <strong>审核状态：</strong>
+                    <Tag color={orderDetail.review_status === '审核通过' ? 'success' : 'default'}>
+                      {orderDetail.review_status}
+                    </Tag>
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={6}>
+                    <strong>订单金额：</strong>¥{orderDetail.total_amount?.toLocaleString() || 0}
+                  </Col>
+                  <Col span={6}>
+                    <strong>税率：</strong>{orderDetail.tax_rate ? `${orderDetail.tax_rate}%` : '-'}
+                  </Col>
+                  <Col span={6}>
+                    <strong>税额：</strong>¥{orderDetail.tax_amount?.toLocaleString() || 0}
+                  </Col>
+                  <Col span={6}>
+                    <strong>含税金额：</strong>¥{orderDetail.net_amount?.toLocaleString() || 0}
+                  </Col>
+                </Row>
               </Card>
-            )}
-          </div>
-        )}
-      </Drawer>
+
+              {/* 订单明细 */}
+              {orderDetail.items && orderDetail.items.length > 0 && (
+                <Card title="订单明细">
+                  <Table
+                    size="small"
+                    columns={[
+                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                      { title: '采购数量', dataIndex: 'ordered_quantity', width: 100, align: 'right' },
+                      { title: '单位', dataIndex: 'unit', width: 60 },
+                      { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text}` },
+                      { title: '总价', dataIndex: 'total_price', width: 120, align: 'right', render: (text) => `¥${text?.toLocaleString()}` },
+                      { title: '已到货', dataIndex: 'received_quantity', width: 100, align: 'right' },
+                      { title: '未到货', dataIndex: 'outstanding_quantity', width: 100, align: 'right' },
+                      { title: '要求到货日期', dataIndex: 'required_date', width: 120 },
+                      { title: '是否检验', dataIndex: 'inspection_required', width: 100, render: (val) => val ? '是' : '否' },
+                    ]}
+                    dataSource={orderDetail.items}
+                    pagination={false}
+                    rowKey="id"
+                    bordered
+                    scroll={{ x: 1000 }}
+                  />
+                </Card>
+              )}
+            </div>
+          )
+        }
+      />
     </>
   );
 };

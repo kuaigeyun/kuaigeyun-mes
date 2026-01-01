@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Input, Select, DatePicker } from 'antd';
-import { DollarOutlined, EyeOutlined, CheckOutlined, FileTextOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Row, Col } from 'antd';
+import { DollarOutlined, EyeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
 // 应收单接口定义
 interface AccountsReceivable {
@@ -45,7 +46,7 @@ const AccountsReceivablePage: React.FC = () => {
   // 收款Modal状态
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
   const [currentReceivable, setCurrentReceivable] = useState<AccountsReceivable | null>(null);
-  const [receiptForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
@@ -63,8 +64,7 @@ const AccountsReceivablePage: React.FC = () => {
   const handleReceipt = (record: AccountsReceivable) => {
     setCurrentReceivable(record);
     setReceiptModalVisible(true);
-
-    receiptForm.setFieldsValue({
+    formRef.current?.setFieldsValue({
       paymentMethod: 'bank_transfer',
       paymentDate: null,
       remarks: '',
@@ -79,7 +79,7 @@ const AccountsReceivablePage: React.FC = () => {
       messageApi.success(`收款成功：¥${currentReceivable?.totalAmount.toLocaleString()}`);
 
       setReceiptModalVisible(false);
-      receiptForm.resetFields();
+      formRef.current?.resetFields();
       actionRef.current?.reload();
 
       // 更新统计数据
@@ -88,9 +88,9 @@ const AccountsReceivablePage: React.FC = () => {
         receivedAmount: prev.receivedAmount + currentReceivable!.totalAmount,
         pendingAmount: Math.max(0, prev.pendingAmount - currentReceivable!.totalAmount),
       }));
-
     } catch (error: any) {
       messageApi.error(error.message || '收款失败');
+      throw error;
     }
   };
 
@@ -225,60 +225,35 @@ const AccountsReceivablePage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总应收金额"
-                  value={stats.totalReceivable}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="已收金额"
-                  value={stats.receivedAmount}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="待收金额"
-                  value={stats.pendingAmount}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="逾期金额"
-                  value={stats.overdueAmount}
-                  prefix="¥"
-                  precision={0}
-                  valueStyle={{ color: '#f5222d' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* UniTable */}
-        <UniTable<AccountsReceivable>
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '总应收金额',
+          value: stats.totalReceivable,
+          prefix: '¥',
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '已收金额',
+          value: stats.receivedAmount,
+          prefix: '¥',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '待收金额',
+          value: stats.pendingAmount,
+          prefix: '¥',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '逾期金额',
+          value: stats.overdueAmount,
+          prefix: '¥',
+          valueStyle: { color: '#f5222d' },
+        },
+      ]}
+    >
+      <UniTable<AccountsReceivable>
           headerTitle="应收管理"
           actionRef={actionRef}
           rowKey="id"
@@ -369,176 +344,157 @@ const AccountsReceivablePage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
 
-      {/* 收款Modal */}
-      <Modal
-        title={`收款确认 - ${currentReceivable?.receivableCode}`}
+      <FormModalTemplate
+        title={`收款确认 - ${currentReceivable?.receivableCode || ''}`}
         open={receiptModalVisible}
-        onCancel={() => setReceiptModalVisible(false)}
-        onOk={() => receiptForm.submit()}
-        okText="确认收款"
-        cancelText="取消"
-        width={500}
+        onClose={() => setReceiptModalVisible(false)}
+        onFinish={handleReceiptSubmit}
+        isEdit={false}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
         {currentReceivable && (
-          <div style={{ marginBottom: 24 }}>
-            <Card title="收款信息" size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>客户：</strong>{currentReceivable.customerName}
-                </Col>
-                <Col span={12}>
-                  <strong>销售订单：</strong>{currentReceivable.salesOrderCode || '无'}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>产品：</strong>{currentReceivable.productName}
-                </Col>
-                <Col span={12}>
-                  <strong>应收金额：</strong>¥{currentReceivable.totalAmount.toLocaleString()}
-                </Col>
-              </Row>
-            </Card>
-
-            <Form
-              form={receiptForm}
-              layout="vertical"
-              onFinish={handleReceiptSubmit}
-            >
-              <Form.Item
-                name="paymentMethod"
-                label="收款方式"
-                rules={[{ required: true, message: '请选择收款方式' }]}
-              >
-                <Select placeholder="请选择收款方式">
-                  <Select.Option value="bank_transfer">银行转账</Select.Option>
-                  <Select.Option value="check">支票</Select.Option>
-                  <Select.Option value="cash">现金</Select.Option>
-                  <Select.Option value="alipay">支付宝</Select.Option>
-                  <Select.Option value="wechat">微信支付</Select.Option>
-                </Select>
-              </Form.Item>
-
-              <Form.Item
-                name="paymentDate"
-                label="收款日期"
-                rules={[{ required: true, message: '请选择收款日期' }]}
-              >
-                <DatePicker
-                  style={{ width: '100%' }}
-                  placeholder="选择收款日期"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="remarks"
-                label="收款备注"
-              >
-                <Input.TextArea
-                  rows={2}
-                  placeholder="请输入收款备注信息"
-                />
-              </Form.Item>
-            </Form>
-          </div>
+          <Card title="收款信息" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <strong>客户：</strong>{currentReceivable.customerName}
+              </Col>
+              <Col span={12}>
+                <strong>销售订单：</strong>{currentReceivable.salesOrderCode || '无'}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <strong>产品：</strong>{currentReceivable.productName}
+              </Col>
+              <Col span={12}>
+                <strong>应收金额：</strong>¥{currentReceivable.totalAmount.toLocaleString()}
+              </Col>
+            </Row>
+          </Card>
         )}
-      </Modal>
+        <ProFormSelect
+          name="paymentMethod"
+          label="收款方式"
+          placeholder="请选择收款方式"
+          rules={[{ required: true, message: '请选择收款方式' }]}
+          options={[
+            { label: '银行转账', value: 'bank_transfer' },
+            { label: '支票', value: 'check' },
+            { label: '现金', value: 'cash' },
+            { label: '支付宝', value: 'alipay' },
+            { label: '微信支付', value: 'wechat' },
+          ]}
+        />
+        <ProFormDatePicker
+          name="paymentDate"
+          label="收款日期"
+          placeholder="选择收款日期"
+          rules={[{ required: true, message: '请选择收款日期' }]}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="收款备注"
+          placeholder="请输入收款备注信息"
+          fieldProps={{ rows: 2 }}
+        />
+      </FormModalTemplate>
 
-      {/* 详情Drawer */}
-      <Drawer
-        title={`应收单详情 - ${receivableDetail?.receivableCode}`}
+      <DetailDrawerTemplate
+        title={`应收单详情 - ${receivableDetail?.receivableCode || ''}`}
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={600}
-      >
-        {receivableDetail && (
-          <div>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>应收单号：</strong>{receivableDetail.receivableCode}
-                </Col>
-                <Col span={12}>
-                  <strong>销售订单：</strong>{receivableDetail.salesOrderCode || '无'}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>客户：</strong>{receivableDetail.customerName}
-                </Col>
-                <Col span={12}>
-                  <strong>状态：</strong>
-                  <Tag color={
-                    receivableDetail.status === 'received' ? 'success' :
-                    receivableDetail.status === 'confirmed' ? 'processing' :
-                    receivableDetail.status === 'overdue' ? 'error' : 'default'
-                  }>
-                    {receivableDetail.status === 'received' ? '已收款' :
-                     receivableDetail.status === 'confirmed' ? '待收款' :
-                     receivableDetail.status === 'overdue' ? '逾期' : '草稿'}
-                  </Tag>
-                </Col>
-              </Row>
-            </Card>
-
-            <Card title="财务信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <strong>数量：</strong>{receivableDetail.quantity}
-                </Col>
-                <Col span={8}>
-                  <strong>单价：</strong>¥{receivableDetail.unitPrice.toFixed(2)}
-                </Col>
-                <Col span={8}>
-                  <strong>总金额：</strong>¥{receivableDetail.totalAmount.toLocaleString()}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <strong>税率：</strong>{receivableDetail.taxRate}%
-                </Col>
-                <Col span={8}>
-                  <strong>税额：</strong>¥{receivableDetail.taxAmount.toFixed(2)}
-                </Col>
-                <Col span={8}>
-                  <strong>净额：</strong>¥{receivableDetail.netAmount.toFixed(2)}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>到期日期：</strong>{receivableDetail.dueDate}
-                </Col>
-                <Col span={12}>
-                  <strong>货币：</strong>{receivableDetail.currency}
-                </Col>
-              </Row>
-            </Card>
-
-            {receivableDetail.status === 'received' && (
-              <Card title="收款信息">
+        width={DRAWER_CONFIG.SMALL_WIDTH}
+        columns={[]}
+        customContent={
+          receivableDetail ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <strong>收款方式：</strong>{receivableDetail.paymentMethod}
+                    <strong>应收单号：</strong>{receivableDetail.receivableCode}
                   </Col>
                   <Col span={12}>
-                    <strong>收款日期：</strong>{receivableDetail.paymentDate}
+                    <strong>销售订单：</strong>{receivableDetail.salesOrderCode || '无'}
                   </Col>
                 </Row>
-                {receivableDetail.remarks && (
-                  <Row style={{ marginTop: 8 }}>
-                    <Col span={24}>
-                      <strong>备注：</strong>{receivableDetail.remarks}
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>客户：</strong>{receivableDetail.customerName}
+                  </Col>
+                  <Col span={12}>
+                    <strong>状态：</strong>
+                    <Tag color={
+                      receivableDetail.status === 'received' ? 'success' :
+                      receivableDetail.status === 'confirmed' ? 'processing' :
+                      receivableDetail.status === 'overdue' ? 'error' : 'default'
+                    }>
+                      {receivableDetail.status === 'received' ? '已收款' :
+                       receivableDetail.status === 'confirmed' ? '待收款' :
+                       receivableDetail.status === 'overdue' ? '逾期' : '草稿'}
+                    </Tag>
+                  </Col>
+                </Row>
+              </Card>
+
+              <Card title="财务信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <strong>数量：</strong>{receivableDetail.quantity}
+                  </Col>
+                  <Col span={8}>
+                    <strong>单价：</strong>¥{receivableDetail.unitPrice.toFixed(2)}
+                  </Col>
+                  <Col span={8}>
+                    <strong>总金额：</strong>¥{receivableDetail.totalAmount.toLocaleString()}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}>
+                    <strong>税率：</strong>{receivableDetail.taxRate}%
+                  </Col>
+                  <Col span={8}>
+                    <strong>税额：</strong>¥{receivableDetail.taxAmount.toFixed(2)}
+                  </Col>
+                  <Col span={8}>
+                    <strong>净额：</strong>¥{receivableDetail.netAmount.toFixed(2)}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>到期日期：</strong>{receivableDetail.dueDate}
+                  </Col>
+                  <Col span={12}>
+                    <strong>货币：</strong>{receivableDetail.currency}
+                  </Col>
+                </Row>
+              </Card>
+
+              {receivableDetail.status === 'received' && (
+                <Card title="收款信息">
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <strong>收款方式：</strong>{receivableDetail.paymentMethod}
+                    </Col>
+                    <Col span={12}>
+                      <strong>收款日期：</strong>{receivableDetail.paymentDate}
                     </Col>
                   </Row>
-                )}
-              </Card>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+                  {receivableDetail.remarks && (
+                    <Row style={{ marginTop: 8 }}>
+                      <Col span={24}>
+                        <strong>备注：</strong>{receivableDetail.remarks}
+                      </Col>
+                    </Row>
+                  )}
+                </Card>
+              )}
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

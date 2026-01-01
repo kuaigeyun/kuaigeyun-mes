@@ -5,15 +5,17 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Card, Select, Divider, Typography, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined, CloseOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { processRouteApi, operationApi } from '../../../services/process';
 import type { ProcessRoute, ProcessRouteCreate, ProcessRouteUpdate, Operation } from '../../../types/process';
+import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 
 /**
  * 工序项接口
@@ -750,7 +752,7 @@ const ProcessRoutesPage: React.FC = () => {
   ];
 
   return (
-    <>
+    <ListPageTemplate>
       <UniTable<ProcessRoute>
         actionRef={actionRef}
         columns={columns}
@@ -805,281 +807,209 @@ const ProcessRoutesPage: React.FC = () => {
         }}
       />
 
-      {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<ProcessRoute>
         title="工艺路线详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<ProcessRoute>
-          dataSource={processRouteDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '工艺路线编码',
-              dataIndex: 'code',
-            },
-            {
-              title: '工艺路线名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'is_active',
-              render: (_, record) => (
-                <Tag color={record.is_active ? 'success' : 'default'}>
-                  {record.is_active ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'created_at',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updated_at',
-              valueType: 'dateTime',
-            },
-            {
-              title: '工序序列',
-              span: 2,
-              render: (_, record) => {
+        dataSource={processRouteDetail || undefined}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        columns={[
+          { title: '工艺路线编码', dataIndex: 'code' },
+          { title: '工艺路线名称', dataIndex: 'name' },
+          { title: '描述', dataIndex: 'description', span: 2 },
+          {
+            title: '启用状态',
+            dataIndex: 'is_active',
+            render: (_, record) => (
+              <Tag color={record.is_active ? 'success' : 'default'}>
+                {record.is_active ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+          {
+            title: '工序序列',
+            span: 2,
+            render: (_, record) => {
+              if (!record.operation_sequence) {
+                return <span style={{ color: '#999' }}>暂无工序</span>;
+              }
 
-                if (!record.operation_sequence) {
-                  return <span style={{ color: '#999' }}>暂无工序</span>;
-                }
+              try {
+                let operations: any[] = [];
 
-                try {
-                  let operations: any[] = [];
-
-                  // 解析工序序列数据
-                  if (Array.isArray(record.operation_sequence)) {
-                    operations = record.operation_sequence;
-                  } else if (typeof record.operation_sequence === 'object' && record.operation_sequence !== null) {
-
-                    // 优先使用 operations 数组（包含完整信息）
-                    if (record.operation_sequence.operations && Array.isArray(record.operation_sequence.operations)) {
-                      operations = record.operation_sequence.operations;
-                    } else if (record.operation_sequence.sequence && Array.isArray(record.operation_sequence.sequence)) {
-                      operations = record.operation_sequence.sequence.map((uuid: string) => ({
-                        uuid,
-                        code: uuid.substring(0, 8),
-                        name: '工序',
-                      }));
-                    } else {
-                      // 尝试直接使用对象的值
-                      const entries = Object.entries(record.operation_sequence);
-
-                      for (const [key, value] of entries) {
-                        if (Array.isArray(value)) {
-                          operations = value;
-                          break;
-                        }
+                // 解析工序序列数据
+                if (Array.isArray(record.operation_sequence)) {
+                  operations = record.operation_sequence;
+                } else if (typeof record.operation_sequence === 'object' && record.operation_sequence !== null) {
+                  // 优先使用 operations 数组（包含完整信息）
+                  if (record.operation_sequence.operations && Array.isArray(record.operation_sequence.operations)) {
+                    operations = record.operation_sequence.operations;
+                  } else if (record.operation_sequence.sequence && Array.isArray(record.operation_sequence.sequence)) {
+                    operations = record.operation_sequence.sequence.map((uuid: string) => ({
+                      uuid,
+                      code: uuid.substring(0, 8),
+                      name: '工序',
+                    }));
+                  } else {
+                    // 尝试直接使用对象的值
+                    const entries = Object.entries(record.operation_sequence);
+                    for (const [key, value] of entries) {
+                      if (Array.isArray(value)) {
+                        operations = value;
+                        break;
                       }
+                    }
 
-                      // 如果还没找到，尝试将所有值合并
-                      if (operations.length === 0) {
-                        const allValues = Object.values(record.operation_sequence).filter(v => v != null);
-                        if (allValues.length > 0 && Array.isArray(allValues[0])) {
-                          operations = allValues[0] as any[];
-                        } else if (allValues.length > 0) {
-                          operations = allValues as any[];
-                        }
+                    // 如果还没找到，尝试将所有值合并
+                    if (operations.length === 0) {
+                      const allValues = Object.values(record.operation_sequence).filter(v => v != null);
+                      if (allValues.length > 0 && Array.isArray(allValues[0])) {
+                        operations = allValues[0] as any[];
+                      } else if (allValues.length > 0) {
+                        operations = allValues as any[];
                       }
                     }
                   }
-
-                  if (!operations || operations.length === 0) {
-                    console.log('operations 为空或长度为0');
-                    return <span style={{ color: '#999' }}>暂无工序</span>;
-                  }
-
-                  // 显示工序列表
-                  return (
-                    <div>
-                      <div style={{ marginBottom: 8, fontWeight: 500 }}>
-                        共 {operations.length} 个工序：
-                      </div>
-                      <Space wrap>
-                        {operations.map((op: any, index: number) => (
-                          <Tag key={op?.uuid || op || index} color="blue">
-                            {op?.code || op || `工序${index + 1}`} - {op?.name || '未知工序'}
-                          </Tag>
-                        ))}
-                      </Space>
-                    </div>
-                  );
-                } catch (error) {
-                  console.error('解析工序序列失败:', error, record.operation_sequence);
-                  return <span style={{ color: '#ff4d4f' }}>工序数据解析失败: {error.message}</span>;
                 }
-              },
-            },
-          ]}
-        />
-      </Drawer>
 
-      {/* 创建/编辑工艺路线 Modal */}
-      <Modal
+                if (!operations || operations.length === 0) {
+                  console.log('operations 为空或长度为0');
+                  return <span style={{ color: '#999' }}>暂无工序</span>;
+                }
+
+                // 显示工序列表
+                return (
+                  <div>
+                    <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                      共 {operations.length} 个工序：
+                    </div>
+                    <Space wrap>
+                      {operations.map((op: any, index: number) => (
+                        <Tag key={op?.uuid || op || index} color="blue">
+                          {op?.code || op || `工序${index + 1}`} - {op?.name || '未知工序'}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </div>
+                );
+              } catch (error: any) {
+                console.error('解析工序序列失败:', error, record.operation_sequence);
+                return <span style={{ color: '#ff4d4f' }}>工序数据解析失败: {error.message}</span>;
+              }
+            },
+          },
+        ]}
+      />
+
+      <FormModalTemplate
         title={isEdit ? '编辑工艺路线' : '新建工艺路线'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        onOk={() => formRef.current?.submit()}
-        okText={isEdit ? '更新' : '创建'}
-        cancelText="取消"
-        confirmLoading={formLoading}
-        width={960}
-        destroyOnHidden
-        style={{ top: 20 }}
-        bodyStyle={{
-          maxHeight: '80vh',
-          overflow: 'auto'
-        }}
-        footer={[
-          <div key="footer" style={{ display: 'flex', justifyContent: 'flex-start', gap: '8px' }}>
-            <Button onClick={handleCloseModal}>
-              取消
-            </Button>
-            <Button
-              type="primary"
-              loading={formLoading}
-              onClick={() => formRef.current?.submit()}
-            >
-              {isEdit ? '更新' : '创建'}
-            </Button>
-          </div>
-        ]}
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
+        initialValues={{ is_active: true }}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={false}
-          initialValues={{
-            is_active: true,
+        {/* 快捷键提示 */}
+        <div style={{
+          marginBottom: 16,
+          padding: '8px 12px',
+          background: '#f6ffed',
+          border: '1px solid #b7eb8f',
+          textAlign: 'center',
+          gridColumn: 'span 24',
+        }}>
+          <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+            💡 快捷键：Ctrl+Enter 保存 • Esc 关闭
+          </Typography.Text>
+        </div>
+
+        {/* 基本信息 */}
+        <ProFormText
+          name="code"
+          label={<Typography.Text strong>工艺路线编码</Typography.Text>}
+          placeholder="请输入工艺路线编码"
+          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入工艺路线编码' },
+            { max: 50, message: '工艺路线编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            style: { textTransform: 'uppercase' },
           }}
-          layout="vertical"
-        >
-          {/* 快捷键提示 */}
+        />
+        <ProFormText
+          name="name"
+          label={<Typography.Text strong>工艺路线名称</Typography.Text>}
+          placeholder="请输入工艺路线名称"
+          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入工艺路线名称' },
+            { max: 200, message: '工艺路线名称不能超过200个字符' },
+          ]}
+        />
+
+        {/* 工序序列配置 */}
+        <div style={{ marginTop: 24, marginBottom: 24, gridColumn: 'span 24' }}>
           <div style={{
-            marginBottom: 16,
-            padding: '8px 12px',
-            background: '#f6ffed',
-            border: '1px solid #b7eb8f',
-            textAlign: 'center'
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16
           }}>
-            <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-              💡 快捷键：Ctrl+Enter 保存 • Esc 关闭
+            <Typography.Text strong style={{ fontSize: '16px' }}>
+              工序序列配置
             </Typography.Text>
-          </div>
-
-          {/* 基本信息 */}
-          <Row gutter={24}>
-            <Col span={12}>
-              <ProFormText
-                name="code"
-                label={
-                  <Typography.Text strong>工艺路线编码</Typography.Text>
-                }
-                placeholder="请输入工艺路线编码"
-                rules={[
-                  { required: true, message: '请输入工艺路线编码' },
-                  { max: 50, message: '工艺路线编码不能超过50个字符' },
-                ]}
-                fieldProps={{
-                  style: { textTransform: 'uppercase' },
-                }}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="name"
-                label={
-                  <Typography.Text strong>工艺路线名称</Typography.Text>
-                }
-                placeholder="请输入工艺路线名称"
-                rules={[
-                  { required: true, message: '请输入工艺路线名称' },
-                  { max: 200, message: '工艺路线名称不能超过200个字符' },
-                ]}
-              />
-            </Col>
-          </Row>
-
-          {/* 工序序列配置 */}
-          <div style={{ marginTop: 24, marginBottom: 24 }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 16
-            }}>
-              <Typography.Text strong style={{ fontSize: '16px' }}>
-                工序序列配置
+            <Space>
+              <Tag color={operationSequence.length > 0 ? 'processing' : 'default'} size="small">
+                {operationSequence.length} 个工序
+              </Tag>
+              <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                支持拖拽排序，点击删除移除工序
               </Typography.Text>
-              <Space>
-                <Tag color={operationSequence.length > 0 ? 'processing' : 'default'} size="small">
-                  {operationSequence.length} 个工序
-                </Tag>
-                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-                  支持拖拽排序，点击删除移除工序
-                </Typography.Text>
-              </Space>
-            </div>
-            <OperationSequenceEditor
-              value={operationSequence}
-              onChange={setOperationSequence}
-            />
+            </Space>
           </div>
+          <OperationSequenceEditor
+            value={operationSequence}
+            onChange={setOperationSequence}
+          />
+        </div>
 
-          {/* 描述 */}
-          <Row>
-            <Col span={24}>
-              <ProFormTextArea
-                name="description"
-                label={
-                  <Typography.Text strong>描述</Typography.Text>
-                }
-                placeholder="请输入工艺路线的详细描述（可选）"
-                fieldProps={{
-                  rows: 3,
-                  maxLength: 500,
-                  showCount: true,
-                }}
-              />
-            </Col>
-          </Row>
+        {/* 描述 */}
+        <ProFormTextArea
+          name="description"
+          label={<Typography.Text strong>描述</Typography.Text>}
+          placeholder="请输入工艺路线的详细描述（可选）"
+          colProps={{ span: 24 }}
+          fieldProps={{
+            rows: 3,
+            maxLength: 500,
+            showCount: true,
+          }}
+        />
 
-          {/* 启用状态 */}
-          <Row style={{ marginTop: 16 }}>
-            <Col span={24}>
-              <ProFormSwitch
-                name="is_active"
-                label={
-                  <Space direction="vertical" size={4}>
-                    <Typography.Text strong>是否启用</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-                      禁用后该工艺路线将不可用
-                    </Typography.Text>
-                  </Space>
-                }
-                checkedChildren="启用"
-                unCheckedChildren="禁用"
-              />
-            </Col>
-          </Row>
-        </ProForm>
-      </Modal>
-    </>
+        {/* 启用状态 */}
+        <ProFormSwitch
+          name="is_active"
+          label={
+            <Space direction="vertical" size={4}>
+              <Typography.Text strong>是否启用</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                禁用后该工艺路线将不可用
+              </Typography.Text>
+            </Space>
+          }
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
+    </ListPageTemplate>
   );
 };
 

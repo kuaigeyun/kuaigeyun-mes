@@ -5,11 +5,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message, Input } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate } from '../../../types/material';
 
@@ -480,9 +481,120 @@ const BOMPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情 Drawer 的列定义
+   */
+  const detailColumns: ProDescriptionsItemType<BOM>[] = [
+    {
+      title: 'BOM编码',
+      dataIndex: 'bomCode',
+      render: (_, record) => record.bomCode || '-',
+    },
+    {
+      title: '版本',
+      dataIndex: 'version',
+      render: (_, record) => <Tag>{record.version}</Tag>,
+    },
+    {
+      title: '审核状态',
+      dataIndex: 'approvalStatus',
+      render: (_, record) => getApprovalStatusTag(record.approvalStatus),
+    },
+    {
+      title: '主物料',
+      dataIndex: 'materialId',
+      render: (_, record) => getMaterialName(record.materialId),
+    },
+    {
+      title: '子物料',
+      dataIndex: 'componentId',
+      render: (_, record) => getMaterialName(record.componentId),
+    },
+    {
+      title: '用量',
+      dataIndex: 'quantity',
+    },
+    {
+      title: '单位',
+      dataIndex: 'unit',
+    },
+    {
+      title: '生效日期',
+      dataIndex: 'effectiveDate',
+      valueType: 'dateTime',
+      render: (_, record) => record.effectiveDate || '-',
+    },
+    {
+      title: '失效日期',
+      dataIndex: 'expiryDate',
+      valueType: 'dateTime',
+      render: (_, record) => record.expiryDate || '-',
+    },
+    {
+      title: '替代料',
+      dataIndex: 'isAlternative',
+      render: (_, record) => (
+        <Tag color={record.isAlternative ? 'orange' : 'default'}>
+          {record.isAlternative ? '是' : '否'}
+        </Tag>
+      ),
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      span: 2,
+    },
+    {
+      title: '备注',
+      dataIndex: 'remark',
+      span: 2,
+    },
+    {
+      title: '审核人',
+      dataIndex: 'approvedBy',
+      render: (_, record) => record.approvedBy ? `用户ID: ${record.approvedBy}` : '-',
+    },
+    {
+      title: '审核时间',
+      dataIndex: 'approvedAt',
+      valueType: 'dateTime',
+      render: (_, record) => record.approvedAt || '-',
+    },
+    {
+      title: '审核意见',
+      dataIndex: 'approvalComment',
+      span: 2,
+      render: (_, record) => record.approvalComment || '-',
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
   return (
     <>
-      <UniTable<BOM>
+      <ListPageTemplate>
+        <UniTable<BOM>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -550,159 +662,36 @@ const BOMPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<BOM>
         title="BOM详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<BOM>
-          dataSource={bomDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: 'BOM编码',
-              dataIndex: 'bomCode',
-              render: (_, record) => record.bomCode || '-',
-            },
-            {
-              title: '版本',
-              dataIndex: 'version',
-              render: (_, record) => <Tag>{record.version}</Tag>,
-            },
-            {
-              title: '审核状态',
-              dataIndex: 'approvalStatus',
-              render: (_, record) => getApprovalStatusTag(record.approvalStatus),
-            },
-            {
-              title: '主物料',
-              dataIndex: 'materialId',
-              render: (_, record) => getMaterialName(record.materialId),
-            },
-            {
-              title: '子物料',
-              dataIndex: 'componentId',
-              render: (_, record) => getMaterialName(record.componentId),
-            },
-            {
-              title: '用量',
-              dataIndex: 'quantity',
-            },
-            {
-              title: '单位',
-              dataIndex: 'unit',
-            },
-            {
-              title: '生效日期',
-              dataIndex: 'effectiveDate',
-              valueType: 'dateTime',
-              render: (_, record) => record.effectiveDate || '-',
-            },
-            {
-              title: '失效日期',
-              dataIndex: 'expiryDate',
-              valueType: 'dateTime',
-              render: (_, record) => record.expiryDate || '-',
-            },
-            {
-              title: '替代料',
-              dataIndex: 'isAlternative',
-              render: (_, record) => (
-                <Tag color={record.isAlternative ? 'orange' : 'default'}>
-                  {record.isAlternative ? '是' : '否'}
-                </Tag>
-              ),
-            },
-            {
-              title: '优先级',
-              dataIndex: 'priority',
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '备注',
-              dataIndex: 'remark',
-              span: 2,
-            },
-            {
-              title: '审核人',
-              dataIndex: 'approvedBy',
-              render: (_, record) => record.approvedBy ? `用户ID: ${record.approvedBy}` : '-',
-            },
-            {
-              title: '审核时间',
-              dataIndex: 'approvedAt',
-              valueType: 'dateTime',
-              render: (_, record) => record.approvedAt || '-',
-            },
-            {
-              title: '审核意见',
-              dataIndex: 'approvalComment',
-              span: 2,
-              render: (_, record) => record.approvalComment || '-',
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={bomDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
 
       {/* 创建/编辑BOM Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑BOM' : '新建BOM（支持批量添加子物料）'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={1000}
-        destroyOnClose
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
+        initialValues={{
+          isActive: true,
+          version: '1.0',
+          approvalStatus: 'draft',
+          items: [{ isAlternative: false, priority: 0 }],
+        }}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
-          initialValues={{
-            isActive: true,
-            version: '1.0',
-            approvalStatus: 'draft',
-            items: [{ isAlternative: false, priority: 0 }],
-          }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
           <SafeProFormSelect
             name="materialId"
             label="主物料"
@@ -929,8 +918,7 @@ const BOMPage: React.FC = () => {
             name="isActive"
             label="是否启用"
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 审核Modal */}
       <Modal

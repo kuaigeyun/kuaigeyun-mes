@@ -11,6 +11,8 @@ import { App, Typography, Button, Space, Tooltip, ConfigProvider, Card, Row, Col
 import { useNavigate, Link } from 'react-router-dom';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, GlobalOutlined, UserAddOutlined, ApartmentOutlined, ArrowLeftOutlined, MailOutlined, MobileOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
+import Lottie from 'lottie-react';
+import loginAnimation from '../../../static/lottie/login.json';
 import { registerPersonal, registerOrganization, checkTenantExists, searchTenants, sendVerificationCode, type TenantCheckResponse, type TenantSearchOption, type OrganizationRegisterRequest, type SendVerificationCodeRequest } from '../../services/register';
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
@@ -1150,35 +1152,19 @@ export default function LoginPage() {
         </div>
 
         <div className="login-left-content">
-          {/* 装饰图片显示在左侧上方 */}
-          <img 
-            src="/img/login.png" 
-            alt="Login Decoration" 
-            className="login-decoration-img"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              target.parentElement?.appendChild(
-                Object.assign(document.createElement('div'), {
-                  className: 'login-placeholder',
-                  style: {
-                    width: '100%',
-                    maxWidth: '600px',
-                    height: '400px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '48px',
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    marginBottom: '40px',
-                  },
-                  textContent: '🚀',
-                })
-              );
-            }}
-          />
+          {/* Lottie 动画装饰显示在左侧上方 */}
+          <div className="login-decoration-lottie">
+            <Lottie
+              animationData={loginAnimation}
+              loop={true}
+              autoplay={true}
+              style={{
+                width: '100%',
+                maxWidth: '600px',
+                height: 'auto',
+              }}
+            />
+          </div>
 
           {/* 框架简介显示在图片下方 */}
           <div className="login-description">

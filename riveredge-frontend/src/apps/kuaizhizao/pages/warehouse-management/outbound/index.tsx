@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, message, Form } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Card } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 
 // 统一的出库单接口（结合生产领料和销售出库）
@@ -55,7 +56,7 @@ const OutboundPage: React.FC = () => {
 
   // Modal 相关状态（创建出库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [createForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -219,8 +220,20 @@ const OutboundPage: React.FC = () => {
     },
   ];
 
+  const handleFormFinish = async (values: any) => {
+    try {
+      messageApi.success('出库单创建成功');
+      setCreateModalVisible(false);
+      formRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
+  };
+
   return (
-    <>
+    <ListPageTemplate>
       <UniTable
         headerTitle="出库管理"
         actionRef={actionRef}
@@ -290,132 +303,116 @@ const OutboundPage: React.FC = () => {
         ]}
       />
 
-      {/* 创建出库单 Modal */}
-      <Modal
+      <FormModalTemplate
         title="新建出库单"
         open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        onOk={() => {
-          createForm.validateFields().then((values) => {
-            messageApi.success('出库单创建成功');
-            setCreateModalVisible(false);
-            createForm.resetFields();
-            actionRef.current?.reload();
-          });
-        }}
-        width={600}
+        onClose={() => setCreateModalVisible(false)}
+        onFinish={handleFormFinish}
+        isEdit={false}
+        initialValues={{ type: 'production' }}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
-        <Form
-          form={createForm}
-          layout="vertical"
-          initialValues={{
-            type: 'production',
-          }}
-        >
-          <Form.Item
-            name="type"
-            label="出库类型"
-            rules={[{ required: true, message: '请选择出库类型' }]}
-          >
-            <select style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
-              <option value="production">生产领料</option>
-              <option value="sales">销售出库</option>
-              <option value="return">退货出库</option>
-            </select>
-          </Form.Item>
+        <ProFormSelect
+          name="type"
+          label="出库类型"
+          placeholder="请选择出库类型"
+          rules={[{ required: true, message: '请选择出库类型' }]}
+          options={[
+            { label: '生产领料', value: 'production' },
+            { label: '销售出库', value: 'sales' },
+            { label: '退货出库', value: 'return' },
+          ]}
+        />
+        <ProFormSelect
+          name="warehouse"
+          label="出库仓库"
+          placeholder="请选择出库仓库"
+          rules={[{ required: true, message: '请选择出库仓库' }]}
+          options={[
+            { label: '原材料仓库', value: 'raw-materials' },
+            { label: '半成品仓库', value: 'semi-finished' },
+            { label: '成品仓库', value: 'finished-goods' },
+          ]}
+        />
+        <ProFormText
+          name="customer"
+          label="客户"
+          placeholder="选择客户"
+        />
+        <ProFormText
+          name="workOrder"
+          label="关联工单"
+          placeholder="选择工单"
+        />
+      </FormModalTemplate>
 
-          <Form.Item
-            name="warehouse"
-            label="出库仓库"
-            rules={[{ required: true, message: '请选择出库仓库' }]}
-          >
-            <select style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
-              <option value="raw-materials">原材料仓库</option>
-              <option value="semi-finished">半成品仓库</option>
-              <option value="finished-goods">成品仓库</option>
-            </select>
-          </Form.Item>
-
-          <Form.Item
-            name="customer"
-            label="客户"
-          >
-            <input type="text" placeholder="选择客户" style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="workOrder"
-            label="关联工单"
-          >
-            <input type="text" placeholder="选择工单" style={{ width: '100%', padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px' }} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 出库单详情 Drawer */}
-      <Drawer
-        title="出库单详情"
-        size="large"
+      <DetailDrawerTemplate
+        title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-      >
-        {currentOrder && (
-          <div>
-            <p><strong>出库单号：</strong>{currentOrder.delivery_code || currentOrder.picking_code}</p>
-            <p><strong>出库类型：</strong>
-              <Tag color={
-                currentOrder.outbound_type === 'production_picking' ? 'processing' : 'success'
-              }>
-                {currentOrder.outbound_type === 'production_picking' ? '生产领料' : '销售出库'}
-              </Tag>
-            </p>
-            <p><strong>状态：</strong>
-              <Tag color={
-                currentOrder.status === '已完成' ? 'success' :
-                currentOrder.status === '已确认' ? 'processing' :
-                currentOrder.status === '已取消' ? 'error' : 'default'
-              }>
-                {currentOrder.status}
-              </Tag>
-            </p>
-            {currentOrder.customer_name && (
-              <p><strong>客户：</strong>{currentOrder.customer_name}</p>
-            )}
-            {currentOrder.work_order_code && (
-              <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
-            )}
-            <p><strong>出库仓库：</strong>{currentOrder.warehouse_name}</p>
-            <p><strong>出库日期：</strong>{currentOrder.delivery_date}</p>
-            <p><strong>操作员：</strong>{currentOrder.delivered_by}</p>
-            <p><strong>总数量：</strong>{currentOrder.total_quantity}</p>
-            <p><strong>总品种：</strong>{currentOrder.total_items}</p>
-            {currentOrder.notes && (
-              <p><strong>备注：</strong>{currentOrder.notes}</p>
-            )}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        columns={[]}
+        customContent={
+          currentOrder ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <p><strong>出库单号：</strong>{currentOrder.delivery_code || currentOrder.picking_code}</p>
+                <p><strong>出库类型：</strong>
+                  <Tag color={
+                    currentOrder.outbound_type === 'production_picking' ? 'processing' : 'success'
+                  }>
+                    {currentOrder.outbound_type === 'production_picking' ? '生产领料' : '销售出库'}
+                  </Tag>
+                </p>
+                <p><strong>状态：</strong>
+                  <Tag color={
+                    currentOrder.status === '已完成' ? 'success' :
+                    currentOrder.status === '已确认' ? 'processing' :
+                    currentOrder.status === '已取消' ? 'error' : 'default'
+                  }>
+                    {currentOrder.status}
+                  </Tag>
+                </p>
+                {currentOrder.customer_name && (
+                  <p><strong>客户：</strong>{currentOrder.customer_name}</p>
+                )}
+                {currentOrder.work_order_code && (
+                  <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
+                )}
+                <p><strong>出库仓库：</strong>{currentOrder.warehouse_name}</p>
+                <p><strong>出库日期：</strong>{currentOrder.delivery_date}</p>
+                <p><strong>操作员：</strong>{currentOrder.delivered_by}</p>
+                <p><strong>总数量：</strong>{currentOrder.total_quantity}</p>
+                <p><strong>总品种：</strong>{currentOrder.total_items}</p>
+                {currentOrder.notes && (
+                  <p><strong>备注：</strong>{currentOrder.notes}</p>
+                )}
+              </Card>
 
-            {/* 出库单明细 */}
-            {currentOrder.items && currentOrder.items.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <h4>出库明细</h4>
-                {currentOrder.items.map((item, index) => (
-                  <div key={item.id} style={{
-                    padding: '12px',
-                    marginBottom: '8px',
-                    border: '1px solid #f0f0f0',
-                    borderRadius: '4px'
-                  }}>
-                    <p><strong>物料编码：</strong>{item.material_code}</p>
-                    <p><strong>物料名称：</strong>{item.material_name}</p>
-                    <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
-                    {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+              {/* 出库单明细 */}
+              {currentOrder.items && currentOrder.items.length > 0 && (
+                <Card title="出库明细">
+                  {currentOrder.items.map((item) => (
+                    <div key={item.id} style={{
+                      padding: '12px',
+                      marginBottom: '8px',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: '4px'
+                    }}>
+                      <p><strong>物料编码：</strong>{item.material_code}</p>
+                      <p><strong>物料名称：</strong>{item.material_name}</p>
+                      <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
+                      {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
+                    </div>
+                  ))}
+                </Card>
+              )}
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 
