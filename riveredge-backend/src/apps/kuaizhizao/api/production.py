@@ -1819,6 +1819,59 @@ async def push_sales_forecast_to_mrp(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
+@router.put("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="更新销售预测")
+async def update_sales_forecast(
+    forecast_id: int,
+    forecast: SalesForecastUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesForecastResponse:
+    """
+    更新销售预测
+
+    - **forecast_id**: 销售预测ID
+    - **forecast**: 销售预测更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的销售预测信息。
+    """
+    service = SalesForecastService()
+    return await service.update_sales_forecast(
+        tenant_id=tenant_id,
+        forecast_id=forecast_id,
+        forecast_data=forecast,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/sales-forecasts/{forecast_id}", summary="删除销售预测")
+async def delete_sales_forecast(
+    forecast_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除销售预测
+
+    - **forecast_id**: 销售预测ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回删除结果。
+    """
+    service = SalesForecastService()
+    # 验证预测存在
+    await service.get_sales_forecast_by_id(tenant_id, forecast_id)
+    # 删除预测（硬删除）
+    from apps.kuaizhizao.models.sales_forecast import SalesForecast
+    deleted = await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).delete()
+    if deleted:
+        return JSONResponse(content={"message": "销售预测删除成功"}, status_code=status.HTTP_200_OK)
+    else:
+        return JSONResponse(content={"message": "销售预测删除失败"}, status_code=status.HTTP_400_BAD_REQUEST)
+
+
 @router.post("/sales-forecasts/{forecast_id}/approve", response_model=SalesForecastResponse, summary="审核销售预测")
 async def approve_sales_forecast(
     forecast_id: int,
