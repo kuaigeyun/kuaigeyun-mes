@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { App, Card, Form, Input, Switch, Button, Upload, message, Space, Divider, Select } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
-import { PageContainer } from '@ant-design/pro-components';
+import { ListPageTemplate } from '../../../components/layout-templates';
 import { theme } from 'antd';
 import type { UploadFile, UploadProps } from 'antd';
 import {
@@ -322,28 +322,27 @@ const SiteSettingsPage: React.FC = () => {
   };
 
   return (
-    <PageContainer
-      title="站点设置"
-      extra={[
-        <Button
-          key="reload"
-          icon={<ReloadOutlined />}
-          onClick={loadSiteSetting}
-          loading={loading}
-        >
-          刷新
-        </Button>,
-        <Button
-          key="save"
-          type="primary"
-          icon={<SaveOutlined />}
-          onClick={handleSave}
-          loading={saving}
-        >
-          保存
-        </Button>,
-      ]}
-    >
+    <ListPageTemplate>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>站点设置</h2>
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={loadSiteSetting}
+            loading={loading}
+          >
+            刷新
+          </Button>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSave}
+            loading={saving}
+          >
+            保存
+          </Button>
+        </Space>
+      </div>
       <Card loading={loading}>
         <Form
           form={form}
