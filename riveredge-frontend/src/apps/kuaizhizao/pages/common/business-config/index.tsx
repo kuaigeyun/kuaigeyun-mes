@@ -12,8 +12,8 @@ import React, { useState, useRef } from 'react';
 import { App, Card, Form, Input, Button, Select, Switch, Tabs, Space, Tag, message, InputNumber, Modal } from 'antd';
 import { SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ProFormText, ProFormSelect, ProFormTextArea, ProFormDigit, ActionType, ProColumns } from '@ant-design/pro-components';
-import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
 // 系统参数接口定义
 interface SystemParameter {
