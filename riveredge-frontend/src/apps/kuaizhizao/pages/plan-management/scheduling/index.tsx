@@ -9,6 +9,7 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Card, message, Modal } from 'antd';
 import { ReloadOutlined, CalculatorOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates/ListPageTemplate';
 
 interface MRPSuggestion {
   id: number;
@@ -692,7 +693,7 @@ const SchedulingPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
+    <ListPageTemplate>
       <Card
         tabList={tabs.map(tab => ({ key: tab.key, label: tab.label }))}
         activeTabKey={activeTab}
@@ -701,7 +702,7 @@ const SchedulingPage: React.FC = () => {
       >
         {tabs.find(tab => tab.key === activeTab)?.children}
       </Card>
-    </div>
+    </ListPageTemplate>
   );
 };
 
