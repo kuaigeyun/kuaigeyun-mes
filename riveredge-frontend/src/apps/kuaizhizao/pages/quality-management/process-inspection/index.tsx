@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Radio, Input, Select } from 'antd';
+import { ActionType, ProColumns, ProFormRadio, ProFormSelect, ProFormTextArea, ProFormText } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
 // 过程检验接口定义
 interface ProcessInspection {
@@ -41,7 +42,7 @@ const ProcessInspectionPage: React.FC = () => {
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<ProcessInspection | null>(null);
-  const [inspectionForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 扫码Modal状态
   const [scanModalVisible, setScanModalVisible] = useState(false);
@@ -64,7 +65,7 @@ const ProcessInspectionPage: React.FC = () => {
     setCurrentInspection(record);
     setInspectionModalVisible(true);
 
-    inspectionForm.setFieldsValue({
+    formRef.current?.setFieldsValue({
       inspectionResult: 'pending',
       remarks: '',
     });
@@ -79,7 +80,7 @@ const ProcessInspectionPage: React.FC = () => {
       messageApi.success(`过程检验完成：${resultText}`);
 
       setInspectionModalVisible(false);
-      inspectionForm.resetFields();
+      formRef.current?.resetFields();
       actionRef.current?.reload();
 
       // 更新统计数据
@@ -93,6 +94,7 @@ const ProcessInspectionPage: React.FC = () => {
 
     } catch (error: any) {
       messageApi.error(error.message || '检验提交失败');
+      throw error;
     }
   };
 
@@ -214,56 +216,35 @@ const ProcessInspectionPage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="待检验数量"
-                  value={stats.pendingCount}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="合格数量"
-                  value={stats.qualifiedCount}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="不合格数量"
-                  value={stats.unqualifiedCount}
-                  prefix={<CloseCircleOutlined />}
-                  valueStyle={{ color: '#f5222d' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总检验数量"
-                  value={stats.totalInspected}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* UniTable */}
-        <UniTable<ProcessInspection>
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '待检验数量',
+          value: stats.pendingCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '合格数量',
+          value: stats.qualifiedCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '不合格数量',
+          value: stats.unqualifiedCount,
+          prefix: <CloseCircleOutlined />,
+          valueStyle: { color: '#f5222d' },
+        },
+        {
+          title: '总检验数量',
+          value: stats.totalInspected,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+      ]}
+    >
+      <UniTable<ProcessInspection>
           headerTitle="过程检验管理"
           actionRef={actionRef}
           rowKey="id"
@@ -355,103 +336,95 @@ const ProcessInspectionPage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
 
-      {/* 检验Modal */}
-      <Modal
-        title={`过程检验 - ${currentInspection?.inspectionCode}`}
+      <FormModalTemplate
+        title={`过程检验 - ${currentInspection?.inspectionCode || ''}`}
         open={inspectionModalVisible}
-        onCancel={() => setInspectionModalVisible(false)}
-        onOk={() => inspectionForm.submit()}
-        okText="提交检验结果"
-        cancelText="取消"
-        width={600}
+        onClose={() => setInspectionModalVisible(false)}
+        onFinish={handleInspectionSubmit}
+        isEdit={false}
+        initialValues={{
+          inspectionResult: 'pending',
+          remarks: '',
+        }}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
         {currentInspection && (
-          <div style={{ marginBottom: 24 }}>
-            <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>工单：</strong>{currentInspection.workOrderName}
-                </Col>
-                <Col span={12}>
-                  <strong>工序：</strong>{currentInspection.operationName}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>产品：</strong>{currentInspection.productName}
-                </Col>
-                <Col span={12}>
-                  <strong>批次号：</strong>{currentInspection.batchNo}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>数量：</strong>{currentInspection.quantity} {currentInspection.unit}
-                </Col>
-              </Row>
-            </Card>
-
-            <Form
-              form={inspectionForm}
-              layout="vertical"
-              onFinish={handleInspectionSubmit}
-            >
-              <Form.Item
-                name="inspectionResult"
-                label="检验结果"
-                rules={[{ required: true, message: '请选择检验结果' }]}
-              >
-                <Radio.Group>
-                  <Radio value="pass">
-                    <Tag color="success">合格</Tag> 工序质量符合要求
-                  </Radio>
-                  <Radio value="fail">
-                    <Tag color="error">不合格</Tag> 工序质量不符合要求
-                  </Radio>
-                </Radio.Group>
-              </Form.Item>
-
-              <Form.Item
-                name="qualityItems"
-                label="质量检查项目"
-              >
-                <Select
-                  mode="multiple"
-                  placeholder="选择检查的项目"
-                  options={[
-                    { label: '尺寸精度', value: 'dimension' },
-                    { label: '表面质量', value: 'surface' },
-                    { label: '功能测试', value: 'function' },
-                    { label: '外观检查', value: 'appearance' },
-                  ]}
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="remarks"
-                label="检验备注"
-              >
-                <Input.TextArea
-                  rows={3}
-                  placeholder="请输入检验详情、发现的问题或处理意见"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="inspectorName"
-                label="检验员"
-                rules={[{ required: true, message: '请输入检验员姓名' }]}
-              >
-                <Input placeholder="请输入检验员姓名" />
-              </Form.Item>
-            </Form>
-          </div>
+          <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <strong>工单：</strong>{currentInspection.workOrderName}
+              </Col>
+              <Col span={12}>
+                <strong>工序：</strong>{currentInspection.operationName}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <strong>产品：</strong>{currentInspection.productName}
+              </Col>
+              <Col span={12}>
+                <strong>批次号：</strong>{currentInspection.batchNo}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <strong>数量：</strong>{currentInspection.quantity} {currentInspection.unit}
+              </Col>
+            </Row>
+          </Card>
         )}
-      </Modal>
+        <ProFormRadio.Group
+          name="inspectionResult"
+          label="检验结果"
+          rules={[{ required: true, message: '请选择检验结果' }]}
+          options={[
+            {
+              label: (
+                <span>
+                  <Tag color="success">合格</Tag> 工序质量符合要求
+                </span>
+              ),
+              value: 'pass',
+            },
+            {
+              label: (
+                <span>
+                  <Tag color="error">不合格</Tag> 工序质量不符合要求
+                </span>
+              ),
+              value: 'fail',
+            },
+          ]}
+        />
+        <ProFormSelect
+          name="qualityItems"
+          label="质量检查项目"
+          mode="multiple"
+          placeholder="选择检查的项目"
+          options={[
+            { label: '尺寸精度', value: 'dimension' },
+            { label: '表面质量', value: 'surface' },
+            { label: '功能测试', value: 'function' },
+            { label: '外观检查', value: 'appearance' },
+          ]}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="检验备注"
+          placeholder="请输入检验详情、发现的问题或处理意见"
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormText
+          name="inspectorName"
+          label="检验员"
+          placeholder="请输入检验员姓名"
+          rules={[{ required: true, message: '请输入检验员姓名' }]}
+        />
+      </FormModalTemplate>
 
-      {/* 扫码检验Modal */}
+      {/* 扫码检验Modal - 保留原有Modal，因为这是特殊功能 */}
       <Modal
         title="扫码过程检验"
         open={scanModalVisible}
@@ -479,7 +452,7 @@ const ProcessInspectionPage: React.FC = () => {
           </p>
         </div>
       </Modal>
-    </>
+    </ListPageTemplate>
   );
 };
 
