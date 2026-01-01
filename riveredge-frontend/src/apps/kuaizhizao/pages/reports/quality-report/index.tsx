@@ -13,6 +13,7 @@ import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Spac
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie } from '@ant-design/charts';
+import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
 
 // 质量报表接口定义
 interface QualityReportItem {
@@ -250,76 +251,54 @@ const QualityReportPage: React.FC = () => {
     setReportType(type);
   };
 
+  // 统计卡片数据
+  const statCards: StatCard[] = [
+    {
+      title: '总检验数',
+      value: stats.totalInspections,
+      prefix: <CheckCircleOutlined />,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '合格检验',
+      value: stats.qualifiedInspections,
+      suffix: `/ ${stats.totalInspections}`,
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '不合格检验',
+      value: stats.unqualifiedInspections,
+      suffix: `/ ${stats.totalInspections}`,
+      valueStyle: { color: '#f5222d' },
+    },
+    {
+      title: '总体合格率',
+      value: stats.overallQualifiedRate,
+      suffix: '%',
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '来料合格率',
+      value: stats.incomingQualifiedRate,
+      suffix: '%',
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '过程合格率',
+      value: stats.processQualifiedRate,
+      suffix: '%',
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '成品合格率',
+      value: stats.finishedQualifiedRate,
+      suffix: '%',
+      valueStyle: { color: '#1890ff' },
+    },
+  ];
+
   return (
-    <div>
-      {/* 统计卡片 */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="总检验数"
-                value={stats.totalInspections}
-                prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="合格检验"
-                value={stats.qualifiedInspections}
-                suffix={`/ ${stats.totalInspections}`}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="不合格检验"
-                value={stats.unqualifiedInspections}
-                suffix={`/ ${stats.totalInspections}`}
-                valueStyle={{ color: '#f5222d' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="总体合格率"
-                value={stats.overallQualifiedRate}
-                suffix="%"
-                precision={1}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="来料合格率"
-                value={stats.incomingQualifiedRate}
-                suffix="%"
-                precision={1}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="成品合格率"
-                value={stats.finishedQualifiedRate}
-                suffix="%"
-                precision={1}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
+    <ListPageTemplate statCards={statCards}>
 
       {/* 报表控制面板 */}
       <Card style={{ marginBottom: 16 }}>
@@ -529,7 +508,7 @@ const QualityReportPage: React.FC = () => {
           </Col>
         </Row>
       )}
-    </div>
+    </ListPageTemplate>
   );
 };
 
