@@ -6,7 +6,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, message, Input, Typography } from 'antd';
 import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons';
@@ -35,7 +35,6 @@ const ApprovalInstanceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token: themeToken } = theme.useToken();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [tableData, setTableData] = useState<ApprovalInstance[]>([]);
   
@@ -94,7 +93,6 @@ const ApprovalInstanceListPage: React.FC = () => {
     setCurrentInstanceUuid(record.uuid);
     setActionType(action);
     setActionModalVisible(true);
-    formRef.current?.resetFields();
   };
 
   /**
@@ -483,7 +481,6 @@ const ApprovalInstanceListPage: React.FC = () => {
         onFinish={handleSubmitForm}
         loading={submitFormLoading}
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        initialValues={formRef.current?.getFieldsValue()}
       >
         <SafeProFormSelect
           name="process_uuid"
@@ -509,7 +506,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             rows: 4,
           }}
         />
-        <ProForm.Item
+        <ProFormItem
           name="data"
           label="审批数据（JSON，可选）"
         >
@@ -517,7 +514,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             rows={6}
             placeholder='{"key": "value"}'
           />
-        </ProForm.Item>
+        </ProFormItem>
       </FormModalTemplate>
 
       {/* 审批操作 Modal */}
@@ -533,7 +530,6 @@ const ApprovalInstanceListPage: React.FC = () => {
         onFinish={handleActionForm}
         loading={actionFormLoading}
         width={MODAL_CONFIG.SMALL_WIDTH}
-        initialValues={formRef.current?.getFieldsValue()}
       >
         {actionType === 'transfer' && (
           <ProFormText
