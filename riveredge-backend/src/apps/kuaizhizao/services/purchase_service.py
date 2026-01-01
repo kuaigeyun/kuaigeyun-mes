@@ -271,6 +271,37 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             return await self.get_purchase_order_by_id(tenant_id, order_id)
 
+    async def submit_purchase_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        submitted_by: int
+    ) -> PurchaseOrderResponse:
+        """
+        提交采购订单（非审核，仅改变状态为待审核）
+
+        Args:
+            tenant_id: 租户ID
+            order_id: 订单ID
+            submitted_by: 提交人ID
+
+        Returns:
+            PurchaseOrderResponse: 提交后的订单信息
+        """
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        if order.status != "草稿":
+            raise BusinessLogicError("只能提交草稿状态的订单")
+
+        await order.update_from_dict({
+            'status': "待审核",
+            'updated_by': submitted_by
+        }).save()
+
+        return await self.get_purchase_order_by_id(tenant_id, order_id)
+
     async def approve_purchase_order(
         self,
         tenant_id: int,

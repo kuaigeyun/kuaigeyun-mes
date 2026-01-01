@@ -150,6 +150,17 @@ export async function importSalesOrders(file: File): Promise<{ success: boolean;
 }
 
 /**
+ * 下推到销售出库
+ */
+export async function pushSalesOrderToDelivery(id: number, deliveryQuantities?: Record<number, number>): Promise<any> {
+  return apiRequest<any>({
+    url: `/apps/kuaizhizao/sales-orders/${id}/push-to-delivery`,
+    method: 'POST',
+    data: deliveryQuantities || {},
+  });
+}
+
+/**
  * 确认销售订单
  */
 export async function confirmSalesOrder(id: number): Promise<SalesOrder> {

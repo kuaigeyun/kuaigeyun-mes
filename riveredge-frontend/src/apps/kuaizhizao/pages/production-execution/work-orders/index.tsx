@@ -10,11 +10,12 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { workOrderApi } from '../../../services/production';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
 interface WorkOrder {
   id?: number;
@@ -61,6 +62,7 @@ const WorkOrdersPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
 
   /**
    * 处理新建工单
@@ -115,8 +117,19 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleDetail = async (record: WorkOrder) => {
     try {
-      // 这里可以加载完整详情数据
-      setWorkOrderDetail(record);
+      // 加载完整详情数据
+      const detail = await workOrderApi.get(record.id!.toString());
+      setWorkOrderDetail(detail);
+      
+      // 获取单据关联关系
+      try {
+        const relations = await getDocumentRelations('work_order', record.id!);
+        setDocumentRelations(relations);
+      } catch (error) {
+        console.error('获取单据关联关系失败:', error);
+        setDocumentRelations(null);
+      }
+      
       setDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取工单详情失败');
@@ -534,10 +547,77 @@ const WorkOrdersPage: React.FC = () => {
       <DetailDrawerTemplate<WorkOrder>
         title={`工单详情 - ${workOrderDetail?.code || ''}`}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+        onClose={() => {
+          setDrawerVisible(false);
+          setWorkOrderDetail(null);
+          setDocumentRelations(null);
+        }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
         width={DRAWER_CONFIG.LARGE_WIDTH}
+        customContent={
+          documentRelations ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="单据关联">
+                {documentRelations.upstream_count > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                      上游单据 ({documentRelations.upstream_count})
+                    </div>
+                    <Table
+                      size="small"
+                      columns={[
+                        { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                        { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                        { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                        { 
+                          title: '状态', 
+                          dataIndex: 'status', 
+                          width: 100,
+                          render: (status: string) => <Tag>{status}</Tag>
+                        },
+                      ]}
+                      dataSource={documentRelations.upstream_documents}
+                      pagination={false}
+                      rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                      bordered
+                    />
+                  </div>
+                )}
+                {documentRelations.downstream_count > 0 && (
+                  <div>
+                    <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                      下游单据 ({documentRelations.downstream_count})
+                    </div>
+                    <Table
+                      size="small"
+                      columns={[
+                        { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                        { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                        { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                        { 
+                          title: '状态', 
+                          dataIndex: 'status', 
+                          width: 100,
+                          render: (status: string) => <Tag>{status}</Tag>
+                        },
+                      ]}
+                      dataSource={documentRelations.downstream_documents}
+                      pagination={false}
+                      rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                      bordered
+                    />
+                  </div>
+                )}
+                {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                    暂无关联单据
+                  </div>
+                )}
+              </Card>
+            </div>
+          ) : null
+        }
       />
     </>
   );

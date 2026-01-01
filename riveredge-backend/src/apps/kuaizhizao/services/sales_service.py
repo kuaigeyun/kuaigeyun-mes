@@ -130,6 +130,257 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         items = await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).order_by('forecast_date')
         return [SalesForecastItemResponse.model_validate(item) for item in items]
 
+    async def submit_forecast(self, tenant_id: int, forecast_id: int, submitted_by: int) -> SalesForecastResponse:
+        """
+        提交销售预测
+        
+        将草稿状态的销售预测提交为待审核状态
+        
+        Args:
+            tenant_id: 租户ID
+            forecast_id: 销售预测ID
+            submitted_by: 提交人ID
+            
+        Returns:
+            SalesForecastResponse: 更新后的销售预测
+            
+        Raises:
+            NotFoundError: 销售预测不存在
+            BusinessLogicError: 销售预测状态不是草稿
+        """
+        async with in_transaction():
+            forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+            
+            if forecast.status != "草稿":
+                raise BusinessLogicError(f"只有草稿状态的销售预测才能提交，当前状态：{forecast.status}")
+            
+            # 更新状态为待审核
+            await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+                status="待审核",
+                review_status="待审核",
+                updated_by=submitted_by
+            )
+            
+            updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+            return updated_forecast
+
+    async def import_from_data(
+        self,
+        tenant_id: int,
+        data: List[List[Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从二维数组数据批量导入销售预测
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建销售预测。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 租户ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '预测名称': 'forecast_name',
+            '*预测名称': 'forecast_name',
+            'forecast_name': 'forecast_name',
+            '*forecast_name': 'forecast_name',
+            '预测类型': 'forecast_type',
+            'forecast_type': 'forecast_type',
+            '预测周期': 'forecast_period',
+            '*预测周期': 'forecast_period',
+            'forecast_period': 'forecast_period',
+            '*forecast_period': 'forecast_period',
+            '开始日期': 'start_date',
+            '*开始日期': 'start_date',
+            'start_date': 'start_date',
+            '*start_date': 'start_date',
+            '结束日期': 'end_date',
+            '*结束日期': 'end_date',
+            'end_date': 'end_date',
+            '*end_date': 'end_date',
+            '备注': 'notes',
+            'notes': 'notes',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['forecast_name', 'forecast_period', 'start_date', 'end_date']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                forecast_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            value_str = str(value).strip()
+                            if value_str:
+                                # 日期字段需要转换
+                                if field in ['start_date', 'end_date']:
+                                    try:
+                                        from datetime import datetime as dt
+                                        # 尝试多种日期格式
+                                        for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                                            try:
+                                                forecast_data[field] = dt.strptime(value_str, fmt).date()
+                                                break
+                                            except ValueError:
+                                                continue
+                                        else:
+                                            raise ValueError(f"日期格式错误：{value_str}")
+                                    except Exception as e:
+                                        errors.append({
+                                            "row": row_idx,
+                                            "error": f"日期格式错误：{value_str}，错误：{str(e)}"
+                                        })
+                                        failure_count += 1
+                                        break
+                                else:
+                                    forecast_data[field] = value_str
+                
+                # 验证必填字段
+                if not forecast_data.get('forecast_name') or not forecast_data.get('forecast_period'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "预测名称或预测周期为空"
+                    })
+                    failure_count += 1
+                    continue
+                
+                if 'start_date' not in forecast_data or 'end_date' not in forecast_data:
+                    errors.append({
+                        "row": row_idx,
+                        "error": "开始日期或结束日期为空或格式错误"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 设置默认值
+                forecast_data.setdefault('forecast_type', 'MTS')
+                forecast_data.setdefault('status', '草稿')
+                forecast_data.setdefault('review_status', '待审核')
+                
+                # 创建销售预测
+                forecast_create = SalesForecastCreate(**forecast_data)
+                await self.create_sales_forecast(tenant_id, forecast_create, created_by)
+                success_count += 1
+                
+            except Exception as e:
+                logger.error(f"导入销售预测失败（第{row_idx}行）: {str(e)}")
+                errors.append({
+                    "row": row_idx,
+                    "error": str(e)
+                })
+                failure_count += 1
+        
+        return {
+            "success": True,
+            "message": "导入完成",
+            "total": success_count + failure_count,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+        }
+
+    async def export_to_excel(
+        self,
+        tenant_id: int,
+        **filters
+    ) -> str:
+        """
+        导出销售预测到Excel文件
+        
+        Args:
+            tenant_id: 租户ID
+            **filters: 过滤条件
+            
+        Returns:
+            str: Excel文件路径
+        """
+        import csv
+        import os
+        import tempfile
+        from datetime import datetime
+        
+        # 查询所有符合条件的销售预测（不分页）
+        forecasts = await self.list_sales_forecasts(tenant_id, skip=0, limit=10000, **filters)
+        
+        # 创建导出目录
+        export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"sales_forecasts_{timestamp}.csv"
+        file_path = os.path.join(export_dir, filename)
+        
+        # 写入CSV文件
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            
+            # 写入表头
+            writer.writerow([
+                '预测编号', '预测名称', '预测类型', '预测周期', 
+                '开始日期', '结束日期', '状态', '审核状态', 
+                '审核人', '审核时间', '备注', '创建时间'
+            ])
+            
+            # 写入数据
+            for forecast in forecasts:
+                writer.writerow([
+                    forecast.forecast_code,
+                    forecast.forecast_name,
+                    forecast.forecast_type,
+                    forecast.forecast_period,
+                    forecast.start_date.strftime('%Y-%m-%d') if forecast.start_date else '',
+                    forecast.end_date.strftime('%Y-%m-%d') if forecast.end_date else '',
+                    forecast.status,
+                    forecast.review_status,
+                    forecast.reviewer_name or '',
+                    forecast.review_time.strftime('%Y-%m-%d %H:%M:%S') if forecast.review_time else '',
+                    forecast.notes or '',
+                    forecast.created_at.strftime('%Y-%m-%d %H:%M:%S') if forecast.created_at else '',
+                ])
+        
+        return file_path
+
     async def push_to_mrp(
         self,
         tenant_id: int,
@@ -370,11 +621,121 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             user_id=user_id or order.created_by
         )
         
+            return {
+                "order_id": order_id,
+                "order_code": order.order_code,
+                "lrp_result": lrp_result.model_dump() if hasattr(lrp_result, 'model_dump') else lrp_result,
+                "message": "LRP运算执行成功"
+            }
+
+    async def push_to_delivery(
+        self,
+        tenant_id: int,
+        order_id: int,
+        created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None
+    ) -> Dict[str, Any]:
+        """
+        下推到销售出库
+        
+        从销售订单下推，自动生成销售出库单
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 销售订单ID
+            created_by: 创建人ID
+            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用订单未出库数量
+            
+        Returns:
+            Dict: 包含创建的销售出库单信息
+            
+        Raises:
+            NotFoundError: 销售订单不存在
+            BusinessLogicError: 销售订单未审核或已全部出库
+        """
+        from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
+        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryCreate, SalesDeliveryItemCreate
+        from decimal import Decimal
+        
+        # 验证销售订单存在且已审核
+        order = await self.get_sales_order_by_id(tenant_id, order_id)
+        if order.status not in ["已审核", "已确认", "进行中"]:
+            raise BusinessLogicError("只有已审核、已确认或进行中状态的销售订单才能下推到销售出库")
+        
+        # 获取订单明细
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id
+        ).all()
+        
+        if not order_items:
+            raise BusinessLogicError("销售订单没有明细，无法生成出库单")
+        
+        # 检查是否有未出库的明细
+        has_outstanding = any(
+            (item.delivered_quantity or 0) < (item.ordered_quantity or 0) 
+            for item in order_items
+        )
+        if not has_outstanding:
+            raise BusinessLogicError("销售订单已全部出库，无法再次生成出库单")
+        
+        # 创建销售出库单
+        delivery_service = SalesDeliveryService()
+        
+        # 构建出库单明细
+        delivery_items = []
+        for item in order_items:
+            # 确定出库数量
+            if delivery_quantities and item.id in delivery_quantities:
+                delivery_quantity = Decimal(str(delivery_quantities[item.id]))
+            else:
+                delivery_quantity = Decimal(str(item.ordered_quantity or 0)) - Decimal(str(item.delivered_quantity or 0))
+            
+            # 跳过数量为0的明细
+            if delivery_quantity <= 0:
+                continue
+            
+            # 验证出库数量不超过未出库数量
+            outstanding = Decimal(str(item.ordered_quantity or 0)) - Decimal(str(item.delivered_quantity or 0))
+            if delivery_quantity > outstanding:
+                raise ValidationError(f"物料 {item.material_code} 的出库数量 {delivery_quantity} 超过未出库数量 {outstanding}")
+            
+            delivery_items.append(SalesDeliveryItemCreate(
+                material_id=item.material_id,
+                material_code=item.material_code or '',
+                material_name=item.material_name or '',
+                material_unit=item.material_unit or '件',
+                delivery_quantity=float(delivery_quantity),
+                unit_price=float(item.unit_price or 0),
+                total_amount=float(delivery_quantity * Decimal(str(item.unit_price or 0)))
+            ))
+        
+        if not delivery_items:
+            raise BusinessLogicError("没有可出库的明细")
+        
+        # 创建出库单
+        delivery_data = SalesDeliveryCreate(
+            sales_order_id=order_id,
+            sales_order_code=order.order_code,
+            customer_id=order.customer_id,
+            customer_name=order.customer_name or '',
+            warehouse_id=1,  # TODO: 从订单或配置中获取默认仓库
+            warehouse_name='默认仓库',  # TODO: 从订单或配置中获取默认仓库名称
+            items=delivery_items
+        )
+        
+        delivery = await delivery_service.create_sales_delivery(
+            tenant_id=tenant_id,
+            delivery_data=delivery_data,
+            created_by=created_by
+        )
+        
         return {
             "order_id": order_id,
             "order_code": order.order_code,
-            "lrp_result": lrp_result.model_dump() if hasattr(lrp_result, 'model_dump') else lrp_result,
-            "message": "LRP运算执行成功"
+            "delivery_id": delivery.id if hasattr(delivery, 'id') else None,
+            "delivery_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
+            "message": "销售出库单创建成功"
         }
 
     async def update_delivery_status(self, tenant_id: int, order_id: int, item_id: int, delivered_quantity: float, updated_by: int) -> SalesOrderItemResponse:

@@ -13,7 +13,8 @@ import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table } from '
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, PurchaseOrder } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, PurchaseOrder } from '../../../services/purchase';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
 // 采购订单接口定义
 interface PurchaseOrder {
@@ -76,6 +77,7 @@ const PurchaseOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
 
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
@@ -185,11 +187,33 @@ const PurchaseOrdersPage: React.FC = () => {
             <Button
               type="link"
               size="small"
+              icon={<SendOutlined />}
+              onClick={() => handleSubmit(record)}
+              style={{ color: '#1890ff' }}
+            >
+              提交
+            </Button>
+          )}
+          {record.status === '草稿' && (
+            <Button
+              type="link"
+              size="small"
               icon={<CheckCircleOutlined />}
               onClick={() => handleApprove(record)}
               style={{ color: '#52c41a' }}
             >
               审核
+            </Button>
+          )}
+          {(record.status === '已审核' || record.status === '已确认') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handlePushToReceipt(record)}
+              style={{ color: '#722ed1' }}
+            >
+              下推入库
             </Button>
           )}
           {record.status === '草稿' && (
@@ -213,10 +237,54 @@ const PurchaseOrdersPage: React.FC = () => {
     try {
       const detail = await getPurchaseOrder(record.id!);
       setOrderDetail(detail as PurchaseOrderDetail);
+      
+      // 获取单据关联关系
+      try {
+        const relations = await getDocumentRelations('purchase_order', record.id!);
+        setDocumentRelations(relations);
+      } catch (error) {
+        console.error('获取单据关联关系失败:', error);
+        setDocumentRelations(null);
+      }
+      
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
     }
+  };
+
+  // 处理提交
+  const handleSubmit = async (record: PurchaseOrder) => {
+    Modal.confirm({
+      title: '提交采购订单',
+      content: `确定要提交采购订单 "${record.order_code}" 吗？提交后将变为待审核状态。`,
+      onOk: async () => {
+        try {
+          await submitPurchaseOrder(record.id!);
+          messageApi.success('采购订单提交成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '采购订单提交失败');
+        }
+      },
+    });
+  };
+
+  // 处理下推到采购入库
+  const handlePushToReceipt = async (record: PurchaseOrder) => {
+    Modal.confirm({
+      title: '下推到采购入库',
+      content: `确定要从采购订单 "${record.order_code}" 下推生成采购入库单吗？`,
+      onOk: async () => {
+        try {
+          const result = await pushPurchaseOrderToReceipt(record.id!);
+          messageApi.success(`成功生成采购入库单：${result.receipt_code || '已创建'}`);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '下推采购入库失败');
+        }
+      },
+    });
   };
 
   // 处理审核
@@ -583,7 +651,11 @@ const PurchaseOrdersPage: React.FC = () => {
       <DetailDrawerTemplate<PurchaseOrderDetail>
         title={`采购订单详情 - ${orderDetail?.order_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setOrderDetail(null);
+          setDocumentRelations(null);
+        }}
         dataSource={orderDetail || undefined}
         columns={detailColumns}
         width={DRAWER_CONFIG.LARGE_WIDTH}
@@ -640,7 +712,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
               {/* 订单明细 */}
               {orderDetail.items && orderDetail.items.length > 0 && (
-                <Card title="订单明细">
+                <Card title="订单明细" style={{ marginBottom: 16 }}>
                   <Table
                     size="small"
                     columns={[
@@ -661,6 +733,67 @@ const PurchaseOrdersPage: React.FC = () => {
                     bordered
                     scroll={{ x: 1000 }}
                   />
+                </Card>
+              )}
+
+              {/* 单据关联 */}
+              {documentRelations && (
+                <Card title="单据关联">
+                  {documentRelations.upstream_count > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        上游单据 ({documentRelations.upstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.upstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.downstream_count > 0 && (
+                    <div>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        下游单据 ({documentRelations.downstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.downstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
+                    <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                      暂无关联单据
+                    </div>
+                  )}
                 </Card>
               )}
             </div>

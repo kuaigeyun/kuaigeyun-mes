@@ -14,7 +14,8 @@ import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, SalesOrder as APISalesOrder } from '../../../services/sales';
+import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, pushSalesOrderToDelivery, SalesOrder as APISalesOrder } from '../../../services/sales';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
 // 使用API服务中的接口定义
 type SalesOrder = APISalesOrder;
@@ -27,6 +28,7 @@ const SalesOrdersPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<SalesOrder | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
   
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
@@ -141,6 +143,17 @@ const SalesOrdersPage: React.FC = () => {
           >
             删除
           </Button>
+          {(record.status === '已审核' || record.status === '已确认' || record.status === '进行中') && (
+            <Button
+              size="small"
+              type="link"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handlePushToDelivery(record)}
+              style={{ color: '#722ed1' }}
+            >
+              下推出库
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -151,10 +164,37 @@ const SalesOrdersPage: React.FC = () => {
     try {
       const detail = await getSalesOrder(record.id!);
       setCurrentRecord(detail);
+      
+      // 获取单据关联关系
+      try {
+        const relations = await getDocumentRelations('sales_order', record.id!);
+        setDocumentRelations(relations);
+      } catch (error) {
+        console.error('获取单据关联关系失败:', error);
+        setDocumentRelations(null);
+      }
+      
       setDetailVisible(true);
     } catch (error) {
       messageApi.error('获取订单详情失败');
     }
+  };
+
+  // 处理下推到销售出库
+  const handlePushToDelivery = async (record: SalesOrder) => {
+    Modal.confirm({
+      title: '下推到销售出库',
+      content: `确定要从销售订单 "${record.order_code}" 下推生成销售出库单吗？`,
+      onOk: async () => {
+        try {
+          const result = await pushSalesOrderToDelivery(record.id!);
+          messageApi.success(`成功生成销售出库单：${result.delivery_code || '已创建'}`);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '下推销售出库失败');
+        }
+      },
+    });
   };
 
   // 处理编辑
@@ -314,7 +354,11 @@ const SalesOrdersPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`销售订单详情 - ${currentRecord?.order_code || ''}`}
         open={detailVisible}
-        onClose={() => setDetailVisible(false)}
+        onClose={() => {
+          setDetailVisible(false);
+          setCurrentRecord(null);
+          setDocumentRelations(null);
+        }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={[]}
         customContent={
@@ -382,7 +426,7 @@ const SalesOrdersPage: React.FC = () => {
                 )}
               </Card>
 
-              <Card title="订单明细">
+              <Card title="订单明细" style={{ marginBottom: 16 }}>
                 {currentRecord.items?.map((item) => (
                   <Card key={item.id} size="small" style={{ marginBottom: 8 }}>
                     <Row gutter={16}>
@@ -423,6 +467,67 @@ const SalesOrdersPage: React.FC = () => {
                   </Card>
                 ))}
               </Card>
+
+              {/* 单据关联 */}
+              {documentRelations && (
+                <Card title="单据关联">
+                  {documentRelations.upstream_count > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        上游单据 ({documentRelations.upstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.upstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.downstream_count > 0 && (
+                    <div>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        下游单据 ({documentRelations.downstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                          { 
+                            title: '状态', 
+                            dataIndex: 'status', 
+                            width: 100,
+                            render: (status: string) => <Tag>{status}</Tag>
+                          },
+                        ]}
+                        dataSource={documentRelations.downstream_documents}
+                        pagination={false}
+                        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                        bordered
+                      />
+                    </div>
+                  )}
+                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
+                    <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                      暂无关联单据
+                    </div>
+                  )}
+                </Card>
+              )}
             </div>
           ) : null
         }

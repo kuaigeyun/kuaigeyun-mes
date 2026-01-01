@@ -130,3 +130,79 @@ export async function getSalesForecastItems(id: number): Promise<SalesForecastIt
   });
 }
 
+/**
+ * 提交销售预测
+ */
+export async function submitSalesForecast(id: number): Promise<SalesForecast> {
+  return apiRequest<SalesForecast>({
+    url: `/apps/kuaizhizao/sales-forecasts/${id}/submit`,
+    method: 'POST',
+  });
+}
+
+/**
+ * 批量导入销售预测
+ */
+export async function importSalesForecasts(data: any[][]): Promise<{
+  success: boolean;
+  message: string;
+  total: number;
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ row: number; error: string }>;
+}> {
+  return apiRequest({
+    url: '/apps/kuaizhizao/sales-forecasts/import',
+    method: 'POST',
+    data: { data },
+  });
+}
+
+/**
+ * 批量导出销售预测
+ */
+export async function exportSalesForecasts(params?: SalesForecastListParams): Promise<Blob> {
+  return apiRequest<Blob>({
+    url: '/apps/kuaizhizao/sales-forecasts/export',
+    method: 'GET',
+    params,
+    responseType: 'blob',
+  });
+}
+
+/**
+ * 获取单据关联关系
+ */
+export interface DocumentRelation {
+  document_type: string;
+  document_id: number;
+  upstream_documents: Array<{
+    document_type: string;
+    document_id: number;
+    document_code?: string;
+    document_name?: string;
+    status?: string;
+    created_at?: string;
+  }>;
+  downstream_documents: Array<{
+    document_type: string;
+    document_id: number;
+    document_code?: string;
+    document_name?: string;
+    status?: string;
+    created_at?: string;
+  }>;
+  upstream_count: number;
+  downstream_count: number;
+}
+
+export async function getDocumentRelations(
+  documentType: string,
+  documentId: number
+): Promise<DocumentRelation> {
+  return apiRequest<DocumentRelation>({
+    url: `/apps/kuaizhizao/documents/${documentType}/${documentId}/relations`,
+    method: 'GET',
+  });
+}
+

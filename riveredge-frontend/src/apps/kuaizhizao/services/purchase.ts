@@ -159,3 +159,25 @@ export async function confirmPurchaseOrder(id: number): Promise<PurchaseOrder> {
   });
 }
 
+/**
+ * 提交采购订单（非审核）
+ */
+export async function submitPurchaseOrder(id: number): Promise<PurchaseOrder> {
+  return apiRequest<PurchaseOrder>({
+    url: `/apps/kuaizhizao/purchase-orders/${id}/submit`,
+    method: 'POST',
+  });
+}
+
+/**
+ * 下推到采购入库
+ */
+export async function pushPurchaseOrderToReceipt(id: number, receiptQuantities?: Record<number, number>): Promise<any> {
+  return apiRequest<any>({
+    url: `/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`,
+    method: 'POST',
+    data: receiptQuantities || {},
+  });
+}
+
+

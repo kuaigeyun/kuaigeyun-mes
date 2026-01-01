@@ -147,6 +147,25 @@ async def delete_purchase_order(
 
 
 # === 采购订单业务操作接口 ===
+@router.post("/purchase-orders/{order_id}/submit", response_model=PurchaseOrderResponse, summary="提交采购订单")
+@handle_exceptions
+async def submit_purchase_order(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    提交采购订单（非审核，仅改变状态为待审核）
+
+    - **order_id**: 采购订单ID
+    """
+    return await PurchaseService().submit_purchase_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        submitted_by=current_user.id
+    )
+
+
 @router.post("/purchase-orders/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
 @handle_exceptions
 async def approve_purchase_order(

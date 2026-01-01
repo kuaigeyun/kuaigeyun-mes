@@ -8,7 +8,8 @@ Date: 2025-12-30
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
@@ -548,6 +549,42 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
             # TODO: 更新库存
             # TODO: 更新销售订单状态
+            
+            # 自动生成应收单
+            try:
+                from apps.kuaizhizao.services.finance_service import ReceivableService
+                from apps.kuaizhizao.schemas.finance import ReceivableCreate
+                
+                receivable_service = ReceivableService()
+                
+                # 获取出库单信息
+                delivery = await SalesDelivery.get(tenant_id=tenant_id, id=delivery_id)
+                
+                # 创建应收单
+                total_amount = Decimal(str(delivery.total_amount))
+                receivable_data = ReceivableCreate(
+                    source_type="销售出库",
+                    source_id=delivery_id,
+                    source_code=delivery.delivery_code,
+                    customer_id=delivery.customer_id,
+                    customer_name=delivery.customer_name,
+                    total_amount=float(total_amount),
+                    received_amount=0.0,
+                    remaining_amount=float(total_amount),
+                    due_date=(datetime.now() + timedelta(days=30)).date(),  # 默认30天账期
+                    business_date=datetime.now().date(),
+                    status="未收款",
+                    notes=f"由销售出库单 {delivery.delivery_code} 自动生成"
+                )
+                
+                await receivable_service.create_receivable(
+                    tenant_id=tenant_id,
+                    receivable_data=receivable_data,
+                    created_by=confirmed_by
+                )
+            except Exception as e:
+                logger.error(f"自动生成应收单失败: {str(e)}")
+                # 不抛出异常，避免影响出库确认
 
             updated_delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
             return updated_delivery
