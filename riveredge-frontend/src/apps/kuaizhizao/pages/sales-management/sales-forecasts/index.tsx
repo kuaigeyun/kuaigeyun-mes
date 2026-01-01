@@ -147,8 +147,8 @@ const SalesForecastsPage: React.FC = () => {
   // 处理详情查看
   const handleDetail = async (record: SalesForecast) => {
     try {
-      // 这里应该调用API获取详情
-      setForecastDetail(record);
+      const detail = await getSalesForecast(record.id!);
+      setForecastDetail(detail);
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取销售预测详情失败');
@@ -162,10 +162,11 @@ const SalesForecastsPage: React.FC = () => {
       content: `确定要审核通过销售预测 "${record.forecast_name}" 吗？`,
       onOk: async () => {
         try {
+          await approveSalesForecast(record.id!);
           messageApi.success('销售预测审核成功');
           actionRef.current?.reload();
-        } catch (error) {
-          messageApi.error('销售预测审核失败');
+        } catch (error: any) {
+          messageApi.error(error.message || '销售预测审核失败');
         }
       },
     });
@@ -187,11 +188,24 @@ const SalesForecastsPage: React.FC = () => {
   };
 
   // 处理编辑
-  const handleEdit = (record: SalesForecast) => {
-    setIsEdit(true);
-    setCurrentForecast(record);
-    setModalVisible(true);
-    formRef.current?.setFieldsValue(record);
+  const handleEdit = async (record: SalesForecast) => {
+    try {
+      const detail = await getSalesForecast(record.id!);
+      setIsEdit(true);
+      setCurrentForecast(detail);
+      setModalVisible(true);
+      // 延迟设置表单值
+      setTimeout(() => {
+        formRef.current?.setFieldsValue({
+          forecast_name: detail.forecast_name,
+          start_date: detail.start_date,
+          end_date: detail.end_date,
+          notes: detail.notes,
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取销售预测详情失败');
+    }
   };
 
   // 处理创建
@@ -205,8 +219,10 @@ const SalesForecastsPage: React.FC = () => {
   const handleFormFinish = async (values: any) => {
     try {
       if (isEdit && currentForecast?.id) {
+        await updateSalesForecast(currentForecast.id, values);
         messageApi.success('销售预测更新成功');
       } else {
+        await createSalesForecast(values);
         messageApi.success('销售预测创建成功');
       }
       setModalVisible(false);
@@ -254,44 +270,26 @@ const SalesForecastsPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据 - 实际应该调用API
-            const mockData: SalesForecast[] = [
-              {
-                id: 1,
-                forecast_code: 'FC202501001',
-                forecast_name: '2026年1月销售预测',
-                start_date: '2026-01-01',
-                end_date: '2026-01-31',
-                status: '已审核',
-                review_status: '审核通过',
-                reviewer_name: '张经理',
-                created_at: '2024-12-01 09:00:00',
-                forecast_items: [
-                  {
-                    material_code: 'FIN001',
-                    material_name: '产品A',
-                    forecast_date: '2026-01-15',
-                    forecast_quantity: 100,
-                  }
-                ]
-              },
-              {
-                id: 2,
-                forecast_code: 'FC202502001',
-                forecast_name: '2026年2月销售预测',
-                start_date: '2026-02-01',
-                end_date: '2026-02-28',
-                status: '草稿',
-                review_status: '待审核',
-                created_at: '2024-12-01 10:30:00',
-              }
-            ];
-
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+            try {
+              const response = await listSalesForecasts({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                status: params.status,
+                keyword: params.keyword,
+              });
+              return {
+                data: response.data || [],
+                success: response.success !== false,
+                total: response.total || 0,
+              };
+            } catch (error) {
+              messageApi.error('获取销售预测列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowSelection={{
             selectedRowKeys,
@@ -313,15 +311,50 @@ const SalesForecastsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑销售预测' : '新建销售预测'}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setCurrentForecast(null);
+          formRef.current?.resetFields();
+        }}
         onFinish={handleFormFinish}
         isEdit={isEdit}
-        initialValues={currentForecast || {}}
-        width={MODAL_CONFIG.SMALL_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        grid={true}
       >
-        {/* 销售预测创建/编辑表单开发中 */}
-        <p>销售预测创建/编辑表单开发中...</p>
+        <ProFormText
+          name="forecast_name"
+          label="预测名称"
+          placeholder="请输入预测名称"
+          rules={[{ required: true, message: '请输入预测名称' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="start_date"
+          label="开始日期"
+          placeholder="请选择开始日期"
+          rules={[{ required: true, message: '请选择开始日期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="end_date"
+          label="结束日期"
+          placeholder="请选择结束日期"
+          rules={[{ required: true, message: '请选择结束日期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="notes"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+        <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
+          <p style={{ margin: 0, color: '#999' }}>
+            注意：销售预测明细项功能开发中，当前版本仅支持基本信息的创建和编辑。
+          </p>
+        </div>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
