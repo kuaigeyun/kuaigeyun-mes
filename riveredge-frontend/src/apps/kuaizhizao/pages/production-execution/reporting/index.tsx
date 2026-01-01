@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, message, Input, Select, Form, Card, Statistic, Row, Col } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
 interface ReportingRecord {
   id: number;
@@ -32,7 +33,7 @@ const ReportingPage: React.FC = () => {
 
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
-  const [reportingForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 扫码报工Modal状态
   const [scanModalVisible, setScanModalVisible] = useState(false);
@@ -49,6 +50,7 @@ const ReportingPage: React.FC = () => {
    */
   const handleManualReporting = () => {
     setReportingModalVisible(true);
+    formRef.current?.resetFields();
   };
 
   /**
@@ -59,10 +61,11 @@ const ReportingPage: React.FC = () => {
       // 这里添加报工逻辑
       messageApi.success('报工成功');
       setReportingModalVisible(false);
-      reportingForm.resetFields();
+      formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error) {
       messageApi.error('报工失败');
+      throw error;
     }
   };
 
@@ -183,56 +186,35 @@ const ReportingPage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="今日报工总数"
-                value={128}
-                prefix={<ClockCircleOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="待审核数量"
-                value={23}
-                prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="合格率"
-                value={96.8}
-                suffix="%"
-                prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="总工时(小时)"
-                value={1247.5}
-                prefix={<ClockCircleOutlined />}
-                valueStyle={{ color: '#722ed1' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
-
-      {/* UniTable */}
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '今日报工总数',
+          value: 128,
+          prefix: <ClockCircleOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '待审核数量',
+          value: 23,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '合格率',
+          value: 96.8,
+          suffix: '%',
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '总工时(小时)',
+          value: 1247.5,
+          prefix: <ClockCircleOutlined />,
+          valueStyle: { color: '#722ed1' },
+        },
+      ]}
+    >
       <UniTable
         headerTitle="报工管理"
         actionRef={actionRef}
@@ -313,89 +295,75 @@ const ReportingPage: React.FC = () => {
           </Button>,
         ]}
       />
-      </div>
 
-      {/* 手动报工 Modal */}
-      <Modal
+      <FormModalTemplate
         title="手动报工"
         open={reportingModalVisible}
-        onCancel={() => setReportingModalVisible(false)}
-        onOk={() => reportingForm.submit()}
-        width={600}
+        onClose={() => setReportingModalVisible(false)}
+        onFinish={handleReportingSubmit}
+        isEdit={false}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
+        grid={true}
       >
-        <Form
-          form={reportingForm}
-          layout="vertical"
-          onFinish={handleReportingSubmit}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="workOrderCode"
-                label="工单编号"
-                rules={[{ required: true, message: '请选择工单' }]}
-              >
-                <Select placeholder="请选择工单">
-                  <Select.Option value="WO20241201001">WO20241201001 - 产品A生产工单</Select.Option>
-                  <Select.Option value="WO20241201002">WO20241201002 - 产品B定制工单</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="operationName"
-                label="工序"
-                rules={[{ required: true, message: '请选择工序' }]}
-              >
-                <Select placeholder="请选择工序">
-                  <Select.Option value="注塑工序">注塑工序</Select.Option>
-                  <Select.Option value="组装工序">组装工序</Select.Option>
-                  <Select.Option value="包装工序">包装工序</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
+        <ProFormSelect
+          name="workOrderCode"
+          label="工单编号"
+          placeholder="请选择工单"
+          rules={[{ required: true, message: '请选择工单' }]}
+          options={[
+            { label: 'WO20241201001 - 产品A生产工单', value: 'WO20241201001' },
+            { label: 'WO20241201002 - 产品B定制工单', value: 'WO20241201002' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="operationName"
+          label="工序"
+          placeholder="请选择工序"
+          rules={[{ required: true, message: '请选择工序' }]}
+          options={[
+            { label: '注塑工序', value: '注塑工序' },
+            { label: '组装工序', value: '组装工序' },
+            { label: '包装工序', value: '包装工序' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="reportedQuantity"
+          label="报工数量"
+          placeholder="报工数量"
+          rules={[{ required: true, message: '请输入报工数量' }]}
+          min={0}
+          colProps={{ span: 8 }}
+        />
+        <ProFormDigit
+          name="qualifiedQuantity"
+          label="合格数量"
+          placeholder="合格数量"
+          rules={[{ required: true, message: '请输入合格数量' }]}
+          min={0}
+          colProps={{ span: 8 }}
+        />
+        <ProFormDigit
+          name="workHours"
+          label="工时(小时)"
+          placeholder="工时"
+          rules={[{ required: true, message: '请输入工时' }]}
+          min={0}
+          fieldProps={{ step: 0.1 }}
+          colProps={{ span: 8 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
 
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                name="reportedQuantity"
-                label="报工数量"
-                rules={[{ required: true, message: '请输入报工数量' }]}
-              >
-                <Input type="number" placeholder="报工数量" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="qualifiedQuantity"
-                label="合格数量"
-                rules={[{ required: true, message: '请输入合格数量' }]}
-              >
-                <Input type="number" placeholder="合格数量" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item
-                name="workHours"
-                label="工时(小时)"
-                rules={[{ required: true, message: '请输入工时' }]}
-              >
-                <Input type="number" step="0.1" placeholder="工时" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            name="remarks"
-            label="备注"
-          >
-            <Input.TextArea rows={3} placeholder="请输入备注信息" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 扫码报工 Modal */}
+      {/* 扫码报工 Modal - 保留原有Modal，因为这是特殊功能 */}
       <Modal
         title="扫码报工"
         open={scanModalVisible}
@@ -424,7 +392,7 @@ const ReportingPage: React.FC = () => {
           </p>
         </div>
       </Modal>
-    </>
+    </ListPageTemplate>
   );
 };
 
