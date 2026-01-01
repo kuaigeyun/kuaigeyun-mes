@@ -37,6 +37,8 @@ export interface DetailDrawerTemplateProps<T = any> {
   column?: number;
   /** 自定义内容（可选，如果提供则覆盖默认的 ProDescriptions） */
   customContent?: ReactNode;
+  /** Drawer 头部额外内容（如操作按钮） */
+  extra?: ReactNode;
   /** 自定义样式类名 */
   className?: string;
 }
@@ -68,6 +70,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   loading = false,
   column = 2,
   customContent,
+  extra,
   className,
 }: DetailDrawerTemplateProps<T>) => {
   const { token } = useToken();
@@ -80,6 +83,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       width={width}
       loading={loading}
       className={className}
+      extra={extra}
     >
       {customContent || (
         <ProDescriptions<T>

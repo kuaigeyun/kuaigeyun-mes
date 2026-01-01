@@ -5,22 +5,22 @@
 
 import React from 'react';
 import { theme } from 'antd';
+import { ListPageTemplate } from '../../../components/layout-templates';
 
 const InngestDashboard: React.FC = () => {
   const { token } = theme.useToken(); // 获取主题 token
 
   return (
-    <div
-      style={{
-        height: 'calc(100vh - 96px)',
-        width: '100%',
-        padding: '16px',
-        margin: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box',
-      }}
-    >
+    <ListPageTemplate>
+      <div
+        style={{
+          height: 'calc(100vh - 200px)',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
+        }}
+      >
       <iframe
         src={`http://${import.meta.env.VITE_INNGEST_HOST || '127.0.0.1'}:${import.meta.env.VITE_INNGEST_PORT || '8288'}/`}
         style={{
@@ -33,7 +33,8 @@ const InngestDashboard: React.FC = () => {
         }}
         title="Inngest Dashboard"
       />
-    </div>
+      </div>
+    </ListPageTemplate>
   );
 };
 

@@ -8,7 +8,6 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { PageContainer } from '@ant-design/pro-components';
 import { 
   Card, 
   Row, 
@@ -25,6 +24,7 @@ import {
   Tooltip,
   App
 } from 'antd';
+import { ListPageTemplate } from '../../../components/layout-templates';
 import {
   ApartmentOutlined,
   UserOutlined,
@@ -329,13 +329,45 @@ export default function OperationsDashboard() {
   }, [displayStatistics, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi]);
 
   return (
-    <PageContainer
-      title="运营看板"
-      subTitle="平台级运营数据概览"
-      loading={false}
-      breadcrumb={false}
-      extra={[
-        <Space key="actions" size="middle">
+    <ListPageTemplate
+      statCards={
+        displayStatistics && hasToken && isInfraSuperAdmin
+          ? [
+              {
+                title: '总组织数',
+                value: displayStatistics.total || 0,
+                prefix: <ApartmentOutlined />,
+                valueStyle: { color: '#1890ff' },
+              },
+              {
+                title: '激活组织',
+                value: displayStatistics.by_status?.active || 0,
+                prefix: <RiseOutlined />,
+                valueStyle: { color: '#52c41a' },
+              },
+              {
+                title: '未激活组织',
+                value: displayStatistics.by_status?.inactive || 0,
+                prefix: <FallOutlined />,
+                valueStyle: { color: '#faad14' },
+              },
+              {
+                title: '已暂停组织',
+                value: displayStatistics.by_status?.suspended || 0,
+                prefix: <ApartmentOutlined />,
+                valueStyle: { color: '#ff4d4f' },
+              },
+            ]
+          : undefined
+      }
+    >
+      {/* 页面头部工具栏 */}
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ margin: 0, marginBottom: 4 }}>运营看板</h2>
+          <Text type="secondary">平台级运营数据概览</Text>
+        </div>
+        <Space size="middle">
           {/* 时间范围筛选 */}
           <Space>
             <Text type="secondary">时间范围：</Text>
@@ -393,8 +425,7 @@ export default function OperationsDashboard() {
             </Button>
           </Space>
         </Space>
-      ]}
-    >
+      </div>
       {/* 未登录或权限不足提示 */}
       {(!hasToken || !isInfraSuperAdmin) && (
         <Card style={{ marginBottom: 24 }}>
@@ -466,50 +497,6 @@ export default function OperationsDashboard() {
         </Row>
       ) : (
         <>
-            {/* 核心指标卡片 */}
-            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="总组织数"
-                    value={displayStatistics?.total || 0}
-                    prefix={<ApartmentOutlined />}
-                    styles={{ content: { color: '#1890ff' } }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="激活组织"
-                    value={displayStatistics?.by_status?.active || 0}
-                    prefix={<RiseOutlined />}
-                    styles={{ content: { color: '#52c41a' } }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="未激活组织"
-                    value={displayStatistics?.by_status?.inactive || 0}
-                    prefix={<FallOutlined />}
-                    styles={{ content: { color: '#faad14' } }}
-                  />
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={6}>
-                <Card>
-                  <Statistic
-                    title="已暂停组织"
-                    value={displayStatistics?.by_status?.suspended || 0}
-                    prefix={<ApartmentOutlined />}
-                    styles={{ content: { color: '#ff4d4f' } }}
-                  />
-                </Card>
-              </Col>
-            </Row>
-
         {/* 组织状态分布 - 使用图表 */}
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
           <Col xs={24} lg={12}>
@@ -613,7 +600,7 @@ export default function OperationsDashboard() {
           <Empty description="暂无数据" />
         </Card>
       )}
-    </PageContainer>
+    </ListPageTemplate>
   );
 }
 

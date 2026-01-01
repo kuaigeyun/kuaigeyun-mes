@@ -11,6 +11,7 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getTenantList,
   getPackageConfig,
@@ -1095,7 +1096,8 @@ const SuperAdminTenantList: React.FC = () => {
 
   return (
     <>
-    <UniTable<Tenant>
+      <ListPageTemplate>
+        <UniTable<Tenant>
       actionRef={actionRef}
       columns={columns}
       rowKey="id"
@@ -1180,99 +1182,18 @@ const SuperAdminTenantList: React.FC = () => {
         }
       }}
       scroll={{ x: 1200 }}
-    />
+        />
+      </ListPageTemplate>
     
     {/* 组织详情 Drawer */}
-    <Drawer
+    <DetailDrawerTemplate<Tenant>
       title="组织详情"
-      size={720}
+      width={DRAWER_CONFIG.STANDARD_WIDTH}
       open={drawerVisible}
       onClose={handleCloseDetail}
-      extra={
-        tenantDetail && (
-          <Space>
-            {tenantDetail.status === TenantStatus.INACTIVE && (
-              <>
-                <Popconfirm
-                  title="确定要审核通过此组织吗？"
-                  onConfirm={async () => {
-                    try {
-                      await apiRequest(`/infra/tenants/${currentTenantId}/approve`, {
-                        method: 'POST',
-                      });
-                      message.success('审核通过成功');
-                      loadTenantDetail(currentTenantId!);
-                      actionRef.current?.reload();
-                    } catch (error: any) {
-                      message.error(error.message || '审核通过失败');
-                    }
-                  }}
-                >
-                  <Button type="primary">审核通过</Button>
-                </Popconfirm>
-                <Popconfirm
-                  title="确定要拒绝此组织注册吗？"
-                  onConfirm={async () => {
-                    try {
-                      await apiRequest(`/infra/tenants/${currentTenantId}/reject`, {
-                        method: 'POST',
-                      });
-                      message.success('审核拒绝成功');
-                      loadTenantDetail(currentTenantId!);
-                      actionRef.current?.reload();
-                    } catch (error: any) {
-                      message.error(error.message || '审核拒绝失败');
-                    }
-                  }}
-                >
-                  <Button danger>审核拒绝</Button>
-                </Popconfirm>
-              </>
-            )}
-            {tenantDetail.status === TenantStatus.SUSPENDED && (
-              <Popconfirm
-                title="确定要激活此组织吗？"
-                onConfirm={async () => {
-                  try {
-                    await activateTenant(currentTenantId!);
-                    message.success('激活成功');
-                    loadTenantDetail(currentTenantId!);
-                    actionRef.current?.reload();
-                  } catch (error: any) {
-                    message.error(error.message || '激活失败');
-                  }
-                }}
-              >
-                <Button type="primary">激活</Button>
-              </Popconfirm>
-            )}
-            {tenantDetail.status === TenantStatus.ACTIVE && (
-              <Popconfirm
-                title="确定要停用此组织吗？"
-                onConfirm={async () => {
-                  try {
-                    await deactivateTenant(currentTenantId!);
-                    message.success('停用成功');
-                    loadTenantDetail(currentTenantId!);
-                    actionRef.current?.reload();
-                  } catch (error: any) {
-                    message.error(error.message || '停用失败');
-                  }
-                }}
-              >
-                <Button danger>停用</Button>
-              </Popconfirm>
-            )}
-          </Space>
-        )
-      }
-    >
-      {tenantDetail ? (
-        <ProDescriptions<Tenant>
-          dataSource={tenantDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
+      loading={detailLoading}
+      dataSource={tenantDetail || {}}
+      columns={[
             {
               title: '组织名称',
               dataIndex: 'name',
@@ -1361,37 +1282,20 @@ const SuperAdminTenantList: React.FC = () => {
     </Drawer>
     
     {/* 新建/编辑组织 Modal */}
-    <Modal
+    <FormModalTemplate
       title={isEdit ? '编辑组织' : '新建组织'}
       open={modalVisible}
-      onCancel={handleCloseModal}
-      footer={null}
-      size={800}
-      destroyOnHidden
+      onClose={handleCloseModal}
+      onFinish={handleSubmit}
+      isEdit={isEdit}
+      loading={formLoading}
+      width={MODAL_CONFIG.STANDARD_WIDTH}
+      formRef={formRef}
+      initialValues={{
+        status: TenantStatus.INACTIVE,
+        plan: TenantPlan.TRIAL,
+      }}
     >
-      <ProForm
-        formRef={formRef}
-        loading={formLoading}
-        onFinish={handleSubmit}
-        submitter={{
-          searchConfig: {
-            submitText: isEdit ? '更新' : '创建',
-            resetText: '取消',
-          },
-          resetButtonProps: {
-            onClick: handleCloseModal,
-          },
-        }}
-        initialValues={{
-          status: TenantStatus.INACTIVE,
-          plan: TenantPlan.TRIAL,
-        }}
-        layout="vertical"
-        grid={true}
-        rowProps={{
-          gutter: 16,
-        }}
-      >
         <ProFormText
           name="name"
           label="组织名称"
@@ -1472,7 +1376,7 @@ const SuperAdminTenantList: React.FC = () => {
           colProps={{ span: 12 }}
         />
       </ProForm>
-    </Modal>
+    </FormModalTemplate>
     </>
   );
 };

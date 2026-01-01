@@ -41,6 +41,8 @@ export interface FormModalTemplateProps {
   grid?: boolean;
   /** 加载状态 */
   loading?: boolean;
+  /** 表单引用（可选，用于外部访问表单实例） */
+  formRef?: React.RefObject<ProFormInstance>;
   /** 自定义样式类名 */
   className?: string;
 }
@@ -75,10 +77,12 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   layout = FORM_LAYOUT.VERTICAL,
   grid = true,
   loading = false,
+  formRef: externalFormRef,
   className,
 }) => {
   const { token } = useToken();
-  const formRef = useRef<ProFormInstance>();
+  const internalFormRef = useRef<ProFormInstance>();
+  const formRef = externalFormRef || internalFormRef;
 
   return (
     <Modal

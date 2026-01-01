@@ -4,9 +4,10 @@
  * 用于查看系统监控信息，包括服务器状态、CPU、内存、磁盘等
  */
 
-import { ProCard, ProDescriptions, StatisticCard } from '@ant-design/pro-components';
+import { ProCard, ProDescriptions } from '@ant-design/pro-components';
 import { useQuery } from '@tanstack/react-query';
-import { Row, Col, Alert, Tag, Progress } from 'antd';
+import { Alert, Tag, Progress } from 'antd';
+import { ListPageTemplate } from '../../../components/layout-templates';
 import {
   DesktopOutlined,
   ControlOutlined,
@@ -57,14 +58,14 @@ export default function MonitoringPage() {
 
   if (error) {
     return (
-      <div style={{ padding: '16px' }}>
+      <ListPageTemplate>
         <Alert
           message="获取系统信息失败"
           description="无法连接到系统监控服务，请稍后重试"
           type="error"
           showIcon
         />
-      </div>
+      </ListPageTemplate>
     );
   }
 
@@ -82,86 +83,41 @@ export default function MonitoringPage() {
   };
 
   return (
-    <div style={{ padding: '16px' }}>
-      {/* 系统概览 */}
-      
-      <Row gutter={[16, 16]}>
-      <Col xs={24} sm={12} md={6}>
-          <StatisticCard
-            statistic={{
-              title: '运行时间',
-              value: formatUptime(info.uptime),
-              icon: <ClockCircleOutlined />,
-            }}
-            style={{ height: '120px' }}
-          >
-            <div style={{ marginTop: 8 }}>
-              <Tag color="green">正常运行</Tag>
-            </div>
-          </StatisticCard>
-        </Col>
-        
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard
-            statistic={{
-              title: 'CPU使用率',
-              value: info.cpu.usage_percent,
-              suffix: '%',
-              icon: <ControlOutlined />,
-            }}
-            style={{ height: '120px' }}
-          >
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                核心数: {info.cpu.count} | 负载: {info.cpu.load_average.map(load => load.toFixed(2)).join(', ')}
-              </div>
-            </div>
-          </StatisticCard>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard
-            statistic={{
-              title: '内存使用率',
-              value: info.memory.usage_percent,
-              suffix: '%',
-              icon: <DatabaseOutlined />,
-            }}
-            style={{ height: '120px' }}
-          >
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                已用: {formatBytes(info.memory.used)} | 总共: {formatBytes(info.memory.total)}
-              </div>
-            </div>
-          </StatisticCard>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard
-            statistic={{
-              title: '磁盘使用率',
-              value: info.disk.usage_percent,
-              suffix: '%',
-              icon: <DatabaseOutlined />,
-            }}
-            style={{ height: '120px' }}
-          >
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                已用: {formatBytes(info.disk.used)} | 总共: {formatBytes(info.disk.total)}
-              </div>
-            </div>
-          </StatisticCard>
-        </Col>
-
-      </Row>
-
-      <br />
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '运行时间',
+          value: formatUptime(info.uptime),
+          prefix: <ClockCircleOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: 'CPU使用率',
+          value: `${info.cpu.usage_percent.toFixed(1)}%`,
+          prefix: <ControlOutlined />,
+          valueStyle: { color: info.cpu.usage_percent > 80 ? '#ff4d4f' : '#1890ff' },
+          suffix: `核心数: ${info.cpu.count}`,
+        },
+        {
+          title: '内存使用率',
+          value: `${info.memory.usage_percent.toFixed(1)}%`,
+          prefix: <DatabaseOutlined />,
+          valueStyle: { color: info.memory.usage_percent > 90 ? '#ff4d4f' : '#52c41a' },
+          suffix: `已用: ${formatBytes(info.memory.used)}`,
+        },
+        {
+          title: '磁盘使用率',
+          value: `${info.disk.usage_percent.toFixed(1)}%`,
+          prefix: <DatabaseOutlined />,
+          valueStyle: { color: info.disk.usage_percent > 90 ? '#ff4d4f' : '#722ed1' },
+          suffix: `已用: ${formatBytes(info.disk.used)}`,
+        },
+      ]}
+    >
 
       {/* 详细监控信息 */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 16 }}>
+        <div>
           <ProCard title="CPU 详情" loading={isLoading}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -201,9 +157,9 @@ export default function MonitoringPage() {
               ]}
             />
           </ProCard>
-        </Col>
+        </div>
 
-        <Col xs={24} lg={12}>
+        <div>
           <ProCard title="内存详情" loading={isLoading}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -244,9 +200,9 @@ export default function MonitoringPage() {
               ]}
             />
           </ProCard>
-        </Col>
+        </div>
 
-        <Col xs={24} lg={12}>
+        <div>
           <ProCard title="磁盘详情" loading={isLoading}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -287,9 +243,9 @@ export default function MonitoringPage() {
               ]}
             />
           </ProCard>
-        </Col>
+        </div>
 
-        <Col xs={24} lg={12}>
+        <div>
           <ProCard title="系统信息" loading={isLoading}>
             <div style={{ marginBottom: 14, height: 15 }} />
             <ProDescriptions
@@ -319,9 +275,8 @@ export default function MonitoringPage() {
               ]}
             />
           </ProCard>
-        </Col>
-
-      </Row>
-    </div>
+        </div>
+      </div>
+    </ListPageTemplate>
   );
 }
