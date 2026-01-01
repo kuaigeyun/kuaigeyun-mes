@@ -475,6 +475,22 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const finalImportFieldMap = importFieldMap || autoImportConfig?.fieldMap || {};
   const finalImportFieldRules = importFieldRules || autoImportConfig?.fieldRules || {};
   
+  // 检测是否有操作列（用于决定scroll配置）
+  // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
+  const hasActionColumn = React.useMemo(() => {
+    return columns.some((col) => {
+      const dataIndex = col.dataIndex;
+      const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex || '');
+      const key = col.key || fieldName;
+      // 检查是否是操作列：key或dataIndex为'action'、'operation'、'option'，或者没有dataIndex但有render函数
+      return (
+        (key === 'action' || key === 'operation' || key === 'option') ||
+        (fieldName === 'action' || fieldName === 'operation' || fieldName === 'option') ||
+        (!dataIndex && col.render && typeof col.render === 'function')
+      );
+    });
+  }, [columns]);
+  
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats'>(defaultViewType);
   // 表格数据状态（用于其他视图）
@@ -1282,10 +1298,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           pageSizeOptions: ['10', '20', '50', '100'],
           showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
         }}
-        scroll={{
-          x: 'max-content', // 只在内容超出时显示水平滚动条
-          // 不设置y，让表格自适应内容高度，避免不必要的垂直滚动条
-        }}
+        scroll={
+          hasActionColumn
+            ? {
+                x: 'max-content', // 有操作列时，只在内容超出时显示水平滚动条
+                // 不设置y，让表格自适应内容高度，避免不必要的垂直滚动条
+              }
+            : undefined // 没有操作列时，不设置scroll，让表格自然布局，避免不必要的滚动条
+        }
         {...(() => {
           // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
           // toolBarRender 已经在左侧处理了
