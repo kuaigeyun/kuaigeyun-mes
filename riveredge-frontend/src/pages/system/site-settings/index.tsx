@@ -533,7 +533,7 @@ const SiteSettingsPage: React.FC = () => {
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
       />
-    </PageContainer>
+    </ListPageTemplate>
   );
 };
 
