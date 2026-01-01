@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { skillApi } from '../../../services/performance';
 import type { Skill, SkillCreate, SkillUpdate } from '../../../types/performance';
 
@@ -233,8 +234,49 @@ const SkillsPage: React.FC = () => {
     },
   ];
 
+  // 详情列定义
+  const detailColumns: ProDescriptionsItemType<Skill>[] = [
+    {
+      title: '技能编码',
+      dataIndex: 'code',
+    },
+    {
+      title: '技能名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '技能分类',
+      dataIndex: 'category',
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      span: 2,
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
   return (
     <>
+      <ListPageTemplate>
       <UniTable<Skill>
         actionRef={actionRef}
         columns={columns}
@@ -293,88 +335,35 @@ const SkillsPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Skill>
         title="技能详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<Skill>
-          dataSource={skillDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '技能编码',
-              dataIndex: 'code',
-            },
-            {
-              title: '技能名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '技能分类',
-              dataIndex: 'category',
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={skillDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
 
       {/* 创建/编辑技能 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑技能' : '新建技能'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{
+          isActive: true,
+        }}
+        layout="vertical"
+        grid={true}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
-          initialValues={{
-            isActive: true,
-          }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
           <ProFormText
             name="code"
             label="技能编码"
@@ -422,8 +411,7 @@ const SkillsPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
     </>
   );
 };
