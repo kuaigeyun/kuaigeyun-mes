@@ -436,7 +436,7 @@ const BOMManagementPage: React.FC = () => {
           </div>
         )}
       </Drawer>
-    </>
+    </ListPageTemplate>
   );
 };
 
