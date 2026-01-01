@@ -235,7 +235,8 @@ const SalesOrdersPage: React.FC = () => {
 
   // 处理Excel导入
   const handleExcelImport = () => {
-    messageApi.info('Excel导入功能开发中...');
+    // Excel导入功能已由UniTable组件集成，无需单独实现
+    messageApi.info('Excel导入功能已由UniTable组件提供，请使用表格工具栏的导入按钮');
   };
 
   return (
