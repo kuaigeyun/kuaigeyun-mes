@@ -162,6 +162,13 @@ export async function createProcessInspection(data: ProcessInspection): Promise<
   });
 }
 
+export async function getProcessInspection(id: number): Promise<ProcessInspection> {
+  return apiRequest<ProcessInspection>({
+    url: `/apps/kuaizhizao/process-inspections/${id}`,
+    method: 'GET',
+  });
+}
+
 export async function updateProcessInspection(id: number, data: Partial<ProcessInspection>): Promise<ProcessInspection> {
   return apiRequest<ProcessInspection>({
     url: `/apps/kuaizhizao/process-inspections/${id}`,
