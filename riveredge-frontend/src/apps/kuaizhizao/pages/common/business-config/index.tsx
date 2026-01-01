@@ -233,7 +233,7 @@ const BusinessConfigPage: React.FC = () => {
   };
 
   // 编码规则表格列定义
-  const codeRuleColumns = [
+  const codeRuleColumns: ProColumns<CodeRule>[] = [
     {
       title: '编码类型',
       dataIndex: 'name',
@@ -265,7 +265,7 @@ const BusinessConfigPage: React.FC = () => {
       title: '示例',
       dataIndex: 'sample',
       width: 140,
-      render: (sample: string) => <Tag color="blue">{sample}</Tag>,
+      render: (_, record) => <Tag color="blue">{record.sample}</Tag>,
     },
     {
       title: '描述',
@@ -274,9 +274,9 @@ const BusinessConfigPage: React.FC = () => {
     },
     {
       title: '操作',
-      key: 'action',
+      valueType: 'option',
       width: 120,
-      render: (_: any, record: CodeRule) => (
+      render: (_, record) => (
         <Space>
           <Button
             size="small"
