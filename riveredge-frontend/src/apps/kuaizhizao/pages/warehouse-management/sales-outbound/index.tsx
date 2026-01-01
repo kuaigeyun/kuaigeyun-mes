@@ -5,11 +5,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
-import { PlusOutlined, CheckCircleOutlined, TruckOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, CheckCircleOutlined, TruckOutlined, ExclamationCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { warehouseApi } from '../../../services/production';
 
 interface SalesOutbound {
   id: number;
@@ -42,6 +43,10 @@ const SalesOutboundPage: React.FC = () => {
   const [outboundModalVisible, setOutboundModalVisible] = useState(false);
   const formRef = useRef<any>(null);
 
+  // 详情Drawer状态
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [outboundDetail, setOutboundDetail] = useState<SalesOutbound | null>(null);
+
   // 统计数据状态
   const [stats, setStats] = useState({
     todayOutbound: 0,
@@ -49,6 +54,19 @@ const SalesOutboundPage: React.FC = () => {
     pendingCount: 0,
     shippedCount: 0,
   });
+
+  /**
+   * 处理详情查看
+   */
+  const handleDetail = async (record: SalesOutbound) => {
+    try {
+      const detail = await warehouseApi.salesDelivery.get(record.id.toString());
+      setOutboundDetail(detail as SalesOutbound);
+      setDetailDrawerVisible(true);
+    } catch (error) {
+      messageApi.error('获取销售出库详情失败');
+    }
+  };
 
   /**
    * 处理新增出库
@@ -228,7 +246,8 @@ const SalesOutboundPage: React.FC = () => {
             key="detail"
             type="link"
             size="small"
-            onClick={() => messageApi.info('查看详情功能开发中')}
+            icon={<EyeOutlined />}
+            onClick={() => handleDetail(record)}
           >
             详情
           </Button>
@@ -492,6 +511,33 @@ const SalesOutboundPage: React.FC = () => {
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
+
+      {/* 销售出库详情 Drawer */}
+      <DetailDrawerTemplate<SalesOutbound>
+        title={`销售出库详情 - ${outboundDetail?.outboundCode || ''}`}
+        open={detailDrawerVisible}
+        onClose={() => setDetailDrawerVisible(false)}
+        dataSource={outboundDetail || undefined}
+        columns={[
+          { title: '出库单号', dataIndex: 'outboundCode' },
+          { title: '订单类型', dataIndex: 'orderType' },
+          { title: '销售订单', dataIndex: 'salesOrderCode' },
+          { title: '客户名称', dataIndex: 'customerName' },
+          { title: '产品编码', dataIndex: 'productCode' },
+          { title: '产品名称', dataIndex: 'productName' },
+          { title: '出库数量', dataIndex: 'quantity' },
+          { title: '单位', dataIndex: 'unit' },
+          { title: '仓库', dataIndex: 'warehouseName' },
+          { title: '库区', dataIndex: 'storageAreaName' },
+          { title: '库位', dataIndex: 'storageLocationName' },
+          { title: '批次号', dataIndex: 'batchNo' },
+          { title: '出库日期', dataIndex: 'outboundDate', valueType: 'dateTime' },
+          { title: '操作员', dataIndex: 'operatorName' },
+          { title: '物流信息', dataIndex: 'logisticsInfo', span: 2 },
+          { title: '备注', dataIndex: 'remarks', span: 2 },
+        ]}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
     </ListPageTemplate>
   );
 };

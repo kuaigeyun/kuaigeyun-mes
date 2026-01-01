@@ -8,31 +8,15 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormRadio, ProFormSelect, ProFormTextArea, ProFormText } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormRadio, ProFormSelect, ProFormTextArea, ProFormText, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { getProcessInspection, ProcessInspection as APIProcessInspection } from '../../../services/quality';
 
-// 过程检验接口定义
-interface ProcessInspection {
-  id: number;
-  inspectionCode: string;
-  workOrderCode: string;
-  workOrderName: string;
-  operationName: string;
-  productCode: string;
-  productName: string;
-  batchNo: string;
-  quantity: number;
-  unit: string;
-  inspectionStatus: 'pending' | 'qualified' | 'unqualified' | 'conditional';
-  inspectionResult: 'pending' | 'pass' | 'fail';
-  inspectorName: string;
-  inspectionDate?: string;
-  remarks?: string;
-  createdAt: string;
-}
+// 使用API服务中的接口定义
+type ProcessInspection = APIProcessInspection;
 
 const ProcessInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -44,6 +28,10 @@ const ProcessInspectionPage: React.FC = () => {
   const [currentInspection, setCurrentInspection] = useState<ProcessInspection | null>(null);
   const formRef = useRef<any>(null);
 
+  // 详情Drawer状态
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [inspectionDetail, setInspectionDetail] = useState<ProcessInspection | null>(null);
+
   // 扫码Modal状态
   const [scanModalVisible, setScanModalVisible] = useState(false);
 
@@ -54,6 +42,17 @@ const ProcessInspectionPage: React.FC = () => {
     unqualifiedCount: 2,
     totalInspected: 42,
   });
+
+  // 处理详情查看
+  const handleDetail = async (record: ProcessInspection) => {
+    try {
+      const detail = await getProcessInspection(record.id!);
+      setInspectionDetail(detail);
+      setDetailDrawerVisible(true);
+    } catch (error) {
+      messageApi.error('获取过程检验详情失败');
+    }
+  };
 
   // 处理扫码报工
   const handleScanInspection = () => {
@@ -205,7 +204,7 @@ const ProcessInspectionPage: React.FC = () => {
               size="small"
               type="link"
               icon={<EyeOutlined />}
-              onClick={() => messageApi.info('详情功能开发中...')}
+              onClick={() => handleDetail(record)}
             >
               详情
             </Button>
