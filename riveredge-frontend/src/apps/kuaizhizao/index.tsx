@@ -39,8 +39,7 @@ import ProductionReportPage from './pages/reports/production-report';
 import QualityReportPage from './pages/reports/quality-report';
 
 // 通用功能页面
-import DataImportExportPage from './pages/common/data-import-export';
-import SystemSettingsPage from './pages/common/system-settings';
+import BusinessConfigPage from './pages/common/business-config';
 
 // 仓储管理页面
 import InventoryPage from './pages/warehouse-management/inventory';
@@ -86,8 +85,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="reports/quality-report" element={<QualityReportPage />} />
 
       {/* 通用功能路由 */}
-      <Route path="common/data-import-export" element={<DataImportExportPage />} />
-      <Route path="common/system-settings" element={<SystemSettingsPage />} />
+      <Route path="common/business-config" element={<BusinessConfigPage />} />
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/inventory" element={<InventoryPage />} />

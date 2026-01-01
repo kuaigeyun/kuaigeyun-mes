@@ -1,15 +1,19 @@
 /**
- * 系统设置页面
+ * 业务配置页面
  *
- * 提供系统参数配置、编码规则设置等通用功能
+ * 提供业务参数配置、编码规则设置等业务级配置功能
+ * 区别于系统级的系统设置，此页面为应用级业务配置
  *
  * @author RiverEdge Team
  * @date 2025-12-29
  */
 
-import React, { useState } from 'react';
-import { App, Card, Form, Input, Button, Select, Switch, Tabs, Table, Space, Tag, Modal, message, InputNumber } from 'antd';
-import { SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
+import React, { useState, useRef } from 'react';
+import { App, Card, Form, Input, Button, Select, Switch, Tabs, Space, Tag, message, InputNumber, Modal } from 'antd';
+import { SaveOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ProFormText, ProFormSelect, ProFormTextArea, ProFormDigit, ActionType, ProColumns } from '@ant-design/pro-components';
+import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 
 // 系统参数接口定义
 interface SystemParameter {
@@ -37,13 +41,15 @@ interface CodeRule {
   description: string;
 }
 
-const SystemSettingsPage: React.FC = () => {
+const BusinessConfigPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const [parametersForm] = Form.useForm();
-  const [codeRuleForm] = Form.useForm();
+  const codeRuleFormRef = useRef<any>();
+  const codeRuleActionRef = useRef<ActionType>();
   const [activeTab, setActiveTab] = useState('parameters');
   const [codeRuleModalVisible, setCodeRuleModalVisible] = useState(false);
-  const [editingCodeRule, setEditingCodeRule] = useState<CodeRule | null>(null);
+  const [codeRuleIsEdit, setCodeRuleIsEdit] = useState(false);
+  const [currentCodeRule, setCurrentCodeRule] = useState<CodeRule | null>(null);
 
   // 系统参数数据
   const [systemParameters] = useState<SystemParameter[]>([
@@ -161,16 +167,18 @@ const SystemSettingsPage: React.FC = () => {
 
   // 处理编码规则编辑
   const handleEditCodeRule = (record: CodeRule) => {
-    setEditingCodeRule(record);
-    codeRuleForm.setFieldsValue(record);
+    setCurrentCodeRule(record);
+    setCodeRuleIsEdit(true);
     setCodeRuleModalVisible(true);
+    codeRuleFormRef.current?.setFieldsValue(record);
   };
 
   // 处理编码规则新增
   const handleAddCodeRule = () => {
-    setEditingCodeRule(null);
-    codeRuleForm.resetFields();
+    setCurrentCodeRule(null);
+    setCodeRuleIsEdit(false);
     setCodeRuleModalVisible(true);
+    codeRuleFormRef.current?.resetFields();
   };
 
   // 保存编码规则
@@ -178,15 +186,15 @@ const SystemSettingsPage: React.FC = () => {
     try {
       const newRule: CodeRule = {
         ...values,
-        id: editingCodeRule?.id || Date.now(),
-        currentSequence: editingCodeRule?.currentSequence || 0,
+        id: currentCodeRule?.id || Date.now(),
+        currentSequence: currentCodeRule?.currentSequence || 0,
         sample: generateSampleCode(values),
       };
 
-      if (editingCodeRule) {
+      if (currentCodeRule) {
         // 编辑
         setCodeRules(prev => prev.map(rule =>
-          rule.id === editingCodeRule.id ? newRule : rule
+          rule.id === currentCodeRule.id ? newRule : rule
         ));
         messageApi.success('编码规则更新成功');
       } else {
@@ -196,7 +204,8 @@ const SystemSettingsPage: React.FC = () => {
       }
 
       setCodeRuleModalVisible(false);
-      codeRuleForm.resetFields();
+      codeRuleFormRef.current?.resetFields();
+      codeRuleActionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '保存失败');
     }
@@ -398,30 +407,39 @@ const SystemSettingsPage: React.FC = () => {
       key: 'code-rules',
       label: '编码规则',
       children: (
-        <div>
-          <Card
-            title="编码规则管理"
-            extra={
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCodeRule}>
-                新增规则
-              </Button>
-            }
-          >
-            <Table
-              columns={codeRuleColumns}
-              dataSource={codeRules}
+        <UniTable<CodeRule>
+              actionRef={codeRuleActionRef}
+              headerTitle="编码规则管理"
               rowKey="id"
-              pagination={{ pageSize: 10 }}
-              size="small"
+              columns={codeRuleColumns}
+              request={async () => {
+                return {
+                  data: codeRules,
+                  success: true,
+                  total: codeRules.length,
+                };
+              }}
+              toolBarRender={() => [
+                <Button
+                  key="create"
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleAddCodeRule}
+                >
+                  新增规则
+                </Button>,
+              ]}
+              pagination={{
+                defaultPageSize: 10,
+                showSizeChanger: true,
+              }}
             />
-          </Card>
-        </div>
       ),
     },
   ];
 
   return (
-    <div>
+    <ListPageTemplate>
       <Card>
         <Tabs
           activeKey={activeTab}
@@ -431,74 +449,65 @@ const SystemSettingsPage: React.FC = () => {
       </Card>
 
       {/* 编码规则编辑Modal */}
-      <Modal
-        title={editingCodeRule ? '编辑编码规则' : '新增编码规则'}
+      <FormModalTemplate
+        title={codeRuleIsEdit ? '编辑编码规则' : '新增编码规则'}
         open={codeRuleModalVisible}
-        onCancel={() => setCodeRuleModalVisible(false)}
-        onOk={() => codeRuleForm.submit()}
-        okText="保存"
-        cancelText="取消"
-        width={600}
+        onClose={() => {
+          setCodeRuleModalVisible(false);
+          codeRuleFormRef.current?.resetFields();
+        }}
+        onFinish={handleSaveCodeRule}
+        isEdit={codeRuleIsEdit}
+        initialValues={currentCodeRule || {}}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={codeRuleFormRef}
       >
-        <Form
-          form={codeRuleForm}
-          layout="vertical"
-          onFinish={handleSaveCodeRule}
-        >
-          <Form.Item
-            name="name"
-            label="规则名称"
-            rules={[{ required: true, message: '请输入规则名称' }]}
-          >
-            <Input placeholder="请输入规则名称" />
-          </Form.Item>
-
-          <Form.Item
-            name="code"
-            label="规则编码"
-            rules={[{ required: true, message: '请输入规则编码' }]}
-          >
-            <Input placeholder="请输入规则编码" />
-          </Form.Item>
-
-          <Form.Item
-            name="prefix"
-            label="前缀"
-            rules={[{ required: true, message: '请输入前缀' }]}
-          >
-            <Input placeholder="请输入编码前缀" />
-          </Form.Item>
-
-          <Form.Item
-            name="dateFormat"
-            label="日期格式"
-            rules={[{ required: true, message: '请选择日期格式' }]}
-          >
-            <Select placeholder="请选择日期格式">
-              <Select.Option value="YYYYMMDD">YYYYMMDD (20251229)</Select.Option>
-              <Select.Option value="YYYY-MM-DD">YYYY-MM-DD (2025-12-29)</Select.Option>
-              <Select.Option value="YYMMDD">YYMMDD (251229)</Select.Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="sequenceLength"
-            label="流水号长度"
-            rules={[{ required: true, message: '请输入流水号长度' }]}
-          >
-            <InputNumber min={1} max={10} style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="description"
-            label="描述"
-          >
-            <Input.TextArea rows={2} placeholder="请输入规则描述" />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
+        <ProFormText
+          name="name"
+          label="规则名称"
+          placeholder="请输入规则名称"
+          rules={[{ required: true, message: '请输入规则名称' }]}
+        />
+        <ProFormText
+          name="code"
+          label="规则编码"
+          placeholder="请输入规则编码"
+          rules={[{ required: true, message: '请输入规则编码' }]}
+        />
+        <ProFormText
+          name="prefix"
+          label="前缀"
+          placeholder="请输入编码前缀"
+          rules={[{ required: true, message: '请输入前缀' }]}
+        />
+        <ProFormSelect
+          name="dateFormat"
+          label="日期格式"
+          placeholder="请选择日期格式"
+          options={[
+            { label: 'YYYYMMDD (20251229)', value: 'YYYYMMDD' },
+            { label: 'YYYY-MM-DD (2025-12-29)', value: 'YYYY-MM-DD' },
+            { label: 'YYMMDD (251229)', value: 'YYMMDD' },
+          ]}
+          rules={[{ required: true, message: '请选择日期格式' }]}
+        />
+        <ProFormDigit
+          name="sequenceLength"
+          label="流水号长度"
+          placeholder="请输入流水号长度"
+          min={1}
+          max={10}
+          rules={[{ required: true, message: '请输入流水号长度' }]}
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入规则描述"
+          fieldProps={{ rows: 2 }}
+        />
+      </FormModalTemplate>
+    </ListPageTemplate>
   );
 };
 
-export default SystemSettingsPage;
+export default BusinessConfigPage;
