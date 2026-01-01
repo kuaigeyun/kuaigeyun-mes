@@ -500,8 +500,7 @@ const SuppliersPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
     </>
   );
 };
