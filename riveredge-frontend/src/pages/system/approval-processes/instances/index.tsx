@@ -59,7 +59,6 @@ const ApprovalInstanceListPage: React.FC = () => {
    */
   const handleSubmit = () => {
     setSubmitModalVisible(true);
-    formRef.current?.resetFields();
   };
 
   /**
