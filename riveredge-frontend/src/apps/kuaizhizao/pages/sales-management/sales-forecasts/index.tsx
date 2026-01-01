@@ -8,41 +8,15 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, message } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { listSalesForecasts, getSalesForecast, createSalesForecast, updateSalesForecast, approveSalesForecast, SalesForecast as APISalesForecast } from '../../../services/sales-forecast';
 
-// 销售预测接口定义
-interface SalesForecast {
-  id?: number;
-  tenant_id?: number;
-  forecast_code?: string;
-  forecast_name?: string;
-  start_date?: string;
-  end_date?: string;
-  status?: string;
-  reviewer_id?: number;
-  reviewer_name?: string;
-  review_time?: string;
-  review_status?: string;
-  review_remarks?: string;
-  notes?: string;
-  created_at?: string;
-  updated_at?: string;
-  forecast_items?: ForecastItem[];
-}
-
-interface ForecastItem {
-  id?: number;
-  material_id?: number;
-  material_code?: string;
-  material_name?: string;
-  component_type?: string;
-  forecast_date?: string;
-  forecast_quantity?: number;
-}
+// 使用API服务中的接口定义
+type SalesForecast = APISalesForecast;
 
 const SalesForecastsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
