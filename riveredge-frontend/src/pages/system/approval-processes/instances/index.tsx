@@ -12,6 +12,7 @@ import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Tab
 import { EyeOutlined, PlusOutlined, CheckOutlined, CloseOutlined, StopOutlined, SwapOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import KanbanView from './kanban-view';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getApprovalInstanceList,
   getApprovalInstanceByUuid,
@@ -63,7 +64,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   /**
    * 处理提交审批表单
    */
-  const handleSubmitForm = async (values: any) => {
+  const handleSubmitForm = async (values: any): Promise<void> => {
     try {
       setSubmitFormLoading(true);
       
@@ -80,6 +81,7 @@ const ApprovalInstanceListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '提交失败');
+      throw error;
     } finally {
       setSubmitFormLoading(false);
     }
@@ -98,7 +100,7 @@ const ApprovalInstanceListPage: React.FC = () => {
   /**
    * 处理审批操作表单提交
    */
-  const handleActionForm = async (values: any) => {
+  const handleActionForm = async (values: any): Promise<void> => {
     if (!currentInstanceUuid) return;
     
     try {
@@ -116,6 +118,7 @@ const ApprovalInstanceListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setActionFormLoading(false);
     }
@@ -270,41 +273,77 @@ const ApprovalInstanceListPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '审批标题', dataIndex: 'title' },
+    { title: '审批内容', dataIndex: 'content' },
+    {
+      title: '审批状态',
+      dataIndex: 'status',
+      render: (value: string) => {
+        const statusMap: Record<string, { color: string; text: string }> = {
+          pending: { color: 'processing', text: '待审批' },
+          approved: { color: 'success', text: '已通过' },
+          rejected: { color: 'error', text: '已拒绝' },
+          cancelled: { color: 'default', text: '已取消' },
+        };
+        const statusInfo = statusMap[value] || { color: 'default', text: value };
+        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+      },
+    },
+    { title: '当前节点', dataIndex: 'current_node' },
+    { title: '当前审批人ID', dataIndex: 'current_approver_id' },
+    {
+      title: '审批数据',
+      dataIndex: 'data',
+      render: (value: any) => (
+        <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ),
+    },
+    { title: '提交时间', dataIndex: 'submitted_at', valueType: 'dateTime' },
+    { title: '完成时间', dataIndex: 'completed_at', valueType: 'dateTime' },
+  ];
+
   return (
     <>
-      {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+      <ListPageTemplate>
+        {/* 视图切换 */}
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <Button
+              type={viewMode === 'kanban' ? 'primary' : 'default'}
+              icon={<AppstoreOutlined />}
+              onClick={() => setViewMode('kanban')}
+              style={{ marginRight: 8 }}
+            >
+              看板视图
+            </Button>
+            <Button
+              type={viewMode === 'list' ? 'primary' : 'default'}
+              icon={<UnorderedListOutlined />}
+              onClick={() => setViewMode('list')}
+            >
+              列表视图
+            </Button>
+          </div>
           <Button
-            type={viewMode === 'kanban' ? 'primary' : 'default'}
-            icon={<AppstoreOutlined />}
-            onClick={() => setViewMode('kanban')}
-            style={{ marginRight: 8 }}
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleSubmit}
           >
-            看板视图
-          </Button>
-          <Button
-            type={viewMode === 'list' ? 'primary' : 'default'}
-            icon={<UnorderedListOutlined />}
-            onClick={() => setViewMode('list')}
-          >
-            列表视图
+            提交审批
           </Button>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleSubmit}
-        >
-          提交审批
-        </Button>
-      </div>
 
-      {/* 看板视图 */}
-      {viewMode === 'kanban' && <KanbanView />}
+        {/* 看板视图 */}
+        {viewMode === 'kanban' && <KanbanView />}
 
-      {/* 列表视图 */}
-      {viewMode === 'list' && (
+        {/* 列表视图 */}
+        {viewMode === 'list' && (
         <UniTable<ApprovalInstance>
           headerTitle="审批实例管理"
           actionRef={actionRef}
@@ -334,15 +373,17 @@ const ApprovalInstanceListPage: React.FC = () => {
             showAdvancedSearch: true,
           }}
         />
-      )}
+        )}
+      </ListPageTemplate>
 
       {/* 提交审批 Modal */}
-      <Modal
+      <FormModalTemplate
         title="提交审批"
         open={submitModalVisible}
-        onCancel={() => setSubmitModalVisible(false)}
-        footer={null}
-        size={600}
+        onClose={() => setSubmitModalVisible(false)}
+        onFinish={handleSubmitForm}
+        loading={submitFormLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -388,10 +429,10 @@ const ApprovalInstanceListPage: React.FC = () => {
             />
           </ProForm.Item>
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 审批操作 Modal */}
-      <Modal
+      <FormModalTemplate
         title={
           actionType === 'approve' ? '同意审批' :
           actionType === 'reject' ? '拒绝审批' :
@@ -399,9 +440,10 @@ const ApprovalInstanceListPage: React.FC = () => {
           '转交审批'
         }
         open={actionModalVisible}
-        onCancel={() => setActionModalVisible(false)}
-        footer={null}
-        size={500}
+        onClose={() => setActionModalVisible(false)}
+        onFinish={handleActionForm}
+        loading={actionFormLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -428,75 +470,19 @@ const ApprovalInstanceListPage: React.FC = () => {
             }}
           />
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<ApprovalInstance>
         title="审批实例详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
-      >
-        {detailLoading ? (
-          <div>加载中...</div>
-        ) : detailData ? (
-          <ProDescriptions
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '审批标题',
-                dataIndex: 'title',
-              },
-              {
-                title: '审批内容',
-                dataIndex: 'content',
-              },
-              {
-                title: '审批状态',
-                dataIndex: 'status',
-                render: (value) => {
-                  const statusMap = {
-                    pending: { color: 'processing', text: '待审批' },
-                    approved: { color: 'success', text: '已通过' },
-                    rejected: { color: 'error', text: '已拒绝' },
-                    cancelled: { color: 'default', text: '已取消' },
-                  };
-                  const statusInfo = statusMap[value] || { color: 'default', text: value };
-                  return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-                },
-              },
-              {
-                title: '当前节点',
-                dataIndex: 'current_node',
-              },
-              {
-                title: '当前审批人ID',
-                dataIndex: 'current_approver_id',
-              },
-              {
-                title: '审批数据',
-                dataIndex: 'data',
-                render: (value) => (
-                  <pre style={{ maxHeight: '200px', overflow: 'auto' }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '提交时间',
-                dataIndex: 'submitted_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '完成时间',
-                dataIndex: 'completed_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        ) : null}
-      </Drawer>
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+      />
     </>
   );
 };
