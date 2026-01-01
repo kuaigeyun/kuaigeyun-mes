@@ -6,9 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Form, Card, Row, Col, Statistic } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, TruckOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
 interface SalesOutbound {
   id: number;
@@ -39,7 +40,7 @@ const SalesOutboundPage: React.FC = () => {
 
   // 出库Modal状态
   const [outboundModalVisible, setOutboundModalVisible] = useState(false);
-  const [outboundForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -54,7 +55,7 @@ const SalesOutboundPage: React.FC = () => {
    */
   const handleCreateOutbound = () => {
     setOutboundModalVisible(true);
-    outboundForm.resetFields();
+    formRef.current?.resetFields();
   };
 
   /**
@@ -94,9 +95,11 @@ const SalesOutboundPage: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       messageApi.success('销售出库单创建成功');
       setOutboundModalVisible(false);
+      formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
+      throw error;
     }
   };
 
@@ -235,58 +238,38 @@ const SalesOutboundPage: React.FC = () => {
   ];
 
   return (
-    <>
-      {/* 统计卡片 */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="今日出库"
-                value={stats.todayOutbound}
-                prefix={<TruckOutlined />}
-                suffix="件"
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="累计出库"
-                value={stats.totalOutbound}
-                prefix={<CheckCircleOutlined />}
-                suffix="件"
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="待确认"
-                value={stats.pendingCount}
-                prefix={<ExclamationCircleOutlined />}
-                suffix="单"
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="已发货"
-                value={stats.shippedCount}
-                prefix={<TruckOutlined />}
-                suffix="单"
-                valueStyle={{ color: '#722ed1' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
-
-      {/* 销售出库表格 */}
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '今日出库',
+          value: stats.todayOutbound,
+          prefix: <TruckOutlined />,
+          suffix: '件',
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '累计出库',
+          value: stats.totalOutbound,
+          prefix: <CheckCircleOutlined />,
+          suffix: '件',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '待确认',
+          value: stats.pendingCount,
+          prefix: <ExclamationCircleOutlined />,
+          suffix: '单',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '已发货',
+          value: stats.shippedCount,
+          prefix: <TruckOutlined />,
+          suffix: '单',
+          valueStyle: { color: '#722ed1' },
+        },
+      ]}
+    >
       <UniTable
         headerTitle="销售出库管理"
         actionRef={actionRef}
@@ -380,179 +363,136 @@ const SalesOutboundPage: React.FC = () => {
         }}
       />
 
-      {/* 新增出库 Modal */}
-      <Modal
+      <FormModalTemplate
         title="新增销售出库"
         open={outboundModalVisible}
-        onCancel={() => setOutboundModalVisible(false)}
-        onOk={() => outboundForm.submit()}
-        width={800}
-        destroyOnClose
+        onClose={() => setOutboundModalVisible(false)}
+        onFinish={handleOutboundSubmit}
+        isEdit={false}
+        initialValues={{
+          outboundDate: new Date().toISOString().split('T')[0],
+          outboundCode: 'OUT20241201004',
+          orderType: 'MTS',
+        }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        grid={true}
       >
-        <ProForm
-          form={outboundForm}
-          onFinish={handleOutboundSubmit}
-          layout="vertical"
-          submitter={false}
-          initialValues={{
-            outboundDate: new Date().toISOString().split('T')[0],
-          }}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormText
-                name="outboundCode"
-                label="出库单号"
-                placeholder="系统自动生成"
-                disabled
-                initialValue="OUT20241201004"
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormSelect
-                name="orderType"
-                label="出库类型"
-                placeholder="请选择出库类型"
-                rules={[{ required: true, message: '请选择出库类型' }]}
-                options={[
-                  { label: '按订单生产 (MTO)', value: 'MTO' },
-                  { label: '按库存生产 (MTS)', value: 'MTS' },
-                ]}
-                initialValue="MTS"
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormSelect
-                name="salesOrderCode"
-                label="销售订单"
-                placeholder="请选择销售订单"
-                dependencies={['orderType']}
-                rules={[
-                  ({ getFieldValue }) => ({
-                    required: getFieldValue('orderType') === 'MTO',
-                    message: 'MTO模式必须选择销售订单',
-                  }),
-                ]}
-                request={async () => [
-                  { label: 'SO20241201001 - 客户A订单 (MTO)', value: 'SO20241201001' },
-                  { label: 'SO20241201002 - 客户B订单 (MTO)', value: 'SO20241201002' },
-                  { label: 'SO20241201003 - 客户C订单 (MTO)', value: 'SO20241201003' },
-                ]}
-                hidden={({ orderType }) => orderType !== 'MTO'}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormSelect
-                name="customerName"
-                label="客户"
-                placeholder="请选择客户"
-                rules={[{ required: true, message: '请选择客户' }]}
-                request={async () => [
-                  { label: '客户A', value: '客户A' },
-                  { label: '客户B', value: '客户B' },
-                  { label: '客户C', value: '客户C' },
-                ]}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormSelect
-                name="customerName"
-                label="客户"
-                placeholder="请选择客户"
-                rules={[{ required: true, message: '请选择客户' }]}
-                request={async () => [
-                  { label: '客户A', value: '客户A' },
-                  { label: '客户B', value: '客户B' },
-                  { label: '客户C', value: '客户C' },
-                ]}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormSelect
-                name="productCode"
-                label="产品"
-                placeholder="请选择产品"
-                rules={[{ required: true, message: '请选择产品' }]}
-                request={async () => [
-                  { label: 'FIN001 - 产品A', value: 'FIN001' },
-                  { label: 'FIN002 - 产品B', value: 'FIN002' },
-                ]}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={8}>
-              <ProFormDigit
-                name="quantity"
-                label="出库数量"
-                placeholder="请输入出库数量"
-                rules={[{ required: true, message: '请输入出库数量' }]}
-                min={1}
-              />
-            </Col>
-            <Col span={8}>
-              <ProFormSelect
-                name="warehouseName"
-                label="仓库"
-                placeholder="请选择仓库"
-                rules={[{ required: true, message: '请选择仓库' }]}
-                request={async () => [
-                  { label: '成品仓库', value: '成品仓库' },
-                ]}
-              />
-            </Col>
-            <Col span={8}>
-              <ProFormText
-                name="batchNo"
-                label="批次号"
-                placeholder="请输入批次号"
-                rules={[{ required: true, message: '请输入批次号' }]}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormDatePicker
-                name="outboundDate"
-                label="出库日期"
-                placeholder="请选择出库日期"
-                rules={[{ required: true, message: '请选择出库日期' }]}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="operatorName"
-                label="操作员"
-                placeholder="请输入操作员姓名"
-                rules={[{ required: true, message: '请输入操作员姓名' }]}
-              />
-            </Col>
-          </Row>
-
-          <ProFormTextArea
-            name="logisticsInfo"
-            label="物流信息"
-            placeholder="请输入物流信息（如快递单号等）"
-            rows={2}
-          />
-
-          <ProFormTextArea
-            name="remarks"
-            label="备注"
-            placeholder="请输入备注信息"
-            rows={2}
-          />
-        </ProForm>
-      </Modal>
-    </>
+        <ProFormText
+          name="outboundCode"
+          label="出库单号"
+          placeholder="系统自动生成"
+          disabled
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="orderType"
+          label="出库类型"
+          placeholder="请选择出库类型"
+          rules={[{ required: true, message: '请选择出库类型' }]}
+          options={[
+            { label: '按订单生产 (MTO)', value: 'MTO' },
+            { label: '按库存生产 (MTS)', value: 'MTS' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="salesOrderCode"
+          label="销售订单"
+          placeholder="请选择销售订单"
+          dependencies={['orderType']}
+          rules={[
+            ({ getFieldValue }) => ({
+              required: getFieldValue('orderType') === 'MTO',
+              message: 'MTO模式必须选择销售订单',
+            }),
+          ]}
+          request={async () => [
+            { label: 'SO20241201001 - 客户A订单 (MTO)', value: 'SO20241201001' },
+            { label: 'SO20241201002 - 客户B订单 (MTO)', value: 'SO20241201002' },
+            { label: 'SO20241201003 - 客户C订单 (MTO)', value: 'SO20241201003' },
+          ]}
+          colProps={{ span: 12 }}
+          hidden={({ orderType }) => orderType !== 'MTO'}
+        />
+        <ProFormSelect
+          name="customerName"
+          label="客户"
+          placeholder="请选择客户"
+          rules={[{ required: true, message: '请选择客户' }]}
+          request={async () => [
+            { label: '客户A', value: '客户A' },
+            { label: '客户B', value: '客户B' },
+            { label: '客户C', value: '客户C' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="productCode"
+          label="产品"
+          placeholder="请选择产品"
+          rules={[{ required: true, message: '请选择产品' }]}
+          request={async () => [
+            { label: 'FIN001 - 产品A', value: 'FIN001' },
+            { label: 'FIN002 - 产品B', value: 'FIN002' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="quantity"
+          label="出库数量"
+          placeholder="请输入出库数量"
+          rules={[{ required: true, message: '请输入出库数量' }]}
+          min={1}
+          colProps={{ span: 8 }}
+        />
+        <ProFormSelect
+          name="warehouseName"
+          label="仓库"
+          placeholder="请选择仓库"
+          rules={[{ required: true, message: '请选择仓库' }]}
+          request={async () => [
+            { label: '成品仓库', value: '成品仓库' },
+          ]}
+          colProps={{ span: 8 }}
+        />
+        <ProFormText
+          name="batchNo"
+          label="批次号"
+          placeholder="请输入批次号"
+          rules={[{ required: true, message: '请输入批次号' }]}
+          colProps={{ span: 8 }}
+        />
+        <ProFormDatePicker
+          name="outboundDate"
+          label="出库日期"
+          placeholder="请选择出库日期"
+          rules={[{ required: true, message: '请选择出库日期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="operatorName"
+          label="操作员"
+          placeholder="请输入操作员姓名"
+          rules={[{ required: true, message: '请输入操作员姓名' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="logisticsInfo"
+          label="物流信息"
+          placeholder="请输入物流信息（如快递单号等）"
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
+    </ListPageTemplate>
   );
 };
 
