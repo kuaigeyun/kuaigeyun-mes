@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDatePicker, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDatePicker, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { holidayApi } from '../../../services/performance';
 import type { Holiday, HolidayCreate, HolidayUpdate } from '../../../types/performance';
 import dayjs from 'dayjs';
@@ -242,8 +243,50 @@ const HolidaysPage: React.FC = () => {
     },
   ];
 
+  // 详情列定义
+  const detailColumns: ProDescriptionsItemType<Holiday>[] = [
+    {
+      title: '假期名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '假期日期',
+      dataIndex: 'holidayDate',
+      valueType: 'date',
+    },
+    {
+      title: '假期类型',
+      dataIndex: 'holidayType',
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      span: 2,
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
   return (
     <>
+      <ListPageTemplate>
       <UniTable<Holiday>
         actionRef={actionRef}
         columns={columns}
@@ -297,89 +340,35 @@ const HolidaysPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Holiday>
         title="假期详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<Holiday>
-          dataSource={holidayDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '假期名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '假期日期',
-              dataIndex: 'holidayDate',
-              valueType: 'date',
-            },
-            {
-              title: '假期类型',
-              dataIndex: 'holidayType',
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={holidayDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
 
       {/* 创建/编辑假期 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑假期' : '新建假期'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{
+          isActive: true,
+        }}
+        layout="vertical"
+        grid={true}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
-          initialValues={{
-            isActive: true,
-          }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
           <ProFormText
             name="name"
             label="假期名称"
@@ -426,8 +415,7 @@ const HolidaysPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
     </>
   );
 };
