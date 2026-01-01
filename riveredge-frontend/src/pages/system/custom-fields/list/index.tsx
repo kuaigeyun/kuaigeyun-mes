@@ -10,10 +10,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormJsonSchema, ProTable } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, theme } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, message, Input, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../../components/uni-table';
+import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, PAGE_SPACING } from '../../../../components/layout-templates';
 import {
   getCustomFieldList,
   getCustomFieldByUuid,
