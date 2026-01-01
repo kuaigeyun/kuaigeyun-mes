@@ -11,6 +11,7 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getMessageConfigList,
   getMessageConfigByUuid,
@@ -121,10 +122,9 @@ const MessageConfigListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新消息配置）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 解析配置 JSON
       let config: Record<string, any> = {};
@@ -161,6 +161,7 @@ const MessageConfigListPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -288,9 +289,69 @@ const MessageConfigListPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '配置名称', dataIndex: 'name' },
+    { title: '配置代码', dataIndex: 'code' },
+    {
+      title: '消息类型',
+      dataIndex: 'type',
+      render: (value: string) => {
+        const typeMap: Record<string, string> = {
+          email: '邮件',
+          sms: '短信',
+          internal: '站内信',
+          push: '推送通知',
+        };
+        return typeMap[value] || value;
+      },
+    },
+    { title: '配置描述', dataIndex: 'description' },
+    {
+      title: '配置信息',
+      dataIndex: 'config',
+      render: (value: Record<string, any>) => (
+        <pre style={{
+          margin: 0,
+          padding: '8px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          overflow: 'auto',
+          maxHeight: '300px',
+          fontSize: 12,
+        }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ),
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '默认配置',
+      dataIndex: 'is_default',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '是' : '否'}
+        </Tag>
+      ),
+    },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
   return (
     <>
-      <UniTable<MessageConfig>
+      <ListPageTemplate>
+        <UniTable<MessageConfig>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -333,30 +394,24 @@ const MessageConfigListPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建消息配置
-          </Button>,
-        ]}
+        showCreateButton
+        onCreate={handleCreate}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
-      />
+        />
+      </ListPageTemplate>
 
       {/* 创建/编辑消息配置 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑消息配置' : '新建消息配置'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -444,95 +499,19 @@ const MessageConfigListPage: React.FC = () => {
             label="是否默认配置"
           />
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<MessageConfig>
         title="消息配置详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<MessageConfig>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '配置名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '配置代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '消息类型',
-                dataIndex: 'type',
-                render: (value) => {
-                  const typeMap: Record<string, string> = {
-                    email: '邮件',
-                    sms: '短信',
-                    internal: '站内信',
-                    push: '推送通知',
-                  };
-                  return typeMap[value] || value;
-                },
-              },
-              {
-                title: '配置描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '配置信息',
-                dataIndex: 'config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '300px',
-                    fontSize: 12,
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '默认配置',
-                dataIndex: 'is_default',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '是' : '否'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+      />
     </>
   );
 };
