@@ -3,9 +3,12 @@
  *
  * 用户工作台，提供快捷入口、消息通知、待办事项等功能
  * 参考 Ant Design Pro 工作台最佳实践
+ *
+ * Author: Luigi Lu
+ * Date: 2025-12-30
  */
 
-import { PageContainer } from '@ant-design/pro-components';
+import React from 'react';
 import {
   Card,
   Row,
@@ -22,21 +25,16 @@ import {
 import {
   UserOutlined,
   TeamOutlined,
-  FileTextOutlined,
-  SettingOutlined,
   BellOutlined,
-  ThunderboltOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   RightOutlined,
   ShopOutlined,
-  ExperimentOutlined,
-  DatabaseOutlined,
-  CloudServerOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { DashboardTemplate, type QuickAction } from '../../../components/layout-templates';
 
 const { Title, Text } = Typography;
 
@@ -98,28 +96,25 @@ const fetchTodos = async () => {
   ];
 };
 
-// 快捷操作配置
-const quickActions = [
+// 快捷操作配置（转换为 DashboardTemplate 格式）
+const getQuickActions = (navigate: (path: string) => void): QuickAction[] => [
   {
-    key: 'users',
     title: '用户管理',
     icon: <UserOutlined />,
-    path: '/system/users',
-    description: '用户列表、权限管理',
+    onClick: () => navigate('/system/users'),
+    type: 'default',
   },
   {
-    key: 'roles',
     title: '角色管理',
     icon: <TeamOutlined />,
-    path: '/system/roles',
-    description: '角色配置、权限分配',
+    onClick: () => navigate('/system/roles'),
+    type: 'default',
   },
   {
-    key: 'departments',
     title: '部门管理',
     icon: <ShopOutlined />,
-    path: '/system/departments',
-    description: '组织架构、部门设置',
+    onClick: () => navigate('/system/departments'),
+    type: 'default',
   },
 ];
 
@@ -162,8 +157,8 @@ export default function DashboardPage() {
   };
 
   return (
-    <PageContainer
-      title="工作台"
+    <DashboardTemplate
+      quickActions={getQuickActions(navigate)}
     >
       {/* 欢迎区域 */}
       <Card style={{ marginBottom: 24 }}>
@@ -180,46 +175,6 @@ export default function DashboardPage() {
             </Text>
           </div>
         </Space>
-      </Card>
-
-      {/* 快捷操作 */}
-      <Card
-        title={
-          <Space>
-            <ThunderboltOutlined />
-            <span>快捷操作</span>
-          </Space>
-        }
-        style={{ marginBottom: 24 }}
-      >
-        <Row gutter={[12, 12]}>
-          {quickActions.map((action) => (
-            <Col xs={12} sm={6} lg={3} key={action.key}>
-              <Card
-                hoverable
-                onClick={() => navigate(action.path)}
-                style={{
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                }}
-                styles={{ body: { padding: '16px 8px' } }}
-              >
-                <div
-                  style={{
-                    fontSize: '24px',
-                    marginBottom: 8,
-                    color: '#1890ff',
-                  }}
-                >
-                  {action.icon}
-                </div>
-                <Text strong style={{ fontSize: '14px' }}>
-                  {action.title}
-                </Text>
-              </Card>
-            </Col>
-          ))}
-        </Row>
       </Card>
 
       {/* 消息通知和待办事项 */}
@@ -368,7 +323,6 @@ export default function DashboardPage() {
           </Card>
         </Col>
       </Row>
-
-    </PageContainer>
+    </DashboardTemplate>
   );
 }
