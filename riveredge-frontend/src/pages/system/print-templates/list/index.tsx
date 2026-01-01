@@ -5,12 +5,11 @@
  * 支持打印模板的 CRUD 操作和模板渲染功能。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Tabs, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import CardView from '../card-view';
+import { App, Popconfirm, Button, Tag, Drawer, Modal, message, Input, Form, Space, Typography, Tooltip, Card } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, FileTextOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -26,8 +25,61 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
 
 const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
+
+/**
+ * 获取模板类型图标和颜色
+ */
+const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
+  const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
+    pdf: { 
+      color: 'red', 
+      text: 'PDF',
+      icon: <FileTextOutlined />,
+    },
+    html: { 
+      color: 'blue', 
+      text: 'HTML',
+      icon: <FileTextOutlined />,
+    },
+    word: { 
+      color: 'green', 
+      text: 'Word',
+      icon: <FileTextOutlined />,
+    },
+    excel: { 
+      color: 'purple', 
+      text: 'Excel',
+      icon: <FileTextOutlined />,
+    },
+    other: { 
+      color: 'default', 
+      text: '其他',
+      icon: <FileTextOutlined />,
+    },
+  };
+  return typeMap[type] || { color: 'default', text: type, icon: <FileTextOutlined /> };
+};
+
+/**
+ * 提取模板变量
+ */
+const extractVariables = (content: string): string[] => {
+  if (!content) return [];
+  const regex = /\{\{(\w+)\}\}/g;
+  const matches = content.matchAll(regex);
+  const variables = new Set<string>();
+  for (const match of matches) {
+    variables.add(match[1]);
+  }
+  return Array.from(variables);
+};
 
 /**
  * 打印模板管理列表页面组件
@@ -36,7 +88,7 @@ const PrintTemplateListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [allTemplates, setAllTemplates] = useState<PrintTemplate[]>([]); // 用于统计
   
   // Modal 相关状态（创建/编辑打印模板）
   const [modalVisible, setModalVisible] = useState(false);
@@ -237,6 +289,162 @@ const PrintTemplateListPage: React.FC = () => {
   };
 
   /**
+   * 计算统计信息
+   */
+  const statCards = useMemo(() => {
+    if (allTemplates.length === 0) return undefined;
+    
+    const stats = {
+      total: allTemplates.length,
+      active: allTemplates.filter((t) => t.is_active).length,
+      inactive: allTemplates.filter((t) => !t.is_active).length,
+      default: allTemplates.filter((t) => t.is_default).length,
+      totalUsage: allTemplates.reduce((sum, t) => sum + (t.usage_count || 0), 0),
+    };
+
+    return [
+      {
+        title: '总模板数',
+        value: stats.total,
+        valueStyle: { color: '#1890ff' },
+      },
+      {
+        title: '已启用',
+        value: stats.active,
+        valueStyle: { color: '#52c41a' },
+      },
+      {
+        title: '默认模板',
+        value: stats.default,
+        valueStyle: { color: '#faad14' },
+      },
+      {
+        title: '总使用次数',
+        value: stats.totalUsage,
+        valueStyle: { color: '#722ed1' },
+      },
+    ];
+  }, [allTemplates]);
+
+  /**
+   * 卡片渲染函数
+   */
+  const renderCard = (template: PrintTemplate, index: number) => {
+    const typeInfo = getTypeInfo(template.type);
+    const variables = extractVariables(template.content);
+    
+    return (
+      <Card
+        key={template.uuid}
+        hoverable
+        style={{ height: '100%' }}
+        actions={[
+          <Tooltip key="view" title="查看详情">
+            <EyeOutlined
+              onClick={() => handleView(template)}
+              style={{ fontSize: 16 }}
+            />
+          </Tooltip>,
+          <Tooltip key="render" title="渲染模板">
+            <PrinterOutlined
+              onClick={() => handleRender(template)}
+              disabled={!template.is_active}
+              style={{ fontSize: 16, color: template.is_active ? '#722ed1' : '#d9d9d9' }}
+            />
+          </Tooltip>,
+          <Popconfirm
+            key="delete"
+            title="确定要删除这个打印模板吗？"
+            onConfirm={() => handleDelete(template)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Tooltip title="删除">
+              <DeleteOutlined
+                style={{ fontSize: 16, color: '#ff4d4f' }}
+              />
+            </Tooltip>
+          </Popconfirm>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text strong style={{ fontSize: 16 }}>
+                {template.name}
+              </Text>
+              <Tag color={typeInfo.color} icon={typeInfo.icon}>
+                {typeInfo.text}
+              </Tag>
+            </div>
+            
+            {template.code && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                代码: {template.code}
+              </Text>
+            )}
+            
+            {template.description && (
+              <Paragraph
+                ellipsis={{ rows: 2, expandable: false }}
+                style={{ marginBottom: 0, fontSize: 12 }}
+              >
+                {template.description}
+              </Paragraph>
+            )}
+          </Space>
+        </div>
+        
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+              <Tag color={template.is_active ? 'success' : 'default'}>
+                {template.is_active ? '启用' : '禁用'}
+              </Tag>
+            </div>
+            
+            {template.is_default && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>默认模板：</Text>
+                <Tag color="processing">是</Tag>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>使用次数：</Text>
+              <Text style={{ fontSize: 12 }}>{template.usage_count || 0}</Text>
+            </div>
+            
+            {variables.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>变量：</Text>
+                <Space wrap size={[4, 4]} style={{ marginTop: 4 }}>
+                  {variables.slice(0, 3).map((v) => (
+                    <Tag key={v} style={{ fontSize: 10, margin: 0 }}>{v}</Tag>
+                  ))}
+                  {variables.length > 3 && (
+                    <Tag style={{ fontSize: 10, margin: 0 }}>+{variables.length - 3}</Tag>
+                  )}
+                </Space>
+              </div>
+            )}
+            
+            {template.last_used_at && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>最后使用：</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {dayjs(template.last_used_at).fromNow()}
+                </Text>
+              </div>
+            )}
+          </Space>
+        </div>
+      </Card>
+    );
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<PrintTemplate>[] = [
@@ -322,79 +530,137 @@ const PrintTemplateListPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
     },
+  ];
+
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
     {
-      title: '操作',
-      valueType: 'option',
-      width: 300,
-      fixed: 'right',
-      render: (_, record) => {
-        return [
-          <Button
-            key="view"
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            查看
-          </Button>,
-          <Button
-            key="edit"
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>,
-          <Button
-            key="render"
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => handleRender(record)}
-            disabled={!record.is_active}
-          >
-            渲染
-          </Button>,
-          <Popconfirm
-            key="delete"
-            title="确定要删除这个打印模板吗？"
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
-          </Popconfirm>,
-        ];
-      },
+      title: '模板名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '模板代码',
+      dataIndex: 'code',
+    },
+    {
+      title: '模板类型',
+      dataIndex: 'type',
+    },
+    {
+      title: '模板描述',
+      dataIndex: 'description',
+    },
+    {
+      title: '是否启用',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '是否默认',
+      dataIndex: 'is_default',
+      render: (value: boolean) => (
+        <Tag color={value ? 'processing' : 'default'}>
+          {value ? '默认' : '-'}
+        </Tag>
+      ),
+    },
+    {
+      title: '模板内容',
+      dataIndex: 'content',
+      render: (value: string) => (
+        <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+          {value}
+        </pre>
+      ),
+    },
+    {
+      title: '模板配置',
+      dataIndex: 'config',
+      render: (value: Record<string, any>) => (
+        value ? (
+          <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        ) : '-'
+      ),
+    },
+    {
+      title: '使用次数',
+      dataIndex: 'usage_count',
+    },
+    {
+      title: '最后使用时间',
+      dataIndex: 'last_used_at',
+      valueType: 'dateTime',
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
     },
   ];
 
   return (
     <>
-      {/* 视图切换 */}
-      <div style={{ 
-        padding: '16px 16px 0 16px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
-      }}>
-        <Tabs
-          activeKey={viewMode}
-          onChange={(key) => setViewMode(key as 'card' | 'list')}
-          items={[
-            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
-            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
-          ]}
-        />
-        {viewMode === 'list' && (
-          <Space>
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<PrintTemplate>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20 } = params;
+            const skip = (current - 1) * pageSize;
+            const limit = pageSize;
+            
+            const listParams: any = {
+              skip,
+              limit,
+              ...searchFormValues,
+            };
+            
+            try {
+              const data = await getPrintTemplateList(listParams);
+              
+              // 同时获取所有数据用于统计（如果当前页是第一页）
+              if (current === 1) {
+                try {
+                  const allData = await getPrintTemplateList({ skip: 0, limit: 1000 });
+                  setAllTemplates(allData);
+                } catch (e) {
+                  // 忽略统计数据的错误
+                }
+              }
+              
+              return {
+                data,
+                success: true,
+                total: data.length, // 注意：这里应该返回实际总数，如果API支持的话
+              };
+            } catch (error: any) {
+              console.error('获取打印模板列表失败:', error);
+              messageApi.error(error?.message || '获取打印模板列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          showCreateButton
+          onCreate={handleCreate}
+          headerActions={
             <Button
               danger
               onClick={handleBatchDelete}
@@ -402,58 +668,18 @@ const PrintTemplateListPage: React.FC = () => {
             >
               批量删除
             </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建
-            </Button>
-          </Space>
-        )}
-      </div>
-
-      {/* 卡片视图 */}
-      {viewMode === 'card' && <div style={{ padding: '0 16px 16px 16px' }}><CardView /></div>}
-
-      {/* 列表视图 */}
-      {viewMode === 'list' && (
-        <ListPageTemplate>
-          <UniTable<PrintTemplate>
-        headerTitle="打印模板管理"
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          const { current = 1, pageSize = 20, ...rest } = params;
-          const skip = (current - 1) * pageSize;
-          const limit = pageSize;
-          
-          const listParams: any = {
-            skip,
-            limit,
-            ...searchFormValues,
-          };
-          
-          const data = await getPrintTemplateList(listParams);
-          return {
-            data,
-            success: true,
-            total: data.length,
-          };
-        }}
-        rowKey="uuid"
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-          toolBarRender={() => []}
-          search={{
-            labelWidth: 'auto',
-            showAdvancedSearch: true,
+          }
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          viewTypes={['table', 'card']}
+          defaultViewType="table"
+          cardViewConfig={{
+            renderCard,
           }}
         />
-        </ListPageTemplate>
-      )}
+      </ListPageTemplate>
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
@@ -547,7 +773,7 @@ const PrintTemplateListPage: React.FC = () => {
         open={renderModalVisible}
         onCancel={() => setRenderModalVisible(false)}
         footer={null}
-        size={700}
+        width={700}
       >
         <ProForm
           formRef={renderFormRef}
@@ -606,92 +832,17 @@ const PrintTemplateListPage: React.FC = () => {
       </Modal>
 
       {/* 详情 Drawer */}
-      <DetailDrawerTemplate
+      <DetailDrawerTemplate<PrintTemplate>
         title="打印模板详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData}
-        columns={[
-          {
-            title: '模板名称',
-            dataIndex: 'name',
-          },
-          {
-            title: '模板代码',
-            dataIndex: 'code',
-          },
-          {
-            title: '模板类型',
-            dataIndex: 'type',
-          },
-          {
-            title: '模板描述',
-            dataIndex: 'description',
-          },
-          {
-            title: '是否启用',
-            dataIndex: 'is_active',
-            render: (value: boolean) => (
-              <Tag color={value ? 'success' : 'default'}>
-                {value ? '启用' : '禁用'}
-              </Tag>
-            ),
-          },
-          {
-            title: '是否默认',
-            dataIndex: 'is_default',
-            render: (value: boolean) => (
-              <Tag color={value ? 'processing' : 'default'}>
-                {value ? '默认' : '-'}
-              </Tag>
-            ),
-          },
-          {
-            title: '模板内容',
-            dataIndex: 'content',
-            render: (value: string) => (
-              <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                {value}
-              </pre>
-            ),
-          },
-          {
-            title: '模板配置',
-            dataIndex: 'config',
-            render: (value: Record<string, any>) => (
-              value ? (
-                <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
-                  {JSON.stringify(value, null, 2)}
-                </pre>
-              ) : '-'
-            ),
-          },
-          {
-            title: '使用次数',
-            dataIndex: 'usage_count',
-          },
-          {
-            title: '最后使用时间',
-            dataIndex: 'last_used_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '创建时间',
-            dataIndex: 'created_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '更新时间',
-            dataIndex: 'updated_at',
-            valueType: 'dateTime',
-          },
-        ]}
+        dataSource={detailData || {}}
+        columns={detailColumns}
       />
     </>
   );
 };
 
 export default PrintTemplateListPage;
-

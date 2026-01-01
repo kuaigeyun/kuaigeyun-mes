@@ -5,12 +5,11 @@
  * 支持集成配置的 CRUD 操作和连接测试功能。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Tabs } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, CheckCircleOutlined, CloseCircleOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import CardView from '../card-view';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Tooltip, Card } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -24,6 +23,61 @@ import {
   IntegrationConfigCreate,
   IntegrationConfigUpdate,
 } from '../../../../services/integrationConfig';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
+
+const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
+
+/**
+ * 获取集成类型图标和颜色
+ */
+const getTypeInfo = (type: string): { color: string; text: string; icon: React.ReactNode } => {
+  const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
+    OAuth: { 
+      color: 'default', 
+      text: 'OAuth',
+      icon: <LinkOutlined />,
+    },
+    API: { 
+      color: 'blue', 
+      text: 'API',
+      icon: <ApiOutlined />,
+    },
+    Webhook: { 
+      color: 'green', 
+      text: 'Webhook',
+      icon: <LinkOutlined />,
+    },
+    Database: { 
+      color: 'orange', 
+      text: 'Database',
+      icon: <ApiOutlined />,
+    },
+  };
+  return typeMap[type] || { color: 'default', text: type, icon: <ApiOutlined /> };
+};
+
+/**
+ * 获取连接状态显示
+ */
+const getConnectionStatus = (integration: IntegrationConfig): { status: 'success' | 'error' | 'warning' | 'default'; text: string } => {
+  if (!integration.is_active) {
+    return { status: 'default', text: '已禁用' };
+  }
+  
+  if (integration.is_connected) {
+    return { status: 'success', text: '已连接' };
+  }
+  
+  if (integration.last_error) {
+    return { status: 'error', text: '连接失败' };
+  }
+  
+  return { status: 'warning', text: '未连接' };
+};
 
 /**
  * 集成设置列表页面组件
@@ -32,7 +86,7 @@ const IntegrationConfigListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [allIntegrations, setAllIntegrations] = useState<IntegrationConfig[]>([]); // 用于统计
   
   // Modal 相关状态（创建/编辑集成配置）
   const [modalVisible, setModalVisible] = useState(false);
@@ -187,6 +241,150 @@ const IntegrationConfigListPage: React.FC = () => {
   };
 
   /**
+   * 计算统计信息
+   */
+  const statCards = useMemo(() => {
+    if (allIntegrations.length === 0) return undefined;
+    
+    const stats = {
+      total: allIntegrations.length,
+      connected: allIntegrations.filter((ic) => ic.is_connected && ic.is_active).length,
+      disconnected: allIntegrations.filter((ic) => !ic.is_connected && ic.is_active).length,
+      inactive: allIntegrations.filter((ic) => !ic.is_active).length,
+    };
+
+    return [
+      {
+        title: '总集成数',
+        value: stats.total,
+        valueStyle: { color: '#1890ff' },
+      },
+      {
+        title: '已连接',
+        value: stats.connected,
+        valueStyle: { color: '#52c41a' },
+      },
+      {
+        title: '未连接',
+        value: stats.disconnected,
+        valueStyle: { color: '#ff4d4f' },
+      },
+      {
+        title: '已禁用',
+        value: stats.inactive,
+        valueStyle: { color: '#faad14' },
+      },
+    ];
+  }, [allIntegrations]);
+
+  /**
+   * 卡片渲染函数
+   */
+  const renderCard = (integration: IntegrationConfig, index: number) => {
+    const typeInfo = getTypeInfo(integration.type);
+    const connectionStatus = getConnectionStatus(integration);
+    
+    return (
+      <Card
+        key={integration.uuid}
+        hoverable
+        style={{ height: '100%' }}
+        actions={[
+          <Tooltip key="view" title="查看详情">
+            <EyeOutlined
+              onClick={() => handleView(integration)}
+              style={{ fontSize: 16 }}
+            />
+          </Tooltip>,
+          <Tooltip key="test" title="测试连接">
+            <ApiOutlined
+              onClick={() => handleTestConnection(integration)}
+              style={{ fontSize: 16, color: '#1890ff' }}
+            />
+          </Tooltip>,
+          <Popconfirm
+            key="delete"
+            title="确定要删除这个集成配置吗？"
+            onConfirm={() => handleDelete(integration)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Tooltip title="删除">
+              <DeleteOutlined
+                style={{ fontSize: 16, color: '#ff4d4f' }}
+              />
+            </Tooltip>
+          </Popconfirm>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text strong style={{ fontSize: 16 }}>
+                {integration.name}
+              </Text>
+              <Tag color={typeInfo.color} icon={typeInfo.icon}>
+                {typeInfo.text}
+              </Tag>
+            </div>
+            
+            {integration.code && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                代码: {integration.code}
+              </Text>
+            )}
+            
+            {integration.description && (
+              <Paragraph
+                ellipsis={{ rows: 2, expandable: false }}
+                style={{ marginBottom: 0, fontSize: 12 }}
+              >
+                {integration.description}
+              </Paragraph>
+            )}
+          </Space>
+        </div>
+        
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>连接状态：</Text>
+              <Badge
+                status={connectionStatus.status}
+                text={connectionStatus.text}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>启用状态：</Text>
+              <Tag color={integration.is_active ? 'success' : 'default'}>
+                {integration.is_active ? '启用' : '禁用'}
+              </Tag>
+            </div>
+            
+            {integration.last_connected_at && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>最后连接：</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {dayjs(integration.last_connected_at).fromNow()}
+                </Text>
+              </div>
+            )}
+            
+            {integration.last_error && (
+              <div style={{ marginTop: 8 }}>
+                <Text type="danger" style={{ fontSize: 11 }}>
+                  错误: {integration.last_error}
+                </Text>
+              </div>
+            )}
+          </Space>
+        </div>
+      </Card>
+    );
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<IntegrationConfig>[] = [
@@ -284,156 +482,164 @@ const IntegrationConfigListPage: React.FC = () => {
       hideInSearch: true,
       sorter: true,
     },
+  ];
+
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
     {
-      title: '操作',
-      valueType: 'option',
-      width: 250,
-      fixed: 'right',
-      render: (_, record) => (
+      title: '集成名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '集成代码',
+      dataIndex: 'code',
+    },
+    {
+      title: '集成类型',
+      dataIndex: 'type',
+      render: (value: string) => {
+        const typeMap: Record<string, string> = {
+          OAuth: 'OAuth',
+          API: 'API',
+          Webhook: 'Webhook',
+          Database: 'Database',
+        };
+        return typeMap[value] || value;
+      },
+    },
+    {
+      title: '集成描述',
+      dataIndex: 'description',
+    },
+    {
+      title: '配置信息',
+      dataIndex: 'config',
+      render: (value: Record<string, any>) => (
+        <pre style={{
+          margin: 0,
+          padding: '8px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          overflow: 'auto',
+          maxHeight: '300px',
+          fontSize: 12,
+        }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ),
+    },
+    {
+      title: '连接状态',
+      dataIndex: 'is_connected',
+      render: (value: boolean) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleView(record)}
-          >
-            查看
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ApiOutlined />}
-            loading={testingUuid === record.uuid}
-            onClick={() => handleTestConnection(record)}
-          >
-            测试
-          </Button>
-          <Popconfirm
-            title="确定要删除这个集成配置吗？"
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
-          </Popconfirm>
+          {value ? (
+            <Badge status="success" text="已连接" />
+          ) : (
+            <Badge status="default" text="未连接" />
+          )}
         </Space>
       ),
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '最后连接时间',
+      dataIndex: 'last_connected_at',
+      valueType: 'dateTime',
+    },
+    {
+      title: '最后错误',
+      dataIndex: 'last_error',
+      render: (value: string) => value ? (
+        <Tag color="error">{value}</Tag>
+      ) : '-',
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      valueType: 'dateTime',
     },
   ];
 
   return (
     <>
-      {/* 视图切换 */}
-      <div style={{ 
-        padding: '16px 16px 0 16px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center' 
-      }}>
-        <Tabs
-          activeKey={viewMode}
-          onChange={(key) => setViewMode(key as 'card' | 'list')}
-          items={[
-            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
-            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
-          ]}
-        />
-        {viewMode === 'list' && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建集成
-          </Button>
-        )}
-      </div>
-
-      {/* 卡片视图 */}
-      {viewMode === 'card' && <div style={{ padding: '0 16px 16px 16px' }}><CardView /></div>}
-
-      {/* 列表视图 */}
-      {viewMode === 'list' && (
-        <ListPageTemplate>
-          <UniTable<IntegrationConfig>
-        actionRef={actionRef}
-        columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
-          // 处理搜索参数（不传skip和limit，让后端返回所有数据，前端进行分页）
-          const apiParams: any = {};
-          
-          // 状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
-          }
-          
-          // 类型筛选
-          if (searchFormValues?.type) {
-            apiParams.type = searchFormValues.type;
-          }
-          
-          try {
-            // 获取所有数据（集成配置数量通常不会太多）
-            const allData = await getIntegrationConfigList(apiParams);
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<IntegrationConfig>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数（不传skip和limit，让后端返回所有数据，前端进行分页）
+            const apiParams: any = {};
             
-            // 前端进行分页处理
-            const page = params.current || 1;
-            const pageSize = params.pageSize || 20;
-            const startIndex = (page - 1) * pageSize;
-            const endIndex = startIndex + pageSize;
-            const paginatedData = allData.slice(startIndex, endIndex);
+            // 状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
             
-            return {
-              data: paginatedData,
-              success: true,
-              total: allData.length,
-            };
-          } catch (error: any) {
-            console.error('获取集成配置列表失败:', error);
-            messageApi.error(error?.message || '获取集成配置列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowKey="uuid"
-        showAdvancedSearch={true}
-        pagination={{
-          defaultPageSize: 20,
-          showSizeChanger: true,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建集成
-          </Button>,
-        ]}
+            // 类型筛选
+            if (searchFormValues?.type) {
+              apiParams.type = searchFormValues.type;
+            }
+            
+            try {
+              // 获取所有数据（集成配置数量通常不会太多）
+              const allData = await getIntegrationConfigList(apiParams);
+              
+              // 同时保存所有数据用于统计
+              setAllIntegrations(allData);
+              
+              // 前端进行分页处理
+              const page = params.current || 1;
+              const pageSize = params.pageSize || 20;
+              const startIndex = (page - 1) * pageSize;
+              const endIndex = startIndex + pageSize;
+              const paginatedData = allData.slice(startIndex, endIndex);
+              
+              return {
+                data: paginatedData,
+                success: true,
+                total: allData.length,
+              };
+            } catch (error: any) {
+              console.error('获取集成配置列表失败:', error);
+              messageApi.error(error?.message || '获取集成配置列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          showCreateButton
+          onCreate={handleCreate}
           rowSelection={{
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          viewTypes={['table', 'card']}
+          defaultViewType="table"
+          cardViewConfig={{
+            renderCard,
+          }}
         />
-        </ListPageTemplate>
-      )}
+      </ListPageTemplate>
 
       {/* 创建/编辑集成配置 Modal */}
       <FormModalTemplate
@@ -533,105 +739,17 @@ const IntegrationConfigListPage: React.FC = () => {
       </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate
+      <DetailDrawerTemplate<IntegrationConfig>
         title="集成配置详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData}
-        columns={[
-          {
-            title: '集成名称',
-            dataIndex: 'name',
-          },
-          {
-            title: '集成代码',
-            dataIndex: 'code',
-          },
-          {
-            title: '集成类型',
-            dataIndex: 'type',
-            render: (value: string) => {
-              const typeMap: Record<string, string> = {
-                OAuth: 'OAuth',
-                API: 'API',
-                Webhook: 'Webhook',
-                Database: 'Database',
-              };
-              return typeMap[value] || value;
-            },
-          },
-          {
-            title: '集成描述',
-            dataIndex: 'description',
-          },
-          {
-            title: '配置信息',
-            dataIndex: 'config',
-            render: (value: Record<string, any>) => (
-              <pre style={{
-                margin: 0,
-                padding: '8px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '4px',
-                overflow: 'auto',
-                maxHeight: '300px',
-                fontSize: 12,
-              }}>
-                {JSON.stringify(value, null, 2)}
-              </pre>
-            ),
-          },
-          {
-            title: '连接状态',
-            dataIndex: 'is_connected',
-            render: (value: boolean) => (
-              <Space>
-                {value ? (
-                  <Badge status="success" text="已连接" />
-                ) : (
-                  <Badge status="default" text="未连接" />
-                )}
-              </Space>
-            ),
-          },
-          {
-            title: '启用状态',
-            dataIndex: 'is_active',
-            render: (value: boolean) => (
-              <Tag color={value ? 'success' : 'default'}>
-                {value ? '启用' : '禁用'}
-              </Tag>
-            ),
-          },
-          {
-            title: '最后连接时间',
-            dataIndex: 'last_connected_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '最后错误',
-            dataIndex: 'last_error',
-            render: (value: string) => value ? (
-              <Tag color="error">{value}</Tag>
-            ) : '-',
-          },
-          {
-            title: '创建时间',
-            dataIndex: 'created_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '更新时间',
-            dataIndex: 'updated_at',
-            valueType: 'dateTime',
-          },
-        ]}
+        dataSource={detailData || {}}
+        columns={detailColumns}
       />
     </>
   );
 };
 
 export default IntegrationConfigListPage;
-
