@@ -548,6 +548,7 @@ const ApplicationListPage: React.FC = () => {
   ];
 
   return (
+    <>
     <ListPageTemplate>
       {/* 头部工具栏 */}
       <div style={{ marginBottom: '24px' }}>
@@ -662,17 +663,19 @@ const ApplicationListPage: React.FC = () => {
       )}
     </ListPageTemplate>
 
-      {/* 查看详情 Drawer */}
-      <DetailDrawerTemplate<Application>
-        title="应用详情"
-        open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
-        columns={detailColumns}
-        column={1}
-      />
+    {/* 查看详情 Drawer */}
+    <DetailDrawerTemplate<Application>
+      title="应用详情"
+      open={drawerVisible}
+      onClose={() => setDrawerVisible(false)}
+      loading={detailLoading}
+      width={DRAWER_CONFIG.STANDARD_WIDTH}
+      dataSource={detailData || {}}
+      columns={detailColumns}
+      column={1}
+    />
+  </>
+  );
 };
 
 export default ApplicationListPage;
