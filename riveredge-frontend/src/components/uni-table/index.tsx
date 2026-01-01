@@ -1013,6 +1013,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0 !important;
           width: 100% !important;
           overflow-x: auto !important;
+          overflow-y: visible !important;
         }
         .uni-table-pro-table .ant-table {
           width: 100% !important;
@@ -1021,6 +1022,31 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-pro-table .ant-table-container {
           width: 100% !important;
           overflow-x: auto !important;
+          overflow-y: visible !important;
+        }
+        /* 当表格内容没有超出时，隐藏垂直滚动条 */
+        .uni-table-pro-table .ant-table-body {
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+        }
+        /* 当表格内容没有超出容器高度时，隐藏垂直滚动条 */
+        .uni-table-pro-table .ant-table-body:not(:has(.ant-table-tbody > tr:last-child)) {
+          overflow-y: hidden !important;
+        }
+        /* 优化滚动条显示：只在内容超出时显示 */
+        .uni-table-pro-table .ant-table-body {
+          scrollbar-width: thin;
+        }
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb {
+          background-color: rgba(0, 0, 0, 0.2);
+          border-radius: 4px;
+        }
+        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(0, 0, 0, 0.3);
         }
         .uni-table-pro-table .ant-pro-table-list-toolbar-container {
           padding-bottom: 0px !important;
@@ -1257,7 +1283,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
         }}
         scroll={{
-          x: true, // 启用水平滚动，由ProTable自动管理列宽
+          x: 'max-content', // 只在内容超出时显示水平滚动条
           // 不设置y，让表格自适应内容高度，避免不必要的垂直滚动条
         }}
         {...(() => {
