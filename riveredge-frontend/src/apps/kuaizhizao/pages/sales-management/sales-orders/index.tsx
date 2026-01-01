@@ -9,12 +9,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { listSalesOrders, getSalesOrder, SalesOrder as APISalesOrder } from '../../../services/sales';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, SalesOrder as APISalesOrder } from '../../../services/sales';
 
 // 使用API服务中的接口定义
 type SalesOrder = APISalesOrder;
@@ -27,6 +27,12 @@ const SalesOrdersPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [detailVisible, setDetailVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<SalesOrder | null>(null);
+  
+  // Modal 相关状态
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState<SalesOrder | null>(null);
+  const formRef = useRef<any>(null);
 
   // 移除模拟数据，使用真实API
 
@@ -152,12 +158,36 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   // 处理编辑
-  const handleEdit = (_record: SalesOrder) => {
-    messageApi.info('编辑功能开发中...');
+  const handleEdit = async (record: SalesOrder) => {
+    try {
+      const detail = await getSalesOrder(record.id!);
+      setIsEdit(true);
+      setCurrentOrder(detail);
+      setModalVisible(true);
+      // 延迟设置表单值
+      setTimeout(() => {
+        formRef.current?.setFieldsValue({
+          customer_id: detail.customer_id,
+          customer_name: detail.customer_name,
+          customer_contact: detail.customer_contact,
+          customer_phone: detail.customer_phone,
+          order_date: detail.order_date,
+          delivery_date: detail.delivery_date,
+          order_type: detail.order_type || 'MTO',
+          shipping_address: detail.shipping_address,
+          shipping_method: detail.shipping_method,
+          payment_terms: detail.payment_terms,
+          salesman_name: detail.salesman_name,
+          notes: detail.notes,
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取销售订单详情失败');
+    }
   };
 
   // 处理删除
-  const handleDelete = (_record: SalesOrder) => {
+  const handleDelete = async (_record: SalesOrder) => {
     Modal.confirm({
       title: '确认删除',
       content: `确定要删除销售订单吗？`,
@@ -172,7 +202,35 @@ const SalesOrdersPage: React.FC = () => {
 
   // 处理创建
   const handleCreate = () => {
-    messageApi.info('创建功能开发中...');
+    setIsEdit(false);
+    setCurrentOrder(null);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+  };
+
+  // 处理提交表单（创建/更新）
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      if (isEdit && currentOrder?.id) {
+        await updateSalesOrder(currentOrder.id, values);
+        messageApi.success('销售订单更新成功');
+      } else {
+        // 创建时需要提供明细项，这里先创建一个空的明细数组
+        // TODO: 后续需要实现明细项的编辑功能
+        await createSalesOrder({
+          ...values,
+          items: [],
+          order_type: values.order_type || 'MTO',
+          delivery_date: values.delivery_date || new Date().toISOString().split('T')[0],
+        });
+        messageApi.success('销售订单创建成功');
+      }
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
   };
 
   // 处理Excel导入
