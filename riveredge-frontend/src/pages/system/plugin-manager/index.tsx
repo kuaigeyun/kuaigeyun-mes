@@ -6,15 +6,12 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  ProTable,
   ProColumns,
   ActionType,
-  ProFormText,
-  ProFormTextArea,
-  ModalForm,
-  ProFormSwitch
 } from '@ant-design/pro-components';
-import { Button, message, Tag, Space, Popconfirm, Card, Alert, Spin, Tooltip } from 'antd';
+import { Button, message, Tag, Space, Popconfirm, Card, Alert, Tooltip } from 'antd';
+import { UniTable } from '../../../components/uni-table';
+import { ListPageTemplate } from '../../../components/layout-templates';
 import {
   PlusOutlined,
   ReloadOutlined,
@@ -250,7 +247,7 @@ const PluginManagerPage: React.FC = () => {
   ];
 
   return (
-    <div>
+    <ListPageTemplate>
       <Card>
         <Alert
           message="插件管理系统"
@@ -270,7 +267,7 @@ const PluginManagerPage: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
 
-        <ProTable<PluginInfo>
+        <UniTable<PluginInfo>
           headerTitle="插件管理"
           actionRef={actionRef}
           rowKey="code"
@@ -278,7 +275,7 @@ const PluginManagerPage: React.FC = () => {
           columns={columns}
           search={false}
           pagination={false}
-          toolBarRender={() => [
+          toolBarActions={[
             <Button
               key="discover"
               type="primary"
@@ -296,9 +293,6 @@ const PluginManagerPage: React.FC = () => {
               刷新
             </Button>,
           ]}
-          cardProps={{
-            bodyStyle: { padding: 0 },
-          }}
         />
 
         <div style={{ marginTop: 16 }}>
@@ -318,7 +312,7 @@ const PluginManagerPage: React.FC = () => {
           />
         </div>
       </Card>
-    </div>
+    </ListPageTemplate>
   );
 };
 
