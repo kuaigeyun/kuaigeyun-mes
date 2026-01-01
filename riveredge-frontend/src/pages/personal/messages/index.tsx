@@ -5,11 +5,13 @@
  * 支持消息列表、消息详情、标记已读等功能。
  */
 
-import React, { useState, useEffect } from 'react';
-import { ProTable, ProColumns } from '@ant-design/pro-components';
-import { App, Card, Badge, Tag, Button, Space, message, Modal, Tabs } from 'antd';
-import { BellOutlined, CheckOutlined, EyeOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import CardView from './card-view';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Badge, Tag, Button, Space, message, Card, Typography } from 'antd';
+import { CheckOutlined, EyeOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../components/uni-table';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { theme } from 'antd';
 import {
   getUserMessages,
   getUserMessageStats,
@@ -24,9 +26,13 @@ import {
  */
 const UserMessagesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { token: themeToken } = theme.useToken();
+  const actionRef = useRef<ActionType>(null);
   const [stats, setStats] = useState<UserMessageStats | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<UserMessage | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   /**
    * 加载消息统计
@@ -61,9 +67,116 @@ const UserMessagesPage: React.FC = () => {
       setSelectedRowKeys([]);
       // 重新加载数据
       loadStats();
+      actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '标记失败');
     }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const handleView = async (record: UserMessage) => {
+    try {
+      setDetailLoading(true);
+      setDrawerVisible(true);
+      setDetailData(record);
+      
+      // 如果是未读消息，自动标记为已读
+      const isUnread = record.status === 'pending' || record.status === 'sending' || record.status === 'success';
+      if (isUnread) {
+        try {
+          await markMessagesRead({
+            message_uuids: [record.uuid],
+          });
+          loadStats();
+          actionRef.current?.reload();
+        } catch (error: any) {
+          // 标记失败不影响查看
+        }
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '获取消息详情失败');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  /**
+   * 渲染消息卡片
+   */
+  const renderMessageCard = (message: UserMessage, index: number) => {
+    const isUnread = message.status === 'pending' || message.status === 'sending' || message.status === 'success';
+    const statusInfo = getStatusTag(message.status);
+    const channelInfo = getChannelTag(message.type);
+
+    return (
+      <Card
+        key={message.uuid}
+        hoverable
+        style={{
+          height: '100%',
+          borderRadius: themeToken.borderRadiusLG,
+          border: isUnread ? `2px solid ${themeToken.colorPrimary}` : undefined,
+        }}
+        actions={[
+          <Button
+            key="view"
+            type="link"
+            icon={<EyeOutlined />}
+            onClick={() => handleView(message)}
+          >
+            查看
+          </Button>,
+          isUnread && (
+            <Button
+              key="mark"
+              type="link"
+              icon={<CheckOutlined />}
+              onClick={async () => {
+                try {
+                  await markMessagesRead({
+                    message_uuids: [message.uuid],
+                  });
+                  messageApi.success('已标记为已读');
+                  loadStats();
+                  actionRef.current?.reload();
+                } catch (error: any) {
+                  messageApi.error(error.message || '标记失败');
+                }
+              }}
+            >
+              标记已读
+            </Button>
+          ),
+        ].filter(Boolean)}
+      >
+        <Card.Meta
+          title={
+            <Space>
+              {isUnread && <Badge dot />}
+              <Typography.Text strong={isUnread}>
+                {message.subject || '(无主题)'}
+              </Typography.Text>
+            </Space>
+          }
+          description={
+            <div>
+              <Typography.Paragraph
+                ellipsis={{ rows: 2, expandable: false }}
+                style={{ marginBottom: 8, fontSize: 12, color: themeToken.colorTextSecondary }}
+              >
+                {message.content}
+              </Typography.Paragraph>
+              <Space size="small" style={{ fontSize: 12 }}>
+                {channelInfo}
+                {statusInfo}
+              </Space>
+            </div>
+          }
+        />
+      </Card>
+    );
   };
 
   /**
@@ -166,8 +279,9 @@ const UserMessagesPage: React.FC = () => {
     },
     {
       title: '操作',
-      key: 'action',
-      hideInSearch: true,
+      valueType: 'option',
+      width: 200,
+      fixed: 'right',
       render: (_: any, record: UserMessage) => {
         const isUnread = record.status === 'pending' || record.status === 'sending' || record.status === 'success';
         return (
@@ -176,45 +290,7 @@ const UserMessagesPage: React.FC = () => {
               type="link"
               size="small"
               icon={<EyeOutlined />}
-              onClick={() => {
-                Modal.info({
-                  title: record.subject || '(无主题)',
-                  width: 600,
-                  content: (
-                    <div>
-                      <p><strong>渠道：</strong>{getChannelTag(record.type)}</p>
-                      <p><strong>状态：</strong>{getStatusTag(record.status)}</p>
-                      <p><strong>内容：</strong></p>
-                      <div style={{ 
-                        padding: '12px', 
-                        background: '#f5f5f5', 
-                        borderRadius: '4px',
-                        whiteSpace: 'pre-wrap',
-                      }}>
-                        {record.content}
-                      </div>
-                      {record.error_message && (
-                        <p style={{ color: 'red', marginTop: '12px' }}>
-                          <strong>错误信息：</strong>{record.error_message}
-                        </p>
-                      )}
-                    </div>
-                  ),
-                  onOk: async () => {
-                    if (isUnread) {
-                      try {
-                        await markMessagesRead({
-                          message_uuids: [record.uuid],
-                        });
-                        messageApi.success('已标记为已读');
-                        loadStats();
-                      } catch (error: any) {
-                        messageApi.error(error.message || '标记失败');
-                      }
-                    }
-                  },
-                });
-              }}
+              onClick={() => handleView(record)}
             >
               查看
             </Button>
@@ -230,6 +306,7 @@ const UserMessagesPage: React.FC = () => {
                     });
                     messageApi.success('已标记为已读');
                     loadStats();
+                    actionRef.current?.reload();
                   } catch (error: any) {
                     messageApi.error(error.message || '标记失败');
                   }
@@ -244,94 +321,95 @@ const UserMessagesPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '主题', dataIndex: 'subject' },
+    { title: '内容', dataIndex: 'content', span: 2 },
+    {
+      title: '渠道',
+      dataIndex: 'type',
+      render: (value: string) => getChannelTag(value),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      render: (value: string) => getStatusTag(value),
+    },
+    { title: '发送时间', dataIndex: 'sent_at', valueType: 'dateTime' },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    {
+      title: '错误信息',
+      dataIndex: 'error_message',
+      span: 2,
+      render: (value: string) => value ? (
+        <Typography.Text type="danger">{value}</Typography.Text>
+      ) : '-',
+    },
+  ];
+
   return (
-    <div style={{ padding: '16px' }}>
-      {/* 视图切换 */}
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Tabs
-          activeKey={viewMode}
-          onChange={(key) => setViewMode(key as 'card' | 'list')}
-          items={[
-            { key: 'card', label: '卡片视图', icon: <AppstoreOutlined /> },
-            { key: 'list', label: '列表视图', icon: <UnorderedListOutlined /> },
-          ]}
-        />
-      </div>
-
-      {/* 卡片视图 */}
-      {viewMode === 'card' && <CardView />}
-
-      {/* 列表视图 */}
-      {viewMode === 'list' && (
-        <>
-          {/* 统计卡片 */}
-          {stats && (
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '16px' }}>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}>
-                {stats.total}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>总消息数</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff4d4f' }}>
-                {stats.unread}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>未读消息</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#52c41a' }}>
-                {stats.read}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>已读消息</div>
-            </div>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#faad14' }}>
-                {stats.failed}
-              </div>
-              <div style={{ color: '#666', marginTop: '8px' }}>失败消息</div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* 消息列表 */}
-      <Card>
-        <ProTable<UserMessage>
+    <>
+      <ListPageTemplate
+        statCards={
+          stats
+            ? [
+                {
+                  title: '总消息数',
+                  value: stats.total,
+                  valueStyle: { color: '#1890ff' },
+                },
+                {
+                  title: '未读消息',
+                  value: stats.unread,
+                  valueStyle: { color: '#ff4d4f' },
+                },
+                {
+                  title: '已读消息',
+                  value: stats.read,
+                  valueStyle: { color: '#52c41a' },
+                },
+                {
+                  title: '失败消息',
+                  value: stats.failed,
+                  valueStyle: { color: '#faad14' },
+                },
+              ]
+            : undefined
+        }
+      >
+        <UniTable<UserMessage>
+          headerTitle="我的消息"
+          actionRef={actionRef}
           columns={columns}
-          request={async (params, sorter, filter) => {
-            const response = await getUserMessages({
-              page: params.current || 1,
-              page_size: params.pageSize || 20,
-              status: params.status as string | undefined,
-              channel: params.type as string | undefined,
-            });
-            return {
-              data: response.items,
-              success: true,
-              total: response.total,
-            };
+          request={async (params, sort, _filter, searchFormValues) => {
+            try {
+              const response = await getUserMessages({
+                page: params.current || 1,
+                page_size: params.pageSize || 20,
+                status: searchFormValues?.status as string | undefined,
+                channel: searchFormValues?.type as string | undefined,
+              });
+              return {
+                data: response.items,
+                success: true,
+                total: response.total,
+              };
+            } catch (error: any) {
+              messageApi.error(error?.message || '获取消息列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowKey="uuid"
-          search={{
-            labelWidth: 'auto',
-            defaultCollapsed: false,
-          }}
+          showAdvancedSearch={true}
           pagination={{
             defaultPageSize: 20,
             showSizeChanger: true,
-            showQuickJumper: true,
-          }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
           }}
           toolBarRender={() => [
             <Button
@@ -344,12 +422,48 @@ const UserMessagesPage: React.FC = () => {
               标记已读
             </Button>,
           ]}
-          headerTitle="我的消息"
-          />
-        </Card>
-        </>
-      )}
-      </div>
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          viewTypes={['table', 'card']}
+          defaultViewType="table"
+          cardViewConfig={{
+            renderCard: renderMessageCard,
+            columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },
+          }}
+        />
+      </ListPageTemplate>
+
+      {/* 详情 Drawer */}
+      <DetailDrawerTemplate<UserMessage>
+        title="消息详情"
+        open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+        customContent={
+          detailData && (
+            <div>
+              <Typography.Paragraph
+                style={{
+                  padding: '12px',
+                  background: '#f5f5f5',
+                  borderRadius: '4px',
+                  whiteSpace: 'pre-wrap',
+                  marginBottom: 0,
+                }}
+              >
+                {detailData.content}
+              </Typography.Paragraph>
+            </div>
+          )
+        }
+      />
+    </>
   );
 };
 
