@@ -13,6 +13,7 @@ import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Spac
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Column } from '@ant-design/charts';
+import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
 
 // 生产报表接口定义
 interface ProductionReportItem {
@@ -246,75 +247,48 @@ const ProductionReportPage: React.FC = () => {
     setReportType(type);
   };
 
+  // 统计卡片数据
+  const statCards: StatCard[] = [
+    {
+      title: '总工单数',
+      value: stats.totalWorkOrders,
+      prefix: <BarChartOutlined />,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '已完成',
+      value: stats.completedWorkOrders,
+      suffix: `/ ${stats.totalWorkOrders}`,
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '准时完成',
+      value: stats.onTimeCompletion,
+      suffix: `/ ${stats.completedWorkOrders}`,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '平均效率',
+      value: stats.averageEfficiency,
+      suffix: '%',
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '平均合格率',
+      value: stats.averageQualifiedRate,
+      suffix: '%',
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '总延期天数',
+      value: stats.totalDelayDays,
+      suffix: '天',
+      valueStyle: { color: '#faad14' },
+    },
+  ];
+
   return (
-    <div>
-      {/* 统计卡片 */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="总工单数"
-                value={stats.totalWorkOrders}
-                prefix={<BarChartOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="已完成"
-                value={stats.completedWorkOrders}
-                suffix={`/ ${stats.totalWorkOrders}`}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="准时完成"
-                value={stats.onTimeCompletion}
-                suffix={`/ ${stats.completedWorkOrders}`}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="平均效率"
-                value={stats.averageEfficiency}
-                suffix="%"
-                precision={1}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="平均合格率"
-                value={stats.averageQualifiedRate}
-                suffix="%"
-                precision={1}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card>
-              <Statistic
-                title="总延期天数"
-                value={stats.totalDelayDays}
-                suffix="天"
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
+    <ListPageTemplate statCards={statCards}>
 
       {/* 报表控制面板 */}
       <Card style={{ marginBottom: 16 }}>
@@ -533,7 +507,7 @@ const ProductionReportPage: React.FC = () => {
           </Col>
         </Row>
       )}
-    </div>
+    </ListPageTemplate>
   );
 };
 

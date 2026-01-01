@@ -13,6 +13,7 @@ import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Spac
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie } from '@ant-design/charts';
+import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
 
 // 库存报表接口定义
 interface InventoryReportItem {
@@ -233,54 +234,36 @@ const InventoryReportPage: React.FC = () => {
     setReportType(type);
   };
 
+  // 统计卡片数据
+  const statCards: StatCard[] = [
+    {
+      title: '总物料品种',
+      value: stats.totalItems,
+      prefix: <BarChartOutlined />,
+      valueStyle: { color: '#1890ff' },
+    },
+    {
+      title: '库存总价值',
+      value: stats.totalValue,
+      prefix: '¥',
+      valueStyle: { color: '#52c41a' },
+    },
+    {
+      title: '库存不足',
+      value: stats.lowStockItems,
+      suffix: '项',
+      valueStyle: { color: '#faad14' },
+    },
+    {
+      title: '缺货项目',
+      value: stats.outOfStockItems,
+      suffix: '项',
+      valueStyle: { color: '#f5222d' },
+    },
+  ];
+
   return (
-    <div>
-      {/* 统计卡片 */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="总物料品种"
-                value={stats.totalItems}
-                prefix={<BarChartOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="库存总价值"
-                value={stats.totalValue}
-                prefix="¥"
-                precision={0}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="库存不足"
-                value={stats.lowStockItems}
-                suffix="项"
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="缺货项目"
-                value={stats.outOfStockItems}
-                suffix="项"
-                valueStyle={{ color: '#f5222d' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
+    <ListPageTemplate statCards={statCards}>
 
       {/* 报表控制面板 */}
       <Card style={{ marginBottom: 16 }}>
@@ -456,7 +439,7 @@ const InventoryReportPage: React.FC = () => {
           </Col>
         </Row>
       )}
-    </div>
+    </ListPageTemplate>
   );
 };
 
