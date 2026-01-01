@@ -423,6 +423,29 @@ const ProcessInspectionPage: React.FC = () => {
         />
       </FormModalTemplate>
 
+      {/* 过程检验详情 Drawer */}
+      <DetailDrawerTemplate<ProcessInspection>
+        title={`过程检验详情 - ${inspectionDetail?.inspectionCode || ''}`}
+        open={detailDrawerVisible}
+        onClose={() => setDetailDrawerVisible(false)}
+        dataSource={inspectionDetail || undefined}
+        columns={[
+          { title: '检验单号', dataIndex: 'inspectionCode' },
+          { title: '工单编号', dataIndex: 'workOrderCode' },
+          { title: '工序名称', dataIndex: 'operationName' },
+          { title: '产品编码', dataIndex: 'productCode' },
+          { title: '产品名称', dataIndex: 'productName' },
+          { title: '批次号', dataIndex: 'batchNo' },
+          { title: '数量', dataIndex: 'quantity' },
+          { title: '检验状态', dataIndex: 'inspectionStatus' },
+          { title: '检验结果', dataIndex: 'inspectionResult' },
+          { title: '检验员', dataIndex: 'inspectorName' },
+          { title: '检验日期', dataIndex: 'inspectionDate', valueType: 'dateTime' },
+          { title: '备注', dataIndex: 'remarks', span: 2 },
+        ]}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
+
       {/* 扫码检验Modal - 保留原有Modal，因为这是特殊功能 */}
       <Modal
         title="扫码过程检验"
