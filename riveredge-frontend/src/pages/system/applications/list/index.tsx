@@ -10,6 +10,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Drawer, Modal, message, Switch, Card, Dropdown, Popconfirm, Row, Col, Input, Select, Pagination, Form, Spin } from 'antd';
 import { useForm } from 'antd/es/form/Form';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   EyeOutlined,
   DownloadOutlined,
@@ -483,14 +484,75 @@ const ApplicationListPage: React.FC = () => {
     loadApplications();
   }, []);
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '应用名称', dataIndex: 'name' },
+    { title: '应用代码', dataIndex: 'code' },
+    { title: '应用描述', dataIndex: 'description' },
+    {
+      title: '应用图标',
+      dataIndex: 'icon',
+      render: (value: string) => value ? <img src={value} alt="图标" style={{ maxWidth: 100, maxHeight: 100 }} /> : '-',
+    },
+    { title: '应用版本', dataIndex: 'version' },
+    { title: '路由路径', dataIndex: 'route_path' },
+    { title: '入口点', dataIndex: 'entry_point' },
+    { title: '权限代码', dataIndex: 'permission_code' },
+    {
+      title: '菜单配置',
+      dataIndex: 'menu_config',
+      render: (value: any) => value ? (
+        <pre style={{ 
+          margin: 0, 
+          fontSize: 12, 
+          maxWidth: 600, 
+          overflow: 'auto',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          padding: '8px',
+          background: '#f5f5f5',
+          borderRadius: '4px'
+        }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ) : '-',
+    },
+    {
+      title: '系统应用',
+      dataIndex: 'is_system',
+      render: (value: boolean) => (value ? '是' : '否'),
+    },
+    {
+      title: '安装状态',
+      dataIndex: 'is_installed',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '已安装' : '未安装'}
+        </Tag>
+      ),
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    { title: '排序顺序', dataIndex: 'sort_order' },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
   return (
-    <div style={{ padding: '24px' }}>
+    <ListPageTemplate>
       {/* 头部工具栏 */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0, marginBottom: '8px' }}>应用中心</h2>
-          <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>管理系统中的应用，支持安装、启用、禁用等操作。插件应用会在系统启动时自动扫描并注册。</p>
-        </div>
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ margin: 0, marginBottom: '8px' }}>应用中心</h2>
+        <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>管理系统中的应用，支持安装、启用、禁用等操作。插件应用会在系统启动时自动扫描并注册。</p>
       </div>
 
       {/* 搜索和筛选 */}
@@ -598,115 +660,19 @@ const ApplicationListPage: React.FC = () => {
           )}
         </div>
       )}
+    </ListPageTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Application>
         title="应用详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={700}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<Application>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '应用名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '应用代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '应用描述',
-                dataIndex: 'description',
-              },
-              {
-                title: '应用图标',
-                dataIndex: 'icon',
-                render: (value) => value ? <img src={value} alt="图标" style={{ maxWidth: 100, maxHeight: 100 }} /> : '-',
-              },
-              {
-                title: '应用版本',
-                dataIndex: 'version',
-              },
-              {
-                title: '路由路径',
-                dataIndex: 'route_path',
-              },
-              {
-                title: '入口点',
-                dataIndex: 'entry_point',
-              },
-              {
-                title: '权限代码',
-                dataIndex: 'permission_code',
-              },
-              {
-                title: '菜单配置',
-                dataIndex: 'menu_config',
-                render: (value) => value ? (
-                  <pre style={{ 
-                    margin: 0, 
-                    fontSize: 12, 
-                    maxWidth: 600, 
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    padding: '8px',
-                    background: '#f5f5f5',
-                    borderRadius: '4px'
-                  }}>
-                    {JSON.stringify(value, null, 2)}
-                  </pre>
-                ) : '-',
-              },
-              {
-                title: '系统应用',
-                dataIndex: 'is_system',
-                render: (value) => (value ? '是' : '否'),
-              },
-              {
-                title: '安装状态',
-                dataIndex: 'is_installed',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '已安装' : '未安装'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'is_active',
-                render: (value) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '排序顺序',
-                dataIndex: 'sort_order',
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
-    </div>
-  );
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+      />
 };
 
 export default ApplicationListPage;
