@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerApi } from '../../../services/supply-chain';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../../../types/supply-chain';
 
@@ -255,8 +256,65 @@ const CustomersPage: React.FC = () => {
     },
   ];
 
+  // 详情列定义
+  const detailColumns: ProDescriptionsItemType<Customer>[] = [
+    {
+      title: '客户编码',
+      dataIndex: 'code',
+    },
+    {
+      title: '客户名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '简称',
+      dataIndex: 'shortName',
+    },
+    {
+      title: '联系人',
+      dataIndex: 'contactPerson',
+    },
+    {
+      title: '电话',
+      dataIndex: 'phone',
+    },
+    {
+      title: '邮箱',
+      dataIndex: 'email',
+    },
+    {
+      title: '地址',
+      dataIndex: 'address',
+      span: 2,
+    },
+    {
+      title: '分类',
+      dataIndex: 'category',
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
   return (
     <>
+      <ListPageTemplate>
       <UniTable<Customer>
         actionRef={actionRef}
         columns={columns}
@@ -315,104 +373,35 @@ const CustomersPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Customer>
         title="客户详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<Customer>
-          dataSource={customerDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '客户编码',
-              dataIndex: 'code',
-            },
-            {
-              title: '客户名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '简称',
-              dataIndex: 'shortName',
-            },
-            {
-              title: '联系人',
-              dataIndex: 'contactPerson',
-            },
-            {
-              title: '电话',
-              dataIndex: 'phone',
-            },
-            {
-              title: '邮箱',
-              dataIndex: 'email',
-            },
-            {
-              title: '地址',
-              dataIndex: 'address',
-              span: 2,
-            },
-            {
-              title: '分类',
-              dataIndex: 'category',
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={customerDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
 
       {/* 创建/编辑客户 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑客户' : '新建客户'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{
+          isActive: true,
+        }}
+        layout="vertical"
+        grid={true}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
-          initialValues={{
-            isActive: true,
-          }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
           <ProFormText
             name="code"
             label="客户编码"
@@ -497,8 +486,7 @@ const CustomersPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
     </>
   );
 };
