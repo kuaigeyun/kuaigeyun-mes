@@ -9,6 +9,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card } from 'antd';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import {
@@ -297,9 +298,53 @@ const MenuListPage: React.FC = () => {
   };
 
   /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '菜单名称', dataIndex: 'name' },
+    { title: '菜单路径', dataIndex: 'path' },
+    { title: '菜单图标', dataIndex: 'icon' },
+    { title: '前端组件', dataIndex: 'component' },
+    { title: '权限代码', dataIndex: 'permission_code' },
+    { title: '关联应用', dataIndex: 'application_uuid' },
+    { title: '父菜单', dataIndex: 'parent_uuid', render: (value: string) => value || '根菜单' },
+    { title: '排序顺序', dataIndex: 'sort_order' },
+    {
+      title: '是否启用',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'default'}>
+          {value ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '是否外部链接',
+      dataIndex: 'is_external',
+      render: (value: boolean) => (
+        <Tag color={value ? 'orange' : 'default'}>
+          {value ? '是' : '否'}
+        </Tag>
+      ),
+    },
+    { title: '外部链接URL', dataIndex: 'external_url' },
+    {
+      title: '菜单元数据',
+      dataIndex: 'meta',
+      render: (value: any) => value ? (
+        <pre style={{ background: '#f5f5f5', padding: '8px', borderRadius: '4px', maxHeight: '200px', overflow: 'auto' }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ) : '-',
+    },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
+  /**
    * 处理提交表单（创建/编辑）
    */
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
       
@@ -325,6 +370,7 @@ const MenuListPage: React.FC = () => {
       loadMenuTree();
     } catch (error: any) {
       messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -357,7 +403,7 @@ const MenuListPage: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '16px' }}>
+    <ListPageTemplate>
       <Card>
         <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -395,15 +441,17 @@ const MenuListPage: React.FC = () => {
       </Card>
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑菜单' : '创建菜单'}
         open={modalVisible}
-        onCancel={() => {
+        onClose={() => {
           setModalVisible(false);
           formRef.current?.resetFields();
         }}
-        footer={null}
-        size={600}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -485,57 +533,23 @@ const MenuListPage: React.FC = () => {
             fieldProps={{ rows: 4 }}
           />
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Menu>
         title="菜单详情"
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setDetailData(null);
         }}
-        size={600}
-      >
-        {detailLoading ? (
-          <div>加载中...</div>
-        ) : detailData ? (
-          <div>
-            <p><strong>菜单名称：</strong>{detailData.name}</p>
-            <p><strong>菜单路径：</strong>{detailData.path || '-'}</p>
-            <p><strong>菜单图标：</strong>{detailData.icon || '-'}</p>
-            <p><strong>前端组件：</strong>{detailData.component || '-'}</p>
-            <p><strong>权限代码：</strong>{detailData.permission_code || '-'}</p>
-            <p><strong>关联应用：</strong>{detailData.application_uuid || '-'}</p>
-            <p><strong>父菜单：</strong>{detailData.parent_uuid || '根菜单'}</p>
-            <p><strong>排序顺序：</strong>{detailData.sort_order}</p>
-            <p><strong>是否启用：</strong>
-              <Tag color={detailData.is_active ? 'success' : 'default'}>
-                {detailData.is_active ? '启用' : '禁用'}
-              </Tag>
-            </p>
-            <p><strong>是否外部链接：</strong>
-              <Tag color={detailData.is_external ? 'orange' : 'default'}>
-                {detailData.is_external ? '是' : '否'}
-              </Tag>
-            </p>
-            {detailData.external_url && (
-              <p><strong>外部链接URL：</strong>{detailData.external_url}</p>
-            )}
-            {detailData.meta && (
-              <div>
-                <strong>菜单元数据：</strong>
-                <pre style={{ background: '#f5f5f5', padding: '8px', borderRadius: '4px', maxHeight: '200px', overflow: 'auto' }}>
-                  {JSON.stringify(detailData.meta, null, 2)}
-                </pre>
-              </div>
-            )}
-            <p><strong>创建时间：</strong>{dayjs(detailData.created_at).format('YYYY-MM-DD HH:mm:ss')}</p>
-            <p><strong>更新时间：</strong>{dayjs(detailData.updated_at).format('YYYY-MM-DD HH:mm:ss')}</p>
-          </div>
-        ) : null}
-      </Drawer>
-    </div>
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+      />
+    </ListPageTemplate>
   );
 };
 

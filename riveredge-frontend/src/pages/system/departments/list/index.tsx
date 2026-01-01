@@ -9,6 +9,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col, Input, Divider, theme } from 'antd';
+import { TwoColumnLayout } from '../../../../components/layout-templates';
+import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import {
@@ -384,10 +386,9 @@ const DepartmentListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       if (isEdit && currentDepartmentUuid) {
         await updateDepartment(currentDepartmentUuid, values as UpdateDepartmentData);
@@ -401,6 +402,7 @@ const DepartmentListPage: React.FC = () => {
       loadDepartmentTree();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -494,19 +496,24 @@ const DepartmentListPage: React.FC = () => {
 
   const filteredTreeData = filterTreeData(treeData, searchKeyword);
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '部门名称', dataIndex: 'name' },
+    { title: '部门代码', dataIndex: 'code' },
+    { title: '描述', dataIndex: 'description', span: 2 },
+    {
+      title: '排序',
+      dataIndex: 'sort_order',
+      render: (value: any) => value !== undefined && value !== null ? value : '-',
+    },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
   return (
-    <div 
-      className="department-page-container" 
-      style={{ 
-        display: 'flex', 
-        height: 'calc(100vh - 96px)', 
-        padding: '16px', 
-        margin: 0, 
-        boxSizing: 'border-box',
-        borderRadius: token.borderRadiusLG || token.borderRadius,
-        overflow: 'hidden',
-      }}
-    >
+    <>
       <style>{`
         /* 树节点标题内容间距优化 */
         .department-tree .ant-tree-node-content-wrapper .ant-tree-title {
@@ -546,111 +553,60 @@ const DepartmentListPage: React.FC = () => {
           margin-left: 8px;
         }
       `}</style>
-      {/* 左侧部门树 */}
-      <div
-        style={{
-          width: '300px',
-          flexShrink: 0,
-          borderTop: `1px solid ${token.colorBorder}`,
-          borderBottom: `1px solid ${token.colorBorder}`,
-          borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: 'none',
-          backgroundColor: token.colorFillAlter || '#fafafa',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          borderTopLeftRadius: token.borderRadiusLG || token.borderRadius,
-          borderBottomLeftRadius: token.borderRadiusLG || token.borderRadius,
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* 搜索栏 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-          <Input
-            placeholder="搜索部门"
-            prefix={<SearchOutlined />}
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            allowClear
-            size="middle"
-          />
-        </div>
-        
-        {/* 工具栏 */}
-        <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}`, display: 'flex', gap: '8px' }}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => handleCreate()}
-            block
-          >
-            新建根部门
-          </Button>
-          <Button
-            type="text"
-            icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
-            onClick={expandedKeys.length > 0 ? handleCollapseAll : handleExpandAll}
-            title={expandedKeys.length > 0 ? '收起全部' : '展开全部'}
-            style={{ height: '32px', padding: '4px 8px' }}
-          />
-        </div>
-        
-        {/* 部门树 */}
-        <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-          <Tree
-            className="department-tree"
-            treeData={filteredTreeData.length > 0 || !searchKeyword.trim() ? filteredTreeData : treeData}
-            onSelect={handleSelect}
-            expandedKeys={expandedKeys}
-            autoExpandParent={autoExpandParent}
-            onExpand={handleExpand}
-            blockNode
-            selectedKeys={selectedNode ? [selectedNode.uuid] : []}
-            draggable
-            onDrop={handleDrop}
-          />
-        </div>
-      </div>
-
-      {/* 右侧主内容区 */}
-      <div style={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        backgroundColor: token.colorBgContainer,
-        borderTop: `1px solid ${token.colorBorder}`,
-        borderBottom: `1px solid ${token.colorBorder}`,
-        borderRight: `1px solid ${token.colorBorder}`,
-        borderLeft: 'none',
-        borderTopRightRadius: token.borderRadiusLG || token.borderRadius,
-        borderBottomRightRadius: token.borderRadiusLG || token.borderRadius,
-        boxSizing: 'border-box',
-        minWidth: 0,
-      }}>
-        {/* 顶部工具栏 */}
-        <div
-          style={{
-            borderBottom: `1px solid ${token.colorBorder}`,
-            padding: '8px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Space>
-            <Button 
-              icon={<ReloadOutlined />} 
-              onClick={() => {
-                loadDepartmentTree();
-              }}
+      <TwoColumnLayout
+        leftPanel={{
+          search: {
+            placeholder: '搜索部门',
+            value: searchKeyword,
+            onChange: setSearchKeyword,
+            allowClear: true,
+          },
+          actions: [
+            <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => handleCreate()}
+              block
             >
-              刷新
-            </Button>
-          </Space>
-          
-          {/* 部门信息 */}
-          <div style={{ flex: 1 }}>
-            {selectedNode ? (
+              新建根部门
+            </Button>,
+            <Button
+              key="expand"
+              type="text"
+              icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
+              onClick={expandedKeys.length > 0 ? handleCollapseAll : handleExpandAll}
+              title={expandedKeys.length > 0 ? '收起全部' : '展开全部'}
+              style={{ height: '32px', padding: '4px 8px', width: '100%' }}
+            />,
+          ],
+          tree: {
+            treeData: filteredTreeData.length > 0 || !searchKeyword.trim() ? filteredTreeData : treeData,
+            selectedKeys: selectedNode ? [selectedNode.uuid] : [],
+            expandedKeys,
+            onSelect: handleSelect,
+            onExpand: handleExpand,
+            blockNode: true,
+            draggable: true,
+            onDrop: handleDrop,
+            className: 'department-tree',
+            autoExpandParent,
+          },
+          width: 300,
+        }}
+        rightPanel={{
+          header: {
+            left: (
+              <Button 
+                icon={<ReloadOutlined />} 
+                onClick={() => {
+                  loadDepartmentTree();
+                }}
+              >
+                刷新
+              </Button>
+            ),
+            center: selectedNode ? (
               <Space>
                 <span style={{ fontWeight: 500 }}>{selectedNode.name}</span>
                 {selectedNode.code && <Tag color="blue">{selectedNode.code}</Tag>}
@@ -666,11 +622,8 @@ const DepartmentListPage: React.FC = () => {
               </Space>
             ) : (
               <span style={{ color: token.colorTextSecondary }}>请从左侧选择一个部门</span>
-            )}
-          </div>
-          
-          {selectedNode && (
-            <>
+            ),
+            right: selectedNode ? (
               <Space>
                 <Button icon={<EyeOutlined />} onClick={() => handleView(selectedNode)}>
                   查看详情
@@ -693,14 +646,10 @@ const DepartmentListPage: React.FC = () => {
                   添加子部门
                 </Button>
               </Space>
-            </>
-          )}
-        </div>
-
-        {/* 内容区域 */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-          {selectedNode ? (
-            <>
+            ) : null,
+          },
+          content: selectedNode ? (
+            <div style={{ padding: '24px' }}>
               {/* 统计信息 */}
               <Row gutter={16} style={{ marginBottom: 24 }}>
                 <Col span={8}>
@@ -743,21 +692,24 @@ const DepartmentListPage: React.FC = () => {
                   },
                 ]}
               />
-            </>
+            </div>
           ) : (
-            <Empty description="请从左侧选择一个部门" />
-          )}
-        </div>
-      </div>
+            <div style={{ padding: '24px', textAlign: 'center' }}>
+              <Empty description="请从左侧选择一个部门" />
+            </div>
+          ),
+        }}
+      />
 
       {/* 创建/编辑 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑部门' : '新建部门'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={handleSubmit}
-        confirmLoading={formLoading}
-        size={800}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -802,20 +754,21 @@ const DepartmentListPage: React.FC = () => {
             initialValue={true}
           />
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Department>
         title="部门详情"
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
           setDepartmentMembers([]);
         }}
-        size={800}
         loading={detailLoading}
-      >
-        {detailData && (
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        customContent={detailData ? (
           <>
             {/* 统计信息 */}
             <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -846,18 +799,7 @@ const DepartmentListPage: React.FC = () => {
             <ProDescriptions
               column={2}
               dataSource={detailData}
-              columns={[
-                { title: '部门名称', dataIndex: 'name' },
-                { title: '部门代码', dataIndex: 'code' },
-                { title: '描述', dataIndex: 'description', span: 2 },
-                {
-                  title: '排序',
-                  dataIndex: 'sort_order',
-                  render: (value: any) => value !== undefined && value !== null ? value : '-',
-                },
-                { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
-              ]}
+              columns={detailColumns}
             />
             
             {/* 部门成员列表 */}
@@ -899,9 +841,9 @@ const DepartmentListPage: React.FC = () => {
               />
             </div>
           </>
-        )}
-      </Drawer>
-    </div>
+        ) : null}
+      />
+    </>
   );
 };
 
