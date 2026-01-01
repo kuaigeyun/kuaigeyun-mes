@@ -38,35 +38,8 @@ export interface ExportTask {
   downloadUrl?: string;
 }
 
-/**
- * 系统参数接口定义
- */
-export interface SystemParameter {
-  id?: number;
-  key: string;
-  name: string;
-  value: string;
-  type: 'string' | 'number' | 'boolean' | 'select';
-  category: string;
-  description?: string;
-  options?: string[];
-  required?: boolean;
-}
-
-/**
- * 编码规则接口定义
- */
-export interface CodeRule {
-  id?: number;
-  code: string;
-  name: string;
-  prefix: string;
-  dateFormat: string;
-  sequenceLength: number;
-  currentSequence?: number;
-  sample?: string;
-  description?: string;
-}
+// 注意：SystemParameter 和 CodeRule 接口定义已移至系统级
+// 如需使用，请从系统级服务中导入
 
 // 数据导入导出API
 export async function uploadImportFile(file: File, dataType: string): Promise<ImportTask> {
@@ -114,74 +87,10 @@ export async function downloadExportFile(taskId: number): Promise<Blob> {
   });
 }
 
-// 系统参数API
-export async function getSystemParameters(): Promise<SystemParameter[]> {
-  return apiRequest<SystemParameter[]>({
-    url: '/apps/kuaizhizao/common/system-parameters',
-    method: 'GET',
-  });
-}
-
-export async function updateSystemParameters(parameters: Record<string, any>): Promise<void> {
-  return apiRequest<void>({
-    url: '/apps/kuaizhizao/common/system-parameters',
-    method: 'PUT',
-    data: parameters,
-  });
-}
-
-export async function getSystemParameter(key: string): Promise<SystemParameter> {
-  return apiRequest<SystemParameter>({
-    url: `/apps/kuaizhizao/common/system-parameters/${key}`,
-    method: 'GET',
-  });
-}
-
-export async function updateSystemParameter(key: string, value: any): Promise<void> {
-  return apiRequest<void>({
-    url: `/apps/kuaizhizao/common/system-parameters/${key}`,
-    method: 'PUT',
-    data: { value },
-  });
-}
-
-// 编码规则API
-export async function getCodeRules(): Promise<CodeRule[]> {
-  return apiRequest<CodeRule[]>({
-    url: '/apps/kuaizhizao/common/code-rules',
-    method: 'GET',
-  });
-}
-
-export async function createCodeRule(rule: Omit<CodeRule, 'id'>): Promise<CodeRule> {
-  return apiRequest<CodeRule>({
-    url: '/apps/kuaizhizao/common/code-rules',
-    method: 'POST',
-    data: rule,
-  });
-}
-
-export async function updateCodeRule(id: number, rule: Partial<CodeRule>): Promise<CodeRule> {
-  return apiRequest<CodeRule>({
-    url: `/apps/kuaizhizao/common/code-rules/${id}`,
-    method: 'PUT',
-    data: rule,
-  });
-}
-
-export async function deleteCodeRule(id: number): Promise<void> {
-  return apiRequest<void>({
-    url: `/apps/kuaizhizao/common/code-rules/${id}`,
-    method: 'DELETE',
-  });
-}
-
-export async function generateNextCode(ruleCode: string): Promise<string> {
-  return apiRequest<string>({
-    url: `/apps/kuaizhizao/common/code-rules/${ruleCode}/generate`,
-    method: 'POST',
-  });
-}
+// 注意：系统参数和编码规则API已在系统级（core）实现
+// 系统参数：/api/v1/core/system-parameters
+// 编码规则：/api/v1/core/code-rules
+// 请在系统级菜单中使用这些API，不要在应用级重复实现
 
 /**
  * 通用工具函数

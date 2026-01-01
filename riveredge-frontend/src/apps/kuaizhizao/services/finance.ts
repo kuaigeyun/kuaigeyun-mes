@@ -87,7 +87,7 @@ export interface AccountsReceivableListResponse {
 // 应付管理API
 export async function listAccountsPayable(params: AccountsPayableListParams = {}): Promise<AccountsPayableListResponse> {
   return apiRequest<AccountsPayableListResponse>({
-    url: '/apps/kuaizhizao/finance-management/accounts-payable',
+    url: '/apps/kuaizhizao/payables',
     method: 'GET',
     params,
   });
@@ -95,7 +95,7 @@ export async function listAccountsPayable(params: AccountsPayableListParams = {}
 
 export async function createAccountsPayable(data: AccountsPayable): Promise<AccountsPayable> {
   return apiRequest<AccountsPayable>({
-    url: '/apps/kuaizhizao/finance-management/accounts-payable',
+    url: '/apps/kuaizhizao/payables',
     method: 'POST',
     data,
   });
@@ -103,7 +103,7 @@ export async function createAccountsPayable(data: AccountsPayable): Promise<Acco
 
 export async function updateAccountsPayable(id: number, data: Partial<AccountsPayable>): Promise<AccountsPayable> {
   return apiRequest<AccountsPayable>({
-    url: `/apps/kuaizhizao/finance-management/accounts-payable/${id}`,
+    url: `/apps/kuaizhizao/payables/${id}`,
     method: 'PUT',
     data,
   });
@@ -111,7 +111,7 @@ export async function updateAccountsPayable(id: number, data: Partial<AccountsPa
 
 export async function makePayment(id: number, paymentMethod: string, paymentDate: string, remarks?: string): Promise<AccountsPayable> {
   return apiRequest<AccountsPayable>({
-    url: `/apps/kuaizhizao/finance-management/accounts-payable/${id}/payment`,
+    url: `/apps/kuaizhizao/payables/${id}/payment`,
     method: 'POST',
     data: { paymentMethod, paymentDate, remarks },
   });
@@ -120,7 +120,7 @@ export async function makePayment(id: number, paymentMethod: string, paymentDate
 // 应收管理API
 export async function listAccountsReceivable(params: AccountsReceivableListParams = {}): Promise<AccountsReceivableListResponse> {
   return apiRequest<AccountsReceivableListResponse>({
-    url: '/apps/kuaizhizao/finance-management/accounts-receivable',
+    url: '/apps/kuaizhizao/receivables',
     method: 'GET',
     params,
   });
@@ -128,7 +128,7 @@ export async function listAccountsReceivable(params: AccountsReceivableListParam
 
 export async function createAccountsReceivable(data: AccountsReceivable): Promise<AccountsReceivable> {
   return apiRequest<AccountsReceivable>({
-    url: '/apps/kuaizhizao/finance-management/accounts-receivable',
+    url: '/apps/kuaizhizao/receivables',
     method: 'POST',
     data,
   });
@@ -136,7 +136,7 @@ export async function createAccountsReceivable(data: AccountsReceivable): Promis
 
 export async function updateAccountsReceivable(id: number, data: Partial<AccountsReceivable>): Promise<AccountsReceivable> {
   return apiRequest<AccountsReceivable>({
-    url: `/apps/kuaizhizao/finance-management/accounts-receivable/${id}`,
+    url: `/apps/kuaizhizao/receivables/${id}`,
     method: 'PUT',
     data,
   });
@@ -144,7 +144,7 @@ export async function updateAccountsReceivable(id: number, data: Partial<Account
 
 export async function receivePayment(id: number, paymentMethod: string, paymentDate: string, remarks?: string): Promise<AccountsReceivable> {
   return apiRequest<AccountsReceivable>({
-    url: `/apps/kuaizhizao/finance-management/accounts-receivable/${id}/receipt`,
+    url: `/apps/kuaizhizao/receivables/${id}/receipt`,
     method: 'POST',
     data: { paymentMethod, paymentDate, remarks },
   });
