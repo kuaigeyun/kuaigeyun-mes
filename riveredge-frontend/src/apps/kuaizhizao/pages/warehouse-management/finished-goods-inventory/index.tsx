@@ -6,9 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Form, Card, Row, Col, Statistic } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
 interface FinishedGoodsInbound {
   id: number;
@@ -37,7 +38,7 @@ const FinishedGoodsInboundPage: React.FC = () => {
 
   // 入库Modal状态
   const [inboundModalVisible, setInboundModalVisible] = useState(false);
-  const [inboundForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -52,7 +53,7 @@ const FinishedGoodsInboundPage: React.FC = () => {
    */
   const handleCreateInbound = () => {
     setInboundModalVisible(true);
-    inboundForm.resetFields();
+    formRef.current?.resetFields();
   };
 
   /**
@@ -78,9 +79,11 @@ const FinishedGoodsInboundPage: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       messageApi.success('产品入库单创建成功');
       setInboundModalVisible(false);
+      formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '创建失败');
+      throw error;
     }
   };
 
@@ -186,59 +189,39 @@ const FinishedGoodsInboundPage: React.FC = () => {
   ];
 
   return (
-    <>
-      {/* 统计卡片 */}
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="今日入库"
-                value={stats.todayInbound}
-                prefix={<ClockCircleOutlined />}
-                suffix="件"
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="累计入库"
-                value={stats.totalInbound}
-                prefix={<CheckCircleOutlined />}
-                suffix="件"
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="待确认"
-                value={stats.pendingCount}
-                prefix={<ExclamationCircleOutlined />}
-                suffix="单"
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="合格率"
-                value={stats.qualifiedRate}
-                prefix={<CheckCircleOutlined />}
-                suffix="%"
-                precision={1}
-                valueStyle={{ color: '#722ed1' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      </div>
-
-      {/* 产品入库表格 */}
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '今日入库',
+          value: stats.todayInbound,
+          prefix: <ClockCircleOutlined />,
+          suffix: '件',
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '累计入库',
+          value: stats.totalInbound,
+          prefix: <CheckCircleOutlined />,
+          suffix: '件',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '待确认',
+          value: stats.pendingCount,
+          prefix: <ExclamationCircleOutlined />,
+          suffix: '单',
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '合格率',
+          value: stats.qualifiedRate,
+          prefix: <CheckCircleOutlined />,
+          suffix: '%',
+          precision: 1,
+          valueStyle: { color: '#722ed1' },
+        },
+      ]}
+    >
       <UniTable
         headerTitle="产品入库管理"
         actionRef={actionRef}
@@ -312,137 +295,111 @@ const FinishedGoodsInboundPage: React.FC = () => {
         }}
       />
 
-      {/* 新增入库 Modal */}
-      <Modal
+      <FormModalTemplate
         title="新增产品入库"
         open={inboundModalVisible}
-        onCancel={() => setInboundModalVisible(false)}
-        onOk={() => inboundForm.submit()}
-        width={800}
-        destroyOnClose
+        onClose={() => setInboundModalVisible(false)}
+        onFinish={handleInboundSubmit}
+        isEdit={false}
+        initialValues={{
+          qualityStatus: 'qualified',
+          inboundDate: new Date().toISOString().split('T')[0],
+          inboundCode: 'IN20241201003',
+        }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        grid={true}
       >
-        <ProForm
-          form={inboundForm}
-          onFinish={handleInboundSubmit}
-          layout="vertical"
-          submitter={false}
-          initialValues={{
-            qualityStatus: 'qualified',
-            inboundDate: new Date().toISOString().split('T')[0],
+        <ProFormText
+          name="inboundCode"
+          label="入库单号"
+          placeholder="系统自动生成"
+          disabled
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="workOrderCode"
+          label="关联工单"
+          placeholder="请选择工单"
+          rules={[{ required: true, message: '请选择关联工单' }]}
+          request={async () => [
+            { label: 'WO20241201001 - 产品A生产工单', value: 'WO20241201001' },
+            { label: 'WO20241201002 - 产品B定制工单', value: 'WO20241201002' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="productCode"
+          label="产品"
+          placeholder="请选择产品"
+          rules={[{ required: true, message: '请选择产品' }]}
+          request={async () => [
+            { label: 'FIN001 - 产品A', value: 'FIN001' },
+            { label: 'FIN002 - 产品B', value: 'FIN002' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="quantity"
+          label="入库数量"
+          placeholder="请输入入库数量"
+          rules={[{ required: true, message: '请输入入库数量' }]}
+          min={1}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="warehouseName"
+          label="仓库"
+          placeholder="请选择仓库"
+          rules={[{ required: true, message: '请选择仓库' }]}
+          request={async () => [
+            { label: '成品仓库', value: '成品仓库' },
+            { label: '半成品仓库', value: '半成品仓库' },
+          ]}
+          colProps={{ span: 8 }}
+        />
+        <ProFormText
+          name="batchNo"
+          label="批次号"
+          placeholder="请输入批次号"
+          rules={[{ required: true, message: '请输入批次号' }]}
+          colProps={{ span: 8 }}
+        />
+        <ProFormSelect
+          name="qualityStatus"
+          label="质量状态"
+          placeholder="请选择质量状态"
+          rules={[{ required: true, message: '请选择质量状态' }]}
+          valueEnum={{
+            qualified: '合格',
+            unqualified: '不合格',
+            pending: '待检',
           }}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormText
-                name="inboundCode"
-                label="入库单号"
-                placeholder="系统自动生成"
-                disabled
-                initialValue="IN20241201003"
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormSelect
-                name="workOrderCode"
-                label="关联工单"
-                placeholder="请选择工单"
-                rules={[{ required: true, message: '请选择关联工单' }]}
-                request={async () => [
-                  { label: 'WO20241201001 - 产品A生产工单', value: 'WO20241201001' },
-                  { label: 'WO20241201002 - 产品B定制工单', value: 'WO20241201002' },
-                ]}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormSelect
-                name="productCode"
-                label="产品"
-                placeholder="请选择产品"
-                rules={[{ required: true, message: '请选择产品' }]}
-                request={async () => [
-                  { label: 'FIN001 - 产品A', value: 'FIN001' },
-                  { label: 'FIN002 - 产品B', value: 'FIN002' },
-                ]}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormDigit
-                name="quantity"
-                label="入库数量"
-                placeholder="请输入入库数量"
-                rules={[{ required: true, message: '请输入入库数量' }]}
-                min={1}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={8}>
-              <ProFormSelect
-                name="warehouseName"
-                label="仓库"
-                placeholder="请选择仓库"
-                rules={[{ required: true, message: '请选择仓库' }]}
-                request={async () => [
-                  { label: '成品仓库', value: '成品仓库' },
-                  { label: '半成品仓库', value: '半成品仓库' },
-                ]}
-              />
-            </Col>
-            <Col span={8}>
-              <ProFormText
-                name="batchNo"
-                label="批次号"
-                placeholder="请输入批次号"
-                rules={[{ required: true, message: '请输入批次号' }]}
-              />
-            </Col>
-            <Col span={8}>
-              <ProFormSelect
-                name="qualityStatus"
-                label="质量状态"
-                placeholder="请选择质量状态"
-                rules={[{ required: true, message: '请选择质量状态' }]}
-                valueEnum={{
-                  qualified: '合格',
-                  unqualified: '不合格',
-                  pending: '待检',
-                }}
-              />
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <ProFormDatePicker
-                name="inboundDate"
-                label="入库日期"
-                placeholder="请选择入库日期"
-                rules={[{ required: true, message: '请选择入库日期' }]}
-              />
-            </Col>
-            <Col span={12}>
-              <ProFormText
-                name="operatorName"
-                label="操作员"
-                placeholder="请输入操作员姓名"
-                rules={[{ required: true, message: '请输入操作员姓名' }]}
-              />
-            </Col>
-          </Row>
-
-          <ProFormTextArea
-            name="remarks"
-            label="备注"
-            placeholder="请输入备注信息"
-            rows={3}
-          />
-        </ProForm>
-      </Modal>
-    </>
+          colProps={{ span: 8 }}
+        />
+        <ProFormDatePicker
+          name="inboundDate"
+          label="入库日期"
+          placeholder="请选择入库日期"
+          rules={[{ required: true, message: '请选择入库日期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="operatorName"
+          label="操作员"
+          placeholder="请输入操作员姓名"
+          rules={[{ required: true, message: '请输入操作员姓名' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
+    </ListPageTemplate>
   );
 };
 

@@ -8,10 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Form, Card, Row, Col, Statistic, Radio, Input, Select, Table } from 'antd';
+import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormText } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Radio, Select, Table } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 
 // 成品检验接口定义
 interface FinishedGoodsInspection {
@@ -50,7 +51,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<FinishedGoodsInspection | null>(null);
-  const [inspectionForm] = Form.useForm();
+  const formRef = useRef<any>(null);
   const [inspectionDetails, setInspectionDetails] = useState<InspectionDetail[]>([]);
 
   // 扫码Modal状态
@@ -82,7 +83,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     ];
     setInspectionDetails(initialDetails);
 
-    inspectionForm.setFieldsValue({
+    formRef.current?.setFieldsValue({
       qualifiedQuantity: record.totalQuantity,
       unqualifiedQuantity: 0,
       remarks: '',
@@ -100,7 +101,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       messageApi.success(`成品检验完成：${resultText}，合格率${qualifiedRate}%`);
 
       setInspectionModalVisible(false);
-      inspectionForm.resetFields();
+      formRef.current?.resetFields();
       setInspectionDetails([]);
       actionRef.current?.reload();
 
@@ -115,6 +116,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
 
     } catch (error: any) {
       messageApi.error(error.message || '检验提交失败');
+      throw error;
     }
   };
 
@@ -316,56 +318,35 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   ];
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="待检验数量"
-                  value={stats.pendingCount}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="合格数量"
-                  value={stats.qualifiedCount}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="不合格数量"
-                  value={stats.unqualifiedCount}
-                  prefix={<CloseCircleOutlined />}
-                  valueStyle={{ color: '#f5222d' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总检验数量"
-                  value={stats.totalInspected}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* UniTable */}
-        <UniTable<FinishedGoodsInspection>
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '待检验数量',
+          value: stats.pendingCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: '合格数量',
+          value: stats.qualifiedCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: '不合格数量',
+          value: stats.unqualifiedCount,
+          prefix: <CloseCircleOutlined />,
+          valueStyle: { color: '#f5222d' },
+        },
+        {
+          title: '总检验数量',
+          value: stats.totalInspected,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+      ]}
+    >
+      <UniTable<FinishedGoodsInspection>
           headerTitle="成品检验管理"
           actionRef={actionRef}
           rowKey="id"
@@ -441,20 +422,25 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           ]}
           scroll={{ x: 1400 }}
         />
-      </div>
 
-      {/* 检验Modal */}
-      <Modal
-        title={`成品检验 - ${currentInspection?.inspectionCode}`}
+      <FormModalTemplate
+        title={`成品检验 - ${currentInspection?.inspectionCode || ''}`}
         open={inspectionModalVisible}
-        onCancel={() => setInspectionModalVisible(false)}
-        onOk={() => inspectionForm.submit()}
-        okText="提交检验结果"
-        cancelText="取消"
-        width={800}
+        onClose={() => setInspectionModalVisible(false)}
+        onFinish={handleInspectionSubmit}
+        isEdit={false}
+        initialValues={
+          currentInspection ? {
+            qualifiedQuantity: currentInspection.totalQuantity,
+            unqualifiedQuantity: 0,
+            remarks: '',
+          } : {}
+        }
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
       >
         {currentInspection && (
-          <div style={{ marginBottom: 24 }}>
+          <>
             <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
@@ -483,66 +469,51 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 rowKey="id"
               />
             </Card>
-
-            <Form
-              form={inspectionForm}
-              layout="vertical"
-              onFinish={handleInspectionSubmit}
-            >
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="qualifiedQuantity"
-                    label="合格数量"
-                    rules={[{ required: true, message: '请输入合格数量' }]}
-                  >
-                    <Input
-                      type="number"
-                      min={0}
-                      max={currentInspection.totalQuantity}
-                      addonAfter={currentInspection.unit}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="unqualifiedQuantity"
-                    label="不合格数量"
-                    rules={[{ required: true, message: '请输入不合格数量' }]}
-                  >
-                    <Input
-                      type="number"
-                      min={0}
-                      max={currentInspection.totalQuantity}
-                      addonAfter={currentInspection.unit}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Form.Item
-                name="remarks"
-                label="检验备注"
-              >
-                <Input.TextArea
-                  rows={3}
-                  placeholder="请输入检验详情、发现的问题或处理意见"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="inspectorName"
-                label="检验员"
-                rules={[{ required: true, message: '请输入检验员姓名' }]}
-              >
-                <Input placeholder="请输入检验员姓名" />
-              </Form.Item>
-            </Form>
-          </div>
+          </>
         )}
-      </Modal>
+        <ProFormDigit
+          name="qualifiedQuantity"
+          label="合格数量"
+          placeholder="请输入合格数量"
+          rules={[{ required: true, message: '请输入合格数量' }]}
+          min={0}
+          max={currentInspection?.totalQuantity}
+          fieldProps={{
+            precision: 0,
+            addonAfter: currentInspection?.unit,
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="unqualifiedQuantity"
+          label="不合格数量"
+          placeholder="请输入不合格数量"
+          rules={[{ required: true, message: '请输入不合格数量' }]}
+          min={0}
+          max={currentInspection?.totalQuantity}
+          fieldProps={{
+            precision: 0,
+            addonAfter: currentInspection?.unit,
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="检验备注"
+          placeholder="请输入检验详情、发现的问题或处理意见"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormText
+          name="inspectorName"
+          label="检验员"
+          placeholder="请输入检验员姓名"
+          rules={[{ required: true, message: '请输入检验员姓名' }]}
+          colProps={{ span: 12 }}
+        />
+      </FormModalTemplate>
 
-      {/* 扫码检验Modal */}
+      {/* 扫码检验Modal - 保留原有Modal，因为这是特殊功能 */}
       <Modal
         title="扫码成品检验"
         open={scanModalVisible}
@@ -570,7 +541,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           </p>
         </div>
       </Modal>
-    </>
+    </ListPageTemplate>
   );
 };
 
