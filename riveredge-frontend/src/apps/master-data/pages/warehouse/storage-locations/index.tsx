@@ -5,11 +5,12 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
 import type { StorageLocation, StorageLocationCreate, StorageLocationUpdate, StorageArea } from '../../../types/warehouse';
 
@@ -265,9 +266,53 @@ const StorageLocationsPage: React.FC = () => {
     },
   ];
 
+  /**
+   * 详情 Drawer 的列定义
+   */
+  const detailColumns: ProDescriptionsItemType<StorageLocation>[] = [
+    {
+      title: '库位编码',
+      dataIndex: 'code',
+    },
+    {
+      title: '库位名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '所属库区',
+      dataIndex: 'storageAreaId',
+      render: (_, record) => getStorageAreaName(record.storageAreaId),
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      span: 2,
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
   return (
     <>
-      <UniTable<StorageLocation>
+      <ListPageTemplate>
+        <UniTable<StorageLocation>
         actionRef={actionRef}
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -325,89 +370,33 @@ const StorageLocationsPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<StorageLocation>
         title="库位详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<StorageLocation>
-          dataSource={storageLocationDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '库位编码',
-              dataIndex: 'code',
-            },
-            {
-              title: '库位名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '所属库区',
-              dataIndex: 'storageAreaId',
-              render: (_, record) => getStorageAreaName(record.storageAreaId),
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={storageLocationDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
 
       {/* 创建/编辑库位 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑库位' : '新建库位'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{
+          isActive: true,
+        }}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
-          initialValues={{
-            isActive: true,
-          }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
           <SafeProFormSelect
             name="storageAreaId"
             label="所属库区"
@@ -467,8 +456,7 @@ const StorageLocationsPage: React.FC = () => {
             label="是否启用"
             colProps={{ span: 12 }}
           />
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
     </>
   );
 };

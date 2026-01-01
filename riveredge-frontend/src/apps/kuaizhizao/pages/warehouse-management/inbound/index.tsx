@@ -6,9 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, message, Form } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, message, Form, Card } from 'antd';
+import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 
 // 统一的入库单接口（结合采购入库和成品入库）
@@ -53,7 +54,7 @@ const InboundPage: React.FC = () => {
 
   // Modal 相关状态（创建入库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [createForm] = Form.useForm();
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -216,8 +217,20 @@ const InboundPage: React.FC = () => {
     },
   ];
 
+  const handleFormFinish = async (values: any) => {
+    try {
+      messageApi.success('入库单创建成功');
+      setCreateModalVisible(false);
+      formRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
+  };
+
   return (
-    <>
+    <ListPageTemplate>
       <UniTable
         headerTitle="入库管理"
         actionRef={actionRef}
@@ -287,135 +300,115 @@ const InboundPage: React.FC = () => {
         ]}
       />
 
-      {/* 创建入库单 Modal */}
-      <Modal
+      <FormModalTemplate
         title="新建入库单"
         open={createModalVisible}
-        onCancel={() => setCreateModalVisible(false)}
-        onOk={() => {
-          createForm.validateFields().then((values) => {
-            messageApi.success('入库单创建成功');
-            setCreateModalVisible(false);
-            createForm.resetFields();
-            actionRef.current?.reload();
-          });
-        }}
-        width={600}
+        onClose={() => setCreateModalVisible(false)}
+        onFinish={handleFormFinish}
+        isEdit={false}
+        initialValues={{ type: 'purchase' }}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
       >
-        <Form
-          form={createForm}
-          layout="vertical"
-          initialValues={{
-            type: 'purchase',
-          }}
-        >
-          <Form.Item
-            name="type"
-            label="入库类型"
-            rules={[{ required: true, message: '请选择入库类型' }]}
-          >
-            <ProFormSelect
-              options={[
-                { label: '采购入库', value: 'purchase' },
-                { label: '生产入库', value: 'production' },
-                { label: '退货入库', value: 'return' },
-                { label: '初始入库', value: 'initial' },
-              ]}
-            />
-          </Form.Item>
+        <ProFormSelect
+          name="type"
+          label="入库类型"
+          placeholder="请选择入库类型"
+          rules={[{ required: true, message: '请选择入库类型' }]}
+          options={[
+            { label: '采购入库', value: 'purchase' },
+            { label: '生产入库', value: 'production' },
+            { label: '退货入库', value: 'return' },
+            { label: '初始入库', value: 'initial' },
+          ]}
+        />
+        <ProFormSelect
+          name="warehouse"
+          label="入库仓库"
+          placeholder="请选择入库仓库"
+          rules={[{ required: true, message: '请选择入库仓库' }]}
+          options={[
+            { label: '原材料仓库', value: 'raw-materials' },
+            { label: '半成品仓库', value: 'semi-finished' },
+            { label: '成品仓库', value: 'finished-goods' },
+          ]}
+        />
+        <ProFormText
+          name="supplier"
+          label="供应商"
+          placeholder="选择供应商"
+        />
+        <ProFormText
+          name="workOrder"
+          label="关联工单"
+          placeholder="选择工单"
+        />
+      </FormModalTemplate>
 
-          <Form.Item
-            name="warehouse"
-            label="入库仓库"
-            rules={[{ required: true, message: '请选择入库仓库' }]}
-          >
-            <ProFormSelect
-              options={[
-                { label: '原材料仓库', value: 'raw-materials' },
-                { label: '半成品仓库', value: 'semi-finished' },
-                { label: '成品仓库', value: 'finished-goods' },
-              ]}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="supplier"
-            label="供应商"
-          >
-            <ProFormText placeholder="选择供应商" />
-          </Form.Item>
-
-          <Form.Item
-            name="workOrder"
-            label="关联工单"
-          >
-            <ProFormText placeholder="选择工单" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 入库单详情 Drawer */}
-      <Drawer
-        title="入库单详情"
-        size="large"
+      <DetailDrawerTemplate
+        title={`入库单详情 - ${currentOrder?.receipt_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-      >
-        {currentOrder && (
-          <div>
-            <p><strong>入库单号：</strong>{currentOrder.receipt_code}</p>
-            <p><strong>入库类型：</strong>
-              <Tag color={
-                currentOrder.receipt_type === 'purchase' ? 'processing' : 'success'
-              }>
-                {currentOrder.receipt_type === 'purchase' ? '采购入库' : '成品入库'}
-              </Tag>
-            </p>
-            <p><strong>状态：</strong>
-              <Tag color={
-                currentOrder.status === '已完成' ? 'success' :
-                currentOrder.status === '已确认' ? 'processing' :
-                currentOrder.status === '已取消' ? 'error' : 'default'
-              }>
-                {currentOrder.status}
-              </Tag>
-            </p>
-            {currentOrder.supplier_name && (
-              <p><strong>供应商：</strong>{currentOrder.supplier_name}</p>
-            )}
-            {currentOrder.work_order_code && (
-              <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
-            )}
-            <p><strong>入库仓库：</strong>{currentOrder.warehouse_name}</p>
-            <p><strong>入库日期：</strong>{currentOrder.receipt_date}</p>
-            <p><strong>操作员：</strong>{currentOrder.received_by}</p>
-            {currentOrder.notes && (
-              <p><strong>备注：</strong>{currentOrder.notes}</p>
-            )}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        columns={[]}
+        customContent={
+          currentOrder ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <p><strong>入库单号：</strong>{currentOrder.receipt_code}</p>
+                <p><strong>入库类型：</strong>
+                  <Tag color={
+                    currentOrder.receipt_type === 'purchase' ? 'processing' : 'success'
+                  }>
+                    {currentOrder.receipt_type === 'purchase' ? '采购入库' : '成品入库'}
+                  </Tag>
+                </p>
+                <p><strong>状态：</strong>
+                  <Tag color={
+                    currentOrder.status === '已完成' ? 'success' :
+                    currentOrder.status === '已确认' ? 'processing' :
+                    currentOrder.status === '已取消' ? 'error' : 'default'
+                  }>
+                    {currentOrder.status}
+                  </Tag>
+                </p>
+                {currentOrder.supplier_name && (
+                  <p><strong>供应商：</strong>{currentOrder.supplier_name}</p>
+                )}
+                {currentOrder.work_order_code && (
+                  <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
+                )}
+                <p><strong>入库仓库：</strong>{currentOrder.warehouse_name}</p>
+                <p><strong>入库日期：</strong>{currentOrder.receipt_date}</p>
+                <p><strong>操作员：</strong>{currentOrder.received_by}</p>
+                {currentOrder.notes && (
+                  <p><strong>备注：</strong>{currentOrder.notes}</p>
+                )}
+              </Card>
 
-            {/* 入库单明细 */}
-            {currentOrder.items && currentOrder.items.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <h4>入库明细</h4>
-                {currentOrder.items.map((item, index) => (
-                  <div key={item.id} style={{
-                    padding: '12px',
-                    marginBottom: '8px',
-                    border: '1px solid #f0f0f0',
-                    borderRadius: '4px'
-                  }}>
-                    <p><strong>物料编码：</strong>{item.material_code}</p>
-                    <p><strong>物料名称：</strong>{item.material_name}</p>
-                    <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
-                    {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+              {/* 入库单明细 */}
+              {currentOrder.items && currentOrder.items.length > 0 && (
+                <Card title="入库明细">
+                  {currentOrder.items.map((item) => (
+                    <div key={item.id} style={{
+                      padding: '12px',
+                      marginBottom: '8px',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: '4px'
+                    }}>
+                      <p><strong>物料编码：</strong>{item.material_code}</p>
+                      <p><strong>物料名称：</strong>{item.material_name}</p>
+                      <p><strong>数量：</strong>{item.quantity} {item.unit}</p>
+                      {item.notes && <p><strong>备注：</strong>{item.notes}</p>}
+                    </div>
+                  ))}
+                </Card>
+              )}
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

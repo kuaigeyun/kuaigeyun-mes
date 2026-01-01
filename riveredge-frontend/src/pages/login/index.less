@@ -84,14 +84,20 @@
       max-width: 400px;
       text-align: center;
 
-      /* 装饰图片 */
-      .login-decoration-img {
+      /* Lottie 动画装饰 */
+      .login-decoration-lottie {
         width: 100%;
         max-width: 600px;
-        height: auto;
         margin-bottom: 40px;
-        border-radius: 12px;
-        box-shadow: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        /* 确保动画容器居中显示 */
+        > div {
+          width: 100% !important;
+          max-width: 600px;
+        }
       }
 
       /* 框架简介 */

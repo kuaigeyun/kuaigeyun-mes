@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 
 // 安全处理 options 的工具函数
@@ -16,9 +16,10 @@ const safeOptions = (options: any): any[] => {
   console.warn('ProFormSelect options 不是数组:', options);
   return [];
 };
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, List, Typography, Divider } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { workshopApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, WorkshopUpdate } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
@@ -760,8 +761,89 @@ const WorkshopsPage: React.FC = () => {
     return fixedColumns;
   }, [customFields]);
 
+  /**
+   * 详情 Drawer 的列定义
+   */
+  const detailColumns: ProDescriptionsItemType<Workshop>[] = [
+    {
+      title: '车间编码',
+      dataIndex: 'code',
+    },
+    {
+      title: '车间名称',
+      dataIndex: 'name',
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      span: 2,
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
+  /**
+   * 详情 Drawer 的自定义内容（包含自定义字段）
+   */
+  const renderDetailContent = () => {
+    if (!workshopDetail) return null;
+
+    return (
+      <>
+        <ProDescriptions<Workshop>
+          dataSource={workshopDetail}
+          loading={detailLoading}
+          column={2}
+          columns={detailColumns}
+        />
+        
+        {/* 自定义字段 */}
+        {customFields.length > 0 && Object.keys(customFieldValues).length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <Typography.Title level={5}>自定义字段</Typography.Title>
+            <ProDescriptions
+              column={2}
+              dataSource={customFieldValues}
+              columns={customFields
+                .filter(field => field.is_active && customFieldValues[field.code] !== undefined)
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map(field => ({
+                  title: field.label || field.name,
+                  dataIndex: field.code,
+                  render: (value: any) => {
+                    if (value === null || value === undefined || value === '') {
+                      return <Typography.Text type="secondary">-</Typography.Text>;
+                    }
+                    return String(value);
+                  },
+                }))}
+            />
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <>
+      <ListPageTemplate>
         <UniTable<Workshop>
         actionRef={actionRef}
         columns={columns}
@@ -876,108 +958,34 @@ const WorkshopsPage: React.FC = () => {
           onChange: setSelectedRowKeys,
         }}
       />
+      </ListPageTemplate>
 
       {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<Workshop>
         title="车间详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<Workshop>
-          dataSource={workshopDetail || undefined}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '车间编码',
-              dataIndex: 'code',
-            },
-            {
-              title: '车间名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-        
-        {/* 自定义字段 */}
-        {customFields.length > 0 && Object.keys(customFieldValues).length > 0 && (
-          <div style={{ marginTop: 24 }}>
-            <Typography.Title level={5}>自定义字段</Typography.Title>
-            <ProDescriptions
-              column={2}
-              dataSource={customFieldValues}
-              columns={customFields
-                .filter(field => field.is_active && customFieldValues[field.code] !== undefined)
-                .sort((a, b) => a.sort_order - b.sort_order)
-                .map(field => ({
-                  title: field.label || field.name,
-                  dataIndex: field.code,
-                  render: (value: any) => {
-                    if (value === null || value === undefined || value === '') {
-                      return <Typography.Text type="secondary">-</Typography.Text>;
-                    }
-                    return String(value);
-                  },
-                }))}
-            />
-          </div>
-        )}
-      </Drawer>
+        dataSource={workshopDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        customContent={renderDetailContent()}
+      />
 
       {/* 创建/编辑车间 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑车间' : '新建车间'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{
+          isActive: true,
+        }}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
-          }}
-          initialValues={{
-            isActive: true,
-          }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
           <ProFormText
             name="code"
             label="车间编码"
@@ -1036,8 +1044,7 @@ const WorkshopsPage: React.FC = () => {
               {renderCustomFields()}
             </>
           )}
-        </ProForm>
-      </Modal>
+      </FormModalTemplate>
     </>
     );
 };

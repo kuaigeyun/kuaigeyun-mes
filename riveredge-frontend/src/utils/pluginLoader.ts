@@ -125,16 +125,24 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
     sourcePath = getPluginSourcePath(pluginCode);
   }
   
+  console.log(`🔍 [pluginLoader] 加载应用 ${pluginCode}，路径: ${sourcePath}`, {
+    entry_point: application.entry_point,
+    route_path: application.route_path,
+    resolved_path: sourcePath,
+  });
+  
   // 使用重试机制加载插件
   const pluginModule = await withRetry(
     async () => {
       // 使用动态导入加载插件模块
       // 注意：Vite 的动态导入需要使用相对路径或绝对路径
       // 使用 /* @vite-ignore */ 可以跳过 Vite 的静态分析
+      console.log(`📥 [pluginLoader] 尝试导入模块: ${sourcePath}`);
       const module = await import(
         /* @vite-ignore */
         sourcePath
       );
+      console.log(`✅ [pluginLoader] 模块导入成功:`, Object.keys(module));
       return module;
     },
     {
@@ -153,23 +161,27 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
 
   // 获取插件路由组件
   let PluginRoutes = pluginModule.default || pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`];
+  console.log(`🔍 [pluginLoader] 查找路由组件，default:`, !!pluginModule.default, 'PluginRoutes:', !!PluginRoutes);
 
   // 如果没有找到路由组件，检查是否是完整的应用组件（包含内部路由）
   if (!PluginRoutes) {
     // 尝试查找应用组件（App后缀）
     PluginRoutes = pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}App`];
+    console.log(`🔍 [pluginLoader] 尝试查找 App 组件:`, !!PluginRoutes);
 
     if (!PluginRoutes && pluginModule.default) {
       // 如果default存在且是一个React组件，直接使用它
       const defaultExport = pluginModule.default;
       if (typeof defaultExport === 'function' || (defaultExport && typeof defaultExport === 'object' && '$$typeof' in defaultExport)) {
         PluginRoutes = defaultExport;
+        console.log(`✅ [pluginLoader] 使用 default 导出作为路由组件`);
       }
     }
 
     if (!PluginRoutes) {
-      console.error(`❌ [插件加载] ${pluginCode} - 未找到路由组件或应用组件`, {
+      console.error(`❌ [pluginLoader] ${pluginCode} - 未找到路由组件或应用组件`, {
         default: pluginModule.default,
+        defaultType: typeof pluginModule.default,
         routes: pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}Routes`],
         app: pluginModule[`${pluginCode.charAt(0).toUpperCase() + pluginCode.slice(1)}App`],
         allExports: Object.keys(pluginModule),
@@ -177,6 +189,8 @@ async function loadPluginInDevelopment(application: Application): Promise<Plugin
       throw new Error(`插件 ${application.code} 未导出路由组件或应用组件。请确保插件入口文件导出了 default、${pluginCode}Routes 或 ${pluginCode}App`);
     }
   }
+  
+  console.log(`✅ [pluginLoader] 找到路由组件:`, PluginRoutes);
 
   // 返回路由配置
   const routePath = application.route_path || `/apps/${application.code}`;

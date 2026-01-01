@@ -5,12 +5,14 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Drawer, message } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { defectTypeApi } from '../../../services/process';
 import type { DefectType, DefectTypeCreate, DefectTypeUpdate } from '../../../types/process';
+import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 
 /**
  * 不良品信息管理列表页面组件
@@ -234,7 +236,7 @@ const DefectTypesPage: React.FC = () => {
   ];
 
   return (
-    <>
+    <ListPageTemplate>
       <UniTable<DefectType>
         actionRef={actionRef}
         columns={columns}
@@ -294,137 +296,92 @@ const DefectTypesPage: React.FC = () => {
         }}
       />
 
-      {/* 详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<DefectType>
         title="不良品详情"
-        size={720}
         open={drawerVisible}
         onClose={handleCloseDetail}
-      >
-        <ProDescriptions<DefectType>
-          dataSource={defectTypeDetail}
-          loading={detailLoading}
-          column={2}
-          columns={[
-            {
-              title: '不良品编码',
-              dataIndex: 'code',
-            },
-            {
-              title: '不良品名称',
-              dataIndex: 'name',
-            },
-            {
-              title: '分类',
-              dataIndex: 'category',
-            },
-            {
-              title: '描述',
-              dataIndex: 'description',
-              span: 2,
-            },
-            {
-              title: '启用状态',
-              dataIndex: 'isActive',
-              render: (_, record) => (
-                <Tag color={record.isActive ? 'success' : 'default'}>
-                  {record.isActive ? '启用' : '禁用'}
-                </Tag>
-              ),
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'createdAt',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updatedAt',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      </Drawer>
+        dataSource={defectTypeDetail || undefined}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        columns={[
+          { title: '不良品编码', dataIndex: 'code' },
+          { title: '不良品名称', dataIndex: 'name' },
+          { title: '分类', dataIndex: 'category' },
+          { title: '描述', dataIndex: 'description', span: 2 },
+          {
+            title: '启用状态',
+            dataIndex: 'isActive',
+            render: (_, record) => (
+              <Tag color={record.isActive ? 'success' : 'default'}>
+                {record.isActive ? '启用' : '禁用'}
+              </Tag>
+            ),
+          },
+          { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
+          { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+        ]}
+      />
 
-      {/* 创建/编辑不良品 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑不良品' : '新建不良品'}
         open={modalVisible}
-        onCancel={handleCloseModal}
-        footer={null}
-        width={800}
-        destroyOnHidden
+        onClose={handleCloseModal}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={{ isActive: true }}
       >
-        <ProForm
-          formRef={formRef}
-          loading={formLoading}
-          onFinish={handleSubmit}
-          submitter={{
-            searchConfig: {
-              submitText: isEdit ? '更新' : '创建',
-              resetText: '取消',
-            },
-            resetButtonProps: {
-              onClick: handleCloseModal,
-            },
+        <ProFormText
+          name="code"
+          label="不良品编码"
+          placeholder="请输入不良品编码"
+          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入不良品编码' },
+            { max: 50, message: '不良品编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            style: { textTransform: 'uppercase' },
           }}
-          initialValues={{
-            isActive: true,
+        />
+        <ProFormText
+          name="name"
+          label="不良品名称"
+          placeholder="请输入不良品名称"
+          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入不良品名称' },
+            { max: 200, message: '不良品名称不能超过200个字符' },
+          ]}
+        />
+        <ProFormText
+          name="category"
+          label="分类"
+          placeholder="请输入分类"
+          colProps={{ span: 12 }}
+          rules={[
+            { max: 50, message: '分类不能超过50个字符' },
+          ]}
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入描述"
+          colProps={{ span: 24 }}
+          fieldProps={{
+            rows: 4,
+            maxLength: 500,
           }}
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
-          <ProFormText
-            name="code"
-            label="不良品编码"
-            placeholder="请输入不良品编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入不良品编码' },
-              { max: 50, message: '不良品编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="不良品名称"
-            placeholder="请输入不良品名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入不良品名称' },
-              { max: 200, message: '不良品名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormText
-            name="category"
-            label="分类"
-            placeholder="请输入分类"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 50, message: '分类不能超过50个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
-        </ProForm>
-      </Modal>
-    </>
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+          colProps={{ span: 12 }}
+        />
+      </FormModalTemplate>
+    </ListPageTemplate>
   );
 };
 

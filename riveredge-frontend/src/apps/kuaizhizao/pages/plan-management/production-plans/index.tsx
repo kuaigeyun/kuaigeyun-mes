@@ -9,9 +9,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Card, Row, Col, Statistic, message, Table, Progress } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, PlayCircleOutlined, BarChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
 // 生产计划接口定义
 interface ProductionPlan {
@@ -218,56 +219,35 @@ const ProductionPlansPage: React.FC = () => {
   };
 
   return (
-    <>
-      <div>
-        {/* 统计卡片 */}
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="总计划数"
-                  value={12}
-                  prefix={<BarChartOutlined />}
-                  valueStyle={{ color: '#1890ff' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="MRP计划"
-                  value={8}
-                  suffix="个"
-                  valueStyle={{ color: '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="LRP计划"
-                  value={4}
-                  suffix="个"
-                  valueStyle={{ color: '#722ed1' }}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="已执行计划"
-                  value={6}
-                  suffix="个"
-                  valueStyle={{ color: '#faad14' }}
-                />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-
-        {/* 生产计划表格 */}
-        <UniTable
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '总计划数',
+          value: 12,
+          prefix: <BarChartOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: 'MRP计划',
+          value: 8,
+          suffix: '个',
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: 'LRP计划',
+          value: 4,
+          suffix: '个',
+          valueStyle: { color: '#722ed1' },
+        },
+        {
+          title: '已执行计划',
+          value: 6,
+          suffix: '个',
+          valueStyle: { color: '#faad14' },
+        },
+      ]}
+    >
+      <UniTable
           headerTitle="生产计划管理"
           actionRef={actionRef}
           rowKey="id"
@@ -331,78 +311,78 @@ const ProductionPlansPage: React.FC = () => {
           ]}
           scroll={{ x: 1200 }}
         />
-      </div>
 
-      {/* 生产计划详情 Drawer */}
-      <Drawer
-        title={`生产计划详情 - ${currentPlan?.plan_code}`}
+      <DetailDrawerTemplate
+        title={`生产计划详情 - ${currentPlan?.plan_code || ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={800}
-      >
-        {currentPlan && (
-          <div style={{ padding: '16px 0' }}>
-            <Card title="基本信息" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>计划编号：</strong>{currentPlan.plan_code}
-                </Col>
-                <Col span={12}>
-                  <strong>计划名称：</strong>{currentPlan.plan_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <strong>计划类型：</strong>
-                  <Tag color={currentPlan.plan_type === 'MRP' ? 'processing' : 'success'}>
-                    {currentPlan.plan_type === 'MRP' ? 'MRP计划' : 'LRP计划'}
-                  </Tag>
-                </Col>
-                <Col span={8}>
-                  <strong>状态：</strong>
-                  <Tag color={currentPlan.status === '已执行' ? 'success' : 'default'}>
-                    {currentPlan.status}
-                  </Tag>
-                </Col>
-                <Col span={8}>
-                  <strong>生成人：</strong>{currentPlan.generated_by_name}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>计划期间：</strong>{currentPlan.start_date} ~ {currentPlan.end_date}
-                </Col>
-                <Col span={12}>
-                  <strong>创建时间：</strong>{currentPlan.created_at}
-                </Col>
-              </Row>
-            </Card>
-
-            {/* 计划明细 */}
-            {currentPlan.items && currentPlan.items.length > 0 && (
-              <Card title="计划明细">
-                <Table
-                  size="small"
-                  columns={[
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    { title: '计划数量', dataIndex: 'planned_quantity', width: 100, align: 'right' },
-                    { title: '单位', dataIndex: 'unit', width: 60 },
-                    { title: '类型', dataIndex: 'item_type', width: 80, render: (type) => type === 'production' ? '生产' : '采购' },
-                    { title: '需求日期', dataIndex: 'due_date', width: 120 },
-                    { title: '可用库存', dataIndex: 'available_inventory', width: 100, align: 'right' },
-                  ]}
-                  dataSource={currentPlan.items}
-                  pagination={false}
-                  rowKey="id"
-                  bordered
-                />
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        columns={[]}
+        customContent={
+          currentPlan ? (
+            <div style={{ padding: '16px 0' }}>
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>计划编号：</strong>{currentPlan.plan_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>计划名称：</strong>{currentPlan.plan_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}>
+                    <strong>计划类型：</strong>
+                    <Tag color={currentPlan.plan_type === 'MRP' ? 'processing' : 'success'}>
+                      {currentPlan.plan_type === 'MRP' ? 'MRP计划' : 'LRP计划'}
+                    </Tag>
+                  </Col>
+                  <Col span={8}>
+                    <strong>状态：</strong>
+                    <Tag color={currentPlan.status === '已执行' ? 'success' : 'default'}>
+                      {currentPlan.status}
+                    </Tag>
+                  </Col>
+                  <Col span={8}>
+                    <strong>生成人：</strong>{currentPlan.generated_by_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>计划期间：</strong>{currentPlan.start_date} ~ {currentPlan.end_date}
+                  </Col>
+                  <Col span={12}>
+                    <strong>创建时间：</strong>{currentPlan.created_at}
+                  </Col>
+                </Row>
               </Card>
-            )}
-          </div>
-        )}
-      </Drawer>
-    </>
+
+              {/* 计划明细 */}
+              {currentPlan.items && currentPlan.items.length > 0 && (
+                <Card title="计划明细">
+                  <Table
+                    size="small"
+                    columns={[
+                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                      { title: '计划数量', dataIndex: 'planned_quantity', width: 100, align: 'right' },
+                      { title: '单位', dataIndex: 'unit', width: 60 },
+                      { title: '类型', dataIndex: 'item_type', width: 80, render: (type) => type === 'production' ? '生产' : '采购' },
+                      { title: '需求日期', dataIndex: 'due_date', width: 120 },
+                      { title: '可用库存', dataIndex: 'available_inventory', width: 100, align: 'right' },
+                    ]}
+                    dataSource={currentPlan.items}
+                    pagination={false}
+                    rowKey="id"
+                    bordered
+                  />
+                </Card>
+              )}
+            </div>
+          ) : null
+        }
+      />
+    </ListPageTemplate>
   );
 };
 

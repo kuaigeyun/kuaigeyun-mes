@@ -8,7 +8,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Alert, Button } from 'antd';
-import { getInstalledApplicationList } from '../services/application';
+import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
 import BasicLayout from '../layouts/BasicLayout';
@@ -113,6 +113,8 @@ const AppRoutes: React.FC = () => {
   const [appRoutes, setAppRoutes] = useState<React.ReactNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [hasScanned, setHasScanned] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const loadApps = async () => {
     try {
@@ -126,21 +128,45 @@ const AppRoutes: React.FC = () => {
 
       // 如果用户未登录或没有组织上下文，不加载应用
       if (!token || !tenantId) {
+        console.log('⚠️ [AppRoutes] 用户未登录或没有组织上下文，跳过应用加载', { hasToken: !!token, hasTenantId: !!tenantId });
+        setIsAuthenticated(false);
         setLoading(false);
         return;
       }
 
+      setIsAuthenticated(true);
+
 
       // 获取已安装且启用的应用列表
-      const applications = await getInstalledApplicationList({ is_active: true });
+      let applications = await getInstalledApplicationList({ is_active: true });
+      console.log('📦 [AppRoutes] 获取到的应用列表:', applications.length, applications.map(a => ({ code: a.code, name: a.name, entry_point: a.entry_point, route_path: a.route_path })));
+
+      // 如果应用列表为空且尚未扫描过，尝试扫描并注册应用
+      if (applications.length === 0 && !hasScanned) {
+        console.log('🔄 [AppRoutes] 应用列表为空，尝试扫描并注册应用...');
+        try {
+          const scannedApps = await scanPlugins();
+          console.log('✅ [AppRoutes] 扫描完成，发现应用:', scannedApps.length, scannedApps.map(a => ({ code: a.code, name: a.name, is_installed: a.is_installed, is_active: a.is_active })));
+          setHasScanned(true);
+          
+          // 重新获取已安装且启用的应用列表
+          applications = await getInstalledApplicationList({ is_active: true });
+          console.log('📦 [AppRoutes] 重新获取应用列表:', applications.length);
+        } catch (scanError: any) {
+          console.error('❌ [AppRoutes] 扫描应用失败:', scanError);
+          // 扫描失败不影响后续流程，继续使用空列表
+          setHasScanned(true);
+        }
+      }
 
       // 异步加载所有应用路由
       const routes: React.ReactNode[] = [];
       const loadPromises = applications.map(async (app: Application) => {
         if (app.entry_point && app.route_path) {
           try {
+            console.log(`🔄 [AppRoutes] 开始加载应用: ${app.code}`, { entry_point: app.entry_point, route_path: app.route_path });
             const pluginRouteConfigs = await loadPlugin(app);
-
+            console.log(`✅ [AppRoutes] 应用 ${app.code} 加载成功，路由配置:`, pluginRouteConfigs);
 
             // 为每个路由配置创建Route组件
             for (const routeConfig of pluginRouteConfigs) {
@@ -183,16 +209,30 @@ const AppRoutes: React.FC = () => {
             }
 
           } catch (appError) {
-            console.error(`❌ 应用 ${app.code} 加载失败:`, appError);
+            console.error(`❌ [AppRoutes] 应用 ${app.code} 加载失败:`, appError);
+            console.error(`❌ [AppRoutes] 错误详情:`, {
+              code: app.code,
+              name: app.name,
+              entry_point: app.entry_point,
+              route_path: app.route_path,
+              error: appError instanceof Error ? appError.message : String(appError),
+              stack: appError instanceof Error ? appError.stack : undefined,
+            });
             // 单个应用加载失败不影响其他应用
             // 可以在这里添加错误统计或上报逻辑
           }
+        } else {
+          console.warn(`⚠️ [AppRoutes] 应用 ${app.code} 缺少 entry_point 或 route_path`, {
+            entry_point: app.entry_point,
+            route_path: app.route_path,
+          });
         }
       });
 
       // 等待所有应用加载完成
       await Promise.all(loadPromises);
 
+      console.log(`🎉 [AppRoutes] 应用加载完成，共加载 ${routes.length} 个路由`);
       setAppRoutes(routes);
       setLoading(false);
 
@@ -220,14 +260,33 @@ const AppRoutes: React.FC = () => {
 
   // 正常状态：渲染应用路由
 
+  // 如果用户未登录，不显示"没有应用路由"的警告
+  if (!isAuthenticated) {
+    // 用户未登录时，不渲染任何内容（应用路由应该在登录后才可用）
+    return null;
+  }
+
   if (appRoutes.length === 0) {
-    console.warn('⚠️ AppRoutes: 没有应用路由，可能应用未加载');
+    console.warn('⚠️ [AppRoutes] 没有应用路由，可能应用未加载');
     return (
       <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7' }}>
         <h3>⚠️ 没有可用的应用路由</h3>
         <p>当前路径: {window.location.pathname}</p>
         <p>已加载的应用路由数: {appRoutes.length}</p>
         <p>如果这是应用路径，请检查应用是否正确安装和启用</p>
+        <div style={{ marginTop: '16px', padding: '12px', background: '#f0f0f0', borderRadius: '4px' }}>
+          <p><strong>排查步骤：</strong></p>
+          <ol style={{ marginLeft: '20px' }}>
+            <li>打开浏览器控制台（F12），查看是否有错误信息</li>
+            <li>访问"系统管理 → 应用管理"页面，点击"扫描应用"按钮，扫描并注册应用</li>
+            <li>确保应用已安装（is_installed = true）且已启用（is_active = true）</li>
+            <li>确认应用的 <code>entry_point</code> 和 <code>route_path</code> 配置正确</li>
+            <li>查看控制台中的 <code>📦 [AppRoutes]</code> 和 <code>🔍 [pluginLoader]</code> 日志</li>
+          </ol>
+          <p style={{ marginTop: '12px', color: '#666', fontSize: '12px' }}>
+            💡 提示：系统已自动尝试扫描应用。如果仍然没有应用，请手动在"应用管理"页面扫描应用。
+          </p>
+        </div>
       </div>
     );
   }

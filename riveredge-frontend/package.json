@@ -40,6 +40,7 @@
         "framer-motion": "11.5.4",
         "i18next": "23.15.2",
         "lodash-es": "4.17.21",
+        "lottie-react": "^2.4.1",
         "lucide-react": "^0.556.0",
         "pinyin-pro": "^3.19.0",
         "rc-field-form": "^1.44.0",

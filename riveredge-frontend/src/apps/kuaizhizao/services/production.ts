@@ -69,6 +69,11 @@ export const reportingApi = {
     return api.post(`/apps/kuaizhizao/reporting/${id}/approve`, data);
   },
 
+  // 驳回报工记录
+  reject: async (id: string, data: any) => {
+    return api.post(`/apps/kuaizhizao/reporting/${id}/reject`, data);
+  },
+
   // 获取报工统计
   getStatistics: async (params?: any) => {
     return api.get('/apps/kuaizhizao/reporting/statistics', { params });
@@ -374,21 +379,5 @@ export const bomApi = {
     calculateRequirements: async (id: string, data: any) => {
       return api.post(`/apps/kuaizhizao/bill-of-materials/${id}/calculate-requirements`, data);
     },
-  },
-};
-
-  // 审核报工
-  approve: async (id: string, data: any) => {
-    return api.post(`/apps/kuaizhizao/production/reporting/${id}/approve`, data);
-  },
-
-  // 驳回报工
-  reject: async (id: string, data: any) => {
-    return api.post(`/apps/kuaizhizao/production/reporting/${id}/reject`, data);
-  },
-
-  // 获取报工统计
-  getStatistics: async (params?: any) => {
-    return api.get('/apps/kuaizhizao/production/reporting/statistics', { params });
   },
 };
