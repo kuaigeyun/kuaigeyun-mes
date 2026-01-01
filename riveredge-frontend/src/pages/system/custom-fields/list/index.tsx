@@ -277,10 +277,9 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新字段）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
       
       // 确保表名正确（新建时使用选中页面的表名）
       if (!isEdit && selectedPage) {
@@ -393,6 +392,7 @@ const CustomFieldListPage: React.FC = () => {
       updatePageFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+      throw error;
     } finally {
       setFormLoading(false);
     }
@@ -813,6 +813,57 @@ const CustomFieldListPage: React.FC = () => {
   const filteredPages = getFilteredPages();
   const selectedPage = getSelectedPageConfig();
 
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    { title: '字段名称', dataIndex: 'name' },
+    { title: '字段代码', dataIndex: 'code' },
+    { title: '关联表名', dataIndex: 'table_name' },
+    { title: '字段类型', dataIndex: 'field_type' },
+    { title: '字段标签', dataIndex: 'label' },
+    { title: '占位符', dataIndex: 'placeholder' },
+    {
+      title: '字段配置',
+      dataIndex: 'config',
+      render: (value: any) => (
+        <pre style={{
+          margin: 0,
+          padding: '8px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          overflow: 'auto',
+          maxHeight: '300px',
+        }}>
+          {JSON.stringify(value || {}, null, 2)}
+        </pre>
+      ),
+    },
+    {
+      title: '是否必填',
+      dataIndex: 'is_required',
+      render: (value: boolean) => (value ? '是' : '否'),
+    },
+    {
+      title: '是否可搜索',
+      dataIndex: 'is_searchable',
+      render: (value: boolean) => (value ? '是' : '否'),
+    },
+    {
+      title: '是否可排序',
+      dataIndex: 'is_sortable',
+      render: (value: boolean) => (value ? '是' : '否'),
+    },
+    { title: '排序顺序', dataIndex: 'sort_order' },
+    {
+      title: '状态',
+      dataIndex: 'is_active',
+      render: (value: boolean) => (value ? '启用' : '禁用'),
+    },
+    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
   return (
     <>
       <div
@@ -820,7 +871,7 @@ const CustomFieldListPage: React.FC = () => {
         style={{
           display: 'flex',
           height: 'calc(100vh - 96px)',
-          padding: '16px',
+          padding: `${PAGE_SPACING.PADDING}px`,
           margin: 0,
           boxSizing: 'border-box',
           borderRadius: token.borderRadiusLG || token.borderRadius,
@@ -983,7 +1034,7 @@ const CustomFieldListPage: React.FC = () => {
 
                 {/* 字段列表 */}
                 <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-                  <ProTable<CustomField>
+                  <UniTable<CustomField>
                     actionRef={actionRef}
                     columns={columns}
                     request={async (params, sort, _filter) => {
@@ -1037,7 +1088,8 @@ const CustomFieldListPage: React.FC = () => {
                       defaultPageSize: 20,
                       showSizeChanger: true,
                     }}
-                    toolBarRender={() => []}
+                    showCreateButton
+                    onCreate={handleCreate}
                     rowSelection={{
                       selectedRowKeys,
                       onChange: setSelectedRowKeys,
@@ -1063,13 +1115,14 @@ const CustomFieldListPage: React.FC = () => {
       </div>
 
       {/* 创建/编辑字段 Modal */}
-      <Modal
+      <FormModalTemplate
         title={isEdit ? '编辑字段' : '新建字段'}
         open={modalVisible}
-        onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
-        confirmLoading={formLoading}
-        size={700}
+        onClose={() => setModalVisible(false)}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
       >
         <ProForm
           formRef={formRef}
@@ -1171,99 +1224,19 @@ const CustomFieldListPage: React.FC = () => {
             label="是否启用"
           />
         </ProForm>
-      </Modal>
+      </FormModalTemplate>
 
       {/* 查看详情 Drawer */}
-      <Drawer
+      <DetailDrawerTemplate<CustomField>
         title="字段详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        size={600}
         loading={detailLoading}
-      >
-        {detailData && (
-          <ProDescriptions<CustomField>
-            column={1}
-            dataSource={detailData}
-            columns={[
-              {
-                title: '字段名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '字段代码',
-                dataIndex: 'code',
-              },
-              {
-                title: '关联表名',
-                dataIndex: 'table_name',
-              },
-              {
-                title: '字段类型',
-                dataIndex: 'field_type',
-              },
-              {
-                title: '字段标签',
-                dataIndex: 'label',
-              },
-              {
-                title: '占位符',
-                dataIndex: 'placeholder',
-              },
-              {
-                title: '字段配置',
-                dataIndex: 'config',
-                render: (value) => (
-                  <pre style={{
-                    margin: 0,
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: '4px',
-                    overflow: 'auto',
-                    maxHeight: '300px',
-                  }}>
-                    {JSON.stringify(value || {}, null, 2)}
-                  </pre>
-                ),
-              },
-              {
-                title: '是否必填',
-                dataIndex: 'is_required',
-                render: (value) => (value ? '是' : '否'),
-              },
-              {
-                title: '是否可搜索',
-                dataIndex: 'is_searchable',
-                render: (value) => (value ? '是' : '否'),
-              },
-              {
-                title: '是否可排序',
-                dataIndex: 'is_sortable',
-                render: (value) => (value ? '是' : '否'),
-              },
-              {
-                title: '排序顺序',
-                dataIndex: 'sort_order',
-              },
-              {
-                title: '状态',
-                dataIndex: 'is_active',
-                render: (value) => (value ? '启用' : '禁用'),
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'created_at',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updated_at',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-        )}
-      </Drawer>
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || {}}
+        columns={detailColumns}
+        column={1}
+      />
     </>
   );
 };
