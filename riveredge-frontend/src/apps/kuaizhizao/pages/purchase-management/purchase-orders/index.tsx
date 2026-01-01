@@ -8,11 +8,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, PurchaseOrder } from '../../../services/purchase';
 
 // 采购订单接口定义
 interface PurchaseOrder {
@@ -70,6 +71,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
+  const formRef = useRef<any>(null);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -209,8 +211,8 @@ const PurchaseOrdersPage: React.FC = () => {
   // 处理详情查看
   const handleDetail = async (record: PurchaseOrder) => {
     try {
-      // 这里应该调用API获取详情
-      setOrderDetail(record as PurchaseOrderDetail);
+      const detail = await getPurchaseOrder(record.id!);
+      setOrderDetail(detail as PurchaseOrderDetail);
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
@@ -224,10 +226,11 @@ const PurchaseOrdersPage: React.FC = () => {
       content: `确定要审核通过采购订单 "${record.order_code}" 吗？`,
       onOk: async () => {
         try {
+          await approvePurchaseOrder(record.id!);
           messageApi.success('采购订单审核成功');
           actionRef.current?.reload();
-        } catch (error) {
-          messageApi.error('采购订单审核失败');
+        } catch (error: any) {
+          messageApi.error(error.message || '采购订单审核失败');
         }
       },
     });
@@ -241,20 +244,41 @@ const PurchaseOrdersPage: React.FC = () => {
       okType: 'danger',
       onOk: async () => {
         try {
+          await deletePurchaseOrder(record.id!);
           messageApi.success('采购订单删除成功');
           actionRef.current?.reload();
-        } catch (error) {
-          messageApi.error('采购订单删除失败');
+        } catch (error: any) {
+          messageApi.error(error.message || '采购订单删除失败');
         }
       },
     });
   };
 
   // 处理编辑
-  const handleEdit = (record: PurchaseOrder) => {
-    setIsEdit(true);
-    setCurrentOrder(record);
-    setModalVisible(true);
+  const handleEdit = async (record: PurchaseOrder) => {
+    try {
+      const detail = await getPurchaseOrder(record.id!);
+      setIsEdit(true);
+      setCurrentOrder(detail);
+      setModalVisible(true);
+      // 延迟设置表单值
+      setTimeout(() => {
+        formRef.current?.setFieldsValue({
+          supplier_id: detail.supplier_id,
+          supplier_name: detail.supplier_name,
+          supplier_contact: detail.supplier_contact,
+          supplier_phone: detail.supplier_phone,
+          order_date: detail.order_date,
+          delivery_date: detail.delivery_date,
+          order_type: detail.order_type || '标准采购',
+          tax_rate: detail.tax_rate,
+          currency: detail.currency || 'CNY',
+          notes: detail.notes,
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取采购订单详情失败');
+    }
   };
 
   // 处理创建
@@ -262,18 +286,24 @@ const PurchaseOrdersPage: React.FC = () => {
     setIsEdit(false);
     setCurrentOrder(null);
     setModalVisible(true);
+    formRef.current?.resetFields();
   };
 
   // 处理提交表单（创建/更新）
   const handleSubmit = async (values: any): Promise<void> => {
     try {
-      // 这里添加创建/更新逻辑
-      // if (isEdit && currentOrder?.id) {
-      //   await purchaseOrderApi.update(currentOrder.id.toString(), values);
-      // } else {
-      //   await purchaseOrderApi.create(values);
-      // }
-      messageApi.success(isEdit ? '采购订单更新成功' : '采购订单创建成功');
+      if (isEdit && currentOrder?.id) {
+        await updatePurchaseOrder(currentOrder.id, values);
+        messageApi.success('采购订单更新成功');
+      } else {
+        // 创建时需要提供明细项，这里先创建一个空的明细数组
+        // TODO: 后续需要实现明细项的编辑功能
+        await createPurchaseOrder({
+          ...values,
+          items: [],
+        });
+        messageApi.success('采购订单创建成功');
+      }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
@@ -413,41 +443,27 @@ const PurchaseOrdersPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据 - 实际应该调用API
-            const mockData: PurchaseOrder[] = [
-              {
-                id: 1,
-                order_code: 'PO202501001',
-                supplier_name: '供应商A',
-                order_date: '2024-12-01',
-                delivery_date: '2024-12-15',
-                status: '已审核',
-                review_status: '审核通过',
-                total_amount: 50000,
-                total_quantity: 100,
-                items_count: 3,
-                created_at: '2024-12-01 09:00:00',
-              },
-              {
-                id: 2,
-                order_code: 'PO202501002',
-                supplier_name: '供应商B',
-                order_date: '2024-12-02',
-                delivery_date: '2024-12-20',
-                status: '草稿',
-                review_status: '待审核',
-                total_amount: 25000,
-                total_quantity: 50,
-                items_count: 2,
-                created_at: '2024-12-02 10:30:00',
-              }
-            ];
-
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+            try {
+              const response = await listPurchaseOrders({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                status: params.status,
+                review_status: params.review_status,
+                keyword: params.keyword,
+              });
+              return {
+                data: response.data || [],
+                success: response.success !== false,
+                total: response.total || 0,
+              };
+            } catch (error) {
+              messageApi.error('获取采购订单列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowSelection={{
             selectedRowKeys,
@@ -471,14 +487,95 @@ const PurchaseOrdersPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑采购订单' : '新建采购订单'}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setCurrentOrder(null);
+          formRef.current?.resetFields();
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
+        grid={true}
       >
-        <div style={{ padding: '16px 0', textAlign: 'center' }}>
-          {/* 这里可以添加采购订单表单组件 */}
-          <p>采购订单表单开发中...</p>
+        <ProFormText
+          name="supplier_name"
+          label="供应商名称"
+          placeholder="请输入供应商名称"
+          rules={[{ required: true, message: '请输入供应商名称' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="supplier_contact"
+          label="联系人"
+          placeholder="请输入联系人"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="supplier_phone"
+          label="联系电话"
+          placeholder="请输入联系电话"
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="order_date"
+          label="订单日期"
+          placeholder="请选择订单日期"
+          rules={[{ required: true, message: '请选择订单日期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="delivery_date"
+          label="要求到货日期"
+          placeholder="请选择要求到货日期"
+          rules={[{ required: true, message: '请选择要求到货日期' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="order_type"
+          label="订单类型"
+          placeholder="请选择订单类型"
+          options={[
+            { label: '标准采购', value: '标准采购' },
+            { label: '紧急采购', value: '紧急采购' },
+            { label: '框架协议', value: '框架协议' },
+          ]}
+          initialValue="标准采购"
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="currency"
+          label="币种"
+          placeholder="请选择币种"
+          options={[
+            { label: '人民币(CNY)', value: 'CNY' },
+            { label: '美元(USD)', value: 'USD' },
+            { label: '欧元(EUR)', value: 'EUR' },
+          ]}
+          initialValue="CNY"
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="tax_rate"
+          label="税率(%)"
+          placeholder="请输入税率"
+          min={0}
+          max={100}
+          precision={2}
+          initialValue={0}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="notes"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+        <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
+          <p style={{ margin: 0, color: '#999' }}>
+            注意：采购订单明细项功能开发中，当前版本仅支持基本信息的创建和编辑。
+          </p>
         </div>
       </FormModalTemplate>
 
