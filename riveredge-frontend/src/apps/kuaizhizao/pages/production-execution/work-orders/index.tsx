@@ -1464,6 +1464,35 @@ const WorkOrdersPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* 合并工单Modal */}
+      <FormModalTemplate
+        title="合并工单"
+        open={mergeModalVisible}
+        onClose={() => {
+          setMergeModalVisible(false);
+          mergeFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitMerge}
+        isEdit={false}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={mergeFormRef}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div>已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行合并</div>
+          <div style={{ marginTop: 8, color: '#666', fontSize: '12px' }}>
+            注意：只能合并相同产品、相同状态（草稿或已下达）且未报工的工单
+          </div>
+        </div>
+        <ProFormTextArea
+          name="remarks"
+          label="合并备注"
+          placeholder="请输入合并备注（可选）"
+          fieldProps={{
+            rows: 3,
+          }}
+        />
+      </FormModalTemplate>
     </>
   );
 };
