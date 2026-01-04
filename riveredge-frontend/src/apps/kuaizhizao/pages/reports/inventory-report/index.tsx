@@ -47,10 +47,18 @@ const InventoryReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // 报表参数状态
   const [reportType, setReportType] = useState<'summary' | 'turnover' | 'analysis'>('summary');
-  const [dateRange, setDateRange] = useState<[string, string]>(['2025-01-01', '2025-12-31']);
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
+    dayjs().subtract(30, 'day'),
+    dayjs(),
+  ]);
+  const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
+
+  // 分析数据状态
+  const [analysisData, setAnalysisData] = useState<any>(null);
 
   // 统计数据状态
   const [stats, setStats] = useState({
