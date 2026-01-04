@@ -213,6 +213,35 @@ export const reportingApi = {
   },
 };
 
+// 物料绑定相关接口
+export const materialBindingApi = {
+  // 创建上料绑定
+  createFeeding: async (recordId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding/feeding`, {
+      method: 'POST',
+      data,
+    });
+  },
+
+  // 创建下料绑定
+  createDischarging: async (recordId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding/discharging`, {
+      method: 'POST',
+      data,
+    });
+  },
+
+  // 获取报工记录的物料绑定列表
+  getByReportingRecord: async (recordId: string) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding`, { method: 'GET' });
+  },
+
+  // 删除物料绑定记录
+  delete: async (bindingId: string) => {
+    return apiRequest(`/apps/kuaizhizao/material-binding/${bindingId}`, { method: 'DELETE' });
+  },
+};
+
 // 仓储管理相关接口
 export const warehouseApi = {
   // 生产领料单
