@@ -24,6 +24,10 @@ from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
 from apps.kuaizhizao.services.packing_binding_service import PackingBindingService
+from apps.kuaizhizao.services.customer_material_registration_service import (
+    BarcodeMappingRuleService,
+    CustomerMaterialRegistrationService,
+)
 
 # 初始化服务实例
 reporting_service = ReportingService()
@@ -33,6 +37,8 @@ inventory_analysis_service = InventoryAnalysisService()
 inventory_alert_rule_service = InventoryAlertRuleService()
 inventory_alert_service = InventoryAlertService()
 packing_binding_service = PackingBindingService()
+barcode_mapping_rule_service = BarcodeMappingRuleService()
+customer_material_registration_service = CustomerMaterialRegistrationService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -132,6 +138,34 @@ from apps.kuaizhizao.schemas.warehouse import (
     PurchaseReceiptCreate,
     PurchaseReceiptUpdate,
     PurchaseReceiptResponse,
+)
+from apps.kuaizhizao.schemas.inventory_alert import (
+    InventoryAlertRuleCreate,
+    InventoryAlertRuleUpdate,
+    InventoryAlertRuleResponse,
+    InventoryAlertRuleListResponse,
+    InventoryAlertCreate,
+    InventoryAlertUpdate,
+    InventoryAlertResponse,
+    InventoryAlertListResponse,
+)
+from apps.kuaizhizao.schemas.packing_binding import (
+    PackingBindingCreate,
+    PackingBindingCreateFromReceipt,
+    PackingBindingUpdate,
+    PackingBindingResponse,
+    PackingBindingListResponse,
+)
+from apps.kuaizhizao.schemas.customer_material_registration import (
+    BarcodeMappingRuleCreate,
+    BarcodeMappingRuleUpdate,
+    BarcodeMappingRuleResponse,
+    BarcodeMappingRuleListResponse,
+    CustomerMaterialRegistrationCreate,
+    CustomerMaterialRegistrationResponse,
+    CustomerMaterialRegistrationListResponse,
+    ParseBarcodeRequest,
+    ParseBarcodeResponse,
 )
 from apps.kuaizhizao.schemas.quality import (
     # 来料检验单
@@ -1532,6 +1566,133 @@ async def delete_packing_binding(
     return JSONResponse(
         content={"message": "装箱绑定记录删除成功"},
         status_code=status.HTTP_200_OK
+    )
+
+
+# ============ 客户来料登记 API ============
+
+@router.post("/inventory/customer-material-registration/parse-barcode", response_model=ParseBarcodeResponse, summary="解析客户来料条码")
+async def parse_customer_material_barcode(
+    parse_request: ParseBarcodeRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ParseBarcodeResponse:
+    """
+    解析客户来料条码
+
+    解析客户来料的一维码或二维码，并尝试映射到内部物料。
+
+    - **parse_request**: 解析条码请求（条码、条码类型、客户ID等）
+    """
+    return await customer_material_registration_service.parse_barcode(
+        tenant_id=tenant_id,
+        parse_request=parse_request
+    )
+
+
+@router.post("/inventory/customer-material-registration", response_model=CustomerMaterialRegistrationResponse, summary="客户来料登记")
+async def create_customer_material_registration(
+    registration_data: CustomerMaterialRegistrationCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    客户来料登记
+
+    登记客户来料信息，支持扫码识别和条码映射。
+
+    - **registration_data**: 登记创建数据（客户、条码、数量等）
+    """
+    return await customer_material_registration_service.create_registration(
+        tenant_id=tenant_id,
+        registration_data=registration_data,
+        registered_by=current_user.id
+    )
+
+
+@router.get("/inventory/customer-material-registration", response_model=List[CustomerMaterialRegistrationListResponse], summary="获取客户来料登记列表")
+async def list_customer_material_registrations(
+    skip: int = Query(0, description="跳过数量"),
+    limit: int = Query(100, description="限制数量"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    registration_date_start: Optional[str] = Query(None, description="登记开始日期（ISO格式）"),
+    registration_date_end: Optional[str] = Query(None, description="登记结束日期（ISO格式）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[CustomerMaterialRegistrationListResponse]:
+    """
+    获取客户来料登记列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    from datetime import datetime
+
+    # 转换时间参数
+    date_start_dt = None
+    date_end_dt = None
+
+    if registration_date_start:
+        try:
+            date_start_dt = datetime.fromisoformat(registration_date_start.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    if registration_date_end:
+        try:
+            date_end_dt = datetime.fromisoformat(registration_date_end.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    return await customer_material_registration_service.list_registrations(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        customer_id=customer_id,
+        status=status,
+        registration_date_start=date_start_dt,
+        registration_date_end=date_end_dt,
+    )
+
+
+@router.post("/inventory/customer-material-registration/mapping-rules", response_model=BarcodeMappingRuleResponse, summary="创建条码映射规则")
+async def create_barcode_mapping_rule(
+    rule_data: BarcodeMappingRuleCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BarcodeMappingRuleResponse:
+    """
+    创建条码映射规则
+
+    - **rule_data**: 映射规则创建数据（条码模式、映射物料、解析规则等）
+    """
+    return await barcode_mapping_rule_service.create_mapping_rule(
+        tenant_id=tenant_id,
+        rule_data=rule_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/inventory/customer-material-registration/mapping-rules", response_model=List[BarcodeMappingRuleListResponse], summary="获取条码映射规则列表")
+async def list_barcode_mapping_rules(
+    skip: int = Query(0, description="跳过数量"),
+    limit: int = Query(100, description="限制数量"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[BarcodeMappingRuleListResponse]:
+    """
+    获取条码映射规则列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    return await barcode_mapping_rule_service.list_mapping_rules(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        customer_id=customer_id,
+        is_enabled=is_enabled,
     )
 
 
