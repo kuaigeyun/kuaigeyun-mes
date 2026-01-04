@@ -255,3 +255,16 @@ class WorkOrderBatchPriorityRequest(BaseModel):
     """工单批量优先级设置请求Schema"""
     work_order_ids: list[int] = Field(..., description="工单ID列表")
     priority: str = Field(..., description="优先级（low/normal/high/urgent）")
+
+
+class WorkOrderMergeRequest(BaseModel):
+    """工单合并请求Schema"""
+    work_order_ids: list[int] = Field(..., min_length=2, description="要合并的工单ID列表（至少2个）")
+    remarks: Optional[str] = Field(None, description="合并备注")
+
+
+class WorkOrderMergeResponse(BaseModel):
+    """工单合并响应Schema"""
+    merged_work_order: WorkOrderResponse = Field(..., description="合并后的工单")
+    original_work_order_ids: list[int] = Field(..., description="原工单ID列表")
+    original_work_order_codes: list[str] = Field(..., description="原工单编码列表")

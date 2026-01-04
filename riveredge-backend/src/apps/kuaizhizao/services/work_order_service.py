@@ -35,6 +35,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderUnfreezeRequest,
     WorkOrderPriorityRequest,
     WorkOrderBatchPriorityRequest,
+    WorkOrderMergeRequest,
+    WorkOrderMergeResponse,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -1069,3 +1071,136 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             logger.info(f"批量设置 {len(updated_work_orders)} 个工单的优先级为 {batch_data.priority}")
 
             return updated_work_orders
+
+    async def merge_work_orders(
+        self,
+        tenant_id: int,
+        merge_data: WorkOrderMergeRequest,
+        created_by: int
+    ) -> WorkOrderMergeResponse:
+        """
+        合并工单
+
+        Args:
+            tenant_id: 组织ID
+            merge_data: 合并数据
+            created_by: 创建人ID
+
+        Returns:
+            WorkOrderMergeResponse: 合并结果
+
+        Raises:
+            ValidationError: 数据验证失败
+            NotFoundError: 工单不存在
+            BusinessLogicError: 业务逻辑错误（如不能合并）
+        """
+        async with in_transaction():
+            if len(merge_data.work_order_ids) < 2:
+                raise ValidationError("至少需要2个工单才能合并")
+
+            # 获取所有要合并的工单
+            work_orders = []
+            for work_order_id in merge_data.work_order_ids:
+                work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+                work_orders.append(work_order)
+
+            # 验证合并规则1：只能合并相同产品的工单
+            first_product_id = work_orders[0].product_id
+            for work_order in work_orders[1:]:
+                if work_order.product_id != first_product_id:
+                    raise BusinessLogicError(f"只能合并相同产品的工单，工单 {work_order.code} 的产品与第一个工单不同")
+
+            # 验证合并规则2：只能合并相同状态的工单（draft/released）
+            first_status = work_orders[0].status
+            if first_status not in ['draft', 'released']:
+                raise BusinessLogicError(f"只能合并草稿或已下达状态的工单，第一个工单状态为：{first_status}")
+            
+            for work_order in work_orders[1:]:
+                if work_order.status != first_status:
+                    raise BusinessLogicError(f"只能合并相同状态的工单，工单 {work_order.code} 的状态与第一个工单不同")
+
+            # 验证合并规则3：不能合并已报工的工单
+            for work_order in work_orders:
+                reporting_records = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order.id,
+                    status='approved',
+                    deleted_at__isnull=True
+                ).all()
+                if reporting_records:
+                    total_reported = sum(Decimal(str(r.qualified_quantity)) for r in reporting_records)
+                    if total_reported > 0:
+                        raise BusinessLogicError(f"工单 {work_order.code} 已有报工记录（已报工数量：{total_reported}），不能合并")
+
+            # 验证合并规则4：不能合并已冻结的工单
+            for work_order in work_orders:
+                if work_order.is_frozen:
+                    raise BusinessLogicError(f"工单 {work_order.code} 已冻结，不能合并")
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 计算合并后的数量（累加）
+            total_quantity = sum(work_order.quantity for work_order in work_orders)
+
+            # 生成合并后工单编码
+            today = datetime.now().strftime("%Y%m%d")
+            merged_code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="WORK_ORDER_CODE",
+                prefix=f"WO{today}"
+            )
+
+            # 构建原工单编码列表（用于备注和响应）
+            original_codes = [wo.code for wo in work_orders]
+            original_ids = [wo.id for wo in work_orders]
+
+            # 构建合并备注
+            merge_remarks = f"由工单 {', '.join(original_codes)} 合并而成"
+            if merge_data.remarks:
+                merge_remarks = f"{merge_remarks}。{merge_data.remarks}"
+
+            # 创建合并后的工单（以第一个工单的信息为基础）
+            first_work_order = work_orders[0]
+            merged_work_order = await WorkOrder.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=merged_code,
+                name=f"{first_work_order.name}（合并）",
+                product_id=first_work_order.product_id,
+                product_code=first_work_order.product_code,
+                product_name=first_work_order.product_name,
+                quantity=total_quantity,
+                production_mode=first_work_order.production_mode,
+                sales_order_id=first_work_order.sales_order_id,
+                sales_order_code=first_work_order.sales_order_code,
+                sales_order_name=first_work_order.sales_order_name,
+                workshop_id=first_work_order.workshop_id,
+                workshop_name=first_work_order.workshop_name,
+                work_center_id=first_work_order.work_center_id,
+                work_center_name=first_work_order.work_center_name,
+                status=first_status,
+                priority=first_work_order.priority,
+                planned_start_date=first_work_order.planned_start_date,
+                planned_end_date=first_work_order.planned_end_date,
+                remarks=merge_remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            # 更新原工单状态为cancelled
+            for work_order in work_orders:
+                work_order.status = 'cancelled'
+                work_order.updated_by = created_by
+                work_order.updated_by_name = user_info["name"]
+                await work_order.save()
+
+            logger.info(f"成功合并 {len(work_orders)} 个工单（{', '.join(original_codes)}）为新工单 {merged_code}")
+
+            return WorkOrderMergeResponse(
+                merged_work_order=WorkOrderResponse.model_validate(merged_work_order),
+                original_work_order_ids=original_ids,
+                original_work_order_codes=original_codes,
+            )
