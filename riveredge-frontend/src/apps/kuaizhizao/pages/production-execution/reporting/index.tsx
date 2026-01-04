@@ -7,9 +7,10 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
-import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { reportingApi } from '../../../services/production';
 
 interface ReportingRecord {
   id: number;
@@ -37,6 +38,11 @@ const ReportingPage: React.FC = () => {
 
   // 扫码报工Modal状态
   const [scanModalVisible, setScanModalVisible] = useState(false);
+
+  // 报废记录Modal状态
+  const [scrapModalVisible, setScrapModalVisible] = useState(false);
+  const [currentReportingRecord, setCurrentReportingRecord] = useState<ReportingRecord | null>(null);
+  const scrapFormRef = useRef<any>(null);
 
   /**
    * 处理扫码报工
@@ -81,6 +87,45 @@ const ReportingPage: React.FC = () => {
         actionRef.current?.reload();
       },
     });
+  };
+
+  /**
+   * 处理创建报废记录
+   */
+  const handleCreateScrap = (record: ReportingRecord) => {
+    if (record.unqualifiedQuantity <= 0) {
+      messageApi.warning('该报工记录没有不合格数量，无法创建报废记录');
+      return;
+    }
+    setCurrentReportingRecord(record);
+    setScrapModalVisible(true);
+    setTimeout(() => {
+      scrapFormRef.current?.setFieldsValue({
+        scrap_quantity: record.unqualifiedQuantity,
+        scrap_type: 'other',
+      });
+    }, 100);
+  };
+
+  /**
+   * 处理提交报废记录
+   */
+  const handleSubmitScrap = async (values: any): Promise<void> => {
+    try {
+      if (!currentReportingRecord?.id) {
+        throw new Error('报工记录信息不存在');
+      }
+
+      await reportingApi.recordScrap(currentReportingRecord.id.toString(), values);
+      messageApi.success('报废记录创建成功');
+      setScrapModalVisible(false);
+      setCurrentReportingRecord(null);
+      scrapFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建报废记录失败');
+      throw error;
+    }
   };
 
   /**
@@ -154,7 +199,7 @@ const ReportingPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 120,
+      width: 180,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -179,6 +224,17 @@ const ReportingPage: React.FC = () => {
                 驳回
               </Button>
             </>
+          )}
+          {record.status === 'approved' && record.unqualifiedQuantity > 0 && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleCreateScrap(record)}
+            >
+              报废
+            </Button>
           )}
         </Space>
       ),
@@ -392,6 +448,80 @@ const ReportingPage: React.FC = () => {
           </p>
         </div>
       </Modal>
+
+      {/* 创建报废记录Modal */}
+      <FormModalTemplate
+        title="创建报废记录"
+        open={scrapModalVisible}
+        onCancel={() => {
+          setScrapModalVisible(false);
+          setCurrentReportingRecord(null);
+          scrapFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitScrap}
+        formRef={scrapFormRef}
+        {...MODAL_CONFIG}
+      >
+        {currentReportingRecord && (
+          <>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div><strong>工单编码：</strong>{currentReportingRecord.workOrderCode}</div>
+                </Col>
+                <Col span={12}>
+                  <div><strong>工序：</strong>{currentReportingRecord.operationName}</div>
+                </Col>
+                <Col span={12} style={{ marginTop: 8 }}>
+                  <div><strong>不合格数量：</strong>{currentReportingRecord.unqualifiedQuantity}</div>
+                </Col>
+              </Row>
+            </Card>
+            <ProFormDigit
+              name="scrap_quantity"
+              label="报废数量"
+              placeholder="请输入报废数量"
+              rules={[{ required: true, message: '请输入报废数量' }]}
+              min={0}
+              max={currentReportingRecord.unqualifiedQuantity}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormSelect
+              name="scrap_type"
+              label="报废类型"
+              placeholder="请选择报废类型"
+              rules={[{ required: true, message: '请选择报废类型' }]}
+              options={[
+                { label: '工艺问题', value: 'process' },
+                { label: '物料问题', value: 'material' },
+                { label: '质量问题', value: 'quality' },
+                { label: '设备问题', value: 'equipment' },
+                { label: '其他', value: 'other' },
+              ]}
+            />
+            <ProFormTextArea
+              name="scrap_reason"
+              label="报废原因"
+              placeholder="请输入报废原因"
+              rules={[{ required: true, message: '请输入报废原因' }]}
+              fieldProps={{ rows: 3 }}
+            />
+            <ProFormDigit
+              name="unit_cost"
+              label="单位成本（可选）"
+              placeholder="请输入单位成本"
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormTextArea
+              name="remarks"
+              label="备注（可选）"
+              placeholder="请输入备注"
+              fieldProps={{ rows: 2 }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

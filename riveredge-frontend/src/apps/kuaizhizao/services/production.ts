@@ -192,6 +192,11 @@ export const reportingApi = {
   getStatistics: async (params?: any) => {
     return apiRequest('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params });
   },
+
+  // 从报工记录创建报废记录
+  recordScrap: async (recordId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data });
+  },
 };
 
 // 仓储管理相关接口
