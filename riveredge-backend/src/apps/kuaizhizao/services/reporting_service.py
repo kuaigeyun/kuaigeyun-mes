@@ -17,11 +17,16 @@ from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
+from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
     ReportingRecordUpdate,
     ReportingRecordResponse,
     ReportingRecordListResponse
+)
+from apps.kuaizhizao.schemas.scrap_record import (
+    ScrapRecordCreateFromReporting,
+    ScrapRecordResponse
 )
 
 from apps.base_service import AppBaseService
@@ -370,13 +375,113 @@ class ReportingService(AppBaseService[ReportingRecord]):
             deleted_at__isnull=True
         )
 
-        if work_order:
-            work_order.completed_quantity = total_completed
-            work_order.qualified_quantity = total_completed
+            if work_order:
+                work_order.completed_quantity = total_completed
+                work_order.qualified_quantity = total_completed
 
-            # 如果完成数量达到计划数量，更新状态为已完成
-            if total_completed >= work_order.quantity:
-                work_order.status = 'completed'
-                work_order.actual_end_date = datetime.now()
+                # 如果完成数量达到计划数量，更新状态为已完成
+                if total_completed >= work_order.quantity:
+                    work_order.status = 'completed'
+                    work_order.actual_end_date = datetime.now()
 
-            await work_order.save()
+                await work_order.save()
+
+    async def record_scrap(
+        self,
+        tenant_id: int,
+        reporting_record_id: int,
+        scrap_data: ScrapRecordCreateFromReporting,
+        created_by: int
+    ) -> ScrapRecordResponse:
+        """
+        从报工记录创建报废记录
+
+        Args:
+            tenant_id: 组织ID
+            reporting_record_id: 报工记录ID
+            scrap_data: 报废记录创建数据
+            created_by: 创建人ID
+
+        Returns:
+            ScrapRecordResponse: 创建的报废记录信息
+
+        Raises:
+            NotFoundError: 报工记录不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取报工记录
+            reporting_record = await ReportingRecord.get_or_none(
+                id=reporting_record_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not reporting_record:
+                raise NotFoundError(f"报工记录不存在: {reporting_record_id}")
+
+            # 获取工单信息
+            work_order = await WorkOrder.get_or_none(
+                id=reporting_record.work_order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not work_order:
+                raise NotFoundError(f"工单不存在: {reporting_record.work_order_id}")
+
+            # 验证报废数量不能超过报工记录的不合格数量
+            if scrap_data.scrap_quantity > reporting_record.unqualified_quantity:
+                raise ValidationError(
+                    f"报废数量({scrap_data.scrap_quantity})不能超过报工记录的不合格数量({reporting_record.unqualified_quantity})"
+                )
+
+            # 生成报废单编码
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="SCRAP_RECORD_CODE",
+                prefix=f"SC{today}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 计算总成本
+            total_cost = Decimal("0")
+            if scrap_data.unit_cost:
+                total_cost = scrap_data.unit_cost * scrap_data.scrap_quantity
+
+            # 创建报废记录
+            scrap_record = await ScrapRecord.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                reporting_record_id=reporting_record_id,
+                work_order_id=reporting_record.work_order_id,
+                work_order_code=reporting_record.work_order_code,
+                operation_id=reporting_record.operation_id,
+                operation_code=reporting_record.operation_code,
+                operation_name=reporting_record.operation_name,
+                product_id=work_order.product_id,
+                product_code=work_order.product_code,
+                product_name=work_order.product_name,
+                scrap_quantity=scrap_data.scrap_quantity,
+                unit_cost=scrap_data.unit_cost,
+                total_cost=total_cost,
+                scrap_reason=scrap_data.scrap_reason,
+                scrap_type=scrap_data.scrap_type,
+                warehouse_id=scrap_data.warehouse_id,
+                warehouse_name=scrap_data.warehouse_name,
+                status="draft",
+                remarks=scrap_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            # TODO: 库存扣减（需要调用库存服务）
+            # TODO: 更新工单的不合格数量
+
+            return ScrapRecordResponse.model_validate(scrap_record)
