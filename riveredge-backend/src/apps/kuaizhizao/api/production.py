@@ -17,6 +17,7 @@ from infra.exceptions.exceptions import ValidationError, BusinessLogicError
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+from apps.kuaizhizao.services.outsource_service import OutsourceService
 
 # 初始化服务实例
 reporting_service = ReportingService()
@@ -64,6 +65,13 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderUpdate,
     ReworkOrderResponse,
     ReworkOrderListResponse
+)
+from apps.kuaizhizao.schemas.outsource_order import (
+    OutsourceOrderCreate,
+    OutsourceOrderCreateFromWorkOrder,
+    OutsourceOrderUpdate,
+    OutsourceOrderResponse,
+    OutsourceOrderListResponse
 )
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
@@ -543,6 +551,164 @@ async def delete_rework_order(
     return JSONResponse(
         content={"message": "返工单删除成功"},
         status_code=status.HTTP_200_OK
+    )
+
+
+@router.post("/work-orders/{work_order_id}/outsource", response_model=OutsourceOrderResponse, summary="从工单创建委外单")
+async def create_outsource_order_from_work_order(
+    work_order_id: int,
+    outsource_data: OutsourceOrderCreateFromWorkOrder,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    """
+    从工单工序创建委外单
+
+    根据工单工序信息创建委外单，自动关联工单和工序。
+
+    - **work_order_id**: 工单ID
+    - **outsource_data**: 委外单创建数据（工单工序ID、供应商ID、委外数量等）
+    """
+    return await OutsourceService().create_outsource_order_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        work_order_operation_id=outsource_data.work_order_operation_id,
+        supplier_id=outsource_data.supplier_id,
+        outsource_quantity=outsource_data.outsource_quantity,
+        unit_price=outsource_data.unit_price,
+        planned_start_date=outsource_data.planned_start_date,
+        planned_end_date=outsource_data.planned_end_date,
+        remarks=outsource_data.remarks,
+        created_by=current_user.id
+    )
+
+
+# ============ 委外单管理 API ============
+
+@router.post("/outsource-orders", response_model=OutsourceOrderResponse, summary="创建委外单")
+async def create_outsource_order(
+    outsource_order: OutsourceOrderCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    """
+    创建委外单
+
+    - **outsource_order**: 委外单创建数据
+    """
+    return await OutsourceService().create_outsource_order(
+        tenant_id=tenant_id,
+        outsource_order_data=outsource_order,
+        created_by=current_user.id
+    )
+
+
+@router.get("/outsource-orders", response_model=List[OutsourceOrderListResponse], summary="获取委外单列表")
+async def list_outsource_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    status: Optional[str] = Query(None, description="委外单状态"),
+    code: Optional[str] = Query(None, description="委外单编码（模糊搜索）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceOrderListResponse]:
+    """
+    获取委外单列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    return await OutsourceService().list_outsource_orders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        work_order_id=work_order_id,
+        supplier_id=supplier_id,
+        status=status,
+        code=code,
+    )
+
+
+@router.get("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="获取委外单详情")
+async def get_outsource_order(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    """
+    根据ID获取委外单详情
+
+    - **outsource_order_id**: 委外单ID
+    """
+    return await OutsourceService().get_outsource_order_by_id(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id
+    )
+
+
+@router.put("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="更新委外单")
+async def update_outsource_order(
+    outsource_order_id: int,
+    outsource_order: OutsourceOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    """
+    更新委外单信息
+
+    - **outsource_order_id**: 委外单ID
+    - **outsource_order**: 委外单更新数据
+    """
+    return await OutsourceService().update_outsource_order(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        outsource_order_data=outsource_order,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/outsource-orders/{outsource_order_id}", summary="删除委外单")
+async def delete_outsource_order(
+    outsource_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除委外单（软删除）
+
+    - **outsource_order_id**: 委外单ID
+    """
+    await OutsourceService().delete_outsource_order(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        deleted_by=current_user.id
+    )
+
+    return JSONResponse(
+        content={"message": "委外单删除成功"},
+        status_code=status.HTTP_200_OK
+    )
+
+
+@router.post("/outsource-orders/{outsource_order_id}/link-purchase-receipt", response_model=OutsourceOrderResponse, summary="关联采购入库单")
+async def link_purchase_receipt_to_outsource_order(
+    outsource_order_id: int,
+    purchase_receipt_id: int = Query(..., description="采购入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceOrderResponse:
+    """
+    关联采购入库单（委外入库）
+
+    - **outsource_order_id**: 委外单ID
+    - **purchase_receipt_id**: 采购入库单ID
+    """
+    return await OutsourceService().link_purchase_receipt(
+        tenant_id=tenant_id,
+        outsource_order_id=outsource_order_id,
+        purchase_receipt_id=purchase_receipt_id,
+        updated_by=current_user.id
     )
 
 

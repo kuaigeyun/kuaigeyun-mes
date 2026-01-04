@@ -7,6 +7,7 @@
 # 生产执行模块
 from .work_order_service import WorkOrderService
 from .reporting_service import ReportingService
+from .outsource_service import OutsourceService
 
 # 仓储管理模块
 from .warehouse_service import (
@@ -48,6 +49,7 @@ __all__ = [
     # 生产执行模块
     'WorkOrderService',
     'ReportingService',
+    'OutsourceService',
 
     # 仓储管理模块
     'ProductionPickingService',
