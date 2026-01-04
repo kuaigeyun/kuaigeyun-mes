@@ -945,6 +945,29 @@ async def delete_reporting_record(
     )
 
 
+@router.post("/reporting/{record_id}/scrap", response_model=ScrapRecordResponse, summary="从报工记录创建报废记录")
+async def create_scrap_record_from_reporting(
+    record_id: int,
+    scrap_data: ScrapRecordCreateFromReporting,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ScrapRecordResponse:
+    """
+    从报工记录创建报废记录
+
+    根据报工记录信息创建报废记录，自动关联报工记录、工单和产品信息。
+
+    - **record_id**: 报工记录ID
+    - **scrap_data**: 报废记录创建数据（报废数量、报废原因、报废类型、单位成本等）
+    """
+    return await reporting_service.record_scrap(
+        tenant_id=tenant_id,
+        reporting_record_id=record_id,
+        scrap_data=scrap_data,
+        created_by=current_user.id
+    )
+
+
 @router.get("/reporting/statistics", summary="获取报工统计信息")
 async def get_reporting_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
