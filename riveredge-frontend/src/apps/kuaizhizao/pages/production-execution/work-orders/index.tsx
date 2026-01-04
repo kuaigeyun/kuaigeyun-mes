@@ -65,6 +65,11 @@ const WorkOrdersPage: React.FC = () => {
   const [workOrderDetail, setWorkOrderDetail] = useState<WorkOrder | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
 
+  // 创建返工单相关状态
+  const [reworkModalVisible, setReworkModalVisible] = useState(false);
+  const [currentWorkOrderForRework, setCurrentWorkOrderForRework] = useState<WorkOrder | null>(null);
+  const reworkFormRef = useRef<any>(null);
+
   /**
    * 处理新建工单
    */
@@ -289,6 +294,53 @@ const WorkOrdersPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error) {
       messageApi.error('工单下达失败');
+    }
+  };
+
+  /**
+   * 处理创建返工单
+   */
+  const handleCreateRework = async (record: WorkOrder) => {
+    try {
+      const detail = await workOrderApi.get(record.id!.toString());
+      setCurrentWorkOrderForRework(detail);
+      setReworkModalVisible(true);
+      setTimeout(() => {
+        reworkFormRef.current?.setFieldsValue({
+          original_work_order_id: detail.id,
+          original_work_order_uuid: detail.uuid || detail.id?.toString(),
+          product_id: detail.product_id,
+          product_code: detail.product_code,
+          product_name: detail.product_name,
+          workshop_id: detail.workshop_id,
+          workshop_name: detail.workshop_name,
+          work_center_id: detail.work_center_id,
+          work_center_name: detail.work_center_name,
+          quantity: 1, // 默认返工数量为1
+          rework_type: '返工',
+          status: 'draft',
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取工单详情失败');
+    }
+  };
+
+  /**
+   * 处理提交返工单表单
+   */
+  const handleSubmitRework = async (values: any): Promise<void> => {
+    try {
+      if (!currentWorkOrderForRework?.id) {
+        throw new Error('原工单信息不存在');
+      }
+      await reworkOrderApi.createFromWorkOrder(currentWorkOrderForRework.id.toString(), values);
+      messageApi.success('返工单创建成功');
+      setReworkModalVisible(false);
+      setCurrentWorkOrderForRework(null);
+    } catch (error: any) {
+      messageApi.error(error.message || '创建返工单失败');
+      throw error;
     }
   };
 
@@ -634,6 +686,80 @@ const WorkOrdersPage: React.FC = () => {
           </>
         }
       />
+
+      {/* 创建返工单Modal */}
+      <FormModalTemplate
+        title="创建返工单"
+        open={reworkModalVisible}
+        onCancel={() => {
+          setReworkModalVisible(false);
+          setCurrentWorkOrderForRework(null);
+          reworkFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitRework}
+        formRef={reworkFormRef}
+        {...MODAL_CONFIG}
+      >
+        <ProFormText
+          name="original_work_order_id"
+          label="原工单ID"
+          disabled
+        />
+        <ProFormText
+          name="product_code"
+          label="产品编码"
+          disabled
+        />
+        <ProFormText
+          name="product_name"
+          label="产品名称"
+          disabled
+        />
+        <ProFormDigit
+          name="quantity"
+          label="返工数量"
+          placeholder="请输入返工数量"
+          rules={[{ required: true, message: '请输入返工数量' }]}
+          min={0}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormSelect
+          name="rework_type"
+          label="返工类型"
+          placeholder="请选择返工类型"
+          rules={[{ required: true, message: '请选择返工类型' }]}
+          options={[
+            { label: '返工', value: '返工' },
+            { label: '返修', value: '返修' },
+            { label: '报废', value: '报废' },
+          ]}
+        />
+        <ProFormTextArea
+          name="rework_reason"
+          label="返工原因"
+          placeholder="请输入返工原因"
+          rules={[{ required: true, message: '请输入返工原因' }]}
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormDatePicker
+          name="planned_start_date"
+          label="计划开始时间"
+          placeholder="请选择计划开始时间"
+          fieldProps={{ showTime: true }}
+        />
+        <ProFormDatePicker
+          name="planned_end_date"
+          label="计划结束时间"
+          placeholder="请选择计划结束时间"
+          fieldProps={{ showTime: true }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="请输入备注"
+          fieldProps={{ rows: 3 }}
+        />
+      </FormModalTemplate>
     </>
   );
 };
