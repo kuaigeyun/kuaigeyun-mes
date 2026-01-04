@@ -398,6 +398,24 @@ async def batch_set_work_order_priority(
     )
 
 
+@router.post("/work-orders/merge", response_model=WorkOrderMergeResponse, summary="合并工单")
+async def merge_work_orders(
+    merge_data: WorkOrderMergeRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderMergeResponse:
+    """
+    合并工单
+
+    - **merge_data**: 合并数据（work_order_ids: 要合并的工单ID列表（至少2个）, remarks: 合并备注（可选））
+    """
+    return await WorkOrderService().merge_work_orders(
+        tenant_id=tenant_id,
+        merge_data=merge_data,
+        created_by=current_user.id
+    )
+
+
 @router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="从工单创建返工单")
 async def create_rework_order_from_work_order(
     work_order_id: int,
