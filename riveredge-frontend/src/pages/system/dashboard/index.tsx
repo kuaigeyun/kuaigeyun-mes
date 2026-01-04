@@ -31,10 +31,23 @@ import {
   RightOutlined,
   ShopOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { DashboardTemplate, type QuickAction } from '../../../components/layout-templates';
+import { getTodos, getStatistics, getDashboard, handleTodo, type TodoItem, type StatisticsResponse } from '../../../services/dashboard';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 const { Title, Text } = Typography;
 
@@ -69,32 +82,6 @@ const fetchNotifications = async () => {
   ];
 };
 
-const fetchTodos = async () => {
-  await new Promise(resolve => setTimeout(resolve, 800));
-  return [
-    {
-      id: 1,
-      title: '审核生产计划 #20251119001',
-      priority: 'high',
-      dueDate: '2025-11-20',
-      status: 'pending',
-    },
-    {
-      id: 2,
-      title: '完成质量检验报告',
-      priority: 'medium',
-      dueDate: '2025-11-21',
-      status: 'pending',
-    },
-    {
-      id: 3,
-      title: '更新库存盘点数据',
-      priority: 'low',
-      dueDate: '2025-11-22',
-      status: 'pending',
-    },
-  ];
-};
 
 // 快捷操作配置（转换为 DashboardTemplate 格式）
 const getQuickActions = (navigate: (path: string) => void): QuickAction[] => [
@@ -124,20 +111,42 @@ const getQuickActions = (navigate: (path: string) => void): QuickAction[] => [
 export default function DashboardPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  // 获取通知
+  // 获取通知（暂时保留模拟数据）
   const { data: notifications, isLoading: notificationsLoading } = useQuery({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
     refetchInterval: 60000,
   });
 
-  // 获取待办事项
-  const { data: todos, isLoading: todosLoading } = useQuery({
-    queryKey: ['todos'],
-    queryFn: fetchTodos,
+  // 获取待办事项（使用真实API）
+  const { data: todosData, isLoading: todosLoading, refetch: refetchTodos } = useQuery({
+    queryKey: ['dashboard-todos'],
+    queryFn: () => getTodos(20),
     refetchInterval: 30000,
   });
+
+  // 获取统计数据（使用真实API）
+  const { data: statistics, isLoading: statisticsLoading } = useQuery({
+    queryKey: ['dashboard-statistics'],
+    queryFn: getStatistics,
+    refetchInterval: 60000,
+  });
+
+  // 处理待办事项
+  const handleTodoMutation = useMutation({
+    mutationFn: ({ todoId, action }: { todoId: string; action: string }) => handleTodo(todoId, action),
+    onSuccess: () => {
+      message.success('处理成功');
+      refetchTodos();
+    },
+    onError: (error: any) => {
+      message.error(`处理失败: ${error.message || '未知错误'}`);
+    },
+  });
+
+  const todos = todosData?.items || [];
 
   // 未读通知数量
   const unreadCount = notifications?.filter(n => !n.read).length || 0;
@@ -291,7 +300,9 @@ export default function DashboardPage() {
                       alignItems: 'flex-start',
                     }}
                     onClick={() => {
-                      // TODO: 处理点击待办
+                      if (item.link) {
+                        navigate(item.link);
+                      }
                     }}
                   >
                     <Avatar
@@ -310,15 +321,190 @@ export default function DashboardPage() {
                           {priorityTextMap[item.priority]}优先级
                         </Tag>
                       </div>
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        截止日期：{dayjs(item.dueDate).format('YYYY-MM-DD')}
-                      </Text>
+                      {item.description && (
+                        <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: 4 }}>
+                          {item.description}
+                        </Text>
+                      )}
+                      {item.due_date && (
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          截止日期：{dayjs(item.due_date).format('YYYY-MM-DD')}
+                        </Text>
+                      )}
+                      <div style={{ marginTop: 8 }}>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
+                          }}
+                        >
+                          处理
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <Empty description="暂无待办事项" />
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 统计卡片 */}
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        {/* 生产统计 */}
+        <Col xs={24} sm={12} lg={8}>
+          <Card
+            title="生产统计"
+            loading={statisticsLoading}
+            style={{ height: '100%' }}
+          >
+            {statistics?.production && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">工单总数</Text>
+                  <Title level={2} style={{ margin: 0 }}>
+                    {statistics.production.total}
+                  </Title>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">已完成</Text>
+                  <Title level={3} style={{ margin: 0, color: '#52c41a' }}>
+                    {statistics.production.completed}
+                  </Title>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">进行中</Text>
+                  <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+                    {statistics.production.in_progress}
+                  </Title>
+                </div>
+                <div>
+                  <Text type="secondary">完成率</Text>
+                  <Title level={3} style={{ margin: 0 }}>
+                    {statistics.production.completion_rate}%
+                  </Title>
+                </div>
+                {statistics.production.total > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: '已完成', value: statistics.production.completed },
+                            { name: '进行中', value: statistics.production.in_progress },
+                            { name: '其他', value: statistics.production.total - statistics.production.completed - statistics.production.in_progress },
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          <Cell fill="#52c41a" />
+                          <Cell fill="#1890ff" />
+                          <Cell fill="#d9d9d9" />
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        </Col>
+
+        {/* 库存统计 */}
+        <Col xs={24} sm={12} lg={8}>
+          <Card
+            title="库存统计"
+            loading={statisticsLoading}
+            style={{ height: '100%' }}
+          >
+            {statistics?.inventory && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">库存总量</Text>
+                  <Title level={2} style={{ margin: 0 }}>
+                    {statistics.inventory.total_quantity}
+                  </Title>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">库存价值</Text>
+                  <Title level={3} style={{ margin: 0 }}>
+                    ¥{statistics.inventory.total_value.toLocaleString()}
+                  </Title>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">周转率</Text>
+                  <Title level={3} style={{ margin: 0 }}>
+                    {statistics.inventory.turnover_rate}
+                  </Title>
+                </div>
+                <div>
+                  <Text type="secondary">预警数量</Text>
+                  <Title level={3} style={{ margin: 0, color: statistics.inventory.alert_count > 0 ? '#ff4d4f' : '#52c41a' }}>
+                    {statistics.inventory.alert_count}
+                  </Title>
+                </div>
+              </div>
+            )}
+          </Card>
+        </Col>
+
+        {/* 质量统计 */}
+        <Col xs={24} sm={12} lg={8}>
+          <Card
+            title="质量统计"
+            loading={statisticsLoading}
+            style={{ height: '100%' }}
+          >
+            {statistics?.quality && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">质量合格率</Text>
+                  <Title level={2} style={{ margin: 0, color: statistics.quality.quality_rate >= 95 ? '#52c41a' : '#ff4d4f' }}>
+                    {statistics.quality.quality_rate}%
+                  </Title>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <Text type="secondary">异常总数</Text>
+                  <Title level={3} style={{ margin: 0 }}>
+                    {statistics.quality.total_exceptions}
+                  </Title>
+                </div>
+                <div>
+                  <Text type="secondary">待处理异常</Text>
+                  <Title level={3} style={{ margin: 0, color: statistics.quality.open_exceptions > 0 ? '#ff4d4f' : '#52c41a' }}>
+                    {statistics.quality.open_exceptions}
+                  </Title>
+                </div>
+                {statistics.quality.total_exceptions > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart
+                        data={[
+                          { name: '总异常', value: statistics.quality.total_exceptions },
+                          { name: '待处理', value: statistics.quality.open_exceptions },
+                          { name: '已处理', value: statistics.quality.total_exceptions - statistics.quality.open_exceptions },
+                        ]}
+                      >
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#1890ff" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
             )}
           </Card>
         </Col>
