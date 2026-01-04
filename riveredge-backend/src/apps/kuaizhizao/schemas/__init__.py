@@ -7,6 +7,7 @@
 # 生产执行模块
 from .work_order import *
 from .reporting_record import *
+from .outsource_order import *
 
 # 仓储管理模块
 from .warehouse import *
@@ -45,6 +46,13 @@ __all__ = [
     'ReportingRecordUpdate',
     'ReportingRecordResponse',
     'ReportingRecordListResponse',
+
+    # 委外单相关
+    'OutsourceOrderBase',
+    'OutsourceOrderCreate',
+    'OutsourceOrderUpdate',
+    'OutsourceOrderResponse',
+    'OutsourceOrderListResponse',
 
     # 生产领料单相关
     'ProductionPickingBase',
