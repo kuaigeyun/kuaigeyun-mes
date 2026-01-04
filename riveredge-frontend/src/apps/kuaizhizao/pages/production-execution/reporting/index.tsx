@@ -741,6 +741,80 @@ const ReportingPage: React.FC = () => {
           </>
         )}
       </FormModalTemplate>
+
+      {/* 修正报工数据Modal */}
+      <FormModalTemplate
+        title="修正报工数据"
+        open={correctModalVisible}
+        onCancel={() => {
+          setCorrectModalVisible(false);
+          setCurrentReportingRecordForCorrect(null);
+          correctFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitCorrect}
+        formRef={correctFormRef}
+        {...MODAL_CONFIG}
+      >
+        {currentReportingRecordForCorrect && (
+          <>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div><strong>工单编码：</strong>{currentReportingRecordForCorrect.workOrderCode}</div>
+                </Col>
+                <Col span={12}>
+                  <div><strong>工序：</strong>{currentReportingRecordForCorrect.operationName}</div>
+                </Col>
+              </Row>
+            </Card>
+            <ProFormDigit
+              name="reported_quantity"
+              label="报工数量"
+              placeholder="请输入报工数量"
+              rules={[{ required: true, message: '请输入报工数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="qualified_quantity"
+              label="合格数量"
+              placeholder="请输入合格数量"
+              rules={[{ required: true, message: '请输入合格数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="unqualified_quantity"
+              label="不合格数量"
+              placeholder="请输入不合格数量"
+              rules={[{ required: true, message: '请输入不合格数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="work_hours"
+              label="工时（小时）"
+              placeholder="请输入工时"
+              rules={[{ required: true, message: '请输入工时' }]}
+              min={0}
+              fieldProps={{ precision: 2, step: 0.1 }}
+            />
+            <ProFormTextArea
+              name="correction_reason"
+              label="修正原因"
+              placeholder="请输入修正原因（必填）"
+              rules={[{ required: true, message: '请输入修正原因' }]}
+              fieldProps={{ rows: 3 }}
+            />
+            <ProFormTextArea
+              name="remarks"
+              label="备注（可选）"
+              placeholder="请输入备注"
+              fieldProps={{ rows: 2 }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };
