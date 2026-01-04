@@ -50,6 +50,8 @@ from apps.kuaizhizao.schemas.work_order import (
     MaterialShortageResponse,
     WorkOrderSplitRequest,
     WorkOrderSplitResponse,
+    WorkOrderOperationResponse,
+    WorkOrderOperationsUpdateRequest,
 )
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,

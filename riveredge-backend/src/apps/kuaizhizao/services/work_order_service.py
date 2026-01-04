@@ -19,13 +19,18 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 
 from apps.base_service import AppBaseService
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
     WorkOrderResponse,
     WorkOrderListResponse,
     WorkOrderSplitRequest,
-    WorkOrderSplitResponse
+    WorkOrderSplitResponse,
+    WorkOrderOperationCreate,
+    WorkOrderOperationUpdate,
+    WorkOrderOperationResponse,
+    WorkOrderOperationsUpdateRequest,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -708,3 +713,174 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             return WorkOrderSplitResponse(
                 original_work_order_id=original_work_order.id,
+
+    async def get_work_order_operations(
+        self,
+        tenant_id: int,
+        work_order_id: int
+    ) -> list[WorkOrderOperationResponse]:
+        """
+        获取工单工序列表
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+
+        Returns:
+            list[WorkOrderOperationResponse]: 工单工序列表
+        """
+        operations = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True
+        ).order_by('sequence').all()
+        
+        return [WorkOrderOperationResponse.model_validate(op) for op in operations]
+
+    async def update_work_order_operations(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operations_data: WorkOrderOperationsUpdateRequest,
+        updated_by: int
+    ) -> list[WorkOrderOperationResponse]:
+        """
+        更新工单工序
+
+        支持工序的增删改和顺序调整。已报工的工序不允许修改。
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            operations_data: 工序数据
+            updated_by: 更新人ID
+
+        Returns:
+            list[WorkOrderOperationResponse]: 更新后的工单工序列表
+
+        Raises:
+            NotFoundError: 工单不存在
+            ValidationError: 数据验证失败
+            BusinessLogicError: 业务逻辑错误（如已报工工序不能修改）
+        """
+        async with in_transaction():
+            # 获取原工单
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单状态（只能修改草稿或已下达状态的工单）
+            if work_order.status not in ['draft', 'released']:
+                raise BusinessLogicError(f"只能修改草稿或已下达状态的工单工序，当前状态：{work_order.status}")
+
+            # 获取现有工序
+            existing_operations = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).all()
+
+            # 检查已报工的工序
+            reported_operation_ids = set()
+            for op in existing_operations:
+                # 检查该工序是否有已审核的报工记录
+                reporting_records = await ReportingRecord.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    operation_id=op.operation_id,
+                    status='approved',
+                    deleted_at__isnull=True
+                ).all()
+                
+                if reporting_records:
+                    reported_operation_ids.add(op.id)
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 构建新工序ID集合（用于判断哪些工序需要删除）
+            new_operation_ids = {op.id for op in existing_operations if op.id not in reported_operation_ids}
+            updated_operation_ids = set()
+
+            # 处理工序更新和新增
+            for idx, op_data in enumerate(operations_data.operations, 1):
+                # 检查是否是要更新的现有工序（通过sequence匹配，且未报工）
+                existing_op = None
+                for eop in existing_operations:
+                    if eop.sequence == op_data.sequence and eop.id not in reported_operation_ids:
+                        existing_op = eop
+                        break
+
+                if existing_op:
+                    # 更新现有工序
+                    if existing_op.id in reported_operation_ids:
+                        raise BusinessLogicError(f"工序 {existing_op.operation_name} 已有报工记录，不能修改")
+                    
+                    # 更新工序信息
+                    await existing_op.update_from_dict({
+                        'operation_id': op_data.operation_id,
+                        'operation_code': op_data.operation_code,
+                        'operation_name': op_data.operation_name,
+                        'sequence': op_data.sequence,
+                        'workshop_id': op_data.workshop_id,
+                        'workshop_name': op_data.workshop_name,
+                        'work_center_id': op_data.work_center_id,
+                        'work_center_name': op_data.work_center_name,
+                        'planned_start_date': op_data.planned_start_date,
+                        'planned_end_date': op_data.planned_end_date,
+                        'standard_time': op_data.standard_time,
+                        'setup_time': op_data.setup_time,
+                        'remarks': op_data.remarks,
+                        'updated_by': updated_by,
+                        'updated_by_name': user_info["name"],
+                    }).save()
+                    updated_operation_ids.add(existing_op.id)
+                else:
+                    # 创建新工序
+                    new_op = await WorkOrderOperation.create(
+                        tenant_id=tenant_id,
+                        uuid=str(uuid.uuid4()),
+                        work_order_id=work_order_id,
+                        work_order_code=work_order.code,
+                        operation_id=op_data.operation_id,
+                        operation_code=op_data.operation_code,
+                        operation_name=op_data.operation_name,
+                        sequence=op_data.sequence,
+                        workshop_id=op_data.workshop_id,
+                        workshop_name=op_data.workshop_name,
+                        work_center_id=op_data.work_center_id,
+                        work_center_name=op_data.work_center_name,
+                        planned_start_date=op_data.planned_start_date,
+                        planned_end_date=op_data.planned_end_date,
+                        standard_time=op_data.standard_time,
+                        setup_time=op_data.setup_time,
+                        status='pending',
+                        remarks=op_data.remarks,
+                        created_by=updated_by,
+                        created_by_name=user_info["name"],
+                    )
+                    updated_operation_ids.add(new_op.id)
+
+            # 删除未更新的未报工工序
+            for op in existing_operations:
+                if op.id not in updated_operation_ids and op.id not in reported_operation_ids:
+                    op.deleted_at = datetime.now()
+                    op.updated_by = updated_by
+                    op.updated_by_name = user_info["name"]
+                    await op.save()
+
+            # 重新计算工单计划结束时间（基于所有工序的计划时间）
+            operations = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).order_by('planned_end_date').all()
+
+            if operations and operations[-1].planned_end_date:
+                work_order.planned_end_date = operations[-1].planned_end_date
+                work_order.updated_by = updated_by
+                work_order.updated_by_name = user_info["name"]
+                await work_order.save()
+
+            logger.info(f"工单 {work_order.code} 的工序已更新")
+
+            # 返回更新后的工序列表
+            return await self.get_work_order_operations(tenant_id, work_order_id)

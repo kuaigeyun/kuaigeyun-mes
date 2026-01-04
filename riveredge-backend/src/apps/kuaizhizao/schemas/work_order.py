@@ -164,3 +164,66 @@ class WorkOrderSplitResponse(BaseModel):
     original_work_order_code: str = Field(..., description="原工单编码")
     split_work_orders: list[WorkOrderResponse] = Field(..., description="拆分工单列表")
     total_count: int = Field(..., description="拆分工单总数")
+
+
+class WorkOrderOperationBase(BaseModel):
+    """工单工序基础Schema"""
+    model_config = ConfigDict(from_attributes=True)
+
+    work_order_id: int = Field(..., description="工单ID")
+    operation_id: int = Field(..., description="工序ID")
+    operation_code: str = Field(..., max_length=50, description="工序编码")
+    operation_name: str = Field(..., max_length=200, description="工序名称")
+    sequence: int = Field(..., description="工序顺序（从1开始）")
+    workshop_id: Optional[int] = Field(None, description="车间ID")
+    workshop_name: Optional[str] = Field(None, max_length=200, description="车间名称")
+    work_center_id: Optional[int] = Field(None, description="工作中心ID")
+    work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
+    standard_time: Optional[Decimal] = Field(None, description="标准工时（小时/件）")
+    setup_time: Optional[Decimal] = Field(None, description="准备时间（小时）")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class WorkOrderOperationCreate(WorkOrderOperationBase):
+    """创建工单工序Schema"""
+    pass
+
+
+class WorkOrderOperationUpdate(BaseModel):
+    """更新工单工序Schema"""
+    model_config = ConfigDict(from_attributes=True)
+
+    operation_id: Optional[int] = Field(None, description="工序ID")
+    sequence: Optional[int] = Field(None, description="工序顺序")
+    workshop_id: Optional[int] = Field(None, description="车间ID")
+    workshop_name: Optional[str] = Field(None, max_length=200, description="车间名称")
+    work_center_id: Optional[int] = Field(None, description="工作中心ID")
+    work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
+    standard_time: Optional[Decimal] = Field(None, description="标准工时（小时/件）")
+    setup_time: Optional[Decimal] = Field(None, description="准备时间（小时）")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class WorkOrderOperationResponse(WorkOrderOperationBase):
+    """工单工序响应Schema"""
+    id: int = Field(..., description="工单工序ID")
+    uuid: str = Field(..., description="业务UUID")
+    tenant_id: int = Field(..., description="租户ID")
+    work_order_code: str = Field(..., max_length=50, description="工单编码")
+    actual_start_date: Optional[datetime] = Field(None, description="实际开始时间")
+    actual_end_date: Optional[datetime] = Field(None, description="实际结束时间")
+    completed_quantity: Decimal = Field(Decimal("0"), description="已完成数量")
+    qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
+    unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
+    status: str = Field(..., max_length=20, description="工序状态")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class WorkOrderOperationsUpdateRequest(BaseModel):
+    """工单工序批量更新请求Schema"""
+    operations: list[WorkOrderOperationCreate] = Field(..., description="工序列表")

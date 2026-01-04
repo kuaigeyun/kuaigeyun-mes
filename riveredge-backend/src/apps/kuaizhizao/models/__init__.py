@@ -8,6 +8,7 @@
 from .work_order import WorkOrder
 from .reporting_record import ReportingRecord
 from .rework_order import ReworkOrder
+from .work_order_operation import WorkOrderOperation
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
