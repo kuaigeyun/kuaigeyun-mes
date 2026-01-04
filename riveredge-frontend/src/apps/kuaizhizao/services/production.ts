@@ -202,6 +202,15 @@ export const reportingApi = {
   recordDefect: async (recordId: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/defect`, { method: 'POST', data });
   },
+
+  // 修正报工数据
+  correct: async (recordId: string, data: any, correctionReason: string) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/correct`, {
+      method: 'PUT',
+      data,
+      params: { correction_reason: correctionReason },
+    });
+  },
 };
 
 // 仓储管理相关接口

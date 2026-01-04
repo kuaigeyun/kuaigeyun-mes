@@ -49,6 +49,11 @@ const ReportingPage: React.FC = () => {
   const [currentReportingRecordForDefect, setCurrentReportingRecordForDefect] = useState<ReportingRecord | null>(null);
   const defectFormRef = useRef<any>(null);
 
+  // 数据修正Modal状态
+  const [correctModalVisible, setCorrectModalVisible] = useState(false);
+  const [currentReportingRecordForCorrect, setCurrentReportingRecordForCorrect] = useState<ReportingRecord | null>(null);
+  const correctFormRef = useRef<any>(null);
+
   /**
    * 处理扫码报工
    */
@@ -174,6 +179,60 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
+   * 处理修正报工数据
+   */
+  const handleCorrectReporting = async (record: ReportingRecord) => {
+    try {
+      const detail = await reportingApi.get(record.id!.toString());
+      setCurrentReportingRecordForCorrect(detail);
+      setCorrectModalVisible(true);
+      setTimeout(() => {
+        correctFormRef.current?.setFieldsValue({
+          reported_quantity: detail.reportedQuantity,
+          qualified_quantity: detail.qualifiedQuantity,
+          unqualified_quantity: detail.unqualifiedQuantity,
+          work_hours: detail.workHours,
+          remarks: detail.remarks,
+        });
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取报工记录详情失败');
+    }
+  };
+
+  /**
+   * 处理提交数据修正
+   */
+  const handleSubmitCorrect = async (values: any): Promise<void> => {
+    try {
+      if (!currentReportingRecordForCorrect?.id) {
+        throw new Error('报工记录信息不存在');
+      }
+
+      if (!values.correction_reason || !values.correction_reason.trim()) {
+        messageApi.error('请输入修正原因');
+        throw new Error('修正原因不能为空');
+      }
+
+      await reportingApi.correct(
+        currentReportingRecordForCorrect.id.toString(),
+        values,
+        values.correction_reason
+      );
+      messageApi.success('报工数据修正成功');
+      setCorrectModalVisible(false);
+      setCurrentReportingRecordForCorrect(null);
+      correctFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      if (error.message !== '修正原因不能为空') {
+        messageApi.error(error.message || '修正报工数据失败');
+      }
+      throw error;
+    }
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<ReportingRecord>[] = [
@@ -244,7 +303,7 @@ const ReportingPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 240,
+      width: 300,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -268,27 +327,45 @@ const ReportingPage: React.FC = () => {
               >
                 驳回
               </Button>
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleCorrectReporting(record)}
+              >
+                修正
+              </Button>
             </>
           )}
-          {record.status === 'approved' && record.unqualifiedQuantity > 0 && (
+          {record.status === 'approved' && (
             <>
+              {record.unqualifiedQuantity > 0 && (
+                <>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<WarningOutlined />}
+                    onClick={() => handleCreateDefect(record)}
+                    style={{ color: '#faad14' }}
+                  >
+                    不良品
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleCreateScrap(record)}
+                  >
+                    报废
+                  </Button>
+                </>
+              )}
               <Button
                 type="link"
                 size="small"
-                icon={<WarningOutlined />}
-                onClick={() => handleCreateDefect(record)}
-                style={{ color: '#faad14' }}
+                onClick={() => handleCorrectReporting(record)}
               >
-                不良品
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => handleCreateScrap(record)}
-              >
-                报废
+                修正
               </Button>
             </>
           )}
