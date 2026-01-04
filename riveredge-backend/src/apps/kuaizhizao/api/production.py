@@ -18,9 +18,11 @@ from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
+from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
 
 # 初始化服务实例
 reporting_service = ReportingService()
+material_binding_service = MaterialBindingService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -86,6 +88,11 @@ from apps.kuaizhizao.schemas.scrap_record import (
 from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordCreateFromReporting,
     DefectRecordResponse
+)
+from apps.kuaizhizao.schemas.material_binding import (
+    MaterialBindingCreateFromReporting,
+    MaterialBindingResponse,
+    MaterialBindingListResponse,
 )
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
@@ -1060,6 +1067,95 @@ async def get_reporting_statistics(
 
     return JSONResponse(
         content=statistics,
+        status_code=status.HTTP_200_OK
+    )
+
+
+@router.post("/reporting/{record_id}/material-binding/feeding", response_model=MaterialBindingResponse, summary="从报工记录创建上料绑定")
+async def create_feeding_binding_from_reporting(
+    record_id: int,
+    binding_data: MaterialBindingCreateFromReporting,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialBindingResponse:
+    """
+    从报工记录创建上料绑定
+
+    在报工记录中绑定上料物料信息。
+
+    - **record_id**: 报工记录ID
+    - **binding_data**: 物料绑定创建数据（物料ID、数量、仓库、批次等）
+    """
+    # 确保绑定类型为上料
+    binding_data.binding_type = "feeding"
+    return await material_binding_service.create_material_binding_from_reporting(
+        tenant_id=tenant_id,
+        reporting_record_id=record_id,
+        binding_data=binding_data,
+        bound_by=current_user.id
+    )
+
+
+@router.post("/reporting/{record_id}/material-binding/discharging", response_model=MaterialBindingResponse, summary="从报工记录创建下料绑定")
+async def create_discharging_binding_from_reporting(
+    record_id: int,
+    binding_data: MaterialBindingCreateFromReporting,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialBindingResponse:
+    """
+    从报工记录创建下料绑定
+
+    在报工记录中绑定下料物料信息。
+
+    - **record_id**: 报工记录ID
+    - **binding_data**: 物料绑定创建数据（物料ID、数量、仓库、批次等）
+    """
+    # 确保绑定类型为下料
+    binding_data.binding_type = "discharging"
+    return await material_binding_service.create_material_binding_from_reporting(
+        tenant_id=tenant_id,
+        reporting_record_id=record_id,
+        binding_data=binding_data,
+        bound_by=current_user.id
+    )
+
+
+@router.get("/reporting/{record_id}/material-binding", response_model=List[MaterialBindingListResponse], summary="获取报工记录的物料绑定记录")
+async def get_material_bindings_by_reporting_record(
+    record_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[MaterialBindingListResponse]:
+    """
+    获取报工记录的物料绑定记录列表
+
+    - **record_id**: 报工记录ID
+    """
+    return await material_binding_service.get_material_bindings_by_reporting_record(
+        tenant_id=tenant_id,
+        reporting_record_id=record_id
+    )
+
+
+@router.delete("/material-binding/{binding_id}", summary="删除物料绑定记录")
+async def delete_material_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除物料绑定记录（软删除）
+
+    - **binding_id**: 物料绑定记录ID
+    """
+    await material_binding_service.delete_material_binding(
+        tenant_id=tenant_id,
+        binding_id=binding_id
+    )
+
+    return JSONResponse(
+        content={"message": "物料绑定记录删除成功"},
         status_code=status.HTTP_200_OK
     )
 
