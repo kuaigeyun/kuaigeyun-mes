@@ -9,6 +9,7 @@ from .work_order import *
 from .reporting_record import *
 from .outsource_order import *
 from .scrap_record import *
+from .defect_record import *
 
 # 仓储管理模块
 from .warehouse import *
@@ -63,6 +64,14 @@ __all__ = [
     'ScrapRecordUpdate',
     'ScrapRecordResponse',
     'ScrapRecordListResponse',
+
+    # 不良品记录相关
+    'DefectRecordBase',
+    'DefectRecordCreate',
+    'DefectRecordCreateFromReporting',
+    'DefectRecordUpdate',
+    'DefectRecordResponse',
+    'DefectRecordListResponse',
 
     # 生产领料单相关
     'ProductionPickingBase',
