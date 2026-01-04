@@ -54,6 +54,8 @@ import SystemParametersPage from '../pages/system/system-parameters/list';
 import FilesPage from '../pages/system/files/list';
 import ApprovalProcessesPage from '../pages/system/approval-processes/list';
 import ApprovalInstancesPage from '../pages/system/approval-processes/instances';
+import ReportTemplatesPage from '../pages/system/report-templates';
+import ReportDesignPage from '../pages/system/report-templates/design';
 import PersonalProfilePage from '../pages/personal/profile';
 import PersonalPreferencesPage from '../pages/personal/preferences';
 import PersonalMessagesPage from '../pages/personal/messages';
@@ -141,6 +143,8 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/files" element={renderWithLayout(FilesPage)} />
       <Route path="/system/approval-processes" element={renderWithLayout(ApprovalProcessesPage)} />
       <Route path="/system/approval-instances" element={renderWithLayout(ApprovalInstancesPage)} />
+      <Route path="/system/report-templates" element={renderWithLayout(ReportTemplatesPage)} />
+      <Route path="/system/report-templates/:id/design" element={renderWithLayout(ReportDesignPage)} />
       <Route path="/system/inngest" element={renderWithLayout(InngestDashboardPage)} />
 
       {/* 个人相关路由 */}

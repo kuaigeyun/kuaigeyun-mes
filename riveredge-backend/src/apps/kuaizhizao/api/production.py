@@ -28,6 +28,9 @@ from apps.kuaizhizao.services.customer_material_registration_service import (
     BarcodeMappingRuleService,
     CustomerMaterialRegistrationService,
 )
+from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
+from apps.kuaizhizao.services.exception_service import ExceptionService
+from apps.kuaizhizao.services.report_service import ReportService
 
 # 初始化服务实例
 reporting_service = ReportingService()
@@ -39,6 +42,9 @@ inventory_alert_service = InventoryAlertService()
 packing_binding_service = PackingBindingService()
 barcode_mapping_rule_service = BarcodeMappingRuleService()
 customer_material_registration_service = CustomerMaterialRegistrationService()
+document_timing_service = DocumentTimingService()
+exception_service = ExceptionService()
+report_service = ReportService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -166,6 +172,23 @@ from apps.kuaizhizao.schemas.customer_material_registration import (
     CustomerMaterialRegistrationListResponse,
     ParseBarcodeRequest,
     ParseBarcodeResponse,
+)
+from apps.kuaizhizao.schemas.document_node_timing import (
+    DocumentNodeTimingResponse,
+    DocumentTimingSummaryResponse,
+)
+from apps.kuaizhizao.schemas.material_shortage_exception import (
+    MaterialShortageExceptionResponse,
+    MaterialShortageExceptionListResponse,
+    MaterialShortageExceptionUpdate,
+)
+from apps.kuaizhizao.schemas.delivery_delay_exception import (
+    DeliveryDelayExceptionResponse,
+    DeliveryDelayExceptionListResponse,
+)
+from apps.kuaizhizao.schemas.quality_exception import (
+    QualityExceptionResponse,
+    QualityExceptionListResponse,
 )
 from apps.kuaizhizao.schemas.quality import (
     # 来料检验单
@@ -4666,3 +4689,462 @@ async def execute_production_plan(
 # ============ 采购订单管理 API ============
 # 注意：采购订单API已移至 purchase.py，此处不再重复实现
 # 请使用 /purchase-orders 路径访问采购订单API
+
+
+# ============ 单据节点耗时统计 API ============
+
+@router.get("/documents/timing", response_model=List[DocumentTimingSummaryResponse], summary="获取单据耗时统计列表")
+async def list_documents_timing(
+    document_type: Optional[str] = Query(None, description="单据类型（如：work_order/purchase_order/sales_order）"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DocumentTimingSummaryResponse]:
+    """
+    获取单据耗时统计列表
+
+    返回有耗时记录的单据列表，支持按单据类型筛选。
+
+    - **document_type**: 单据类型（可选）
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    """
+    return await document_timing_service.list_documents_with_timing(
+        tenant_id=tenant_id,
+        document_type=document_type,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get("/documents/{document_type}/{document_id}/timing", response_model=DocumentTimingSummaryResponse, summary="获取单据耗时统计")
+async def get_document_timing(
+    document_type: str = Path(..., description="单据类型（如：work_order/purchase_order/sales_order）"),
+    document_id: int = Path(..., description="单据ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DocumentTimingSummaryResponse:
+    """
+    获取单据的耗时统计
+
+    返回单据在各个节点的耗时信息，包括总耗时和各个节点的详细耗时。
+
+    - **document_type**: 单据类型
+    - **document_id**: 单据ID
+    """
+    return await document_timing_service.get_document_timing(
+        tenant_id=tenant_id,
+        document_type=document_type,
+        document_id=document_id,
+    )
+
+
+@router.get("/documents/efficiency", summary="获取单据执行效率分析")
+async def get_document_efficiency(
+    document_type: Optional[str] = Query(None, description="单据类型（如：work_order/purchase_order/sales_order）"),
+    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取单据执行效率分析
+
+    返回单据执行效率分析结果，包括平均耗时、瓶颈节点、优化建议等。
+
+    - **document_type**: 单据类型（可选）
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    """
+    from datetime import datetime
+
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    if date_end:
+        try:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    return await document_timing_service.get_document_efficiency(
+        tenant_id=tenant_id,
+        document_type=document_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+
+# ============ 异常处理 API ============
+
+@router.get("/exceptions/material-shortage", response_model=List[MaterialShortageExceptionListResponse], summary="获取缺料异常列表")
+async def list_material_shortage_exceptions(
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    alert_level: Optional[str] = Query(None, description="预警级别"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[MaterialShortageExceptionListResponse]:
+    """
+    获取缺料异常列表
+
+    支持按工单ID、状态、预警级别筛选。
+    """
+    return await exception_service.list_material_shortage_exceptions(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        status=status,
+        alert_level=alert_level,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post("/exceptions/material-shortage/{exception_id}/handle", response_model=MaterialShortageExceptionResponse, summary="处理缺料异常")
+async def handle_material_shortage_exception(
+    exception_id: int = Path(..., description="异常记录ID"),
+    action: str = Query(..., description="处理操作（purchase/substitute/resolve/cancel）"),
+    alternative_material_id: Optional[int] = Query(None, description="替代物料ID"),
+    remarks: Optional[str] = Query(None, description="备注"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialShortageExceptionResponse:
+    """
+    处理缺料异常
+    """
+    return await exception_service.handle_material_shortage_exception(
+        tenant_id=tenant_id,
+        exception_id=exception_id,
+        handled_by=current_user.id,
+        action=action,
+        alternative_material_id=alternative_material_id,
+        remarks=remarks,
+    )
+
+
+@router.post("/work-orders/{work_order_id}/detect-shortage", response_model=List[MaterialShortageExceptionResponse], summary="检测工单缺料")
+async def detect_work_order_shortage(
+    work_order_id: int = Path(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[MaterialShortageExceptionResponse]:
+    """
+    检测工单缺料并创建缺料异常记录
+    """
+    return await exception_service.detect_material_shortage(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
+
+@router.get("/exceptions/delivery-delay", response_model=List[DeliveryDelayExceptionListResponse], summary="获取延期异常列表")
+async def list_delivery_delay_exceptions(
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    alert_level: Optional[str] = Query(None, description="预警级别"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DeliveryDelayExceptionListResponse]:
+    """
+    获取延期异常列表
+
+    支持按工单ID、状态、预警级别筛选。
+    """
+    return await exception_service.list_delivery_delay_exceptions(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        status=status,
+        alert_level=alert_level,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post("/exceptions/delivery-delay/{exception_id}/handle", response_model=DeliveryDelayExceptionResponse, summary="处理延期异常")
+async def handle_delivery_delay_exception(
+    exception_id: int = Path(..., description="异常记录ID"),
+    action: str = Query(..., description="处理操作（adjust_plan/increase_resources/expedite/resolve/cancel）"),
+    remarks: Optional[str] = Query(None, description="备注"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DeliveryDelayExceptionResponse:
+    """
+    处理延期异常
+    """
+    return await exception_service.handle_delivery_delay_exception(
+        tenant_id=tenant_id,
+        exception_id=exception_id,
+        handled_by=current_user.id,
+        action=action,
+        remarks=remarks,
+    )
+
+
+@router.post("/work-orders/{work_order_id}/detect-delay", response_model=List[DeliveryDelayExceptionResponse], summary="检测工单延期")
+async def detect_work_order_delay(
+    work_order_id: int = Path(..., description="工单ID"),
+    days_threshold: int = Query(0, description="延期天数阈值"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DeliveryDelayExceptionResponse]:
+    """
+    检测工单延期并创建延期异常记录
+
+    - **work_order_id**: 工单ID
+    - **days_threshold**: 延期天数阈值
+    """
+    return await exception_service.detect_delivery_delay(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        days_threshold=days_threshold,
+    )
+
+
+@router.get("/exceptions/quality", response_model=List[QualityExceptionListResponse], summary="获取质量异常列表")
+async def list_quality_exceptions(
+    exception_type: Optional[str] = Query(None, description="异常类型"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    severity: Optional[str] = Query(None, description="严重程度"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[QualityExceptionListResponse]:
+    """
+    获取质量异常列表
+
+    支持按异常类型、工单ID、状态、严重程度筛选。
+    """
+    return await exception_service.list_quality_exceptions(
+        tenant_id=tenant_id,
+        exception_type=exception_type,
+        work_order_id=work_order_id,
+        status=status,
+        severity=severity,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post("/exceptions/quality/{exception_id}/handle", response_model=QualityExceptionResponse, summary="处理质量异常")
+async def handle_quality_exception(
+    exception_id: int = Path(..., description="异常记录ID"),
+    action: str = Query(..., description="处理操作（investigate/correct/close/cancel）"),
+    root_cause: Optional[str] = Query(None, description="根本原因"),
+    corrective_action: Optional[str] = Query(None, description="纠正措施"),
+    preventive_action: Optional[str] = Query(None, description="预防措施"),
+    responsible_person_id: Optional[int] = Query(None, description="责任人ID"),
+    responsible_person_name: Optional[str] = Query(None, description="责任人姓名"),
+    verification_result: Optional[str] = Query(None, description="验证结果"),
+    remarks: Optional[str] = Query(None, description="备注"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityExceptionResponse:
+    """
+    处理质量异常
+    """
+    return await exception_service.handle_quality_exception(
+        tenant_id=tenant_id,
+        exception_id=exception_id,
+        handled_by=current_user.id,
+        action=action,
+        root_cause=root_cause,
+        corrective_action=corrective_action,
+        preventive_action=preventive_action,
+        responsible_person_id=responsible_person_id,
+        responsible_person_name=responsible_person_name,
+        verification_result=verification_result,
+        remarks=remarks,
+    )
+
+
+@router.get("/exceptions/statistics", summary="获取异常统计分析")
+async def get_exception_statistics(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取异常统计分析
+
+    包括缺料异常、延期异常、质量异常的统计信息。
+    """
+    from datetime import datetime
+    
+    date_start_dt = None
+    date_end_dt = None
+    
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+    
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+    
+    return await exception_service.get_exception_statistics(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+
+# ============ 报表 API ============
+
+@router.get("/reports/inventory", summary="获取库存报表")
+async def get_inventory_report(
+    report_type: str = Query("summary", description="报表类型（summary/turnover/abc/slow_moving）"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取库存报表数据
+
+    支持多种报表类型：
+    - summary: 库存状况分析
+    - turnover: 库存周转率报表
+    - abc: ABC分析报表
+    - slow_moving: 呆滞料分析报表
+    """
+    from datetime import datetime
+    
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+
+    return await report_service.get_inventory_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/reports/production", summary="获取生产报表")
+async def get_production_report(
+    report_type: str = Query("efficiency", description="报表类型（efficiency/completion/reporting/equipment）"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    work_center_id: Optional[int] = Query(None, description="工作中心ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取生产报表数据
+
+    支持多种报表类型：
+    - efficiency: 生产效率分析
+    - completion: 工单完成情况报表
+    - reporting: 报工统计分析报表
+    - equipment: 设备利用率报表
+
+    - **report_type**: 报表类型
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **work_center_id**: 工作中心ID（可选）
+    """
+    from datetime import datetime
+    
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+
+    return await report_service.get_production_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        work_center_id=work_center_id,
+    )
+
+
+@router.get("/reports/quality", summary="获取质量报表")
+async def get_quality_report(
+    report_type: str = Query("analysis", description="报表类型（analysis/defect/pass_rate/trend）"),
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取质量报表数据
+
+    支持多种报表类型：
+    - analysis: 质量分析报告
+    - defect: 不良品统计报表
+    - pass_rate: 检验合格率报表
+    - trend: 质量趋势分析报表
+
+    - **report_type**: 报表类型
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **material_id**: 物料ID（可选）
+    """
+    from datetime import datetime
+    
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("开始日期格式错误，应为YYYY-MM-DD")
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise ValidationError("结束日期格式错误，应为YYYY-MM-DD")
+
+    return await report_service.get_quality_report(
+        tenant_id=tenant_id,
+        report_type=report_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        material_id=material_id,
+    )

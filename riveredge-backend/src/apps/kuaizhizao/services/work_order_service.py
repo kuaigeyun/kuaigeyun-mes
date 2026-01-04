@@ -41,6 +41,7 @@ from apps.kuaizhizao.schemas.work_order import (
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
+from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from loguru import logger
 
 
@@ -120,6 +121,23 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 created_by=created_by,
                 created_by_name=user_info["name"],
             )
+
+            # 记录"创建"节点开始时间
+            try:
+                timing_service = DocumentTimingService()
+                await timing_service.record_node_start(
+                    tenant_id=tenant_id,
+                    document_type="work_order",
+                    document_id=work_order.id,
+                    document_code=work_order.code,
+                    node_name="创建",
+                    node_code="created",
+                    operator_id=created_by,
+                    operator_name=user_info["name"],
+                )
+            except Exception as e:
+                # 节点时间记录失败不影响主流程，记录日志
+                logger.warning(f"记录工单创建节点时间失败: {e}")
 
             return WorkOrderResponse.model_validate(work_order)
 
@@ -391,6 +409,33 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 updated_by=released_by,
                 status='released'
             )
+
+            # 记录节点时间
+            try:
+                timing_service = DocumentTimingService()
+                # 结束"创建"节点
+                await timing_service.record_node_end(
+                    tenant_id=tenant_id,
+                    document_type="work_order",
+                    document_id=work_order_id,
+                    node_code="created",
+                    operator_id=released_by,
+                )
+                # 开始"下达"节点
+                released_by_info = await self.get_user_info(released_by)
+                await timing_service.record_node_start(
+                    tenant_id=tenant_id,
+                    document_type="work_order",
+                    document_id=work_order_id,
+                    document_code=work_order.code,
+                    node_name="下达",
+                    node_code="released",
+                    operator_id=released_by,
+                    operator_name=released_by_info["name"],
+                )
+            except Exception as e:
+                # 节点时间记录失败不影响主流程，记录日志
+                logger.warning(f"记录工单下达节点时间失败: {e}")
 
             return WorkOrderResponse.model_validate(work_order)
 

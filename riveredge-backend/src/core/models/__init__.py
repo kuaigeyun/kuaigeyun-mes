@@ -89,6 +89,10 @@ from .operation_log import OperationLog
 # 登录日志模型
 from .login_log import LoginLog
 
+# 工作时间段配置模型
+from .working_hours_config import WorkingHoursConfig
+from .report_template import ReportTemplate
+
 __all__ = [
     # 基础模型
     "BaseModel",
@@ -151,5 +155,9 @@ __all__ = [
     "LoginLog",
     # 菜单管理模型
     "Menu",
+    # 工作时间段配置模型
+    "WorkingHoursConfig",
+    # 报表模板模型
+    "ReportTemplate",
 ]
 

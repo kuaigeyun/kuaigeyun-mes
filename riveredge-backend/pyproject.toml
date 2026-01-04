@@ -29,6 +29,8 @@ dependencies = [
     "pypinyin>=0.51.0",
     "aiofiles>=23.2.1",  # 异步文件操作库,用于文件上传、下载等操作
     "inngest>=0.3.0",  # 工作流引擎
+    "openpyxl>=3.1.0",  # Excel文件生成（MIT许可证，商业友好）
+    "weasyprint>=60.0",  # PDF文件生成（BSD许可证，商业友好）
 ]
 
 [project.optional-dependencies]

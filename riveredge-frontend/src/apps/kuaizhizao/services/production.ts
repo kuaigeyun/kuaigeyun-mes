@@ -368,6 +368,86 @@ export const warehouseApi = {
       });
     },
   },
+
+  // 客户来料登记
+  customerMaterialRegistration: {
+    // 解析条码
+    parseBarcode: async (data: { barcode: string; barcode_type?: string; customer_id?: number }) => {
+      return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/parse-barcode', {
+        method: 'POST',
+        data,
+      });
+    },
+    // 获取登记列表
+    list: async (params?: {
+      skip?: number;
+      limit?: number;
+      customer_id?: number;
+      status?: string;
+      registration_date_start?: string;
+      registration_date_end?: string;
+    }) => {
+      return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration', {
+        method: 'GET',
+        params,
+      });
+    },
+    // 创建登记
+    create: async (data: any) => {
+      return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration', {
+        method: 'POST',
+        data,
+      });
+    },
+    // 获取登记详情
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/${id}`, {
+        method: 'GET',
+      });
+    },
+  },
+
+  // 条码映射规则
+  barcodeMappingRule: {
+    // 获取映射规则列表
+    list: async (params?: {
+      skip?: number;
+      limit?: number;
+      customer_id?: number;
+      is_enabled?: boolean;
+    }) => {
+      return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules', {
+        method: 'GET',
+        params,
+      });
+    },
+    // 创建映射规则
+    create: async (data: any) => {
+      return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules', {
+        method: 'POST',
+        data,
+      });
+    },
+    // 获取映射规则详情
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules/${id}`, {
+        method: 'GET',
+      });
+    },
+    // 更新映射规则
+    update: async (id: string, data: any) => {
+      return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules/${id}`, {
+        method: 'PUT',
+        data,
+      });
+    },
+    // 删除映射规则
+    delete: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/mapping-rules/${id}`, {
+        method: 'DELETE',
+      });
+    },
+  },
 };
 
 // 质量管理相关接口

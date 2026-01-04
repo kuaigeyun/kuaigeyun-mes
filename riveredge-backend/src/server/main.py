@@ -71,6 +71,8 @@ from core.api.approval_processes import approval_processes_router, approval_inst
 from core.api.scripts.scripts import router as scripts_router
 from core.api.print_templates.print_templates import router as print_templates_router
 from core.api.print_devices.print_devices import router as print_devices_router
+from core.api.working_hours_configs.working_hours_configs import router as working_hours_configs_router
+from core.api.reports.report_templates import router as report_templates_router
 from core.api.user_profile.user_profile import router as user_profile_router
 from core.api.user_preferences.user_preferences import router as user_preferences_router
 from core.api.user_messages.user_messages import router as user_messages_router
@@ -392,6 +394,8 @@ app.include_router(approval_instances_router, prefix="/api/v1/core")
 app.include_router(scripts_router, prefix="/api/v1/core")
 app.include_router(print_templates_router, prefix="/api/v1/core")
 app.include_router(print_devices_router, prefix="/api/v1/core")
+app.include_router(working_hours_configs_router, prefix="/api/v1/core")
+app.include_router(report_templates_router, prefix="/api/v1/core")
 app.include_router(user_profile_router, prefix="/api/v1/personal")
 app.include_router(user_preferences_router, prefix="/api/v1/personal")
 app.include_router(user_messages_router, prefix="/api/v1/personal")
