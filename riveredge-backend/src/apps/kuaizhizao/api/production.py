@@ -972,6 +972,30 @@ async def create_scrap_record_from_reporting(
     )
 
 
+@router.post("/reporting/{record_id}/defect", response_model=DefectRecordResponse, summary="从报工记录创建不良品记录")
+async def create_defect_record_from_reporting(
+    record_id: int,
+    defect_data: DefectRecordCreateFromReporting,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    """
+    从报工记录创建不良品记录
+
+    根据报工记录信息创建不良品记录，自动关联报工记录、工单和产品信息。
+    支持不良品隔离、返工处理、报废处理等处理方式。
+
+    - **record_id**: 报工记录ID
+    - **defect_data**: 不良品记录创建数据（不良品数量、不良品类型、不良品原因、处理方式等）
+    """
+    return await reporting_service.record_defect(
+        tenant_id=tenant_id,
+        reporting_record_id=record_id,
+        defect_data=defect_data,
+        created_by=current_user.id
+    )
+
+
 @router.get("/reporting/statistics", summary="获取报工统计信息")
 async def get_reporting_statistics(
     date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
