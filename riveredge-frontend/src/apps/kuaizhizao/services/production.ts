@@ -110,6 +110,47 @@ export const reworkOrderApi = {
   },
 };
 
+// 委外单相关接口
+export const outsourceOrderApi = {
+  // 获取委外单列表
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-orders', { method: 'GET', params });
+  },
+
+  // 创建委外单
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-orders', { method: 'POST', data });
+  },
+
+  // 更新委外单
+  update: async (id: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}`, { method: 'PUT', data });
+  },
+
+  // 删除委外单
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}`, { method: 'DELETE' });
+  },
+
+  // 获取委外单详情
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${id}`, { method: 'GET' });
+  },
+
+  // 从工单创建委外单
+  createFromWorkOrder: async (workOrderId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/outsource`, { method: 'POST', data });
+  },
+
+  // 关联采购入库单
+  linkPurchaseReceipt: async (outsourceOrderId: string, purchaseReceiptId: number) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-orders/${outsourceOrderId}/link-purchase-receipt`, {
+      method: 'POST',
+      params: { purchase_receipt_id: purchaseReceiptId },
+    });
+  },
+};
+
 // 报工相关接口
 export const reportingApi = {
   // 获取报工记录列表
