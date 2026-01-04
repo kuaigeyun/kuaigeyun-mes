@@ -350,6 +350,46 @@ async def get_work_order(
     )
 
 
+@router.get("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="获取工单工序列表")
+async def get_work_order_operations(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[WorkOrderOperationResponse]:
+    """
+    获取工单工序列表
+
+    - **work_order_id**: 工单ID
+    """
+    return await WorkOrderService().get_work_order_operations(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id
+    )
+
+
+@router.put("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="更新工单工序")
+async def update_work_order_operations(
+    work_order_id: int,
+    operations_data: WorkOrderOperationsUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[WorkOrderOperationResponse]:
+    """
+    更新工单工序
+
+    支持工序的增删改和顺序调整。已报工的工序不允许修改。
+
+    - **work_order_id**: 工单ID
+    - **operations_data**: 工序数据（operations: 工序列表）
+    """
+    return await WorkOrderService().update_work_order_operations(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operations_data=operations_data,
+        updated_by=current_user.id
+    )
+
+
 @router.put("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="更新工单")
 async def update_work_order(
     work_order_id: int,
