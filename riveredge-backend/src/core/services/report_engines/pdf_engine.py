@@ -47,12 +47,11 @@ class PDFEngine:
                 "在 Windows 上需要安装 GTK+ 运行时库。"
                 "请参考：https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
             )
-            if 'WEASYPRINT_ERROR' in globals():
+            if WEASYPRINT_ERROR:
                 error_msg += f"\n错误详情: {WEASYPRINT_ERROR}"
             raise RuntimeError(error_msg)
 
-        # 延迟导入，确保只在真正使用时才导入
-        from weasyprint import HTML
+        # 使用顶层导入的 HTML（如果 WEASYPRINT_AVAILABLE 为 True，HTML 已经可用）
 
         # 生成HTML内容
         html_content = self._generate_html(config, data)
