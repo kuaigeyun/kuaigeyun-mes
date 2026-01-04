@@ -94,6 +94,10 @@ const WorkOrdersPage: React.FC = () => {
   const [batchPriorityModalVisible, setBatchPriorityModalVisible] = useState(false);
   const [batchPriority, setBatchPriority] = useState<string>('normal');
 
+  // 合并工单相关状态
+  const [mergeModalVisible, setMergeModalVisible] = useState(false);
+  const mergeFormRef = useRef<any>(null);
+
   /**
    * 处理新建工单
    */
@@ -784,6 +788,13 @@ const WorkOrdersPage: React.FC = () => {
               disabled={selectedRowKeys.length === 0}
             >
               批量设置优先级
+            </Button>,
+            <Button
+              key="merge"
+              onClick={handleMerge}
+              disabled={selectedRowKeys.length < 2}
+            >
+              合并工单
             </Button>,
           ]}
           onDelete={handleDelete}
