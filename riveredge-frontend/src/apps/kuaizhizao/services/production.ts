@@ -50,6 +50,16 @@ export const workOrderApi = {
   updateOperations: async (id: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data });
   },
+
+  // 冻结工单
+  freeze: async (id: string, data: { freeze_reason: string }) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/freeze`, { method: 'POST', data });
+  },
+
+  // 解冻工单
+  unfreeze: async (id: string, data?: { unfreeze_reason?: string }) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/unfreeze`, { method: 'POST', data: data || {} });
+  },
 };
 
 // 返工单相关接口

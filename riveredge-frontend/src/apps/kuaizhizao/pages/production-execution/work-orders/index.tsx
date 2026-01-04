@@ -50,6 +50,11 @@ interface WorkOrder {
   completed_quantity?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
+  is_frozen?: boolean;
+  freeze_reason?: string;
+  frozen_at?: string;
+  frozen_by?: number;
+  frozen_by_name?: string;
   remarks?: string;
   created_at?: string;
   updated_at?: string;
@@ -79,6 +84,11 @@ const WorkOrdersPage: React.FC = () => {
   const [reworkModalVisible, setReworkModalVisible] = useState(false);
   const [currentWorkOrderForRework, setCurrentWorkOrderForRework] = useState<WorkOrder | null>(null);
   const reworkFormRef = useRef<any>(null);
+
+  // 冻结/解冻相关状态
+  const [freezeModalVisible, setFreezeModalVisible] = useState(false);
+  const [currentWorkOrderForFreeze, setCurrentWorkOrderForFreeze] = useState<WorkOrder | null>(null);
+  const freezeFormRef = useRef<any>(null);
 
   /**
    * 处理新建工单
@@ -359,6 +369,69 @@ const WorkOrdersPage: React.FC = () => {
       setCurrentWorkOrderForRework(null);
     } catch (error: any) {
       messageApi.error(error.message || '创建返工单失败');
+      throw error;
+    }
+  };
+
+  /**
+   * 处理冻结工单
+   */
+  const handleFreeze = async (record: WorkOrder) => {
+    try {
+      const detail = await workOrderApi.get(record.id!.toString());
+      setCurrentWorkOrderForFreeze(detail);
+      setFreezeModalVisible(true);
+      freezeFormRef.current?.resetFields();
+    } catch (error) {
+      messageApi.error('获取工单详情失败');
+    }
+  };
+
+  /**
+   * 处理解冻工单
+   */
+  const handleUnfreeze = async (record: WorkOrder) => {
+    Modal.confirm({
+      title: '确认解冻',
+      content: `确定要解冻工单"${record.code}"吗？`,
+      onOk: async () => {
+        try {
+          await workOrderApi.unfreeze(record.id!.toString());
+          messageApi.success('工单解冻成功');
+          actionRef.current?.reload();
+          // 如果详情页打开，刷新详情
+          if (workOrderDetail?.id === record.id) {
+            const detail = await workOrderApi.get(record.id!.toString());
+            setWorkOrderDetail(detail);
+          }
+        } catch (error: any) {
+          messageApi.error(error.message || '工单解冻失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理提交冻结表单
+   */
+  const handleSubmitFreeze = async (values: any): Promise<void> => {
+    try {
+      if (!currentWorkOrderForFreeze?.id) {
+        throw new Error('工单信息不存在');
+      }
+      await workOrderApi.freeze(currentWorkOrderForFreeze.id.toString(), values);
+      messageApi.success('工单冻结成功');
+      setFreezeModalVisible(false);
+      setCurrentWorkOrderForFreeze(null);
+      freezeFormRef.current?.resetFields();
+      actionRef.current?.reload();
+      // 如果详情页打开，刷新详情
+      if (workOrderDetail?.id === currentWorkOrderForFreeze.id) {
+        const detail = await workOrderApi.get(currentWorkOrderForFreeze.id.toString());
+        setWorkOrderDetail(detail);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '工单冻结失败');
       throw error;
     }
   };
@@ -724,6 +797,23 @@ const WorkOrdersPage: React.FC = () => {
                 >
                   拆分工单
                 </Button>
+                {workOrderDetail?.is_frozen ? (
+                  <Button
+                    type="default"
+                    onClick={() => handleUnfreeze(workOrderDetail!)}
+                  >
+                    解冻工单
+                  </Button>
+                ) : (
+                  <Button
+                    type="default"
+                    danger
+                    onClick={() => handleFreeze(workOrderDetail!)}
+                    disabled={!workOrderDetail || workOrderDetail.status === 'cancelled' || workOrderDetail.status === 'completed'}
+                  >
+                    冻结工单
+                  </Button>
+                )}
               </Space>
             </div>
             {documentRelations ? (
