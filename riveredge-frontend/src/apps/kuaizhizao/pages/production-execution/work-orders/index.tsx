@@ -500,6 +500,37 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
+   * 处理合并工单
+   */
+  const handleMerge = () => {
+    if (selectedRowKeys.length < 2) {
+      messageApi.warning('请至少选择2个工单进行合并');
+      return;
+    }
+    // 合并功能将在Modal中实现
+    setMergeModalVisible(true);
+  };
+
+  /**
+   * 处理提交合并工单
+   */
+  const handleSubmitMerge = async (values: any): Promise<void> => {
+    try {
+      const result = await workOrderApi.merge({
+        work_order_ids: selectedRowKeys.map(key => Number(key)),
+        remarks: values.remarks,
+      });
+      messageApi.success(`工单合并成功，新工单编码：${result.merged_work_order.code}`);
+      setMergeModalVisible(false);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '工单合并失败');
+      throw error;
+    }
+  };
+
+  /**
    * 处理拆分工单
    */
   const handleSplit = async (record: WorkOrder) => {

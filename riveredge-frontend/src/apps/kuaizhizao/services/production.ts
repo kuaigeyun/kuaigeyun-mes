@@ -70,6 +70,11 @@ export const workOrderApi = {
   batchSetPriority: async (data: { work_order_ids: number[]; priority: string }) => {
     return apiRequest('/apps/kuaizhizao/work-orders/batch-priority', { method: 'PUT', data });
   },
+
+  // 合并工单
+  merge: async (data: { work_order_ids: number[]; remarks?: string }) => {
+    return apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data });
+  },
 };
 
 // 返工单相关接口
