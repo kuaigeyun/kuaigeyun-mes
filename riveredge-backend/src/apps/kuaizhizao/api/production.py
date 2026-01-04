@@ -50,6 +50,8 @@ from apps.kuaizhizao.schemas.work_order import (
     MaterialShortageResponse,
     WorkOrderFreezeRequest,
     WorkOrderUnfreezeRequest,
+    WorkOrderPriorityRequest,
+    WorkOrderBatchPriorityRequest,
     WorkOrderSplitRequest,
     WorkOrderSplitResponse,
     WorkOrderOperationResponse,
