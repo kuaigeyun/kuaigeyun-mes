@@ -197,6 +197,11 @@ export const reportingApi = {
   recordScrap: async (recordId: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data });
   },
+
+  // 从报工记录创建不良品记录
+  recordDefect: async (recordId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/defect`, { method: 'POST', data });
+  },
 };
 
 // 仓储管理相关接口
