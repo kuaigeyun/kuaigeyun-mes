@@ -17,10 +17,11 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { workOrderApi, reworkOrderApi } from '../../../services/production';
+import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { operationApi } from '../../../../master-data/services/process';
 import { workshopApi } from '../../../../master-data/services/factory';
+import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
@@ -84,6 +85,12 @@ const WorkOrdersPage: React.FC = () => {
   const [reworkModalVisible, setReworkModalVisible] = useState(false);
   const [currentWorkOrderForRework, setCurrentWorkOrderForRework] = useState<WorkOrder | null>(null);
   const reworkFormRef = useRef<any>(null);
+
+  // 创建委外单相关状态
+  const [outsourceModalVisible, setOutsourceModalVisible] = useState(false);
+  const [currentWorkOrderForOutsource, setCurrentWorkOrderForOutsource] = useState<WorkOrder | null>(null);
+  const outsourceFormRef = useRef<any>(null);
+  const [supplierList, setSupplierList] = useState<any[]>([]);
 
   // 冻结/解冻相关状态
   const [freezeModalVisible, setFreezeModalVisible] = useState(false);
@@ -912,6 +919,13 @@ const WorkOrdersPage: React.FC = () => {
                   disabled={!workOrderDetail || workOrderDetail.status === 'cancelled'}
                 >
                   创建返工单
+                </Button>
+                <Button
+                  type="primary"
+                  onClick={() => handleCreateOutsource(workOrderDetail!)}
+                  disabled={!workOrderDetail || workOrderDetail.status === 'cancelled' || !workOrderOperations || workOrderOperations.length === 0}
+                >
+                  创建委外单
                 </Button>
                 <Button
                   type="default"
