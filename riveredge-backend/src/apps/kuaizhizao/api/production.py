@@ -47,7 +47,9 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderUpdate,
     WorkOrderResponse,
     WorkOrderListResponse,
-    MaterialShortageResponse
+    MaterialShortageResponse,
+    WorkOrderSplitRequest,
+    WorkOrderSplitResponse,
 )
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
