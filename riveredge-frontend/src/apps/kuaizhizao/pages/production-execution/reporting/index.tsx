@@ -7,7 +7,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
-import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { reportingApi } from '../../../services/production';
@@ -43,6 +43,11 @@ const ReportingPage: React.FC = () => {
   const [scrapModalVisible, setScrapModalVisible] = useState(false);
   const [currentReportingRecord, setCurrentReportingRecord] = useState<ReportingRecord | null>(null);
   const scrapFormRef = useRef<any>(null);
+
+  // 不良品记录Modal状态
+  const [defectModalVisible, setDefectModalVisible] = useState(false);
+  const [currentReportingRecordForDefect, setCurrentReportingRecordForDefect] = useState<ReportingRecord | null>(null);
+  const defectFormRef = useRef<any>(null);
 
   /**
    * 处理扫码报工
@@ -129,6 +134,46 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
+   * 处理创建不良品记录
+   */
+  const handleCreateDefect = (record: ReportingRecord) => {
+    if (record.unqualifiedQuantity <= 0) {
+      messageApi.warning('该报工记录没有不合格数量，无法创建不良品记录');
+      return;
+    }
+    setCurrentReportingRecordForDefect(record);
+    setDefectModalVisible(true);
+    setTimeout(() => {
+      defectFormRef.current?.setFieldsValue({
+        defect_quantity: record.unqualifiedQuantity,
+        defect_type: 'other',
+        disposition: 'quarantine',
+      });
+    }, 100);
+  };
+
+  /**
+   * 处理提交不良品记录
+   */
+  const handleSubmitDefect = async (values: any): Promise<void> => {
+    try {
+      if (!currentReportingRecordForDefect?.id) {
+        throw new Error('报工记录信息不存在');
+      }
+
+      await reportingApi.recordDefect(currentReportingRecordForDefect.id.toString(), values);
+      messageApi.success('不良品记录创建成功');
+      setDefectModalVisible(false);
+      setCurrentReportingRecordForDefect(null);
+      defectFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建不良品记录失败');
+      throw error;
+    }
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<ReportingRecord>[] = [
@@ -199,7 +244,7 @@ const ReportingPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 240,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -226,15 +271,26 @@ const ReportingPage: React.FC = () => {
             </>
           )}
           {record.status === 'approved' && record.unqualifiedQuantity > 0 && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleCreateScrap(record)}
-            >
-              报废
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<WarningOutlined />}
+                onClick={() => handleCreateDefect(record)}
+                style={{ color: '#faad14' }}
+              >
+                不良品
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleCreateScrap(record)}
+              >
+                报废
+              </Button>
+            </>
           )}
         </Space>
       ),
