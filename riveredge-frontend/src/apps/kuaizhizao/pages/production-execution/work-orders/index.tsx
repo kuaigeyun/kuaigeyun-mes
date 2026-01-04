@@ -895,6 +895,17 @@ const WorkOrdersPage: React.FC = () => {
                     冻结工单
                   </Button>
                 )}
+                <Select
+                  value={workOrderDetail?.priority || 'normal'}
+                  onChange={(value) => handleSetPriority(workOrderDetail!, value)}
+                  disabled={!workOrderDetail}
+                  style={{ width: 120 }}
+                >
+                  <Select.Option value="low">低</Select.Option>
+                  <Select.Option value="normal">正常</Select.Option>
+                  <Select.Option value="high">高</Select.Option>
+                  <Select.Option value="urgent">紧急</Select.Option>
+                </Select>
               </Space>
             </div>
             {documentRelations ? (
@@ -1382,6 +1393,35 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </FormModalTemplate>
+
+      {/* 批量设置优先级Modal */}
+      <Modal
+        title="批量设置优先级"
+        open={batchPriorityModalVisible}
+        onOk={handleSubmitBatchPriority}
+        onCancel={() => setBatchPriorityModalVisible(false)}
+        okText="确定"
+        cancelText="取消"
+      >
+        <div style={{ padding: '16px 0' }}>
+          <div style={{ marginBottom: 16 }}>
+            已选择 <strong>{selectedRowKeys.length}</strong> 个工单
+          </div>
+          <div>
+            <div style={{ marginBottom: 8 }}>优先级：</div>
+            <Select
+              value={batchPriority}
+              onChange={(value) => setBatchPriority(value)}
+              style={{ width: '100%' }}
+            >
+              <Select.Option value="low">低</Select.Option>
+              <Select.Option value="normal">正常</Select.Option>
+              <Select.Option value="high">高</Select.Option>
+              <Select.Option value="urgent">紧急</Select.Option>
+            </Select>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };
