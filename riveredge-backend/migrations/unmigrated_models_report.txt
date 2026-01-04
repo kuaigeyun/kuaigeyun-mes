@@ -1,0 +1,48 @@
+================================================================================
+未迁移模型检查报告
+================================================================================
+
+📋 模型文件中的表（共 26 个）
+--------------------------------------------------------------------------------
+  ✅ 已迁移 apps_kuaizhizao_finished_goods_inspections
+  ✅ 已迁移 apps_kuaizhizao_finished_goods_receipt_items
+  ✅ 已迁移 apps_kuaizhizao_finished_goods_receipts
+  ✅ 已迁移 apps_kuaizhizao_incoming_inspections
+  ✅ 已迁移 apps_kuaizhizao_lrp_results
+  ✅ 已迁移 apps_kuaizhizao_mrp_results
+  ✅ 已迁移 apps_kuaizhizao_payables
+  ✅ 已迁移 apps_kuaizhizao_process_inspections
+  ✅ 已迁移 apps_kuaizhizao_production_picking_items
+  ✅ 已迁移 apps_kuaizhizao_production_pickings
+  ✅ 已迁移 apps_kuaizhizao_production_plan_items
+  ✅ 已迁移 apps_kuaizhizao_production_plans
+  ✅ 已迁移 apps_kuaizhizao_purchase_invoices
+  ✅ 已迁移 apps_kuaizhizao_purchase_order_items
+  ✅ 已迁移 apps_kuaizhizao_purchase_orders
+  ✅ 已迁移 apps_kuaizhizao_purchase_receipt_items
+  ✅ 已迁移 apps_kuaizhizao_purchase_receipts
+  ✅ 已迁移 apps_kuaizhizao_receivables
+  ✅ 已迁移 apps_kuaizhizao_reporting_records
+  ✅ 已迁移 apps_kuaizhizao_sales_deliveries
+  ✅ 已迁移 apps_kuaizhizao_sales_delivery_items
+  ✅ 已迁移 apps_kuaizhizao_sales_forecast_items
+  ✅ 已迁移 apps_kuaizhizao_sales_forecasts
+  ✅ 已迁移 apps_kuaizhizao_sales_order_items
+  ✅ 已迁移 apps_kuaizhizao_sales_orders
+  ✅ 已迁移 apps_kuaizhizao_work_orders
+
+📋 迁移文件中的表
+--------------------------------------------------------------------------------
+  创建的表: 28 个
+  删除的表: 2 个
+  当前存在的表: 26 个
+
+✅ 所有模型都已迁移
+
+✅ 没有孤立的表
+
+📊 总结
+--------------------------------------------------------------------------------
+✅ 所有模型都已正确迁移，没有发现问题
+
+================================================================================

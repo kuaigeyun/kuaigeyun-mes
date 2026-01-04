@@ -527,15 +527,26 @@ class TenantService:
         """
         初始化组织数据
         
-        在创建新组织后调用，初始化组织的默认数据（如默认角色、权限等）。
-        此方法为占位方法，后续完善。
+        在创建新组织后调用，初始化组织的默认数据（如默认角色、权限、编码规则、系统参数等）。
         
         Args:
             tenant_id: 组织 ID
         """
-        # TODO: 实现组织数据初始化逻辑
+        from core.services.default.default_values_service import DefaultValuesService
+        
+        try:
+            # 创建默认编码规则和系统参数
+            await DefaultValuesService.initialize_tenant_defaults(tenant_id)
+            
+            logger.info(f"组织 {tenant_id} 默认数据初始化完成")
+        except Exception as e:
+            # 初始化失败不影响组织创建，记录日志即可
+            logger.error(f"组织 {tenant_id} 默认数据初始化失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+        # TODO: 后续完善
         # 1. 创建默认角色
         # 2. 创建默认权限
-        # 3. 创建默认配置
-        pass
+        # 3. 其他默认配置
 

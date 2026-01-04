@@ -40,6 +40,16 @@ export const workOrderApi = {
   split: async (id: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data });
   },
+
+  // 获取工单工序列表
+  getOperations: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'GET' });
+  },
+
+  // 更新工单工序
+  updateOperations: async (id: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data });
+  },
 };
 
 // 返工单相关接口

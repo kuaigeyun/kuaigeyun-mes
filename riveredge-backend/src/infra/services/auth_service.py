@@ -441,7 +441,7 @@ class AuthService:
             plan=TenantPlan.TRIAL,  # 默认体验套餐
             settings={
                 "description": f"组织注册：{data.tenant_name}",
-                "registered_by": data.username,
+                "registered_by": data.phone,  # 使用手机号作为注册人标识
             },
             max_users=None,  # 根据套餐自动设置
             max_storage=None,  # 根据套餐自动设置
@@ -453,8 +453,11 @@ class AuthService:
         await tenant_service.initialize_tenant_data(tenant.id)
         
         # 创建管理员用户
+        # ⭐ 关键：手机号即账号，自动作为用户名
+        username = data.phone
+        
         user_data = UserCreate(
-            username=data.username,
+            username=username,  # 手机号作为用户名
             phone=data.phone,
             email=data.email,
             password=data.password,

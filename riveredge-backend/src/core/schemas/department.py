@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -127,4 +127,13 @@ class DepartmentTreeResponse(BaseModel):
 
 # 解决前向引用
 DepartmentTreeItem.model_rebuild()
+
+
+class DepartmentImportRequest(BaseModel):
+    """
+    部门导入请求 Schema
+    
+    接收前端 uni_import 组件传递的二维数组数据。
+    """
+    data: List[List[Any]] = Field(..., description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）")
 

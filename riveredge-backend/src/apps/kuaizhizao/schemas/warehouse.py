@@ -109,7 +109,7 @@ class ProductionPickingItemResponse(ProductionPickingItemBase):
 
 class FinishedGoodsReceiptBase(BaseSchema):
     """成品入库单基础schema"""
-    receipt_code: str = Field(..., max_length=50, description="入库单编码")
+    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，如果不提供则自动生成）")
     work_order_id: int = Field(..., description="工单ID")
     work_order_code: str = Field(..., max_length=50, description="工单编码")
     sales_order_id: Optional[int] = Field(None, description="销售订单ID")
@@ -131,7 +131,7 @@ class FinishedGoodsReceiptBase(BaseSchema):
 
 class FinishedGoodsReceiptCreate(FinishedGoodsReceiptBase):
     """成品入库单创建schema"""
-    pass
+    items: Optional[List["FinishedGoodsReceiptItemCreate"]] = Field(None, description="入库明细列表")
 
 
 class FinishedGoodsReceiptUpdate(FinishedGoodsReceiptBase):
@@ -199,9 +199,9 @@ class FinishedGoodsReceiptItemResponse(FinishedGoodsReceiptItemBase):
 
 class SalesDeliveryBase(BaseSchema):
     """销售出库单基础schema"""
-    delivery_code: str = Field(..., max_length=50, description="出库单编码")
-    sales_order_id: int = Field(..., description="销售订单ID")
-    sales_order_code: str = Field(..., max_length=50, description="销售订单编码")
+    delivery_code: Optional[str] = Field(None, max_length=50, description="出库单编码（可选，如果不提供则自动生成）")
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID（MTO模式，MTS模式可为空）")
+    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码（MTO模式，MTS模式可为空）")
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
     warehouse_id: int = Field(..., description="出库仓库ID")
@@ -225,7 +225,7 @@ class SalesDeliveryBase(BaseSchema):
 
 class SalesDeliveryCreate(SalesDeliveryBase):
     """销售出库单创建schema"""
-    pass
+    items: Optional[List["SalesDeliveryItemCreate"]] = Field(None, description="出库明细列表")
 
 
 class SalesDeliveryUpdate(SalesDeliveryBase):
@@ -314,27 +314,6 @@ class PurchaseReceiptBase(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
 
 
-class PurchaseReceiptCreate(PurchaseReceiptBase):
-    """采购入库单创建schema"""
-    items: Optional[List[PurchaseReceiptItemCreate]] = Field(default_factory=list, description="入库单明细列表")
-
-
-class PurchaseReceiptUpdate(PurchaseReceiptBase):
-    """采购入库单更新schema"""
-    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
-
-
-class PurchaseReceiptResponse(PurchaseReceiptBase):
-    """采购入库单响应schema"""
-    id: int = Field(..., description="入库单ID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-
-    class Config:
-        from_attributes = True
-
-
 # === 采购入库单明细 ===
 
 class PurchaseReceiptItemBase(BaseSchema):
@@ -376,6 +355,29 @@ class PurchaseReceiptItemResponse(PurchaseReceiptItemBase):
     id: int = Field(..., description="明细ID")
     tenant_id: int = Field(..., description="租户ID")
     receipt_id: int = Field(..., description="入库单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+# === 采购入库单（主表，需要在明细之后定义） ===
+
+class PurchaseReceiptCreate(PurchaseReceiptBase):
+    """采购入库单创建schema"""
+    items: Optional[List[PurchaseReceiptItemCreate]] = Field(default_factory=list, description="入库单明细列表")
+
+
+class PurchaseReceiptUpdate(PurchaseReceiptBase):
+    """采购入库单更新schema"""
+    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+
+
+class PurchaseReceiptResponse(PurchaseReceiptBase):
+    """采购入库单响应schema"""
+    id: int = Field(..., description="入库单ID")
+    tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

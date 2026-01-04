@@ -196,3 +196,164 @@ export async function getSalesForecastsForMRP(): Promise<SalesForecast[]> {
   return response.data || [];
 }
 
+// ============ LRP运算相关接口 ============
+
+/**
+ * LRP运算请求接口
+ */
+export interface LRPComputationRequest {
+  sales_order_id: number;
+  planning_horizon?: number; // 计划时域（月数），默认3
+  consider_capacity?: boolean; // 是否考虑产能，默认false
+}
+
+/**
+ * LRP运算结果接口
+ */
+export interface LRPComputationResult {
+  sales_order_id: number;
+  computation_time: string;
+  feasible: boolean;
+  production_schedule: any[];
+  procurement_schedule: any[];
+  capacity_utilization: any;
+}
+
+/**
+ * LRP运算结果详情接口
+ */
+export interface LRPResult {
+  id?: number;
+  tenant_id?: number;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  delivery_date?: string;
+  planning_horizon?: number;
+  required_quantity?: number;
+  available_inventory?: number;
+  net_requirement?: number;
+  planned_production?: number;
+  planned_procurement?: number;
+  production_start_date?: string;
+  production_completion_date?: string;
+  procurement_start_date?: string;
+  procurement_completion_date?: string;
+  computation_status?: string;
+  computation_time?: string;
+  material_breakdown?: any;
+  capacity_requirements?: any;
+  procurement_schedule?: any;
+}
+
+/**
+ * LRP运算结果列表参数
+ */
+export interface LRPResultListParams {
+  skip?: number;
+  limit?: number;
+  sales_order_id?: number;
+}
+
+/**
+ * LRP运算结果列表响应
+ */
+export interface LRPResultListResponse {
+  data: LRPResult[];
+  total: number;
+  success: boolean;
+}
+
+/**
+ * 执行LRP运算
+ */
+export async function runLRPComputation(request: LRPComputationRequest): Promise<LRPComputationResult> {
+  return apiRequest<LRPComputationResult>({
+    url: '/apps/kuaizhizao/lrp/run',
+    method: 'POST',
+    data: {
+      sales_order_id: request.sales_order_id,
+      planning_horizon: request.planning_horizon || 3,
+      consider_capacity: request.consider_capacity || false,
+    },
+  });
+}
+
+/**
+ * 获取LRP运算结果列表
+ */
+export async function listLRPResults(params: LRPResultListParams = {}): Promise<LRPResultListResponse> {
+  return apiRequest<LRPResultListResponse>({
+    url: '/apps/kuaizhizao/lrp/results',
+    method: 'GET',
+    params,
+  });
+}
+
+/**
+ * 获取LRP运算结果详情
+ */
+export async function getLRPResult(id: number): Promise<LRPResult> {
+  return apiRequest<LRPResult>({
+    url: `/apps/kuaizhizao/lrp/results/${id}`,
+    method: 'GET',
+  });
+}
+
+/**
+ * 从LRP运算结果一键生成工单和采购单
+ */
+export interface GenerateOrdersFromLRPRequest {
+  generate_work_orders?: boolean;
+  generate_purchase_orders?: boolean;
+  selected_material_ids?: number[];
+}
+
+export interface GenerateOrdersFromLRPResponse {
+  sales_order_id: number;
+  generated_work_orders: number;
+  generated_purchase_orders: number;
+  work_orders: any[];
+  purchase_orders: any[];
+  message: string;
+}
+
+export async function generateOrdersFromLRP(
+  salesOrderId: number,
+  options: GenerateOrdersFromLRPRequest = {}
+): Promise<GenerateOrdersFromLRPResponse> {
+  const params: any = {
+    generate_work_orders: options.generate_work_orders !== false,
+    generate_purchase_orders: options.generate_purchase_orders !== false,
+  };
+  
+  if (options.selected_material_ids && options.selected_material_ids.length > 0) {
+    params.selected_material_ids = options.selected_material_ids;
+  }
+  
+  return apiRequest<GenerateOrdersFromLRPResponse>({
+    url: `/apps/kuaizhizao/lrp/results/${salesOrderId}/generate-orders`,
+    method: 'POST',
+    params,
+  });
+}
+
+/**
+ * 导出LRP运算结果
+ */
+export async function exportLRPResults(salesOrderId?: number): Promise<Blob> {
+  const params: any = {};
+  if (salesOrderId) {
+    params.sales_order_id = salesOrderId;
+  }
+  
+  return apiRequest<Blob>({
+    url: '/apps/kuaizhizao/lrp/results/export',
+    method: 'GET',
+    params,
+    responseType: 'blob',
+  });
+}
+

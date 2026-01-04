@@ -7,6 +7,8 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
+from __future__ import annotations
+
 from datetime import datetime, date
 from typing import Optional, List
 from pydantic import Field
@@ -34,7 +36,7 @@ class SalesForecastBase(BaseSchema):
 
 class SalesForecastCreate(SalesForecastBase):
     """销售预测创建schema"""
-    pass
+    items: Optional[List[SalesForecastItemCreate]] = Field(None, description="预测明细列表")
 
 
 class SalesForecastUpdate(SalesForecastBase):
@@ -128,7 +130,7 @@ class SalesOrderBase(BaseSchema):
 
 class SalesOrderCreate(SalesOrderBase):
     """销售订单创建schema"""
-    pass
+    items: Optional[List["SalesOrderItemCreate"]] = Field(None, description="订单明细列表")
 
 
 class SalesOrderUpdate(SalesOrderBase):

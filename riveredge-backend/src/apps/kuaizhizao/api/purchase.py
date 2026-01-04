@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, Query, Path
 from fastapi.responses import JSONResponse
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.models.user import User as CurrentUser
-from infra.exceptions.exceptions import handle_exceptions
+from infra.models.user import User as CurrentUser
+from infra.exceptions.exceptions import ValidationError, NotFoundError
 
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse,
@@ -33,7 +33,6 @@ router = APIRouter(tags=["采购订单管理"])
 
 # === 采购订单CRUD接口 ===
 @router.post("/purchase-orders", response_model=PurchaseOrderResponse, summary="创建采购订单")
-@handle_exceptions
 async def create_purchase_order(
     order: PurchaseOrderCreate,
     current_user: CurrentUser = Depends(get_current_user),
@@ -56,7 +55,6 @@ async def create_purchase_order(
 
 
 @router.get("/purchase-orders", response_model=List[PurchaseOrderListResponse], summary="获取采购订单列表")
-@handle_exceptions
 async def list_purchase_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="返回数量"),
@@ -92,7 +90,6 @@ async def list_purchase_orders(
 
 
 @router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="获取采购订单详情")
-@handle_exceptions
 async def get_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     tenant_id: int = Depends(get_current_tenant)
@@ -106,10 +103,9 @@ async def get_purchase_order(
 
 
 @router.put("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")
-@handle_exceptions
 async def update_purchase_order(
-    order_id: int = Path(..., description="采购订单ID"),
     order: PurchaseOrderUpdate,
+    order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -130,7 +126,6 @@ async def update_purchase_order(
 
 
 @router.delete("/purchase-orders/{order_id}", summary="删除采购订单")
-@handle_exceptions
 async def delete_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     tenant_id: int = Depends(get_current_tenant)
@@ -148,7 +143,6 @@ async def delete_purchase_order(
 
 # === 采购订单业务操作接口 ===
 @router.post("/purchase-orders/{order_id}/submit", response_model=PurchaseOrderResponse, summary="提交采购订单")
-@handle_exceptions
 async def submit_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
@@ -167,10 +161,9 @@ async def submit_purchase_order(
 
 
 @router.post("/purchase-orders/{order_id}/approve", response_model=PurchaseOrderResponse, summary="审核采购订单")
-@handle_exceptions
 async def approve_purchase_order(
-    order_id: int = Path(..., description="采购订单ID"),
     approve_data: PurchaseOrderApprove,
+    order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -189,10 +182,9 @@ async def approve_purchase_order(
 
 
 @router.post("/purchase-orders/{order_id}/confirm", response_model=PurchaseOrderResponse, summary="确认采购订单")
-@handle_exceptions
 async def confirm_purchase_order(
-    order_id: int = Path(..., description="采购订单ID"),
     confirm_data: PurchaseOrderConfirm,
+    order_id: int = Path(..., description="采购订单ID"),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -211,7 +203,6 @@ async def confirm_purchase_order(
 
 
 @router.post("/purchase-orders/{order_id}/push-to-receipt", summary="下推到采购入库")
-@handle_exceptions
 async def push_purchase_order_to_receipt(
     order_id: int = Path(..., description="采购订单ID"),
     receipt_quantities: Optional[dict] = None,

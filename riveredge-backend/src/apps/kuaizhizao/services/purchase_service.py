@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
 from tortoise.transactions import in_transaction
@@ -132,10 +132,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
         # 获取订单明细
-        items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id)
-        order.items = items
-
-        return PurchaseOrderResponse.model_validate(order)
+        items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
+        
+        # 使用model_validate，但需要手动处理items字段（因为order.items是ReverseRelation）
+        # 先获取订单的所有字段，排除items
+        order_data = order.__dict__.copy()
+        # 移除items键（如果存在），因为它是ReverseRelation对象
+        order_data.pop('items', None)
+        
+        # 使用model_construct构建响应对象
+        response = PurchaseOrderResponse.model_construct(**order_data)
+        # 手动设置items
+        response.items = [PurchaseOrderItemResponse.model_validate(item) for item in items]
+        
+        return response
 
     async def list_purchase_orders(
         self,
@@ -480,21 +490,41 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material_unit=item.unit,
                 receipt_quantity=receipt_quantity,
                 unit_price=item.unit_price,
-                total_amount=receipt_quantity * item.unit_price
+                total_amount=receipt_quantity * item.unit_price,
+                qualified_quantity=receipt_quantity,  # 默认全部合格，后续可通过检验调整
+                unqualified_quantity=Decimal('0')  # 默认无不合格数量
             ))
         
         if not receipt_items:
             raise BusinessLogicError("没有可入库的明细")
         
+        # 获取默认仓库（如果未指定）
+        warehouse_id = None
+        warehouse_name = None
+        # 尝试获取第一个激活的仓库作为默认仓库
+        from apps.master_data.models.warehouse import Warehouse
+        default_warehouse = await Warehouse.filter(tenant_id=tenant_id, is_active=True).first()
+        if default_warehouse:
+            warehouse_id = default_warehouse.id
+            warehouse_name = default_warehouse.name
+        
+        if not warehouse_id:
+            raise BusinessLogicError("未指定入库仓库，且未找到可用仓库")
+        
+        # 生成入库单编码
+        today = datetime.now().strftime("%Y%m%d")
+        receipt_code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
+        
         # 创建入库单
         receipt_data = PurchaseReceiptCreate(
+            receipt_code=receipt_code,
             purchase_order_id=order_id,
             purchase_order_code=order.order_code,
             supplier_id=order.supplier_id,
             supplier_name=order.supplier_name,
             receipt_date=datetime.now().date(),
-            warehouse_id=None,  # TODO: 从物料或订单获取默认仓库
-            warehouse_name=None,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
             status="待入库",
             items=receipt_items
         )
@@ -505,10 +535,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             created_by=created_by
         )
         
+        # 获取receipt的id（PurchaseReceiptResponse有id字段）
+        receipt_id = receipt.id if hasattr(receipt, 'id') else None
+        receipt_code = receipt.receipt_code if hasattr(receipt, 'receipt_code') else None
+        
         return {
             "order_id": order_id,
             "order_code": order.order_code,
-            "receipt_id": receipt.id if hasattr(receipt, 'id') else None,
-            "receipt_code": receipt.receipt_code if hasattr(receipt, 'receipt_code') else None,
+            "receipt_id": receipt_id,
+            "receipt_code": receipt_code,
             "message": "采购入库单创建成功"
         }

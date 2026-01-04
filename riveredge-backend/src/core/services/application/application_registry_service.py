@@ -249,6 +249,13 @@ class ApplicationRegistryService:
                 if cls._module_exists(route_module_path):
                     try:
                         # 动态导入路由模块
+                        # 注意：在导入路由模块时，确保sys.path已正确设置
+                        import sys
+                        from pathlib import Path
+                        src_path = Path(__file__).parent.parent.parent.parent / "src"
+                        if str(src_path) not in sys.path:
+                            sys.path.insert(0, str(src_path))
+                        
                         route_module = importlib.import_module(route_module_path)
 
                         # 获取路由对象（通常命名为router）
@@ -261,8 +268,8 @@ class ApplicationRegistryService:
                             # 如果路由管理器已初始化，则注册路由
                             route_manager = get_route_manager()
                             if route_manager:
-                                # 使用应用的 route_path 作为路由前缀
-                                route_prefix = app.get('route_path', '/api/v1')
+                                # 使用 /api/v1 作为基础前缀，路由管理器会自动添加 /apps/{app_code}
+                                route_prefix = '/api/v1'
                                 route_manager.register_app_routes(app_code, [router], prefix=route_prefix)
                                 logger.info(f"✅ 通过路由管理器注册应用路由: {route_module_path} (prefix: {route_prefix})")
                             else:

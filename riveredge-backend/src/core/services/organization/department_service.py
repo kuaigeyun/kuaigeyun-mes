@@ -6,12 +6,14 @@
 
 from typing import List, Optional, Dict, Any
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from core.models.department import Department
 from core.models.user_role import UserRole
 from core.schemas.department import DepartmentCreate, DepartmentUpdate
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
+from loguru import logger
 
 # 向后兼容别名
 PermissionDeniedError = AuthorizationError
@@ -372,4 +374,205 @@ class DepartmentService:
                     await department.save()
         
         return True
+    
+    @staticmethod
+    async def import_departments_from_data(
+        tenant_id: int,
+        data: List[List[Any]],
+        current_user_id: int
+    ) -> Dict[str, Any]:
+        """
+        从二维数组数据导入部门
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建部门。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 组织ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            current_user_id: 当前用户ID
+            
+        Returns:
+            dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '部门名称': 'name',
+            '*部门名称': 'name',
+            'name': 'name',
+            '*name': 'name',
+            '部门代码': 'code',
+            'code': 'code',
+            '父部门': 'parent',
+            'parent': 'parent',
+            '负责人': 'manager',
+            'manager': 'manager',
+            '描述': 'description',
+            'description': 'description',
+            '排序': 'sort_order',
+            'sort_order': 'sort_order',
+            '启用': 'is_active',
+            'is_active': 'is_active',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['name']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        # 用于缓存已创建的部门（按名称），用于处理父子关系
+        created_departments_cache: Dict[str, Department] = {}
+        
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                dept_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            dept_data[field] = str(value).strip()
+                
+                # 验证必填字段
+                if not dept_data.get('name'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "部门名称为空"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 检查部门名称是否已存在
+                existing_dept = await Department.filter(
+                    tenant_id=tenant_id,
+                    name=dept_data['name'],
+                    deleted_at__isnull=True
+                ).first()
+                
+                if existing_dept:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"部门名称 {dept_data['name']} 已存在"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 处理父部门（通过名称查找）
+                parent_id = None
+                if dept_data.get('parent'):
+                    # 先查找已创建的部门
+                    if dept_data['parent'] in created_departments_cache:
+                        parent_id = created_departments_cache[dept_data['parent']].id
+                    else:
+                        # 查找数据库中的部门
+                        parent = await Department.filter(
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True
+                        ).filter(
+                            Q(name=dept_data['parent']) | Q(code=dept_data['parent'])
+                        ).first()
+                        
+                        if parent:
+                            parent_id = parent.id
+                        else:
+                            errors.append({
+                                "row": row_idx,
+                                "error": f"父部门 {dept_data['parent']} 不存在（请先导入父部门）"
+                            })
+                            failure_count += 1
+                            continue
+                
+                # 处理部门负责人（通过用户名查找）
+                manager_id = None
+                if dept_data.get('manager'):
+                    manager = await User.filter(
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True
+                    ).filter(
+                        Q(username=dept_data['manager']) | Q(full_name=dept_data['manager'])
+                    ).first()
+                    
+                    if manager:
+                        manager_id = manager.id
+                    else:
+                        errors.append({
+                            "row": row_idx,
+                            "error": f"负责人 {dept_data['manager']} 不存在"
+                        })
+                        failure_count += 1
+                        continue
+                
+                # 处理排序
+                sort_order = 0
+                if dept_data.get('sort_order'):
+                    try:
+                        sort_order = int(dept_data['sort_order'])
+                    except ValueError:
+                        sort_order = 0
+                
+                # 处理启用状态
+                is_active = True
+                if dept_data.get('is_active'):
+                    is_active_str = str(dept_data['is_active']).lower()
+                    is_active = is_active_str in ('true', '1', '是', '启用', 'enabled')
+                
+                # 创建部门
+                department = await Department.create(
+                    tenant_id=tenant_id,
+                    name=dept_data['name'],
+                    code=dept_data.get('code'),
+                    description=dept_data.get('description'),
+                    parent_id=parent_id,
+                    manager_id=manager_id,
+                    sort_order=sort_order,
+                    is_active=is_active,
+                )
+                
+                # 缓存已创建的部门
+                created_departments_cache[dept_data['name']] = department
+                
+                success_count += 1
+                
+            except Exception as e:
+                logger.error(f"导入部门失败（行{row_idx}）: {e}")
+                errors.append({
+                    "row": row_idx,
+                    "error": str(e)
+                })
+                failure_count += 1
+        
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+        }
 

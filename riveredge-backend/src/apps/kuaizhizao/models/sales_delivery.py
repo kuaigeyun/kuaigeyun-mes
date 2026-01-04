@@ -20,9 +20,9 @@ class SalesDelivery(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     delivery_code = fields.CharField(max_length=50, unique=True, description="出库单编码")
 
-    # 销售订单信息
-    sales_order_id = fields.IntField(description="销售订单ID")
-    sales_order_code = fields.CharField(max_length=50, description="销售订单编码")
+    # 销售订单信息（MTO模式，MTS模式可为空）
+    sales_order_id = fields.IntField(null=True, description="销售订单ID")
+    sales_order_code = fields.CharField(max_length=50, null=True, description="销售订单编码")
     customer_id = fields.IntField(description="客户ID")
     customer_name = fields.CharField(max_length=200, description="客户名称")
 

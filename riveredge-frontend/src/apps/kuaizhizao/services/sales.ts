@@ -133,19 +133,35 @@ export async function deleteSalesOrder(id: number): Promise<void> {
 }
 
 /**
- * 批量导入销售订单
+ * 提交销售订单
  */
-export async function importSalesOrders(file: File): Promise<{ success: boolean; message: string; data?: any }> {
-  const formData = new FormData();
-  formData.append('file', file);
+export async function submitSalesOrder(id: number): Promise<SalesOrder> {
+  return apiRequest<SalesOrder>({
+    url: `/apps/kuaizhizao/sales-orders/${id}/submit`,
+    method: 'POST',
+  });
+}
 
+/**
+ * 批量导入销售订单（UniSheet方式）
+ */
+export async function importSalesOrders(data: any[][]): Promise<{ success: boolean; message: string; data?: any }> {
   return apiRequest<{ success: boolean; message: string; data?: any }>({
     url: '/apps/kuaizhizao/sales-orders/import',
     method: 'POST',
-    data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    data: { data },
+  });
+}
+
+/**
+ * 批量导出销售订单
+ */
+export async function exportSalesOrders(params: SalesOrderListParams = {}): Promise<Blob> {
+  return apiRequest<Blob>({
+    url: '/apps/kuaizhizao/sales-orders/export',
+    method: 'GET',
+    params,
+    responseType: 'blob',
   });
 }
 

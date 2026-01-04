@@ -37,6 +37,8 @@ from infra.api.infra_superadmin.auth import router as infra_superadmin_auth_rout
 from infra.api.auth.auth import router as auth_router
 from infra.api.monitoring.statistics import router as monitoring_statistics_router
 from infra.api.saved_searches.saved_searches import router as saved_searches_router
+from infra.api.init.init_wizard import router as init_wizard_router
+from infra.api.templates.templates import router as industry_template_router
 
 # 导入所有系统级 API 路由（core）
 import sys
@@ -358,6 +360,8 @@ app.include_router(tenants_router, prefix="/api/v1/infra")
 app.include_router(infra_superadmin_auth_router, prefix="/api/v1/infra")
 app.include_router(infra_superadmin_router, prefix="/api/v1/infra")
 app.include_router(saved_searches_router, prefix="/api/v1")
+app.include_router(init_wizard_router, prefix="/api/v1/infra")
+app.include_router(industry_template_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
 app.include_router(users_router, prefix="/api/v1/core")

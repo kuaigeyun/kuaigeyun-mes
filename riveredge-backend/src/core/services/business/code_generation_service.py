@@ -47,39 +47,38 @@ class CodeGenerationService:
         if not rule:
             raise ValidationError(f"编码规则 {rule_code} 不存在或未启用")
         
-        # 获取或创建序号记录
-        async with in_transaction():
-            sequence = await CodeSequence.get_or_none(
+        # 获取或创建序号记录（不使用嵌套事务，避免死锁）
+        sequence = await CodeSequence.get_or_none(
+            code_rule_id=rule.id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not sequence:
+            sequence = await CodeSequence.create(
                 code_rule_id=rule.id,
                 tenant_id=tenant_id,
-                deleted_at__isnull=True
+                current_seq=rule.seq_start - rule.seq_step
             )
-            if not sequence:
-                sequence = await CodeSequence.create(
-                    code_rule_id=rule.id,
-                    tenant_id=tenant_id,
-                    current_seq=rule.seq_start - rule.seq_step
-                )
-            
-            # 检查是否需要重置序号
-            if rule.seq_reset_rule:
-                now = date.today()
-                if sequence.reset_date != now:
-                    if rule.seq_reset_rule == "daily":
+        
+        # 检查是否需要重置序号
+        if rule.seq_reset_rule:
+            now = date.today()
+            if sequence.reset_date != now:
+                if rule.seq_reset_rule == "daily":
+                    sequence.current_seq = rule.seq_start - rule.seq_step
+                    sequence.reset_date = now
+                elif rule.seq_reset_rule == "monthly":
+                    if not sequence.reset_date or sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
                         sequence.current_seq = rule.seq_start - rule.seq_step
                         sequence.reset_date = now
-                    elif rule.seq_reset_rule == "monthly":
-                        if not sequence.reset_date or sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
-                            sequence.current_seq = rule.seq_start - rule.seq_step
-                            sequence.reset_date = now
-                    elif rule.seq_reset_rule == "yearly":
-                        if not sequence.reset_date or sequence.reset_date.year != now.year:
-                            sequence.current_seq = rule.seq_start - rule.seq_step
-                            sequence.reset_date = now
-            
-            # 递增序号
-            sequence.current_seq += rule.seq_step
-            await sequence.save()
+                elif rule.seq_reset_rule == "yearly":
+                    if not sequence.reset_date or sequence.reset_date.year != now.year:
+                        sequence.current_seq = rule.seq_start - rule.seq_step
+                        sequence.reset_date = now
+        
+        # 递增序号（在外部事务中保存）
+        sequence.current_seq += rule.seq_step
+        await sequence.save()
         
         # 生成编码
         return await CodeGenerationService._render_expression(

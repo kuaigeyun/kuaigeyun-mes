@@ -188,7 +188,7 @@ const PurchaseOrdersPage: React.FC = () => {
               type="link"
               size="small"
               icon={<SendOutlined />}
-              onClick={() => handleSubmit(record)}
+              onClick={() => handleSubmitOrder(record)}
               style={{ color: '#1890ff' }}
             >
               提交
@@ -253,8 +253,8 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  // 处理提交
-  const handleSubmit = async (record: PurchaseOrder) => {
+  // 处理提交订单审核
+  const handleSubmitOrder = async (record: PurchaseOrder) => {
     Modal.confirm({
       title: '提交采购订单',
       content: `确定要提交采购订单 "${record.order_code}" 吗？提交后将变为待审核状态。`,
@@ -357,8 +357,8 @@ const PurchaseOrdersPage: React.FC = () => {
     formRef.current?.resetFields();
   };
 
-  // 处理提交表单（创建/更新）
-  const handleSubmit = async (values: any): Promise<void> => {
+  // 处理表单提交（创建/更新）
+  const handleFormSubmit = async (values: any): Promise<void> => {
     try {
       if (isEdit && currentOrder?.id) {
         await updatePurchaseOrder(currentOrder.id, values);
@@ -560,7 +560,7 @@ const PurchaseOrdersPage: React.FC = () => {
           setCurrentOrder(null);
           formRef.current?.resetFields();
         }}
-        onFinish={handleSubmit}
+        onFinish={handleFormSubmit}
         isEdit={isEdit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}

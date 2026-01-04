@@ -10,11 +10,13 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { downloadFile } from '../../../services/common';
 
 // 销售出库单接口定义
 interface SalesDelivery {
@@ -69,6 +71,9 @@ const SalesDeliveriesPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [deliveryDetail, setDeliveryDetail] = useState<SalesDeliveryDetail | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+
+  // 导入导出相关状态
+  const [importVisible, setImportVisible] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<SalesDelivery>[] = [
@@ -175,6 +180,14 @@ const SalesDeliveriesPage: React.FC = () => {
               确认出库
             </Button>
           )}
+          <Button
+            type="link"
+            size="small"
+            icon={<PrinterOutlined />}
+            onClick={() => handlePrint(record)}
+          >
+            打印
+          </Button>
         </Space>
       ),
     },
@@ -216,6 +229,68 @@ const SalesDeliveriesPage: React.FC = () => {
         }
       },
     });
+  };
+
+  // 处理打印
+  const handlePrint = async (record: SalesDelivery) => {
+    try {
+      const result = await warehouseApi.salesDelivery.print(record.id!.toString());
+      
+      if (result.success) {
+        // 如果有渲染后的内容，使用新窗口打印
+        if (result.content) {
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+            printWindow.document.write(result.content);
+            printWindow.document.close();
+            printWindow.onload = () => {
+              printWindow.print();
+            };
+          }
+        } else {
+          // 如果没有模板内容，使用默认打印方式
+          // 打开详情页面并打印
+          await handleDetail(record);
+          setTimeout(() => {
+            window.print();
+          }, 500);
+        }
+      } else {
+        messageApi.warning(result.message || '打印功能暂未配置模板');
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '打印失败');
+    }
+  };
+
+  // 处理批量导入
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await warehouseApi.salesDelivery.import(data);
+      if (result.success) {
+        const resultData = result.data || {};
+        messageApi.success(`导入成功：成功 ${resultData.success_count || 0} 条，失败 ${resultData.failure_count || 0} 条`);
+        setImportVisible(false);
+        actionRef.current?.reload();
+      } else {
+        const resultData = result.data || {};
+        messageApi.warning(`导入完成：成功 ${resultData.success_count || 0} 条，失败 ${resultData.failure_count || 0} 条`);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  // 处理批量导出
+  const handleExport = async () => {
+    try {
+      const blob = await warehouseApi.salesDelivery.export();
+      const filename = `销售出库单_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
+    }
   };
 
   // 详情列定义
@@ -357,6 +432,22 @@ const SalesDeliveriesPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          toolBarRender={() => [
+            <Button
+              key="import"
+              icon={<UploadOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              批量导入
+            </Button>,
+            <Button
+              key="export"
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+            >
+              批量导出
+            </Button>,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
@@ -461,6 +552,27 @@ const SalesDeliveriesPage: React.FC = () => {
             </div>
           ) : null
         }
+      />
+
+      {/* 批量导入弹窗 */}
+      <UniImport
+        visible={importVisible}
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        title="批量导入销售出库单"
+        headers={[
+          '销售订单编号',
+          '客户名称',
+          '仓库名称',
+          '出库时间',
+          '发货方式',
+          '物流单号',
+          '收货地址',
+          '备注',
+        ]}
+        sampleData={[
+          ['SO20250115001', '客户A', '主仓库', '2025-01-15 10:00:00', '快递', 'SF1234567890', '北京市朝阳区xxx', '备注信息'],
+        ]}
       />
     </>
   );

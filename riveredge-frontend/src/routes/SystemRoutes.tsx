@@ -14,6 +14,8 @@ import LoginPage from '../pages/login';
 import NotFoundPage from '../pages/404';
 import InfraLoginPage from '../pages/infra/login';
 import LockScreenPage from '../pages/lock-screen';
+import InitWizardPage from '../pages/init/wizard';
+import TemplateSelectPage from '../pages/init/template-select';
 
 // 系统级页面（直接导入，移除懒加载）
 import DashboardPage from '../pages/system/dashboard';
@@ -90,6 +92,10 @@ const SystemRoutes: React.FC = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/infra/login" element={<InfraLoginPage />} />
       <Route path="/lock-screen" element={<LockScreenPage />} />
+      
+      {/* 初始化向导页面（不需要布局） */}
+      <Route path="/init/wizard" element={<InitWizardPage />} />
+      <Route path="/init/template-select" element={<TemplateSelectPage />} />
 
       {/* 系统级路由 */}
       {/* 仪表盘重定向到工作台 */}

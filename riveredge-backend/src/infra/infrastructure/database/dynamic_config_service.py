@@ -219,8 +219,9 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.sales_order",
                 f"apps.{module_code}.models.sales_order_item",
                 # BOM管理模块
-                f"apps.{module_code}.models.bill_of_materials",
-                f"apps.{module_code}.models.bill_of_materials_item",
+                # BOM管理已移至master_data APP，不再需要bill_of_materials模型
+                # f"apps.{module_code}.models.bill_of_materials",
+                # f"apps.{module_code}.models.bill_of_materials_item",
                 # 生产计划模块
                 f"apps.{module_code}.models.production_plan",
                 f"apps.{module_code}.models.production_plan_item",
@@ -347,8 +348,9 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.sales_order",
                 f"apps.{module_code}.models.sales_order_item",
                 # BOM管理模块
-                f"apps.{module_code}.models.bill_of_materials",
-                f"apps.{module_code}.models.bill_of_materials_item",
+                # BOM管理已移至master_data APP，不再需要bill_of_materials模型
+                # f"apps.{module_code}.models.bill_of_materials",
+                # f"apps.{module_code}.models.bill_of_materials_item",
                 # 生产计划模块
                 f"apps.{module_code}.models.production_plan",
                 f"apps.{module_code}.models.production_plan_item",

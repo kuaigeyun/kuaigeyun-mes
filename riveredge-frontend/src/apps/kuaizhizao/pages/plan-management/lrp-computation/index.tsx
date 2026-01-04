@@ -9,36 +9,19 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Statistic, Table, Alert } from 'antd';
-import { CalculatorOutlined, PlayCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Statistic, Table, Alert, Checkbox } from 'antd';
+import { CalculatorOutlined, PlayCircleOutlined, EyeOutlined, DownloadOutlined, FileAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
 import { FormModalTemplate } from '../../../../../components/layout-templates/FormModalTemplate';
 import { DetailDrawerTemplate } from '../../../../../components/layout-templates/DetailDrawerTemplate';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { runLRPComputation, listLRPResults, getLRPResult, generateOrdersFromLRP, exportLRPResults, LRPResult, LRPComputationRequest } from '../../../services/mrp';
+import { listSalesOrders, SalesOrder } from '../../../services/sales';
+import { downloadFile } from '../../../services/common';
 
-// LRP运算结果接口定义
-interface LRPResult {
-  id?: number;
-  plan_id?: number;
-  sales_order_id?: number;
-  sales_order_code?: string;
-  material_id?: number;
-  material_code?: string;
-  material_name?: string;
-  required_quantity?: number;
-  available_inventory?: number;
-  production_plan_quantity?: number;
-  purchase_plan_quantity?: number;
-  delivery_date?: string;
-  calculation_date?: string;
-}
-
-interface LRPComputationRequest {
-  sales_order_id: number;
-  consider_inventory: boolean;
-  look_ahead_days: number;
-}
+// 使用服务中的接口定义
+type LRPResultType = LRPResult;
 
 const LRPComputationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -48,14 +31,20 @@ const LRPComputationPage: React.FC = () => {
   // 运算Modal状态
   const [computationModalVisible, setComputationModalVisible] = useState(false);
   const computationFormRef = useRef<any>(null);
+  const [currentSalesOrderId, setCurrentSalesOrderId] = useState<number | null>(null);
 
   // 结果Drawer状态
   const [resultDrawerVisible, setResultDrawerVisible] = useState(false);
-  const [computationResults, setComputationResults] = useState<LRPResult[]>([]);
+  const [computationResults, setComputationResults] = useState<LRPResultType[]>([]);
   const [computationStatus, setComputationStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
 
+  // 生成订单Modal状态
+  const [generateOrdersModalVisible, setGenerateOrdersModalVisible] = useState(false);
+  const [generateWorkOrders, setGenerateWorkOrders] = useState(true);
+  const [generatePurchaseOrders, setGeneratePurchaseOrders] = useState(true);
+
   // 表格列定义
-  const columns: ProColumns<LRPResult>[] = [
+  const columns: ProColumns<LRPResultType>[] = [
     {
       title: '销售订单',
       dataIndex: 'sales_order_code',
@@ -90,8 +79,15 @@ const LRPComputationPage: React.FC = () => {
       render: (text) => text || 0,
     },
     {
-      title: '建议生产',
-      dataIndex: 'production_plan_quantity',
+      title: '净需求',
+      dataIndex: 'net_requirement',
+      width: 100,
+      align: 'right',
+      render: (text) => text || 0,
+    },
+    {
+      title: '计划生产',
+      dataIndex: 'planned_production',
       width: 100,
       align: 'right',
       render: (text) => {
@@ -100,8 +96,8 @@ const LRPComputationPage: React.FC = () => {
       },
     },
     {
-      title: '建议采购',
-      dataIndex: 'purchase_plan_quantity',
+      title: '计划采购',
+      dataIndex: 'planned_procurement',
       width: 100,
       align: 'right',
       render: (text) => {
@@ -117,11 +113,42 @@ const LRPComputationPage: React.FC = () => {
     },
     {
       title: '运算时间',
-      dataIndex: 'calculation_date',
+      dataIndex: 'computation_time',
       valueType: 'dateTime',
       width: 160,
     },
   ];
+
+  // 统计卡片数据（从API获取）
+  const [statCardsData, setStatCardsData] = useState({
+    total: 0,
+    totalProduction: 0,
+    totalProcurement: 0,
+  });
+
+  // 更新统计数据
+  React.useEffect(() => {
+    const updateStats = async () => {
+      if (currentSalesOrderId) {
+        try {
+          const response = await listLRPResults({
+            skip: 0,
+            limit: 10000,
+            sales_order_id: currentSalesOrderId,
+          });
+          const results = response.data || [];
+          setStatCardsData({
+            total: results.length,
+            totalProduction: results.reduce((sum: number, item: LRPResultType) => sum + (item.planned_production || 0), 0),
+            totalProcurement: results.reduce((sum: number, item: LRPResultType) => sum + (item.planned_procurement || 0), 0),
+          });
+        } catch (error) {
+          // 忽略错误
+        }
+      }
+    };
+    updateStats();
+  }, [currentSalesOrderId]);
 
   // 处理LRP运算
   const handleLRPComputation = () => {
@@ -129,7 +156,7 @@ const LRPComputationPage: React.FC = () => {
   };
 
   // 提交LRP运算
-  const handleComputationSubmit = async (values: LRPComputationRequest) => {
+  const handleComputationSubmit = async (values: any) => {
     setComputationModalVisible(false);
     setComputationStatus('running');
 
@@ -138,62 +165,79 @@ const LRPComputationPage: React.FC = () => {
       content: '确定要运行LRP运算吗？运算过程可能需要一些时间。',
       onOk: async () => {
         try {
-          // 模拟LRP运算过程
           setComputationStatus('running');
-
-          // 这里应该调用实际的LRP运算API
+          
+          // 调用真实的LRP运算API
+          const request: LRPComputationRequest = {
+            sales_order_id: values.sales_order_id,
+            planning_horizon: values.planning_horizon || 3,
+            consider_capacity: values.consider_capacity || false,
+          };
+          
+          await runLRPComputation(request);
+          
+          // 运算完成后，刷新结果列表
+          setCurrentSalesOrderId(values.sales_order_id);
           setTimeout(() => {
-            const mockResults: LRPResult[] = [
-              {
-                id: 1,
-                sales_order_code: 'SO202501001',
-                material_code: 'FIN001',
-                material_name: '定制产品A',
-                required_quantity: 50,
-                available_inventory: 0,
-                production_plan_quantity: 50,
-                purchase_plan_quantity: 0,
-                delivery_date: '2026-01-15',
-                calculation_date: new Date().toISOString(),
-              },
-              {
-                id: 2,
-                sales_order_code: 'SO202501001',
-                material_code: 'MAT001',
-                material_name: '组件A',
-                required_quantity: 100,
-                available_inventory: 20,
-                production_plan_quantity: 80,
-                purchase_plan_quantity: 0,
-                delivery_date: '2026-01-10',
-                calculation_date: new Date().toISOString(),
-              },
-              {
-                id: 3,
-                sales_order_code: 'SO202501001',
-                material_code: 'MAT003',
-                material_name: '标准件C',
-                required_quantity: 200,
-                available_inventory: 50,
-                production_plan_quantity: 0,
-                purchase_plan_quantity: 150,
-                delivery_date: '2026-01-08',
-                calculation_date: new Date().toISOString(),
-              },
-            ];
-
-            setComputationResults(mockResults);
+            actionRef.current?.reload();
             setComputationStatus('completed');
-            setResultDrawerVisible(true);
             messageApi.success('LRP运算完成');
-          }, 2000);
-
-        } catch (error) {
+          }, 1000);
+        } catch (error: any) {
           setComputationStatus('failed');
-          messageApi.error('LRP运算失败');
+          messageApi.error(error.message || 'LRP运算失败');
         }
       },
     });
+  };
+
+  // 处理一键生成工单和采购单
+  const handleGenerateOrders = () => {
+    if (!currentSalesOrderId) {
+      messageApi.warning('请先选择销售订单并运行LRP运算');
+      return;
+    }
+    setGenerateOrdersModalVisible(true);
+  };
+
+  // 确认生成工单和采购单
+  const handleConfirmGenerateOrders = async () => {
+    if (!currentSalesOrderId) {
+      messageApi.warning('请先选择销售订单并运行LRP运算');
+      return;
+    }
+
+    try {
+      const selectedMaterialIds = selectedRowKeys.length > 0 
+        ? selectedRowKeys.map(key => Number(key))
+        : undefined;
+
+      const result = await generateOrdersFromLRP(currentSalesOrderId, {
+        generate_work_orders: generateWorkOrders,
+        generate_purchase_orders: generatePurchaseOrders,
+        selected_material_ids: selectedMaterialIds,
+      });
+
+      messageApi.success(
+        `成功生成 ${result.generated_work_orders} 个工单和 ${result.generated_purchase_orders} 个采购单`
+      );
+      setGenerateOrdersModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '生成订单失败');
+    }
+  };
+
+  // 处理导出
+  const handleExport = async () => {
+    try {
+      const blob = await exportLRPResults(currentSalesOrderId || undefined);
+      const filename = `LRP运算结果_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
+    }
   };
 
   // 查看运算结果
@@ -221,19 +265,19 @@ const LRPComputationPage: React.FC = () => {
     },
     {
       title: '订单专属需求',
-      value: computationResults.length,
+      value: statCardsData.total,
       suffix: '项',
       valueStyle: { color: '#1890ff' },
     },
     {
       title: '建议生产总量',
-      value: computationResults.reduce((sum, item) => sum + (item.production_plan_quantity || 0), 0),
+      value: statCardsData.totalProduction,
       suffix: '件',
       valueStyle: { color: '#722ed1' },
     },
     {
       title: '建议采购总量',
-      value: computationResults.reduce((sum, item) => sum + (item.purchase_plan_quantity || 0), 0),
+      value: statCardsData.totalProcurement,
       suffix: '件',
       valueStyle: { color: '#52c41a' },
     },
@@ -268,13 +312,27 @@ const LRPComputationPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        showAdvancedSearch={false}
+        showAdvancedSearch={true}
         request={async (params) => {
-          return {
-            data: computationResults,
-            success: true,
-            total: computationResults.length,
-          };
+          try {
+            const response = await listLRPResults({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              sales_order_id: currentSalesOrderId || undefined,
+            });
+            return {
+              data: response.data || [],
+              success: response.success !== false,
+              total: response.total || 0,
+            };
+          } catch (error) {
+            messageApi.error('获取LRP运算结果列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
         }}
         rowSelection={{
           selectedRowKeys,
@@ -291,12 +349,20 @@ const LRPComputationPage: React.FC = () => {
             运行LRP运算
           </Button>,
           <Button
-            key="view"
-            icon={<EyeOutlined />}
-            onClick={handleViewResult}
-            disabled={computationResults.length === 0}
+            key="generate"
+            icon={<FileAddOutlined />}
+            onClick={handleGenerateOrders}
+            disabled={!currentSalesOrderId || computationStatus !== 'completed'}
           >
-            查看结果
+            一键生成工单和采购单
+          </Button>,
+          <Button
+            key="export"
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+            disabled={!currentSalesOrderId}
+          >
+            导出结果
           </Button>,
         ]}
         scroll={{ x: 1200 }}
@@ -313,8 +379,8 @@ const LRPComputationPage: React.FC = () => {
         layout="vertical"
         formRef={computationFormRef}
         initialValues={{
-          consider_inventory: true,
-          look_ahead_days: 30,
+          planning_horizon: 3,
+          consider_capacity: false,
         }}
       >
         <ProFormSelect
@@ -322,31 +388,72 @@ const LRPComputationPage: React.FC = () => {
           label="选择销售订单"
           placeholder="选择销售订单"
           rules={[{ required: true, message: '请选择销售订单' }]}
-          options={[
-            { label: 'SO202501001 - 定制产品A订单', value: 1 },
-            { label: 'SO202501002 - 定制产品B订单', value: 2 },
-          ]}
+          request={async () => {
+            try {
+              const response = await listSalesOrders({
+                skip: 0,
+                limit: 1000,
+                status: '已确认',
+              });
+              return (response.data || []).map((order: SalesOrder) => ({
+                label: `${order.order_code} - ${order.customer_name}`,
+                value: order.id,
+              }));
+            } catch (error) {
+              return [];
+            }
+          }}
+        />
+        <ProFormDigit
+          name="planning_horizon"
+          label="计划时域（月数）"
+          rules={[{ required: true, message: '请输入计划时域' }]}
+          min={1}
+          max={12}
+          initialValue={3}
         />
         <ProFormSelect
-          name="consider_inventory"
-          label="是否考虑现有库存"
+          name="consider_capacity"
+          label="是否考虑产能"
           rules={[{ required: true }]}
           options={[
             { label: '是', value: true },
             { label: '否', value: false },
           ]}
         />
-        <ProFormSelect
-          name="look_ahead_days"
-          label="展望天数"
-          rules={[{ required: true, message: '请输入展望天数' }]}
-          options={[
-            { label: '30天', value: 30 },
-            { label: '60天', value: 60 },
-            { label: '90天', value: 90 },
-          ]}
-        />
       </FormModalTemplate>
+
+      {/* 生成工单和采购单Modal */}
+      <Modal
+        title="一键生成工单和采购单"
+        open={generateOrdersModalVisible}
+        onOk={handleConfirmGenerateOrders}
+        onCancel={() => setGenerateOrdersModalVisible(false)}
+        okText="确认生成"
+        cancelText="取消"
+      >
+        <Alert
+          message="提示"
+          description="将根据LRP运算结果自动生成工单（自制件）和采购单（外购件）。如果已选择物料，则只生成选中物料的订单。"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Space direction="vertical">
+          <Checkbox
+            checked={generateWorkOrders}
+            onChange={(e) => setGenerateWorkOrders(e.target.checked)}
+          >
+            生成工单（自制件）
+          </Checkbox>
+          <Checkbox
+            checked={generatePurchaseOrders}
+            onChange={(e) => setGeneratePurchaseOrders(e.target.checked)}
+          >
+            生成采购单（外购件）
+          </Checkbox>
+        </Space>
+      </Modal>
 
       {/* LRP运算结果Drawer */}
       <DetailDrawerTemplate

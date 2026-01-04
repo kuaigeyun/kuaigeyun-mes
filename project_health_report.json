@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-01-03 07:49:09",
+  "backend_checks": [
+    {
+      "name": "API端点检测",
+      "status": "pass",
+      "message": "检测到 142 个API端点",
+      "details": [
+        "端点数量: 142"
+      ]
+    },
+    {
+      "name": "数据模型检测",
+      "status": "pass",
+      "message": "检测到 25 个数据模型",
+      "details": [
+        "模型文件: 25",
+        "有效模型: 25"
+      ]
+    },
+    {
+      "name": "服务层检测",
+      "status": "pass",
+      "message": "检测到 11 个服务类",
+      "details": [
+        "服务文件: 11",
+        "有效服务: 11"
+      ]
+    },
+    {
+      "name": "数据库迁移检测",
+      "status": "pass",
+      "message": "检测到 9 个有效迁移文件",
+      "details": [
+        "迁移文件: 9",
+        "有效迁移: 9"
+      ]
+    }
+  ],
+  "frontend_checks": [
+    {
+      "name": "前端页面检测",
+      "status": "pass",
+      "message": "检测到 25 个页面",
+      "details": [
+        "页面目录: 25",
+        "有效页面: 25"
+      ]
+    },
+    {
+      "name": "路由配置检测",
+      "status": "pass",
+      "message": "检测到 23 个路由",
+      "details": [
+        "路由数量: 23",
+        "导入组件: 23"
+      ]
+    },
+    {
+      "name": "API服务检测",
+      "status": "pass",
+      "message": "检测到 10 个API服务文件",
+      "details": [
+        "服务文件: 10",
+        "有效服务: 10"
+      ]
+    }
+  ],
+  "integration_checks": [
+    {
+      "name": "前后端API映射检测",
+      "status": "pass",
+      "message": "后端端点: 143, 前端调用: 73",
+      "details": [
+        "后端API端点: 143",
+        "前端API调用: 73"
+      ]
+    }
+  ]
+}

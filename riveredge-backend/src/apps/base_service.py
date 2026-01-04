@@ -88,16 +88,25 @@ class AppBaseService(BaseService[T]):
         Returns:
             Dict: 用户信息（包含id, username, name等）
         """
-        user = await UserService.get_user_by_id(user_id)
-        user_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
+        user_service = UserService()
+        user = await user_service.get_user_by_id(user_id)
+        if not user:
+            return {
+                "id": user_id,
+                "username": "未知用户",
+                "name": "未知用户",
+                "email": ""
+            }
+        
+        # User模型使用full_name字段，而不是first_name和last_name
+        user_name = user.full_name if hasattr(user, 'full_name') and user.full_name else user.username
         
         return {
             "id": user.id,
             "username": user.username,
             "name": user_name,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "email": user.email
+            "full_name": user.full_name if hasattr(user, 'full_name') else None,
+            "email": user.email if hasattr(user, 'email') else None
         }
 
     async def get_user_name(self, user_id: int) -> str:

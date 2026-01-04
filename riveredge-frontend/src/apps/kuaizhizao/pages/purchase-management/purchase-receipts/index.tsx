@@ -10,11 +10,13 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, SendOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { downloadFile } from '../../../services/common';
 
 // 采购入库单接口定义
 interface PurchaseReceipt {
@@ -77,6 +79,9 @@ const PurchaseReceiptsPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [receiptDetail, setReceiptDetail] = useState<PurchaseReceiptDetail | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+
+  // 导入导出相关状态
+  const [importVisible, setImportVisible] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<PurchaseReceipt>[] = [
@@ -226,6 +231,36 @@ const PurchaseReceiptsPage: React.FC = () => {
     });
   };
 
+  // 处理批量导入
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await warehouseApi.purchaseReceipt.import(data);
+      if (result.success) {
+        const resultData = result.data || {};
+        messageApi.success(`导入成功：成功 ${resultData.success_count || 0} 条，失败 ${resultData.failure_count || 0} 条`);
+        setImportVisible(false);
+        actionRef.current?.reload();
+      } else {
+        const resultData = result.data || {};
+        messageApi.warning(`导入完成：成功 ${resultData.success_count || 0} 条，失败 ${resultData.failure_count || 0} 条`);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  // 处理批量导出
+  const handleExport = async () => {
+    try {
+      const blob = await warehouseApi.purchaseReceipt.export();
+      const filename = `采购入库单_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
+    }
+  };
+
   // 详情列定义
   const detailColumns: ProDescriptionsItemType<PurchaseReceiptDetail>[] = [
     {
@@ -360,6 +395,22 @@ const PurchaseReceiptsPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
+          toolBarRender={() => [
+            <Button
+              key="import"
+              icon={<UploadOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              批量导入
+            </Button>,
+            <Button
+              key="export"
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+            >
+              批量导出
+            </Button>,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
@@ -467,6 +518,24 @@ const PurchaseReceiptsPage: React.FC = () => {
             </div>
           ) : null
         }
+      />
+
+      {/* 批量导入弹窗 */}
+      <UniImport
+        visible={importVisible}
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        title="批量导入采购入库单"
+        headers={[
+          '采购订单编号',
+          '供应商名称',
+          '仓库名称',
+          '入库时间',
+          '备注',
+        ]}
+        sampleData={[
+          ['PO20250115001', '供应商A', '主仓库', '2025-01-15 10:00:00', '备注信息'],
+        ]}
       />
     </>
   );

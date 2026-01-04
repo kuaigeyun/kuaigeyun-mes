@@ -151,3 +151,24 @@ export async function updateDepartmentOrder(
   });
 }
 
+/**
+ * 批量导入部门
+ * 
+ * @param data - 二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）
+ * @returns 导入结果
+ */
+export async function importDepartments(data: any[][]): Promise<{
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ row: number; error: string }>;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+    errors: Array<{ row: number; error: string }>;
+  }>('/core/departments/batch-import', {
+    method: 'POST',
+    data: { data },
+  });
+}
+

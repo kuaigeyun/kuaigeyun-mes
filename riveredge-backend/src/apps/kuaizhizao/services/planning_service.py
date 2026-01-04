@@ -122,6 +122,11 @@ class ProductionPlanningService(BaseService):
                     planned_order_schedule=mrp_result.get('planned_order_schedule', {})
                 )
 
+                # 获取物料信息以确定物料类型
+                from apps.master_data.models.material import Material
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                material_type = "自制" if (material and (getattr(material, 'is_finished', False) or getattr(material, 'category', '') == '成品')) else "外购"
+                
                 # 创建计划明细
                 await ProductionPlanItem.create(
                     tenant_id=tenant_id,
@@ -129,12 +134,12 @@ class ProductionPlanningService(BaseService):
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
-                    material_type=item.component_type,
+                    material_type=material_type,
                     planned_quantity=mrp_result.get('total_net_requirement', 0),
                     planned_date=item.forecast_date,
                     gross_requirement=mrp_result.get('total_gross_requirement', 0),
                     net_requirement=mrp_result.get('total_net_requirement', 0),
-                    suggested_action=self._determine_action(item.component_type, mrp_result),
+                    suggested_action=self._determine_action(material_type, mrp_result),
                     work_order_quantity=mrp_result.get('suggested_work_orders', 0),
                     purchase_order_quantity=mrp_result.get('suggested_purchase_orders', 0),
                     lead_time=mrp_result.get('lead_time', 0)
@@ -207,13 +212,16 @@ class ProductionPlanningService(BaseService):
                 )
 
                 # 保存LRP结果
+                # 计算planning_horizon（从订单日期到交货日期的天数）
+                planning_horizon_days = (sales_order.delivery_date - sales_order.order_date).days if sales_order.order_date else 30
+                
                 await LRPResult.create(
                     tenant_id=tenant_id,
                     sales_order_id=request.sales_order_id,
                     material_id=item.material_id,
                     delivery_date=sales_order.delivery_date,
-                    planning_horizon=request.planning_horizon,
-                    required_quantity=item.order_quantity,
+                    planning_horizon=planning_horizon_days,
+                    required_quantity=item.order_quantity,  # 使用order_quantity（模型字段名）
                     available_inventory=lrp_result.get('available_inventory', 0),
                     net_requirement=lrp_result.get('net_requirement', 0),
                     planned_production=lrp_result.get('planned_production', 0),
@@ -389,8 +397,14 @@ class ProductionPlanningService(BaseService):
         # 计算净需求
         net_requirement = max(0, gross_requirement - current_inventory)
 
-        # 根据物料类型决定行动
-        if forecast_item.component_type == "自制":
+        # 根据物料类型决定行动（从Material模型获取）
+        from apps.master_data.models.material import Material
+        material = await Material.get_or_none(tenant_id=tenant_id, id=forecast_item.material_id)
+        # 判断是否为自制/成品（Material模型没有category和is_finished字段，暂时假设所有物料都是成品）
+        # TODO: 后续可以通过MaterialGroup或其他方式判断物料类型
+        is_self_made = True  # 暂时假设所有物料都是成品，需要生产
+        
+        if is_self_made:
             suggested_work_orders = 1 if net_requirement > 0 else 0
             suggested_purchase_orders = 0
         else:
@@ -544,6 +558,91 @@ class ProductionPlanningService(BaseService):
         results = await query.offset(skip).limit(limit).order_by('-computation_time')
         return [LRPResultListResponse.model_validate(result) for result in results]
 
+    async def export_lrp_results_to_excel(
+        self,
+        tenant_id: int,
+        sales_order_id: Optional[int] = None,
+        **filters
+    ) -> str:
+        """
+        导出LRP运算结果到Excel文件
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID（可选）
+            **filters: 其他过滤条件
+            
+        Returns:
+            str: Excel文件路径
+        """
+        import csv
+        import os
+        import tempfile
+        from datetime import datetime
+        from apps.master_data.models.material import Material
+        
+        # 查询LRP运算结果
+        results = await self.list_lrp_results(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            skip=0,
+            limit=10000
+        )
+        
+        # 创建导出目录
+        export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"lrp_results_{timestamp}.csv"
+        file_path = os.path.join(export_dir, filename)
+        
+        # 写入CSV文件
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            
+            # 写入表头
+            writer.writerow([
+                '销售订单编号', '物料编码', '物料名称', '交货日期', '计划时域',
+                '需求数量', '可用库存', '净需求', '计划生产', '计划采购',
+                '生产开始日期', '生产完成日期', '采购开始日期', '采购完成日期',
+                '运算状态', '运算时间'
+            ])
+            
+            # 写入数据
+            for result in results:
+                # 获取物料信息
+                material = await Material.get_or_none(tenant_id=tenant_id, id=result.material_id)
+                material_code = material.material_code if material else ''
+                material_name = material.material_name if material else ''
+                
+                # 获取销售订单编号
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+                sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=result.sales_order_id)
+                sales_order_code = sales_order.order_code if sales_order else ''
+                
+                writer.writerow([
+                    sales_order_code,
+                    material_code,
+                    material_name,
+                    result.delivery_date.strftime('%Y-%m-%d') if result.delivery_date else '',
+                    result.planning_horizon,
+                    str(result.required_quantity) if result.required_quantity else '0',
+                    str(result.available_inventory) if result.available_inventory else '0',
+                    str(result.net_requirement) if result.net_requirement else '0',
+                    str(result.planned_production) if result.planned_production else '0',
+                    str(result.planned_procurement) if result.planned_procurement else '0',
+                    result.production_start_date.strftime('%Y-%m-%d') if result.production_start_date else '',
+                    result.production_completion_date.strftime('%Y-%m-%d') if result.production_completion_date else '',
+                    result.procurement_start_date.strftime('%Y-%m-%d') if result.procurement_start_date else '',
+                    result.procurement_completion_date.strftime('%Y-%m-%d') if result.procurement_completion_date else '',
+                    result.computation_status,
+                    result.computation_time.strftime('%Y-%m-%d %H:%M:%S') if result.computation_time else '',
+                ])
+        
+        return file_path
+
     async def export_mrp_results_to_excel(
         self,
         tenant_id: int,
@@ -668,20 +767,26 @@ class ProductionPlanningService(BaseService):
                     logger.warning(f"物料 {mrp_result.material_id} 不存在，跳过")
                     continue
                 
-                # 判断物料类型
-                is_self_made = material.material_type == "自制" or material.material_type == "成品"
+                # 判断物料类型（Material模型没有category和is_finished字段，暂时假设所有物料都是成品）
+                # TODO: 后续可以通过MaterialGroup或其他方式判断物料类型
+                is_self_made = True  # 暂时假设所有物料都是成品，需要生产
+                
+                # 添加调试日志
+                logger.info(f"MRP结果 - 物料ID: {mrp_result.material_id}, suggested_work_orders: {mrp_result.suggested_work_orders}, "
+                          f"total_net_requirement: {mrp_result.total_net_requirement}, is_self_made: {is_self_made}")
                 
                 # 生成工单
                 if generate_work_orders and is_self_made and mrp_result.suggested_work_orders > 0:
                     try:
+                        # 工单code由服务自动生成，不需要提供
                         work_order_data = WorkOrderCreate(
-                            name=f"{material.material_name}-MRP工单",
+                            name=f"{material.name}-MRP工单",
                             product_id=material.id,
-                            product_code=material.material_code,
-                            product_name=material.material_name,
+                            product_code=material.code,
+                            product_name=material.name,
                             quantity=Decimal(str(mrp_result.total_net_requirement)),
                             production_mode="MTS",
-                            status="草稿",
+                            status="draft",  # 使用draft而不是"草稿"
                             priority="normal"
                         )
                         
@@ -718,8 +823,8 @@ class ProductionPlanningService(BaseService):
                             items=[
                                 PurchaseOrderItemCreate(
                                     material_id=mrp_result.material_id,
-                                    material_code=material.material_code,
-                                    material_name=material.material_name,
+                                    material_code=material.code,
+                                    material_name=material.name,
                                     ordered_quantity=Decimal(str(mrp_result.total_net_requirement)),
                                     unit=material.base_unit or "件",
                                     unit_price=Decimal('0.00'),  # TODO: 从价格表获取
@@ -739,12 +844,58 @@ class ProductionPlanningService(BaseService):
                         logger.error(f"生成采购单失败，物料ID: {mrp_result.material_id}, 错误: {str(e)}")
                         continue
             
+            # 将WorkOrderResponse和PurchaseOrderResponse对象转换为字典
+            # 使用model_dump(mode='json')确保Decimal等类型被正确序列化
+            work_orders_data = []
+            for wo in generated_work_orders:
+                if hasattr(wo, 'model_dump'):
+                    try:
+                        work_orders_data.append(wo.model_dump(mode='json'))
+                    except TypeError:
+                        # 如果mode='json'不支持，尝试普通model_dump并手动转换Decimal
+                        wo_dict = wo.model_dump()
+                        # 手动转换Decimal为str
+                        for key, value in wo_dict.items():
+                            if isinstance(value, Decimal):
+                                wo_dict[key] = str(value)
+                        work_orders_data.append(wo_dict)
+                elif hasattr(wo, 'dict'):
+                    work_orders_data.append(wo.dict())
+                else:
+                    work_orders_data.append({
+                        "id": getattr(wo, 'id', None),
+                        "code": getattr(wo, 'code', None),
+                        "name": getattr(wo, 'name', None),
+                    })
+            
+            purchase_orders_data = []
+            for po in generated_purchase_orders:
+                if hasattr(po, 'model_dump'):
+                    try:
+                        purchase_orders_data.append(po.model_dump(mode='json'))
+                    except TypeError:
+                        # 如果mode='json'不支持，尝试普通model_dump并手动转换Decimal
+                        po_dict = po.model_dump()
+                        # 手动转换Decimal为str
+                        for key, value in po_dict.items():
+                            if isinstance(value, Decimal):
+                                po_dict[key] = str(value)
+                        purchase_orders_data.append(po_dict)
+                elif hasattr(po, 'dict'):
+                    purchase_orders_data.append(po.dict())
+                else:
+                    purchase_orders_data.append({
+                        "id": getattr(po, 'id', None),
+                        "code": getattr(po, 'code', None),
+                        "name": getattr(po, 'name', None),
+                    })
+            
             return {
                 "forecast_id": forecast_id,
                 "generated_work_orders": len(generated_work_orders),
                 "generated_purchase_orders": len(generated_purchase_orders),
-                "work_orders": generated_work_orders,
-                "purchase_orders": generated_purchase_orders
+                "work_orders": work_orders_data,
+                "purchase_orders": purchase_orders_data
             }
     
     async def generate_orders_from_lrp_result(

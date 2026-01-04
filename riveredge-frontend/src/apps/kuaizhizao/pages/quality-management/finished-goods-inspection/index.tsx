@@ -8,31 +8,49 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormText } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Radio, Select, Table } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, UploadOutlined, DownloadOutlined, FileAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniImport } from '../../../../../components/uni-import';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { qualityApi } from '../../../services/production';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { downloadFile } from '../../../services/common';
 
 // 成品检验接口定义
 interface FinishedGoodsInspection {
-  id: number;
-  inspectionCode: string;
-  workOrderCode: string;
-  workOrderName: string;
-  productCode: string;
-  productName: string;
-  batchNo: string;
-  totalQuantity: number;
-  qualifiedQuantity: number;
-  unqualifiedQuantity: number;
-  unit: string;
-  inspectionStatus: 'pending' | 'qualified' | 'unqualified' | 'conditional';
-  inspectionResult: 'pending' | 'pass' | 'fail';
-  inspectorName: string;
-  inspectionDate?: string;
-  remarks?: string;
-  createdAt: string;
+  id?: number;
+  tenant_id?: number;
+  inspection_code?: string;
+  work_order_id?: number;
+  work_order_code?: string;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  batch_number?: string;
+  inspection_quantity?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  inspection_result?: string;
+  quality_status?: string;
+  inspector_id?: number;
+  inspector_name?: string;
+  inspection_time?: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  review_time?: string;
+  review_status?: string;
+  review_remarks?: string;
+  status?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface InspectionDetail {
@@ -52,10 +70,18 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<FinishedGoodsInspection | null>(null);
   const formRef = useRef<any>(null);
-  const [inspectionDetails, setInspectionDetails] = useState<InspectionDetail[]>([]);
 
-  // 扫码Modal状态
-  const [scanModalVisible, setScanModalVisible] = useState(false);
+  // 详情Drawer状态
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [inspectionDetail, setInspectionDetail] = useState<FinishedGoodsInspection | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+
+  // 从工单创建Modal状态
+  const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
+  const createFromWorkOrderFormRef = useRef<any>(null);
+
+  // 批量导入状态
+  const [importVisible, setImportVisible] = useState(false);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -65,9 +91,19 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     totalInspected: 24,
   });
 
-  // 处理扫码报工
-  const handleScanInspection = () => {
-    setScanModalVisible(true);
+  // 处理详情查看
+  const handleDetail = async (record: FinishedGoodsInspection) => {
+    try {
+      const detail = await qualityApi.finishedGoodsInspection.get(record.id!.toString());
+      setInspectionDetail(detail);
+      setDetailDrawerVisible(true);
+      
+      // 获取单据关联
+      const relations = await getDocumentRelations('finished_goods_inspection', record.id!);
+      setDocumentRelations(relations);
+    } catch (error) {
+      messageApi.error('获取成品检验详情失败');
+    }
   };
 
   // 处理检验
@@ -75,161 +111,174 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     setCurrentInspection(record);
     setInspectionModalVisible(true);
 
-    // 初始化检验明细
-    const initialDetails: InspectionDetail[] = [
-      { id: 1, sampleNo: '样品001', qualityItems: [], result: 'pass' },
-      { id: 2, sampleNo: '样品002', qualityItems: [], result: 'pass' },
-      { id: 3, sampleNo: '样品003', qualityItems: [], result: 'pass' },
-    ];
-    setInspectionDetails(initialDetails);
-
     formRef.current?.setFieldsValue({
-      qualifiedQuantity: record.totalQuantity,
-      unqualifiedQuantity: 0,
-      remarks: '',
+      qualified_quantity: record.inspection_quantity || 0,
+      unqualified_quantity: 0,
+      notes: '',
     });
   };
 
   // 处理检验提交
   const handleInspectionSubmit = async (values: any) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (currentInspection?.id) {
+        await qualityApi.finishedGoodsInspection.conduct(currentInspection.id.toString(), {
+          qualified_quantity: values.qualified_quantity,
+          unqualified_quantity: values.unqualified_quantity,
+          notes: values.notes,
+        });
+      }
 
-      const qualifiedRate = ((values.qualifiedQuantity / currentInspection!.totalQuantity) * 100).toFixed(1);
-      const resultText = values.qualifiedQuantity === currentInspection!.totalQuantity ? '全检合格' : '部分不合格';
-
-      messageApi.success(`成品检验完成：${resultText}，合格率${qualifiedRate}%`);
-
+      messageApi.success('成品检验完成');
       setInspectionModalVisible(false);
       formRef.current?.resetFields();
-      setInspectionDetails([]);
       actionRef.current?.reload();
-
-      // 更新统计数据
-      setStats(prev => ({
-        ...prev,
-        pendingCount: Math.max(0, prev.pendingCount - 1),
-        qualifiedCount: values.unqualifiedQuantity === 0 ? prev.qualifiedCount + 1 : prev.qualifiedCount,
-        unqualifiedCount: values.unqualifiedQuantity > 0 ? prev.unqualifiedCount + 1 : prev.unqualifiedCount,
-        totalInspected: prev.totalInspected + 1,
-      }));
-
     } catch (error: any) {
       messageApi.error(error.message || '检验提交失败');
       throw error;
     }
   };
 
-  // 更新检验明细
-  const updateInspectionDetail = (id: number, field: string, value: any) => {
-    setInspectionDetails(prev =>
-      prev.map(detail =>
-        detail.id === id ? { ...detail, [field]: value } : detail
-      )
-    );
+  // 从工单创建成品检验单
+  const handleCreateFromWorkOrder = () => {
+    setCreateFromWorkOrderModalVisible(true);
+  };
+
+  const handleCreateFromWorkOrderSubmit = async (values: any) => {
+    try {
+      await qualityApi.finishedGoodsInspection.createFromWorkOrder(values.work_order_id.toString());
+      messageApi.success('成功创建成品检验单');
+      setCreateFromWorkOrderModalVisible(false);
+      createFromWorkOrderFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建成品检验单失败');
+    }
+  };
+
+  // 批量导入
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await qualityApi.finishedGoodsInspection.import(data);
+      if (result.success) {
+        messageApi.success(result.message || '导入成功');
+        setImportVisible(false);
+        actionRef.current?.reload();
+      } else {
+        messageApi.error(result.message || '导入失败');
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  // 批量导出
+  const handleExport = async () => {
+    try {
+      const blob = await qualityApi.finishedGoodsInspection.export();
+      const filename = `成品检验单_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
+    }
   };
 
   // 表格列定义
   const columns: ProColumns<FinishedGoodsInspection>[] = [
     {
       title: '检验单号',
-      dataIndex: 'inspectionCode',
+      dataIndex: 'inspection_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
-      title: '工单编号',
-      dataIndex: 'workOrderCode',
+      title: '工单编码',
+      dataIndex: 'work_order_code',
+      width: 140,
+      ellipsis: true,
+    },
+    {
+      title: '物料编码',
+      dataIndex: 'material_code',
       width: 120,
     },
     {
-      title: '工单名称',
-      dataIndex: 'workOrderName',
+      title: '物料名称',
+      dataIndex: 'material_name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '产品编码',
-      dataIndex: 'productCode',
-      width: 120,
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'productName',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '批次号',
-      dataIndex: 'batchNo',
+      title: '检验数量',
+      dataIndex: 'inspection_quantity',
       width: 100,
+      align: 'right',
+      render: (text) => text || 0,
     },
     {
-      title: '总数',
-      dataIndex: 'totalQuantity',
+      title: '合格数量',
+      dataIndex: 'qualified_quantity',
       width: 80,
       align: 'right',
+      render: (text) => text || 0,
     },
     {
-      title: '合格数',
-      dataIndex: 'qualifiedQuantity',
-      width: 80,
-      align: 'right',
-      render: (text, record) => (
-        <span style={{ color: text === record.totalQuantity ? '#52c41a' : '#f5222d' }}>
-          {text}
-        </span>
-      ),
-    },
-    {
-      title: '合格率',
-      width: 80,
-      align: 'right',
-      render: (_, record) => {
-        const rate = ((record.qualifiedQuantity / record.totalQuantity) * 100).toFixed(1);
-        return `${rate}%`;
-      },
-    },
-    {
-      title: '检验状态',
-      dataIndex: 'inspectionStatus',
+      title: '不合格数量',
+      dataIndex: 'unqualified_quantity',
       width: 100,
-      render: (status) => {
-        const statusMap = {
-          pending: { text: '待检验', color: 'default' },
-          qualified: { text: '合格', color: 'success' },
-          unqualified: { text: '不合格', color: 'error' },
-          conditional: { text: '条件合格', color: 'warning' },
-        };
-        const config = statusMap[status as keyof typeof statusMap] || statusMap.pending;
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
+      align: 'right',
+      render: (text) => text || 0,
     },
     {
       title: '检验结果',
-      dataIndex: 'inspectionResult',
+      dataIndex: 'inspection_result',
       width: 100,
-      render: (result) => {
-        const resultMap = {
-          pending: { text: '待检验', color: 'default' },
-          pass: { text: '合格', color: 'success' },
-          fail: { text: '不合格', color: 'error' },
+      render: (text) => {
+        const resultMap: Record<string, { text: string; color: string }> = {
+          '待检验': { text: '待检验', color: 'default' },
+          '已检验': { text: '已检验', color: 'success' },
+          '合格': { text: '合格', color: 'success' },
+          '不合格': { text: '不合格', color: 'error' },
         };
-        const config = resultMap[result as keyof typeof resultMap] || resultMap.pending;
+        const config = resultMap[text as string] || { text: text || '待检验', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '检验员',
-      dataIndex: 'inspectorName',
+      title: '质量状态',
+      dataIndex: 'quality_status',
       width: 100,
+      render: (text) => {
+        const statusMap: Record<string, { text: string; color: string }> = {
+          '待判定': { text: '待判定', color: 'default' },
+          '合格': { text: '合格', color: 'success' },
+          '不合格': { text: '不合格', color: 'error' },
+        };
+        const config = statusMap[text as string] || { text: text || '待判定', color: 'default' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
     },
     {
-      title: '检验日期',
-      dataIndex: 'inspectionDate',
-      width: 120,
+      title: '检验时间',
+      dataIndex: 'inspection_time',
+      width: 160,
       valueType: 'dateTime',
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 100,
+      render: (status) => {
+        const statusMap: Record<string, { text: string; color: string }> = {
+          '待检验': { text: '待检验', color: 'default' },
+          '已检验': { text: '已检验', color: 'success' },
+          '已审核': { text: '已审核', color: 'processing' },
+        };
+        const config = statusMap[status as string] || { text: status || '待检验', color: 'default' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
     },
     {
       title: '操作',
@@ -238,7 +287,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          {record.inspectionResult === 'pending' ? (
+          {record.status === '待检验' || record.inspection_result === '待检验' ? (
             <Button
               size="small"
               type="primary"
@@ -251,7 +300,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
               size="small"
               type="link"
               icon={<EyeOutlined />}
-              onClick={() => messageApi.info('详情功能开发中...')}
+              onClick={() => handleDetail(record)}
             >
               详情
             </Button>
@@ -353,50 +402,29 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据
-            const mockData: FinishedGoodsInspection[] = [
-              {
-                id: 1,
-                inspectionCode: 'FQ20251229001',
-                workOrderCode: 'WO20241201001',
-                workOrderName: '产品A生产工单',
-                productCode: 'FIN001',
-                productName: '产品A',
-                batchNo: 'BATCH001',
-                totalQuantity: 100,
-                qualifiedQuantity: 0,
-                unqualifiedQuantity: 0,
-                unit: '个',
-                inspectionStatus: 'pending',
-                inspectionResult: 'pending',
-                inspectorName: '',
-                createdAt: '2025-12-29 16:00:00',
-              },
-              {
-                id: 2,
-                inspectionCode: 'FQ20251229002',
-                workOrderCode: 'WO20241201002',
-                workOrderName: '产品B定制工单',
-                productCode: 'FIN002',
-                productName: '产品B',
-                batchNo: 'BATCH002',
-                totalQuantity: 50,
-                qualifiedQuantity: 48,
-                unqualifiedQuantity: 2,
-                unit: '个',
-                inspectionStatus: 'qualified',
-                inspectionResult: 'pass',
-                inspectorName: '孙七',
-                inspectionDate: '2025-12-29 17:30:00',
-                createdAt: '2025-12-29 15:30:00',
-              },
-            ];
-
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+            try {
+              const response = await qualityApi.finishedGoodsInspection.list({
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                status: params.status,
+                quality_status: params.quality_status,
+                work_order_id: params.work_order_id,
+              });
+              // 后端返回的是数组
+              const data = Array.isArray(response) ? response : (response.data || []);
+              return {
+                data: data,
+                success: true,
+                total: data.length,
+              };
+            } catch (error) {
+              messageApi.error('获取成品检验列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
           }}
           rowSelection={{
             selectedRowKeys,
@@ -404,143 +432,273 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <Button
-              key="scan"
+              key="create-from-work-order"
               type="primary"
-              icon={<ScanOutlined />}
-              onClick={handleScanInspection}
+              icon={<FileAddOutlined />}
+              onClick={handleCreateFromWorkOrder}
             >
-              扫码检验
+              从工单创建
             </Button>,
             <Button
-              key="batch-inspect"
-              icon={<CheckCircleOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={() => messageApi.info('批量检验功能开发中...')}
+              key="import"
+              icon={<UploadOutlined />}
+              onClick={() => setImportVisible(true)}
             >
-              批量检验
+              批量导入
+            </Button>,
+            <Button
+              key="export"
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+            >
+              批量导出
             </Button>,
           ]}
           scroll={{ x: 1400 }}
         />
 
       <FormModalTemplate
-        title={`成品检验 - ${currentInspection?.inspectionCode || ''}`}
+        title={`成品检验 - ${currentInspection?.inspection_code || ''}`}
         open={inspectionModalVisible}
         onClose={() => setInspectionModalVisible(false)}
         onFinish={handleInspectionSubmit}
         isEdit={false}
         initialValues={
           currentInspection ? {
-            qualifiedQuantity: currentInspection.totalQuantity,
-            unqualifiedQuantity: 0,
-            remarks: '',
+            qualified_quantity: currentInspection.inspection_quantity || 0,
+            unqualified_quantity: 0,
+            notes: '',
           } : {}
         }
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.SMALL_WIDTH}
         formRef={formRef}
       >
         {currentInspection && (
-          <>
-            <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <strong>工单：</strong>{currentInspection.workOrderName}
-                </Col>
-                <Col span={12}>
-                  <strong>产品：</strong>{currentInspection.productName}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={12}>
-                  <strong>批次号：</strong>{currentInspection.batchNo}
-                </Col>
-                <Col span={12}>
-                  <strong>总数：</strong>{currentInspection.totalQuantity} {currentInspection.unit}
-                </Col>
-              </Row>
-            </Card>
-
-            <Card title="检验明细" size="small" style={{ marginBottom: 16 }}>
-              <Table
-                size="small"
-                columns={detailColumns}
-                dataSource={inspectionDetails}
-                pagination={false}
-                rowKey="id"
-              />
-            </Card>
-          </>
+          <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <strong>工单编码：</strong>{currentInspection.work_order_code}
+              </Col>
+              <Col span={12}>
+                <strong>物料编码：</strong>{currentInspection.material_code}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <strong>物料名称：</strong>{currentInspection.material_name}
+              </Col>
+              <Col span={12}>
+                <strong>检验数量：</strong>{currentInspection.inspection_quantity}
+              </Col>
+            </Row>
+          </Card>
         )}
         <ProFormDigit
-          name="qualifiedQuantity"
+          name="qualified_quantity"
           label="合格数量"
           placeholder="请输入合格数量"
-          rules={[{ required: true, message: '请输入合格数量' }]}
-          min={0}
-          max={currentInspection?.totalQuantity}
-          fieldProps={{
-            precision: 0,
-            addonAfter: currentInspection?.unit,
-          }}
-          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入合格数量' },
+            { type: 'number', min: 0, message: '合格数量不能小于0' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!currentInspection) return Promise.resolve();
+                const unqualifiedQuantity = getFieldValue('unqualified_quantity') || 0;
+                if (value + unqualifiedQuantity > (currentInspection.inspection_quantity || 0)) {
+                  return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+          fieldProps={{ precision: 2 }}
         />
         <ProFormDigit
-          name="unqualifiedQuantity"
+          name="unqualified_quantity"
           label="不合格数量"
           placeholder="请输入不合格数量"
-          rules={[{ required: true, message: '请输入不合格数量' }]}
-          min={0}
-          max={currentInspection?.totalQuantity}
-          fieldProps={{
-            precision: 0,
-            addonAfter: currentInspection?.unit,
-          }}
-          colProps={{ span: 12 }}
+          rules={[
+            { required: true, message: '请输入不合格数量' },
+            { type: 'number', min: 0, message: '不合格数量不能小于0' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!currentInspection) return Promise.resolve();
+                const qualifiedQuantity = getFieldValue('qualified_quantity') || 0;
+                if (qualifiedQuantity + value > (currentInspection.inspection_quantity || 0)) {
+                  return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+          fieldProps={{ precision: 2 }}
         />
         <ProFormTextArea
-          name="remarks"
+          name="notes"
           label="检验备注"
           placeholder="请输入检验详情、发现的问题或处理意见"
           fieldProps={{ rows: 3 }}
-          colProps={{ span: 24 }}
-        />
-        <ProFormText
-          name="inspectorName"
-          label="检验员"
-          placeholder="请输入检验员姓名"
-          rules={[{ required: true, message: '请输入检验员姓名' }]}
-          colProps={{ span: 12 }}
         />
       </FormModalTemplate>
 
-      {/* 扫码检验Modal - 保留原有Modal，因为这是特殊功能 */}
-      <Modal
-        title="扫码成品检验"
-        open={scanModalVisible}
-        onCancel={() => setScanModalVisible(false)}
-        footer={null}
-        width={400}
+      {/* 从工单创建Modal */}
+      <FormModalTemplate
+        title="从工单创建成品检验单"
+        open={createFromWorkOrderModalVisible}
+        onClose={() => {
+          setCreateFromWorkOrderModalVisible(false);
+          createFromWorkOrderFormRef.current?.resetFields();
+        }}
+        onFinish={handleCreateFromWorkOrderSubmit}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={createFromWorkOrderFormRef}
       >
-        <div style={{ textAlign: 'center', padding: '24px' }}>
-          <div style={{
-            width: 120,
-            height: 120,
-            margin: '0 auto 24px auto',
-            border: '1px dashed #d9d9d9',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#999'
-          }}>
-            <ScanOutlined style={{ fontSize: '48px' }} />
-          </div>
-          <p>请使用手机扫描工单二维码进行成品检验</p>
-          <p style={{ color: '#666', fontSize: '12px', marginTop: '8px' }}>
-            扫码后将自动跳转到检验页面
-          </p>
-        </div>
-      </Modal>
+        <ProFormSelect
+          name="work_order_id"
+          label="选择工单"
+          placeholder="请选择工单"
+          rules={[{ required: true, message: '请选择工单' }]}
+          request={async () => {
+            try {
+              const { workOrderApi } = await import('../../../services/production');
+              const response = await workOrderApi.list({
+                skip: 0,
+                limit: 1000,
+                status: '进行中',
+              });
+              const data = Array.isArray(response) ? response : (response.data || []);
+              return data.map((wo: any) => ({
+                label: `${wo.code} - ${wo.name}`,
+                value: wo.id,
+              }));
+            } catch (error) {
+              return [];
+            }
+          }}
+        />
+      </FormModalTemplate>
+
+      {/* 批量导入 */}
+      <UniImport
+        visible={importVisible}
+        onClose={() => setImportVisible(false)}
+        onImport={handleImport}
+        columns={[
+          { title: '工单编码', dataIndex: 'work_order_code', required: true },
+          { title: '检验数量', dataIndex: 'inspection_quantity', required: true },
+          { title: '合格数量', dataIndex: 'qualified_quantity' },
+          { title: '不合格数量', dataIndex: 'unqualified_quantity' },
+          { title: '备注', dataIndex: 'notes' },
+        ]}
+      />
+
+      {/* 成品检验详情 Drawer */}
+      <DetailDrawerTemplate
+        title={`成品检验详情 - ${inspectionDetail?.inspection_code || ''}`}
+        open={detailDrawerVisible}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setDocumentRelations(null);
+        }}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        columns={[]}
+        customContent={
+          inspectionDetail ? (
+            <div style={{ padding: '16px 0' }}>
+              {/* 单据关联展示 */}
+              {documentRelations && (
+                <Card title="单据关联" style={{ marginBottom: 16 }}>
+                  {documentRelations.upstream_count > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        上游单据 ({documentRelations.upstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '关联时间', dataIndex: 'relation_time', width: 160 },
+                        ]}
+                        dataSource={documentRelations.upstream_documents}
+                        pagination={false}
+                        rowKey="id"
+                      />
+                    </div>
+                  )}
+                  {documentRelations.upstream_count === 0 && (
+                    <div style={{ textAlign: 'center', color: '#999', padding: '20px 0' }}>
+                      暂无关联单据
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              <Card title="基本信息" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>检验单号：</strong>{inspectionDetail.inspection_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>工单编码：</strong>{inspectionDetail.work_order_code}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>物料编码：</strong>{inspectionDetail.material_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>物料名称：</strong>{inspectionDetail.material_name}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}>
+                    <strong>检验数量：</strong>{inspectionDetail.inspection_quantity || 0}
+                  </Col>
+                  <Col span={8}>
+                    <strong>合格数量：</strong>{inspectionDetail.qualified_quantity || 0}
+                  </Col>
+                  <Col span={8}>
+                    <strong>不合格数量：</strong>{inspectionDetail.unqualified_quantity || 0}
+                  </Col>
+                </Row>
+              </Card>
+
+              <Card title="检验结果">
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <strong>检验结果：</strong>
+                    <Tag color={inspectionDetail.inspection_result === '已检验' ? 'success' : 'default'}>
+                      {inspectionDetail.inspection_result || '待检验'}
+                    </Tag>
+                  </Col>
+                  <Col span={12}>
+                    <strong>质量状态：</strong>
+                    <Tag color={inspectionDetail.quality_status === '合格' ? 'success' : 'error'}>
+                      {inspectionDetail.quality_status || '待判定'}
+                    </Tag>
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>检验员：</strong>{inspectionDetail.inspector_name || '未指定'}
+                  </Col>
+                  <Col span={12}>
+                    <strong>检验时间：</strong>{inspectionDetail.inspection_time || '未检验'}
+                  </Col>
+                </Row>
+                {inspectionDetail.notes && (
+                  <Row style={{ marginTop: 8 }}>
+                    <Col span={24}>
+                      <strong>检验备注：</strong>{inspectionDetail.notes}
+                    </Col>
+                  </Row>
+                )}
+              </Card>
+            </div>
+          ) : null
+        }
+      />
     </ListPageTemplate>
   );
 };

@@ -10,6 +10,7 @@ Date: 2025-12-30
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from decimal import Decimal
+import uuid
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
@@ -282,15 +283,77 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
     def __init__(self):
         super().__init__(FinishedGoodsReceipt)
 
-    async def create_finished_goods_receipt(self, tenant_id: int, receipt_data: FinishedGoodsReceiptCreate, created_by: int) -> FinishedGoodsReceiptResponse:
+    async def create_finished_goods_receipt(self, tenant_id: int, receipt_data: FinishedGoodsReceiptCreate, created_by: int, items: Optional[List[FinishedGoodsReceiptItemCreate]] = None) -> FinishedGoodsReceiptResponse:
         """创建成品入库单"""
-        return await self.create_record(
-            tenant_id=tenant_id,
-            create_data=receipt_data,
-            created_by=created_by,
-            code_rule_name="FINISHED_GOODS_RECEIPT_CODE",
-            response_schema=FinishedGoodsReceiptResponse
-        )
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            # 如果未提供receipt_code，则自动生成
+            if receipt_data.receipt_code:
+                code = receipt_data.receipt_code
+            else:
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(tenant_id, "FINISHED_GOODS_RECEIPT_CODE", prefix=f"FGR{today}")
+            
+            # 从参数或receipt_data中提取items（如果存在）
+            if items is None:
+                items = getattr(receipt_data, 'items', None) or []
+            
+            # 计算总数量
+            total_quantity = sum(item.receipt_quantity for item in items) if items else 0
+            
+            # 创建入库单
+            receipt = await FinishedGoodsReceipt.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                receipt_code=code,
+                work_order_id=receipt_data.work_order_id,
+                work_order_code=receipt_data.work_order_code,
+                sales_order_id=receipt_data.sales_order_id,
+                sales_order_code=receipt_data.sales_order_code,
+                warehouse_id=receipt_data.warehouse_id,
+                warehouse_name=receipt_data.warehouse_name,
+                receipt_time=receipt_data.receipt_time,
+                receiver_id=receipt_data.receiver_id,
+                receiver_name=receipt_data.receiver_name,
+                reviewer_id=receipt_data.reviewer_id,
+                reviewer_name=receipt_data.reviewer_name,
+                review_time=receipt_data.review_time,
+                review_status=receipt_data.review_status,
+                review_remarks=receipt_data.review_remarks,
+                status=receipt_data.status,
+                total_quantity=total_quantity,
+                notes=receipt_data.notes,
+                created_by=user_info.get("id"),
+                created_by_name=user_info.get("name", ""),
+            )
+            
+            # 创建入库单明细
+            if items:
+                from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+                for item_data in items:
+                    await FinishedGoodsReceiptItem.create(
+                        tenant_id=tenant_id,
+                        receipt_id=receipt.id,
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, 'material_spec', None),
+                        material_unit=item_data.material_unit,
+                        receipt_quantity=item_data.receipt_quantity,
+                        qualified_quantity=item_data.qualified_quantity,
+                        unqualified_quantity=item_data.unqualified_quantity,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        batch_number=getattr(item_data, 'batch_number', None),
+                        expiry_date=getattr(item_data, 'expiry_date', None),
+                        quality_status=getattr(item_data, 'quality_status', '合格'),
+                        quality_inspection_id=getattr(item_data, 'quality_inspection_id', None),
+                        status=getattr(item_data, 'status', '待入库'),
+                        receipt_time=getattr(item_data, 'receipt_time', None),
+                        notes=getattr(item_data, 'notes', None),
+                    )
+            
+            return FinishedGoodsReceiptResponse.model_validate(receipt)
 
     async def get_finished_goods_receipt_by_id(self, tenant_id: int, receipt_id: int) -> FinishedGoodsReceiptResponse:
         """根据ID获取成品入库单"""
@@ -497,16 +560,76 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         """创建销售出库单"""
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
-            today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(tenant_id, "SALES_DELIVERY_CODE", prefix=f"SD{today}")
+            # 如果未提供delivery_code，则自动生成
+            if delivery_data.delivery_code:
+                code = delivery_data.delivery_code
+            else:
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(tenant_id, "SALES_DELIVERY_CODE", prefix=f"SD{today}")
 
+            # 从delivery_data中提取items（如果存在）
+            items = getattr(delivery_data, 'items', None) or []
+            
+            # 计算总数量和总金额
+            total_quantity = sum(item.delivery_quantity for item in items) if items else 0
+            total_amount = sum(item.total_amount for item in items) if items else 0
+
+            # MTS模式下，sales_order_id可以为None
+            sales_order_id = delivery_data.sales_order_id if delivery_data.sales_order_id and delivery_data.sales_order_id > 0 else None
+            sales_order_code = delivery_data.sales_order_code if sales_order_id else None
+            
             delivery = await SalesDelivery.create(
                 tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
                 delivery_code=code,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-                **delivery_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                sales_order_id=sales_order_id,
+                sales_order_code=sales_order_code or "",
+                customer_id=delivery_data.customer_id,
+                customer_name=delivery_data.customer_name,
+                warehouse_id=delivery_data.warehouse_id,
+                warehouse_name=delivery_data.warehouse_name,
+                delivery_time=delivery_data.delivery_time,
+                deliverer_id=delivery_data.deliverer_id,
+                deliverer_name=delivery_data.deliverer_name,
+                reviewer_id=delivery_data.reviewer_id,
+                reviewer_name=delivery_data.reviewer_name,
+                review_time=delivery_data.review_time,
+                review_status=delivery_data.review_status,
+                review_remarks=delivery_data.review_remarks,
+                status=delivery_data.status,
+                total_quantity=total_quantity,
+                total_amount=total_amount,
+                shipping_method=delivery_data.shipping_method,
+                tracking_number=delivery_data.tracking_number,
+                shipping_address=getattr(delivery_data, 'shipping_address', None),
+                notes=delivery_data.notes,
+                created_by=user_info.get("id"),
+                created_by_name=user_info.get("name", ""),
             )
+            
+            # 创建出库单明细
+            if items:
+                for item_data in items:
+                    await SalesDeliveryItem.create(
+                        tenant_id=tenant_id,
+                        delivery_id=delivery.id,
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, 'material_spec', None),
+                        material_unit=item_data.material_unit,
+                        delivery_quantity=item_data.delivery_quantity,
+                        unit_price=item_data.unit_price,
+                        total_amount=item_data.total_amount,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        batch_number=getattr(item_data, 'batch_number', None),
+                        expiry_date=getattr(item_data, 'expiry_date', None),
+                        status=getattr(item_data, 'status', '待出库'),
+                        delivery_time=getattr(item_data, 'delivery_time', None),
+                        notes=getattr(item_data, 'notes', None),
+                    )
+            
             return SalesDeliveryResponse.model_validate(delivery)
 
     async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryResponse:
@@ -589,7 +712,284 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             updated_delivery = await self.get_sales_delivery_by_id(tenant_id, delivery_id)
             return updated_delivery
 
-    @staticmethod
+    async def import_from_data(
+        self,
+        tenant_id: int,
+        data: List[List[Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从二维数组数据批量导入销售出库单
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建销售出库单。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 租户ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '销售订单编号': 'sales_order_code',
+            '*销售订单编号': 'sales_order_code',
+            'sales_order_code': 'sales_order_code',
+            '*sales_order_code': 'sales_order_code',
+            '客户名称': 'customer_name',
+            'customer_name': 'customer_name',
+            '仓库名称': 'warehouse_name',
+            'warehouse_name': 'warehouse_name',
+            '出库时间': 'delivery_time',
+            'delivery_time': 'delivery_time',
+            '发货方式': 'shipping_method',
+            'shipping_method': 'shipping_method',
+            '物流单号': 'tracking_number',
+            'tracking_number': 'tracking_number',
+            '收货地址': 'shipping_address',
+            'shipping_address': 'shipping_address',
+            '备注': 'notes',
+            'notes': 'notes',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['sales_order_code']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        # 获取销售订单信息（用于填充客户信息）
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                delivery_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            value_str = str(value).strip()
+                            if value_str:
+                                # 日期字段需要转换
+                                if field == 'delivery_time':
+                                    try:
+                                        from datetime import datetime as dt
+                                        # 尝试多种日期格式
+                                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                                            try:
+                                                delivery_data[field] = dt.strptime(value_str, fmt)
+                                                break
+                                            except ValueError:
+                                                continue
+                                        else:
+                                            raise ValueError(f"日期格式错误：{value_str}")
+                                    except Exception as e:
+                                        errors.append({
+                                            "row": row_idx,
+                                            "error": f"日期格式错误：{value_str}，错误：{str(e)}"
+                                        })
+                                        failure_count += 1
+                                        break
+                                else:
+                                    delivery_data[field] = value_str
+                
+                # 验证必填字段
+                if not delivery_data.get('sales_order_code'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "销售订单编号为空"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 查找销售订单
+                sales_order = await SalesOrder.get_or_none(
+                    tenant_id=tenant_id,
+                    order_code=delivery_data['sales_order_code']
+                )
+                if not sales_order:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"销售订单不存在：{delivery_data['sales_order_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 构建创建数据
+                from apps.kuaizhizao.schemas.warehouse import SalesDeliveryCreate, SalesDeliveryItemCreate
+                
+                # 获取订单明细（用于创建出库单明细）
+                from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+                order_items = await SalesOrderItem.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id=sales_order.id
+                ).all()
+                
+                if not order_items:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"销售订单没有明细：{delivery_data['sales_order_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 构建出库单明细
+                delivery_items = []
+                for item in order_items:
+                    if item.remaining_quantity > 0:
+                        delivery_items.append(SalesDeliveryItemCreate(
+                            material_id=item.material_id,
+                            material_code=item.material_code,
+                            material_name=item.material_name,
+                            material_unit=item.material_unit,
+                            delivery_quantity=item.remaining_quantity,
+                            unit_price=item.unit_price,
+                            total_amount=item.remaining_quantity * item.unit_price
+                        ))
+                
+                if not delivery_items:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"销售订单没有可出库的明细：{delivery_data['sales_order_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 创建出库单
+                delivery_create_data = SalesDeliveryCreate(
+                    sales_order_id=sales_order.id,
+                    sales_order_code=sales_order.order_code,
+                    customer_id=sales_order.customer_id,
+                    customer_name=sales_order.customer_name,
+                    warehouse_id=1,  # TODO: 从仓库名称查找仓库ID
+                    warehouse_name=delivery_data.get('warehouse_name', '默认仓库'),
+                    delivery_time=delivery_data.get('delivery_time') or datetime.now(),
+                    items=delivery_items,
+                    shipping_method=delivery_data.get('shipping_method'),
+                    tracking_number=delivery_data.get('tracking_number'),
+                    shipping_address=delivery_data.get('shipping_address'),
+                    notes=delivery_data.get('notes')
+                )
+                
+                await self.create_sales_delivery(
+                    tenant_id=tenant_id,
+                    delivery_data=delivery_create_data,
+                    created_by=created_by
+                )
+                
+                success_count += 1
+                
+            except Exception as e:
+                errors.append({
+                    "row": row_idx,
+                    "error": f"导入失败：{str(e)}"
+                })
+                failure_count += 1
+                logger.error(f"导入销售出库单失败（第{row_idx}行）：{str(e)}")
+        
+        return {
+            "success": True,
+            "message": f"导入完成：成功 {success_count} 条，失败 {failure_count} 条",
+            "data": {
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "errors": errors
+            }
+        }
+
+    async def export_to_excel(
+        self,
+        tenant_id: int,
+        **filters
+    ) -> str:
+        """
+        导出销售出库单到Excel文件
+        
+        Args:
+            tenant_id: 租户ID
+            **filters: 过滤条件
+            
+        Returns:
+            str: Excel文件路径
+        """
+        import csv
+        import os
+        import tempfile
+        from datetime import datetime
+        
+        # 查询所有符合条件的销售出库单（不分页）
+        deliveries = await self.list_sales_deliveries(tenant_id, skip=0, limit=10000, **filters)
+        
+        # 创建导出目录
+        export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"sales_deliveries_{timestamp}.csv"
+        file_path = os.path.join(export_dir, filename)
+        
+        # 写入CSV文件
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            
+            # 写入表头
+            writer.writerow([
+                '出库单编号', '销售订单编号', '客户名称', '仓库名称',
+                '出库时间', '状态', '总数量', '总金额',
+                '发货方式', '物流单号', '收货地址', '备注', '创建时间'
+            ])
+            
+            # 写入数据
+            for delivery in deliveries:
+                writer.writerow([
+                    delivery.delivery_code,
+                    delivery.sales_order_code or '',
+                    delivery.customer_name or '',
+                    delivery.warehouse_name or '',
+                    delivery.delivery_time.strftime('%Y-%m-%d %H:%M:%S') if delivery.delivery_time else '',
+                    delivery.status,
+                    str(delivery.total_quantity) if delivery.total_quantity else '0',
+                    str(delivery.total_amount) if delivery.total_amount else '0',
+                    delivery.shipping_method or '',
+                    delivery.tracking_number or '',
+                    delivery.shipping_address or '',
+                    delivery.notes or '',
+                    delivery.created_at.strftime('%Y-%m-%d %H:%M:%S') if delivery.created_at else '',
+                ])
+        
+        return file_path
 
 
 class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
@@ -606,12 +1006,12 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             code = await self.generate_code(tenant_id, "PURCHASE_RECEIPT_CODE", prefix=f"PR{today}")
 
             # 创建入库单头
-            receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={'items', 'created_by'})
+            receipt_dict = receipt_data.model_dump(exclude_unset=True, exclude={'items', 'created_by', 'receipt_code'})
             receipt_dict.update({
                 'tenant_id': tenant_id,
-                'receipt_code': code,
+                'receipt_code': code,  # 使用生成的编码
                 'created_by': created_by,
-                'created_by_name': user_info["name"],
+                'created_by_name': user_info.get("name", ""),
             })
             
             receipt = await PurchaseReceipt.create(**receipt_dict)
@@ -622,17 +1022,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             
             for item_data in receipt_data.items or []:
                 item_dict = item_data.model_dump(exclude_unset=True)
+                # 确保数量字段是Decimal类型
+                receipt_quantity = Decimal(str(item_data.receipt_quantity))
+                unit_price = Decimal(str(item_data.unit_price))
+                
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'receipt_id': receipt.id,
-                    'total_amount': item_data.receipt_quantity * item_data.unit_price,
-                    'qualified_quantity': item_data.receipt_quantity,  # 默认合格数量等于入库数量
-                    'unqualified_quantity': Decimal(0),
+                    'receipt_quantity': receipt_quantity,
+                    'unit_price': unit_price,
+                    'total_amount': receipt_quantity * unit_price,
+                    'qualified_quantity': Decimal(str(item_data.qualified_quantity)) if hasattr(item_data, 'qualified_quantity') and item_data.qualified_quantity is not None else receipt_quantity,
+                    'unqualified_quantity': Decimal(str(item_data.unqualified_quantity)) if hasattr(item_data, 'unqualified_quantity') and item_data.unqualified_quantity is not None else Decimal(0),
                 })
                 
                 await PurchaseReceiptItem.create(**item_dict)
                 
-                total_quantity += item_data.receipt_quantity
+                total_quantity += receipt_quantity
                 total_amount += item_dict['total_amount']
             
             # 更新入库单总数量和总金额
@@ -722,4 +1128,272 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
             return updated_receipt
+
+    async def import_from_data(
+        self,
+        tenant_id: int,
+        data: List[List[Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从二维数组数据批量导入采购入库单
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建采购入库单。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 租户ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '采购订单编号': 'purchase_order_code',
+            '*采购订单编号': 'purchase_order_code',
+            'purchase_order_code': 'purchase_order_code',
+            '*purchase_order_code': 'purchase_order_code',
+            '供应商名称': 'supplier_name',
+            'supplier_name': 'supplier_name',
+            '仓库名称': 'warehouse_name',
+            'warehouse_name': 'warehouse_name',
+            '入库时间': 'receipt_time',
+            'receipt_time': 'receipt_time',
+            '备注': 'notes',
+            'notes': 'notes',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['purchase_order_code']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        # 获取采购订单信息（用于填充供应商信息）
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                receipt_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            value_str = str(value).strip()
+                            if value_str:
+                                # 日期字段需要转换
+                                if field == 'receipt_time':
+                                    try:
+                                        from datetime import datetime as dt
+                                        # 尝试多种日期格式
+                                        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                                            try:
+                                                receipt_data[field] = dt.strptime(value_str, fmt)
+                                                break
+                                            except ValueError:
+                                                continue
+                                        else:
+                                            raise ValueError(f"日期格式错误：{value_str}")
+                                    except Exception as e:
+                                        errors.append({
+                                            "row": row_idx,
+                                            "error": f"日期格式错误：{value_str}，错误：{str(e)}"
+                                        })
+                                        failure_count += 1
+                                        break
+                                else:
+                                    receipt_data[field] = value_str
+                
+                # 验证必填字段
+                if not receipt_data.get('purchase_order_code'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "采购订单编号为空"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 查找采购订单
+                purchase_order = await PurchaseOrder.get_or_none(
+                    tenant_id=tenant_id,
+                    order_code=receipt_data['purchase_order_code']
+                )
+                if not purchase_order:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"采购订单不存在：{receipt_data['purchase_order_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 构建创建数据
+                from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
+                
+                # 获取订单明细（用于创建入库单明细）
+                from apps.kuaizhizao.models.purchase_order_item import PurchaseOrderItem
+                order_items = await PurchaseOrderItem.filter(
+                    tenant_id=tenant_id,
+                    order_id=purchase_order.id
+                ).all()
+                
+                if not order_items:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"采购订单没有明细：{receipt_data['purchase_order_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 构建入库单明细
+                receipt_items = []
+                for item in order_items:
+                    if item.outstanding_quantity > 0:
+                        receipt_items.append(PurchaseReceiptItemCreate(
+                            purchase_order_item_id=item.id,
+                            material_id=item.material_id,
+                            material_code=item.material_code,
+                            material_name=item.material_name,
+                            material_unit=item.unit,
+                            receipt_quantity=item.outstanding_quantity,
+                            unit_price=item.unit_price,
+                            total_amount=item.outstanding_quantity * item.unit_price
+                        ))
+                
+                if not receipt_items:
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"采购订单没有可入库的明细：{receipt_data['purchase_order_code']}"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 创建入库单
+                receipt_create_data = PurchaseReceiptCreate(
+                    purchase_order_id=purchase_order.id,
+                    purchase_order_code=purchase_order.order_code,
+                    supplier_id=purchase_order.supplier_id,
+                    supplier_name=purchase_order.supplier_name,
+                    warehouse_id=1,  # TODO: 从仓库名称查找仓库ID
+                    warehouse_name=receipt_data.get('warehouse_name', '默认仓库'),
+                    receipt_time=receipt_data.get('receipt_time') or datetime.now(),
+                    items=receipt_items,
+                    notes=receipt_data.get('notes')
+                )
+                
+                await self.create_purchase_receipt(
+                    tenant_id=tenant_id,
+                    receipt_data=receipt_create_data,
+                    created_by=created_by
+                )
+                
+                success_count += 1
+                
+            except Exception as e:
+                errors.append({
+                    "row": row_idx,
+                    "error": f"导入失败：{str(e)}"
+                })
+                failure_count += 1
+                logger.error(f"导入采购入库单失败（第{row_idx}行）：{str(e)}")
+        
+        return {
+            "success": True,
+            "message": f"导入完成：成功 {success_count} 条，失败 {failure_count} 条",
+            "data": {
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "errors": errors
+            }
+        }
+
+    async def export_to_excel(
+        self,
+        tenant_id: int,
+        **filters
+    ) -> str:
+        """
+        导出采购入库单到Excel文件
+        
+        Args:
+            tenant_id: 租户ID
+            **filters: 过滤条件
+            
+        Returns:
+            str: Excel文件路径
+        """
+        import csv
+        import os
+        import tempfile
+        from datetime import datetime
+        
+        # 查询所有符合条件的采购入库单（不分页）
+        receipts = await self.list_purchase_receipts(tenant_id, skip=0, limit=10000, **filters)
+        
+        # 创建导出目录
+        export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"purchase_receipts_{timestamp}.csv"
+        file_path = os.path.join(export_dir, filename)
+        
+        # 写入CSV文件
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            
+            # 写入表头
+            writer.writerow([
+                '入库单编号', '采购订单编号', '供应商名称', '仓库名称',
+                '入库时间', '状态', '总数量', '总金额',
+                '备注', '创建时间'
+            ])
+            
+            # 写入数据
+            for receipt in receipts:
+                writer.writerow([
+                    receipt.receipt_code,
+                    receipt.purchase_order_code or '',
+                    receipt.supplier_name or '',
+                    receipt.warehouse_name or '',
+                    receipt.receipt_time.strftime('%Y-%m-%d %H:%M:%S') if receipt.receipt_time else '',
+                    receipt.status,
+                    str(receipt.total_quantity) if receipt.total_quantity else '0',
+                    str(receipt.total_amount) if receipt.total_amount else '0',
+                    receipt.notes or '',
+                    receipt.created_at.strftime('%Y-%m-%d %H:%M:%S') if receipt.created_at else '',
+                ])
+        
+        return file_path
 
