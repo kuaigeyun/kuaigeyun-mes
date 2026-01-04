@@ -14,7 +14,7 @@ import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { outsourceOrderApi } from '../../../../services/production';
+import { outsourceOrderApi } from '../../../services/production';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import dayjs from 'dayjs';
 
