@@ -21,11 +21,16 @@ from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
+from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
+from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
 
 # 初始化服务实例
 reporting_service = ReportingService()
 material_binding_service = MaterialBindingService()
 stocktaking_service = StocktakingService()
+inventory_analysis_service = InventoryAnalysisService()
+inventory_alert_rule_service = InventoryAlertRuleService()
+inventory_alert_service = InventoryAlertService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
