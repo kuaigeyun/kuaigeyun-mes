@@ -135,11 +135,17 @@ export interface TrendChartData {
 }
 
 // 库存报表API
-export async function getInventoryReport(params: ReportParams = {}): Promise<InventoryReportResponse> {
+export async function getInventoryReport(params: ReportParams & { report_type?: string } = {}): Promise<InventoryReportResponse> {
   return apiRequest<InventoryReportResponse>({
-    url: '/apps/kuaizhizao/reports/inventory-report',
+    url: '/apps/kuaizhizao/reports/inventory',
     method: 'GET',
-    params,
+    params: {
+      report_type: params.report_type || 'summary',
+      date_start: params.date_start,
+      date_end: params.date_end,
+      warehouse_id: params.filters?.warehouse_id,
+      ...params,
+    },
   });
 }
 
@@ -153,11 +159,17 @@ export async function exportInventoryReport(params: ReportParams = {}): Promise<
 }
 
 // 生产报表API
-export async function getProductionReport(params: ReportParams = {}): Promise<ProductionReportResponse> {
+export async function getProductionReport(params: ReportParams & { report_type?: string } = {}): Promise<ProductionReportResponse> {
   return apiRequest<ProductionReportResponse>({
-    url: '/apps/kuaizhizao/reports/production-report',
+    url: '/apps/kuaizhizao/reports/production',
     method: 'GET',
-    params,
+    params: {
+      report_type: params.report_type || 'efficiency',
+      date_start: params.date_start,
+      date_end: params.date_end,
+      work_center_id: params.filters?.work_center_id,
+      ...params,
+    },
   });
 }
 
@@ -171,11 +183,17 @@ export async function exportProductionReport(params: ReportParams = {}): Promise
 }
 
 // 质量报表API
-export async function getQualityReport(params: ReportParams = {}): Promise<QualityReportResponse> {
+export async function getQualityReport(params: ReportParams & { report_type?: string } = {}): Promise<QualityReportResponse> {
   return apiRequest<QualityReportResponse>({
-    url: '/apps/kuaizhizao/reports/quality-report',
+    url: '/apps/kuaizhizao/reports/quality',
     method: 'GET',
-    params,
+    params: {
+      report_type: params.report_type || 'analysis',
+      date_start: params.date_start,
+      date_end: params.date_end,
+      material_id: params.filters?.material_id,
+      ...params,
+    },
   });
 }
 

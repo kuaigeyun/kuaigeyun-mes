@@ -16,6 +16,11 @@ from .material_binding import MaterialBinding
 from .stocktaking import Stocktaking, StocktakingItem
 from .inventory_alert import InventoryAlertRule, InventoryAlert
 from .packing_binding import PackingBinding
+from .customer_material_registration import CustomerMaterialRegistration, BarcodeMappingRule
+from .document_node_timing import DocumentNodeTiming
+from .material_shortage_exception import MaterialShortageException
+from .delivery_delay_exception import DeliveryDelayException
+from .quality_exception import QualityException
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -72,6 +77,10 @@ __all__ = [
     'PackingBinding',
     'BarcodeMappingRule',
     'CustomerMaterialRegistration',
+    'DocumentNodeTiming',
+    'MaterialShortageException',
+    'DeliveryDelayException',
+    'QualityException',
 
     # 仓储管理模块
     'ProductionPicking',

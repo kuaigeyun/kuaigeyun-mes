@@ -45,6 +45,14 @@ import InboundPage from './pages/warehouse-management/inbound';
 import FinishedGoodsInboundPage from './pages/warehouse-management/finished-goods-inventory';
 import SalesOutboundPage from './pages/warehouse-management/sales-outbound';
 import OutboundPage from './pages/warehouse-management/outbound';
+import CustomerMaterialRegistrationPage from './pages/warehouse-management/customer-material-registration';
+import BarcodeMappingRulesPage from './pages/warehouse-management/barcode-mapping-rules';
+import DocumentTimingPage from './pages/warehouse-management/document-timing';
+import DocumentEfficiencyPage from './pages/warehouse-management/document-efficiency';
+import MaterialShortageExceptionsPage from './pages/production-execution/material-shortage-exceptions';
+import DeliveryDelayExceptionsPage from './pages/production-execution/delivery-delay-exceptions';
+import QualityExceptionsPage from './pages/production-execution/quality-exceptions';
+import ExceptionStatisticsPage from './pages/production-execution/exception-statistics';
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -64,6 +72,10 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/reporting" element={<ReportingPage />} />
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
       <Route path="production-execution/outsource-orders" element={<OutsourceOrdersPage />} />
+      <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
+      <Route path="production-execution/delivery-delay-exceptions" element={<DeliveryDelayExceptionsPage />} />
+      <Route path="production-execution/quality-exceptions" element={<QualityExceptionsPage />} />
+      <Route path="production-execution/exception-statistics" element={<ExceptionStatisticsPage />} />
 
       {/* 销售管理路由 */}
       <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
@@ -89,6 +101,10 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/finished-goods-inventory" element={<FinishedGoodsInboundPage />} />
       <Route path="warehouse-management/sales-outbound" element={<SalesOutboundPage />} />
       <Route path="warehouse-management/outbound" element={<OutboundPage />} />
+      <Route path="warehouse-management/customer-material-registration" element={<CustomerMaterialRegistrationPage />} />
+      <Route path="warehouse-management/barcode-mapping-rules" element={<BarcodeMappingRulesPage />} />
+      <Route path="warehouse-management/document-timing" element={<DocumentTimingPage />} />
+      <Route path="warehouse-management/document-efficiency" element={<DocumentEfficiencyPage />} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
