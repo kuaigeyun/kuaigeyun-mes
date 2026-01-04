@@ -1287,6 +1287,31 @@ const WorkOrdersPage: React.FC = () => {
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
+
+      {/* 冻结工单Modal */}
+      <FormModalTemplate
+        title="冻结工单"
+        open={freezeModalVisible}
+        onClose={() => {
+          setFreezeModalVisible(false);
+          setCurrentWorkOrderForFreeze(null);
+          freezeFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitFreeze}
+        isEdit={false}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={freezeFormRef}
+      >
+        <ProFormTextArea
+          name="freeze_reason"
+          label="冻结原因"
+          placeholder="请输入冻结原因（必填）"
+          rules={[{ required: true, message: '请输入冻结原因' }]}
+          fieldProps={{
+            rows: 4,
+          }}
+        />
+      </FormModalTemplate>
     </>
   );
 };
