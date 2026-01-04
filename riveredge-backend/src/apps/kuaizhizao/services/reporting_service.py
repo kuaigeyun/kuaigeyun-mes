@@ -18,6 +18,7 @@ from tortoise.transactions import in_transaction
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
+from apps.kuaizhizao.models.defect_record import DefectRecord
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
     ReportingRecordUpdate,
@@ -27,6 +28,10 @@ from apps.kuaizhizao.schemas.reporting_record import (
 from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
     ScrapRecordResponse
+)
+from apps.kuaizhizao.schemas.defect_record import (
+    DefectRecordCreateFromReporting,
+    DefectRecordResponse
 )
 
 from apps.base_service import AppBaseService
