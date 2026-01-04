@@ -6,6 +6,7 @@
 
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
+from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
