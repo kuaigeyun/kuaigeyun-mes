@@ -334,19 +334,91 @@ class ReportingService(AppBaseService[ReportingRecord]):
         approved_count = sum(1 for r in records if r.status == 'approved')
         rejected_count = sum(1 for r in records if r.status == 'rejected')
 
-        total_reported_quantity = sum(r.reported_quantity for r in records)
-        total_qualified_quantity = sum(r.qualified_quantity for r in records)
-        total_work_hours = sum(r.work_hours for r in records)
+        total_reported_quantity = sum(r.reported_quantity for r in records) or Decimal("0")
+        total_qualified_quantity = sum(r.qualified_quantity for r in records) or Decimal("0")
+        total_unqualified_quantity = sum(r.unqualified_quantity for r in records) or Decimal("0")
+        total_work_hours = sum(r.work_hours for r in records) or Decimal("0")
+
+        # 计算合格率
+        qualification_rate = float((total_qualified_quantity / total_reported_quantity * 100)) if total_reported_quantity > 0 else 0
+
+        # 效率分析：平均每小时报工数量
+        avg_quantity_per_hour = float(total_reported_quantity / total_work_hours) if total_work_hours > 0 else 0
+
+        # 异常分析：统计不合格率
+        unqualified_rate = float((total_unqualified_quantity / total_reported_quantity * 100)) if total_reported_quantity > 0 else 0
+
+        # 按工序统计（前10个）
+        operation_stats = {}
+        for r in records:
+            op_name = r.operation_name
+            if op_name not in operation_stats:
+                operation_stats[op_name] = {
+                    'count': 0,
+                    'reported_quantity': Decimal("0"),
+                    'qualified_quantity': Decimal("0"),
+                    'work_hours': Decimal("0"),
+                }
+            operation_stats[op_name]['count'] += 1
+            operation_stats[op_name]['reported_quantity'] += r.reported_quantity
+            operation_stats[op_name]['qualified_quantity'] += r.qualified_quantity
+            operation_stats[op_name]['work_hours'] += r.work_hours
+
+        # 转换为列表并计算合格率
+        operation_stats_list = []
+        for op_name, stats in sorted(operation_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:10]:
+            op_rate = float((stats['qualified_quantity'] / stats['reported_quantity'] * 100)) if stats['reported_quantity'] > 0 else 0
+            operation_stats_list.append({
+                'operation_name': op_name,
+                'count': stats['count'],
+                'reported_quantity': float(stats['reported_quantity']),
+                'qualified_quantity': float(stats['qualified_quantity']),
+                'work_hours': float(stats['work_hours']),
+                'qualification_rate': op_rate,
+            })
+
+        # 按操作工统计（前10个）
+        worker_stats = {}
+        for r in records:
+            worker_name = r.worker_name
+            if worker_name not in worker_stats:
+                worker_stats[worker_name] = {
+                    'count': 0,
+                    'reported_quantity': Decimal("0"),
+                    'qualified_quantity': Decimal("0"),
+                    'work_hours': Decimal("0"),
+                }
+            worker_stats[worker_name]['count'] += 1
+            worker_stats[worker_name]['reported_quantity'] += r.reported_quantity
+            worker_stats[worker_name]['qualified_quantity'] += r.qualified_quantity
+            worker_stats[worker_name]['work_hours'] += r.work_hours
+
+        worker_stats_list = []
+        for worker_name, stats in sorted(worker_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:10]:
+            worker_rate = float((stats['qualified_quantity'] / stats['reported_quantity'] * 100)) if stats['reported_quantity'] > 0 else 0
+            worker_stats_list.append({
+                'worker_name': worker_name,
+                'count': stats['count'],
+                'reported_quantity': float(stats['reported_quantity']),
+                'qualified_quantity': float(stats['qualified_quantity']),
+                'work_hours': float(stats['work_hours']),
+                'qualification_rate': worker_rate,
+            })
 
         return {
             'total_count': total_count,
             'pending_count': pending_count,
             'approved_count': approved_count,
             'rejected_count': rejected_count,
-            'total_reported_quantity': total_reported_quantity,
-            'total_qualified_quantity': total_qualified_quantity,
-            'total_work_hours': total_work_hours,
-            'qualification_rate': (total_qualified_quantity / total_reported_quantity * 100) if total_reported_quantity > 0 else 0,
+            'total_reported_quantity': float(total_reported_quantity),
+            'total_qualified_quantity': float(total_qualified_quantity),
+            'total_unqualified_quantity': float(total_unqualified_quantity),
+            'total_work_hours': float(total_work_hours),
+            'qualification_rate': qualification_rate,
+            'unqualified_rate': unqualified_rate,
+            'avg_quantity_per_hour': avg_quantity_per_hour,
+            'operation_stats': operation_stats_list,
+            'worker_stats': worker_stats_list,
         }
 
     async def _update_work_order_progress(
