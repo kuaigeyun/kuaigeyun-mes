@@ -18,7 +18,7 @@ class WorkOrderBase(BaseModel):
     """
     model_config = ConfigDict(from_attributes=True)
 
-    code: str = Field(..., description="工单编码")
+    code: Optional[str] = Field(None, description="工单编码（可选，创建时自动生成）")
     name: str = Field(..., description="工单名称")
     product_id: int = Field(..., description="产品ID")
     product_code: str = Field(..., description="产品编码")
@@ -62,7 +62,7 @@ class WorkOrderCreate(WorkOrderBase):
 
     用于创建新工单的数据验证。
     """
-    pass
+    code: Optional[str] = Field(None, description="工单编码（可选，如果不提供则自动生成）")
 
 
 class WorkOrderUpdate(BaseModel):
@@ -147,3 +147,20 @@ class MaterialShortageResponse(BaseModel):
     work_order_id: int = Field(..., description="工单ID")
     work_order_code: str = Field(..., description="工单编码")
     work_order_name: str = Field(..., description="工单名称")
+
+
+class WorkOrderSplitRequest(BaseModel):
+    """工单拆分请求Schema"""
+    split_type: str = Field(..., description="拆分类型：quantity（按数量拆分）或operation（按工序拆分）")
+    split_quantities: Optional[list[Decimal]] = Field(None, description="按数量拆分：每个拆分工单的数量列表")
+    split_count: Optional[int] = Field(None, description="按数量拆分：拆分成几个工单（等量拆分）")
+    operation_ids: Optional[list[int]] = Field(None, description="按工序拆分：要拆分到新工单的工序ID列表")
+    remarks: Optional[str] = Field(None, description="拆分备注")
+
+
+class WorkOrderSplitResponse(BaseModel):
+    """工单拆分响应Schema"""
+    original_work_order_id: int = Field(..., description="原工单ID")
+    original_work_order_code: str = Field(..., description="原工单编码")
+    split_work_orders: list[WorkOrderResponse] = Field(..., description="拆分工单列表")
+    total_count: int = Field(..., description="拆分工单总数")

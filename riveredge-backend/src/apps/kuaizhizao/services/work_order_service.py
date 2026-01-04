@@ -23,10 +23,13 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
     WorkOrderResponse,
-    WorkOrderListResponse
+    WorkOrderListResponse,
+    WorkOrderSplitRequest,
+    WorkOrderSplitResponse
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from loguru import logger
 
 
@@ -61,13 +64,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ValidationError: 数据验证失败
         """
         async with in_transaction():
-            # 生成工单编码
-            today = datetime.now().strftime("%Y%m%d")
-            code = await self.generate_code(
-                tenant_id=tenant_id,
-                code_type="WORK_ORDER_CODE",
-                prefix=f"WO{today}"
-            )
+            # 生成工单编码（如果未提供）
+            if not work_order_data.code:
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(
+                    tenant_id=tenant_id,
+                    code_type="WORK_ORDER_CODE",
+                    prefix=f"WO{today}"
+                )
+            else:
+                code = work_order_data.code
 
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
@@ -539,3 +545,166 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "delay_reasons": delay_reasons,
             "work_orders": delayed_orders
         }
+
+    async def split_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        split_data: WorkOrderSplitRequest,
+        created_by: int
+    ) -> WorkOrderSplitResponse:
+        """
+        拆分工单
+
+        支持按数量拆分。按工序拆分功能暂未实现。
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 原工单ID
+            split_data: 拆分数据
+            created_by: 创建人ID
+
+        Returns:
+            WorkOrderSplitResponse: 拆分结果
+
+        Raises:
+            NotFoundError: 工单不存在
+            ValidationError: 数据验证失败
+            BusinessLogicError: 业务逻辑错误（如已报工不能拆分）
+        """
+        async with in_transaction():
+            # 获取原工单
+            original_work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单状态（只能拆分草稿或已下达状态的工单）
+            if original_work_order.status not in ['draft', 'released']:
+                raise BusinessLogicError(f"只能拆分草稿或已下达状态的工单，当前状态：{original_work_order.status}")
+
+            # 检查是否已报工（只能拆分未报工部分）
+            reporting_records = await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                status='approved',
+                deleted_at__isnull=True
+            ).all()
+
+            if reporting_records:
+                # 计算已报工数量
+                total_reported = sum(Decimal(str(r.qualified_quantity)) for r in reporting_records)
+                if total_reported > 0:
+                    raise BusinessLogicError(f"工单已有报工记录（已报工数量：{total_reported}），不能拆分。只能拆分未报工的工单。")
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            split_work_orders = []
+
+            if split_data.split_type == 'quantity':
+                # 按数量拆分
+                if split_data.split_quantities:
+                    # 指定每个拆分工单的数量
+                    quantities = split_data.split_quantities
+                    total_split_quantity = sum(quantities)
+                    
+                    if total_split_quantity > original_work_order.quantity:
+                        raise ValidationError(f"拆分工单数量总和（{total_split_quantity}）不能大于原工单数量（{original_work_order.quantity}）")
+                    
+                    if total_split_quantity < original_work_order.quantity:
+                        raise ValidationError(f"拆分工单数量总和（{total_split_quantity}）必须等于原工单数量（{original_work_order.quantity}）")
+                    
+                    for idx, quantity in enumerate(quantities, 1):
+                        if quantity <= 0:
+                            raise ValidationError(f"拆分数量必须大于0，第{idx}个拆分工单数量：{quantity}")
+                        
+                        # 生成拆分工单编码
+                        split_code = f"{original_work_order.code}-{idx:03d}"
+                        
+                        # 创建拆分工单
+                        split_work_order = await WorkOrder.create(
+                            tenant_id=tenant_id,
+                            uuid=str(uuid.uuid4()),
+                            code=split_code,
+                            name=f"{original_work_order.name}-拆分{idx}",
+                            product_id=original_work_order.product_id,
+                            product_code=original_work_order.product_code,
+                            product_name=original_work_order.product_name,
+                            quantity=quantity,
+                            production_mode=original_work_order.production_mode,
+                            sales_order_id=original_work_order.sales_order_id,
+                            sales_order_code=original_work_order.sales_order_code,
+                            sales_order_name=original_work_order.sales_order_name,
+                            workshop_id=original_work_order.workshop_id,
+                            workshop_name=original_work_order.workshop_name,
+                            work_center_id=original_work_order.work_center_id,
+                            work_center_name=original_work_order.work_center_name,
+                            status=original_work_order.status,
+                            priority=original_work_order.priority,
+                            planned_start_date=original_work_order.planned_start_date,
+                            planned_end_date=original_work_order.planned_end_date,
+                            remarks=split_data.remarks or f"从工单{original_work_order.code}拆分",
+                            created_by=created_by,
+                            created_by_name=user_info["name"],
+                        )
+                        split_work_orders.append(split_work_order)
+                
+                elif split_data.split_count:
+                    # 等量拆分
+                    if split_data.split_count <= 1:
+                        raise ValidationError("拆分数量必须大于1")
+                    
+                    split_quantity = original_work_order.quantity / Decimal(str(split_data.split_count))
+                    
+                    # 验证是否能整除
+                    if split_quantity * split_data.split_count != original_work_order.quantity:
+                        raise ValidationError(f"原工单数量（{original_work_order.quantity}）不能被拆分数（{split_data.split_count}）整除")
+                    
+                    for idx in range(1, split_data.split_count + 1):
+                        # 生成拆分工单编码
+                        split_code = f"{original_work_order.code}-{idx:03d}"
+                        
+                        # 创建拆分工单
+                        split_work_order = await WorkOrder.create(
+                            tenant_id=tenant_id,
+                            uuid=str(uuid.uuid4()),
+                            code=split_code,
+                            name=f"{original_work_order.name}-拆分{idx}",
+                            product_id=original_work_order.product_id,
+                            product_code=original_work_order.product_code,
+                            product_name=original_work_order.product_name,
+                            quantity=split_quantity,
+                            production_mode=original_work_order.production_mode,
+                            sales_order_id=original_work_order.sales_order_id,
+                            sales_order_code=original_work_order.sales_order_code,
+                            sales_order_name=original_work_order.sales_order_name,
+                            workshop_id=original_work_order.workshop_id,
+                            workshop_name=original_work_order.workshop_name,
+                            work_center_id=original_work_order.work_center_id,
+                            work_center_name=original_work_order.work_center_name,
+                            status=original_work_order.status,
+                            priority=original_work_order.priority,
+                            planned_start_date=original_work_order.planned_start_date,
+                            planned_end_date=original_work_order.planned_end_date,
+                            remarks=split_data.remarks or f"从工单{original_work_order.code}拆分",
+                            created_by=created_by,
+                            created_by_name=user_info["name"],
+                        )
+                        split_work_orders.append(split_work_order)
+                else:
+                    raise ValidationError("按数量拆分时必须提供split_quantities或split_count")
+            
+            elif split_data.split_type == 'operation':
+                # 按工序拆分（TODO: 需要工序模型支持，暂时返回错误）
+                raise ValidationError("按工序拆分功能暂未实现，请使用按数量拆分")
+            else:
+                raise ValidationError(f"不支持的拆分类型：{split_data.split_type}")
+
+            # 更新原工单状态为已取消（拆分后原工单不再使用）
+            original_work_order.status = 'cancelled'
+            original_work_order.updated_by = created_by
+            original_work_order.updated_by_name = user_info["name"]
+            await original_work_order.save()
+
+            logger.info(f"工单 {original_work_order.code} 拆分为 {len(split_work_orders)} 个工单")
+
+            return WorkOrderSplitResponse(
+                original_work_order_id=original_work_order.id,
