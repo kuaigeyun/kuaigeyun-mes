@@ -14,8 +14,9 @@ import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table } from '
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { workOrderApi } from '../../../services/production';
+import { workOrderApi, reworkOrderApi } from '../../../services/production';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { useNavigate } from 'react-router-dom';
 
 interface WorkOrder {
   id?: number;
@@ -556,7 +557,20 @@ const WorkOrdersPage: React.FC = () => {
         columns={detailColumns}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         customContent={
-          documentRelations ? (
+          <>
+            {/* 操作按钮区域 */}
+            <div style={{ padding: '16px 0', borderBottom: '1px solid #f0f0f0', marginBottom: '16px' }}>
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={() => handleCreateRework(workOrderDetail!)}
+                  disabled={!workOrderDetail || workOrderDetail.status === 'cancelled'}
+                >
+                  创建返工单
+                </Button>
+              </Space>
+            </div>
+            {documentRelations ? (
             <div style={{ padding: '16px 0' }}>
               <Card title="单据关联">
                 {documentRelations.upstream_count > 0 && (
@@ -616,7 +630,8 @@ const WorkOrdersPage: React.FC = () => {
                 )}
               </Card>
             </div>
-          ) : null
+            ) : null}
+          </>
         }
       />
     </>

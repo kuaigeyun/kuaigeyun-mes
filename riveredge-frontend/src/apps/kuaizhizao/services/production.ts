@@ -37,6 +37,39 @@ export const workOrderApi = {
   },
 };
 
+// 返工单相关接口
+export const reworkOrderApi = {
+  // 获取返工单列表
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/rework-orders', { method: 'GET', params });
+  },
+
+  // 创建返工单
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/rework-orders', { method: 'POST', data });
+  },
+
+  // 更新返工单
+  update: async (id: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'PUT', data });
+  },
+
+  // 删除返工单
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'DELETE' });
+  },
+
+  // 获取返工单详情
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'GET' });
+  },
+
+  // 从工单创建返工单
+  createFromWorkOrder: async (workOrderId: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/rework`, { method: 'POST', data });
+  },
+};
+
 // 报工相关接口
 export const reportingApi = {
   // 获取报工记录列表
@@ -146,6 +179,28 @@ export const warehouseApi = {
     confirm: async (id: string) => {
       return apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST' });
     },
+    import: async (data: any[][]) => {
+      return apiRequest<{ success: boolean; message: string; data?: any }>({
+        url: '/apps/kuaizhizao/sales-deliveries/import',
+        method: 'POST',
+        data: { data },
+      });
+    },
+    export: async (params?: any) => {
+      return apiRequest<Blob>({
+        url: '/apps/kuaizhizao/sales-deliveries/export',
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      });
+    },
+    print: async (id: string, templateUuid?: string) => {
+      return apiRequest<{ success: boolean; content?: string; data?: any; message?: string }>({
+        url: `/apps/kuaizhizao/sales-deliveries/${id}/print`,
+        method: 'GET',
+        params: templateUuid ? { template_uuid: templateUuid } : undefined,
+      });
+    },
   },
 
   // 采购入库单
@@ -167,6 +222,21 @@ export const warehouseApi = {
     },
     confirm: async (id: string) => {
       return apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST' });
+    },
+    import: async (data: any[][]) => {
+      return apiRequest<{ success: boolean; message: string; data?: any }>({
+        url: '/apps/kuaizhizao/purchase-receipts/import',
+        method: 'POST',
+        data: { data },
+      });
+    },
+    export: async (params?: any) => {
+      return apiRequest<Blob>({
+        url: '/apps/kuaizhizao/purchase-receipts/export',
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      });
     },
   },
 };
@@ -196,6 +266,24 @@ export const qualityApi = {
     approve: async (id: string, data: any) => {
       return apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data });
     },
+    createFromPurchaseReceipt: async (purchaseReceiptId: string) => {
+      return apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' });
+    },
+    import: async (data: any[][]) => {
+      return apiRequest<{ success: boolean; message: string; data?: any }>({
+        url: '/apps/kuaizhizao/incoming-inspections/import',
+        method: 'POST',
+        data: { data },
+      });
+    },
+    export: async (params?: any) => {
+      return apiRequest<Blob>({
+        url: '/apps/kuaizhizao/incoming-inspections/export',
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      });
+    },
   },
 
   // 过程检验
@@ -220,6 +308,24 @@ export const qualityApi = {
     },
     approve: async (id: string, data: any) => {
       return apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, { method: 'POST', data });
+    },
+    createFromWorkOrder: async (workOrderId: string, operationId: string) => {
+      return apiRequest(`/apps/kuaizhizao/process-inspections/from-work-order?work_order_id=${workOrderId}&operation_id=${operationId}`, { method: 'POST' });
+    },
+    import: async (data: any[][]) => {
+      return apiRequest<{ success: boolean; message: string; data?: any }>({
+        url: '/apps/kuaizhizao/process-inspections/import',
+        method: 'POST',
+        data: { data },
+      });
+    },
+    export: async (params?: any) => {
+      return apiRequest<Blob>({
+        url: '/apps/kuaizhizao/process-inspections/export',
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      });
     },
   },
 
@@ -248,6 +354,24 @@ export const qualityApi = {
     },
     certificate: async (id: string, data: any) => {
       return apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/certificate`, { method: 'POST', data });
+    },
+    createFromWorkOrder: async (workOrderId: string) => {
+      return apiRequest(`/apps/kuaizhizao/finished-goods-inspections/from-work-order?work_order_id=${workOrderId}`, { method: 'POST' });
+    },
+    import: async (data: any[][]) => {
+      return apiRequest<{ success: boolean; message: string; data?: any }>({
+        url: '/apps/kuaizhizao/finished-goods-inspections/import',
+        method: 'POST',
+        data: { data },
+      });
+    },
+    export: async (params?: any) => {
+      return apiRequest<Blob>({
+        url: '/apps/kuaizhizao/finished-goods-inspections/export',
+        method: 'GET',
+        params,
+        responseType: 'blob',
+      });
     },
   },
 };
