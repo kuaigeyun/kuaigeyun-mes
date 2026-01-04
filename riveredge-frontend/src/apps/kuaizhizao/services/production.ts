@@ -35,6 +35,11 @@ export const workOrderApi = {
   release: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/release`, { method: 'POST' });
   },
+
+  // 拆分工单
+  split: async (id: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data });
+  },
 };
 
 // 返工单相关接口
