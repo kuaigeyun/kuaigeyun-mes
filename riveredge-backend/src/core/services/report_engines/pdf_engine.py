@@ -9,8 +9,15 @@ Date: 2025-01-15
 
 from typing import Dict, Any
 from io import BytesIO
-from weasyprint import HTML, CSS
 from loguru import logger
+
+# 延迟导入 WeasyPrint，避免在 Windows 上启动失败
+try:
+    from weasyprint import HTML, CSS
+    WEASYPRINT_AVAILABLE = True
+except ImportError as e:
+    WEASYPRINT_AVAILABLE = False
+    WEASYPRINT_ERROR = str(e)
 
 
 class PDFEngine:
@@ -30,7 +37,23 @@ class PDFEngine:
 
         Returns:
             BytesIO: PDF文件流
+
+        Raises:
+            RuntimeError: WeasyPrint 不可用时抛出
         """
+        if not WEASYPRINT_AVAILABLE:
+            error_msg = (
+                "WeasyPrint 不可用。"
+                "在 Windows 上需要安装 GTK+ 运行时库。"
+                "请参考：https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
+            )
+            if 'WEASYPRINT_ERROR' in globals():
+                error_msg += f"\n错误详情: {WEASYPRINT_ERROR}"
+            raise RuntimeError(error_msg)
+
+        # 延迟导入，确保只在真正使用时才导入
+        from weasyprint import HTML
+
         # 生成HTML内容
         html_content = self._generate_html(config, data)
 
