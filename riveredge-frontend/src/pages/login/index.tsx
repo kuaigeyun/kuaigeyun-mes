@@ -130,11 +130,11 @@ export default function LoginPage() {
    */
   interface OrganizationRegisterFormData {
     tenant_name: string;
-    tenant_domain?: string;
-    username: string;
-    email?: string;
+    phone: string;
     password: string;
     confirm_password: string;
+    tenant_domain?: string;
+    email?: string;
   }
   
   /**
@@ -322,22 +322,22 @@ export default function LoginPage() {
         return;
       }
 
-      // 提交组织注册
+      // 提交组织注册（极简表单：组织名称、手机号、密码）
       const registerResponse = await registerOrganization({
         tenant_name: values.tenant_name,
-        tenant_domain: values.tenant_domain,
-        username: values.username,
-        email: values.email,
+        phone: values.phone,
         password: values.password,
+        tenant_domain: values.tenant_domain,
+        email: values.email,
       });
 
       if (registerResponse && registerResponse.success) {
         message.success('注册成功，正在自动登录...');
 
-        // 注册成功后自动登录
+        // 注册成功后自动登录（使用手机号作为用户名）
         try {
           const loginResponse = await login({
-            username: values.username,
+            username: values.phone,  // 手机号即账号
             password: values.password,
             tenant_id: registerResponse.tenant_id,
           });
@@ -371,9 +371,10 @@ export default function LoginPage() {
       setRegisterDrawerVisible(false);
       setRegisterType('select');
       // 延迟执行消息提示和导航，避免阻塞主线程
+      // 新注册的组织跳转到初始化向导
       setTimeout(() => {
         message.success('登录成功');
-        navigate('/system/dashboard', { replace: true });
+        navigate('/init/wizard', { replace: true });
       }, 0);
           }
         } catch (loginError: any) {
@@ -2265,130 +2266,85 @@ export default function LoginPage() {
               rowProps={{ gutter: 16 }}
               className="register-form"
             >
-              <ProFormGroup title="组织信息">
-                <ProFormText
-                  name="tenant_name"
-                  label="组织名称"
-                  colProps={{ span: 12 }}
-                  rules={[
-                    { required: true, message: '请输入组织名称' },
-                    { min: 1, max: 100, message: '组织名称长度为 1-100 个字符' },
-                  ]}
-                  fieldProps={{
-                    size: 'large',
-                    prefix: <ApartmentOutlined />,
-                    placeholder: '请输入组织名称（1-100个字符）',
-                  }}
-                  extra={
-                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      这是您组织的显示名称，用于标识您的组织，注册后可以随时修改
-                    </div>
-                  }
-                />
-                <ProFormText
-                  name="tenant_domain"
-                  label="组织域名（可选）"
-                  placeholder="留空将自动生成"
-                  colProps={{ span: 12 }}
-                  rules={[
-                    { max: 100, message: '组织域名长度不能超过 100 个字符' },
-                    { pattern: /^[a-z0-9-]*$/, message: '只能包含小写字母、数字和连字符' },
-                  ]}
-                  fieldProps={{
-                    size: 'large',
-                    prefix: <ApartmentOutlined />,
-                    placeholder: '输入组织域名',
-                  }}
-                  extra={
-                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      组织域名是访问您组织专属页面的地址，不填写系统会自动生成一个唯一的域名
-                    </div>
-                  }
-                />
-              </ProFormGroup>
-
-              <ProFormGroup title="管理员信息">
-                <ProFormText
-                  name="username"
-                  label="管理员用户名"
-                  colProps={{ span: 12 }}
-                  rules={[
-                    { required: true, message: '请输入管理员用户名' },
-                    { min: 3, max: 50, message: '用户名长度为 3-50 个字符' },
-                  ]}
-                  fieldProps={{
-                    size: 'large',
-                    prefix: <UserOutlined />,
-                    placeholder: '请输入管理员用户名',
-                    autoComplete: 'username',
-                  }}
-                  extra={
-                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      这是管理员登录时使用的账号，注册后无法修改，请谨慎填写
-                    </div>
-                  }
-                />
-                <ProFormText
-                  name="email"
-                  label="管理员邮箱（可选）"
-                  colProps={{ span: 12 }}
-                  rules={[{ type: 'email', message: '请输入有效的邮箱地址' }]}
-                  fieldProps={{
-                    size: 'large',
-                    prefix: <MailOutlined />,
-                    placeholder: '请输入邮箱地址',
-                    autoComplete: 'email',
-                  }}
-                  extra={
-                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      填写邮箱后，可以接收系统通知，也可以在忘记密码时找回账户
-                    </div>
-                  }
-                />
-                <ProFormText.Password
-                  name="password"
-                  label="管理员密码"
-                  colProps={{ span: 12 }}
-                  rules={[
-                    { required: true, message: '请输入密码' },
-                    { min: 8, message: '密码长度至少 8 个字符' },
-                    { max: 128, message: '密码长度不能超过 128 个字符' },
-                  ]}
-                  fieldProps={{
-                    size: 'large',
-                    prefix: <LockOutlined />,
-                    placeholder: '请输入密码（8-128个字符）',
-                    autoComplete: 'new-password',
-                  }}
-                  extra={
-                    <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px' }}>
-                      为了账户安全，建议使用字母、数字和特殊符号的组合，至少8个字符
-                    </div>
-                  }
-                />
-                <ProFormText.Password
-                  name="confirm_password"
-                  label="确认密码"
-                  colProps={{ span: 12 }}
-                  rules={[
-                    { required: true, message: '请再次输入密码' },
-                    ({ getFieldValue }) => ({
-                      validator(_, value) {
-                        if (!value || getFieldValue('password') === value) {
-                          return Promise.resolve();
-                        }
-                        return Promise.reject(new Error('两次输入的密码不一致，请重新输入'));
-                      },
-                    }),
-                  ]}
-                  fieldProps={{
-                    size: 'large',
-                    prefix: <LockOutlined />,
-                    placeholder: '请再次输入密码以确认',
-                    autoComplete: 'new-password',
-                  }}
-                />
-              </ProFormGroup>
+              {/* 极简注册表单：仅3个必填字段 */}
+              <ProFormText
+                name="tenant_name"
+                label="组织名称"
+                rules={[
+                  { required: true, message: '请输入组织名称' },
+                  { min: 1, max: 100, message: '组织名称长度为 1-100 个字符' },
+                ]}
+                fieldProps={{
+                  size: 'large',
+                  prefix: <ApartmentOutlined />,
+                  placeholder: '请输入组织名称',
+                }}
+                extra={
+                  <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px', color: '#999' }}>
+                    这是您组织的显示名称，用于标识您的组织
+                  </div>
+                }
+              />
+              <ProFormText
+                name="phone"
+                label="手机号"
+                rules={[
+                  { required: true, message: '请输入手机号' },
+                  { pattern: /^1[3-9]\d{9}$/, message: '请输入有效的11位中国大陆手机号' },
+                ]}
+                fieldProps={{
+                  size: 'large',
+                  prefix: <MobileOutlined />,
+                  placeholder: '请输入手机号（11位）',
+                  autoComplete: 'tel',
+                }}
+                extra={
+                  <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px', color: '#999' }}>
+                    手机号将作为您的登录账号，请确保手机号正确
+                  </div>
+                }
+              />
+              <ProFormText.Password
+                name="password"
+                label="密码"
+                rules={[
+                  { required: true, message: '请输入密码' },
+                  { min: 8, message: '密码长度至少 8 个字符' },
+                  { max: 128, message: '密码长度不能超过 128 个字符' },
+                ]}
+                fieldProps={{
+                  size: 'large',
+                  prefix: <LockOutlined />,
+                  placeholder: '请输入密码（至少8个字符）',
+                  autoComplete: 'new-password',
+                }}
+                extra={
+                  <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '12px', color: '#999' }}>
+                    为了账户安全，建议使用字母、数字和特殊符号的组合
+                  </div>
+                }
+              />
+              <ProFormText.Password
+                name="confirm_password"
+                label="确认密码"
+                rules={[
+                  { required: true, message: '请再次输入密码' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue('password') === value) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(new Error('两次输入的密码不一致'));
+                    },
+                  }),
+                ]}
+                fieldProps={{
+                  size: 'large',
+                  prefix: <LockOutlined />,
+                  placeholder: '请再次输入密码以确认',
+                  autoComplete: 'new-password',
+                }}
+              />
             </ProForm>
           </div>
         )}

@@ -309,7 +309,7 @@ const MRPComputationPage: React.FC = () => {
       {computationStatus === 'completed' && currentForecastId && (
         <Alert
           message="MRP运算完成"
-          description="MRP运算已完成，请查看下方结果列表。可以点击"一键生成工单和采购单"按钮生成订单。"
+          description="MRP运算已完成，请查看下方结果列表。可以点击「一键生成工单和采购单」按钮生成订单。"
           type="success"
           showIcon
           style={{ marginBottom: 16 }}

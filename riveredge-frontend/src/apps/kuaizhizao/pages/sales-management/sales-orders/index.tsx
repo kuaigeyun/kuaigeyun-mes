@@ -11,11 +11,13 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined, UploadOutlined, DownloadOutlined, SendOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, pushSalesOrderToDelivery, SalesOrder as APISalesOrder } from '../../../services/sales';
+import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, pushSalesOrderToDelivery, submitSalesOrder, importSalesOrders, exportSalesOrders, SalesOrder as APISalesOrder } from '../../../services/sales';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { downloadFile } from '../../../services/common';
 
 // 使用API服务中的接口定义
 type SalesOrder = APISalesOrder;
@@ -35,6 +37,9 @@ const SalesOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<SalesOrder | null>(null);
   const formRef = useRef<any>(null);
+
+  // 导入导出相关状态
+  const [importVisible, setImportVisible] = useState(false);
 
   // 移除模拟数据，使用真实API
 
@@ -134,6 +139,17 @@ const SalesOrdersPage: React.FC = () => {
           >
             编辑
           </Button>
+          {record.status === '草稿' && (
+            <Button
+              size="small"
+              type="link"
+              icon={<SendOutlined />}
+              onClick={() => handleSubmit(record)}
+              style={{ color: '#1890ff' }}
+            >
+              提交
+            </Button>
+          )}
           <Button
             size="small"
             danger
@@ -249,7 +265,7 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   // 处理提交表单（创建/更新）
-  const handleSubmit = async (values: any): Promise<void> => {
+  const handleSubmitForm = async (values: any): Promise<void> => {
     try {
       if (isEdit && currentOrder?.id) {
         await updateSalesOrder(currentOrder.id, values);
@@ -270,6 +286,53 @@ const SalesOrdersPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
       throw error;
+    }
+  };
+
+  // 处理提交订单（从草稿提交为待审核）
+  const handleSubmit = async (record: SalesOrder) => {
+    Modal.confirm({
+      title: '提交销售订单',
+      content: `确定要提交销售订单 "${record.order_code}" 吗？提交后将变为待审核状态。`,
+      onOk: async () => {
+        try {
+          await submitSalesOrder(record.id!);
+          messageApi.success('销售订单提交成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '提交失败');
+        }
+      },
+    });
+  };
+
+  // 处理批量导入
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await importSalesOrders(data);
+      if (result.success) {
+        const resultData = result.data || {};
+        messageApi.success(`导入成功：成功 ${resultData.success_count || 0} 条，失败 ${resultData.failure_count || 0} 条`);
+        setImportVisible(false);
+        actionRef.current?.reload();
+      } else {
+        const resultData = result.data || {};
+        messageApi.warning(`导入完成：成功 ${resultData.success_count || 0} 条，失败 ${resultData.failure_count || 0} 条`);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  // 处理批量导出
+  const handleExport = async () => {
+    try {
+      const blob = await exportSalesOrders();
+      const filename = `销售订单_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
     }
   };
 
@@ -344,6 +407,20 @@ const SalesOrdersPage: React.FC = () => {
               onClick={handleCreate}
             >
               新建订单
+            </Button>,
+            <Button
+              key="import"
+              icon={<UploadOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              批量导入
+            </Button>,
+            <Button
+              key="export"
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+            >
+              批量导出
             </Button>,
           ]}
           scroll={{ x: 1200 }}
@@ -531,6 +608,27 @@ const SalesOrdersPage: React.FC = () => {
             </div>
           ) : null
         }
+      />
+
+      {/* 批量导入弹窗 */}
+      <UniImport
+        visible={importVisible}
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        title="批量导入销售订单"
+        headers={[
+          '客户名称',
+          '订单日期',
+          '交货日期',
+          '订单类型',
+          '发货方式',
+          '收货地址',
+          '付款条件',
+          '备注',
+        ]}
+        sampleData={[
+          ['客户A', '2025-01-15', '2025-02-15', 'MTO', '快递', '北京市朝阳区xxx', '货到付款', '备注信息'],
+        ]}
       />
     </>
   );

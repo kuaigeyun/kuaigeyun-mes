@@ -145,8 +145,6 @@ class PayableService(AppBaseService[Payable]):
             updated_payable = await self.get_payable_by_id(tenant_id, payable_id)
             return updated_payable
 
-    @staticmethod
-
 
 class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
     """采购发票服务"""

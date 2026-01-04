@@ -94,10 +94,10 @@ export async function registerPersonal(data: PersonalRegisterRequest): Promise<P
  */
 export interface OrganizationRegisterRequest {
   tenant_name: string;
-  tenant_domain?: string;
-  username: string;
-  email?: string;
+  phone: string;
   password: string;
+  tenant_domain?: string;
+  email?: string;
   full_name?: string;
 }
 

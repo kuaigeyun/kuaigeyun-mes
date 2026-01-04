@@ -56,19 +56,30 @@ class ApplicationRouteManager:
             logger.info(f"应用 {app_code} 已存在路由，先移除旧路由")
             self.unregister_app_routes(app_code)
 
+        # 构建应用路由前缀：/api/v1/apps/{app_code}
+        app_prefix = f"{prefix}/apps/{app_code}"
+
         # 注册新路由
         registered = []
         for router in routers:
             try:
-                logger.debug(f"📝 正在注册路由器，prefix={router.prefix}, tags={router.tags}")
-                self.app.include_router(router, prefix=prefix)
+                # 如果router已经有prefix，需要合并
+                router_prefix = router.prefix if router.prefix else ""
+                # 如果router的prefix已经包含/apps/{app_code}，则不再重复添加
+                if f"/apps/{app_code}" in router_prefix:
+                    final_prefix = router_prefix
+                else:
+                    final_prefix = app_prefix
+                
+                logger.debug(f"📝 正在注册路由器，final_prefix={final_prefix}, router.prefix={router_prefix}, tags={router.tags}")
+                self.app.include_router(router, prefix=final_prefix)
                 registered.append(router)
-                logger.debug(f"✅ 注册应用 {app_code} 的路由: {router.prefix}")
+                logger.debug(f"✅ 注册应用 {app_code} 的路由: {app_prefix}")
                 # 检查路由是否真的被添加了
-                route_count = len([route for route in self.app.routes if hasattr(route, 'path') and route.path.startswith(prefix)])
-                logger.debug(f"📊 当前应用路由数量（以 {prefix} 开头）: {route_count}")
-                # 打印所有以 prefix 开头的路由
-                matching_routes = [route.path for route in self.app.routes if hasattr(route, 'path') and route.path.startswith(prefix)]
+                route_count = len([route for route in self.app.routes if hasattr(route, 'path') and route.path.startswith(app_prefix)])
+                logger.debug(f"📊 当前应用路由数量（以 {app_prefix} 开头）: {route_count}")
+                # 打印所有以 app_prefix 开头的路由
+                matching_routes = [route.path for route in self.app.routes if hasattr(route, 'path') and route.path.startswith(app_prefix)]
                 if matching_routes:
                     logger.debug(f"📋 匹配的路由路径: {matching_routes[:5]}")  # 只打印前5个
             except Exception as e:
@@ -79,9 +90,9 @@ class ApplicationRouteManager:
             self._registered_routes[app_code] = registered
             self._route_registry[app_code] = {
                 'routers': routers,
-                'prefix': prefix
+                'prefix': app_prefix
             }
-            logger.info(f"✅ 应用 {app_code} 路由注册完成，共注册 {len(registered)} 个路由")
+            logger.info(f"✅ 应用 {app_code} 路由注册完成，共注册 {len(registered)} 个路由，前缀: {app_prefix}")
         else:
             logger.warning(f"⚠️ 应用 {app_code} 没有成功注册任何路由")
     

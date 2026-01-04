@@ -169,22 +169,36 @@ class OrganizationRegisterRequest(BaseModel):
     组织注册请求 Schema
     
     用于组织注册的请求数据（包含组织信息和管理员信息）。
+    极简注册表单：仅需组织名称、手机号、密码。
+    手机号即账号，自动作为用户名。
     
     Attributes:
         tenant_name: 组织名称（必填）
-        tenant_domain: 组织域名（可选，留空则自动生成8位随机域名）
-        username: 管理员用户名（必填，3-50 字符）
-        email: 管理员邮箱（可选，符合中国用户使用习惯）
+        phone: 手机号（必填，11位中国大陆手机号，自动作为登录账号）
         password: 管理员密码（必填，最少 8 字符）
+        tenant_domain: 组织域名（可选，留空则自动生成8位随机域名）
+        email: 管理员邮箱（可选，用于找回密码）
         full_name: 管理员全名（可选）
     """
     
     tenant_name: str = Field(..., min_length=1, max_length=100, description="组织名称")
-    tenant_domain: Optional[str] = Field(None, max_length=100, description="组织域名（可选，留空则自动生成8位随机域名，格式：riveredge.cn/xxxxx）")
-    username: str = Field(..., min_length=3, max_length=50, description="管理员用户名（3-50 字符）")
-    email: Optional[str] = Field(None, description="管理员邮箱（可选，符合中国用户使用习惯）")
+    phone: str = Field(..., pattern=r'^1[3-9]\d{9}$', description="手机号（必填，11位中国大陆手机号，自动作为登录账号）")
     password: str = Field(..., min_length=8, max_length=100, description="管理员密码（最少 8 字符）")
+    tenant_domain: Optional[str] = Field(None, max_length=100, description="组织域名（可选，留空则自动生成8位随机域名，格式：riveredge.cn/xxxxx）")
+    email: Optional[str] = Field(None, description="管理员邮箱（可选，用于找回密码）")
     full_name: Optional[str] = Field(None, max_length=100, description="管理员全名（可选）")
+    
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        """
+        验证邮箱字段
+        
+        如果邮箱为空字符串，则转换为 None（非必填字段）
+        """
+        if v is None or (isinstance(v, str) and v.strip() == ''):
+            return None
+        return v
 
 
 class TenantJoinRequest(BaseModel):

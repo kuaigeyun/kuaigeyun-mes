@@ -17,12 +17,12 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     升级：删除kuaizhizao APP中的BOM管理表
     
     删除以下表：
-    - apps_kuaizhizao_bill_of_materials_item (明细表，先删除)
+    - apps_kuaizhizao_bill_of_materials_items (明细表，先删除)
     - apps_kuaizhizao_bill_of_materials (主表)
     """
     return """
     -- 删除BOM明细表（先删除明细表，因为可能有外键依赖）
-    DROP TABLE IF EXISTS "apps_kuaizhizao_bill_of_materials_item" CASCADE;
+    DROP TABLE IF EXISTS "apps_kuaizhizao_bill_of_materials_items" CASCADE;
     
     -- 删除BOM主表
     DROP TABLE IF EXISTS "apps_kuaizhizao_bill_of_materials" CASCADE;

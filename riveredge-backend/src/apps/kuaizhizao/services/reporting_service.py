@@ -63,8 +63,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 验证工单是否存在且状态正确
             work_order = await WorkOrder.get_or_none(
                 id=reporting_data.work_order_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
+                tenant_id=tenant_id
             )
 
             if not work_order:

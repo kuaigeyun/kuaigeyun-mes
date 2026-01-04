@@ -42,7 +42,7 @@ class PayableBase(BaseSchema):
 
 class PayableCreate(PayableBase):
     """应付单创建schema"""
-    pass
+    payable_code: Optional[str] = Field(None, max_length=50, description="应付单编码（可选，如果不提供则自动生成）")
 
 
 class PayableUpdate(PayableBase):
@@ -149,7 +149,7 @@ class ReceivableBase(BaseSchema):
 
 class ReceivableCreate(ReceivableBase):
     """应收单创建schema"""
-    pass
+    receivable_code: Optional[str] = Field(None, max_length=50, description="应收单编码（可选，如果不提供则自动生成）")
 
 
 class ReceivableUpdate(ReceivableBase):

@@ -24,6 +24,9 @@ from apps.kuaizhizao.models.mrp_result import MRPResult
 from apps.kuaizhizao.models.lrp_result import LRPResult
 from apps.kuaizhizao.models.payable import Payable
 from apps.kuaizhizao.models.receivable import Receivable
+from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+from apps.kuaizhizao.models.process_inspection import ProcessInspection
+from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -46,6 +49,9 @@ class DocumentRelationService:
         "purchase_receipt": {"model": PurchaseReceipt, "code_field": "receipt_code", "name_field": None},
         "payable": {"model": Payable, "code_field": "payable_code", "name_field": None},
         "receivable": {"model": Receivable, "code_field": "receivable_code", "name_field": None},
+        "incoming_inspection": {"model": IncomingInspection, "code_field": "inspection_code", "name_field": None},
+        "process_inspection": {"model": ProcessInspection, "code_field": "inspection_code", "name_field": None},
+        "finished_goods_inspection": {"model": FinishedGoodsInspection, "code_field": "inspection_code", "name_field": None},
     }
 
     async def get_document_relations(
@@ -125,6 +131,21 @@ class DocumentRelationService:
         elif document_type == "receivable":
             # 应收单的上游：销售出库单
             upstream_documents = await self._get_receivable_upstream(tenant_id, document_id)
+            downstream_documents = []
+
+        elif document_type == "incoming_inspection":
+            # 来料检验单的上游：采购入库单
+            upstream_documents = await self._get_incoming_inspection_upstream(tenant_id, document_id)
+            downstream_documents = []
+
+        elif document_type == "process_inspection":
+            # 过程检验单的上游：工单、报工记录
+            upstream_documents = await self._get_process_inspection_upstream(tenant_id, document_id)
+            downstream_documents = []
+
+        elif document_type == "finished_goods_inspection":
+            # 成品检验单的上游：工单、成品入库单
+            upstream_documents = await self._get_finished_goods_inspection_upstream(tenant_id, document_id)
             downstream_documents = []
 
         elif document_type == "sales_delivery":
@@ -529,6 +550,138 @@ class DocumentRelationService:
                         "status": purchase_order.status,
                         "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
                     })
+
+        return upstream
+
+    async def _get_incoming_inspection_upstream(
+        self,
+        tenant_id: int,
+        inspection_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取来料检验单的上游单据（采购入库单）"""
+        inspection = await IncomingInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+        if not inspection:
+            return []
+
+        upstream = []
+
+        # 关联采购入库单
+        if inspection.purchase_receipt_id:
+            receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=inspection.purchase_receipt_id)
+            if receipt:
+                upstream.append({
+                    "document_type": "purchase_receipt",
+                    "document_id": receipt.id,
+                    "document_code": receipt.receipt_code,
+                    "document_name": None,
+                    "status": receipt.status,
+                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                })
+
+                # 继续向上追溯采购单
+                purchase_order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=receipt.purchase_order_id)
+                if purchase_order:
+                    upstream.append({
+                        "document_type": "purchase_order",
+                        "document_id": purchase_order.id,
+                        "document_code": purchase_order.order_code,
+                        "document_name": purchase_order.order_name if hasattr(purchase_order, 'order_name') else None,
+                        "status": purchase_order.status,
+                        "created_at": purchase_order.created_at.isoformat() if purchase_order.created_at else None
+                    })
+
+        return upstream
+
+    async def _get_process_inspection_upstream(
+        self,
+        tenant_id: int,
+        inspection_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取过程检验单的上游单据（工单、报工记录）"""
+        inspection = await ProcessInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+        if not inspection:
+            return []
+
+        upstream = []
+
+        # 关联工单
+        if inspection.work_order_id:
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=inspection.work_order_id)
+            if work_order:
+                upstream.append({
+                    "document_type": "work_order",
+                    "document_id": work_order.id,
+                    "document_code": work_order.code,
+                    "document_name": work_order.name,
+                    "status": work_order.status,
+                    "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+                })
+
+        # 关联报工记录
+        if inspection.work_order_id and inspection.operation_id:
+            from apps.kuaizhizao.models.reporting_record import ReportingRecord
+            reporting = await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=inspection.work_order_id,
+                operation_id=inspection.operation_id
+            ).order_by('-created_at').first()
+            
+            if reporting:
+                upstream.append({
+                    "document_type": "reporting_record",
+                    "document_id": reporting.id,
+                    "document_code": reporting.reporting_code,
+                    "document_name": None,
+                    "status": reporting.status,
+                    "created_at": reporting.created_at.isoformat() if reporting.created_at else None
+                })
+
+        return upstream
+
+    async def _get_finished_goods_inspection_upstream(
+        self,
+        tenant_id: int,
+        inspection_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取成品检验单的上游单据（工单、成品入库单）"""
+        inspection = await FinishedGoodsInspection.get_or_none(tenant_id=tenant_id, id=inspection_id)
+        if not inspection:
+            return []
+
+        upstream = []
+
+        # 关联工单
+        if inspection.work_order_id:
+            from apps.kuaizhizao.models.work_order import WorkOrder
+            work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=inspection.work_order_id)
+            if work_order:
+                upstream.append({
+                    "document_type": "work_order",
+                    "document_id": work_order.id,
+                    "document_code": work_order.code,
+                    "document_name": work_order.name,
+                    "status": work_order.status,
+                    "created_at": work_order.created_at.isoformat() if work_order.created_at else None
+                })
+
+        # 关联成品入库单
+        if inspection.work_order_id:
+            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+            receipt = await FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                work_order_id=inspection.work_order_id
+            ).order_by('-created_at').first()
+            
+            if receipt:
+                upstream.append({
+                    "document_type": "finished_goods_receipt",
+                    "document_id": receipt.id,
+                    "document_code": receipt.receipt_code,
+                    "document_name": None,
+                    "status": receipt.status,
+                    "created_at": receipt.created_at.isoformat() if receipt.created_at else None
+                })
 
         return upstream
 

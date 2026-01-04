@@ -8,12 +8,15 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Row, Col } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Row, Col, Table, Modal } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined, PlusOutlined, UploadOutlined, DownloadOutlined, FileAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { qualityApi } from '../../../services/production';
+import { qualityApi, warehouseApi } from '../../../services/production';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { downloadFile } from '../../../services/common';
 
 // 来料检验接口定义
 interface IncomingInspection {
@@ -21,17 +24,28 @@ interface IncomingInspection {
   tenant_id?: number;
   inspection_code?: string;
   purchase_receipt_id?: number;
+  purchase_receipt_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
   material_id?: number;
   material_code?: string;
   material_name?: string;
-  quantity?: number;
+  material_spec?: string;
+  material_unit?: string;
+  inspection_quantity?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
-  status?: string;
-  inspection_date?: string;
+  inspection_result?: string;
+  quality_status?: string;
   inspector_id?: number;
   inspector_name?: string;
-  certificate_number?: string;
+  inspection_time?: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  review_time?: string;
+  review_status?: string;
+  review_remarks?: string;
+  status?: string;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -50,6 +64,14 @@ const IncomingInspectionPage: React.FC = () => {
   // 详情Drawer状态
   const [detailVisible, setDetailVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<IncomingInspection | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+
+  // 从采购入库单创建Modal状态
+  const [createFromReceiptModalVisible, setCreateFromReceiptModalVisible] = useState(false);
+  const createFromReceiptFormRef = useRef<any>(null);
+
+  // 批量导入状态
+  const [importVisible, setImportVisible] = useState(false);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -65,9 +87,9 @@ const IncomingInspectionPage: React.FC = () => {
     setInspectionModalVisible(true);
     // 设置表单初始值
     formRef.current?.setFieldsValue({
-      qualifiedQuantity: record.quantity,
-      unqualifiedQuantity: 0,
-      remarks: '',
+      qualified_quantity: record.inspection_quantity || 0,
+      unqualified_quantity: 0,
+      notes: '',
     });
   };
 
@@ -76,9 +98,9 @@ const IncomingInspectionPage: React.FC = () => {
     try {
       if (currentInspection?.id) {
         await qualityApi.incomingInspection.conduct(currentInspection.id.toString(), {
-          qualified_quantity: values.qualifiedQuantity,
-          unqualified_quantity: values.unqualifiedQuantity,
-          notes: values.remarks,
+          qualified_quantity: values.qualified_quantity,
+          unqualified_quantity: values.unqualified_quantity,
+          notes: values.notes,
         });
       }
 
@@ -98,8 +120,57 @@ const IncomingInspectionPage: React.FC = () => {
       const detail = await qualityApi.incomingInspection.get(record.id!.toString());
       setInspectionDetail(detail);
       setDetailVisible(true);
+      
+      // 获取单据关联
+      const relations = await getDocumentRelations('incoming_inspection', record.id!);
+      setDocumentRelations(relations);
     } catch (error) {
       messageApi.error('获取检验单详情失败');
+    }
+  };
+
+  // 从采购入库单创建来料检验单
+  const handleCreateFromReceipt = () => {
+    setCreateFromReceiptModalVisible(true);
+  };
+
+  const handleCreateFromReceiptSubmit = async (values: any) => {
+    try {
+      await qualityApi.incomingInspection.createFromPurchaseReceipt(values.purchase_receipt_id.toString());
+      messageApi.success('成功创建来料检验单');
+      setCreateFromReceiptModalVisible(false);
+      createFromReceiptFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建来料检验单失败');
+    }
+  };
+
+  // 批量导入
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await qualityApi.incomingInspection.import(data);
+      if (result.success) {
+        messageApi.success(result.message || '导入成功');
+        setImportVisible(false);
+        actionRef.current?.reload();
+      } else {
+        messageApi.error(result.message || '导入失败');
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  // 批量导出
+  const handleExport = async () => {
+    try {
+      const blob = await qualityApi.incomingInspection.export();
+      const filename = `来料检验单_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadFile(blob, filename);
+      messageApi.success('导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
     }
   };
 
@@ -124,10 +195,23 @@ const IncomingInspectionPage: React.FC = () => {
       ellipsis: true,
     },
     {
+      title: '采购入库单号',
+      dataIndex: 'purchase_receipt_code',
+      width: 140,
+      ellipsis: true,
+    },
+    {
+      title: '供应商',
+      dataIndex: 'supplier_name',
+      width: 150,
+      ellipsis: true,
+    },
+    {
       title: '检验数量',
-      dataIndex: 'quantity',
+      dataIndex: 'inspection_quantity',
       width: 100,
       align: 'right',
+      render: (text) => text || 0,
     },
     {
       title: '合格数量',
@@ -162,9 +246,24 @@ const IncomingInspectionPage: React.FC = () => {
       width: 100,
     },
     {
-      title: '检验日期',
-      dataIndex: 'inspection_date',
-      width: 120,
+      title: '检验结果',
+      dataIndex: 'inspection_result',
+      width: 100,
+      render: (text) => {
+        const resultMap: Record<string, { text: string; color: string }> = {
+          '待检验': { text: '待检验', color: 'default' },
+          '合格': { text: '合格', color: 'success' },
+          '不合格': { text: '不合格', color: 'error' },
+          '部分合格': { text: '部分合格', color: 'warning' },
+        };
+        const config = resultMap[text as string] || { text: text || '待检验', color: 'default' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
+    {
+      title: '检验时间',
+      dataIndex: 'inspection_time',
+      width: 160,
       valueType: 'dateTime',
     },
     {
@@ -174,7 +273,7 @@ const IncomingInspectionPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          {record.inspectionResult === 'pending' ? (
+          {record.status === '待检验' || record.inspection_result === '待检验' ? (
             <Button
               size="small"
               type="primary"
@@ -192,14 +291,6 @@ const IncomingInspectionPage: React.FC = () => {
               详情
             </Button>
           )}
-          <Button
-            size="small"
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => messageApi.info('编辑功能开发中...')}
-          >
-            编辑
-          </Button>
         </Space>
       ),
     },
@@ -245,12 +336,17 @@ const IncomingInspectionPage: React.FC = () => {
               const response = await qualityApi.incomingInspection.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                ...params,
+                status: params.status,
+                quality_status: params.quality_status,
+                supplier_id: params.supplier_id,
+                material_id: params.material_id,
               });
+              // 后端返回的是数组
+              const data = Array.isArray(response) ? response : (response.data || []);
               return {
-                data: response.data,
-                success: response.success,
-                total: response.total,
+                data: data,
+                success: true,
+                total: data.length,
               };
             } catch (error) {
               messageApi.error('获取来料检验列表失败');
@@ -267,13 +363,26 @@ const IncomingInspectionPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <Button
-              key="batch-inspect"
+              key="create-from-receipt"
               type="primary"
-              icon={<CheckCircleOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={() => messageApi.info('批量检验功能开发中...')}
+              icon={<FileAddOutlined />}
+              onClick={handleCreateFromReceipt}
             >
-              批量检验
+              从采购入库单创建
+            </Button>,
+            <Button
+              key="import"
+              icon={<UploadOutlined />}
+              onClick={() => setImportVisible(true)}
+            >
+              批量导入
+            </Button>,
+            <Button
+              key="export"
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+            >
+              批量导出
             </Button>,
           ]}
           scroll={{ x: 1400 }}
@@ -287,8 +396,8 @@ const IncomingInspectionPage: React.FC = () => {
         isEdit={false}
         initialValues={
           currentInspection ? {
-            qualifiedQuantity: currentInspection.quantity,
-            unqualifiedQuantity: 0,
+            qualified_quantity: currentInspection.inspection_quantity || 0,
+            unqualified_quantity: 0,
           } : {}
         }
         width={MODAL_CONFIG.SMALL_WIDTH}
@@ -306,13 +415,13 @@ const IncomingInspectionPage: React.FC = () => {
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
               <Col span={24}>
-                <strong>检验数量：</strong>{currentInspection.quantity}
+                <strong>检验数量：</strong>{currentInspection.inspection_quantity}
               </Col>
             </Row>
           </Card>
         )}
         <ProFormDigit
-          name="qualifiedQuantity"
+          name="qualified_quantity"
           label="合格数量"
           placeholder="请输入合格数量"
           rules={[
@@ -321,18 +430,18 @@ const IncomingInspectionPage: React.FC = () => {
             ({ getFieldValue }) => ({
               validator(_, value) {
                 if (!currentInspection) return Promise.resolve();
-                const unqualifiedQuantity = getFieldValue('unqualifiedQuantity') || 0;
-                if (value + unqualifiedQuantity > currentInspection.quantity) {
+                const unqualifiedQuantity = getFieldValue('unqualified_quantity') || 0;
+                if (value + unqualifiedQuantity > (currentInspection.inspection_quantity || 0)) {
                   return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
                 }
                 return Promise.resolve();
               },
             }),
           ]}
-          fieldProps={{ precision: 0 }}
+          fieldProps={{ precision: 2 }}
         />
         <ProFormDigit
-          name="unqualifiedQuantity"
+          name="unqualified_quantity"
           label="不合格数量"
           placeholder="请输入不合格数量"
           rules={[
@@ -341,18 +450,18 @@ const IncomingInspectionPage: React.FC = () => {
             ({ getFieldValue }) => ({
               validator(_, value) {
                 if (!currentInspection) return Promise.resolve();
-                const qualifiedQuantity = getFieldValue('qualifiedQuantity') || 0;
-                if (qualifiedQuantity + value > currentInspection.quantity) {
+                const qualifiedQuantity = getFieldValue('qualified_quantity') || 0;
+                if (qualifiedQuantity + value > (currentInspection.inspection_quantity || 0)) {
                   return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
                 }
                 return Promise.resolve();
               },
             }),
           ]}
-          fieldProps={{ precision: 0 }}
+          fieldProps={{ precision: 2 }}
         />
         <ProFormTextArea
-          name="remarks"
+          name="notes"
           label="检验备注"
           placeholder="请输入检验详情、发现的问题或处理意见"
           fieldProps={{ rows: 3 }}
@@ -368,6 +477,53 @@ const IncomingInspectionPage: React.FC = () => {
         customContent={
           inspectionDetail ? (
             <div style={{ padding: '16px 0' }}>
+              {/* 单据关联展示 */}
+              {documentRelations && (
+                <Card title="单据关联" style={{ marginBottom: 16 }}>
+                  {documentRelations.upstream_count > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        上游单据 ({documentRelations.upstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '关联时间', dataIndex: 'relation_time', width: 160 },
+                        ]}
+                        dataSource={documentRelations.upstream_documents}
+                        pagination={false}
+                        rowKey="id"
+                      />
+                    </div>
+                  )}
+                  {documentRelations.downstream_count > 0 && (
+                    <div>
+                      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                        下游单据 ({documentRelations.downstream_count})
+                      </div>
+                      <Table
+                        size="small"
+                        columns={[
+                          { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                          { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                          { title: '关联时间', dataIndex: 'relation_time', width: 160 },
+                        ]}
+                        dataSource={documentRelations.downstream_documents}
+                        pagination={false}
+                        rowKey="id"
+                      />
+                    </div>
+                  )}
+                  {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
+                    <div style={{ textAlign: 'center', color: '#999', padding: '20px 0' }}>
+                      暂无关联单据
+                    </div>
+                  )}
+                </Card>
+              )}
+
               <Card title="基本信息" style={{ marginBottom: 16 }}>
                 <Row gutter={16}>
                   <Col span={12}>
@@ -384,13 +540,21 @@ const IncomingInspectionPage: React.FC = () => {
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={8}>
-                    <strong>检验数量：</strong>{inspectionDetail.quantity}
+                    <strong>检验数量：</strong>{inspectionDetail.inspection_quantity || 0}
                   </Col>
                   <Col span={8}>
                     <strong>合格数量：</strong>{inspectionDetail.qualified_quantity || 0}
                   </Col>
                   <Col span={8}>
                     <strong>不合格数量：</strong>{inspectionDetail.unqualified_quantity || 0}
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={12}>
+                    <strong>采购入库单号：</strong>{inspectionDetail.purchase_receipt_code}
+                  </Col>
+                  <Col span={12}>
+                    <strong>供应商：</strong>{inspectionDetail.supplier_name}
                   </Col>
                 </Row>
               </Card>
@@ -408,17 +572,30 @@ const IncomingInspectionPage: React.FC = () => {
                     </Tag>
                   </Col>
                   <Col span={12}>
-                    <strong>证书编号：</strong>{inspectionDetail.certificate_number || '无'}
+                    <strong>质量状态：</strong>
+                    <Tag color={inspectionDetail.quality_status === '合格' ? 'success' : 'error'}>
+                      {inspectionDetail.quality_status || '待判定'}
+                    </Tag>
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={12}>
-                    <strong>检验员：</strong>{inspectionDetail.inspector_name}
+                    <strong>检验员：</strong>{inspectionDetail.inspector_name || '未指定'}
                   </Col>
                   <Col span={12}>
-                    <strong>检验日期：</strong>{inspectionDetail.inspection_date}
+                    <strong>检验时间：</strong>{inspectionDetail.inspection_time || '未检验'}
                   </Col>
                 </Row>
+                {inspectionDetail.reviewer_name && (
+                  <Row gutter={16} style={{ marginTop: 8 }}>
+                    <Col span={12}>
+                      <strong>审核人：</strong>{inspectionDetail.reviewer_name}
+                    </Col>
+                    <Col span={12}>
+                      <strong>审核时间：</strong>{inspectionDetail.review_time || '未审核'}
+                    </Col>
+                  </Row>
+                )}
                 {inspectionDetail.notes && (
                   <Row style={{ marginTop: 8 }}>
                     <Col span={24}>
@@ -431,8 +608,60 @@ const IncomingInspectionPage: React.FC = () => {
           ) : null
         }
       />
+
+      {/* 从采购入库单创建Modal */}
+      <FormModalTemplate
+        title="从采购入库单创建来料检验单"
+        open={createFromReceiptModalVisible}
+        onClose={() => {
+          setCreateFromReceiptModalVisible(false);
+          createFromReceiptFormRef.current?.resetFields();
+        }}
+        onFinish={handleCreateFromReceiptSubmit}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={createFromReceiptFormRef}
+      >
+        <ProFormSelect
+          name="purchase_receipt_id"
+          label="选择采购入库单"
+          placeholder="请选择采购入库单"
+          rules={[{ required: true, message: '请选择采购入库单' }]}
+          request={async () => {
+            try {
+              const response = await warehouseApi.purchaseReceipt.list({
+                skip: 0,
+                limit: 1000,
+                status: '已入库',
+              });
+              const data = Array.isArray(response) ? response : (response.data || []);
+              return data.map((receipt: any) => ({
+                label: `${receipt.receipt_code} - ${receipt.supplier_name}`,
+                value: receipt.id,
+              }));
+            } catch (error) {
+              return [];
+            }
+          }}
+        />
+      </FormModalTemplate>
+
+      {/* 批量导入 */}
+      <UniImport
+        visible={importVisible}
+        onClose={() => setImportVisible(false)}
+        onImport={handleImport}
+        columns={[
+          { title: '采购入库单号', dataIndex: 'purchase_receipt_code', required: true },
+          { title: '物料编码', dataIndex: 'material_code', required: true },
+          { title: '检验数量', dataIndex: 'inspection_quantity', required: true },
+          { title: '合格数量', dataIndex: 'qualified_quantity' },
+          { title: '不合格数量', dataIndex: 'unqualified_quantity' },
+          { title: '备注', dataIndex: 'notes' },
+        ]}
+      />
     </ListPageTemplate>
   );
 };
 
 export default IncomingInspectionPage;
+

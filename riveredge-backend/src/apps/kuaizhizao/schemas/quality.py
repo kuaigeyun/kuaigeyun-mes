@@ -19,17 +19,17 @@ class IncomingInspectionBase(BaseSchema):
     """来料检验单基础schema"""
     inspection_code: str = Field(..., max_length=50, description="检验单编码")
     purchase_receipt_id: int = Field(..., description="采购入库单ID")
-    purchase_receipt_code: str = Field(..., max_length=50, description="采购入库单编码")
-    supplier_id: int = Field(..., description="供应商ID")
-    supplier_name: str = Field(..., max_length=200, description="供应商名称")
-    material_id: int = Field(..., description="物料ID")
-    material_code: str = Field(..., max_length=50, description="物料编码")
-    material_name: str = Field(..., max_length=200, description="物料名称")
+    purchase_receipt_code: Optional[str] = Field(None, max_length=50, description="采购入库单编码")
+    supplier_id: Optional[int] = Field(None, description="供应商ID")
+    supplier_name: Optional[str] = Field(None, max_length=200, description="供应商名称")
+    material_id: Optional[int] = Field(None, description="物料ID（如果使用items则不需要）")
+    material_code: Optional[str] = Field(None, max_length=50, description="物料编码（如果使用items则不需要）")
+    material_name: Optional[str] = Field(None, max_length=200, description="物料名称（如果使用items则不需要）")
     material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
-    material_unit: str = Field(..., max_length=20, description="物料单位")
-    inspection_quantity: float = Field(..., gt=0, description="检验数量")
-    qualified_quantity: float = Field(0, ge=0, description="合格数量")
-    unqualified_quantity: float = Field(0, ge=0, description="不合格数量")
+    material_unit: Optional[str] = Field(None, max_length=20, description="物料单位")
+    inspection_quantity: Optional[float] = Field(None, gt=0, description="检验数量（如果使用items则不需要）")
+    qualified_quantity: Optional[float] = Field(None, ge=0, description="合格数量（如果使用items则不需要）")
+    unqualified_quantity: Optional[float] = Field(None, ge=0, description="不合格数量（如果使用items则不需要）")
     inspection_result: str = Field("待检验", max_length=20, description="检验结果")
     quality_status: str = Field("合格", max_length=20, description="质量状态")
     inspector_id: Optional[int] = Field(None, description="检验人ID")
@@ -54,9 +54,20 @@ class IncomingInspectionBase(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
 
 
+class IncomingInspectionItemCreate(BaseSchema):
+    """来料检验单明细创建schema"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: Optional[str] = Field(None, max_length=200, description="物料名称")
+    inspection_quantity: float = Field(..., gt=0, description="检验数量")
+    qualified_quantity: float = Field(0, ge=0, description="合格数量")
+    unqualified_quantity: float = Field(0, ge=0, description="不合格数量")
+
+
 class IncomingInspectionCreate(IncomingInspectionBase):
     """来料检验单创建schema"""
-    pass
+    inspection_code: Optional[str] = Field(None, max_length=50, description="检验单编码（可选，如果不提供则自动生成）")
+    items: Optional[List[IncomingInspectionItemCreate]] = Field(None, description="检验明细列表（如果提供items，则忽略基础schema中的物料字段）")
 
 
 class IncomingInspectionUpdate(IncomingInspectionBase):

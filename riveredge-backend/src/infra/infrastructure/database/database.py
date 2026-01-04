@@ -180,8 +180,9 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型
                 "apps.kuaizhizao.models.sales_order_item",  # 销售订单明细模型
-                "apps.kuaizhizao.models.bill_of_materials",  # BOM模型
-                "apps.kuaizhizao.models.bill_of_materials_item",  # BOM明细模型
+                # BOM管理已移至master_data APP，不再需要bill_of_materials模型
+                # "apps.kuaizhizao.models.bill_of_materials",  # BOM模型
+                # "apps.kuaizhizao.models.bill_of_materials_item",  # BOM明细模型
                 "apps.kuaizhizao.models.production_plan",  # 生产计划模型
                 "apps.kuaizhizao.models.production_plan_item",  # 生产计划明细模型
                 "apps.kuaizhizao.models.mrp_result",  # MRP结果模型

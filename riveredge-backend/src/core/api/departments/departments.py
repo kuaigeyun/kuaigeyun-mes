@@ -6,6 +6,7 @@
 
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from pydantic import BaseModel, Field
 
 from core.models.department import Department
 from core.schemas.department import (
@@ -14,6 +15,7 @@ from core.schemas.department import (
     DepartmentResponse,
     DepartmentTreeResponse,
     DepartmentTreeItem,
+    DepartmentImportRequest,
 )
 from core.services.organization.department_service import DepartmentService
 from core.api.deps.deps import get_current_tenant
@@ -328,5 +330,52 @@ async def update_department_order(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
+        )
+
+
+class DepartmentImportRequestSchema(BaseModel):
+    """部门导入请求 Schema（API层）"""
+    data: List[List[Any]] = Field(..., description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）")
+
+
+@router.post("/batch-import")
+async def import_departments(
+    request: DepartmentImportRequestSchema,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入部门
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建部门。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+        
+    Raises:
+        HTTPException: 当数据格式错误或导入失败时抛出
+    """
+    try:
+        result = await DepartmentService.import_departments_from_data(
+            tenant_id=tenant_id,
+            data=request.data,
+            current_user_id=current_user.id
+        )
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}"
         )
 

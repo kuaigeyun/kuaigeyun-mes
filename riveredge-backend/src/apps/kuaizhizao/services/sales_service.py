@@ -46,13 +46,27 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "SALES_FORECAST_CODE", prefix=f"SF{today}")
 
+            # 准备创建数据，排除forecast_code（因为我们要使用生成的编码）
+            create_data = forecast_data.model_dump(exclude_unset=True, exclude={'created_by', 'forecast_code'})
+            create_data['forecast_code'] = code
+            create_data['created_by'] = created_by
+            create_data['created_by_name'] = user_info["name"]
+            
             forecast = await SalesForecast.create(
                 tenant_id=tenant_id,
-                forecast_code=code,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-                **forecast_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                **create_data
             )
+            
+            # 创建预测明细（如果提供了items）
+            items_data = forecast_data.model_dump().get('items', [])
+            if items_data:
+                for item_data in items_data:
+                    await SalesForecastItem.create(
+                        tenant_id=tenant_id,
+                        forecast_id=forecast.id,
+                        **item_data
+                    )
+            
             return SalesForecastResponse.model_validate(forecast)
 
     async def get_sales_forecast_by_id(self, tenant_id: int, forecast_id: int) -> SalesForecastResponse:
@@ -449,17 +463,45 @@ class SalesOrderService(AppBaseService[SalesOrder]):
     async def create_sales_order(self, tenant_id: int, order_data: SalesOrderCreate, created_by: int) -> SalesOrderResponse:
         """创建销售订单"""
         async with in_transaction():
+            from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+            
             user_info = await self.get_user_info(created_by)
             today = datetime.now().strftime("%Y%m%d")
             code = await self.generate_code(tenant_id, "SALES_ORDER_CODE", prefix=f"SO{today}")
 
+            # 提取items（如果存在）
+            items_data = order_data.model_dump().get('items', [])
+            
+            # 如果order_data中已包含order_code，则排除它（因为我们要使用生成的编码）
+            order_dict = order_data.model_dump(exclude_unset=True, exclude={'created_by', 'order_code', 'items'})
+            order_dict['order_code'] = code
+            
             order = await SalesOrder.create(
                 tenant_id=tenant_id,
-                order_code=code,
                 created_by=created_by,
-                created_by_name=user_info["name"],
-                **order_data.model_dump(exclude_unset=True, exclude={'created_by'})
+                created_by_name=user_info.get("name", ""),
+                **order_dict
             )
+            
+            # 创建订单明细
+            if items_data:
+                for item_data in items_data:
+                    # 处理quantity字段（可能是quantity或order_quantity）
+                    order_quantity = item_data.get('order_quantity') or item_data.get('quantity', 0)
+                    delivered_quantity = item_data.get('delivered_quantity', 0)
+                    remaining_quantity = order_quantity - delivered_quantity
+                    
+                    # 创建订单明细，排除items字段
+                    item_dict = {k: v for k, v in item_data.items() if k not in ['created_by', 'items']}
+                    item_dict['order_quantity'] = order_quantity
+                    item_dict['remaining_quantity'] = remaining_quantity
+                    
+                    await SalesOrderItem.create(
+                        tenant_id=tenant_id,
+                        sales_order_id=order.id,
+                        **item_dict
+                    )
+            
             return SalesOrderResponse.model_validate(order)
 
     async def get_sales_order_by_id(self, tenant_id: int, order_id: int) -> SalesOrderResponse:
@@ -621,12 +663,12 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             user_id=user_id or order.created_by
         )
         
-            return {
-                "order_id": order_id,
-                "order_code": order.order_code,
-                "lrp_result": lrp_result.model_dump() if hasattr(lrp_result, 'model_dump') else lrp_result,
-                "message": "LRP运算执行成功"
-            }
+        return {
+            "order_id": order_id,
+            "order_code": order.order_code,
+            "lrp_result": lrp_result.model_dump() if hasattr(lrp_result, 'model_dump') else lrp_result,
+            "message": "LRP运算执行成功"
+        }
 
     async def push_to_delivery(
         self,
@@ -792,4 +834,257 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             status=status
         )
 
-    @staticmethod
+    async def submit_order(self, tenant_id: int, order_id: int, submitted_by: int) -> SalesOrderResponse:
+        """
+        提交销售订单
+        
+        将草稿状态的销售订单提交为待审核状态
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 销售订单ID
+            submitted_by: 提交人ID
+            
+        Returns:
+            SalesOrderResponse: 更新后的销售订单
+            
+        Raises:
+            NotFoundError: 销售订单不存在
+            BusinessLogicError: 销售订单状态不是草稿
+        """
+        async with in_transaction():
+            order = await self.get_sales_order_by_id(tenant_id, order_id)
+            
+            if order.status != "草稿":
+                raise BusinessLogicError(f"只有草稿状态的销售订单才能提交，当前状态：{order.status}")
+            
+            # 更新状态为待审核
+            await SalesOrder.filter(tenant_id=tenant_id, id=order_id).update(
+                status="待审核",
+                review_status="待审核",
+                updated_by=submitted_by
+            )
+            
+            updated_order = await self.get_sales_order_by_id(tenant_id, order_id)
+            return updated_order
+
+    async def import_from_data(
+        self,
+        tenant_id: int,
+        data: List[List[Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从二维数组数据批量导入销售订单
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建销售订单。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 租户ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '客户名称': 'customer_name',
+            '*客户名称': 'customer_name',
+            'customer_name': 'customer_name',
+            '*customer_name': 'customer_name',
+            '订单日期': 'order_date',
+            '*订单日期': 'order_date',
+            'order_date': 'order_date',
+            '*order_date': 'order_date',
+            '交货日期': 'delivery_date',
+            '*交货日期': 'delivery_date',
+            'delivery_date': 'delivery_date',
+            '*delivery_date': 'delivery_date',
+            '订单类型': 'order_type',
+            'order_type': 'order_type',
+            '发货方式': 'shipping_method',
+            'shipping_method': 'shipping_method',
+            '收货地址': 'shipping_address',
+            'shipping_address': 'shipping_address',
+            '付款条件': 'payment_terms',
+            'payment_terms': 'payment_terms',
+            '备注': 'notes',
+            'notes': 'notes',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['customer_name', 'order_date', 'delivery_date']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        for row, row_idx in non_empty_rows:
+            try:
+                # 解析行数据
+                order_data = {}
+                for field, col_idx in header_index_map.items():
+                    if col_idx < len(row):
+                        value = row[col_idx]
+                        if value is not None:
+                            value_str = str(value).strip()
+                            if value_str:
+                                # 日期字段需要转换
+                                if field in ['order_date', 'delivery_date']:
+                                    try:
+                                        from datetime import datetime as dt
+                                        # 尝试多种日期格式
+                                        for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                                            try:
+                                                order_data[field] = dt.strptime(value_str, fmt).date()
+                                                break
+                                            except ValueError:
+                                                continue
+                                        else:
+                                            raise ValueError(f"日期格式错误：{value_str}")
+                                    except Exception as e:
+                                        errors.append({
+                                            "row": row_idx,
+                                            "error": f"日期格式错误：{value_str}，错误：{str(e)}"
+                                        })
+                                        failure_count += 1
+                                        break
+                                else:
+                                    order_data[field] = value_str
+                
+                # 验证必填字段
+                if not order_data.get('customer_name') or not order_data.get('order_date') or not order_data.get('delivery_date'):
+                    errors.append({
+                        "row": row_idx,
+                        "error": "客户名称、订单日期或交货日期为空"
+                    })
+                    failure_count += 1
+                    continue
+                
+                # 设置默认值
+                order_data.setdefault('order_type', 'MTO')
+                order_data.setdefault('status', '草稿')
+                order_data.setdefault('review_status', '待审核')
+                
+                # 创建销售订单
+                from apps.kuaizhizao.schemas.sales import SalesOrderCreate
+                order_create_data = SalesOrderCreate(**order_data)
+                
+                await self.create_sales_order(
+                    tenant_id=tenant_id,
+                    order_data=order_create_data,
+                    created_by=created_by
+                )
+                
+                success_count += 1
+                
+            except Exception as e:
+                errors.append({
+                    "row": row_idx,
+                    "error": f"导入失败：{str(e)}"
+                })
+                failure_count += 1
+                logger.error(f"导入销售订单失败（第{row_idx}行）：{str(e)}")
+        
+        return {
+            "success": True,
+            "message": f"导入完成：成功 {success_count} 条，失败 {failure_count} 条",
+            "data": {
+                "success_count": success_count,
+                "failure_count": failure_count,
+                "errors": errors
+            }
+        }
+
+    async def export_to_excel(
+        self,
+        tenant_id: int,
+        **filters
+    ) -> str:
+        """
+        导出销售订单到Excel文件
+        
+        Args:
+            tenant_id: 租户ID
+            **filters: 过滤条件
+            
+        Returns:
+            str: Excel文件路径
+        """
+        import csv
+        import os
+        import tempfile
+        from datetime import datetime
+        
+        # 查询所有符合条件的销售订单（不分页）
+        orders = await self.list_sales_orders(tenant_id, skip=0, limit=10000, **filters)
+        
+        # 创建导出目录
+        export_dir = os.path.join(tempfile.gettempdir(), 'riveredge_exports')
+        os.makedirs(export_dir, exist_ok=True)
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"sales_orders_{timestamp}.csv"
+        file_path = os.path.join(export_dir, filename)
+        
+        # 写入CSV文件
+        with open(file_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            
+            # 写入表头
+            writer.writerow([
+                '订单编号', '客户名称', '订单类型', '订单日期', 
+                '交货日期', '状态', '审核状态', '总数量', '总金额',
+                '发货方式', '收货地址', '付款条件', '备注', '创建时间'
+            ])
+            
+            # 写入数据
+            for order in orders:
+                writer.writerow([
+                    order.order_code,
+                    order.customer_name,
+                    order.order_type,
+                    order.order_date.strftime('%Y-%m-%d') if order.order_date else '',
+                    order.delivery_date.strftime('%Y-%m-%d') if order.delivery_date else '',
+                    order.status,
+                    order.review_status,
+                    str(order.total_quantity) if order.total_quantity else '0',
+                    str(order.total_amount) if order.total_amount else '0',
+                    order.shipping_method or '',
+                    order.shipping_address or '',
+                    order.payment_terms or '',
+                    order.notes or '',
+                    order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else '',
+                ])
+        
+        return file_path

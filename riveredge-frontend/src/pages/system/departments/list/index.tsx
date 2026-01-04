@@ -8,11 +8,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col, Input, Divider, theme } from 'antd';
+import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card, Table, Statistic, Row, Col, Input, Divider, theme, List, Typography } from 'antd';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined, UserOutlined, SearchOutlined, ReloadOutlined, ImportOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
+import { UniImport } from '../../../../components/uni-import';
 import {
   getDepartmentTree,
   getDepartmentByUuid,
@@ -20,6 +21,7 @@ import {
   updateDepartment,
   deleteDepartment,
   updateDepartmentOrder,
+  importDepartments,
   Department,
   DepartmentTreeItem,
   CreateDepartmentData,
@@ -57,6 +59,9 @@ const DepartmentListPage: React.FC = () => {
   
   // 搜索相关状态
   const [searchKeyword, setSearchKeyword] = useState('');
+  
+  // 批量导入相关状态
+  const [importVisible, setImportVisible] = useState(false);
 
   /**
    * 加载部门树
@@ -156,6 +161,51 @@ const DepartmentListPage: React.FC = () => {
   useEffect(() => {
     loadDepartmentTree();
   }, []);
+
+  /**
+   * 处理批量导入
+   */
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      messageApi.warning('导入数据为空');
+      return;
+    }
+
+    try {
+      const result = await importDepartments(data);
+      
+      Modal.info({
+        title: '导入完成',
+        width: 600,
+        content: (
+          <div>
+            <p>成功：{result.success_count} 条</p>
+            <p>失败：{result.failure_count} 条</p>
+            {result.errors.length > 0 && (
+              <List
+                size="small"
+                dataSource={result.errors}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Typography.Text type="danger">
+                      第 {item.row} 行：{item.error}
+                    </Typography.Text>
+                  </List.Item>
+                )}
+              />
+            )}
+          </div>
+        ),
+      });
+
+      if (result.success_count > 0) {
+        setImportVisible(false);
+        loadDepartmentTree();
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '导入失败');
+    }
+  };
 
   /**
    * 处理树节点选择
@@ -842,6 +892,16 @@ const DepartmentListPage: React.FC = () => {
             </div>
           </>
         ) : null}
+      />
+
+      {/* 批量导入 Modal */}
+      <UniImport
+        visible={importVisible}
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        title="批量导入部门"
+        headers={['部门名称', '部门代码', '父部门', '负责人', '描述', '排序', '启用']}
+        exampleRow={['技术部', 'TECH', '', '', '技术研发部门', '1', '是']}
       />
     </>
   );
