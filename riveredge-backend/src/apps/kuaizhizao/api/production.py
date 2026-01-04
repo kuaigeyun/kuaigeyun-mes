@@ -23,6 +23,7 @@ from apps.kuaizhizao.services.material_binding_service import MaterialBindingSer
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
+from apps.kuaizhizao.services.packing_binding_service import PackingBindingService
 
 # 初始化服务实例
 reporting_service = ReportingService()
@@ -31,6 +32,7 @@ stocktaking_service = StocktakingService()
 inventory_analysis_service = InventoryAnalysisService()
 inventory_alert_rule_service = InventoryAlertRuleService()
 inventory_alert_service = InventoryAlertService()
+packing_binding_service = PackingBindingService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
