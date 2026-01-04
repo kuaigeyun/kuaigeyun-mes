@@ -699,6 +699,13 @@ const WorkOrdersPage: React.FC = () => {
             >
               新建工单
             </Button>,
+            <Button
+              key="batchPriority"
+              onClick={handleBatchSetPriority}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量设置优先级
+            </Button>,
           ]}
           onDelete={handleDelete}
         />
