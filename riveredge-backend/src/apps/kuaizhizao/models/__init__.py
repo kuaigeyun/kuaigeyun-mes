@@ -11,6 +11,7 @@ from .rework_order import ReworkOrder
 from .outsource_order import OutsourceOrder
 from .work_order_operation import WorkOrderOperation
 from .scrap_record import ScrapRecord
+from .defect_record import DefectRecord
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -58,6 +59,7 @@ __all__ = [
     'OutsourceOrder',
     'WorkOrderOperation',
     'ScrapRecord',
+    'DefectRecord',
 
     # 仓储管理模块
     'ProductionPicking',
