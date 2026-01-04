@@ -53,6 +53,7 @@ __all__ = [
     'WorkOrder',
     'ReportingRecord',
     'ReworkOrder',
+    'WorkOrderOperation',
 
     # 仓储管理模块
     'ProductionPicking',
