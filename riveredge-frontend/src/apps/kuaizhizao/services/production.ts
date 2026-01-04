@@ -60,6 +60,16 @@ export const workOrderApi = {
   unfreeze: async (id: string, data?: { unfreeze_reason?: string }) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/unfreeze`, { method: 'POST', data: data || {} });
   },
+
+  // 设置工单优先级
+  setPriority: async (id: string, data: { priority: string }) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/priority`, { method: 'PUT', data });
+  },
+
+  // 批量设置工单优先级
+  batchSetPriority: async (data: { work_order_ids: number[]; priority: string }) => {
+    return apiRequest('/apps/kuaizhizao/work-orders/batch-priority', { method: 'PUT', data });
+  },
 };
 
 // 返工单相关接口

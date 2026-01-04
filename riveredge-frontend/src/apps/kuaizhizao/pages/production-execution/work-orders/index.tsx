@@ -267,6 +267,17 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: '优先级',
       dataIndex: 'priority',
+      width: 100,
+      render: (text: string) => {
+        const priorityMap: Record<string, { text: string; color: string }> = {
+          'low': { text: '低', color: 'default' },
+          'normal': { text: '正常', color: 'blue' },
+          'high': { text: '高', color: 'orange' },
+          'urgent': { text: '紧急', color: 'red' },
+        };
+        const config = priorityMap[text || 'normal'] || { text: text || '正常', color: 'blue' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
     },
     {
       title: '计划开始时间',
