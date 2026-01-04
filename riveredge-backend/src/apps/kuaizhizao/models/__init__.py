@@ -14,6 +14,7 @@ from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
 from .material_binding import MaterialBinding
 from .stocktaking import Stocktaking, StocktakingItem
+from .inventory_alert import InventoryAlertRule, InventoryAlert
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -65,6 +66,8 @@ __all__ = [
     'MaterialBinding',
     'Stocktaking',
     'StocktakingItem',
+    'InventoryAlertRule',
+    'InventoryAlert',
 
     # 仓储管理模块
     'ProductionPicking',
