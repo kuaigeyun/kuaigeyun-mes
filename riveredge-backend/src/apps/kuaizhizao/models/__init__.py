@@ -8,6 +8,7 @@
 from .work_order import WorkOrder
 from .reporting_record import ReportingRecord
 from .rework_order import ReworkOrder
+from .outsource_order import OutsourceOrder
 from .work_order_operation import WorkOrderOperation
 
 # 仓储管理模块
@@ -53,6 +54,7 @@ __all__ = [
     'WorkOrder',
     'ReportingRecord',
     'ReworkOrder',
+    'OutsourceOrder',
     'WorkOrderOperation',
 
     # 仓储管理模块
