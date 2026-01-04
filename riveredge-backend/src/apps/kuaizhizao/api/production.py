@@ -1473,6 +1473,68 @@ async def confirm_finished_goods_receipt(
     )
 
 
+@router.post("/finished-goods-receipts/{receipt_id}/packing-binding", response_model=PackingBindingResponse, summary="从成品入库单创建装箱绑定")
+async def create_packing_binding_from_receipt(
+    receipt_id: int,
+    binding_data: PackingBindingCreateFromReceipt,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    从成品入库单创建装箱绑定
+
+    在成品入库单中绑定装箱信息，包括产品序列号、包装物料等。
+
+    - **receipt_id**: 成品入库单ID
+    - **binding_data**: 装箱绑定创建数据（产品ID、装箱数量、包装物料、序列号等）
+    """
+    return await packing_binding_service.create_packing_binding_from_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        binding_data=binding_data,
+        bound_by=current_user.id
+    )
+
+
+@router.get("/finished-goods-receipts/{receipt_id}/packing-binding", response_model=List[PackingBindingListResponse], summary="获取成品入库单的装箱绑定记录")
+async def get_packing_bindings_by_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    """
+    获取成品入库单的装箱绑定记录列表
+
+    - **receipt_id**: 成品入库单ID
+    """
+    return await packing_binding_service.get_packing_bindings_by_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id
+    )
+
+
+@router.delete("/packing-binding/{binding_id}", summary="删除装箱绑定记录")
+async def delete_packing_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除装箱绑定记录（软删除）
+
+    - **binding_id**: 装箱绑定记录ID
+    """
+    await packing_binding_service.delete_packing_binding(
+        tenant_id=tenant_id,
+        binding_id=binding_id
+    )
+
+    return JSONResponse(
+        content={"message": "装箱绑定记录删除成功"},
+        status_code=status.HTTP_200_OK
+    )
+
+
 # ============ 销售出库管理 API ============
 
 @router.post("/sales-deliveries", response_model=SalesDeliveryResponse, summary="创建销售出库单")
