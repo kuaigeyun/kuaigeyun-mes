@@ -101,6 +101,13 @@ class WorkOrder(BaseModel):
     # 状态和优先级
     status = fields.CharField(max_length=20, description="工单状态", default="draft")
     priority = fields.CharField(max_length=10, description="优先级", default="normal")
+    
+    # 冻结信息
+    is_frozen = fields.BooleanField(default=False, description="是否冻结")
+    freeze_reason = fields.TextField(null=True, description="冻结原因")
+    frozen_at = fields.DatetimeField(null=True, description="冻结时间")
+    frozen_by = fields.IntField(null=True, description="冻结人ID")
+    frozen_by_name = fields.CharField(max_length=100, null=True, description="冻结人姓名")
 
     # 时间信息
     planned_start_date = fields.DatetimeField(null=True, description="计划开始时间")
