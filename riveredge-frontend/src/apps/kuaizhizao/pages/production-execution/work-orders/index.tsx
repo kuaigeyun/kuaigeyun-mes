@@ -90,6 +90,10 @@ const WorkOrdersPage: React.FC = () => {
   const [currentWorkOrderForFreeze, setCurrentWorkOrderForFreeze] = useState<WorkOrder | null>(null);
   const freezeFormRef = useRef<any>(null);
 
+  // 批量设置优先级相关状态
+  const [batchPriorityModalVisible, setBatchPriorityModalVisible] = useState(false);
+  const [batchPriority, setBatchPriority] = useState<string>('normal');
+
   /**
    * 处理新建工单
    */
