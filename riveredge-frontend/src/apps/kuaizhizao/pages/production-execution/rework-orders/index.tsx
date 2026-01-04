@@ -14,7 +14,7 @@ import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { reworkOrderApi } from '../../../../services/production';
+import { reworkOrderApi } from '../../../services/production';
 
 interface ReworkOrder {
   id?: number;
