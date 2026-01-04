@@ -578,6 +578,92 @@ const ReportingPage: React.FC = () => {
           </>
         )}
       </FormModalTemplate>
+
+      {/* 创建不良品记录Modal */}
+      <FormModalTemplate
+        title="创建不良品记录"
+        open={defectModalVisible}
+        onCancel={() => {
+          setDefectModalVisible(false);
+          setCurrentReportingRecordForDefect(null);
+          defectFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitDefect}
+        formRef={defectFormRef}
+        {...MODAL_CONFIG}
+      >
+        {currentReportingRecordForDefect && (
+          <>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div><strong>工单编码：</strong>{currentReportingRecordForDefect.workOrderCode}</div>
+                </Col>
+                <Col span={12}>
+                  <div><strong>工序：</strong>{currentReportingRecordForDefect.operationName}</div>
+                </Col>
+                <Col span={12} style={{ marginTop: 8 }}>
+                  <div><strong>不合格数量：</strong>{currentReportingRecordForDefect.unqualifiedQuantity}</div>
+                </Col>
+              </Row>
+            </Card>
+            <ProFormDigit
+              name="defect_quantity"
+              label="不良品数量"
+              placeholder="请输入不良品数量"
+              rules={[{ required: true, message: '请输入不良品数量' }]}
+              min={0}
+              max={currentReportingRecordForDefect.unqualifiedQuantity}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormSelect
+              name="defect_type"
+              label="不良品类型"
+              placeholder="请选择不良品类型"
+              rules={[{ required: true, message: '请选择不良品类型' }]}
+              options={[
+                { label: '尺寸问题', value: 'dimension' },
+                { label: '外观问题', value: 'appearance' },
+                { label: '功能问题', value: 'function' },
+                { label: '物料问题', value: 'material' },
+                { label: '其他', value: 'other' },
+              ]}
+            />
+            <ProFormTextArea
+              name="defect_reason"
+              label="不良品原因"
+              placeholder="请输入不良品原因"
+              rules={[{ required: true, message: '请输入不良品原因' }]}
+              fieldProps={{ rows: 3 }}
+            />
+            <ProFormSelect
+              name="disposition"
+              label="处理方式"
+              placeholder="请选择处理方式"
+              rules={[{ required: true, message: '请选择处理方式' }]}
+              options={[
+                { label: '隔离', value: 'quarantine' },
+                { label: '返工', value: 'rework' },
+                { label: '报废', value: 'scrap' },
+                { label: '接受', value: 'accept' },
+                { label: '其他', value: 'other' },
+              ]}
+            />
+            <ProFormTextArea
+              name="quarantine_location"
+              label="隔离位置（处理方式为隔离时填写）"
+              placeholder="请输入隔离位置"
+              fieldProps={{ rows: 2 }}
+            />
+            <ProFormTextArea
+              name="remarks"
+              label="备注（可选）"
+              placeholder="请输入备注"
+              fieldProps={{ rows: 2 }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };
