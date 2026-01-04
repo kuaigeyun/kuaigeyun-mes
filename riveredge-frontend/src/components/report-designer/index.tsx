@@ -227,16 +227,19 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
                 <Button icon={<SaveOutlined />} onClick={handleSave}>
                   保存
                 </Button>
-                <Button icon={<EyeOutlined />} onClick={handlePreview}>
-                  预览
-                </Button>
-                <Button icon={<UndoOutlined />}>撤销</Button>
-                <Button icon={<RedoOutlined />}>重做</Button>
               </Space>
             }
             style={{ height: '100%' }}
           >
-            <Canvas id="canvas" components={config.components}>
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              items={[
+                {
+                  key: 'design',
+                  label: '设计',
+                  children: (
+                    <Canvas id="canvas" components={config.components}>
               {config.components.map((component) => (
                 <DraggableComponent
                   key={component.id}
@@ -258,8 +261,17 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
                     }
                   }}
                 />
-              ))}
-            </Canvas>
+                      ))}
+                    </Canvas>
+                  ),
+                },
+                {
+                  key: 'preview',
+                  label: '预览',
+                  children: <Preview config={config} />,
+                },
+              ]}
+            />
           </Card>
         </Content>
 
