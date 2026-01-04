@@ -927,6 +927,32 @@ async def approve_reporting_record(
     )
 
 
+@router.put("/reporting/{record_id}/correct", response_model=ReportingRecordResponse, summary="修正报工数据")
+async def correct_reporting_data(
+    record_id: int,
+    correct_data: ReportingRecordUpdate,
+    correction_reason: str = Query(..., description="修正原因（必填）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReportingRecordResponse:
+    """
+    修正报工数据
+
+    用于修正已提交的报工记录数据，需要记录修正原因和修正历史。
+
+    - **record_id**: 报工记录ID
+    - **correct_data**: 修正数据
+    - **correction_reason**: 修正原因（必填）
+    """
+    return await reporting_service.correct_reporting_data(
+        tenant_id=tenant_id,
+        record_id=record_id,
+        correct_data=correct_data,
+        corrected_by=current_user.id,
+        correction_reason=correction_reason
+    )
+
+
 @router.delete("/reporting/{record_id}", summary="删除报工记录")
 async def delete_reporting_record(
     record_id: int,

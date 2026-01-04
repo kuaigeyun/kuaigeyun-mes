@@ -586,3 +586,85 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # - 更新工单的不合格数量
 
             return DefectRecordResponse.model_validate(defect_record)
+
+    async def correct_reporting_data(
+        self,
+        tenant_id: int,
+        record_id: int,
+        correct_data: ReportingRecordUpdate,
+        corrected_by: int,
+        correction_reason: str
+    ) -> ReportingRecordResponse:
+        """
+        修正报工数据
+
+        用于修正已提交的报工记录数据，需要记录修正原因和修正历史。
+
+        Args:
+            tenant_id: 组织ID
+            record_id: 报工记录ID
+            correct_data: 修正数据
+            corrected_by: 修正人ID
+            correction_reason: 修正原因（必填）
+
+        Returns:
+            ReportingRecordResponse: 修正后的报工记录信息
+
+        Raises:
+            NotFoundError: 报工记录不存在
+            ValidationError: 数据验证失败
+            BusinessLogicError: 业务逻辑错误（如已审核的记录不允许修正等）
+        """
+        if not correction_reason or not correction_reason.strip():
+            raise ValidationError("修正原因不能为空")
+
+        async with in_transaction():
+            # 获取报工记录
+            reporting_record = await ReportingRecord.get_or_none(
+                id=record_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not reporting_record:
+                raise NotFoundError(f"报工记录不存在: {record_id}")
+
+            # 获取修正人信息
+            user_info = await self.get_user_info(corrected_by)
+
+            # 检查是否可以修正（可以根据业务需求调整规则）
+            # 例如：只有待审核或已驳回的记录可以修正，或者所有记录都可以修正但需要审核
+            # 这里假设所有记录都可以修正，但会在备注中记录修正历史
+            if reporting_record.status == 'approved':
+                # 已审核的记录也可以修正，但需要记录修正历史
+                pass
+
+            # 构建修正备注（记录修正历史）
+            correction_note = f"\n[数据修正] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 修正，原因：{correction_reason}"
+            if reporting_record.remarks:
+                updated_remarks = reporting_record.remarks + correction_note
+            else:
+                updated_remarks = correction_note
+
+            # 更新报工记录
+            update_data = correct_data.model_dump(exclude_unset=True)
+            update_data['remarks'] = updated_remarks
+            update_data['updated_by'] = corrected_by
+            update_data['updated_by_name'] = user_info['name']
+
+            await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                id=record_id
+            ).update(**update_data)
+
+            # 重新获取更新后的记录
+            updated_record = await ReportingRecord.get_or_none(
+                id=record_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            # TODO: 如果修正了数量相关字段，可能需要重新计算工单进度
+            # TODO: 记录详细的修正历史（可以创建单独的修正历史表）
+
+            return ReportingRecordResponse.model_validate(updated_record)
