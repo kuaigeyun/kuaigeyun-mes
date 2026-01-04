@@ -7,6 +7,7 @@
 # 生产执行模块
 from .work_order import WorkOrder
 from .reporting_record import ReportingRecord
+from .rework_order import ReworkOrder
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -50,6 +51,7 @@ __all__ = [
     # 生产执行模块
     'WorkOrder',
     'ReportingRecord',
+    'ReworkOrder',
 
     # 仓储管理模块
     'ProductionPicking',

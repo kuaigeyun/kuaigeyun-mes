@@ -4,7 +4,7 @@
 提供工单管理和报工管理的API接口。
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -16,6 +16,7 @@ from infra.exceptions.exceptions import ValidationError, BusinessLogicError
 
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
+from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 
 # 初始化服务实例
 reporting_service = ReportingService()
@@ -47,6 +48,12 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderResponse,
     WorkOrderListResponse,
     MaterialShortageResponse
+)
+from apps.kuaizhizao.schemas.rework_order import (
+    ReworkOrderCreate,
+    ReworkOrderUpdate,
+    ReworkOrderResponse,
+    ReworkOrderListResponse
 )
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
@@ -272,6 +279,136 @@ async def delete_work_order(
 
     return JSONResponse(
         content={"message": "工单删除成功"},
+        status_code=status.HTTP_200_OK
+    )
+
+
+@router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="从工单创建返工单")
+async def create_rework_order_from_work_order(
+    work_order_id: int,
+    rework_order: ReworkOrderCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    """
+    从工单创建返工单
+
+    根据原工单信息创建返工单，自动关联原工单。
+
+    - **work_order_id**: 原工单ID
+    - **rework_order**: 返工单创建数据（部分字段可从原工单继承）
+    """
+    return await ReworkOrderService().create_rework_order_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        rework_order_data=rework_order,
+        created_by=current_user.id
+    )
+
+
+# ============ 返工单管理 API ============
+
+@router.post("/rework-orders", response_model=ReworkOrderResponse, summary="创建返工单")
+async def create_rework_order(
+    rework_order: ReworkOrderCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    """
+    创建返工单
+
+    - **rework_order**: 返工单创建数据
+    """
+    return await ReworkOrderService().create_rework_order(
+        tenant_id=tenant_id,
+        rework_order_data=rework_order,
+        created_by=current_user.id
+    )
+
+
+@router.get("/rework-orders", response_model=List[ReworkOrderListResponse], summary="获取返工单列表")
+async def list_rework_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="返工单编码（模糊搜索）"),
+    status: Optional[str] = Query(None, description="返工单状态"),
+    original_work_order_id: Optional[int] = Query(None, description="原工单ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ReworkOrderListResponse]:
+    """
+    获取返工单列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    return await ReworkOrderService().list_rework_orders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        status=status,
+        original_work_order_id=original_work_order_id,
+        product_id=product_id,
+    )
+
+
+@router.get("/rework-orders/{rework_order_id}", response_model=ReworkOrderResponse, summary="获取返工单详情")
+async def get_rework_order(
+    rework_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    """
+    根据ID获取返工单详情
+
+    - **rework_order_id**: 返工单ID
+    """
+    return await ReworkOrderService().get_rework_order_by_id(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id
+    )
+
+
+@router.put("/rework-orders/{rework_order_id}", response_model=ReworkOrderResponse, summary="更新返工单")
+async def update_rework_order(
+    rework_order_id: int,
+    rework_order: ReworkOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReworkOrderResponse:
+    """
+    更新返工单信息
+
+    - **rework_order_id**: 返工单ID
+    - **rework_order**: 返工单更新数据
+    """
+    return await ReworkOrderService().update_rework_order(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id,
+        rework_order_data=rework_order,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/rework-orders/{rework_order_id}", summary="删除返工单")
+async def delete_rework_order(
+    rework_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除返工单（软删除）
+
+    - **rework_order_id**: 返工单ID
+    """
+    await ReworkOrderService().delete_rework_order(
+        tenant_id=tenant_id,
+        rework_order_id=rework_order_id
+    )
+
+    return JSONResponse(
+        content={"message": "返工单删除成功"},
         status_code=status.HTTP_200_OK
     )
 
@@ -772,10 +909,13 @@ async def create_finished_goods_receipt(
 
     返回创建的成品入库单信息。
     """
+    # 从receipt中提取items（如果存在）
+    items = getattr(receipt, 'items', None)
     return await FinishedGoodsReceiptService().create_finished_goods_receipt(
         tenant_id=tenant_id,
         receipt_data=receipt,
-        created_by=current_user.id
+        created_by=current_user.id,
+        items=items
     )
 
 
@@ -919,6 +1059,206 @@ async def confirm_sales_delivery(
     )
 
 
+@router.post("/sales-deliveries/import", summary="批量导入销售出库单")
+async def import_sales_deliveries(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入销售出库单
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建销售出库单。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+    """
+    from fastapi import HTTPException
+    
+    try:
+        # 获取二维数组数据
+        data = request.get("data", [])
+        if not data:
+            raise ValidationError("导入数据为空")
+        
+        service = SalesDeliveryService()
+        result = await service.import_from_data(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        
+        return result
+                
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"导入销售出库单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}"
+        )
+
+
+@router.get("/sales-deliveries/export", response_class=FileResponse, summary="批量导出销售出库单")
+async def export_sales_deliveries(
+    status: Optional[str] = Query(None, description="出库状态筛选"),
+    sales_order_id: Optional[int] = Query(None, description="销售订单ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出销售出库单到Excel文件
+    
+    Args:
+        status: 出库状态筛选
+        sales_order_id: 销售订单ID筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    import os
+    
+    try:
+        service = SalesDeliveryService()
+        file_path = await service.export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            sales_order_id=sales_order_id,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出销售出库单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
+
+
+@router.get("/sales-deliveries/{delivery_id}/print", summary="打印销售出库单")
+async def print_sales_delivery(
+    delivery_id: int,
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，如果不提供则使用默认模板）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    打印销售出库单
+    
+    使用打印模板服务渲染销售出库单，支持自定义模板。
+    如果不提供模板UUID，将使用默认的销售出库单打印模板。
+    
+    Args:
+        delivery_id: 销售出库单ID
+        template_uuid: 打印模板UUID（可选）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 打印结果（包含渲染后的内容）
+    """
+    from fastapi import HTTPException
+    from core.services.print.print_template_service import PrintTemplateService
+    from core.schemas.print_template import PrintTemplateRenderRequest
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+    
+    try:
+        # 获取销售出库单详情
+        service = SalesDeliveryService()
+        delivery = await service.get_sales_delivery_by_id(tenant_id, delivery_id)
+        
+        # 获取出库单明细
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id=delivery_id
+        ).all()
+        
+        # 构建打印数据
+        print_data = {
+            "delivery_code": delivery.delivery_code,
+            "sales_order_code": delivery.sales_order_code or "",
+            "customer_name": delivery.customer_name or "",
+            "warehouse_name": delivery.warehouse_name or "",
+            "delivery_time": delivery.delivery_time.strftime("%Y-%m-%d %H:%M:%S") if delivery.delivery_time else "",
+            "status": delivery.status,
+            "total_quantity": str(delivery.total_quantity) if delivery.total_quantity else "0",
+            "total_amount": str(delivery.total_amount) if delivery.total_amount else "0",
+            "shipping_method": delivery.shipping_method or "",
+            "tracking_number": delivery.tracking_number or "",
+            "shipping_address": delivery.shipping_address or "",
+            "notes": delivery.notes or "",
+            "items": [
+                {
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                    "delivery_quantity": str(item.delivery_quantity),
+                    "material_unit": item.material_unit,
+                    "unit_price": str(item.unit_price),
+                    "total_amount": str(item.total_amount),
+                    "batch_number": item.batch_number or "",
+                    "location_code": item.location_code or "",
+                }
+                for item in items
+            ],
+            "created_at": delivery.created_at.strftime("%Y-%m-%d %H:%M:%S") if delivery.created_at else "",
+        }
+        
+        # 如果没有提供模板UUID，尝试查找默认模板
+        if not template_uuid:
+            # TODO: 从配置或数据库查找默认的销售出库单打印模板
+            # 这里暂时返回打印数据，前端可以自行处理
+            return {
+                "success": True,
+                "data": print_data,
+                "message": "打印数据已准备，请在前端使用打印模板渲染"
+            }
+        
+        # 使用指定的模板渲染
+        render_request = PrintTemplateRenderRequest(
+            data=print_data,
+            output_format="html",  # 默认HTML格式，前端可以转换为PDF
+            async_execution=False
+        )
+        
+        result = await PrintTemplateService.render_print_template(
+            tenant_id=tenant_id,
+            uuid=template_uuid,
+            data=render_request
+        )
+        
+        return {
+            "success": True,
+            "content": result.get("rendered_content", ""),
+            "data": print_data
+        }
+        
+    except Exception as e:
+        logger.error(f"打印销售出库单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"打印失败: {str(e)}"
+        )
+
+
 # ============ 采购入库管理 API ============
 
 @router.post("/purchase-receipts", response_model=PurchaseReceiptResponse, summary="创建采购入库单")
@@ -994,11 +1334,106 @@ async def confirm_purchase_receipt(
 
     - **receipt_id**: 入库单ID
     """
-    return await PurchaseReceiptService.confirm_receipt(
+    return await PurchaseReceiptService().confirm_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
         confirmed_by=current_user.id
     )
+
+
+@router.post("/purchase-receipts/import", summary="批量导入采购入库单")
+async def import_purchase_receipts(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入采购入库单
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建采购入库单。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+    """
+    from fastapi import HTTPException
+    
+    try:
+        # 获取二维数组数据
+        data = request.get("data", [])
+        if not data:
+            raise ValidationError("导入数据为空")
+        
+        service = PurchaseReceiptService()
+        result = await service.import_from_data(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        
+        return result
+                
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"导入采购入库单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}"
+        )
+
+
+@router.get("/purchase-receipts/export", response_class=FileResponse, summary="批量导出采购入库单")
+async def export_purchase_receipts(
+    status: Optional[str] = Query(None, description="入库状态筛选"),
+    purchase_order_id: Optional[int] = Query(None, description="采购订单ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出采购入库单到Excel文件
+    
+    Args:
+        status: 入库状态筛选
+        purchase_order_id: 采购订单ID筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    import os
+    
+    try:
+        service = PurchaseReceiptService()
+        file_path = await service.export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            purchase_order_id=purchase_order_id,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出采购入库单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 # ============ 来料检验管理 API ============
@@ -1111,6 +1546,81 @@ async def approve_incoming_inspection(
     )
 
 
+@router.post("/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}", response_model=List[IncomingInspectionResponse], summary="从采购入库单创建来料检验单")
+async def create_inspection_from_purchase_receipt(
+    purchase_receipt_id: int = Path(..., description="采购入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[IncomingInspectionResponse]:
+    """
+    从采购入库单创建来料检验单
+
+    为采购入库单的每个明细项创建一个来料检验单
+
+    - **purchase_receipt_id**: 采购入库单ID
+    """
+    return await IncomingInspectionService().create_inspection_from_purchase_receipt(
+        tenant_id=tenant_id,
+        purchase_receipt_id=purchase_receipt_id,
+        created_by=current_user.id
+    )
+
+
+@router.post("/incoming-inspections/import", summary="批量导入来料检验单")
+async def import_incoming_inspections(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入来料检验单
+
+    - **data**: 二维数组数据（从uni_import组件传递）
+    """
+    data = request.get("data", [])
+    result = await IncomingInspectionService().import_from_data(
+        tenant_id=tenant_id,
+        data=data,
+        created_by=current_user.id
+    )
+    return JSONResponse(content=result)
+
+
+@router.get("/incoming-inspections/export", response_class=FileResponse, summary="导出来料检验单")
+async def export_incoming_inspections(
+    status: Optional[str] = Query(None, description="检验状态"),
+    quality_status: Optional[str] = Query(None, description="质量状态"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    导出来料检验单到Excel文件
+
+    支持多种筛选条件。
+    """
+    try:
+        file_path = await IncomingInspectionService().export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            quality_status=quality_status,
+            supplier_id=supplier_id,
+            material_id=material_id,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出来料检验单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
+
+
 # ============ 过程检验管理 API ============
 
 @router.post("/process-inspections", response_model=ProcessInspectionResponse, summary="创建过程检验单")
@@ -1128,7 +1638,7 @@ async def create_process_inspection(
 
     返回创建的过程检验单信息。
     """
-    return await ProcessInspectionService.create_process_inspection(
+    return await ProcessInspectionService().create_process_inspection(
         tenant_id=tenant_id,
         inspection_data=inspection,
         created_by=current_user.id
@@ -1151,7 +1661,7 @@ async def list_process_inspections(
 
     支持多种筛选条件的高级搜索。
     """
-    return await ProcessInspectionService.list_process_inspections(
+    return await ProcessInspectionService().list_process_inspections(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -1173,7 +1683,7 @@ async def get_process_inspection(
 
     - **inspection_id**: 检验单ID
     """
-    return await ProcessInspectionService.get_process_inspection_by_id(
+    return await ProcessInspectionService().get_process_inspection_by_id(
         tenant_id=tenant_id,
         inspection_id=inspection_id
     )
@@ -1192,12 +1702,80 @@ async def conduct_process_inspection(
     - **inspection_id**: 检验单ID
     - **inspection_data**: 检验数据
     """
-    return await ProcessInspectionService.conduct_inspection(
+    return await ProcessInspectionService().conduct_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
         inspection_data=inspection_data,
         inspected_by=current_user.id
     )
+
+
+@router.post("/process-inspections/from-work-order", response_model=ProcessInspectionResponse, summary="从工单和工序创建过程检验单")
+async def create_process_inspection_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    operation_id: int = Query(..., description="工序ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProcessInspectionResponse:
+    """
+    从工单和工序创建过程检验单
+
+    - **work_order_id**: 工单ID
+    - **operation_id**: 工序ID
+    """
+    return await ProcessInspectionService().create_inspection_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        created_by=current_user.id
+    )
+
+
+@router.post("/process-inspections/import", summary="批量导入过程检验单")
+async def import_process_inspections(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量导入过程检验单"""
+    data = request.get("data", [])
+    result = await ProcessInspectionService().import_from_data(
+        tenant_id=tenant_id,
+        data=data,
+        created_by=current_user.id
+    )
+    return JSONResponse(content=result)
+
+
+@router.get("/process-inspections/export", response_class=FileResponse, summary="导出过程检验单")
+async def export_process_inspections(
+    status: Optional[str] = Query(None, description="检验状态"),
+    quality_status: Optional[str] = Query(None, description="质量状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    operation_id: Optional[int] = Query(None, description="工序ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """导出过程检验单到Excel文件"""
+    try:
+        file_path = await ProcessInspectionService().export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            quality_status=quality_status,
+            work_order_id=work_order_id,
+            operation_id=operation_id,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出过程检验单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 # ============ 成品检验管理 API ============
@@ -1308,6 +1886,69 @@ async def issue_certificate(
         certificate_number=certificate_number,
         issued_by=current_user.id
     )
+
+
+@router.post("/finished-goods-inspections/from-work-order", response_model=FinishedGoodsInspectionResponse, summary="从工单创建成品检验单")
+async def create_finished_goods_inspection_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsInspectionResponse:
+    """
+    从工单创建成品检验单
+
+    - **work_order_id**: 工单ID
+    """
+    return await FinishedGoodsInspectionService().create_inspection_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        created_by=current_user.id
+    )
+
+
+@router.post("/finished-goods-inspections/import", summary="批量导入成品检验单")
+async def import_finished_goods_inspections(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量导入成品检验单"""
+    data = request.get("data", [])
+    result = await FinishedGoodsInspectionService().import_from_data(
+        tenant_id=tenant_id,
+        data=data,
+        created_by=current_user.id
+    )
+    return JSONResponse(content=result)
+
+
+@router.get("/finished-goods-inspections/export", response_class=FileResponse, summary="导出成品检验单")
+async def export_finished_goods_inspections(
+    status: Optional[str] = Query(None, description="检验状态"),
+    quality_status: Optional[str] = Query(None, description="质量状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """导出成品检验单到Excel文件"""
+    try:
+        file_path = await FinishedGoodsInspectionService().export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            quality_status=quality_status,
+            work_order_id=work_order_id,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出成品检验单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 @router.get("/quality/anomalies", summary="查询质量异常记录")
@@ -1973,7 +2614,8 @@ async def create_sales_order(
 
     返回创建的销售订单信息。
     """
-    return await SalesOrderService.create_sales_order(
+    service = SalesOrderService()
+    return await service.create_sales_order(
         tenant_id=tenant_id,
         order_data=order,
         created_by=current_user.id
@@ -2047,6 +2689,29 @@ async def get_sales_order(
     return await service.get_sales_order_by_id(
         tenant_id=tenant_id,
         order_id=order_id
+    )
+
+
+@router.post("/sales-orders/{order_id}/submit", response_model=SalesOrderResponse, summary="提交销售订单")
+async def submit_sales_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesOrderResponse:
+    """
+    提交销售订单
+
+    将草稿状态的销售订单提交为待审核状态
+
+    - **order_id**: 销售订单ID
+    """
+    from apps.kuaizhizao.services.sales_service import SalesOrderService
+    
+    service = SalesOrderService()
+    return await service.submit_order(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        submitted_by=current_user.id
     )
 
 
@@ -2703,6 +3368,106 @@ async def export_sales_forecasts(
         )
 
 
+@router.post("/sales-orders/import", summary="批量导入销售订单")
+async def import_sales_orders(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入销售订单
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建销售订单。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+    """
+    from fastapi import HTTPException
+    
+    try:
+        # 获取二维数组数据
+        data = request.get("data", [])
+        if not data:
+            raise ValidationError("导入数据为空")
+        
+        from apps.kuaizhizao.services.sales_service import SalesOrderService
+        service = SalesOrderService()
+        result = await service.import_from_data(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        
+        return result
+                
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"导入销售订单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}"
+        )
+
+
+@router.get("/sales-orders/export", response_class=FileResponse, summary="批量导出销售订单")
+async def export_sales_orders(
+    status: Optional[str] = Query(None, description="订单状态筛选"),
+    order_type: Optional[str] = Query(None, description="订单类型筛选"),
+    customer_id: Optional[int] = Query(None, description="客户ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出销售订单到Excel文件
+    
+    Args:
+        status: 订单状态筛选
+        order_type: 订单类型筛选
+        customer_id: 客户ID筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    import os
+    
+    try:
+        from apps.kuaizhizao.services.sales_service import SalesOrderService
+        service = SalesOrderService()
+        file_path = await service.export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            order_type=order_type,
+            customer_id=customer_id,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出销售订单失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
+
+
 @router.post("/sales-orders/batch-create", response_model=BatchResponse, summary="批量创建销售订单")
 async def batch_create_sales_orders(
     request: BatchCreateRequest,
@@ -2995,6 +3760,35 @@ async def get_lrp_result(
         tenant_id=tenant_id,
         result_id=result_id
     )
+
+
+@router.get("/lrp/results/export", response_class=FileResponse, summary="导出LRP运算结果")
+async def export_lrp_results(
+    sales_order_id: Optional[int] = Query(None, description="销售订单ID（可选，用于筛选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    导出LRP运算结果到Excel文件
+
+    - **sales_order_id**: 销售订单ID（可选，用于筛选）
+    """
+    try:
+        file_path = await ProductionPlanningService().export_lrp_results_to_excel(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出LRP运算结果失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
 
 
 # ============ 一键生成工单和采购单 API ============
