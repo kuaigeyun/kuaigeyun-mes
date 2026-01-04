@@ -14,9 +14,11 @@ try:
         "ExcelEngine",
         "PDFEngine",
     ]
-except ImportError:
+except (ImportError, OSError):
     # 如果 PDFEngine 导入失败（通常是 WeasyPrint 依赖问题），只导出 ExcelEngine
     # PDFEngine 将在使用时抛出更友好的错误
+    # ImportError: 模块导入失败
+    # OSError: 库文件缺失（Windows 上常见，缺少 GTK+ 运行时）
     PDFEngine = None  # type: ignore
     __all__ = [
         "ExcelEngine",
