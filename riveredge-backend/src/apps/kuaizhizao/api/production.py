@@ -52,6 +52,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderUnfreezeRequest,
     WorkOrderPriorityRequest,
     WorkOrderBatchPriorityRequest,
+    WorkOrderMergeRequest,
+    WorkOrderMergeResponse,
     WorkOrderSplitRequest,
     WorkOrderSplitResponse,
     WorkOrderOperationResponse,
