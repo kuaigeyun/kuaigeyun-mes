@@ -283,6 +283,30 @@ async def delete_work_order(
     )
 
 
+@router.post("/work-orders/{work_order_id}/split", response_model=WorkOrderSplitResponse, summary="拆分工单")
+async def split_work_order(
+    work_order_id: int,
+    split_data: WorkOrderSplitRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderSplitResponse:
+    """
+    拆分工单
+
+    支持按数量拆分（将大工单拆分成多个小工单）。
+    按工序拆分功能暂未实现。
+
+    - **work_order_id**: 原工单ID
+    - **split_data**: 拆分数据（split_type、split_quantities或split_count）
+    """
+    return await WorkOrderService().split_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        split_data=split_data,
+        created_by=current_user.id
+    )
+
+
 @router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="从工单创建返工单")
 async def create_rework_order_from_work_order(
     work_order_id: int,
