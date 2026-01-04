@@ -70,6 +70,8 @@ __all__ = [
     'InventoryAlertRule',
     'InventoryAlert',
     'PackingBinding',
+    'BarcodeMappingRule',
+    'CustomerMaterialRegistration',
 
     # 仓储管理模块
     'ProductionPicking',
