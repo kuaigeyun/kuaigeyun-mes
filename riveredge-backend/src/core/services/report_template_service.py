@@ -20,10 +20,16 @@ from core.schemas.report import (
     ReportConfig,
 )
 from core.services.base import BaseService
-from core.services.report_engines import ExcelEngine, PDFEngine
+from core.services.report_engines import ExcelEngine
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 import httpx
+
+# 延迟导入 PDFEngine，因为在 Windows 上可能不可用
+try:
+    from core.services.report_engines import PDFEngine
+except ImportError:
+    PDFEngine = None  # type: ignore
 
 
 class ReportTemplateService(BaseService):
@@ -281,6 +287,12 @@ class ReportTemplateService(BaseService):
             file_stream = engine.generate(template.config, data)
             return file_stream.read()
         elif format == "pdf":
+            if PDFEngine is None:
+                raise ValidationError(
+                    "PDF 生成功能不可用。"
+                    "在 Windows 上需要安装 GTK+ 运行时库。"
+                    "请参考：https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
+                )
             engine = PDFEngine()
             file_stream = engine.generate(template.config, data)
             return file_stream.read()
