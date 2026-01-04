@@ -23,7 +23,7 @@ class DefaultValuesService:
     为新组织提供默认配置。
     """
     
-    # 默认编码规则配置
+    # 默认编码规则配置（符合中国制造业通用实践）
     DEFAULT_CODE_RULES = [
         {
             "name": "工单编码",
@@ -41,6 +41,17 @@ class DefaultValuesService:
             "code": "material",
             "expression": "MAT{SEQ:6}",
             "description": "物料编码规则，格式：MAT + 6位序号",
+            "seq_start": 1,
+            "seq_step": 1,
+            "seq_reset_rule": "never",
+            "is_system": True,
+            "is_active": True,
+        },
+        {
+            "name": "产品编码",
+            "code": "product",
+            "expression": "PRD{SEQ:6}",
+            "description": "产品编码规则，格式：PRD + 6位序号",
             "seq_start": 1,
             "seq_step": 1,
             "seq_reset_rule": "never",
@@ -70,6 +81,28 @@ class DefaultValuesService:
             "is_active": True,
         },
         {
+            "name": "采购单编码",
+            "code": "purchase_order",
+            "expression": "PO{YYYYMMDD}{SEQ:4}",
+            "description": "采购单编码规则，格式：PO + 日期（YYYYMMDD）+ 4位序号",
+            "seq_start": 1,
+            "seq_step": 1,
+            "seq_reset_rule": "daily",
+            "is_system": True,
+            "is_active": True,
+        },
+        {
+            "name": "销售单编码",
+            "code": "sales_order",
+            "expression": "SO{YYYYMMDD}{SEQ:4}",
+            "description": "销售单编码规则，格式：SO + 日期（YYYYMMDD）+ 4位序号",
+            "seq_start": 1,
+            "seq_step": 1,
+            "seq_reset_rule": "daily",
+            "is_system": True,
+            "is_active": True,
+        },
+        {
             "name": "生产任务编码",
             "code": "production_task",
             "expression": "PT{YYYYMMDD}{SEQ:4}",
@@ -82,8 +115,9 @@ class DefaultValuesService:
         },
     ]
     
-    # 默认系统参数配置
+    # 默认系统参数配置（符合中国制造业通用实践）
     DEFAULT_SYSTEM_PARAMETERS = [
+        # 系统基本信息
         {
             "key": "system.name",
             "value": "RiverEdge制造管理系统",
@@ -140,6 +174,7 @@ class DefaultValuesService:
             "is_system": True,
             "is_active": True,
         },
+        # 工单相关参数
         {
             "key": "work_order.auto_approve",
             "value": False,
@@ -152,10 +187,11 @@ class DefaultValuesService:
             "key": "work_order.default_priority",
             "value": "normal",
             "type": "string",
-            "description": "工单默认优先级（默认：normal）",
+            "description": "工单默认优先级（默认：normal，可选值：low/normal/high/urgent）",
             "is_system": False,
             "is_active": True,
         },
+        # 生产相关参数
         {
             "key": "production.enable_quality_check",
             "value": True,
@@ -164,6 +200,15 @@ class DefaultValuesService:
             "is_system": False,
             "is_active": True,
         },
+        {
+            "key": "production.default_workshop_id",
+            "value": None,
+            "type": "number",
+            "description": "默认车间ID（可选，创建工单时的默认车间）",
+            "is_system": False,
+            "is_active": True,
+        },
+        # 库存相关参数
         {
             "key": "inventory.enable_low_stock_alert",
             "value": True,
@@ -177,6 +222,73 @@ class DefaultValuesService:
             "value": 10,
             "type": "number",
             "description": "库存不足预警阈值（默认：10）",
+            "is_system": False,
+            "is_active": True,
+        },
+        {
+            "key": "inventory.default_warehouse_id",
+            "value": None,
+            "type": "number",
+            "description": "默认仓库ID（可选，库存操作的默认仓库）",
+            "is_system": False,
+            "is_active": True,
+        },
+        {
+            "key": "inventory.enable_batch_management",
+            "value": False,
+            "type": "boolean",
+            "description": "是否启用批次管理（默认：否，根据行业需要启用）",
+            "is_system": False,
+            "is_active": True,
+        },
+        # 质量相关参数
+        {
+            "key": "quality.default_qualification_rate",
+            "value": 0.95,
+            "type": "number",
+            "description": "默认合格率（默认：95%，即0.95）",
+            "is_system": False,
+            "is_active": True,
+        },
+        {
+            "key": "quality.enable_auto_reject",
+            "value": False,
+            "type": "boolean",
+            "description": "是否启用自动拒收（默认：否，质量检验不合格时自动拒收）",
+            "is_system": False,
+            "is_active": True,
+        },
+        # 采购相关参数
+        {
+            "key": "purchase.require_approval",
+            "value": True,
+            "type": "boolean",
+            "description": "采购单是否需要审批（默认：是）",
+            "is_system": False,
+            "is_active": True,
+        },
+        {
+            "key": "purchase.default_payment_term",
+            "value": "月结30天",
+            "type": "string",
+            "description": "默认付款条件（默认：月结30天）",
+            "is_system": False,
+            "is_active": True,
+        },
+        # 销售相关参数
+        {
+            "key": "sales.require_approval",
+            "value": True,
+            "type": "boolean",
+            "description": "销售单是否需要审批（默认：是）",
+            "is_system": False,
+            "is_active": True,
+        },
+        {
+            "key": "sales.default_payment_term",
+            "value": "月结30天",
+            "type": "string",
+            "description": "默认收款条件（默认：月结30天）",
             "is_system": False,
             "is_active": True,
         },
