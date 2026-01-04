@@ -82,6 +82,19 @@ __all__ = [
     'MaterialBindingResponse',
     'MaterialBindingListResponse',
 
+    # 库存盘点单相关
+    'StocktakingBase',
+    'StocktakingCreate',
+    'StocktakingUpdate',
+    'StocktakingResponse',
+    'StocktakingListResponse',
+    'StocktakingItemBase',
+    'StocktakingItemCreate',
+    'StocktakingItemUpdate',
+    'StocktakingItemResponse',
+    'StocktakingItemListResponse',
+    'StocktakingWithItemsResponse',
+
     # 生产领料单相关
     'ProductionPickingBase',
     'ProductionPickingCreate',
