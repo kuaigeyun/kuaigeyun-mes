@@ -8,6 +8,7 @@
 from .work_order import *
 from .reporting_record import *
 from .outsource_order import *
+from .scrap_record import *
 
 # 仓储管理模块
 from .warehouse import *
@@ -54,6 +55,14 @@ __all__ = [
     'OutsourceOrderUpdate',
     'OutsourceOrderResponse',
     'OutsourceOrderListResponse',
+
+    # 报废记录相关
+    'ScrapRecordBase',
+    'ScrapRecordCreate',
+    'ScrapRecordCreateFromReporting',
+    'ScrapRecordUpdate',
+    'ScrapRecordResponse',
+    'ScrapRecordListResponse',
 
     # 生产领料单相关
     'ProductionPickingBase',
