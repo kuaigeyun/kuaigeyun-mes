@@ -50,6 +50,7 @@ __all__ = [
     # 委外单相关
     'OutsourceOrderBase',
     'OutsourceOrderCreate',
+    'OutsourceOrderCreateFromWorkOrder',
     'OutsourceOrderUpdate',
     'OutsourceOrderResponse',
     'OutsourceOrderListResponse',

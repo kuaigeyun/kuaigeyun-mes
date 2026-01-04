@@ -66,6 +66,21 @@ class OutsourceOrderCreate(OutsourceOrderBase):
     code: Optional[str] = Field(None, description="委外单编码（可选，如果不提供则自动生成）")
 
 
+class OutsourceOrderCreateFromWorkOrder(BaseModel):
+    """
+    从工单创建委外单请求Schema
+
+    用于从工单工序创建委外单的简化请求。
+    """
+    work_order_operation_id: int = Field(..., description="工单工序ID")
+    supplier_id: int = Field(..., description="供应商ID")
+    outsource_quantity: Decimal = Field(..., description="委外数量")
+    unit_price: Optional[Decimal] = Field(None, description="单价")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
 class OutsourceOrderUpdate(BaseModel):
     """
     委外单更新Schema
@@ -133,4 +148,3 @@ class OutsourceOrderListResponse(BaseModel):
     planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
     total_amount: Decimal = Field(..., description="总金额")
     created_at: datetime = Field(..., description="创建时间")
-
