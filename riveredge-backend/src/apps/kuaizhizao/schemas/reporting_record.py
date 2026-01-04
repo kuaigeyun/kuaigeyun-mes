@@ -53,6 +53,11 @@ class ReportingRecordUpdate(BaseModel):
     """
     model_config = ConfigDict(from_attributes=True)
 
+    reported_quantity: Optional[Decimal] = Field(None, description="报工数量")
+    qualified_quantity: Optional[Decimal] = Field(None, description="合格数量")
+    unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
+    work_hours: Optional[Decimal] = Field(None, description="工时（小时）")
+    remarks: Optional[str] = Field(None, description="备注")
     status: Optional[str] = Field(None, description="审核状态")
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
