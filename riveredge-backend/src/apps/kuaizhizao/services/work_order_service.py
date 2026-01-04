@@ -815,23 +815,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         raise BusinessLogicError(f"工序 {existing_op.operation_name} 已有报工记录，不能修改")
                     
                     # 更新工序信息
-                    await existing_op.update_from_dict({
-                        'operation_id': op_data.operation_id,
-                        'operation_code': op_data.operation_code,
-                        'operation_name': op_data.operation_name,
-                        'sequence': op_data.sequence,
-                        'workshop_id': op_data.workshop_id,
-                        'workshop_name': op_data.workshop_name,
-                        'work_center_id': op_data.work_center_id,
-                        'work_center_name': op_data.work_center_name,
-                        'planned_start_date': op_data.planned_start_date,
-                        'planned_end_date': op_data.planned_end_date,
-                        'standard_time': op_data.standard_time,
-                        'setup_time': op_data.setup_time,
-                        'remarks': op_data.remarks,
-                        'updated_by': updated_by,
-                        'updated_by_name': user_info["name"],
-                    }).save()
+                    existing_op.operation_id = op_data.operation_id
+                    existing_op.operation_code = op_data.operation_code
+                    existing_op.operation_name = op_data.operation_name
+                    existing_op.sequence = op_data.sequence
+                    existing_op.workshop_id = op_data.workshop_id
+                    existing_op.workshop_name = op_data.workshop_name
+                    existing_op.work_center_id = op_data.work_center_id
+                    existing_op.work_center_name = op_data.work_center_name
+                    existing_op.planned_start_date = op_data.planned_start_date
+                    existing_op.planned_end_date = op_data.planned_end_date
+                    existing_op.standard_time = op_data.standard_time
+                    existing_op.setup_time = op_data.setup_time
+                    existing_op.remarks = op_data.remarks
+                    existing_op.updated_by = updated_by
+                    existing_op.updated_by_name = user_info["name"]
+                    await existing_op.save()
                     updated_operation_ids.add(existing_op.id)
                 else:
                     # 创建新工序
