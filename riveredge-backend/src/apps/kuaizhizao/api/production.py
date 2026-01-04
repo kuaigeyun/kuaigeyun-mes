@@ -19,10 +19,12 @@ from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
+from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 
 # 初始化服务实例
 reporting_service = ReportingService()
 material_binding_service = MaterialBindingService()
+stocktaking_service = StocktakingService()
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -93,6 +95,16 @@ from apps.kuaizhizao.schemas.material_binding import (
     MaterialBindingCreateFromReporting,
     MaterialBindingResponse,
     MaterialBindingListResponse,
+)
+from apps.kuaizhizao.schemas.stocktaking import (
+    StocktakingCreate,
+    StocktakingUpdate,
+    StocktakingResponse,
+    StocktakingListResponse,
+    StocktakingWithItemsResponse,
+    StocktakingItemCreate,
+    StocktakingItemUpdate,
+    StocktakingItemResponse,
 )
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
