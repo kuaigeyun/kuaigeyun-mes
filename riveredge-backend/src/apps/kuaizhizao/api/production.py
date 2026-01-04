@@ -79,6 +79,10 @@ from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordResponse,
     ReportingRecordListResponse
 )
+from apps.kuaizhizao.schemas.scrap_record import (
+    ScrapRecordCreateFromReporting,
+    ScrapRecordResponse
+)
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
     ProductionPickingCreate,
