@@ -12,11 +12,16 @@ from io import BytesIO
 from loguru import logger
 
 # 延迟导入 WeasyPrint，避免在 Windows 上启动失败
+# 如果导入失败，PDFEngine 类仍然可以加载，但生成 PDF 时会抛出友好的错误
+WEASYPRINT_AVAILABLE = False
+WEASYPRINT_ERROR = None
+
 try:
     from weasyprint import HTML, CSS
     WEASYPRINT_AVAILABLE = True
-except ImportError as e:
-    WEASYPRINT_AVAILABLE = False
+except (ImportError, OSError) as e:
+    # ImportError: 模块未安装
+    # OSError: 库文件缺失（Windows 上常见，缺少 GTK+ 运行时）
     WEASYPRINT_ERROR = str(e)
 
 
