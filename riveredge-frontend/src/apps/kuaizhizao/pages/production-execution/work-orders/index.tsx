@@ -567,14 +567,25 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
-      valueEnum: {
-        '草稿': { text: '草稿', status: 'default' },
-        '已下达': { text: '已下达', status: 'processing' },
-        '生产中': { text: '生产中', status: 'processing' },
-        '已完成': { text: '已完成', status: 'success' },
-        '已取消': { text: '已取消', status: 'error' },
-      },
+      width: 120,
+      render: (text, record) => (
+        <Space>
+          <Tag
+            color={
+              text === '草稿' ? 'default' :
+              text === '已下达' ? 'processing' :
+              text === '生产中' ? 'processing' :
+              text === '已完成' ? 'success' :
+              'error'
+            }
+          >
+            {text}
+          </Tag>
+          {record.is_frozen && (
+            <Tag color="warning">已冻结</Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: '计划开始时间',
