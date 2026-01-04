@@ -25,7 +25,7 @@ from apps.kuaizhizao.schemas.reporting_record import (
 )
 
 from apps.base_service import AppBaseService
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
 class ReportingService(AppBaseService[ReportingRecord]):
@@ -68,6 +68,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             if not work_order:
                 raise NotFoundError(f"工单不存在: {reporting_data.work_order_id}")
+
+            # 检查工单是否冻结
+            if work_order.is_frozen:
+                raise BusinessLogicError(f"工单已冻结，不能报工。冻结原因：{work_order.freeze_reason or '无'}")
 
             if work_order.status not in ['released', 'in_progress']:
                 raise ValidationError("只能对已下达或进行中的工单进行报工")
