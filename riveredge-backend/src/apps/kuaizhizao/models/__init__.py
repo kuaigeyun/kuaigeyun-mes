@@ -13,6 +13,7 @@ from .work_order_operation import WorkOrderOperation
 from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
 from .material_binding import MaterialBinding
+from .stocktaking import Stocktaking, StocktakingItem
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -62,6 +63,8 @@ __all__ = [
     'ScrapRecord',
     'DefectRecord',
     'MaterialBinding',
+    'Stocktaking',
+    'StocktakingItem',
 
     # 仓储管理模块
     'ProductionPicking',
