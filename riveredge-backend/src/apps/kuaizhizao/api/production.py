@@ -355,6 +355,45 @@ async def unfreeze_work_order(
     )
 
 
+@router.put("/work-orders/{work_order_id}/priority", response_model=WorkOrderResponse, summary="设置工单优先级")
+async def set_work_order_priority(
+    work_order_id: int,
+    priority_data: WorkOrderPriorityRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    设置工单优先级
+
+    - **work_order_id**: 工单ID
+    - **priority_data**: 优先级数据（priority: low/normal/high/urgent）
+    """
+    return await WorkOrderService().set_work_order_priority(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        priority_data=priority_data,
+        updated_by=current_user.id
+    )
+
+
+@router.put("/work-orders/batch-priority", response_model=List[WorkOrderResponse], summary="批量设置工单优先级")
+async def batch_set_work_order_priority(
+    batch_data: WorkOrderBatchPriorityRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[WorkOrderResponse]:
+    """
+    批量设置工单优先级
+
+    - **batch_data**: 批量优先级数据（work_order_ids: 工单ID列表, priority: low/normal/high/urgent）
+    """
+    return await WorkOrderService().batch_set_work_order_priority(
+        tenant_id=tenant_id,
+        batch_data=batch_data,
+        updated_by=current_user.id
+    )
+
+
 @router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="从工单创建返工单")
 async def create_rework_order_from_work_order(
     work_order_id: int,

@@ -244,3 +244,14 @@ class WorkOrderFreezeRequest(BaseModel):
 class WorkOrderUnfreezeRequest(BaseModel):
     """工单解冻请求Schema"""
     unfreeze_reason: Optional[str] = Field(None, description="解冻原因（可选）")
+
+
+class WorkOrderPriorityRequest(BaseModel):
+    """工单优先级设置请求Schema"""
+    priority: str = Field(..., description="优先级（low/normal/high/urgent）")
+
+
+class WorkOrderBatchPriorityRequest(BaseModel):
+    """工单批量优先级设置请求Schema"""
+    work_order_ids: list[int] = Field(..., description="工单ID列表")
+    priority: str = Field(..., description="优先级（low/normal/high/urgent）")

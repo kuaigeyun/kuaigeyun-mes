@@ -33,6 +33,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderOperationsUpdateRequest,
     WorkOrderFreezeRequest,
     WorkOrderUnfreezeRequest,
+    WorkOrderPriorityRequest,
+    WorkOrderBatchPriorityRequest,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -976,3 +978,94 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             logger.info(f"工单 {work_order.code} 已解冻")
 
             return WorkOrderResponse.model_validate(work_order)
+
+    async def set_work_order_priority(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        priority_data: WorkOrderPriorityRequest,
+        updated_by: int
+    ) -> WorkOrderResponse:
+        """
+        设置工单优先级
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            priority_data: 优先级数据
+            updated_by: 更新人ID
+
+        Returns:
+            WorkOrderResponse: 更新后的工单信息
+
+        Raises:
+            NotFoundError: 工单不存在
+            ValidationError: 优先级值无效
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 验证优先级值
+            valid_priorities = ['low', 'normal', 'high', 'urgent']
+            if priority_data.priority not in valid_priorities:
+                raise ValidationError(f"优先级值无效，必须是以下之一：{', '.join(valid_priorities)}")
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 更新优先级
+            work_order.priority = priority_data.priority
+            work_order.updated_by = updated_by
+            work_order.updated_by_name = user_info["name"]
+            await work_order.save()
+
+            logger.info(f"工单 {work_order.code} 优先级已设置为 {priority_data.priority}")
+
+            return WorkOrderResponse.model_validate(work_order)
+
+    async def batch_set_work_order_priority(
+        self,
+        tenant_id: int,
+        batch_data: WorkOrderBatchPriorityRequest,
+        updated_by: int
+    ) -> List[WorkOrderResponse]:
+        """
+        批量设置工单优先级
+
+        Args:
+            tenant_id: 组织ID
+            batch_data: 批量优先级数据
+            updated_by: 更新人ID
+
+        Returns:
+            List[WorkOrderResponse]: 更新后的工单信息列表
+
+        Raises:
+            ValidationError: 优先级值无效或工单ID列表为空
+            NotFoundError: 部分工单不存在
+        """
+        async with in_transaction():
+            # 验证优先级值
+            valid_priorities = ['low', 'normal', 'high', 'urgent']
+            if batch_data.priority not in valid_priorities:
+                raise ValidationError(f"优先级值无效，必须是以下之一：{', '.join(valid_priorities)}")
+
+            if not batch_data.work_order_ids:
+                raise ValidationError("工单ID列表不能为空")
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 批量更新工单优先级
+            updated_work_orders = []
+            for work_order_id in batch_data.work_order_ids:
+                work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+                work_order.priority = batch_data.priority
+                work_order.updated_by = updated_by
+                work_order.updated_by_name = user_info["name"]
+                await work_order.save()
+                updated_work_orders.append(WorkOrderResponse.model_validate(work_order))
+
+            logger.info(f"批量设置 {len(updated_work_orders)} 个工单的优先级为 {batch_data.priority}")
+
+            return updated_work_orders
