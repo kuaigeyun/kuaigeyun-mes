@@ -83,6 +83,10 @@ from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
     ScrapRecordResponse
 )
+from apps.kuaizhizao.schemas.defect_record import (
+    DefectRecordCreateFromReporting,
+    DefectRecordResponse
+)
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
     ProductionPickingCreate,
