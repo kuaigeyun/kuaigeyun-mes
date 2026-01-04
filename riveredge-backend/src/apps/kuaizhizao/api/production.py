@@ -48,6 +48,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderResponse,
     WorkOrderListResponse,
     MaterialShortageResponse,
+    WorkOrderFreezeRequest,
+    WorkOrderUnfreezeRequest,
     WorkOrderSplitRequest,
     WorkOrderSplitResponse,
     WorkOrderOperationResponse,
@@ -308,6 +310,48 @@ async def split_work_order(
         work_order_id=work_order_id,
         split_data=split_data,
         created_by=current_user.id
+    )
+
+
+@router.post("/work-orders/{work_order_id}/freeze", response_model=WorkOrderResponse, summary="冻结工单")
+async def freeze_work_order(
+    work_order_id: int,
+    freeze_data: WorkOrderFreezeRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    冻结工单
+
+    - **work_order_id**: 工单ID
+    - **freeze_data**: 冻结数据（包含冻结原因）
+    """
+    return await WorkOrderService().freeze_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        freeze_data=freeze_data,
+        frozen_by=current_user.id
+    )
+
+
+@router.post("/work-orders/{work_order_id}/unfreeze", response_model=WorkOrderResponse, summary="解冻工单")
+async def unfreeze_work_order(
+    work_order_id: int,
+    unfreeze_data: WorkOrderUnfreezeRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    解冻工单
+
+    - **work_order_id**: 工单ID
+    - **unfreeze_data**: 解冻数据（可选解冻原因）
+    """
+    return await WorkOrderService().unfreeze_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        unfreeze_data=unfreeze_data,
+        unfrozen_by=current_user.id
     )
 
 

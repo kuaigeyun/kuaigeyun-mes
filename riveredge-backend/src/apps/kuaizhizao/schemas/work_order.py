@@ -40,6 +40,13 @@ class WorkOrderBase(BaseModel):
     # 状态和优先级
     status: str = Field("draft", description="工单状态")
     priority: str = Field("normal", description="优先级")
+    
+    # 冻结信息
+    is_frozen: bool = Field(False, description="是否冻结")
+    freeze_reason: Optional[str] = Field(None, description="冻结原因")
+    frozen_at: Optional[datetime] = Field(None, description="冻结时间")
+    frozen_by: Optional[int] = Field(None, description="冻结人ID")
+    frozen_by_name: Optional[str] = Field(None, description="冻结人姓名")
 
     # 时间信息
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
@@ -227,3 +234,13 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
 class WorkOrderOperationsUpdateRequest(BaseModel):
     """工单工序批量更新请求Schema"""
     operations: list[WorkOrderOperationCreate] = Field(..., description="工序列表")
+
+
+class WorkOrderFreezeRequest(BaseModel):
+    """工单冻结请求Schema"""
+    freeze_reason: str = Field(..., description="冻结原因")
+
+
+class WorkOrderUnfreezeRequest(BaseModel):
+    """工单解冻请求Schema"""
+    unfreeze_reason: Optional[str] = Field(None, description="解冻原因（可选）")

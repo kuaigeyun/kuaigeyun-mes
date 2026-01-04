@@ -31,6 +31,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderOperationUpdate,
     WorkOrderOperationResponse,
     WorkOrderOperationsUpdateRequest,
+    WorkOrderFreezeRequest,
+    WorkOrderUnfreezeRequest,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -883,3 +885,94 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 返回更新后的工序列表
             return await self.get_work_order_operations(tenant_id, work_order_id)
+
+    async def freeze_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        freeze_data: WorkOrderFreezeRequest,
+        frozen_by: int
+    ) -> WorkOrderResponse:
+        """
+        冻结工单
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            freeze_data: 冻结数据（包含冻结原因）
+            frozen_by: 冻结人ID
+
+        Returns:
+            WorkOrderResponse: 冻结后的工单信息
+
+        Raises:
+            NotFoundError: 工单不存在
+            BusinessLogicError: 工单已冻结或状态不允许冻结
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单是否已冻结
+            if work_order.is_frozen:
+                raise BusinessLogicError("工单已冻结，不能重复冻结")
+
+            # 获取冻结人信息
+            user_info = await self.get_user_info(frozen_by)
+
+            # 更新冻结信息
+            work_order.is_frozen = True
+            work_order.freeze_reason = freeze_data.freeze_reason
+            work_order.frozen_at = datetime.now()
+            work_order.frozen_by = frozen_by
+            work_order.frozen_by_name = user_info["name"]
+            work_order.updated_by = frozen_by
+            work_order.updated_by_name = user_info["name"]
+            await work_order.save()
+
+            logger.info(f"工单 {work_order.code} 已冻结，原因：{freeze_data.freeze_reason}")
+
+            return WorkOrderResponse.model_validate(work_order)
+
+    async def unfreeze_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        unfreeze_data: WorkOrderUnfreezeRequest,
+        unfrozen_by: int
+    ) -> WorkOrderResponse:
+        """
+        解冻工单
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            unfreeze_data: 解冻数据（可选解冻原因）
+            unfrozen_by: 解冻人ID
+
+        Returns:
+            WorkOrderResponse: 解冻后的工单信息
+
+        Raises:
+            NotFoundError: 工单不存在
+            BusinessLogicError: 工单未冻结
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单是否已冻结
+            if not work_order.is_frozen:
+                raise BusinessLogicError("工单未冻结，不能解冻")
+
+            # 获取解冻人信息
+            user_info = await self.get_user_info(unfrozen_by)
+
+            # 清除冻结信息（保留冻结历史记录，可通过freeze_reason等字段查看）
+            work_order.is_frozen = False
+            # 保留freeze_reason、frozen_at、frozen_by等字段作为历史记录
+            work_order.updated_by = unfrozen_by
+            work_order.updated_by_name = user_info["name"]
+            await work_order.save()
+
+            logger.info(f"工单 {work_order.code} 已解冻")
+
+            return WorkOrderResponse.model_validate(work_order)
