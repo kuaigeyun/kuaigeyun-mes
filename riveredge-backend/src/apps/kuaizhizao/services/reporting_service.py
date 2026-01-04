@@ -490,3 +490,99 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # TODO: 更新工单的不合格数量
 
             return ScrapRecordResponse.model_validate(scrap_record)
+
+    async def record_defect(
+        self,
+        tenant_id: int,
+        reporting_record_id: int,
+        defect_data: DefectRecordCreateFromReporting,
+        created_by: int
+    ) -> DefectRecordResponse:
+        """
+        从报工记录创建不良品记录
+
+        Args:
+            tenant_id: 组织ID
+            reporting_record_id: 报工记录ID
+            defect_data: 不良品记录创建数据
+            created_by: 创建人ID
+
+        Returns:
+            DefectRecordResponse: 创建的不良品记录信息
+
+        Raises:
+            NotFoundError: 报工记录不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取报工记录
+            reporting_record = await ReportingRecord.get_or_none(
+                id=reporting_record_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not reporting_record:
+                raise NotFoundError(f"报工记录不存在: {reporting_record_id}")
+
+            # 获取工单信息
+            work_order = await WorkOrder.get_or_none(
+                id=reporting_record.work_order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not work_order:
+                raise NotFoundError(f"工单不存在: {reporting_record.work_order_id}")
+
+            # 验证不良品数量不能超过报工记录的不合格数量
+            if defect_data.defect_quantity > reporting_record.unqualified_quantity:
+                raise ValidationError(
+                    f"不良品数量({defect_data.defect_quantity})不能超过报工记录的不合格数量({reporting_record.unqualified_quantity})"
+                )
+
+            # 生成不良品记录编码
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="DEFECT_RECORD_CODE",
+                prefix=f"DF{today}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 创建不良品记录
+            defect_record = await DefectRecord.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                reporting_record_id=reporting_record_id,
+                work_order_id=reporting_record.work_order_id,
+                work_order_code=reporting_record.work_order_code,
+                operation_id=reporting_record.operation_id,
+                operation_code=reporting_record.operation_code,
+                operation_name=reporting_record.operation_name,
+                product_id=work_order.product_id,
+                product_code=work_order.product_code,
+                product_name=work_order.product_name,
+                defect_quantity=defect_data.defect_quantity,
+                defect_type=defect_data.defect_type,
+                defect_reason=defect_data.defect_reason,
+                disposition=defect_data.disposition,
+                quarantine_location=defect_data.quarantine_location,
+                status="draft",
+                remarks=defect_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            # TODO: 根据处理方式执行相应操作
+            # - 如果处理方式为返工，创建返工单
+            # - 如果处理方式为报废，创建报废记录
+            # - 如果处理方式为隔离，记录隔离位置
+            # - 更新工单的不合格数量
+
+            return DefectRecordResponse.model_validate(defect_record)
