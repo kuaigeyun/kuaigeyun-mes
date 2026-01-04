@@ -10,6 +10,7 @@ from .reporting_record import *
 from .outsource_order import *
 from .scrap_record import *
 from .defect_record import *
+from .material_binding import *
 
 # 仓储管理模块
 from .warehouse import *
@@ -72,6 +73,14 @@ __all__ = [
     'DefectRecordUpdate',
     'DefectRecordResponse',
     'DefectRecordListResponse',
+
+    # 物料绑定记录相关
+    'MaterialBindingBase',
+    'MaterialBindingCreate',
+    'MaterialBindingCreateFromReporting',
+    'MaterialBindingUpdate',
+    'MaterialBindingResponse',
+    'MaterialBindingListResponse',
 
     # 生产领料单相关
     'ProductionPickingBase',
