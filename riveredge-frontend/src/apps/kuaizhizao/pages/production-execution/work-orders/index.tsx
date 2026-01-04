@@ -400,6 +400,72 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
+   * 处理创建委外单
+   */
+  const handleCreateOutsource = async (record: WorkOrder) => {
+    try {
+      const detail = await workOrderApi.get(record.id!.toString());
+      setCurrentWorkOrderForOutsource(detail);
+      
+      // 加载供应商列表
+      try {
+        const suppliers = await supplierApi.list({ isActive: true });
+        setSupplierList(suppliers || []);
+      } catch (error) {
+        console.error('加载供应商列表失败:', error);
+        setSupplierList([]);
+      }
+
+      // 加载工单工序列表（如果还没有加载）
+      if (!workOrderOperations || workOrderOperations.length === 0) {
+        try {
+          const operations = await workOrderApi.getOperations(record.id!.toString());
+          setWorkOrderOperations(operations);
+        } catch (error) {
+          console.error('获取工单工序列表失败:', error);
+        }
+      }
+
+      setOutsourceModalVisible(true);
+      setTimeout(() => {
+        outsourceFormRef.current?.resetFields();
+      }, 100);
+    } catch (error) {
+      messageApi.error('获取工单详情失败');
+    }
+  };
+
+  /**
+   * 处理提交委外单表单
+   */
+  const handleSubmitOutsource = async (values: any): Promise<void> => {
+    try {
+      if (!currentWorkOrderForOutsource?.id) {
+        throw new Error('工单信息不存在');
+      }
+      
+      const submitData = {
+        work_order_operation_id: values.work_order_operation_id,
+        supplier_id: values.supplier_id,
+        outsource_quantity: values.outsource_quantity,
+        unit_price: values.unit_price,
+        planned_start_date: values.planned_start_date ? values.planned_start_date.format('YYYY-MM-DD HH:mm:ss') : undefined,
+        planned_end_date: values.planned_end_date ? values.planned_end_date.format('YYYY-MM-DD HH:mm:ss') : undefined,
+        remarks: values.remarks,
+      };
+
+      await outsourceOrderApi.createFromWorkOrder(currentWorkOrderForOutsource.id.toString(), submitData);
+      messageApi.success('委外单创建成功');
+      setOutsourceModalVisible(false);
+      setCurrentWorkOrderForOutsource(null);
+      outsourceFormRef.current?.resetFields();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建委外单失败');
+      throw error;
+    }
+  };
+
+  /**
    * 处理冻结工单
    */
   const handleFreeze = async (record: WorkOrder) => {
@@ -1141,6 +1207,98 @@ const WorkOrdersPage: React.FC = () => {
           placeholder="请输入备注"
           fieldProps={{ rows: 3 }}
         />
+      </FormModalTemplate>
+
+      {/* 创建委外单Modal */}
+      <FormModalTemplate
+        title="创建委外单"
+        open={outsourceModalVisible}
+        onCancel={() => {
+          setOutsourceModalVisible(false);
+          setCurrentWorkOrderForOutsource(null);
+          outsourceFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitOutsource}
+        formRef={outsourceFormRef}
+        {...MODAL_CONFIG}
+      >
+        {currentWorkOrderForOutsource && (
+          <>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <div><strong>工单编码：</strong>{currentWorkOrderForOutsource.code}</div>
+                </Col>
+                <Col span={12}>
+                  <div><strong>产品名称：</strong>{currentWorkOrderForOutsource.product_name}</div>
+                </Col>
+              </Row>
+            </Card>
+            <ProFormSelect
+              name="work_order_operation_id"
+              label="选择工序"
+              placeholder="请选择要委外的工序"
+              rules={[{ required: true, message: '请选择要委外的工序' }]}
+              options={workOrderOperations.map((op: any) => ({
+                label: `${op.operation_name || op.operation_code} (序号: ${op.sequence || op.id})`,
+                value: op.id,
+              }))}
+              fieldProps={{
+                showSearch: true,
+                filterOption: (input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              }}
+            />
+            <ProFormSelect
+              name="supplier_id"
+              label="供应商"
+              placeholder="请选择供应商"
+              rules={[{ required: true, message: '请选择供应商' }]}
+              options={supplierList.map(s => ({
+                label: `${s.code} - ${s.name}`,
+                value: s.id,
+              }))}
+              fieldProps={{
+                showSearch: true,
+                filterOption: (input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              }}
+            />
+            <ProFormDigit
+              name="outsource_quantity"
+              label="委外数量"
+              placeholder="请输入委外数量"
+              rules={[{ required: true, message: '请输入委外数量' }]}
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDigit
+              name="unit_price"
+              label="单价"
+              placeholder="请输入单价（可选）"
+              min={0}
+              fieldProps={{ precision: 2 }}
+            />
+            <ProFormDatePicker
+              name="planned_start_date"
+              label="计划开始时间"
+              placeholder="请选择计划开始时间"
+              fieldProps={{ showTime: true }}
+            />
+            <ProFormDatePicker
+              name="planned_end_date"
+              label="计划结束时间"
+              placeholder="请选择计划结束时间"
+              fieldProps={{ showTime: true }}
+            />
+            <ProFormTextArea
+              name="remarks"
+              label="备注"
+              placeholder="请输入备注（可选）"
+              fieldProps={{ rows: 3 }}
+            />
+          </>
+        )}
       </FormModalTemplate>
 
       {/* 拆分工单Modal */}
