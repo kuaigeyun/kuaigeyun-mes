@@ -452,6 +452,54 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
+   * 处理设置工单优先级
+   */
+  const handleSetPriority = async (record: WorkOrder, newPriority: string) => {
+    try {
+      await workOrderApi.setPriority(record.id!.toString(), { priority: newPriority });
+      messageApi.success('优先级设置成功');
+      actionRef.current?.reload();
+      // 如果详情页打开，刷新详情
+      if (workOrderDetail?.id === record.id) {
+        const detail = await workOrderApi.get(record.id!.toString());
+        setWorkOrderDetail(detail);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '优先级设置失败');
+    }
+  };
+
+  /**
+   * 处理批量设置优先级
+   */
+  const handleBatchSetPriority = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请至少选择一个工单');
+      return;
+    }
+    setBatchPriority('normal');
+    setBatchPriorityModalVisible(true);
+  };
+
+  /**
+   * 处理提交批量设置优先级
+   */
+  const handleSubmitBatchPriority = async () => {
+    try {
+      await workOrderApi.batchSetPriority({
+        work_order_ids: selectedRowKeys.map(key => Number(key)),
+        priority: batchPriority,
+      });
+      messageApi.success(`已批量设置 ${selectedRowKeys.length} 个工单的优先级`);
+      setBatchPriorityModalVisible(false);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '批量设置优先级失败');
+    }
+  };
+
+  /**
    * 处理拆分工单
    */
   const handleSplit = async (record: WorkOrder) => {
