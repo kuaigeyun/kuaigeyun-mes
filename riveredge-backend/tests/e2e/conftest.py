@@ -18,6 +18,7 @@ from typing import AsyncGenerator
 from httpx import AsyncClient
 from fastapi import FastAPI
 from tortoise import Tortoise
+from loguru import logger
 
 # 添加src目录到路径
 backend_root = Path(__file__).parent.parent.parent
@@ -192,7 +193,6 @@ async def db_setup():
             await ApplicationRegistryService.reload_apps()
         except Exception as e:
             # 如果数据库中没有应用记录，尝试从文件系统扫描
-            from loguru import logger
             logger.warning(f"应用注册服务初始化失败，尝试从文件系统扫描: {e}")
         
         yield
@@ -319,6 +319,66 @@ async def test_customer(db_setup, test_tenant) -> AsyncGenerator:
 
 
 @pytest.fixture(scope="function")
+async def test_material(db_setup, test_tenant) -> AsyncGenerator:
+    """
+    创建测试物料
+    
+    为每个测试创建独立的测试物料，测试结束后清理。
+    """
+    from apps.master_data.models.material import Material
+    import uuid as uuid_module
+    from datetime import datetime
+    
+    # 使用filter查找，包括软删除的记录
+    existing = await Material.filter(
+        tenant_id=test_tenant.id,
+        code="TEST-MAT-001"
+    ).first()
+    
+    if existing:
+        # 如果存在但已软删除，恢复它
+        if existing.deleted_at:
+            existing.deleted_at = None
+            await existing.save()
+        yield existing
+        return
+    
+    # 创建新物料
+    material = None
+    try:
+        material = await Material.create(
+            tenant_id=test_tenant.id,
+            uuid=str(uuid_module.uuid4()),
+            code="TEST-MAT-001",
+            name="测试物料",
+            spec="测试规格",
+            unit="个",
+            material_type="成品",
+            is_active=True
+        )
+    except Exception:
+        # 如果创建失败（可能是并发创建），再次尝试获取
+        material = await Material.filter(
+            tenant_id=test_tenant.id,
+            code="TEST-MAT-001"
+        ).first()
+        if material and material.deleted_at:
+            material.deleted_at = None
+            await material.save()
+        if not material:
+            raise
+    
+    yield material
+    
+    # 清理：软删除测试物料
+    try:
+        material.deleted_at = datetime.now()
+        await material.save()
+    except Exception as e:
+        print(f"清理测试物料时出错: {e}")
+
+
+@pytest.fixture(scope="function")
 async def test_user(db_setup, test_tenant) -> AsyncGenerator[User, None]:
     """
     创建测试用户
@@ -380,4 +440,3 @@ async def auth_headers(test_client: AsyncClient, test_user: User, test_tenant) -
         "Authorization": f"Bearer {token}",
         "X-Tenant-ID": str(test_user.tenant_id)
     }
-
