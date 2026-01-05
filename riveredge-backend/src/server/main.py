@@ -128,8 +128,23 @@ async def lifespan(app: FastAPI):
     logger.info("✅ 应用注册服务已重新初始化")
     
     # 在lifespan中加载插件路由（确保路由管理器已初始化）
+    # 注意：路由已经在 ApplicationRegistryService.reload_apps() 中注册到 ApplicationRouteManager
+    # 这里只需要确保路由已经注册到 FastAPI app
     load_plugin_routes()
     logger.info("✅ 插件路由已加载")
+    
+    # 验证路由注册情况
+    from core.services.application.application_route_manager import get_route_manager
+    route_manager = get_route_manager()
+    if route_manager:
+        registered_apps = ApplicationRegistryService.get_registered_routes()
+        logger.info(f"📊 路由注册验证: 已注册 {len(registered_apps)} 个应用的路由")
+        for app_code, routers in registered_apps.items():
+            # 检查路由是否真的在 FastAPI app 中
+            app_routes = [route.path for route in app.routes if hasattr(route, 'path') and f'/apps/{app_code}' in route.path]
+            logger.info(f"   - {app_code}: {len(routers)} 个路由器, {len(app_routes)} 个路由已注册到 FastAPI")
+            if app_routes:
+                logger.debug(f"      路由示例: {app_routes[:3]}")
 
     yield
 
