@@ -91,40 +91,29 @@ export async function listSalesOrders(params: SalesOrderListParams = {}): Promis
 
 /**
  * 创建销售订单
+ * 
+ * 注意：使用与基础数据管理APP相同的模式（api.post）
  */
 export async function createSalesOrder(data: SalesOrder): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>(
-    '/apps/kuaizhizao/sales-orders',
-    {
-      method: 'POST',
-      data,
-    }
-  );
+  return api.post<SalesOrder>('/apps/kuaizhizao/sales-orders', data);
 }
 
 /**
  * 获取销售订单详情
+ * 
+ * 注意：使用与基础数据管理APP相同的模式（api.get）
  */
 export async function getSalesOrder(id: number): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>(
-    `/apps/kuaizhizao/sales-orders/${id}`,
-    {
-      method: 'GET',
-    }
-  );
+  return api.get<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}`);
 }
 
 /**
  * 更新销售订单
+ * 
+ * 注意：使用与基础数据管理APP相同的模式（api.put）
  */
 export async function updateSalesOrder(id: number, data: Partial<SalesOrder>): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>(
-    `/apps/kuaizhizao/sales-orders/${id}`,
-    {
-      method: 'PUT',
-      data,
-    }
-  );
+  return api.put<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}`, data);
 }
 
 /**
