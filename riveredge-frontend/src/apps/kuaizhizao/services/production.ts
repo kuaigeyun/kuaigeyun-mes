@@ -687,3 +687,71 @@ export const planningApi = {
   },
 };
 
+// 异常处理相关接口
+export const exceptionApi = {
+  // 缺料异常
+  materialShortage: {
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/exceptions/material-shortage', { method: 'GET', params });
+    },
+    handle: async (id: string, action: string, alternativeMaterialId?: number, remarks?: string) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/material-shortage/${id}/handle`, {
+        method: 'POST',
+        params: { action, alternative_material_id: alternativeMaterialId, remarks },
+      });
+    },
+    detect: async (workOrderId: string) => {
+      return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/detect-shortage`, { method: 'POST' });
+    },
+  },
+
+  // 延期异常
+  deliveryDelay: {
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/exceptions/delivery-delay', { method: 'GET', params });
+    },
+    handle: async (id: string, action: string, remarks?: string) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/delivery-delay/${id}/handle`, {
+        method: 'POST',
+        params: { action, remarks },
+      });
+    },
+    detect: async (workOrderId: string, daysThreshold?: number) => {
+      return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/detect-delay`, {
+        method: 'POST',
+        params: { days_threshold: daysThreshold },
+      });
+    },
+  },
+
+  // 质量异常
+  quality: {
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/exceptions/quality', { method: 'GET', params });
+    },
+    handle: async (
+      id: string,
+      action: string,
+      data?: {
+        root_cause?: string;
+        corrective_action?: string;
+        preventive_action?: string;
+        responsible_person_id?: number;
+        responsible_person_name?: string;
+        verification_result?: string;
+        remarks?: string;
+      }
+    ) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/quality/${id}/handle`, {
+        method: 'POST',
+        params: { action, ...data },
+      });
+    },
+  },
+
+  // 异常统计
+  statistics: async (params?: { date_start?: string; date_end?: string }) => {
+    return apiRequest('/apps/kuaizhizao/exceptions/statistics', { method: 'GET', params });
+  },
+};
+

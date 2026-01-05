@@ -19,8 +19,7 @@ from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.models.material_shortage_exception import MaterialShortageException
 from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
 from apps.kuaizhizao.models.quality_exception import QualityException
-from apps.kuaizhizao.services.warehouse_service import WarehouseService
-from apps.kuaizhizao.services.production_service import ProductionService
+from apps.kuaizhizao.models.inventory_alert import InventoryAlert
 from loguru import logger
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -75,10 +74,11 @@ async def get_todos(
     todos = []
     
     try:
-        # 1. 获取待处理工单
+        # 1. 获取待处理工单（状态为released或in_progress的工单）
         work_orders = await WorkOrderService().list_work_orders(
             tenant_id=tenant_id,
             status="released",
+            skip=0,
             limit=limit,
         )
         
@@ -86,12 +86,12 @@ async def get_todos(
             todos.append(TodoItem(
                 id=f"work_order_{wo.id}",
                 type="work_order",
-                title=f"处理工单 {wo.work_order_no}",
+                title=f"处理工单 {wo.code}",
                 description=f"产品：{wo.product_name}，数量：{wo.quantity}",
-                priority="high" if wo.priority == "urgent" else "medium",
+                priority="medium",  # 工单列表响应中没有priority字段，默认medium
                 due_date=wo.planned_end_date,
                 status="pending",
-                link=f"/apps/kuaizhizao/work-orders/{wo.id}",
+                link=f"/apps/kuaizhizao/production-execution/work-orders/{wo.id}",
                 created_at=wo.created_at,
             ))
     except Exception as e:
@@ -177,26 +177,62 @@ async def get_todos(
 @router.post("/todos/{todo_id}/handle", summary="处理待办事项")
 async def handle_todo(
     todo_id: str,
-    action: str = Query(..., description="处理动作"),
+    action: str = Query("handle", description="处理动作（handle: 跳转处理, ignore: 忽略）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     处理待办事项
     
-    根据待办事项类型执行相应的处理动作
+    根据待办事项类型执行相应的处理动作。
+    工单和异常待办事项返回跳转链接，实际处理在对应的详情页完成。
+    
+    - **todo_id**: 待办事项ID（格式：work_order_{id} 或 exception_material_{id} 等）
+    - **action**: 处理动作（handle: 处理/跳转, ignore: 忽略）
     """
     # 解析待办事项ID
     if todo_id.startswith("work_order_"):
+        # 工单待办事项：返回跳转链接
         work_order_id = int(todo_id.replace("work_order_", ""))
-        # TODO: 执行工单处理逻辑
-        return {"message": "工单处理成功", "todo_id": todo_id}
-    elif todo_id.startswith("exception_"):
-        exception_id = int(todo_id.replace("exception_", ""))
-        # TODO: 执行异常处理逻辑
-        return {"message": "异常处理成功", "todo_id": todo_id}
+        return {
+            "success": True,
+            "message": "请前往工单详情页进行处理",
+            "todo_id": todo_id,
+            "redirect": f"/apps/kuaizhizao/production-execution/work-orders/{work_order_id}",
+        }
+    elif todo_id.startswith("exception_material_"):
+        # 缺料异常：返回跳转链接
+        exception_id = int(todo_id.replace("exception_material_", ""))
+        return {
+            "success": True,
+            "message": "请前往缺料异常详情页进行处理",
+            "todo_id": todo_id,
+            "redirect": f"/apps/kuaizhizao/exceptions/material-shortage/{exception_id}",
+        }
+    elif todo_id.startswith("exception_delay_"):
+        # 延期异常：返回跳转链接
+        exception_id = int(todo_id.replace("exception_delay_", ""))
+        return {
+            "success": True,
+            "message": "请前往延期异常详情页进行处理",
+            "todo_id": todo_id,
+            "redirect": f"/apps/kuaizhizao/exceptions/delivery-delay/{exception_id}",
+        }
+    elif todo_id.startswith("exception_quality_"):
+        # 质量异常：返回跳转链接
+        exception_id = int(todo_id.replace("exception_quality_", ""))
+        return {
+            "success": True,
+            "message": "请前往质量异常详情页进行处理",
+            "todo_id": todo_id,
+            "redirect": f"/apps/kuaizhizao/exceptions/quality/{exception_id}",
+        }
     else:
-        return {"message": "未知的待办事项类型", "todo_id": todo_id}
+        return {
+            "success": False,
+            "message": f"未知的待办事项类型: {todo_id}",
+            "todo_id": todo_id,
+        }
 
 
 @router.get("/statistics", response_model=StatisticsResponse, summary="获取统计数据")
@@ -242,12 +278,19 @@ async def get_statistics(
     
     try:
         # 库存统计
-        # TODO: 实现库存统计逻辑
+        # 获取库存预警数量
+        alert_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            status="open",
+        ).count()
+        
+        # TODO: 实现完整的库存统计逻辑（总数量、总价值、周转率等）
+        # 当前先返回预警数量
         statistics.inventory = {
             "total_quantity": 0,
             "total_value": 0,
             "turnover_rate": 0,
-            "alert_count": 0,
+            "alert_count": alert_count,
         }
     except Exception as e:
         logger.error(f"获取库存统计失败: {e}")
@@ -260,6 +303,9 @@ async def get_statistics(
     
     try:
         # 质量统计
+        from apps.kuaizhizao.services.reporting_service import ReportingService
+        
+        # 获取质量异常统计
         quality_exceptions = await QualityException.filter(
             tenant_id=tenant_id,
         ).all()
@@ -269,10 +315,18 @@ async def get_statistics(
             status="open",
         ).all()
         
+        # 获取报工统计，计算合格率
+        reporting_service = ReportingService()
+        reporting_stats = await reporting_service.get_reporting_statistics(
+            tenant_id=tenant_id,
+        )
+        
+        quality_rate = reporting_stats.get("qualification_rate", 0) if reporting_stats else 0
+        
         statistics.quality = {
             "total_exceptions": len(quality_exceptions),
             "open_exceptions": len(open_quality_exceptions),
-            "quality_rate": 95.5,  # TODO: 从质量数据计算
+            "quality_rate": round(quality_rate, 2),
         }
     except Exception as e:
         logger.error(f"获取质量统计失败: {e}")
