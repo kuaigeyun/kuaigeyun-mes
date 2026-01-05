@@ -126,6 +126,10 @@ async def lifespan(app: FastAPI):
     # 数据库连接建立后，重新初始化应用注册服务（使用真实的数据库数据）
     await ApplicationRegistryService.reload_apps()
     logger.info("✅ 应用注册服务已重新初始化")
+    
+    # 在lifespan中加载插件路由（确保路由管理器已初始化）
+    load_plugin_routes()
+    logger.info("✅ 插件路由已加载")
 
     yield
 
@@ -199,8 +203,8 @@ def load_plugin_routes():
         import traceback
         traceback.print_exc()
 
-# 加载插件路由（在路由管理器初始化后调用）
-load_plugin_routes()
+# 注意：插件路由现在在lifespan中加载，确保路由管理器和应用注册服务都已初始化
+# load_plugin_routes()  # 已移至lifespan中调用
 
 # 挂载静态文件目录
 import os
