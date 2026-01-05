@@ -4,7 +4,7 @@
 定义设备数据模型，支持多组织隔离。
 
 Author: Luigi Lu
-Date: 2025-01-15
+Date: 2026-01-05
 """
 
 from tortoise import fields
@@ -61,6 +61,7 @@ class Equipment(BaseModel):
             ("type",),
             ("category",),
             ("workstation_id",),
+            ("work_center_id",),
             ("status",),
         ]
         unique_together = [("tenant_id", "code")]
@@ -93,6 +94,11 @@ class Equipment(BaseModel):
     workstation_id = fields.IntField(null=True, description="关联工位ID（可选，关联到工位）")
     workstation_code = fields.CharField(max_length=50, null=True, description="工位编码")
     workstation_name = fields.CharField(max_length=200, null=True, description="工位名称")
+    
+    # 关联工作中心（可选）
+    work_center_id = fields.IntField(null=True, description="关联工作中心ID（可选，关联到工作中心）")
+    work_center_code = fields.CharField(max_length=50, null=True, description="工作中心编码")
+    work_center_name = fields.CharField(max_length=200, null=True, description="工作中心名称")
     
     # 状态信息
     status = fields.CharField(max_length=50, default="正常", description="设备状态（正常、维修中、停用、报废）")

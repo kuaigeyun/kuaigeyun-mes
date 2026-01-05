@@ -4,7 +4,7 @@
 定义设备相关的 Pydantic Schema，用于 API 请求和响应验证。
 
 Author: Luigi Lu
-Date: 2025-01-15
+Date: 2026-01-05
 """
 
 from datetime import datetime, date
@@ -36,6 +36,9 @@ class EquipmentBase(BaseModel):
     workstation_id: Optional[int] = Field(None, description="关联工位ID（可选）")
     workstation_code: Optional[str] = Field(None, max_length=50, description="工位编码")
     workstation_name: Optional[str] = Field(None, max_length=200, description="工位名称")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID（可选）")
+    work_center_code: Optional[str] = Field(None, max_length=50, description="工作中心编码")
+    work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
     status: str = Field(default="正常", max_length=50, description="设备状态（正常、维修中、停用、报废）")
     is_active: bool = Field(default=True, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
@@ -92,6 +95,9 @@ class EquipmentUpdate(BaseModel):
     workstation_id: Optional[int] = Field(None, description="关联工位ID（可选）")
     workstation_code: Optional[str] = Field(None, max_length=50, description="工位编码")
     workstation_name: Optional[str] = Field(None, max_length=200, description="工位名称")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID（可选）")
+    work_center_code: Optional[str] = Field(None, max_length=50, description="工作中心编码")
+    work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
     status: Optional[str] = Field(None, max_length=50, description="设备状态（正常、维修中、停用、报废）")
     is_active: Optional[bool] = Field(None, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
