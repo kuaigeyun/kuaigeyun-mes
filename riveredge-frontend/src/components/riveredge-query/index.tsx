@@ -1399,11 +1399,19 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                     submitter={false}
                   >
                     <Row gutter={16}>
-                      {searchableColumns.map((column) => (
-                        <Col span={12} key={column.dataIndex as string}>
-                          {renderFormItem(column)}
-                        </Col>
-                      ))}
+                      {searchableColumns.map((column, index) => {
+                        const dataIndex = column.dataIndex;
+                        const key = typeof dataIndex === 'string' 
+                          ? dataIndex 
+                          : Array.isArray(dataIndex) 
+                            ? dataIndex.join('-') 
+                            : `column-${index}`;
+                        return (
+                          <Col span={12} key={key}>
+                            {renderFormItem(column)}
+                          </Col>
+                        );
+                      })}
                     </Row>
                   </ProForm>
                 ),
