@@ -187,15 +187,20 @@ def load_plugin_routes():
             # 使用路由管理器注册路由
             for app_code, routers in registered_routes.items():
                 route_manager.register_app_routes(app_code, routers)
-                logger.debug(f"✅ 通过路由管理器注册应用 {app_code} 的路由")
+                logger.info(f"✅ 通过路由管理器注册应用 {app_code} 的路由（{len(routers)} 个路由器）")
         else:
             # 向后兼容：如果路由管理器未初始化，使用旧方式
+            logger.warning("⚠️ 路由管理器未初始化，使用兼容模式注册路由")
             for app_code, routers in registered_routes.items():
                 for router in routers:
                     app.include_router(router, prefix="/api/v1")
-                    logger.debug(f"✅ 已注册应用 {app_code} 的路由（兼容模式）")
+                    logger.info(f"✅ 已注册应用 {app_code} 的路由（兼容模式）")
 
         total_routes = sum(len(routers) for routers in registered_routes.values())
+        if total_routes > 0:
+            logger.info(f"✅ 总共注册了 {total_routes} 个应用路由")
+        else:
+            logger.warning("⚠️ 没有注册任何应用路由 - 请检查应用是否被发现")
         logger.info(f"🎉 应用路由注册完成，共注册 {total_routes} 个路由对象")
 
     except Exception as e:
