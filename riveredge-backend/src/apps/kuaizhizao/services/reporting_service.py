@@ -467,6 +467,48 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             await work_order.save()
 
+    async def _update_work_order_unqualified_quantity(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        work_order: Optional[WorkOrder] = None
+    ) -> None:
+        """
+        更新工单的不合格数量
+        
+        从该工单的所有报废记录中统计报废数量，更新工单的unqualified_quantity字段。
+        统计所有状态的报废记录（draft和confirmed），不包括cancelled状态。
+        
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            work_order: 工单对象（可选，如果提供则直接使用，否则从数据库查询）
+        """
+        # 如果没有提供工单对象，则从数据库查询
+        if work_order is None:
+            work_order = await WorkOrder.get_or_none(
+                id=work_order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            
+        if not work_order:
+            return
+        
+        # 查询该工单的所有报废记录（不包括cancelled状态和已删除的）
+        scrap_records = await ScrapRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            status__in=['draft', 'confirmed'],  # 统计draft和confirmed状态的报废记录
+            deleted_at__isnull=True
+        ).all()
+        
+        # 累加报废数量
+        total_scrap_quantity = sum(r.scrap_quantity for r in scrap_records)
+        
+        # 更新工单的不合格数量
+        work_order.unqualified_quantity = total_scrap_quantity
+
     async def record_scrap(
         self,
         tenant_id: int,
