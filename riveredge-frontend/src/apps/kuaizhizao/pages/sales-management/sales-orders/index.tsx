@@ -331,22 +331,48 @@ const SalesOrdersPage: React.FC = () => {
       // 获取选中的客户信息
       const selectedCustomer = customers.find((c) => c.value === values.customer_id);
       
+      // 处理明细项：将表单中的items转换为API需要的格式
+      const items = (values.items || []).map((item: any) => {
+        const selectedMaterial = materials.find((m) => m.value === item.material_id);
+        return {
+          material_id: item.material_id,
+          material_code: selectedMaterial?.label.split(' - ')[0] || '',
+          material_name: selectedMaterial?.label.split(' - ')[1]?.split(' (')[0] || '',
+          material_spec: selectedMaterial?.label.includes('(') 
+            ? selectedMaterial.label.split('(')[1]?.replace(')', '') || '' 
+            : '',
+          material_unit: item.material_unit || selectedMaterial?.unit || '个',
+          ordered_quantity: item.ordered_quantity || 0,
+          unit_price: item.unit_price || 0,
+          total_price: (item.ordered_quantity || 0) * (item.unit_price || 0),
+          delivery_date: item.delivery_date || values.delivery_date || new Date().toISOString().split('T')[0],
+          notes: item.notes || '',
+        };
+      });
+
+      // 计算订单总数量和总金额
+      const total_quantity = items.reduce((sum: number, item: any) => sum + (item.ordered_quantity || 0), 0);
+      const total_amount = items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
+
       if (isEdit && currentOrder?.id) {
         await updateSalesOrder(currentOrder.id, {
           ...values,
           customer_name: selectedCustomer?.label.split(' (')[0] || values.customer_name,
+          items,
+          total_quantity,
+          total_amount,
         });
         messageApi.success('销售订单更新成功');
       } else {
-        // 创建时需要提供明细项，这里先创建一个空的明细数组
-        // TODO: 后续需要实现明细项的编辑功能
         await createSalesOrder({
           ...values,
           customer_name: selectedCustomer?.label.split(' (')[0] || '',
-          items: [],
+          items,
           order_type: values.order_type || 'MTO',
           delivery_date: values.delivery_date || new Date().toISOString().split('T')[0],
           status: '草稿',
+          total_quantity,
+          total_amount,
         });
         messageApi.success('销售订单创建成功');
       }
