@@ -1,58 +1,56 @@
 /**
- * 设备管理列表页面
+ * 模具管理列表页面
  * 
- * 用于系统管理员查看和管理组织内的设备。
- * 支持设备的 CRUD 操作。
+ * 用于系统管理员查看和管理组织内的模具。
+ * 支持模具的 CRUD 操作和模具使用记录管理。
  * 
  * Author: Luigi Lu
  * Date: 2025-01-15
  */
 
 import React, { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormJsonSchema } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, message } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
-  getEquipmentList,
-  getEquipmentByUuid,
-  createEquipment,
-  updateEquipment,
-  deleteEquipment,
-  Equipment,
-  CreateEquipmentData,
-  UpdateEquipmentData,
-} from '../../../../services/equipment';
+  getMoldList,
+  getMoldByUuid,
+  createMold,
+  updateMold,
+  deleteMold,
+  Mold,
+  CreateMoldData,
+  UpdateMoldData,
+} from '../../../../services/mold';
 
 /**
- * 设备管理列表页面组件
+ * 模具管理列表页面组件
  */
-const EquipmentListPage: React.FC = () => {
+const MoldListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
-  const [currentEquipmentUuid, setCurrentEquipmentUuid] = useState<string | null>(null);
+  const [currentMoldUuid, setCurrentMoldUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [detailData, setDetailData] = useState<Equipment | null>(null);
+  const [detailData, setDetailData] = useState<Mold | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   /**
-   * 处理新建设备
+   * 处理新建模具
    */
   const handleCreate = () => {
     setIsEdit(false);
-    setCurrentEquipmentUuid(null);
+    setCurrentMoldUuid(null);
     setFormInitialValues({
       status: '正常',
       is_active: true,
@@ -61,14 +59,14 @@ const EquipmentListPage: React.FC = () => {
   };
 
   /**
-   * 处理编辑设备
+   * 处理编辑模具
    */
-  const handleEdit = async (record: Equipment) => {
+  const handleEdit = async (record: Mold) => {
     try {
       setIsEdit(true);
-      setCurrentEquipmentUuid(record.uuid);
+      setCurrentMoldUuid(record.uuid);
       
-      const detail = await getEquipmentByUuid(record.uuid);
+      const detail = await getMoldByUuid(record.uuid);
       setFormInitialValues({
         code: detail.code,
         name: detail.name,
@@ -82,42 +80,38 @@ const EquipmentListPage: React.FC = () => {
         purchase_date: detail.purchase_date,
         installation_date: detail.installation_date,
         warranty_period: detail.warranty_period,
-        technical_parameters: detail.technical_parameters,
-        workstation_id: detail.workstation_id,
-        workstation_code: detail.workstation_code,
-        workstation_name: detail.workstation_name,
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
       });
       setModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取设备详情失败');
+      messageApi.error(error.message || '获取模具详情失败');
     }
   };
 
   /**
    * 处理查看详情
    */
-  const handleView = async (record: Equipment) => {
+  const handleView = async (record: Mold) => {
     try {
       setDetailLoading(true);
       setDrawerVisible(true);
-      const detail = await getEquipmentByUuid(record.uuid);
+      const detail = await getMoldByUuid(record.uuid);
       setDetailData(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '获取设备详情失败');
+      messageApi.error(error.message || '获取模具详情失败');
     } finally {
       setDetailLoading(false);
     }
   };
 
   /**
-   * 处理删除设备
+   * 处理删除模具
    */
-  const handleDelete = async (record: Equipment) => {
+  const handleDelete = async (record: Mold) => {
     try {
-      await deleteEquipment(record.uuid);
+      await deleteMold(record.uuid);
       messageApi.success('删除成功');
       actionRef.current?.reload();
     } catch (error: any) {
@@ -132,11 +126,11 @@ const EquipmentListPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      if (isEdit && currentEquipmentUuid) {
-        await updateEquipment(currentEquipmentUuid, values as UpdateEquipmentData);
+      if (isEdit && currentMoldUuid) {
+        await updateMold(currentMoldUuid, values as UpdateMoldData);
         messageApi.success('更新成功');
       } else {
-        await createEquipment(values as CreateEquipmentData);
+        await createMold(values as CreateMoldData);
         messageApi.success('创建成功');
       }
       
@@ -153,32 +147,32 @@ const EquipmentListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Equipment>[] = [
+  const columns: ProColumns<Mold>[] = [
     {
-      title: '设备编码',
+      title: '模具编码',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '设备名称',
+      title: '模具名称',
       dataIndex: 'name',
       width: 200,
     },
     {
-      title: '设备类型',
+      title: '模具类型',
       dataIndex: 'type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        '加工设备': { text: '加工设备' },
-        '检测设备': { text: '检测设备' },
-        '包装设备': { text: '包装设备' },
+        '注塑模具': { text: '注塑模具' },
+        '压铸模具': { text: '压铸模具' },
+        '冲压模具': { text: '冲压模具' },
         '其他': { text: '其他' },
       },
     },
     {
-      title: '设备分类',
+      title: '模具分类',
       dataIndex: 'category',
       width: 120,
       hideInSearch: true,
@@ -202,14 +196,14 @@ const EquipmentListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: '关联工位',
-      dataIndex: 'workstation_name',
-      width: 150,
+      title: '累计使用次数',
+      dataIndex: 'total_usage_count',
+      width: 120,
       hideInSearch: true,
-      render: (_, record) => record.workstation_name || '-',
+      sorter: true,
     },
     {
-      title: '设备状态',
+      title: '模具状态',
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
@@ -276,16 +270,8 @@ const EquipmentListPage: React.FC = () => {
           >
             编辑
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<HistoryOutlined />}
-            onClick={() => navigate(`/system/equipment/${record.uuid}/trace`)}
-          >
-            追溯
-          </Button>
           <Popconfirm
-            title="确定要删除这个设备吗？"
+            title="确定要删除这个模具吗？"
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -305,15 +291,14 @@ const EquipmentListPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
-        <UniTable<Equipment>
+        <UniTable<Mold>
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {
-            const response = await getEquipmentList({
+            const response = await getMoldList({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
               type: searchFormValues?.type,
-              category: searchFormValues?.category,
               status: searchFormValues?.status,
               is_active: searchFormValues?.is_active,
               search: searchFormValues?.keyword,
@@ -334,7 +319,7 @@ const EquipmentListPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <Button key="create" type="primary" onClick={handleCreate}>
-              新建设备
+              新建模具
             </Button>,
           ]}
           rowSelection={{
@@ -346,7 +331,7 @@ const EquipmentListPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑设备' : '新建设备'}
+        title={isEdit ? '编辑模具' : '新建模具'}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -360,32 +345,32 @@ const EquipmentListPage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="设备编码"
-          placeholder="设备编码（可选，不填则自动生成）"
+          label="模具编码"
+          placeholder="模具编码（可选，不填则自动生成）"
           disabled={isEdit}
         />
         <ProFormText
           name="name"
-          label="设备名称"
-          rules={[{ required: true, message: '请输入设备名称' }]}
-          placeholder="请输入设备名称"
+          label="模具名称"
+          rules={[{ required: true, message: '请输入模具名称' }]}
+          placeholder="请输入模具名称"
         />
         <ProFormSelect
           name="type"
-          label="设备类型"
-          placeholder="请选择设备类型（可选）"
+          label="模具类型"
+          placeholder="请选择模具类型（可选）"
           options={[
-            { label: '加工设备', value: '加工设备' },
-            { label: '检测设备', value: '检测设备' },
-            { label: '包装设备', value: '包装设备' },
+            { label: '注塑模具', value: '注塑模具' },
+            { label: '压铸模具', value: '压铸模具' },
+            { label: '冲压模具', value: '冲压模具' },
             { label: '其他', value: '其他' },
           ]}
           allowClear
         />
         <ProFormText
           name="category"
-          label="设备分类"
-          placeholder="请输入设备分类（如：CNC、注塑机、冲压机等）"
+          label="模具分类"
+          placeholder="请输入模具分类"
         />
         <ProFormText
           name="brand"
@@ -428,20 +413,10 @@ const EquipmentListPage: React.FC = () => {
           placeholder="请输入保修期（月）"
           fieldProps={{ min: 0 }}
         />
-        <ProFormText
-          name="workstation_code"
-          label="工位编码"
-          placeholder="请输入工位编码（可选）"
-        />
-        <ProFormText
-          name="workstation_name"
-          label="工位名称"
-          placeholder="请输入工位名称（可选）"
-        />
         <ProFormSelect
           name="status"
-          label="设备状态"
-          rules={[{ required: true, message: '请选择设备状态' }]}
+          label="模具状态"
+          rules={[{ required: true, message: '请选择模具状态' }]}
           options={[
             { label: '正常', value: '正常' },
             { label: '维修中', value: '维修中' },
@@ -457,23 +432,23 @@ const EquipmentListPage: React.FC = () => {
         <ProFormTextArea
           name="description"
           label="描述"
-          placeholder="请输入设备描述"
+          placeholder="请输入模具描述"
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="设备详情"
+        title="模具详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
         dataSource={detailData}
         columns={[
-          { title: '设备编码', dataIndex: 'code' },
-          { title: '设备名称', dataIndex: 'name' },
-          { title: '设备类型', dataIndex: 'type' },
-          { title: '设备分类', dataIndex: 'category' },
+          { title: '模具编码', dataIndex: 'code' },
+          { title: '模具名称', dataIndex: 'name' },
+          { title: '模具类型', dataIndex: 'type' },
+          { title: '模具分类', dataIndex: 'category' },
           { title: '品牌', dataIndex: 'brand' },
           { title: '型号', dataIndex: 'model' },
           { title: '序列号', dataIndex: 'serial_number' },
@@ -482,9 +457,9 @@ const EquipmentListPage: React.FC = () => {
           { title: '采购日期', dataIndex: 'purchase_date' },
           { title: '安装日期', dataIndex: 'installation_date' },
           { title: '保修期（月）', dataIndex: 'warranty_period' },
-          { title: '关联工位', dataIndex: 'workstation_name' },
+          { title: '累计使用次数', dataIndex: 'total_usage_count' },
           {
-            title: '设备状态',
+            title: '模具状态',
             dataIndex: 'status',
             render: (value: string) => {
               const statusMap: Record<string, string> = {
@@ -510,5 +485,5 @@ const EquipmentListPage: React.FC = () => {
   );
 };
 
-export default EquipmentListPage;
+export default MoldListPage;
 

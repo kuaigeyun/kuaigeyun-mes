@@ -26,6 +26,10 @@ import PermissionsPage from '../pages/system/permissions/list';
 import DepartmentsPage from '../pages/system/departments/list';
 import PositionsPage from '../pages/system/positions/list';
 import EquipmentPage from '../pages/system/equipment/list';
+import EquipmentTracePage from '../pages/system/equipment/trace';
+import MaintenancePlansPage from '../pages/system/maintenance-plans/list';
+import EquipmentFaultsPage from '../pages/system/equipment-faults/list';
+import MoldsPage from '../pages/system/molds/list';
 import UsersPage from '../pages/system/users/list';
 import UserProfilePage from '../pages/personal/profile';
 import LanguagesPage from '../pages/system/languages/list';
@@ -114,6 +118,10 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/departments" element={renderWithLayout(DepartmentsPage)} />
       <Route path="/system/positions" element={renderWithLayout(PositionsPage)} />
       <Route path="/system/equipment" element={renderWithLayout(EquipmentPage)} />
+      <Route path="/system/equipment/:uuid/trace" element={renderWithLayout(EquipmentTracePage)} />
+      <Route path="/system/maintenance-plans" element={renderWithLayout(MaintenancePlansPage)} />
+      <Route path="/system/equipment-faults" element={renderWithLayout(EquipmentFaultsPage)} />
+      <Route path="/system/molds" element={renderWithLayout(MoldsPage)} />
       <Route path="/system/users" element={renderWithLayout(UsersPage)} />
       <Route path="/system/user-profile" element={renderWithLayout(UserProfilePage)} />
       <Route path="/system/languages" element={renderWithLayout(LanguagesPage)} />
