@@ -4,7 +4,7 @@
 提供设备的 CRUD 操作。
 
 Author: Luigi Lu
-Date: 2025-01-15
+Date: 2026-01-05
 """
 
 from typing import List, Optional
@@ -166,10 +166,9 @@ class EquipmentService:
         
         # 搜索条件
         if search:
+            from tortoise.expressions import Q
             query = query.filter(
-                code__icontains=search
-            ) | query.filter(
-                name__icontains=search
+                Q(code__icontains=search) | Q(name__icontains=search)
             )
         
         # 获取总数量

@@ -4,7 +4,7 @@
 提供设备故障和维修记录的 CRUD 操作。
 
 Author: Luigi Lu
-Date: 2025-01-15
+Date: 2026-01-05
 """
 
 from typing import List, Optional

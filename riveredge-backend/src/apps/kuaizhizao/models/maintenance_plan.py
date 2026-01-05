@@ -4,7 +4,7 @@
 定义维护保养计划数据模型，支持多组织隔离。
 
 Author: Luigi Lu
-Date: 2025-01-15
+Date: 2026-01-05
 """
 
 from tortoise import fields
