@@ -101,6 +101,14 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 addopts = "-v --strict-markers --tb=short"
+markers = [
+    "e2e: 端到端测试",
+    "unit: 单元测试",
+    "integration: 集成测试",
+    "sales_order: 销售订单相关测试",
+    "mto: MTO模式测试",
+    "mts: MTS模式测试",
+]
 
 [tool.aerich]
 tortoise_orm = "migrations.aerich_config.TORTOISE_ORM"
