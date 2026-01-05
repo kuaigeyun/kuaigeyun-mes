@@ -234,11 +234,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # 注册 Inngest 服务
 # 导入 Inngest 函数（确保函数被注册）
-try:
-    from core.inngest.functions.test_function import test_integration_function
-except ImportError:
-    # 测试环境可能没有inngest，跳过导入
-    test_integration_function = None
+# 注意：test_integration_function已在__init__.py中处理导入错误
 from core.inngest.functions import (
     message_sender_function,
     scheduled_task_executor_function,
