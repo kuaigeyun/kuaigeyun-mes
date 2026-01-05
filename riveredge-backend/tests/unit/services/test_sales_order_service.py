@@ -19,6 +19,7 @@ from apps.kuaizhizao.schemas.sales import (
     SalesOrderUpdate,
     SalesOrderItemCreate,
 )
+from decimal import Decimal
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -42,10 +43,13 @@ async def test_create_sales_order(db_setup, test_tenant, test_customer, test_use
                 material_code="MAT001",
                 material_name="测试物料",
                 material_unit="个",
-                ordered_quantity=Decimal("100.00"),
-                unit_price=Decimal("10.00"),
-                total_amount=Decimal("1000.00"),
+                order_quantity=100.0,
+                delivered_quantity=0.0,
+                remaining_quantity=100.0,
+                unit_price=10.0,
+                total_amount=1000.0,
                 delivery_date=date(2026, 2, 15),
+                delivery_status="待交货",
             )
         ],
     )
@@ -268,20 +272,26 @@ async def test_create_sales_order_with_items(db_setup, test_tenant, test_custome
                 material_code="MAT001",
                 material_name="物料1",
                 material_unit="个",
-                ordered_quantity=Decimal("50.00"),
-                unit_price=Decimal("10.00"),
-                total_amount=Decimal("500.00"),
+                order_quantity=50.0,
+                delivered_quantity=0.0,
+                remaining_quantity=50.0,
+                unit_price=10.0,
+                total_amount=500.0,
                 delivery_date=date(2026, 2, 15),
+                delivery_status="待交货",
             ),
             SalesOrderItemCreate(
                 material_id=2,
                 material_code="MAT002",
                 material_name="物料2",
                 material_unit="个",
-                ordered_quantity=Decimal("30.00"),
-                unit_price=Decimal("20.00"),
-                total_amount=Decimal("600.00"),
+                order_quantity=30.0,
+                delivered_quantity=0.0,
+                remaining_quantity=30.0,
+                unit_price=20.0,
+                total_amount=600.0,
                 delivery_date=date(2026, 2, 20),
+                delivery_status="待交货",
             ),
         ],
     )
@@ -301,6 +311,6 @@ async def test_create_sales_order_with_items(db_setup, test_tenant, test_custome
     # 验证明细项已保存
     items = await SalesOrderItem.filter(sales_order_id=result.id).all()
     assert len(items) == 2
-    assert items[0].ordered_quantity == Decimal("50.00")
-    assert items[1].ordered_quantity == Decimal("30.00")
+    assert float(items[0].order_quantity) == 50.0
+    assert float(items[1].order_quantity) == 30.0
 
