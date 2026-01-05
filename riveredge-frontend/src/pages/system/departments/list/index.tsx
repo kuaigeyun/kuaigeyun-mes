@@ -622,6 +622,14 @@ const DepartmentListPage: React.FC = () => {
               新建根部门
             </Button>,
             <Button
+              key="import"
+              icon={<ImportOutlined />}
+              onClick={() => setImportVisible(true)}
+              block
+            >
+              批量导入
+            </Button>,
+            <Button
               key="expand"
               type="text"
               icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
