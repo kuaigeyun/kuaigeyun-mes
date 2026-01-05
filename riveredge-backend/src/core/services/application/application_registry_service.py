@@ -298,7 +298,11 @@ class ApplicationRegistryService:
         if registered_routes:
             logger.info(f"✅ 成功注册 {len(registered_routes)} 个应用路由: {', '.join(registered_routes)}")
         else:
-            logger.info("ℹ️ 没有应用路由需要注册")
+            logger.warning("⚠️ 没有应用路由需要注册 - 这可能表示应用没有被发现或路由注册失败")
+            # 输出调试信息
+            logger.info(f"📋 已发现的应用数量: {len(apps)}")
+            if apps:
+                logger.info(f"📋 应用列表: {[app.get('name', app.get('code', 'unknown')) for app in apps]}")
 
     @classmethod
     def _module_exists(cls, module_path: str) -> bool:
