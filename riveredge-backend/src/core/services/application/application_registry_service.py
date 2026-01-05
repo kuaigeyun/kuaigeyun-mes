@@ -128,6 +128,8 @@ class ApplicationRegistryService:
                         continue
                     
                     # 构建应用数据（从 manifest.json 读取）
+                    # 注意：manifest.json 中的 entry_point 是前端路径，需要转换为后端路由模块路径
+                    backend_entry_point = f"apps.{app_code.replace('-', '_')}.api.router"
                     apps.append({
                         "uuid": f"{app_code}-fallback-uuid",
                         "code": app_code,
@@ -135,7 +137,7 @@ class ApplicationRegistryService:
                         "description": manifest.get('description', ''),
                         "version": manifest.get('version', '1.0.0'),
                         "route_path": manifest.get('route_path', f"/apps/{app_code}"),
-                        "entry_point": manifest.get('entry_point', f"apps.{app_code.replace('-', '_')}.api.router"),
+                        "entry_point": backend_entry_point,  # 使用后端路由模块路径
                         "menu_config": manifest.get('menu_config'),
                         "is_system": False,
                         "is_active": True,
