@@ -83,115 +83,137 @@ export interface SalesOrderListResponse {
  * 获取销售订单列表
  */
 export async function listSalesOrders(params: SalesOrderListParams = {}): Promise<SalesOrderListResponse> {
-  return apiRequest<SalesOrderListResponse>({
-    url: '/apps/kuaizhizao/sales-orders',
-    method: 'GET',
-    params,
-  });
+  return apiRequest<SalesOrderListResponse>(
+    '/apps/kuaizhizao/sales-orders',
+    {
+      method: 'GET',
+      params,
+    }
+  );
 }
 
 /**
  * 创建销售订单
  */
 export async function createSalesOrder(data: SalesOrder): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>({
-    url: '/apps/kuaizhizao/sales-orders',
-    method: 'POST',
-    data,
-  });
+  return apiRequest<SalesOrder>(
+    '/apps/kuaizhizao/sales-orders',
+    {
+      method: 'POST',
+      data,
+    }
+  );
 }
 
 /**
  * 获取销售订单详情
  */
 export async function getSalesOrder(id: number): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-orders/${id}`,
-    method: 'GET',
-  });
+  return apiRequest<SalesOrder>(
+    `/apps/kuaizhizao/sales-orders/${id}`,
+    {
+      method: 'GET',
+    }
+  );
 }
 
 /**
  * 更新销售订单
  */
 export async function updateSalesOrder(id: number, data: Partial<SalesOrder>): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-orders/${id}`,
-    method: 'PUT',
-    data,
-  });
+  return apiRequest<SalesOrder>(
+    `/apps/kuaizhizao/sales-orders/${id}`,
+    {
+      method: 'PUT',
+      data,
+    }
+  );
 }
 
 /**
  * 删除销售订单
  */
 export async function deleteSalesOrder(id: number): Promise<void> {
-  return apiRequest<void>({
-    url: `/apps/kuaizhizao/sales-orders/${id}`,
-    method: 'DELETE',
-  });
+  return apiRequest<void>(
+    `/apps/kuaizhizao/sales-orders/${id}`,
+    {
+      method: 'DELETE',
+    }
+  );
 }
 
 /**
  * 提交销售订单
  */
 export async function submitSalesOrder(id: number): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-orders/${id}/submit`,
-    method: 'POST',
-  });
+  return apiRequest<SalesOrder>(
+    `/apps/kuaizhizao/sales-orders/${id}/submit`,
+    {
+      method: 'POST',
+    }
+  );
 }
 
 /**
  * 批量导入销售订单（UniSheet方式）
  */
 export async function importSalesOrders(data: any[][]): Promise<{ success: boolean; message: string; data?: any }> {
-  return apiRequest<{ success: boolean; message: string; data?: any }>({
-    url: '/apps/kuaizhizao/sales-orders/import',
-    method: 'POST',
-    data: { data },
-  });
+  return apiRequest<{ success: boolean; message: string; data?: any }>(
+    '/apps/kuaizhizao/sales-orders/import',
+    {
+      method: 'POST',
+      data: { data },
+    }
+  );
 }
 
 /**
  * 批量导出销售订单
  */
 export async function exportSalesOrders(params: SalesOrderListParams = {}): Promise<Blob> {
-  return apiRequest<Blob>({
-    url: '/apps/kuaizhizao/sales-orders/export',
-    method: 'GET',
-    params,
-    responseType: 'blob',
-  });
+  return apiRequest<Blob>(
+    '/apps/kuaizhizao/sales-orders/export',
+    {
+      method: 'GET',
+      params,
+      responseType: 'blob',
+    }
+  );
 }
 
 /**
  * 下推到销售出库
  */
 export async function pushSalesOrderToDelivery(id: number, deliveryQuantities?: Record<number, number>): Promise<any> {
-  return apiRequest<any>({
-    url: `/apps/kuaizhizao/sales-orders/${id}/push-to-delivery`,
-    method: 'POST',
-    data: deliveryQuantities || {},
-  });
+  return apiRequest<any>(
+    `/apps/kuaizhizao/sales-orders/${id}/push-to-delivery`,
+    {
+      method: 'POST',
+      data: deliveryQuantities || {},
+    }
+  );
 }
 
 /**
  * 确认销售订单
  */
 export async function confirmSalesOrder(id: number): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-orders/${id}/confirm`,
-    method: 'POST',
-  });
+  return apiRequest<SalesOrder>(
+    `/apps/kuaizhizao/sales-orders/${id}/confirm`,
+    {
+      method: 'POST',
+    }
+  );
 }
 
 /**
  * 取消销售订单
  */
 export async function cancelSalesOrder(id: number): Promise<SalesOrder> {
-  return apiRequest<SalesOrder>({
-    url: `/apps/kuaizhizao/sales-orders/${id}/cancel`,
-    method: 'POST',
-  });
+  return apiRequest<SalesOrder>(
+    `/apps/kuaizhizao/sales-orders/${id}/cancel`,
+    {
+      method: 'POST',
+    }
+  );
 }
