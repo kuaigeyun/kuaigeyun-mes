@@ -106,6 +106,13 @@ const WorkOrdersPage: React.FC = () => {
   const [mergeModalVisible, setMergeModalVisible] = useState(false);
   const mergeFormRef = useRef<any>(null);
 
+  // 拆分工单相关状态
+  const [splitModalVisible, setSplitModalVisible] = useState(false);
+  const [currentWorkOrderForSplit, setCurrentWorkOrderForSplit] = useState<WorkOrder | null>(null);
+  const [splitCount, setSplitCount] = useState<number>(2);
+  const [splitType, setSplitType] = useState<'count' | 'quantity'>('count');
+  const [splitQuantities, setSplitQuantities] = useState<number[]>([]);
+
   /**
    * 处理新建工单
    */
