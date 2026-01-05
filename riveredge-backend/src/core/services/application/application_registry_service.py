@@ -103,10 +103,16 @@ class ApplicationRegistryService:
                 apps.append(app_data)
 
             logger.info(f"📋 从数据库发现 {len(apps)} 个活跃应用: {[app['name'] for app in apps]}")
+            
+            # 如果数据库中没有应用，回退到文件系统扫描
+            if not apps:
+                logger.warning("⚠️ 数据库中没有已安装的应用，尝试从文件系统扫描应用")
+                raise Exception("数据库中没有应用，回退到文件系统扫描")
+            
             return apps
 
         except Exception as e:
-            logger.warning(f"⚠️ 数据库查询失败，尝试从文件系统扫描应用: {e}")
+            logger.warning(f"⚠️ 数据库查询失败或没有应用，尝试从文件系统扫描应用: {e}")
 
             # 回退方案：从文件系统扫描应用目录，自动发现应用
             # 不再硬编码应用列表，而是动态扫描 apps 目录
