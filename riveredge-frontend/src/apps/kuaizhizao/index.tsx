@@ -15,6 +15,7 @@ import SchedulingPage from './pages/plan-management/scheduling';
 // 生产执行页面
 import WorkOrdersPage from './pages/production-execution/work-orders';
 import ReportingPage from './pages/production-execution/reporting';
+import ReportingStatisticsPage from './pages/production-execution/reporting/statistics';
 import ReworkOrdersPage from './pages/production-execution/rework-orders';
 import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
 
@@ -70,6 +71,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
       <Route path="production-execution/reporting" element={<ReportingPage />} />
+      <Route path="production-execution/reporting/statistics" element={<ReportingStatisticsPage />} />
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
       <Route path="production-execution/outsource-orders" element={<OutsourceOrdersPage />} />
       <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
