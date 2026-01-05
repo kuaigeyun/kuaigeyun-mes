@@ -3407,7 +3407,7 @@ async def create_sales_order(
     )
 
 
-@router.get("/sales-orders", summary="获取销售订单列表")
+@router.get("/sales-orders", response_model=List[SalesOrderListResponse], summary="获取销售订单列表")
 async def list_sales_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3418,11 +3418,14 @@ async def list_sales_orders(
     delivery_date_end: Optional[str] = Query(None, description="交货日期结束（ISO格式）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-):
+) -> List[SalesOrderListResponse]:
     """
     获取销售订单列表
 
     支持多种筛选条件的高级搜索。
+    
+    注意：返回数组格式，与基础数据管理APP保持一致
+    前端在 request 函数中手动包装为 { data, total, success } 格式
     """
     from datetime import date
 

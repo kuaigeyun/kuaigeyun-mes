@@ -7,7 +7,7 @@
  * @date 2025-12-29
  */
 
-import { apiRequest } from '../../../services/api';
+import { api } from '../../../services/api';
 
 // 导出销售预测API（重新导出，方便使用）
 export * from './sales-forecast';
@@ -81,15 +81,12 @@ export interface SalesOrderListResponse {
 
 /**
  * 获取销售订单列表
+ * 
+ * 注意：使用与基础数据管理APP相同的模式（api.get），返回数组格式
+ * 在页面组件的 request 函数中手动包装为 { data, total, success } 格式
  */
-export async function listSalesOrders(params: SalesOrderListParams = {}): Promise<SalesOrderListResponse> {
-  return apiRequest<SalesOrderListResponse>(
-    '/apps/kuaizhizao/sales-orders',
-    {
-      method: 'GET',
-      params,
-    }
-  );
+export async function listSalesOrders(params: SalesOrderListParams = {}): Promise<SalesOrder[]> {
+  return api.get<SalesOrder[]>('/apps/kuaizhizao/sales-orders', { params });
 }
 
 /**

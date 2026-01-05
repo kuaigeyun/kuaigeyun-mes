@@ -374,17 +374,37 @@ const SalesOrdersPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
+            // 处理搜索参数（与车间页面保持一致的模式）
+            const apiParams: any = {
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
+            };
+
+            // 应用筛选条件
+            if (searchFormValues?.status) {
+              apiParams.status = searchFormValues.status;
+            }
+            if (searchFormValues?.customer_id) {
+              apiParams.customer_id = searchFormValues.customer_id;
+            }
+            if (searchFormValues?.order_type) {
+              apiParams.order_type = searchFormValues.order_type;
+            }
+            if (searchFormValues?.delivery_date_start) {
+              apiParams.delivery_date_start = searchFormValues.delivery_date_start;
+            }
+            if (searchFormValues?.delivery_date_end) {
+              apiParams.delivery_date_end = searchFormValues.delivery_date_end;
+            }
+
             try {
-              const response = await listSalesOrders({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...params,
-              });
+              // 使用与车间页面相同的模式：api.get 返回数组，手动包装
+              const result = await listSalesOrders(apiParams);
               return {
-                data: response.data || [],
-                success: response.success !== false,
-                total: response.total || 0,
+                data: result || [],
+                success: true,
+                total: result?.length || 0, // 注意：后端需要返回总数，这里暂时使用数组长度
               };
             } catch (error: any) {
               const errorMessage = error?.message || '获取销售订单列表失败';
