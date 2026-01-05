@@ -8,6 +8,8 @@
 from .work_order import WorkOrder
 from .reporting_record import ReportingRecord
 from .rework_order import ReworkOrder
+from .cost_rule import CostRule
+from .cost_calculation import CostCalculation
 from .outsource_order import OutsourceOrder
 from .work_order_operation import WorkOrderOperation
 from .scrap_record import ScrapRecord
@@ -71,6 +73,8 @@ __all__ = [
     'WorkOrder',
     'ReportingRecord',
     'ReworkOrder',
+    'CostRule',
+    'CostCalculation',
     'OutsourceOrder',
     'WorkOrderOperation',
     'ScrapRecord',

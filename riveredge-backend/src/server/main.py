@@ -86,6 +86,8 @@ from core.api.operation_logs.operation_logs import router as operation_logs_rout
 from core.api.login_logs.login_logs import router as login_logs_router
 from core.api.online_users.online_users import router as online_users_router
 from core.api.help_documents.help_documents import router as help_documents_router
+from core.api.ai.suggestions import router as ai_suggestions_router
+from core.api.onboarding.onboarding import router as onboarding_router
 
 # 插件管理器API
 from core.api.plugin_manager.plugin_manager import router as plugin_manager_router
@@ -414,6 +416,8 @@ app.include_router(operation_logs_router, prefix="/api/v1/core")
 app.include_router(login_logs_router, prefix="/api/v1/core")
 app.include_router(online_users_router, prefix="/api/v1/core")
 app.include_router(help_documents_router, prefix="/api/v1/core")
+app.include_router(ai_suggestions_router, prefix="/api/v1/core")
+app.include_router(onboarding_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")

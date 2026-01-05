@@ -8,6 +8,7 @@
 from .work_order_service import WorkOrderService
 from .reporting_service import ReportingService
 from .rework_order_service import ReworkOrderService
+from .cost_service import CostRuleService, CostCalculationService
 from .outsource_service import OutsourceService
 
 # 仓储管理模块
@@ -51,6 +52,8 @@ __all__ = [
     'WorkOrderService',
     'ReportingService',
     'ReworkOrderService',
+    'CostRuleService',
+    'CostCalculationService',
     'OutsourceService',
 
     # 仓储管理模块
