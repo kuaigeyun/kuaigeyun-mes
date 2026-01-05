@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormList } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined, UploadOutlined, DownloadOutlined, SendOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -19,6 +19,7 @@ import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, pus
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { downloadFile } from '../../../services/common';
 import { customerApi } from '../../../../master-data/services/supply-chain';
+import { materialApi } from '../../../../master-data/services/material';
 
 // 使用API服务中的接口定义
 type SalesOrder = APISalesOrder;
@@ -40,6 +41,8 @@ const SalesOrdersPage: React.FC = () => {
   const formRef = useRef<any>(null);
   const [customers, setCustomers] = useState<Array<{ label: string; value: number }>>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const [materials, setMaterials] = useState<Array<{ label: string; value: number; unit?: string }>>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
 
   // 导入导出相关状态
   const [importVisible, setImportVisible] = useState(false);
@@ -279,6 +282,30 @@ const SalesOrdersPage: React.FC = () => {
     };
     if (modalVisible) {
       loadCustomers();
+    }
+  }, [modalVisible]);
+
+  // 加载物料列表
+  useEffect(() => {
+    const loadMaterials = async () => {
+      try {
+        setMaterialsLoading(true);
+        const materialList = await materialApi.list({ limit: 1000, isActive: true });
+        setMaterials(
+          materialList.map((material) => ({
+            label: `${material.code} - ${material.name}${material.spec ? ` (${material.spec})` : ''}`,
+            value: material.id,
+            unit: material.unit || '个',
+          }))
+        );
+      } catch (error) {
+        console.error('加载物料列表失败:', error);
+      } finally {
+        setMaterialsLoading(false);
+      }
+    };
+    if (modalVisible) {
+      loadMaterials();
     }
   }, [modalVisible]);
 
