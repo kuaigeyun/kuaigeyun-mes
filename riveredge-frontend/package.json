@@ -11,6 +11,10 @@
         "build": "vite build src",
         "build:monolithic": "vite build src",
         "build:saas": "vite build src",
+        "test": "vitest",
+        "test:ui": "vitest --ui",
+        "test:coverage": "vitest --coverage",
+        "test:run": "vitest run",
         "install:all": "npm install",
         "clean": "rm -rf node_modules"
     },
