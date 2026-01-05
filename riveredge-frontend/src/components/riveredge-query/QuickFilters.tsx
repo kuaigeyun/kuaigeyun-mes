@@ -173,7 +173,7 @@ export const QuickFilters: React.FC<QuickFiltersProps> = ({
       </div>
       
       <Space wrap size={[8, 8]}>
-        {quickFilterColumns.map(column => {
+        {quickFilterColumns.map((column) => {
           const dataIndex = column.dataIndex;
           const field = typeof dataIndex === 'string' ? dataIndex : Array.isArray(dataIndex) ? dataIndex[0] : '';
           if (!field) return null;
@@ -184,7 +184,7 @@ export const QuickFilters: React.FC<QuickFiltersProps> = ({
           const currentValues = quickFilters[field] || [];
           
           return (
-            <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div key={field || `column-${column.title}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ 
                 color: token.colorTextSecondary,
                 fontSize: token.fontSizeSM,

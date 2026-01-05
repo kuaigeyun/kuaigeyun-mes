@@ -102,8 +102,10 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     cursor: card.onClick ? 'pointer' : 'default',
                     height: '100%',
                   }}
-                  bodyStyle={{
-                    padding: STAT_CARD_CONFIG.PADDING,
+                  styles={{
+                    body: {
+                      padding: STAT_CARD_CONFIG.PADDING,
+                    },
                   }}
                 >
                   <Statistic
@@ -111,10 +113,12 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     value={card.value}
                     prefix={card.prefix}
                     suffix={card.suffix}
-                    valueStyle={{
-                      fontSize: '24px',
-                      fontWeight: 600,
-                      ...card.valueStyle,
+                    styles={{
+                      content: {
+                        fontSize: '24px',
+                        fontWeight: 600,
+                        ...card.valueStyle,
+                      },
                     }}
                   />
                 </Card>
