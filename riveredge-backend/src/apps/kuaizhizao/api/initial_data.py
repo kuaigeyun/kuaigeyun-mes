@@ -17,11 +17,19 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError
 
 from apps.kuaizhizao.services.initial_data_service import InitialDataService
+from apps.kuaizhizao.services.launch_countdown_service import LaunchCountdownService
+from apps.kuaizhizao.services.data_compensation_service import DataCompensationService
+from apps.kuaizhizao.schemas.initial_data import (
+    LaunchCountdownCreate, LaunchCountdownUpdate, LaunchCountdownResponse,
+    DataCompensationRequest, DataCompensationResponse,
+)
 
 router = APIRouter(prefix="/initial-data", tags=["Initial Data Import"])
 
 # 初始化服务实例
 initial_data_service = InitialDataService()
+launch_countdown_service = LaunchCountdownService()
+data_compensation_service = DataCompensationService()
 
 
 @router.post("/inventory/import", summary="导入期初库存")
@@ -190,5 +198,68 @@ async def import_initial_receivables_payables(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导入失败: {str(e)}"
+        )
+
+
+@router.post("/countdown", response_model=LaunchCountdownResponse, summary="创建或更新上线倒计时")
+async def create_or_update_countdown(
+    data: LaunchCountdownCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建或更新上线倒计时"""
+    try:
+        countdown = await launch_countdown_service.create_or_update_countdown(
+            tenant_id=tenant_id,
+            launch_date=data.launch_date,
+            snapshot_time=data.snapshot_time,
+            created_by=current_user.id
+        )
+        return LaunchCountdownResponse.model_validate(countdown)
+    except Exception as e:
+        logger.error(f"创建或更新上线倒计时失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"操作失败: {str(e)}"
+        )
+
+
+@router.get("/countdown", response_model=Optional[LaunchCountdownResponse], summary="获取上线倒计时")
+async def get_countdown(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取当前组织的上线倒计时"""
+    countdown = await launch_countdown_service.get_countdown(tenant_id)
+    if not countdown:
+        return None
+    return LaunchCountdownResponse.model_validate(countdown)
+
+
+@router.post("/compensation", response_model=DataCompensationResponse, summary="计算动态数据补偿")
+async def calculate_compensation(
+    data: DataCompensationRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """计算动态数据补偿"""
+    try:
+        result = await data_compensation_service.calculate_compensation(
+            tenant_id=tenant_id,
+            snapshot_time=data.snapshot_time,
+            launch_date=data.launch_date,
+            created_by=current_user.id
+        )
+        return DataCompensationResponse(**result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"计算动态数据补偿失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"计算失败: {str(e)}"
         )
 
