@@ -53,3 +53,20 @@ export async function importInitialInventory(
   });
 }
 
+/**
+ * 导入期初在制品
+ */
+export async function importInitialWIP(
+  data: any[][],
+  snapshotTime?: string
+): Promise<InitialInventoryImportResponse> {
+  return apiRequest<InitialInventoryImportResponse>({
+    url: '/apps/kuaizhizao/initial-data/wip/import',
+    method: 'POST',
+    data: {
+      data,
+      snapshot_time: snapshotTime,
+    },
+  });
+}
+
