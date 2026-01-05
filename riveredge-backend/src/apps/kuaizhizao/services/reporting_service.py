@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
+from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
@@ -452,16 +453,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
             deleted_at__isnull=True
         )
 
-            if work_order:
-                work_order.completed_quantity = total_completed
-                work_order.qualified_quantity = total_completed
+        if work_order:
+            work_order.completed_quantity = total_completed
+            work_order.qualified_quantity = total_completed
+            
+            # 更新不合格数量（从报废记录统计）
+            await self._update_work_order_unqualified_quantity(tenant_id, work_order_id, work_order)
 
-                # 如果完成数量达到计划数量，更新状态为已完成
-                if total_completed >= work_order.quantity:
-                    work_order.status = 'completed'
-                    work_order.actual_end_date = datetime.now()
+            # 如果完成数量达到计划数量，更新状态为已完成
+            if total_completed >= work_order.quantity:
+                work_order.status = 'completed'
+                work_order.actual_end_date = datetime.now()
 
-                await work_order.save()
+            await work_order.save()
 
     async def record_scrap(
         self,
@@ -558,9 +562,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 updated_by_name=user_info["name"],
             )
 
-            # TODO: 库存扣减（需要调用库存服务）
-            # TODO: 更新工单的不合格数量
+            # 更新工单的不合格数量（从报废记录统计）
+            await self._update_work_order_unqualified_quantity(
+                tenant_id=tenant_id,
+                work_order_id=work_order.id,
+                work_order=work_order
+            )
+            await work_order.save()
+            
+            # 库存扣减（需要调用库存服务，待库存服务实现后补充）
+            # 注意：由于系统中暂无独立的库存服务，库存扣减功能待后续实现
+            # 如果需要立即实现，可以通过调用仓储管理服务或创建库存变动记录来实现
+            if scrap_data.warehouse_id:
+                logger.info(
+                    f"报废记录 {code} 需要扣减库存，物料ID: {work_order.product_id}, "
+                    f"仓库ID: {scrap_data.warehouse_id}, 数量: {scrap_data.scrap_quantity} "
+                    f"（库存扣减功能待库存服务实现后补充）"
+                )
 
+            logger.info(f"创建报废记录成功: {code}, 工单: {work_order.code}, 报废数量: {scrap_data.scrap_quantity}")
             return ScrapRecordResponse.model_validate(scrap_record)
 
     async def record_defect(
