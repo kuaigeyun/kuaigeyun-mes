@@ -6,6 +6,7 @@
 
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from loguru import logger
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 

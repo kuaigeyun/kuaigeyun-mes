@@ -66,32 +66,7 @@ class HelpDocumentService:
         Returns:
             Dict[str, Any]: 默认帮助文档内容
         """
-        default_documents = {
-            "user_management": {
-                "key": "user_management",
-                "title": "用户管理帮助",
-                "sections": [
-                    {
-                        "title": "功能介绍",
-                        "content": "用户管理模块用于管理系统用户，包括用户的创建、编辑、删除、权限分配等功能。"
-                    },
-                    {
-                        "title": "操作步骤",
-                        "content": "1. 点击\"创建用户\"按钮\n2. 填写用户信息\n3. 分配角色和权限\n4. 保存用户"
-                    },
-                ]
-            },
-            "role_management": {
-                "key": "role_management",
-                "title": "角色管理帮助",
-                "sections": [
-                    {
-                        "title": "功能介绍",
-                        "content": "角色管理模块用于管理系统角色，包括角色的创建、编辑、删除、权限分配等功能。"
-                    },
-                ]
-            },
-        }
+        default_documents = HelpDocumentService._get_all_default_documents()
         
         return default_documents.get(document_key, {
             "key": document_key,
@@ -158,5 +133,115 @@ class HelpDocumentService:
             if key.startswith(prefix):
                 documents.append(document)
         
+        # 如果没有组织特定的文档，返回默认文档列表
+        if not documents:
+            documents = list(HelpDocumentService._get_all_default_documents().values())
+        
         return documents
+    
+    @staticmethod
+    def _get_all_default_documents() -> Dict[str, Dict[str, Any]]:
+        """
+        获取所有默认帮助文档
+        
+        Returns:
+            Dict[str, Dict[str, Any]]: 默认帮助文档字典
+        """
+        return {
+            "user_management": {
+                "key": "user_management",
+                "title": "用户管理帮助",
+                "sections": [
+                    {
+                        "title": "功能介绍",
+                        "content": "用户管理模块用于管理系统用户，包括用户的创建、编辑、删除、权限分配等功能。"
+                    },
+                    {
+                        "title": "操作步骤",
+                        "content": "1. 点击\"创建用户\"按钮\n2. 填写用户信息\n3. 分配角色和权限\n4. 保存用户"
+                    },
+                ]
+            },
+            "role_management": {
+                "key": "role_management",
+                "title": "角色管理帮助",
+                "sections": [
+                    {
+                        "title": "功能介绍",
+                        "content": "角色管理模块用于管理系统角色，包括角色的创建、编辑、删除、权限分配等功能。"
+                    },
+                ]
+            },
+            "work_order_management": {
+                "key": "work_order_management",
+                "title": "工单管理帮助",
+                "sections": [
+                    {
+                        "title": "功能介绍",
+                        "content": "工单管理模块用于管理生产工单，包括工单的创建、下达、执行、完成等全生命周期管理。"
+                    },
+                    {
+                        "title": "工单拆分",
+                        "content": "可以将大工单拆分成多个小工单，支持按数量拆分和按工序拆分。"
+                    },
+                    {
+                        "title": "工单冻结",
+                        "content": "可以冻结工单，冻结后的工单不能进行报工操作。"
+                    },
+                ]
+            },
+            "reporting_management": {
+                "key": "reporting_management",
+                "title": "报工管理帮助",
+                "sections": [
+                    {
+                        "title": "功能介绍",
+                        "content": "报工管理模块用于记录生产报工数据，包括报工数量、合格数量、不合格数量、工时等信息。"
+                    },
+                    {
+                        "title": "数据修正",
+                        "content": "组织管理员可以修正已提交的报工数据，修正时需要填写修正原因。"
+                    },
+                ]
+            },
+        }
+    
+    @staticmethod
+    async def search_help_documents(
+        tenant_id: int,
+        keyword: str
+    ) -> List[Dict[str, Any]]:
+        """
+        搜索帮助文档
+        
+        Args:
+            tenant_id: 组织ID
+            keyword: 搜索关键词
+            
+        Returns:
+            List[Dict[str, Any]]: 匹配的帮助文档列表
+        """
+        # 获取所有帮助文档
+        all_documents = await HelpDocumentService.list_help_documents(tenant_id)
+        
+        # 搜索匹配的文档
+        matched_documents = []
+        keyword_lower = keyword.lower()
+        
+        for document in all_documents:
+            # 在标题中搜索
+            if keyword_lower in document.get("title", "").lower():
+                matched_documents.append(document)
+                continue
+            
+            # 在章节标题和内容中搜索
+            for section in document.get("sections", []):
+                section_title = section.get("title", "").lower()
+                section_content = section.get("content", "").lower()
+                
+                if keyword_lower in section_title or keyword_lower in section_content:
+                    matched_documents.append(document)
+                    break
+        
+        return matched_documents
 

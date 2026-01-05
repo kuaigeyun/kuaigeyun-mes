@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { WizardTemplate } from '../layout-templates/WizardTemplate';
 import { getInitSteps, completeStep, completeInitWizard, type InitWizardData, type Step1OrganizationInfo, type Step2DefaultSettings, type Step3AdminInfo, type Step4Template } from '../../services/init-wizard';
 import { getTenantId } from '../../utils/auth';
+import { getIndustryTemplateList, type IndustryTemplate } from '../../services/industryTemplate';
 import { ApartmentOutlined, SettingOutlined, UserOutlined, FileTextOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
 /**
@@ -39,6 +40,8 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
   const [loading, setLoading] = useState(false);
   const [initData, setInitData] = useState<InitWizardData>({});
   const [stepConfigs, setStepConfigs] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<IndustryTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   // 获取当前组织ID
   const currentTenantId = tenantId || getTenantId();
@@ -47,6 +50,7 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
   useEffect(() => {
     if (currentTenantId) {
       loadInitSteps();
+      loadTemplates();
       // 从sessionStorage恢复进度
       const savedData = sessionStorage.getItem(`init_wizard_data_${currentTenantId}`);
       if (savedData) {
@@ -58,6 +62,22 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
       }
     }
   }, [currentTenantId]);
+
+  /**
+   * 加载行业模板列表
+   */
+  const loadTemplates = async () => {
+    setTemplatesLoading(true);
+    try {
+      const response = await getIndustryTemplateList(undefined, true);
+      setTemplates(response.items || []);
+    } catch (error: any) {
+      console.error('加载模板列表失败:', error);
+      // 不显示错误消息，因为这是可选步骤
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
 
   /**
    * 加载初始化步骤配置
@@ -327,14 +347,16 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
             <ProFormSelect
               name="template_id"
               label="行业模板"
-              placeholder="请选择行业模板（可选，可跳过）"
+              placeholder={templatesLoading ? '加载中...' : '请选择行业模板（可选，可跳过）'}
+              loading={templatesLoading}
               options={[
                 { label: '不选择模板（跳过）', value: undefined },
-                { label: '制造业模板', value: 1 },
-                { label: '零售业模板', value: 2 },
-                { label: '服务业模板', value: 3 },
+                ...templates.map((template) => ({
+                  label: `${template.name}${template.is_default ? '（推荐）' : ''}`,
+                  value: template.id,
+                })),
               ]}
-              extra="选择行业模板可以快速配置系统，也可以稍后手动配置"
+              extra="选择行业模板可以快速配置系统，包括编码规则、系统参数等，也可以稍后手动配置"
             />
           </ProFormGroup>
         </ProForm>

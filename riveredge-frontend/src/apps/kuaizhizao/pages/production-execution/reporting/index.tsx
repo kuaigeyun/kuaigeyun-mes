@@ -216,8 +216,7 @@ const ReportingPage: React.FC = () => {
 
       await reportingApi.correct(
         currentReportingRecordForCorrect.id.toString(),
-        values,
-        values.correction_reason
+        values
       );
       messageApi.success('报工数据修正成功');
       setCorrectModalVisible(false);
