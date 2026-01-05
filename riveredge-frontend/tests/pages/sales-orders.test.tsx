@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { App } from 'antd'
+import { BrowserRouter } from 'react-router-dom'
 import SalesOrdersPage from '../../src/apps/kuaizhizao/pages/sales-management/sales-orders/index'
 
 // Mock依赖
@@ -39,9 +40,11 @@ describe('销售订单页面', () => {
     vi.mocked(listSalesOrders).mockResolvedValue([])
 
     render(
-      <App>
-        <SalesOrdersPage />
-      </App>
+      <BrowserRouter>
+        <App>
+          <SalesOrdersPage />
+        </App>
+      </BrowserRouter>
     )
 
     await waitFor(() => {
@@ -54,9 +57,11 @@ describe('销售订单页面', () => {
     vi.mocked(listSalesOrders).mockResolvedValue([])
 
     render(
-      <App>
-        <SalesOrdersPage />
-      </App>
+      <BrowserRouter>
+        <App>
+          <SalesOrdersPage />
+        </App>
+      </BrowserRouter>
     )
 
     await waitFor(() => {

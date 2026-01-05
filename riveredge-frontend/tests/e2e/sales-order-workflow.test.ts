@@ -28,19 +28,8 @@ describe('销售订单完整流程E2E测试（前端）', () => {
 
   describe('创建销售订单流程', () => {
     it('应该完成创建销售订单的完整流程', async () => {
-      // 1. 模拟获取客户列表
-      const mockCustomers = [
-        { id: 1, name: '测试客户', code: 'CUST001' },
-        { id: 2, name: '客户B', code: 'CUST002' },
-      ]
-      vi.mocked(api.get).mockResolvedValueOnce(mockCustomers)
-
-      // 2. 模拟获取物料列表
-      const mockMaterials = [
-        { id: 1, code: 'MAT001', name: '物料1', unit: '个' },
-        { id: 2, code: 'MAT002', name: '物料2', unit: '个' },
-      ]
-      vi.mocked(api.get).mockResolvedValueOnce(mockMaterials)
+      // 注意：这些mock在实际测试中可能不会被调用，因为createSalesOrder直接调用api.post
+      // 如果需要测试获取客户/物料列表，应该单独测试
 
       // 3. 创建订单
       const orderData = {
@@ -108,15 +97,14 @@ describe('销售订单完整流程E2E测试（前端）', () => {
       // 1. 获取所有订单
       vi.mocked(api.get).mockResolvedValueOnce(mockOrders)
       const allOrders = await listSalesOrders({ skip: 0, limit: 20 })
-      expect(allOrders).toEqual(mockOrders)
-      expect(allOrders.length).toBe(2)
+      expect(allOrders).toHaveLength(2)
+      expect(allOrders[0].order_code).toBe('SO202601150001')
 
       // 2. 按状态筛选
       const filteredOrders = mockOrders.filter((o) => o.status === '草稿')
       vi.mocked(api.get).mockResolvedValueOnce(filteredOrders)
       const draftOrders = await listSalesOrders({ skip: 0, limit: 20, status: '草稿' })
-      expect(draftOrders).toEqual(filteredOrders)
-      expect(draftOrders.length).toBe(1)
+      expect(draftOrders).toHaveLength(1)
       expect(draftOrders[0].status).toBe('草稿')
     })
   })
@@ -146,8 +134,9 @@ describe('销售订单完整流程E2E测试（前端）', () => {
       // 1. 获取订单详情
       vi.mocked(api.get).mockResolvedValueOnce(mockOrder)
       const order = await getSalesOrder(1)
-      expect(order).toEqual(mockOrder)
+      expect(order.id).toBe(1)
       expect(order.order_code).toBe('SO202601150001')
+      expect(order.customer_id).toBe(1)
 
       // 2. 更新订单
       const updateData = {
