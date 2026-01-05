@@ -11,7 +11,15 @@ import React, { useState } from 'react';
 import { App, Card, Steps, Button, Space, message, DatePicker } from 'antd';
 import { ImportOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniImport } from '../../../../../components/uni-import';
-import { importInitialInventory, importInitialWIP, importInitialReceivablesPayables } from '../../../services/initial-data';
+import { 
+  importInitialInventory, 
+  importInitialWIP, 
+  importInitialReceivablesPayables,
+  createOrUpdateCountdown,
+  getCountdown,
+  calculateCompensation,
+  type LaunchCountdown,
+} from '../../../services/initial-data';
 import dayjs, { Dayjs } from 'dayjs';
 
 const { Step } = Steps;
@@ -24,10 +32,40 @@ const InitialDataImportPage: React.FC = () => {
   
   const [currentStep, setCurrentStep] = useState(0);
   const [snapshotTime, setSnapshotTime] = useState<Dayjs | null>(null);
+  const [launchDate, setLaunchDate] = useState<Dayjs | null>(null);
+  const [countdown, setCountdown] = useState<LaunchCountdown | null>(null);
   const [importVisible, setImportVisible] = useState(false);
   const [wipImportVisible, setWipImportVisible] = useState(false);
   const [receivablesPayablesImportVisible, setReceivablesPayablesImportVisible] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [compensating, setCompensating] = useState(false);
+  
+  // 加载上线倒计时
+  React.useEffect(() => {
+    loadCountdown();
+  }, []);
+  
+  const loadCountdown = async () => {
+    try {
+      const data = await getCountdown();
+      if (data) {
+        setCountdown(data);
+        setLaunchDate(dayjs(data.launch_date));
+        if (data.snapshot_time) {
+          setSnapshotTime(dayjs(data.snapshot_time));
+        }
+      }
+    } catch (error) {
+      console.error('加载上线倒计时失败:', error);
+    }
+  };
+  
+  // 计算倒计时天数
+  const getDaysRemaining = () => {
+    if (!launchDate) return 0;
+    const days = launchDate.diff(dayjs(), 'day');
+    return days > 0 ? days : 0;
+  };
 
   /**
    * 处理期初应收应付导入
