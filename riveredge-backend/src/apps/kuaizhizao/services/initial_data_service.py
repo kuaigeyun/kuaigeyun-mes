@@ -18,8 +18,11 @@ from loguru import logger
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.master_data.models.material import Material
 from apps.master_data.models.warehouse import Warehouse
+from apps.master_data.models.factory import Workshop
+from apps.master_data.models.process import Operation
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
 from apps.master_data.schemas.material_schemas import MaterialCodeConvertRequest
 from apps.base_service import AppBaseService
@@ -321,6 +324,306 @@ class InitialDataService:
                         })
                         failure_count += 1
                     success_count -= len(items)
+        
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+            "total": success_count + failure_count,
+        }
+
+    async def import_initial_wip(
+        self,
+        tenant_id: int,
+        data: List[List[Any]],  # 二维数组数据（从 uni_import 组件传递）
+        snapshot_time: Optional[datetime] = None,
+        created_by: int = 1
+    ) -> Dict[str, Any]:
+        """
+        导入期初在制品
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建期初在制品工单。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 组织ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            snapshot_time: 快照时间点（可选，用于标记期初数据的时间点）
+            created_by: 创建人ID
+            
+        Returns:
+            dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '工单号': 'work_order_code',
+            'work_order_code': 'work_order_code',
+            '产品编码': 'product_code',
+            '*产品编码': 'product_code',
+            'product_code': 'product_code',
+            '*product_code': 'product_code',
+            '当前工序': 'current_operation',
+            '*当前工序': 'current_operation',
+            'current_operation': 'current_operation',
+            '*current_operation': 'current_operation',
+            '在制品数量': 'wip_quantity',
+            '*在制品数量': 'wip_quantity',
+            'wip_quantity': 'wip_quantity',
+            '*wip_quantity': 'wip_quantity',
+            '已投入数量': 'input_quantity',
+            'input_quantity': 'input_quantity',
+            '预计完成时间': 'estimated_completion_time',
+            'estimated_completion_time': 'estimated_completion_time',
+            '车间编码': 'workshop_code',
+            'workshop_code': 'workshop_code',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['product_code', 'current_operation', 'wip_quantity']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        async with in_transaction():
+            
+            for row, row_idx in non_empty_rows:
+                try:
+                    # 解析行数据
+                    row_data = {}
+                    for field, col_idx in header_index_map.items():
+                        if col_idx < len(row):
+                            value = row[col_idx]
+                            if value is not None:
+                                row_data[field] = str(value).strip()
+                    
+                    # 验证必填字段
+                    if not row_data.get('product_code'):
+                        errors.append({
+                            "row": row_idx,
+                            "error": "产品编码为空"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    if not row_data.get('current_operation'):
+                        errors.append({
+                            "row": row_idx,
+                            "error": "当前工序为空"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    if not row_data.get('wip_quantity'):
+                        errors.append({
+                            "row": row_idx,
+                            "error": "在制品数量为空"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    # 转换产品编码（支持部门编码，自动映射到主编码）
+                    product_code = row_data['product_code']
+                    try:
+                        convert_request = MaterialCodeConvertRequest(
+                            external_code=product_code,
+                            external_system="期初数据导入"
+                        )
+                        convert_result = await MaterialCodeMappingService.convert_code(
+                            tenant_id=tenant_id,
+                            request=convert_request
+                        )
+                        if convert_result.found:
+                            product_code = convert_result.internal_code
+                    except Exception as e:
+                        logger.warning(f"产品编码映射转换失败: {product_code}, 错误: {e}")
+                    
+                    # 查找产品（物料）
+                    product = await Material.filter(
+                        tenant_id=tenant_id,
+                        code=product_code,
+                        deleted_at__isnull=True
+                    ).first()
+                    
+                    if not product:
+                        errors.append({
+                            "row": row_idx,
+                            "error": f"产品不存在: {product_code}"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    # 查找当前工序
+                    current_operation_code = row_data['current_operation']
+                    operation = await Operation.filter(
+                        tenant_id=tenant_id,
+                        code=current_operation_code,
+                        deleted_at__isnull=True
+                    ).first()
+                    
+                    if not operation:
+                        errors.append({
+                            "row": row_idx,
+                            "error": f"工序不存在: {current_operation_code}"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    # 解析在制品数量
+                    try:
+                        wip_quantity = Decimal(str(row_data['wip_quantity']))
+                        if wip_quantity <= 0:
+                            raise ValueError("在制品数量必须大于0")
+                    except (ValueError, TypeError) as e:
+                        errors.append({
+                            "row": row_idx,
+                            "error": f"在制品数量格式错误: {row_data['wip_quantity']}"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    # 解析已投入数量（可选）
+                    input_quantity = Decimal('0')
+                    if row_data.get('input_quantity'):
+                        try:
+                            input_quantity = Decimal(str(row_data['input_quantity']))
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # 解析预计完成时间（可选）
+                    estimated_completion_time = None
+                    if row_data.get('estimated_completion_time'):
+                        try:
+                            from datetime import datetime as dt
+                            # 尝试多种日期格式
+                            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                                try:
+                                    estimated_completion_time = dt.strptime(row_data['estimated_completion_time'], fmt)
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception:
+                            pass
+                    
+                    # 查找车间（可选）
+                    workshop = None
+                    if row_data.get('workshop_code'):
+                        workshop = await Workshop.filter(
+                            tenant_id=tenant_id,
+                            code=row_data['workshop_code'],
+                            deleted_at__isnull=True
+                        ).first()
+                    
+                    # 生成工单编码（如果未提供）
+                    work_order_code = row_data.get('work_order_code')
+                    if not work_order_code:
+                        today = datetime.now().strftime("%Y%m%d")
+                        base_service = AppBaseService(WorkOrder)
+                        work_order_code = await base_service.generate_code(
+                            tenant_id,
+                            "WORK_ORDER_CODE",
+                            prefix=f"INIT-WIP{today}"
+                        )
+                    
+                    # 检查工单是否已存在
+                    existing_work_order = await WorkOrder.filter(
+                        tenant_id=tenant_id,
+                        code=work_order_code,
+                        deleted_at__isnull=True
+                    ).first()
+                    
+                    if existing_work_order:
+                        errors.append({
+                            "row": row_idx,
+                            "error": f"工单已存在: {work_order_code}"
+                        })
+                        failure_count += 1
+                        continue
+                    
+                    # 创建期初在制品工单（标记为"期初在制品"）
+                    work_order = await WorkOrder.create(
+                        tenant_id=tenant_id,
+                        uuid=str(uuid.uuid4()),
+                        code=work_order_code,
+                        name=f"期初在制品-{product.name}",
+                        product_id=product.id,
+                        product_code=product.code,
+                        product_name=product.name,
+                        quantity=wip_quantity,
+                        production_mode="MTS",
+                        workshop_id=workshop.id if workshop else None,
+                        workshop_name=workshop.name if workshop else None,
+                        status="进行中",  # 期初在制品直接标记为进行中
+                        priority="normal",
+                        actual_start_date=snapshot_time or datetime.now(),
+                        completed_quantity=Decimal('0'),
+                        qualified_quantity=Decimal('0'),
+                        unqualified_quantity=Decimal('0'),
+                        remarks=f"期初在制品导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}，当前工序：{operation.name}）",
+                        created_by=created_by,
+                        updated_by=created_by,
+                    )
+                    
+                    # 创建工单工序（当前工序标记为进行中）
+                    await WorkOrderOperation.create(
+                        tenant_id=tenant_id,
+                        uuid=str(uuid.uuid4()),
+                        work_order_id=work_order.id,
+                        work_order_code=work_order.code,
+                        operation_id=operation.id,
+                        operation_code=operation.code,
+                        operation_name=operation.name,
+                        sequence=1,  # 期初在制品只有一个当前工序
+                        workshop_id=workshop.id if workshop else None,
+                        workshop_name=workshop.name if workshop else None,
+                        actual_start_date=snapshot_time or datetime.now(),
+                        completed_quantity=Decimal('0'),  # 当前工序未完成
+                        qualified_quantity=Decimal('0'),
+                        unqualified_quantity=Decimal('0'),
+                        status="进行中",
+                        remarks=f"期初在制品，在制品数量：{wip_quantity}",
+                    )
+                    
+                    # TODO: 如果提供了已投入数量，可以创建生产领料单记录
+                    # 这里暂时不实现，因为需要更复杂的BOM展开逻辑
+                    
+                    success_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                    errors.append({
+                        "row": row_idx,
+                        "error": f"处理数据时出错: {str(e)}"
+                    })
+                    failure_count += 1
+                    continue
         
         return {
             "success_count": success_count,
