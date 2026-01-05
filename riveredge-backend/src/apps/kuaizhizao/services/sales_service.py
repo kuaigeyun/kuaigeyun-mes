@@ -511,7 +511,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             raise NotFoundError(f"销售订单不存在: {order_id}")
         return SalesOrderResponse.model_validate(order)
 
-    async def list_sales_orders(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesOrderListResponse]:
+    async def list_sales_orders(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售订单列表"""
         query = SalesOrder.filter(tenant_id=tenant_id)
 
@@ -527,8 +527,18 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         if filters.get('delivery_date_end'):
             query = query.filter(delivery_date__lte=filters['delivery_date_end'])
 
+        # 获取总数
+        total = await query.count()
+        
+        # 获取分页数据
         orders = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [SalesOrderListResponse.model_validate(order) for order in orders]
+        
+        # 返回前端期望的格式
+        return {
+            "data": [SalesOrderListResponse.model_validate(order).model_dump() for order in orders],
+            "total": total,
+            "success": True
+        }
 
     async def update_sales_order(self, tenant_id: int, order_id: int, order_data: SalesOrderUpdate, updated_by: int) -> SalesOrderResponse:
         """更新销售订单"""
