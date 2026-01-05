@@ -10,8 +10,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormJsonSchema } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, message, Modal, Tabs, Table, Card } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentApi } from '../../../services/equipment';
@@ -61,6 +61,10 @@ const EquipmentPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [equipmentDetail, setEquipmentDetail] = useState<Equipment | null>(null);
+
+  // 追溯相关状态
+  const [traceVisible, setTraceVisible] = useState(false);
+  const [traceData, setTraceData] = useState<any>(null);
 
   /**
    * 处理新建设备
@@ -155,9 +159,9 @@ const EquipmentPage: React.FC = () => {
         messageApi.error('设备UUID不存在');
         return;
       }
-      const traceData = await equipmentApi.getTrace(record.uuid);
-      // TODO: 打开追溯详情页面或Modal
-      messageApi.info('设备追溯功能开发中');
+      const data = await equipmentApi.getTrace(record.uuid);
+      setTraceData(data);
+      setTraceVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取设备追溯失败');
     }
@@ -374,7 +378,7 @@ const EquipmentPage: React.FC = () => {
     },
     {
       title: '操作',
-      width: 180,
+      width: 240,
       fixed: 'right',
       render: (_text, record) => (
         <Space>
@@ -393,6 +397,14 @@ const EquipmentPage: React.FC = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<HistoryOutlined />}
+            onClick={() => handleTrace(record)}
+          >
+            追溯
           </Button>
           <Button
             type="link"
