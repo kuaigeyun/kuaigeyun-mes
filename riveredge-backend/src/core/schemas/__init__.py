@@ -112,6 +112,30 @@ from .maintenance_plan import (
     MaintenanceExecutionListResponse,
 )
 
+# 设备故障维修 Schema
+from .equipment_fault import (
+    EquipmentFaultCreate,
+    EquipmentFaultUpdate,
+    EquipmentFaultResponse,
+    EquipmentFaultListResponse,
+    EquipmentRepairCreate,
+    EquipmentRepairUpdate,
+    EquipmentRepairResponse,
+    EquipmentRepairListResponse,
+)
+
+# 模具管理 Schema
+from .mold import (
+    MoldCreate,
+    MoldUpdate,
+    MoldResponse,
+    MoldListResponse,
+    MoldUsageCreate,
+    MoldUsageUpdate,
+    MoldUsageResponse,
+    MoldUsageListResponse,
+)
+
 # 文件管理 Schema
 from .file import (
     FileCreate,
