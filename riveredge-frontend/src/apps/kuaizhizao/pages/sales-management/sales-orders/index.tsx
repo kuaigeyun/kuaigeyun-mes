@@ -810,6 +810,155 @@ const SalesOrdersPage: React.FC = () => {
           }}
           colProps={{ span: 24 }}
         />
+
+        {/* 订单明细 */}
+        <div style={{ marginTop: 16, width: '100%' }}>
+          <ProFormList
+            name="items"
+            label="订单明细"
+            min={1}
+            max={100}
+            initialValue={[]}
+            creatorButtonProps={{
+              creatorButtonText: '添加明细项',
+              type: 'dashed',
+              style: { width: '100%' },
+            }}
+            itemRender={({ listDom, action }, { index }) => (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  marginBottom: 16,
+                  padding: 16,
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 4,
+                  backgroundColor: '#fafafa',
+                }}
+              >
+                <div style={{ flex: 1 }}>{listDom}</div>
+                <div style={{ marginLeft: 8 }}>{action}</div>
+              </div>
+            )}
+            rules={[
+              { required: true, message: '请至少添加一个明细项' },
+            ]}
+          >
+            {(f, index, action) => {
+              return (
+                <div style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+                  <ProFormSelect
+                    {...f}
+                    name={[f.name, 'material_id']}
+                    label="物料"
+                    placeholder="请选择物料"
+                    rules={[{ required: true, message: '请选择物料' }]}
+                    options={materials}
+                    loading={materialsLoading}
+                    fieldProps={{
+                      showSearch: true,
+                      filterOption: (input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      onChange: (value) => {
+                        const selectedMaterial = materials.find((m) => m.value === value);
+                        if (selectedMaterial) {
+                          formRef.current?.setFieldValue(
+                            ['items', f.name, 'material_unit'],
+                            selectedMaterial.unit || '个'
+                          );
+                        }
+                      },
+                    }}
+                    colProps={{ span: 24 }}
+                  />
+                  <ProFormDigit
+                    {...f}
+                    name={[f.name, 'ordered_quantity']}
+                    label="订单数量"
+                    placeholder="请输入订单数量"
+                    rules={[{ required: true, message: '请输入订单数量' }]}
+                    min={0.01}
+                    precision={2}
+                    fieldProps={{
+                      onChange: () => {
+                        // 自动计算总价
+                        const quantity = formRef.current?.getFieldValue(['items', f.name, 'ordered_quantity']) || 0;
+                        const price = formRef.current?.getFieldValue(['items', f.name, 'unit_price']) || 0;
+                        formRef.current?.setFieldValue(
+                          ['items', f.name, 'total_price'],
+                          quantity * price
+                        );
+                      },
+                    }}
+                    colProps={{ span: 8 }}
+                  />
+                  <ProFormText
+                    {...f}
+                    name={[f.name, 'material_unit']}
+                    label="单位"
+                    placeholder="单位"
+                    disabled
+                    colProps={{ span: 4 }}
+                  />
+                  <ProFormDigit
+                    {...f}
+                    name={[f.name, 'unit_price']}
+                    label="单价"
+                    placeholder="请输入单价"
+                    rules={[{ required: true, message: '请输入单价' }]}
+                    min={0}
+                    precision={2}
+                    fieldProps={{
+                      prefix: '¥',
+                      onChange: () => {
+                        // 自动计算总价
+                        const quantity = formRef.current?.getFieldValue(['items', f.name, 'ordered_quantity']) || 0;
+                        const price = formRef.current?.getFieldValue(['items', f.name, 'unit_price']) || 0;
+                        formRef.current?.setFieldValue(
+                          ['items', f.name, 'total_price'],
+                          quantity * price
+                        );
+                      },
+                    }}
+                    colProps={{ span: 6 }}
+                  />
+                  <ProFormDigit
+                    {...f}
+                    name={[f.name, 'total_price']}
+                    label="总价"
+                    placeholder="自动计算"
+                    disabled
+                    fieldProps={{
+                      prefix: '¥',
+                    }}
+                    colProps={{ span: 6 }}
+                  />
+                  <ProFormDatePicker
+                    {...f}
+                    name={[f.name, 'delivery_date']}
+                    label="交货日期"
+                    placeholder="请选择交货日期"
+                    rules={[{ required: true, message: '请选择交货日期' }]}
+                    fieldProps={{
+                      format: 'YYYY-MM-DD',
+                    }}
+                    colProps={{ span: 12 }}
+                  />
+                  <ProFormTextArea
+                    {...f}
+                    name={[f.name, 'notes']}
+                    label="备注"
+                    placeholder="请输入备注"
+                    fieldProps={{
+                      rows: 2,
+                    }}
+                    colProps={{ span: 12 }}
+                  />
+                </div>
+              );
+            }}
+          </ProFormList>
+        </div>
       </FormModalTemplate>
 
       {/* 批量导入弹窗 */}
