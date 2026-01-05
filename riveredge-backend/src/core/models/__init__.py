@@ -95,6 +95,8 @@ from .report_template import ReportTemplate
 
 # 设备模型
 from .equipment import Equipment
+from .maintenance_plan import MaintenancePlan, MaintenanceExecution
+from .equipment_fault import EquipmentFault, EquipmentRepair
 
 __all__ = [
     # 基础模型
@@ -164,5 +166,9 @@ __all__ = [
     "ReportTemplate",
     # 设备模型
     "Equipment",
+    "MaintenancePlan",
+    "MaintenanceExecution",
+    "EquipmentFault",
+    "EquipmentRepair",
 ]
 
