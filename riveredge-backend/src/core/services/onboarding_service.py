@@ -359,4 +359,88 @@ class OnboardingService:
                     "scenarios": [],
                 },
             }
+    
+    @staticmethod
+    async def get_quick_start_tutorial(
+        tenant_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取快速入门教程
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            Dict[str, Any]: 快速入门教程信息
+        """
+        tutorial = {
+            "title": "快速入门教程",
+            "description": "帮助新用户快速了解系统基本功能和使用方法",
+            "steps": [
+                {
+                    "step": 1,
+                    "title": "系统登录",
+                    "description": "使用手机号或用户名登录系统",
+                    "details": [
+                        "打开系统登录页面",
+                        "输入手机号或用户名和密码",
+                        "点击登录按钮",
+                    ],
+                    "screenshot": None,  # TODO: 添加截图路径
+                },
+                {
+                    "step": 2,
+                    "title": "工作台概览",
+                    "description": "了解工作台的基本功能",
+                    "details": [
+                        "登录后进入工作台页面",
+                        "查看待办事项、统计数据等",
+                        "点击卡片可跳转到详细页面",
+                    ],
+                    "screenshot": None,
+                },
+                {
+                    "step": 3,
+                    "title": "基础数据配置",
+                    "description": "配置系统基础数据",
+                    "details": [
+                        "进入系统设置菜单",
+                        "配置组织信息、编码规则等",
+                        "导入基础数据（物料、BOM等）",
+                    ],
+                    "screenshot": None,
+                },
+                {
+                    "step": 4,
+                    "title": "业务流程操作",
+                    "description": "学习基本业务流程操作",
+                    "details": [
+                        "根据角色查看对应的功能菜单",
+                        "学习创建、编辑、查询等基本操作",
+                        "参考使用场景向导了解详细流程",
+                    ],
+                    "screenshot": None,
+                },
+                {
+                    "step": 5,
+                    "title": "获取帮助",
+                    "description": "如何获取帮助和支持",
+                    "details": [
+                        "查看帮助文档",
+                        "使用AI智能建议功能",
+                        "联系系统管理员",
+                    ],
+                    "screenshot": None,
+                },
+            ],
+            "tips": [
+                "建议先完成基础数据配置，再进行业务流程操作",
+                "遇到问题可以查看帮助文档或使用AI智能建议",
+                "定期查看工作台，及时处理待办事项",
+            ],
+        }
+        
+        return {
+            "tutorial": tutorial,
+        }
 
