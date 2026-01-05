@@ -27,6 +27,12 @@
                     "path": "/apps/kuaizhizao/sales-management/sales-orders",
                     "permission": "kuaizhizao:sales-order:view",
                     "sort_order": 2
+                },
+                {
+                    "title": "销售出库",
+                    "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
+                    "permission": "kuaizhizao:sales-delivery:view",
+                    "sort_order": 3
                 }]
             },
             {
@@ -56,6 +62,12 @@
                         "path": "/apps/kuaizhizao/plan-management/production-plans",
                         "permission": "kuaizhizao:production-plan:view",
                         "sort_order": 3
+                    },
+                    {
+                        "title": "排程管理",
+                        "path": "/apps/kuaizhizao/plan-management/scheduling",
+                        "permission": "kuaizhizao:scheduling:view",
+                        "sort_order": 4
                     }
                 ]
             },
@@ -68,6 +80,12 @@
                     "path": "/apps/kuaizhizao/purchase-management/purchase-orders",
                     "permission": "kuaizhizao:purchase-order:view",
                     "sort_order": 1
+                },
+                {
+                    "title": "采购入库",
+                    "path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
+                    "permission": "kuaizhizao:purchase-receipt:view",
+                    "sort_order": 2
                 }]
             },
             {
@@ -103,6 +121,36 @@
                         "path": "/apps/kuaizhizao/warehouse-management/outbound",
                         "permission": "kuaizhizao:outbound:view",
                         "sort_order": 5
+                    },
+                    {
+                        "title": "期初数据导入",
+                        "path": "/apps/kuaizhizao/warehouse-management/initial-data",
+                        "permission": "kuaizhizao:initial-data:view",
+                        "sort_order": 6
+                    },
+                    {
+                        "title": "客户来料登记",
+                        "path": "/apps/kuaizhizao/warehouse-management/customer-material-registration",
+                        "permission": "kuaizhizao:customer-material-registration:view",
+                        "sort_order": 7
+                    },
+                    {
+                        "title": "条码映射规则",
+                        "path": "/apps/kuaizhizao/warehouse-management/barcode-mapping-rules",
+                        "permission": "kuaizhizao:barcode-mapping-rule:view",
+                        "sort_order": 8
+                    },
+                    {
+                        "title": "单据节点耗时",
+                        "path": "/apps/kuaizhizao/warehouse-management/document-timing",
+                        "permission": "kuaizhizao:document-timing:view",
+                        "sort_order": 9
+                    },
+                    {
+                        "title": "单据效率分析",
+                        "path": "/apps/kuaizhizao/warehouse-management/document-efficiency",
+                        "permission": "kuaizhizao:document-efficiency:view",
+                        "sort_order": 10
                     }
                 ]
             },
@@ -145,6 +193,96 @@
                         "path": "/apps/kuaizhizao/production-execution/reporting",
                         "permission": "kuaizhizao:reporting:view",
                         "sort_order": 2
+                    },
+                    {
+                        "title": "报工统计",
+                        "path": "/apps/kuaizhizao/production-execution/reporting/statistics",
+                        "permission": "kuaizhizao:reporting:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "返工单",
+                        "path": "/apps/kuaizhizao/production-execution/rework-orders",
+                        "permission": "kuaizhizao:rework-order:view",
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "委外单",
+                        "path": "/apps/kuaizhizao/production-execution/outsource-orders",
+                        "permission": "kuaizhizao:outsource-order:view",
+                        "sort_order": 5
+                    },
+                    {
+                        "title": "缺料异常",
+                        "path": "/apps/kuaizhizao/production-execution/material-shortage-exceptions",
+                        "permission": "kuaizhizao:material-shortage-exception:view",
+                        "sort_order": 6
+                    },
+                    {
+                        "title": "延期异常",
+                        "path": "/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
+                        "permission": "kuaizhizao:delivery-delay-exception:view",
+                        "sort_order": 7
+                    },
+                    {
+                        "title": "质量异常",
+                        "path": "/apps/kuaizhizao/production-execution/quality-exceptions",
+                        "permission": "kuaizhizao:quality-exception:view",
+                        "sort_order": 8
+                    },
+                    {
+                        "title": "异常统计",
+                        "path": "/apps/kuaizhizao/production-execution/exception-statistics",
+                        "permission": "kuaizhizao:exception-statistics:view",
+                        "sort_order": 9
+                    }
+                ]
+            },
+            {
+                "title": "成本管理",
+                "icon": "calculator",
+                "sort_order": 7,
+                "children": [{
+                        "title": "成本规则",
+                        "path": "/apps/kuaizhizao/cost-management/cost-rules",
+                        "permission": "kuaizhizao:cost-rule:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "成本核算",
+                        "path": "/apps/kuaizhizao/cost-management/cost-calculations",
+                        "permission": "kuaizhizao:cost-calculation:view",
+                        "sort_order": 2
+                    }
+                ]
+            },
+            {
+                "title": "设备管理",
+                "icon": "tool",
+                "sort_order": 7.5,
+                "children": [{
+                        "title": "设备管理",
+                        "path": "/apps/kuaizhizao/equipment-management/equipment",
+                        "permission": "kuaizhizao:equipment:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "设备故障",
+                        "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
+                        "permission": "kuaizhizao:equipment-fault:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "维护计划",
+                        "path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
+                        "permission": "kuaizhizao:maintenance-plan:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "模具管理",
+                        "path": "/apps/kuaizhizao/equipment-management/molds",
+                        "permission": "kuaizhizao:mold:view",
+                        "sort_order": 4
                     }
                 ]
             },
