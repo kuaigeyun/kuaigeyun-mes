@@ -19,10 +19,14 @@ from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+from apps.kuaizhizao.models.receivable import Receivable
+from apps.kuaizhizao.models.payable import Payable
 from apps.master_data.models.material import Material
 from apps.master_data.models.warehouse import Warehouse
 from apps.master_data.models.factory import Workshop
 from apps.master_data.models.process import Operation
+from apps.master_data.models.customer import Customer
+from apps.master_data.models.supplier import Supplier
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
 from apps.master_data.schemas.material_schemas import MaterialCodeConvertRequest
 from apps.base_service import AppBaseService
@@ -622,6 +626,301 @@ class InitialDataService:
                         "row": row_idx,
                         "error": f"处理数据时出错: {str(e)}"
                     })
+                    failure_count += 1
+                    continue
+        
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+            "total": success_count + failure_count,
+        }
+
+    async def import_initial_receivables_payables(
+        self,
+        tenant_id: int,
+        data: List[List[Any]],  # 二维数组数据（从 uni_import 组件传递）
+        snapshot_time: Optional[datetime] = None,
+        created_by: int = 1
+    ) -> Dict[str, Any]:
+        """
+        导入期初应收应付
+        
+        接收前端 uni_import 组件传递的二维数组数据，批量创建期初应收/应付单。
+        数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+        
+        Args:
+            tenant_id: 组织ID
+            data: 二维数组数据（从 uni_import 组件传递）
+            snapshot_time: 快照时间点（可选，用于标记期初数据的时间点）
+            created_by: 创建人ID
+            
+        Returns:
+            dict: 导入结果（成功数、失败数、错误列表）
+        """
+        if not data or len(data) < 2:
+            raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
+        
+        # 解析表头（第一行，索引0）
+        headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
+        
+        # 表头字段映射（支持中英文）
+        header_map = {
+            '类型': 'type', '*类型': 'type', 'type': 'type',
+            '客户编码': 'customer_code', 'customer_code': 'customer_code',
+            '供应商编码': 'supplier_code', 'supplier_code': 'supplier_code',
+            '单据类型': 'source_type', '*单据类型': 'source_type', 'source_type': 'source_type',
+            '单据号': 'source_code', '*单据号': 'source_code', 'source_code': 'source_code',
+            '单据日期': 'business_date', '*单据日期': 'business_date', 'business_date': 'business_date',
+            '应收金额': 'receivable_amount', 'receivable_amount': 'receivable_amount',
+            '应付金额': 'payable_amount', 'payable_amount': 'payable_amount',
+            '已收金额': 'received_amount', 'received_amount': 'received_amount',
+            '已付金额': 'paid_amount', 'paid_amount': 'paid_amount',
+            '到期日期': 'due_date', 'due_date': 'due_date',
+            '发票号': 'invoice_number', 'invoice_number': 'invoice_number',
+        }
+        
+        # 找到表头索引
+        header_index_map = {}
+        for idx, header in enumerate(headers):
+            if header and header in header_map:
+                header_index_map[header_map[header]] = idx
+        
+        # 验证必填字段
+        required_fields = ['type', 'source_type', 'source_code', 'business_date']
+        missing_fields = [f for f in required_fields if f not in header_index_map]
+        if missing_fields:
+            raise ValidationError(f"缺少必填字段：{', '.join(missing_fields)}")
+        
+        # 解析数据行（从第三行开始，索引2，跳过表头和示例数据行）
+        rows = data[2:] if len(data) > 2 else []
+        
+        # 过滤空行
+        non_empty_rows = [
+            (row, idx + 3) for idx, row in enumerate(rows)
+            if any(cell is not None and str(cell).strip() for cell in row)
+        ]
+        
+        if not non_empty_rows:
+            raise ValidationError("没有可导入的数据行（所有行都为空）")
+        
+        success_count = 0
+        failure_count = 0
+        errors = []
+        
+        async with in_transaction():
+            for row, row_idx in non_empty_rows:
+                try:
+                    # 解析行数据
+                    row_data = {}
+                    for field, col_idx in header_index_map.items():
+                        if col_idx < len(row):
+                            value = row[col_idx]
+                            if value is not None:
+                                row_data[field] = str(value).strip()
+                    
+                    # 验证类型
+                    if not row_data.get('type'):
+                        errors.append({"row": row_idx, "error": "类型为空（应收/应付）"})
+                        failure_count += 1
+                        continue
+                    
+                    data_type = row_data['type'].strip().upper()
+                    if data_type not in ['应收', '应付', 'RECEIVABLE', 'PAYABLE', 'AR', 'AP']:
+                        errors.append({"row": row_idx, "error": f"类型错误: {row_data['type']}，应为'应收'或'应付'"})
+                        failure_count += 1
+                        continue
+                    
+                    is_receivable = data_type in ['应收', 'RECEIVABLE', 'AR']
+                    
+                    # 验证客户/供应商编码
+                    if is_receivable:
+                        if not row_data.get('customer_code'):
+                            errors.append({"row": row_idx, "error": "客户编码为空"})
+                            failure_count += 1
+                            continue
+                    else:
+                        if not row_data.get('supplier_code'):
+                            errors.append({"row": row_idx, "error": "供应商编码为空"})
+                            failure_count += 1
+                            continue
+                    
+                    # 验证其他必填字段
+                    for field in ['source_type', 'source_code', 'business_date']:
+                        if not row_data.get(field):
+                            errors.append({"row": row_idx, "error": f"{field}为空"})
+                            failure_count += 1
+                            break
+                    else:
+                        # 解析金额和日期
+                        from datetime import datetime as dt, date
+                        
+                        # 解析金额
+                        if is_receivable:
+                            if not row_data.get('receivable_amount'):
+                                errors.append({"row": row_idx, "error": "应收金额为空"})
+                                failure_count += 1
+                                continue
+                            try:
+                                total_amount = Decimal(str(row_data['receivable_amount']))
+                                if total_amount <= 0:
+                                    raise ValueError("应收金额必须大于0")
+                            except (ValueError, TypeError):
+                                errors.append({"row": row_idx, "error": f"应收金额格式错误: {row_data['receivable_amount']}"})
+                                failure_count += 1
+                                continue
+                            
+                            received_amount = Decimal('0')
+                            if row_data.get('received_amount'):
+                                try:
+                                    received_amount = Decimal(str(row_data['received_amount']))
+                                except (ValueError, TypeError):
+                                    pass
+                            remaining_amount = total_amount - received_amount
+                        else:
+                            if not row_data.get('payable_amount'):
+                                errors.append({"row": row_idx, "error": "应付金额为空"})
+                                failure_count += 1
+                                continue
+                            try:
+                                total_amount = Decimal(str(row_data['payable_amount']))
+                                if total_amount <= 0:
+                                    raise ValueError("应付金额必须大于0")
+                            except (ValueError, TypeError):
+                                errors.append({"row": row_idx, "error": f"应付金额格式错误: {row_data['payable_amount']}"})
+                                failure_count += 1
+                                continue
+                            
+                            paid_amount = Decimal('0')
+                            if row_data.get('paid_amount'):
+                                try:
+                                    paid_amount = Decimal(str(row_data['paid_amount']))
+                                except (ValueError, TypeError):
+                                    pass
+                            remaining_amount = total_amount - paid_amount
+                        
+                        # 解析日期
+                        try:
+                            business_date_str = row_data['business_date']
+                            business_date = None
+                            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d', '%Y-%m-%d %H:%M:%S']:
+                                try:
+                                    business_date = dt.strptime(business_date_str, fmt).date()
+                                    break
+                                except ValueError:
+                                    continue
+                            if not business_date:
+                                raise ValueError(f"日期格式错误: {business_date_str}")
+                        except Exception:
+                            errors.append({"row": row_idx, "error": f"单据日期格式错误: {row_data['business_date']}"})
+                            failure_count += 1
+                            continue
+                        
+                        # 解析到期日期（可选）
+                        due_date = business_date
+                        if row_data.get('due_date'):
+                            try:
+                                due_date_str = row_data['due_date']
+                                for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%Y.%m.%d']:
+                                    try:
+                                        due_date = dt.strptime(due_date_str, fmt).date()
+                                        break
+                                    except ValueError:
+                                        continue
+                            except Exception:
+                                pass
+                        
+                        # 查找客户/供应商并创建应收/应付单
+                        if is_receivable:
+                            customer = await Customer.filter(
+                                tenant_id=tenant_id,
+                                code=row_data['customer_code'],
+                                deleted_at__isnull=True
+                            ).first()
+                            
+                            if not customer:
+                                errors.append({"row": row_idx, "error": f"客户不存在: {row_data['customer_code']}"})
+                                failure_count += 1
+                                continue
+                            
+                            # 生成应收单编码
+                            today = datetime.now().strftime("%Y%m%d")
+                            base_service = AppBaseService(Receivable)
+                            receivable_code = await base_service.generate_code(
+                                tenant_id, "RECEIVABLE_CODE", prefix=f"INIT-AR{today}"
+                            )
+                            
+                            # 创建期初应收单
+                            await Receivable.create(
+                                tenant_id=tenant_id,
+                                uuid=str(uuid.uuid4()),
+                                receivable_code=receivable_code,
+                                source_type=row_data['source_type'],
+                                source_id=0,
+                                source_code=row_data['source_code'],
+                                customer_id=customer.id,
+                                customer_name=customer.name,
+                                total_amount=total_amount,
+                                received_amount=received_amount,
+                                remaining_amount=remaining_amount,
+                                due_date=due_date,
+                                status="未收款" if remaining_amount > 0 else "已收款",
+                                business_date=business_date,
+                                invoice_issued=bool(row_data.get('invoice_number')),
+                                invoice_number=row_data.get('invoice_number'),
+                                review_status="已审核",
+                                notes=f"期初应收导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}）",
+                                created_by=created_by,
+                                updated_by=created_by,
+                            )
+                            success_count += 1
+                        else:
+                            supplier = await Supplier.filter(
+                                tenant_id=tenant_id,
+                                code=row_data['supplier_code'],
+                                deleted_at__isnull=True
+                            ).first()
+                            
+                            if not supplier:
+                                errors.append({"row": row_idx, "error": f"供应商不存在: {row_data['supplier_code']}"})
+                                failure_count += 1
+                                continue
+                            
+                            # 生成应付单编码
+                            today = datetime.now().strftime("%Y%m%d")
+                            base_service = AppBaseService(Payable)
+                            payable_code = await base_service.generate_code(
+                                tenant_id, "PAYABLE_CODE", prefix=f"INIT-AP{today}"
+                            )
+                            
+                            # 创建期初应付单
+                            await Payable.create(
+                                tenant_id=tenant_id,
+                                uuid=str(uuid.uuid4()),
+                                payable_code=payable_code,
+                                source_type=row_data['source_type'],
+                                source_id=0,
+                                source_code=row_data['source_code'],
+                                supplier_id=supplier.id,
+                                supplier_name=supplier.name,
+                                total_amount=total_amount,
+                                paid_amount=paid_amount,
+                                remaining_amount=remaining_amount,
+                                due_date=due_date,
+                                status="未付款" if remaining_amount > 0 else "已付款",
+                                business_date=business_date,
+                                invoice_received=bool(row_data.get('invoice_number')),
+                                invoice_number=row_data.get('invoice_number'),
+                                review_status="已审核",
+                                notes=f"期初应付导入（快照时间点：{snapshot_time.strftime('%Y-%m-%d %H:%M:%S') if snapshot_time else '未指定'}）",
+                                created_by=created_by,
+                                updated_by=created_by,
+                            )
+                            success_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"处理第 {row_idx} 行数据时出错: {e}")
+                    errors.append({"row": row_idx, "error": f"处理数据时出错: {str(e)}"})
                     failure_count += 1
                     continue
         
