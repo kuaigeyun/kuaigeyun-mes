@@ -18,6 +18,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { listSalesOrders, getSalesOrder, createSalesOrder, updateSalesOrder, pushSalesOrderToDelivery, submitSalesOrder, importSalesOrders, exportSalesOrders, SalesOrder as APISalesOrder } from '../../../services/sales';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { downloadFile } from '../../../services/common';
+import { customerApi } from '../../../../master-data/services/supply-chain';
 
 // 使用API服务中的接口定义
 type SalesOrder = APISalesOrder;
@@ -37,6 +38,8 @@ const SalesOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<SalesOrder | null>(null);
   const formRef = useRef<any>(null);
+  const [customers, setCustomers] = useState<Array<{ label: string; value: number }>>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
 
   // 导入导出相关状态
   const [importVisible, setImportVisible] = useState(false);
@@ -256,28 +259,67 @@ const SalesOrdersPage: React.FC = () => {
     });
   };
 
+  // 加载客户列表
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        setCustomersLoading(true);
+        const customerList = await customerApi.list({ limit: 1000, isActive: true });
+        setCustomers(
+          customerList.map((customer) => ({
+            label: `${customer.name} (${customer.code})`,
+            value: customer.id,
+          }))
+        );
+      } catch (error) {
+        console.error('加载客户列表失败:', error);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+    if (modalVisible) {
+      loadCustomers();
+    }
+  }, [modalVisible]);
+
   // 处理创建
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentOrder(null);
     setModalVisible(true);
     formRef.current?.resetFields();
+    // 设置默认值
+    setTimeout(() => {
+      formRef.current?.setFieldsValue({
+        order_type: 'MTO',
+        order_date: new Date().toISOString().split('T')[0],
+        status: '草稿',
+      });
+    }, 100);
   };
 
   // 处理提交表单（创建/更新）
   const handleSubmitForm = async (values: any): Promise<void> => {
     try {
+      // 获取选中的客户信息
+      const selectedCustomer = customers.find((c) => c.value === values.customer_id);
+      
       if (isEdit && currentOrder?.id) {
-        await updateSalesOrder(currentOrder.id, values);
+        await updateSalesOrder(currentOrder.id, {
+          ...values,
+          customer_name: selectedCustomer?.label.split(' (')[0] || values.customer_name,
+        });
         messageApi.success('销售订单更新成功');
       } else {
         // 创建时需要提供明细项，这里先创建一个空的明细数组
         // TODO: 后续需要实现明细项的编辑功能
         await createSalesOrder({
           ...values,
+          customer_name: selectedCustomer?.label.split(' (')[0] || '',
           items: [],
           order_type: values.order_type || 'MTO',
           delivery_date: values.delivery_date || new Date().toISOString().split('T')[0],
+          status: '草稿',
         });
         messageApi.success('销售订单创建成功');
       }
@@ -630,6 +672,118 @@ const SalesOrdersPage: React.FC = () => {
           ) : null
         }
       />
+
+      {/* 创建/编辑表单Modal */}
+      <FormModalTemplate
+        title={isEdit ? '编辑销售订单' : '新建销售订单'}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setCurrentOrder(null);
+          formRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitForm}
+        isEdit={isEdit}
+        initialValues={currentOrder || {
+          order_type: 'MTO',
+          order_date: new Date().toISOString().split('T')[0],
+          status: '草稿',
+        }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        grid={true}
+      >
+        <ProFormSelect
+          name="customer_id"
+          label="客户"
+          placeholder="请选择客户"
+          rules={[{ required: true, message: '请选择客户' }]}
+          options={customers}
+          loading={customersLoading}
+          fieldProps={{
+            showSearch: true,
+            filterOption: (input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="order_type"
+          label="订单类型"
+          placeholder="请选择订单类型"
+          rules={[{ required: true, message: '请选择订单类型' }]}
+          options={[
+            { label: '按订单生产 (MTO)', value: 'MTO' },
+            { label: '按库存生产 (MTS)', value: 'MTS' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="order_date"
+          label="订单日期"
+          placeholder="请选择订单日期"
+          rules={[{ required: true, message: '请选择订单日期' }]}
+          fieldProps={{
+            format: 'YYYY-MM-DD',
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="delivery_date"
+          label="交货日期"
+          placeholder="请选择交货日期"
+          rules={[{ required: true, message: '请选择交货日期' }]}
+          fieldProps={{
+            format: 'YYYY-MM-DD',
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="customer_contact"
+          label="客户联系人"
+          placeholder="请输入客户联系人"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="customer_phone"
+          label="客户电话"
+          placeholder="请输入客户电话"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="shipping_address"
+          label="收货地址"
+          placeholder="请输入收货地址"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="shipping_method"
+          label="发货方式"
+          placeholder="请输入发货方式（如：快递、物流等）"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="payment_terms"
+          label="付款条件"
+          placeholder="请输入付款条件（如：货到付款、月结等）"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="salesman_name"
+          label="销售员"
+          placeholder="请输入销售员姓名"
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="notes"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{
+            rows: 3,
+          }}
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
 
       {/* 批量导入弹窗 */}
       <UniImport
