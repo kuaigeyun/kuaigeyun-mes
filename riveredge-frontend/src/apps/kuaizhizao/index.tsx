@@ -21,15 +21,27 @@ import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
 
 // 采购管理页面
 import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
+import PurchaseReceiptsPage from './pages/purchase-management/purchase-receipts';
 
 // 销售管理页面
 import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
+import SalesDeliveriesPage from './pages/sales-management/sales-deliveries';
 
 // 质量管理页面
 import IncomingInspectionPage from './pages/quality-management/incoming-inspection';
 import ProcessInspectionPage from './pages/quality-management/process-inspection';
 import FinishedGoodsInspectionPage from './pages/quality-management/finished-goods-inspection';
+
+// 成本管理页面
+import CostRulesPage from './pages/cost-management/cost-rules';
+import CostCalculationsPage from './pages/cost-management/cost-calculations';
+
+// 设备管理页面
+import EquipmentPage from './pages/equipment-management/equipment';
+import EquipmentFaultsPage from './pages/equipment-management/equipment-faults';
+import MaintenancePlansPage from './pages/equipment-management/maintenance-plans';
+import MoldsPage from './pages/equipment-management/molds';
 
 // 财务管理页面
 import AccountsPayablePage from './pages/finance-management/accounts-payable';
@@ -68,6 +80,7 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 采购管理路由 */}
       <Route path="purchase-management/purchase-orders" element={<PurchaseOrdersPage />} />
+      <Route path="purchase-management/purchase-receipts" element={<PurchaseReceiptsPage />} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
@@ -83,11 +96,22 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 销售管理路由 */}
       <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
+      <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
 
       {/* 质量管理路由 */}
       <Route path="quality-management/incoming-inspection" element={<IncomingInspectionPage />} />
       <Route path="quality-management/process-inspection" element={<ProcessInspectionPage />} />
       <Route path="quality-management/finished-goods-inspection" element={<FinishedGoodsInspectionPage />} />
+
+      {/* 成本管理路由 */}
+      <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
+      <Route path="cost-management/cost-calculations" element={<CostCalculationsPage />} />
+
+      {/* 设备管理路由 */}
+      <Route path="equipment-management/equipment" element={<EquipmentPage />} />
+      <Route path="equipment-management/equipment-faults" element={<EquipmentFaultsPage />} />
+      <Route path="equipment-management/maintenance-plans" element={<MaintenancePlansPage />} />
+      <Route path="equipment-management/molds" element={<MoldsPage />} />
 
       {/* 财务管理路由 */}
       <Route path="finance-management/accounts-payable" element={<AccountsPayablePage />} />
