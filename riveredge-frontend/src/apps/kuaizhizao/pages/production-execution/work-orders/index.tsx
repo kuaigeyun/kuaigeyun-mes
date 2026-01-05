@@ -389,10 +389,20 @@ const WorkOrdersPage: React.FC = () => {
       if (!currentWorkOrderForRework?.id) {
         throw new Error('原工单信息不存在');
       }
-      await reworkOrderApi.createFromWorkOrder(currentWorkOrderForRework.id.toString(), values);
+      // 使用ReworkOrderFromWorkOrderRequest格式
+      const submitData = {
+        rework_reason: values.rework_reason,
+        rework_type: values.rework_type,
+        quantity: values.quantity ? Number(values.quantity) : undefined,
+        route_id: values.route_id || undefined,
+        work_center_id: values.work_center_id || currentWorkOrderForRework.work_center_id || undefined,
+        remarks: values.remarks || undefined,
+      };
+      await reworkOrderApi.createFromWorkOrder(currentWorkOrderForRework.id.toString(), submitData);
       messageApi.success('返工单创建成功');
       setReworkModalVisible(false);
       setCurrentWorkOrderForRework(null);
+      reworkFormRef.current?.resetFields();
     } catch (error: any) {
       messageApi.error(error.message || '创建返工单失败');
       throw error;
