@@ -616,6 +616,120 @@ const EquipmentPage: React.FC = () => {
         dataSource={equipmentDetail}
         columns={detailColumns}
       />
+
+      {/* 设备追溯 Modal */}
+      <Modal
+        title={`设备追溯 - ${traceData?.equipment?.name || ''}`}
+        open={traceVisible}
+        onCancel={() => {
+          setTraceVisible(false);
+          setTraceData(null);
+        }}
+        width={1200}
+        footer={[
+          <Button key="close" onClick={() => {
+            setTraceVisible(false);
+            setTraceData(null);
+          }}>
+            关闭
+          </Button>,
+        ]}
+      >
+        {traceData && (
+          <Tabs
+            defaultActiveKey="maintenance_plans"
+            items={[
+              {
+                key: 'maintenance_plans',
+                label: `维护计划 (${traceData.maintenance_plans?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={traceData.maintenance_plans || []}
+                    columns={[
+                      { title: '计划编号', dataIndex: 'plan_no', width: 140 },
+                      { title: '计划名称', dataIndex: 'plan_name', width: 200 },
+                      { title: '计划类型', dataIndex: 'plan_type', width: 120 },
+                      { title: '维护类型', dataIndex: 'maintenance_type', width: 120 },
+                      { title: '状态', dataIndex: 'status', width: 100, render: (status) => <Tag>{status}</Tag> },
+                      { title: '计划开始日期', dataIndex: 'planned_start_date', width: 120 },
+                      { title: '计划结束日期', dataIndex: 'planned_end_date', width: 120 },
+                      { title: '创建时间', dataIndex: 'created_at', width: 160 },
+                    ]}
+                    rowKey="uuid"
+                    pagination={false}
+                    size="small"
+                  />
+                ),
+              },
+              {
+                key: 'maintenance_executions',
+                label: `维护执行 (${traceData.maintenance_executions?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={traceData.maintenance_executions || []}
+                    columns={[
+                      { title: '执行编号', dataIndex: 'execution_no', width: 140 },
+                      { title: '执行日期', dataIndex: 'execution_date', width: 120 },
+                      { title: '执行人', dataIndex: 'executor_name', width: 100 },
+                      { title: '执行结果', dataIndex: 'execution_result', width: 120 },
+                      { title: '状态', dataIndex: 'status', width: 100, render: (status) => <Tag>{status}</Tag> },
+                      { title: '维护费用', dataIndex: 'maintenance_cost', width: 100, render: (cost) => cost ? `¥${cost}` : '-' },
+                      { title: '创建时间', dataIndex: 'created_at', width: 160 },
+                    ]}
+                    rowKey="uuid"
+                    pagination={false}
+                    size="small"
+                  />
+                ),
+              },
+              {
+                key: 'equipment_faults',
+                label: `故障记录 (${traceData.equipment_faults?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={traceData.equipment_faults || []}
+                    columns={[
+                      { title: '故障编号', dataIndex: 'fault_no', width: 140 },
+                      { title: '故障日期', dataIndex: 'fault_date', width: 120 },
+                      { title: '故障类型', dataIndex: 'fault_type', width: 120 },
+                      { title: '故障级别', dataIndex: 'fault_level', width: 100, render: (level) => <Tag>{level}</Tag> },
+                      { title: '状态', dataIndex: 'status', width: 100, render: (status) => <Tag>{status}</Tag> },
+                      { title: '需要维修', dataIndex: 'repair_required', width: 100, render: (required) => <Tag color={required ? 'warning' : 'success'}>{required ? '是' : '否'}</Tag> },
+                      { title: '创建时间', dataIndex: 'created_at', width: 160 },
+                    ]}
+                    rowKey="uuid"
+                    pagination={false}
+                    size="small"
+                  />
+                ),
+              },
+              {
+                key: 'equipment_repairs',
+                label: `维修记录 (${traceData.equipment_repairs?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={traceData.equipment_repairs || []}
+                    columns={[
+                      { title: '维修编号', dataIndex: 'repair_no', width: 140 },
+                      { title: '维修日期', dataIndex: 'repair_date', width: 120 },
+                      { title: '维修类型', dataIndex: 'repair_type', width: 120 },
+                      { title: '维修人', dataIndex: 'repairer_name', width: 100 },
+                      { title: '维修时长（小时）', dataIndex: 'repair_duration', width: 120 },
+                      { title: '维修费用', dataIndex: 'repair_cost', width: 100, render: (cost) => cost ? `¥${cost}` : '-' },
+                      { title: '状态', dataIndex: 'status', width: 100, render: (status) => <Tag>{status}</Tag> },
+                      { title: '维修结果', dataIndex: 'repair_result', width: 120 },
+                      { title: '创建时间', dataIndex: 'created_at', width: 160 },
+                    ]}
+                    rowKey="uuid"
+                    pagination={false}
+                    size="small"
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+      </Modal>
     </>
   );
 };
