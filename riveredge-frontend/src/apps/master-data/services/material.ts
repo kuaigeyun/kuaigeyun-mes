@@ -18,6 +18,14 @@ import type {
   BOMCreate,
   BOMUpdate,
   BOMListParams,
+  MaterialCodeMapping,
+  MaterialCodeMappingCreate,
+  MaterialCodeMappingUpdate,
+  MaterialCodeMappingListParams,
+  MaterialCodeMappingListResponse,
+  MaterialCodeConvertRequest,
+  MaterialCodeConvertResponse,
+  MaterialCodeMappingBatchImportResult,
 } from '../types/material';
 
 /**
@@ -204,6 +212,60 @@ export const bomApi = {
    */
   getVersions: async (bomCode: string): Promise<BOM[]> => {
     return api.get(`/apps/master-data/materials/bom/versions/${bomCode}`);
+  },
+};
+
+/**
+ * 物料编码映射 API 服务
+ */
+export const materialCodeMappingApi = {
+  /**
+   * 创建物料编码映射
+   */
+  create: async (data: MaterialCodeMappingCreate): Promise<MaterialCodeMapping> => {
+    return api.post('/apps/master-data/materials/mapping', data);
+  },
+
+  /**
+   * 获取物料编码映射列表
+   */
+  list: async (params?: MaterialCodeMappingListParams): Promise<MaterialCodeMappingListResponse> => {
+    return api.get('/apps/master-data/materials/mapping', { params });
+  },
+
+  /**
+   * 获取物料编码映射详情
+   */
+  get: async (uuid: string): Promise<MaterialCodeMapping> => {
+    return api.get(`/apps/master-data/materials/mapping/${uuid}`);
+  },
+
+  /**
+   * 更新物料编码映射
+   */
+  update: async (uuid: string, data: MaterialCodeMappingUpdate): Promise<MaterialCodeMapping> => {
+    return api.put(`/apps/master-data/materials/mapping/${uuid}`, data);
+  },
+
+  /**
+   * 删除物料编码映射
+   */
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/materials/mapping/${uuid}`);
+  },
+
+  /**
+   * 编码转换（外部编码 -> 内部编码）
+   */
+  convert: async (request: MaterialCodeConvertRequest): Promise<MaterialCodeConvertResponse> => {
+    return api.post('/apps/master-data/materials/mapping/convert', request);
+  },
+
+  /**
+   * 批量导入物料编码映射
+   */
+  batchImport: async (mappingsData: MaterialCodeMappingCreate[]): Promise<MaterialCodeMappingBatchImportResult> => {
+    return api.post('/apps/master-data/materials/mapping/batch-import', mappingsData);
   },
 };
 

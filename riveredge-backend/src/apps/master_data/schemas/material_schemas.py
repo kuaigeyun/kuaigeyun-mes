@@ -440,3 +440,94 @@ class BOMBatchCreate(BaseModel):
                 raise ValueError("失效日期必须晚于生效日期")
         return v
 
+
+
+# ==================== 物料编码映射 Schema ====================
+
+class MaterialCodeMappingBase(BaseModel):
+    """物料编码映射基础 Schema"""
+    
+    material_uuid: str = Field(..., description="物料UUID（关联内部物料）")
+    internal_code: str = Field(..., max_length=50, description="内部编码（物料编码）")
+    external_code: str = Field(..., max_length=100, description="外部编码（外部系统的编码）")
+    external_system: str = Field(..., max_length=50, description="外部系统名称（如：ERP、WMS、MES等）")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, description="是否启用")
+    
+    @validator("internal_code")
+    def validate_internal_code(cls, v):
+        """验证内部编码格式"""
+        if not v or not v.strip():
+            raise ValueError("内部编码不能为空")
+        return v.strip().upper()
+    
+    @validator("external_code")
+    def validate_external_code(cls, v):
+        """验证外部编码格式"""
+        if not v or not v.strip():
+            raise ValueError("外部编码不能为空")
+        return v.strip()
+    
+    @validator("external_system")
+    def validate_external_system(cls, v):
+        """验证外部系统名称格式"""
+        if not v or not v.strip():
+            raise ValueError("外部系统名称不能为空")
+        return v.strip()
+
+
+class MaterialCodeMappingCreate(MaterialCodeMappingBase):
+    """创建物料编码映射 Schema"""
+    pass
+
+
+class MaterialCodeMappingUpdate(BaseModel):
+    """更新物料编码映射 Schema"""
+    
+    material_uuid: Optional[str] = Field(None, description="物料UUID（关联内部物料）")
+    internal_code: Optional[str] = Field(None, max_length=50, description="内部编码（物料编码）")
+    external_code: Optional[str] = Field(None, max_length=100, description="外部编码（外部系统的编码）")
+    external_system: Optional[str] = Field(None, max_length=50, description="外部系统名称（如：ERP、WMS、MES等）")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class MaterialCodeMappingResponse(MaterialCodeMappingBase):
+    """物料编码映射响应 Schema"""
+    
+    id: int = Field(..., description="映射ID")
+    uuid: str = Field(..., description="业务ID（UUID）")
+    tenant_id: int = Field(..., description="组织ID")
+    material_id: int = Field(..., description="物料ID（内部使用）")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class MaterialCodeMappingListResponse(BaseModel):
+    """物料编码映射列表响应 Schema"""
+    
+    items: List[MaterialCodeMappingResponse] = Field(..., description="映射列表")
+    total: int = Field(..., description="总数")
+
+
+class MaterialCodeConvertRequest(BaseModel):
+    """物料编码转换请求 Schema"""
+    
+    external_code: str = Field(..., max_length=100, description="外部编码")
+    external_system: str = Field(..., max_length=50, description="外部系统名称")
+
+
+class MaterialCodeConvertResponse(BaseModel):
+    """物料编码转换响应 Schema"""
+    
+    internal_code: str = Field(..., description="内部编码")
+    material_uuid: str = Field(..., description="物料UUID")
+    material_name: str = Field(..., description="物料名称")
+    found: bool = Field(..., description="是否找到映射")

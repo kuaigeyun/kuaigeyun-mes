@@ -45,6 +45,7 @@ import InventoryPage from './pages/warehouse-management/inventory';
 import InboundPage from './pages/warehouse-management/inbound';
 import FinishedGoodsInboundPage from './pages/warehouse-management/finished-goods-inventory';
 import SalesOutboundPage from './pages/warehouse-management/sales-outbound';
+import InitialDataImportPage from './pages/warehouse-management/initial-data';
 import OutboundPage from './pages/warehouse-management/outbound';
 import CustomerMaterialRegistrationPage from './pages/warehouse-management/customer-material-registration';
 import BarcodeMappingRulesPage from './pages/warehouse-management/barcode-mapping-rules';
@@ -107,6 +108,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/barcode-mapping-rules" element={<BarcodeMappingRulesPage />} />
       <Route path="warehouse-management/document-timing" element={<DocumentTimingPage />} />
       <Route path="warehouse-management/document-efficiency" element={<DocumentEfficiencyPage />} />
+      <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
