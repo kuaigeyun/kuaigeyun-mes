@@ -25,6 +25,7 @@ import RolesPage from '../pages/system/roles/list';
 import PermissionsPage from '../pages/system/permissions/list';
 import DepartmentsPage from '../pages/system/departments/list';
 import PositionsPage from '../pages/system/positions/list';
+import EquipmentPage from '../pages/system/equipment/list';
 import UsersPage from '../pages/system/users/list';
 import UserProfilePage from '../pages/personal/profile';
 import LanguagesPage from '../pages/system/languages/list';
@@ -112,6 +113,7 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/permissions" element={renderWithLayout(PermissionsPage)} />
       <Route path="/system/departments" element={renderWithLayout(DepartmentsPage)} />
       <Route path="/system/positions" element={renderWithLayout(PositionsPage)} />
+      <Route path="/system/equipment" element={renderWithLayout(EquipmentPage)} />
       <Route path="/system/users" element={renderWithLayout(UsersPage)} />
       <Route path="/system/user-profile" element={renderWithLayout(UserProfilePage)} />
       <Route path="/system/languages" element={renderWithLayout(LanguagesPage)} />
