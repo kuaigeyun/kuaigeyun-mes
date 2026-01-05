@@ -874,7 +874,25 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 deleted_at__isnull=True
             )
 
-            # TODO: 如果修正了数量相关字段，可能需要重新计算工单进度
-            # TODO: 记录详细的修正历史（可以创建单独的修正历史表）
+            if not updated_record:
+                raise NotFoundError(f"报工记录不存在: {record_id}")
 
+            # 如果修正了数量相关字段，重新计算工单进度
+            # 检查是否修改了数量相关字段
+            quantity_fields = ['reported_quantity', 'qualified_quantity', 'unqualified_quantity']
+            update_data_dict = correct_data.model_dump(exclude_unset=True)
+            has_quantity_change = any(field in update_data_dict for field in quantity_fields)
+            
+            if has_quantity_change:
+                # 如果修正了数量，重新计算工单进度
+                await self._update_work_order_progress(
+                    tenant_id=tenant_id,
+                    work_order_id=updated_record.work_order_id
+                )
+                logger.info(f"报工记录 {record_id} 修正后，已重新计算工单 {updated_record.work_order_id} 的进度")
+
+            # 记录详细的修正历史（在remarks字段中记录，后续可以创建单独的修正历史表）
+            # 修正历史已记录在remarks字段中（见上面的correction_note）
+
+            logger.info(f"报工记录 {record_id} 修正成功，修正人: {user_info['name']}, 原因: {correction_reason}")
             return ReportingRecordResponse.model_validate(updated_record)
