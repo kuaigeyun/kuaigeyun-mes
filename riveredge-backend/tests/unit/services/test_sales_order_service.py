@@ -8,8 +8,16 @@ Date: 2026-01-15
 """
 
 import pytest
+import sys
+from pathlib import Path
 from datetime import date, datetime
 from decimal import Decimal
+
+# 添加src目录到路径
+backend_root = Path(__file__).parent.parent.parent
+src_path = backend_root / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
 
 from apps.kuaizhizao.services.sales_service import SalesOrderService
 from apps.kuaizhizao.models.sales_order import SalesOrder
