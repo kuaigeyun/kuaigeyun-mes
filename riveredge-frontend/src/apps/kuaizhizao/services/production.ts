@@ -204,11 +204,16 @@ export const reportingApi = {
   },
 
   // 修正报工数据
-  correct: async (recordId: string, data: any, correctionReason: string) => {
+  correct: async (recordId: string, data: any) => {
+    // 从data中提取correction_reason作为Query参数
+    const { correction_reason, ...restData } = data;
+    if (!correction_reason || !correction_reason.trim()) {
+      throw new Error('修正原因不能为空');
+    }
     return apiRequest(`/apps/kuaizhizao/reporting/${recordId}/correct`, {
       method: 'PUT',
-      data,
-      params: { correction_reason: correctionReason },
+      data: restData,
+      params: { correction_reason },
     });
   },
 };

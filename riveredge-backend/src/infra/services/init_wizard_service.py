@@ -206,10 +206,16 @@ class InitWizardService:
             settings["init_step4"] = step_data.model_dump()
             await Tenant.filter(id=tenant_id).update(settings=settings)
             
-            # 如果选择了模板，应用模板（后续实现）
+            # 如果选择了模板，应用模板
             if step_data.template_id:
-                # TODO: 应用行业模板
-                pass
+                from infra.services.industry_template_service import IndustryTemplateService
+                template_service = IndustryTemplateService()
+                try:
+                    await template_service.apply_template_to_tenant(step_data.template_id, tenant_id)
+                    logger.info(f"组织 {tenant_id} 在步骤4中应用了行业模板 {step_data.template_id}")
+                except Exception as e:
+                    logger.warning(f"应用行业模板失败（不中断流程）: {e}")
+                    # 如果应用失败，不中断流程，只记录警告
         
         return {
             "success": True,
@@ -270,10 +276,16 @@ class InitWizardService:
         
         if init_data.step4_template:
             settings["init_step4"] = init_data.step4_template.model_dump()
-            # 如果选择了模板，应用模板（后续实现）
+            # 如果选择了模板，应用模板
             if init_data.step4_template.template_id:
-                # TODO: 应用行业模板
-                pass
+                from infra.services.industry_template_service import IndustryTemplateService
+                template_service = IndustryTemplateService()
+                try:
+                    await template_service.apply_template_to_tenant(init_data.step4_template.template_id, tenant_id)
+                    logger.info(f"组织 {tenant_id} 在完成向导时应用了行业模板 {init_data.step4_template.template_id}")
+                except Exception as e:
+                    logger.warning(f"应用行业模板失败（不中断流程）: {e}")
+                    # 如果应用失败，不中断流程，只记录警告
         
         # 标记初始化完成
         settings["init_completed"] = True

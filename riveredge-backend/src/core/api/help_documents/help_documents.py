@@ -65,19 +65,28 @@ async def get_help_document(
 
 @router.get("", response_model=List[HelpDocumentResponse])
 async def list_help_documents(
+    keyword: Optional[str] = Query(None, description="搜索关键词（可选）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    列出所有帮助文档
+    列出所有帮助文档或搜索帮助文档
     
-    列出当前组织的所有帮助文档。
+    如果提供了 keyword 参数，则搜索匹配的文档；否则列出所有文档。
     
     Args:
+        keyword: 搜索关键词（可选）
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
         List[HelpDocumentResponse]: 帮助文档列表
     """
-    documents = await HelpDocumentService.list_help_documents(tenant_id=tenant_id)
+    if keyword:
+        documents = await HelpDocumentService.search_help_documents(
+            tenant_id=tenant_id,
+            keyword=keyword
+        )
+    else:
+        documents = await HelpDocumentService.list_help_documents(tenant_id=tenant_id)
+    
     return [HelpDocumentResponse.model_validate(doc) for doc in documents]
 

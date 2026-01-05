@@ -38,11 +38,17 @@ export async function getHelpDocument(documentKey: string): Promise<HelpDocument
 /**
  * 列出所有帮助文档
  * 
+ * @param keyword - 搜索关键词（可选）
  * @returns 帮助文档列表
  */
-export async function listHelpDocuments(): Promise<HelpDocument[]> {
+export async function listHelpDocuments(keyword?: string): Promise<HelpDocument[]> {
+  const params: Record<string, any> = {};
+  if (keyword) {
+    params.keyword = keyword;
+  }
   return apiRequest<HelpDocument[]>('/core/help-documents', {
     method: 'GET',
+    params,
   });
 }
 
