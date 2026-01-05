@@ -186,7 +186,7 @@ const SalesOrdersPage: React.FC = () => {
         const relations = await getDocumentRelations('sales_order', record.id!);
         setDocumentRelations(relations);
       } catch (error) {
-        console.error('获取单据关联关系失败:', error);
+        // 获取单据关联关系失败，静默处理
         setDocumentRelations(null);
       }
       
@@ -381,35 +381,13 @@ const SalesOrdersPage: React.FC = () => {
                 limit: params.pageSize,
                 ...params,
               });
-              console.log('销售订单列表响应:', response);
-              // 检查响应格式
-              if (!response || typeof response !== 'object') {
-                console.error('响应格式错误:', response);
-                messageApi.error('获取销售订单列表失败：响应格式错误');
-                return {
-                  data: [],
-                  success: false,
-                  total: 0,
-                };
-              }
-              // 确保响应包含必要的字段
-              if (!('data' in response) || !('total' in response)) {
-                console.error('响应缺少必要字段:', response);
-                messageApi.error('获取销售订单列表失败：响应格式不完整');
-                return {
-                  data: [],
-                  success: false,
-                  total: 0,
-                };
-              }
               return {
                 data: response.data || [],
                 success: response.success !== false,
                 total: response.total || 0,
               };
             } catch (error: any) {
-              console.error('获取销售订单列表失败:', error);
-              const errorMessage = error?.message || error?.response?.data?.detail || '获取销售订单列表失败';
+              const errorMessage = error?.message || '获取销售订单列表失败';
               messageApi.error(errorMessage);
               return {
                 data: [],

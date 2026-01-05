@@ -61,7 +61,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             raise NotFoundError(f"来料检验单不存在: {inspection_id}")
         return IncomingInspectionResponse.model_validate(inspection)
 
-    async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[IncomingInspectionListResponse]:
+    async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取来料检验单列表"""
         query = IncomingInspection.filter(tenant_id=tenant_id)
 
@@ -75,8 +75,18 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         if filters.get('material_id'):
             query = query.filter(material_id=filters['material_id'])
 
+        # 获取总数
+        total = await query.count()
+        
+        # 获取分页数据
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [IncomingInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        
+        # 返回前端期望的格式
+        return {
+            "data": [IncomingInspectionListResponse.model_validate(inspection).model_dump() for inspection in inspections],
+            "total": total,
+            "success": True
+        }
 
     async def update_incoming_inspection(self, tenant_id: int, inspection_id: int, inspection_data: IncomingInspectionUpdate, updated_by: int) -> IncomingInspectionResponse:
         """更新来料检验单"""

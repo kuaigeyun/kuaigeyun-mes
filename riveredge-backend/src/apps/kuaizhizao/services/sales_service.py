@@ -76,7 +76,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
         return SalesForecastResponse.model_validate(forecast)
 
-    async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesForecastListResponse]:
+    async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售预测列表"""
         query = SalesForecast.filter(tenant_id=tenant_id)
 
@@ -86,8 +86,18 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         if filters.get('forecast_period'):
             query = query.filter(forecast_period=filters['forecast_period'])
 
+        # 获取总数
+        total = await query.count()
+        
+        # 获取分页数据
         forecasts = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [SalesForecastListResponse.model_validate(forecast) for forecast in forecasts]
+        
+        # 返回前端期望的格式
+        return {
+            "data": [SalesForecastListResponse.model_validate(forecast).model_dump() for forecast in forecasts],
+            "total": total,
+            "success": True
+        }
 
     async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:
         """更新销售预测"""

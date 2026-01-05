@@ -301,54 +301,33 @@ async def debug_reload_apps():
             "message": f"应用路由重新加载失败: {str(e)}",
         }
 
-# 查看已注册的应用和路由（调试用）
+# 查看已注册的应用和路由（调试用，简化输出）
 @app.get("/debug/registered-routes")
 async def debug_registered_routes():
     """
     查看已注册的应用和路由（调试用）
 
-    返回所有已注册的应用和路由信息。
+    返回已注册的应用列表和路由数量。
     """
     from core.services.application.application_registry_service import ApplicationRegistryService
     from core.services.application.application_route_manager import get_route_manager
     
     try:
-        # 获取已注册的应用路由
         registered_routes = ApplicationRegistryService.get_registered_routes()
-        
-        # 获取路由管理器
         route_manager = get_route_manager()
-        
-        # 获取所有已注册的应用
         registered_apps = ApplicationRegistryService._registered_apps
-        
-        # 获取FastAPI应用的所有路由
-        app_routes = []
-        for route in app.routes:
-            if hasattr(route, 'path') and hasattr(route, 'methods'):
-                app_routes.append({
-                    "path": route.path,
-                    "methods": list(route.methods) if route.methods else [],
-                    "name": getattr(route, 'name', ''),
-                })
         
         return {
             "status": "success",
             "registered_apps": list(registered_apps.keys()),
             "registered_routes_count": {app_code: len(routers) for app_code, routers in registered_routes.items()},
             "route_manager_initialized": route_manager is not None,
-            "app_routes_count": len(app_routes),
-            "app_routes_sample": app_routes[:20],  # 只返回前20个路由作为示例
-            "kuaizhizao_registered": "kuaizhizao" in registered_routes,
-            "kuaizhizao_in_apps": "kuaizhizao" in registered_apps,
         }
     except Exception as e:
         logger.error(f"获取已注册路由失败: {e}")
-        import traceback
         return {
             "status": "error",
             "message": f"获取已注册路由失败: {str(e)}",
-            "traceback": traceback.format_exc(),
         }
 
 # ⚠️ 第二阶段改进：服务健康检查端点
