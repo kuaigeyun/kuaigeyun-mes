@@ -10,6 +10,7 @@ export * from './reports';
 export * from './common';
 export * from './purchase';
 export * from './equipment';
+export * from './cost';
 
 // 导出各个API模块
 export {
@@ -27,3 +28,8 @@ export {
   equipmentFaultApi,
   moldApi,
 } from './equipment';
+
+export {
+  costRuleApi,
+  costCalculationApi,
+} from './cost';

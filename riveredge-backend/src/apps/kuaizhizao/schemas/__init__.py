@@ -8,6 +8,7 @@
 from .work_order import *
 from .reporting_record import *
 from .rework_order import *
+from .cost import *
 from .outsource_order import *
 from .scrap_record import *
 from .defect_record import *
@@ -58,6 +59,29 @@ __all__ = [
     'ReworkOrderResponse',
     'ReworkOrderListResponse',
     'ReworkOrderFromWorkOrderRequest',
+
+    # 成本核算规则相关
+    'CostRuleBase',
+    'CostRuleCreate',
+    'CostRuleUpdate',
+    'CostRuleResponse',
+    'CostRuleListResponse',
+
+    # 成本核算记录相关
+    'CostCalculationBase',
+    'CostCalculationCreate',
+    'CostCalculationUpdate',
+    'CostCalculationResponse',
+    'CostCalculationListResponse',
+    'WorkOrderCostCalculationRequest',
+    'ProductCostCalculationRequest',
+
+    # 成本对比相关
+    'CostComparisonResponse',
+
+    # 成本分析相关
+    'CostAnalysisResponse',
+    'CostOptimizationResponse',
 
     # 委外单相关
     'OutsourceOrderBase',

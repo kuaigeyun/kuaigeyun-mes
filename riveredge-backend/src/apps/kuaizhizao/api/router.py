@@ -20,6 +20,10 @@ from .maintenance_plans.maintenance_plans import router as maintenance_plans_rou
 from .equipment_faults.equipment_faults import router as equipment_faults_router
 from .molds.molds import router as molds_router
 
+# 导入成本核算路由
+from .cost.cost_rules import router as cost_rules_router
+from .cost.cost_calculations import router as cost_calculations_router
+
 # 创建主路由
 router = APIRouter(tags=["Kuaige Zhizao MES"])
 
@@ -36,6 +40,10 @@ router.include_router(equipment_router)
 router.include_router(maintenance_plans_router)
 router.include_router(equipment_faults_router)
 router.include_router(molds_router)
+
+# 注册成本核算路由
+router.include_router(cost_rules_router)
+router.include_router(cost_calculations_router)
 
 @router.get("/health")
 async def health_check():

@@ -23,6 +23,9 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
+# 导入角色场景路由
+from .role_scenarios import router as role_scenarios_router
+
 
 def model_to_response(model_obj, response_class, **extra_fields):
     """
@@ -394,4 +397,7 @@ async def get_role_permissions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取角色权限失败: {str(e)}"
         )
+
+# 包含角色场景路由
+router.include_router(role_scenarios_router)
 
