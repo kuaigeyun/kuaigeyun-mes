@@ -764,6 +764,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             return WorkOrderSplitResponse(
                 original_work_order_id=original_work_order.id,
+                original_work_order_code=original_work_order.code,
+                split_work_orders=[WorkOrderResponse.model_validate(wo) for wo in split_work_orders],
+                total_count=len(split_work_orders),
 
     async def get_work_order_operations(
         self,

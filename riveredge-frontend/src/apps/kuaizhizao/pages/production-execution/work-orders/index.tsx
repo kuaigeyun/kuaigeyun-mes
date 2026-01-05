@@ -3,9 +3,10 @@
  *
  * 提供工单的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  * 支持MTS/MTO模式工单管理。
+ * 支持工单拆分、冻结、优先级管理、合并、工序修改等高级功能。
  *
  * Author: Luigi Lu
- * Date: 2025-12-26
+ * Date: 2026-01-05
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -767,6 +768,21 @@ const WorkOrdersPage: React.FC = () => {
           )}
         </Space>
       ),
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      width: 100,
+      render: (text: string) => {
+        const priorityMap: Record<string, { text: string; color: string }> = {
+          'low': { text: '低', color: 'default' },
+          'normal': { text: '正常', color: 'blue' },
+          'high': { text: '高', color: 'orange' },
+          'urgent': { text: '紧急', color: 'red' },
+        };
+        const config = priorityMap[text || 'normal'] || { text: text || '正常', color: 'blue' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
     },
     {
       title: '计划开始时间',
