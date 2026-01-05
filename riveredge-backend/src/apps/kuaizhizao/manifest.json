@@ -71,6 +71,42 @@
                 }]
             },
             {
+                "title": "仓储管理",
+                "icon": "warehouse",
+                "sort_order": 5,
+                "children": [{
+                        "title": "入库管理",
+                        "path": "/apps/kuaizhizao/warehouse-management/inbound",
+                        "permission": "kuaizhizao:inbound:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "库存查询",
+                        "path": "/apps/kuaizhizao/warehouse-management/inventory",
+                        "permission": "kuaizhizao:inventory:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "产品入库",
+                        "path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
+                        "permission": "kuaizhizao:finished-goods-inventory:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "销售出库",
+                        "path": "/apps/kuaizhizao/warehouse-management/sales-outbound",
+                        "permission": "kuaizhizao:sales-outbound:view",
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "出库管理",
+                        "path": "/apps/kuaizhizao/warehouse-management/outbound",
+                        "permission": "kuaizhizao:outbound:view",
+                        "sort_order": 5
+                    }
+                ]
+            },
+            {
                 "title": "质量管理",
                 "icon": "check-circle",
                 "sort_order": 6,
@@ -95,33 +131,9 @@
                 ]
             },
             {
-                "title": "仓储管理",
-                "icon": "warehouse",
-                "sort_order": 4,
-                "children": [{
-                        "title": "入库管理",
-                        "path": "/apps/kuaizhizao/warehouse-management/inbound",
-                        "permission": "kuaizhizao:inbound:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "库存查询",
-                        "path": "/apps/kuaizhizao/warehouse-management/inventory",
-                        "permission": "kuaizhizao:inventory:view",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "产品入库",
-                        "path": "/apps/kuaizhizao/warehouse-management/finished-goods-inventory",
-                        "permission": "kuaizhizao:finished-goods-inventory:view",
-                        "sort_order": 3
-                    }
-                ]
-            },
-            {
                 "title": "生产执行",
                 "icon": "factory",
-                "sort_order": 5,
+                "sort_order": 4,
                 "children": [{
                         "title": "工单管理",
                         "path": "/apps/kuaizhizao/production-execution/work-orders",
@@ -132,24 +144,6 @@
                         "title": "报工管理",
                         "path": "/apps/kuaizhizao/production-execution/reporting",
                         "permission": "kuaizhizao:reporting:view",
-                        "sort_order": 2
-                    }
-                ]
-            },
-            {
-                "title": "仓储管理",
-                "icon": "warehouse",
-                "sort_order": 7,
-                "children": [{
-                        "title": "销售出库",
-                        "path": "/apps/kuaizhizao/warehouse-management/sales-outbound",
-                        "permission": "kuaizhizao:sales-outbound:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "出库管理",
-                        "path": "/apps/kuaizhizao/warehouse-management/outbound",
-                        "permission": "kuaizhizao:outbound:view",
                         "sort_order": 2
                     }
                 ]
