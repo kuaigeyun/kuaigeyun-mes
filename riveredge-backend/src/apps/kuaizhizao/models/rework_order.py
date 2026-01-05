@@ -4,7 +4,7 @@
 定义返工单数据模型，支持多组织隔离。
 
 Author: Luigi Lu
-Date: 2026-01-04
+Date: 2026-01-05
 """
 
 from tortoise import fields
@@ -15,7 +15,7 @@ class ReworkOrder(BaseModel):
     """
     返工单模型
 
-    用于管理返工单，关联原工单，支持多组织隔离。
+    用于管理返工单，支持多组织隔离。
 
     Attributes:
         id: 主键ID（自增ID，内部使用）
@@ -30,23 +30,19 @@ class ReworkOrder(BaseModel):
         quantity: 返工数量
         rework_reason: 返工原因
         rework_type: 返工类型（返工、返修、报废）
-        status: 返工单状态（draft/released/in_progress/completed/cancelled）
+        route_id: 返工工艺路线ID（关联物料）
+        route_name: 返工工艺路线名称
+        status: 返工状态（draft/released/in_progress/completed/cancelled）
         planned_start_date: 计划开始日期
         planned_end_date: 计划结束日期
         actual_start_date: 实际开始日期
         actual_end_date: 实际结束日期
-        workshop_id: 车间ID
-        workshop_name: 车间名称
-        work_center_id: 工作中心ID
+        work_center_id: 工作中心ID（关联物料）
         work_center_name: 工作中心名称
-        completed_quantity: 已完成数量
-        qualified_quantity: 合格数量
-        unqualified_quantity: 不合格数量
+        operator_id: 操作员ID（用户ID）
+        operator_name: 操作员姓名
+        cost: 返工成本
         remarks: 备注
-        created_by: 创建人ID
-        created_by_name: 创建人姓名
-        updated_by: 更新人ID
-        updated_by_name: 更新人姓名
         created_at: 创建时间（继承自BaseModel）
         updated_at: 更新时间（继承自BaseModel）
         deleted_at: 删除时间（软删除）
@@ -84,41 +80,52 @@ class ReworkOrder(BaseModel):
     product_code = fields.CharField(max_length=50, description="产品编码")
     product_name = fields.CharField(max_length=200, description="产品名称")
 
-    # 返工数量和原因
-    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="返工数量")
+    # 返工数量
+    quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="返工数量")
+
+    # 返工原因和类型
     rework_reason = fields.TextField(description="返工原因")
     rework_type = fields.CharField(max_length=50, description="返工类型（返工、返修、报废）")
 
-    # 返工状态
-    status = fields.CharField(max_length=20, default="draft", description="返工单状态（draft/released/in_progress/completed/cancelled）")
+    # 返工工艺
+    route_id = fields.IntField(null=True, description="返工工艺路线ID（关联物料）")
+    route_name = fields.CharField(max_length=200, null=True, description="返工工艺路线名称")
 
-    # 时间信息
+    # 返工状态
+    status = fields.CharField(
+        max_length=20,
+        default="draft",
+        description="返工状态（draft/released/in_progress/completed/cancelled）",
+    )
+
+    # 计划时间
     planned_start_date = fields.DatetimeField(null=True, description="计划开始日期")
     planned_end_date = fields.DatetimeField(null=True, description="计划结束日期")
+
+    # 实际时间
     actual_start_date = fields.DatetimeField(null=True, description="实际开始日期")
     actual_end_date = fields.DatetimeField(null=True, description="实际结束日期")
 
-    # 车间工作中心信息
-    workshop_id = fields.IntField(null=True, description="车间ID")
-    workshop_name = fields.CharField(max_length=200, null=True, description="车间名称")
-    work_center_id = fields.IntField(null=True, description="工作中心ID")
+    # 工作中心
+    work_center_id = fields.IntField(null=True, description="工作中心ID（关联物料）")
     work_center_name = fields.CharField(max_length=200, null=True, description="工作中心名称")
 
-    # 完成信息
-    completed_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="已完成数量")
-    qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
-    unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
+    # 操作员
+    operator_id = fields.IntField(null=True, description="操作员ID（用户ID）")
+    operator_name = fields.CharField(max_length=100, null=True, description="操作员姓名")
+
+    # 返工成本
+    cost = fields.DecimalField(max_digits=18, decimal_places=2, default=0, description="返工成本")
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
 
-    # 创建更新信息
-    created_by = fields.IntField(description="创建人ID")
-    created_by_name = fields.CharField(max_length=100, description="创建人姓名")
+    # 创建人和更新人
+    created_by = fields.IntField(null=True, description="创建人ID")
+    created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")
     updated_by = fields.IntField(null=True, description="更新人ID")
     updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.product_name}"
-

@@ -1,10 +1,10 @@
 """
 返工单业务服务模块
 
-提供返工单相关的业务逻辑处理，包括CRUD操作、状态流转等。
+提供返工单相关的业务逻辑处理，包括CRUD操作、从工单创建返工单等。
 
 Author: Luigi Lu
-Date: 2026-01-04
+Date: 2026-01-05
 """
 
 import uuid
@@ -12,19 +12,19 @@ from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 
-from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
-from apps.base_service import AppBaseService
+from apps.kuaizhizao.services.base_service import AppBaseService
 from apps.kuaizhizao.models.rework_order import ReworkOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
     ReworkOrderUpdate,
     ReworkOrderResponse,
-    ReworkOrderListResponse
+    ReworkOrderListResponse,
+    ReworkOrderFromWorkOrderRequest,
 )
 from loguru import logger
 
@@ -62,58 +62,35 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         async with in_transaction():
             # 生成返工单编码（如果未提供）
             if not rework_order_data.code:
-                # 返工单编码格式：返工-{原工单号}-{序号}
-                if rework_order_data.original_work_order_uuid:
-                    # 根据原工单UUID获取原工单编码
-                    original_work_order = await WorkOrder.filter(
-                        tenant_id=tenant_id,
-                        uuid=rework_order_data.original_work_order_uuid
-                    ).first()
-                    
-                    if not original_work_order:
-                        raise NotFoundError(f"原工单不存在: {rework_order_data.original_work_order_uuid}")
-                    
-                    original_code = original_work_order.code
-                elif rework_order_data.original_work_order_id:
-                    # 根据原工单ID获取原工单编码
-                    original_work_order = await WorkOrder.filter(
-                        tenant_id=tenant_id,
-                        id=rework_order_data.original_work_order_id
-                    ).first()
-                    
-                    if not original_work_order:
-                        raise NotFoundError(f"原工单不存在: {rework_order_data.original_work_order_id}")
-                    
-                    original_code = original_work_order.code
-                    # 同时更新UUID
-                    rework_order_data.original_work_order_uuid = original_work_order.uuid
-                else:
-                    # 如果没有原工单信息，使用默认前缀
-                    original_code = "WO"
-                
-                # 查询该原工单已创建的返工单数量，用于生成序号
-                existing_count = await ReworkOrder.filter(
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(
                     tenant_id=tenant_id,
-                    original_work_order_id=original_work_order.id if rework_order_data.original_work_order_id else None,
-                    original_work_order_uuid=rework_order_data.original_work_order_uuid
-                ).count()
-                
-                seq = existing_count + 1
-                code = f"返工-{original_code}-{seq:03d}"
+                    code_type="REWORK_ORDER_CODE",
+                    prefix=f"返工-{today}"
+                )
             else:
                 code = rework_order_data.code
-
-            # 检查编码是否已存在
-            existing = await ReworkOrder.filter(
-                tenant_id=tenant_id,
-                code=code
-            ).first()
-            
-            if existing:
-                raise ValidationError(f"返工单编码已存在: {code}")
+                # 检查编码是否已存在
+                existing = await ReworkOrder.filter(
+                    tenant_id=tenant_id,
+                    code=code,
+                    deleted_at__isnull=True
+                ).first()
+                if existing:
+                    raise ValidationError(f"返工单编码 {code} 已存在")
 
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
+
+            # 如果关联了原工单，验证原工单是否存在
+            if rework_order_data.original_work_order_id:
+                original_work_order = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id,
+                    id=rework_order_data.original_work_order_id,
+                    deleted_at__isnull=True
+                )
+                if not original_work_order:
+                    raise NotFoundError(f"原工单不存在: {rework_order_data.original_work_order_id}")
 
             # 创建返工单
             rework_order = await ReworkOrder.create(
@@ -128,40 +105,39 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 quantity=rework_order_data.quantity,
                 rework_reason=rework_order_data.rework_reason,
                 rework_type=rework_order_data.rework_type,
-                status=rework_order_data.status,
+                route_id=rework_order_data.route_id,
+                route_name=rework_order_data.route_name,
+                status="draft",
                 planned_start_date=rework_order_data.planned_start_date,
                 planned_end_date=rework_order_data.planned_end_date,
-                actual_start_date=rework_order_data.actual_start_date,
-                actual_end_date=rework_order_data.actual_end_date,
-                workshop_id=rework_order_data.workshop_id,
-                workshop_name=rework_order_data.workshop_name,
                 work_center_id=rework_order_data.work_center_id,
                 work_center_name=rework_order_data.work_center_name,
-                completed_quantity=rework_order_data.completed_quantity,
-                qualified_quantity=rework_order_data.qualified_quantity,
-                unqualified_quantity=rework_order_data.unqualified_quantity,
+                operator_id=rework_order_data.operator_id,
+                operator_name=rework_order_data.operator_name,
+                cost=Decimal("0"),
                 remarks=rework_order_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
             )
 
-            logger.info(f"创建返工单成功: {code} (租户: {tenant_id})")
             return ReworkOrderResponse.model_validate(rework_order)
 
     async def create_rework_order_from_work_order(
         self,
         tenant_id: int,
         work_order_id: int,
-        rework_order_data: ReworkOrderCreate,
+        request_data: ReworkOrderFromWorkOrderRequest,
         created_by: int
     ) -> ReworkOrderResponse:
         """
-        从原工单创建返工单
+        从工单创建返工单
 
         Args:
             tenant_id: 组织ID
             work_order_id: 原工单ID
-            rework_order_data: 返工单创建数据（部分字段可从原工单继承）
+            request_data: 创建返工单请求数据
             created_by: 创建人ID
 
         Returns:
@@ -172,36 +148,58 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             ValidationError: 数据验证失败
         """
         async with in_transaction():
-            # 获取原工单信息
-            original_work_order = await WorkOrder.filter(
+            # 获取原工单
+            original_work_order = await WorkOrder.get_or_none(
                 tenant_id=tenant_id,
-                id=work_order_id
-            ).first()
-            
+                id=work_order_id,
+                deleted_at__isnull=True
+            )
             if not original_work_order:
-                raise NotFoundError(f"原工单不存在: {work_order_id}")
+                raise NotFoundError(f"工单不存在: {work_order_id}")
 
-            # 从原工单继承信息（如果返工单数据中未提供）
-            if not rework_order_data.original_work_order_id:
-                rework_order_data.original_work_order_id = original_work_order.id
-            if not rework_order_data.original_work_order_uuid:
-                rework_order_data.original_work_order_uuid = original_work_order.uuid
-            if not rework_order_data.product_id:
-                rework_order_data.product_id = original_work_order.product_id
-            if not rework_order_data.product_code:
-                rework_order_data.product_code = original_work_order.product_code
-            if not rework_order_data.product_name:
-                rework_order_data.product_name = original_work_order.product_name
-            if not rework_order_data.workshop_id:
-                rework_order_data.workshop_id = original_work_order.workshop_id
-            if not rework_order_data.workshop_name:
-                rework_order_data.workshop_name = original_work_order.workshop_name
-            if not rework_order_data.work_center_id:
-                rework_order_data.work_center_id = original_work_order.work_center_id
-            if not rework_order_data.work_center_name:
-                rework_order_data.work_center_name = original_work_order.work_center_name
+            # 验证工单状态（只有已完成的工单才能创建返工单）
+            if original_work_order.status not in ["completed", "in_progress"]:
+                raise BusinessLogicError(f"只有已完成或进行中的工单才能创建返工单，当前工单状态: {original_work_order.status}")
+
+            # 生成返工单编码
+            today = datetime.now().strftime("%Y%m%d")
+            # 查找该工单已创建的返工单数量
+            existing_count = await ReworkOrder.filter(
+                tenant_id=tenant_id,
+                original_work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).count()
+            sequence = existing_count + 1
+
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="REWORK_ORDER_CODE",
+                prefix=f"返工-{original_work_order.code}-{sequence:03d}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 确定返工数量（如果未提供则使用原工单数量）
+            quantity = request_data.quantity if request_data.quantity else original_work_order.quantity
 
             # 创建返工单
+            rework_order_data = ReworkOrderCreate(
+                code=code,
+                original_work_order_id=work_order_id,
+                original_work_order_uuid=original_work_order.uuid,
+                product_id=original_work_order.product_id,
+                product_code=original_work_order.product_code,
+                product_name=original_work_order.product_name,
+                quantity=quantity,
+                rework_reason=request_data.rework_reason,
+                rework_type=request_data.rework_type,
+                route_id=request_data.route_id,
+                work_center_id=request_data.work_center_id or original_work_order.work_center_id,
+                work_center_name=original_work_order.work_center_name if not request_data.work_center_id else None,
+                remarks=request_data.remarks,
+            )
+
             return await self.create_rework_order(
                 tenant_id=tenant_id,
                 rework_order_data=rework_order_data,
@@ -229,43 +227,80 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         return ReworkOrderResponse.model_validate(rework_order)
 
+    async def get_rework_order_by_uuid(
+        self,
+        tenant_id: int,
+        rework_order_uuid: str
+    ) -> ReworkOrderResponse:
+        """
+        根据UUID获取返工单
+
+        Args:
+            tenant_id: 组织ID
+            rework_order_uuid: 返工单UUID
+
+        Returns:
+            ReworkOrderResponse: 返工单信息
+
+        Raises:
+            NotFoundError: 返工单不存在
+        """
+        rework_order = await ReworkOrder.get_or_none(
+            tenant_id=tenant_id,
+            uuid=rework_order_uuid,
+            deleted_at__isnull=True
+        )
+        if not rework_order:
+            raise NotFoundError(f"返工单不存在: {rework_order_uuid}")
+        return ReworkOrderResponse.model_validate(rework_order)
+
     async def list_rework_orders(
         self,
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
         code: Optional[str] = None,
-        status: Optional[str] = None,
         original_work_order_id: Optional[int] = None,
-        product_id: Optional[int] = None
+        product_name: Optional[str] = None,
+        status: Optional[str] = None,
+        rework_type: Optional[str] = None,
     ) -> List[ReworkOrderListResponse]:
         """
-        查询返工单列表
+        获取返工单列表
 
         Args:
             tenant_id: 组织ID
             skip: 跳过数量
             limit: 限制数量
-            code: 返工单编码（模糊查询）
-            status: 返工单状态
+            code: 返工单编码（模糊搜索）
             original_work_order_id: 原工单ID
-            product_id: 产品ID
+            product_name: 产品名称（模糊搜索）
+            status: 返工单状态
+            rework_type: 返工类型
 
         Returns:
             List[ReworkOrderListResponse]: 返工单列表
         """
-        query = Q(tenant_id=tenant_id)
+        from tortoise.queryset import Q
 
+        query = ReworkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        # 应用过滤条件
         if code:
-            query &= Q(code__icontains=code)
-        if status:
-            query &= Q(status=status)
+            query = query.filter(code__icontains=code)
         if original_work_order_id:
-            query &= Q(original_work_order_id=original_work_order_id)
-        if product_id:
-            query &= Q(product_id=product_id)
+            query = query.filter(original_work_order_id=original_work_order_id)
+        if product_name:
+            query = query.filter(product_name__icontains=product_name)
+        if status:
+            query = query.filter(status=status)
+        if rework_type:
+            query = query.filter(rework_type=rework_type)
 
-        rework_orders = await ReworkOrder.filter(query).offset(skip).limit(limit).order_by("-created_at")
+        rework_orders = await query.offset(skip).limit(limit).order_by("-created_at")
         return [ReworkOrderListResponse.model_validate(ro) for ro in rework_orders]
 
     async def update_rework_order(
@@ -292,30 +327,43 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             ValidationError: 数据验证失败
         """
         async with in_transaction():
+            # 获取返工单
             rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
+
+            # 验证状态（已完成的返工单不允许修改）
+            if rework_order.status == "completed":
+                raise BusinessLogicError("已完成的返工单不允许修改")
 
             # 获取更新人信息
             user_info = await self.get_user_info(updated_by)
 
             # 更新字段
             update_data = rework_order_data.model_dump(exclude_unset=True)
-            for key, value in update_data.items():
-                setattr(rework_order, key, value)
+            update_data["updated_by"] = updated_by
+            update_data["updated_by_name"] = user_info["name"]
 
-            # 更新更新人信息
-            rework_order.updated_by = updated_by
-            rework_order.updated_by_name = user_info["name"]
+            # 如果状态变更为in_progress，记录实际开始时间
+            if "status" in update_data and update_data["status"] == "in_progress" and not rework_order.actual_start_date:
+                update_data["actual_start_date"] = datetime.now()
 
-            await rework_order.save()
+            # 如果状态变更为completed，记录实际结束时间
+            if "status" in update_data and update_data["status"] == "completed" and not rework_order.actual_end_date:
+                update_data["actual_end_date"] = datetime.now()
 
-            logger.info(f"更新返工单成功: {rework_order.code} (租户: {tenant_id})")
-            return ReworkOrderResponse.model_validate(rework_order)
+            await ReworkOrder.filter(
+                tenant_id=tenant_id,
+                id=rework_order_id
+            ).update(**update_data)
+
+            # 返回更新后的返工单
+            updated_rework_order = await self.get_rework_order_by_id(tenant_id, rework_order_id)
+            return updated_rework_order
 
     async def delete_rework_order(
         self,
         tenant_id: int,
         rework_order_id: int
-    ) -> None:
+    ) -> bool:
         """
         删除返工单（软删除）
 
@@ -323,15 +371,25 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             tenant_id: 组织ID
             rework_order_id: 返工单ID
 
+        Returns:
+            bool: 删除是否成功
+
         Raises:
             NotFoundError: 返工单不存在
+            BusinessLogicError: 已完成的返工单不允许删除
         """
         async with in_transaction():
+            # 获取返工单
             rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
 
+            # 验证状态（已完成的返工单不允许删除）
+            if rework_order.status == "completed":
+                raise BusinessLogicError("已完成的返工单不允许删除")
+
             # 软删除
-            rework_order.deleted_at = datetime.utcnow()
-            await rework_order.save()
+            await ReworkOrder.filter(
+                tenant_id=tenant_id,
+                id=rework_order_id
+            ).update(deleted_at=datetime.now())
 
-            logger.info(f"删除返工单成功: {rework_order.code} (租户: {tenant_id})")
-
+            return True

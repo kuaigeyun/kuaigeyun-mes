@@ -88,7 +88,8 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
     ReworkOrderUpdate,
     ReworkOrderResponse,
-    ReworkOrderListResponse
+    ReworkOrderListResponse,
+    ReworkOrderFromWorkOrderRequest,
 )
 from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderCreate,
@@ -559,22 +560,22 @@ async def merge_work_orders(
 @router.post("/work-orders/{work_order_id}/rework", response_model=ReworkOrderResponse, summary="从工单创建返工单")
 async def create_rework_order_from_work_order(
     work_order_id: int,
-    rework_order: ReworkOrderCreate,
+    request_data: ReworkOrderFromWorkOrderRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReworkOrderResponse:
     """
     从工单创建返工单
 
-    根据原工单信息创建返工单，自动关联原工单。
+    根据原工单信息创建返工单，自动关联原工单。返工单编码自动生成：返工-{原工单号}-{序号}
 
     - **work_order_id**: 原工单ID
-    - **rework_order**: 返工单创建数据（部分字段可从原工单继承）
+    - **request_data**: 返工单创建请求数据（返工原因、返工类型等，部分字段可从原工单继承）
     """
     return await ReworkOrderService().create_rework_order_from_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
-        rework_order_data=rework_order,
+        request_data=request_data,
         created_by=current_user.id
     )
 
@@ -606,7 +607,8 @@ async def list_rework_orders(
     code: Optional[str] = Query(None, description="返工单编码（模糊搜索）"),
     status: Optional[str] = Query(None, description="返工单状态"),
     original_work_order_id: Optional[int] = Query(None, description="原工单ID"),
-    product_id: Optional[int] = Query(None, description="产品ID"),
+    product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
+    rework_type: Optional[str] = Query(None, description="返工类型"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[ReworkOrderListResponse]:
@@ -622,7 +624,8 @@ async def list_rework_orders(
         code=code,
         status=status,
         original_work_order_id=original_work_order_id,
-        product_id=product_id,
+        product_name=product_name,
+        rework_type=rework_type,
     )
 
 
