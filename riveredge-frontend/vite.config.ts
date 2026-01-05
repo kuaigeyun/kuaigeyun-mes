@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
@@ -199,4 +200,12 @@ export default defineConfig({
   logLevel: 'info', // 显示必要信息，方便调试
   // ⚠️ 优化：允许清屏，但减少频率
   clearScreen: true,
+  // 测试配置
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.ts'],
+    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
+  },
 })

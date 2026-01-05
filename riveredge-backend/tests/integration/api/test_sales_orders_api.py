@@ -30,10 +30,13 @@ async def test_create_sales_order_api(test_client: AsyncClient, auth_headers: di
                 "material_code": "MAT001",
                 "material_name": "测试物料",
                 "material_unit": "个",
-                "ordered_quantity": 100.0,
+                "order_quantity": 100.0,
+                "delivered_quantity": 0.0,
+                "remaining_quantity": 100.0,
                 "unit_price": 10.0,
                 "total_amount": 1000.0,
                 "delivery_date": date(2026, 2, 15).isoformat(),
+                "delivery_status": "待交货",
             }
         ],
     }

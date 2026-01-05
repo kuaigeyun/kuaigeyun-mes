@@ -192,6 +192,7 @@ async def db_setup():
             await ApplicationRegistryService.reload_apps()
         except Exception as e:
             # 如果数据库中没有应用记录，尝试从文件系统扫描
+            from loguru import logger
             logger.warning(f"应用注册服务初始化失败，尝试从文件系统扫描: {e}")
         
         yield
