@@ -49,6 +49,7 @@ from core.api.roles.roles import router as roles_router
 from core.api.permissions.permissions import router as permissions_router
 from core.api.departments.departments import router as departments_router
 from core.api.positions.positions import router as positions_router
+from core.api.equipment.equipment import router as equipment_router
 from core.api.data_dictionaries.data_dictionaries import router as data_dictionaries_router
 from core.api.system_parameters.system_parameters import router as system_parameters_router
 from core.api.code_rules.code_rules import router as code_rules_router
@@ -371,6 +372,7 @@ app.include_router(roles_router, prefix="/api/v1/core")
 app.include_router(permissions_router, prefix="/api/v1/core")
 app.include_router(departments_router, prefix="/api/v1/core")
 app.include_router(positions_router, prefix="/api/v1/core")
+app.include_router(equipment_router, prefix="/api/v1/core")
 app.include_router(data_dictionaries_router, prefix="/api/v1/core")
 app.include_router(system_parameters_router, prefix="/api/v1/core")
 app.include_router(code_rules_router, prefix="/api/v1/core")

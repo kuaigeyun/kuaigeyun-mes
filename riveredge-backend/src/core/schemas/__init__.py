@@ -92,6 +92,14 @@ from .integration_config import (
     TestConnectionResponse,
 )
 
+# 设备管理 Schema
+from .equipment import (
+    EquipmentCreate,
+    EquipmentUpdate,
+    EquipmentResponse,
+    EquipmentListResponse,
+)
+
 # 文件管理 Schema
 from .file import (
     FileCreate,

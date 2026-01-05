@@ -93,6 +93,9 @@ from .login_log import LoginLog
 from .working_hours_config import WorkingHoursConfig
 from .report_template import ReportTemplate
 
+# 设备模型
+from .equipment import Equipment
+
 __all__ = [
     # 基础模型
     "BaseModel",
@@ -159,5 +162,7 @@ __all__ = [
     "WorkingHoursConfig",
     # 报表模板模型
     "ReportTemplate",
+    # 设备模型
+    "Equipment",
 ]
 
