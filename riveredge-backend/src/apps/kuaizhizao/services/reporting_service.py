@@ -715,12 +715,80 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 updated_by_name=user_info["name"],
             )
 
-            # TODO: 根据处理方式执行相应操作
-            # - 如果处理方式为返工，创建返工单
-            # - 如果处理方式为报废，创建报废记录
-            # - 如果处理方式为隔离，记录隔离位置
-            # - 更新工单的不合格数量
+            # 根据处理方式执行相应操作
+            rework_order_id = None
+            scrap_record_id = None
+            
+            if defect_data.disposition == 'rework':
+                # 如果处理方式为返工，创建返工单
+                rework_service = ReworkOrderService()
+                rework_order_data = ReworkOrderCreate(
+                    original_work_order_id=work_order.id,
+                    original_work_order_uuid=work_order.uuid,
+                    product_id=work_order.product_id,
+                    product_code=work_order.product_code,
+                    product_name=work_order.product_name,
+                    quantity=defect_data.defect_quantity,
+                    rework_reason=defect_data.defect_reason,
+                    rework_type="返工",  # 不良品返工
+                    workshop_id=work_order.workshop_id,
+                    workshop_name=work_order.workshop_name,
+                    work_center_id=work_order.work_center_id,
+                    work_center_name=work_order.work_center_name,
+                    remarks=f"从不良品记录 {code} 创建，原因：{defect_data.defect_reason}",
+                )
+                rework_order = await rework_service.create_rework_order(
+                    tenant_id=tenant_id,
+                    rework_order_data=rework_order_data,
+                    created_by=created_by
+                )
+                rework_order_id = rework_order.id
+                logger.info(f"从不良品记录 {code} 创建返工单: {rework_order.code}")
+                
+            elif defect_data.disposition == 'scrap':
+                # 如果处理方式为报废，创建报废记录
+                scrap_data = ScrapRecordCreateFromReporting(
+                    scrap_quantity=defect_data.defect_quantity,
+                    scrap_reason=f"不良品报废：{defect_data.defect_reason}",
+                    scrap_type="quality",  # 质量原因报废
+                    remarks=f"从不良品记录 {code} 创建",
+                )
+                scrap_record = await self.record_scrap(
+                    tenant_id=tenant_id,
+                    reporting_record_id=reporting_record_id,
+                    scrap_data=scrap_data,
+                    created_by=created_by
+                )
+                scrap_record_id = scrap_record.id
+                logger.info(f"从不良品记录 {code} 创建报废记录: {scrap_record.code}")
+            
+            elif defect_data.disposition == 'quarantine':
+                # 如果处理方式为隔离，隔离位置已在创建时记录（quarantine_location字段）
+                logger.info(f"不良品记录 {code} 已隔离，隔离位置: {defect_data.quarantine_location or '未指定'}")
+            
+            # 更新不良品记录，关联返工单ID或报废记录ID
+            if rework_order_id or scrap_record_id:
+                await DefectRecord.filter(
+                    tenant_id=tenant_id,
+                    id=defect_record.id
+                ).update(
+                    rework_order_id=rework_order_id,
+                    scrap_record_id=scrap_record_id,
+                    updated_by=created_by,
+                    updated_by_name=user_info["name"],
+                )
+                # 重新获取更新后的记录
+                defect_record = await DefectRecord.get(id=defect_record.id)
+            
+            # 更新工单的不合格数量
+            await self._update_work_order_unqualified_quantity(
+                tenant_id=tenant_id,
+                work_order_id=work_order.id,
+                work_order=work_order
+            )
+            await work_order.save()
 
+            logger.info(f"创建不良品记录成功: {code}, 工单: {work_order.code}, 不良品数量: {defect_data.defect_quantity}, 处理方式: {defect_data.disposition}")
             return DefectRecordResponse.model_validate(defect_record)
 
     async def correct_reporting_data(
