@@ -228,6 +228,17 @@ const SalesOrdersPage: React.FC = () => {
       setModalVisible(true);
       // 延迟设置表单值
       setTimeout(() => {
+        // 转换明细项格式（如果后端返回的格式与表单需要的格式不同）
+        const items = (detail.items || []).map((item: any) => ({
+          material_id: item.material_id,
+          material_unit: item.material_unit || '个',
+          ordered_quantity: item.ordered_quantity || 0,
+          unit_price: item.unit_price || 0,
+          total_price: item.total_price || (item.ordered_quantity || 0) * (item.unit_price || 0),
+          delivery_date: item.delivery_date || detail.delivery_date,
+          notes: item.notes || '',
+        }));
+
         formRef.current?.setFieldsValue({
           customer_id: detail.customer_id,
           customer_name: detail.customer_name,
@@ -241,6 +252,7 @@ const SalesOrdersPage: React.FC = () => {
           payment_terms: detail.payment_terms,
           salesman_name: detail.salesman_name,
           notes: detail.notes,
+          items: items,
         });
       }, 100);
     } catch (error) {
