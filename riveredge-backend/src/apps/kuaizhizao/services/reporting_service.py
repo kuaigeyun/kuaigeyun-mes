@@ -835,6 +835,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 获取修正人信息
             user_info = await self.get_user_info(corrected_by)
+            
+            # 权限控制：只有组织管理员可以修正报工数据
+            from infra.models.user import User
+            correcting_user = await User.get_or_none(id=corrected_by)
+            if not correcting_user or not correcting_user.is_tenant_admin:
+                raise BusinessLogicError("只有组织管理员可以修正报工数据")
 
             # 检查是否可以修正（可以根据业务需求调整规则）
             # 例如：只有待审核或已驳回的记录可以修正，或者所有记录都可以修正但需要审核
