@@ -196,3 +196,77 @@ export interface BOMBatchCreate {
   isActive?: boolean;
 }
 
+
+// ==================== 物料编码映射类型定义 ====================
+
+export interface MaterialCodeMapping {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  materialId: number;
+  materialUuid: string;
+  internalCode: string;
+  externalCode: string;
+  externalSystem: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface MaterialCodeMappingCreate {
+  materialUuid: string;
+  internalCode: string;
+  externalCode: string;
+  externalSystem: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface MaterialCodeMappingUpdate {
+  materialUuid?: string;
+  internalCode?: string;
+  externalCode?: string;
+  externalSystem?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface MaterialCodeMappingListParams {
+  materialUuid?: string;
+  externalSystem?: string;
+  internalCode?: string;
+  externalCode?: string;
+  isActive?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MaterialCodeMappingListResponse {
+  items: MaterialCodeMapping[];
+  total: number;
+}
+
+export interface MaterialCodeConvertRequest {
+  externalCode: string;
+  externalSystem: string;
+}
+
+export interface MaterialCodeConvertResponse {
+  internalCode: string;
+  materialUuid: string;
+  materialName: string;
+  found: boolean;
+}
+
+export interface MaterialCodeMappingBatchImportResult {
+  successCount: number;
+  failureCount: number;
+  errors: Array<{
+    index: number;
+    externalCode: string;
+    externalSystem: string;
+    error: string;
+  }>;
+}

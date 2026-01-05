@@ -10,11 +10,14 @@ from typing import List, Optional, Annotated
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.master_data.services.material_service import MaterialService
+from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
-    MaterialGroupTreeResponse
+    MaterialGroupTreeResponse,
+    MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
+    MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -521,4 +524,172 @@ async def delete_material(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# ==================== 物料编码映射相关接口 ====================
+
+@router.post("/mapping", response_model=MaterialCodeMappingResponse, summary="创建物料编码映射")
+async def create_material_code_mapping(
+    data: MaterialCodeMappingCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建物料编码映射
+    
+    用于将外部系统的编码映射到内部物料编码。
+    
+    - **material_uuid**: 物料UUID（必填，关联内部物料）
+    - **internal_code**: 内部编码（必填，物料编码）
+    - **external_code**: 外部编码（必填，外部系统的编码）
+    - **external_system**: 外部系统名称（必填，如：ERP、WMS、MES等）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（默认：true）
+    """
+    try:
+        return await MaterialCodeMappingService.create_mapping(tenant_id, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/mapping", response_model=MaterialCodeMappingListResponse, summary="获取物料编码映射列表")
+async def list_material_code_mappings(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    material_uuid: Optional[str] = Query(None, description="物料UUID（过滤）"),
+    external_system: Optional[str] = Query(None, description="外部系统名称（过滤）"),
+    internal_code: Optional[str] = Query(None, description="内部编码（模糊匹配）"),
+    external_code: Optional[str] = Query(None, description="外部编码（模糊匹配）"),
+    is_active: Optional[bool] = Query(None, description="是否启用（过滤）"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页大小")
+):
+    """
+    获取物料编码映射列表
+    
+    - **material_uuid**: 物料UUID（可选，用于过滤）
+    - **external_system**: 外部系统名称（可选，用于过滤）
+    - **internal_code**: 内部编码（可选，模糊匹配）
+    - **external_code**: 外部编码（可选，模糊匹配）
+    - **is_active**: 是否启用（可选，用于过滤）
+    - **page**: 页码（默认：1）
+    - **page_size**: 每页大小（默认：20，最大：100）
+    """
+    return await MaterialCodeMappingService.list_mappings(
+        tenant_id=tenant_id,
+        material_uuid=material_uuid,
+        external_system=external_system,
+        internal_code=internal_code,
+        external_code=external_code,
+        is_active=is_active,
+        page=page,
+        page_size=page_size
+    )
+
+
+@router.get("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="获取物料编码映射详情")
+async def get_material_code_mapping(
+    mapping_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据UUID获取物料编码映射详情
+    
+    - **mapping_uuid**: 映射UUID
+    """
+    try:
+        return await MaterialCodeMappingService.get_mapping_by_uuid(tenant_id, mapping_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/mapping/{mapping_uuid}", response_model=MaterialCodeMappingResponse, summary="更新物料编码映射")
+async def update_material_code_mapping(
+    mapping_uuid: str,
+    data: MaterialCodeMappingUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新物料编码映射
+    
+    - **mapping_uuid**: 映射UUID
+    - **material_uuid**: 物料UUID（可选）
+    - **internal_code**: 内部编码（可选）
+    - **external_code**: 外部编码（可选）
+    - **external_system**: 外部系统名称（可选）
+    - **description**: 描述（可选）
+    - **is_active**: 是否启用（可选）
+    """
+    try:
+        return await MaterialCodeMappingService.update_mapping(tenant_id, mapping_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/mapping/{mapping_uuid}", summary="删除物料编码映射")
+async def delete_material_code_mapping(
+    mapping_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除物料编码映射（软删除）
+    
+    - **mapping_uuid**: 映射UUID
+    """
+    try:
+        await MaterialCodeMappingService.delete_mapping(tenant_id, mapping_uuid)
+        return {"message": "物料编码映射删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/mapping/convert", response_model=MaterialCodeConvertResponse, summary="编码转换")
+async def convert_material_code(
+    request: MaterialCodeConvertRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    编码转换（外部编码 -> 内部编码）
+    
+    根据外部系统的编码查找对应的内部物料编码。
+    
+    - **external_code**: 外部编码（必填）
+    - **external_system**: 外部系统名称（必填，如：ERP、WMS、MES等）
+    
+    Returns:
+        MaterialCodeConvertResponse: 编码转换结果
+        - **found**: 是否找到映射
+        - **internal_code**: 内部编码（如果找到）
+        - **material_uuid**: 物料UUID（如果找到）
+        - **material_name**: 物料名称（如果找到）
+    """
+    return await MaterialCodeMappingService.convert_code(tenant_id, request)
+
+
+@router.post("/mapping/batch-import", summary="批量导入物料编码映射")
+async def batch_import_material_code_mappings(
+    mappings_data: List[MaterialCodeMappingCreate],
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量导入物料编码映射
+    
+    支持批量创建多个物料编码映射。
+    
+    - **mappings_data**: 映射创建数据列表
+    
+    Returns:
+        dict: 批量导入结果
+        - **success_count**: 成功数量
+        - **failure_count**: 失败数量
+        - **errors**: 错误列表
+    """
+    return await MaterialCodeMappingService.batch_create_mappings(tenant_id, mappings_data)
 

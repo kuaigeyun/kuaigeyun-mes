@@ -24,6 +24,9 @@ from .molds.molds import router as molds_router
 from .cost.cost_rules import router as cost_rules_router
 from .cost.cost_calculations import router as cost_calculations_router
 
+# 导入期初数据导入路由
+from .initial_data import router as initial_data_router
+
 # 创建主路由
 router = APIRouter(tags=["Kuaige Zhizao MES"])
 
@@ -44,6 +47,9 @@ router.include_router(molds_router)
 # 注册成本核算路由
 router.include_router(cost_rules_router)
 router.include_router(cost_calculations_router)
+
+# 注册期初数据导入路由
+router.include_router(initial_data_router)
 
 @router.get("/health")
 async def health_check():

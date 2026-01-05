@@ -7,6 +7,7 @@
 from .factory import Workshop, ProductionLine, Workstation
 from .warehouse import Warehouse, StorageArea, StorageLocation
 from .material import MaterialGroup, Material, BOM
+from .material_code_mapping import MaterialCodeMapping
 from .process import DefectType, Operation, ProcessRoute, SOP
 from .customer import Customer
 from .supplier import Supplier
@@ -23,6 +24,7 @@ __all__ = [
     "MaterialGroup",
     "Material",
     "BOM",
+    "MaterialCodeMapping",
     "DefectType",
     "Operation",
     "ProcessRoute",
