@@ -4,26 +4,26 @@
 
 📋 模型文件中的表（共 46 个）
 --------------------------------------------------------------------------------
-  ❌ 未迁移 apps_kuaizhizao_barcode_mapping_rules
-  ❌ 未迁移 apps_kuaizhizao_cost_calculations
-  ❌ 未迁移 apps_kuaizhizao_cost_rules
-  ❌ 未迁移 apps_kuaizhizao_customer_material_registrations
-  ❌ 未迁移 apps_kuaizhizao_defect_records
-  ❌ 未迁移 apps_kuaizhizao_delivery_delay_exceptions
-  ❌ 未迁移 apps_kuaizhizao_document_node_timings
+  ✅ 已迁移 apps_kuaizhizao_barcode_mapping_rules
+  ✅ 已迁移 apps_kuaizhizao_cost_calculations
+  ✅ 已迁移 apps_kuaizhizao_cost_rules
+  ✅ 已迁移 apps_kuaizhizao_customer_material_registrations
+  ✅ 已迁移 apps_kuaizhizao_defect_records
+  ✅ 已迁移 apps_kuaizhizao_delivery_delay_exceptions
+  ✅ 已迁移 apps_kuaizhizao_document_node_timings
   ✅ 已迁移 apps_kuaizhizao_finished_goods_inspections
   ✅ 已迁移 apps_kuaizhizao_finished_goods_receipt_items
   ✅ 已迁移 apps_kuaizhizao_finished_goods_receipts
   ✅ 已迁移 apps_kuaizhizao_incoming_inspections
-  ❌ 未迁移 apps_kuaizhizao_inventory_alert_rules
-  ❌ 未迁移 apps_kuaizhizao_inventory_alerts
-  ❌ 未迁移 apps_kuaizhizao_launch_countdowns
+  ✅ 已迁移 apps_kuaizhizao_inventory_alert_rules
+  ✅ 已迁移 apps_kuaizhizao_inventory_alerts
+  ✅ 已迁移 apps_kuaizhizao_launch_countdowns
   ✅ 已迁移 apps_kuaizhizao_lrp_results
-  ❌ 未迁移 apps_kuaizhizao_material_bindings
-  ❌ 未迁移 apps_kuaizhizao_material_shortage_exceptions
+  ✅ 已迁移 apps_kuaizhizao_material_bindings
+  ✅ 已迁移 apps_kuaizhizao_material_shortage_exceptions
   ✅ 已迁移 apps_kuaizhizao_mrp_results
-  ❌ 未迁移 apps_kuaizhizao_outsource_orders
-  ❌ 未迁移 apps_kuaizhizao_packing_bindings
+  ✅ 已迁移 apps_kuaizhizao_outsource_orders
+  ✅ 已迁移 apps_kuaizhizao_packing_bindings
   ✅ 已迁移 apps_kuaizhizao_payables
   ✅ 已迁移 apps_kuaizhizao_process_inspections
   ✅ 已迁移 apps_kuaizhizao_production_picking_items
@@ -35,60 +35,34 @@
   ✅ 已迁移 apps_kuaizhizao_purchase_orders
   ✅ 已迁移 apps_kuaizhizao_purchase_receipt_items
   ✅ 已迁移 apps_kuaizhizao_purchase_receipts
-  ❌ 未迁移 apps_kuaizhizao_quality_exceptions
+  ✅ 已迁移 apps_kuaizhizao_quality_exceptions
   ✅ 已迁移 apps_kuaizhizao_receivables
   ✅ 已迁移 apps_kuaizhizao_reporting_records
-  ❌ 未迁移 apps_kuaizhizao_rework_orders
+  ✅ 已迁移 apps_kuaizhizao_rework_orders
   ✅ 已迁移 apps_kuaizhizao_sales_deliveries
   ✅ 已迁移 apps_kuaizhizao_sales_delivery_items
   ✅ 已迁移 apps_kuaizhizao_sales_forecast_items
   ✅ 已迁移 apps_kuaizhizao_sales_forecasts
   ✅ 已迁移 apps_kuaizhizao_sales_order_items
   ✅ 已迁移 apps_kuaizhizao_sales_orders
-  ❌ 未迁移 apps_kuaizhizao_scrap_records
-  ❌ 未迁移 apps_kuaizhizao_stocktaking_items
-  ❌ 未迁移 apps_kuaizhizao_stocktakings
-  ❌ 未迁移 apps_kuaizhizao_work_order_operations
+  ✅ 已迁移 apps_kuaizhizao_scrap_records
+  ✅ 已迁移 apps_kuaizhizao_stocktaking_items
+  ✅ 已迁移 apps_kuaizhizao_stocktakings
+  ✅ 已迁移 apps_kuaizhizao_work_order_operations
   ✅ 已迁移 apps_kuaizhizao_work_orders
 
 📋 迁移文件中的表
 --------------------------------------------------------------------------------
-  创建的表: 28 个
+  创建的表: 48 个
   删除的表: 2 个
-  当前存在的表: 26 个
+  当前存在的表: 46 个
 
-⚠️  未迁移的模型（共 20 个）
---------------------------------------------------------------------------------
-  ❌ apps_kuaizhizao_barcode_mapping_rules
-  ❌ apps_kuaizhizao_cost_calculations
-  ❌ apps_kuaizhizao_cost_rules
-  ❌ apps_kuaizhizao_customer_material_registrations
-  ❌ apps_kuaizhizao_defect_records
-  ❌ apps_kuaizhizao_delivery_delay_exceptions
-  ❌ apps_kuaizhizao_document_node_timings
-  ❌ apps_kuaizhizao_inventory_alert_rules
-  ❌ apps_kuaizhizao_inventory_alerts
-  ❌ apps_kuaizhizao_launch_countdowns
-  ❌ apps_kuaizhizao_material_bindings
-  ❌ apps_kuaizhizao_material_shortage_exceptions
-  ❌ apps_kuaizhizao_outsource_orders
-  ❌ apps_kuaizhizao_packing_bindings
-  ❌ apps_kuaizhizao_quality_exceptions
-  ❌ apps_kuaizhizao_rework_orders
-  ❌ apps_kuaizhizao_scrap_records
-  ❌ apps_kuaizhizao_stocktaking_items
-  ❌ apps_kuaizhizao_stocktakings
-  ❌ apps_kuaizhizao_work_order_operations
+✅ 所有模型都已迁移
 
-建议操作：
-  1. 检查这些模型是否还需要
-  2. 如果需要，创建对应的迁移文件
-  3. 如果不需要，删除模型文件
 ✅ 没有孤立的表
 
 📊 总结
 --------------------------------------------------------------------------------
-⚠️  发现 20 个问题需要处理
-  - 20 个未迁移的模型
+✅ 所有模型都已正确迁移，没有发现问题
 
 ================================================================================
