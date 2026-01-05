@@ -187,7 +187,7 @@ export interface UpdateMoldUsageData {
  * @returns 模具列表响应数据
  */
 export async function getMoldList(params?: MoldListParams): Promise<MoldListResponse> {
-  return apiRequest<MoldListResponse>('/core/molds', {
+  return apiRequest<MoldListResponse>('/apps/kuaizhizao/molds', {
     params,
   });
 }
@@ -201,7 +201,7 @@ export async function getMoldList(params?: MoldListParams): Promise<MoldListResp
  * @returns 模具信息
  */
 export async function getMoldByUuid(moldUuid: string): Promise<Mold> {
-  return apiRequest<Mold>(`/core/molds/${moldUuid}`);
+  return apiRequest<Mold>(`/apps/kuaizhizao/molds/${moldUuid}`);
 }
 
 /**
@@ -213,7 +213,7 @@ export async function getMoldByUuid(moldUuid: string): Promise<Mold> {
  * @returns 创建的模具信息
  */
 export async function createMold(data: CreateMoldData): Promise<Mold> {
-  return apiRequest<Mold>('/core/molds', {
+  return apiRequest<Mold>('/apps/kuaizhizao/molds', {
     method: 'POST',
     data,
   });
@@ -229,7 +229,7 @@ export async function createMold(data: CreateMoldData): Promise<Mold> {
  * @returns 更新后的模具信息
  */
 export async function updateMold(moldUuid: string, data: UpdateMoldData): Promise<Mold> {
-  return apiRequest<Mold>(`/core/molds/${moldUuid}`, {
+  return apiRequest<Mold>(`/apps/kuaizhizao/molds/${moldUuid}`, {
     method: 'PUT',
     data,
   });
@@ -243,7 +243,7 @@ export async function updateMold(moldUuid: string, data: UpdateMoldData): Promis
  * @param moldUuid - 模具 UUID
  */
 export async function deleteMold(moldUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/molds/${moldUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/molds/${moldUuid}`, {
     method: 'DELETE',
   });
 }
@@ -257,7 +257,7 @@ export async function deleteMold(moldUuid: string): Promise<void> {
  * @returns 模具使用记录列表响应数据
  */
 export async function getMoldUsageList(params?: MoldUsageListParams): Promise<MoldUsageListResponse> {
-  return apiRequest<MoldUsageListResponse>('/core/molds/usages', {
+  return apiRequest<MoldUsageListResponse>('/apps/kuaizhizao/molds/usages', {
     params,
   });
 }
@@ -271,7 +271,7 @@ export async function getMoldUsageList(params?: MoldUsageListParams): Promise<Mo
  * @returns 模具使用记录信息
  */
 export async function getMoldUsageByUuid(usageUuid: string): Promise<MoldUsage> {
-  return apiRequest<MoldUsage>(`/core/molds/usages/${usageUuid}`);
+  return apiRequest<MoldUsage>(`/apps/kuaizhizao/molds/usages/${usageUuid}`);
 }
 
 /**
@@ -283,7 +283,7 @@ export async function getMoldUsageByUuid(usageUuid: string): Promise<MoldUsage> 
  * @returns 创建的模具使用记录信息
  */
 export async function createMoldUsage(data: CreateMoldUsageData): Promise<MoldUsage> {
-  return apiRequest<MoldUsage>('/core/molds/usages', {
+  return apiRequest<MoldUsage>('/apps/kuaizhizao/molds/usages', {
     method: 'POST',
     data,
   });
@@ -299,7 +299,7 @@ export async function createMoldUsage(data: CreateMoldUsageData): Promise<MoldUs
  * @returns 更新后的模具使用记录信息
  */
 export async function updateMoldUsage(usageUuid: string, data: UpdateMoldUsageData): Promise<MoldUsage> {
-  return apiRequest<MoldUsage>(`/core/molds/usages/${usageUuid}`, {
+  return apiRequest<MoldUsage>(`/apps/kuaizhizao/molds/usages/${usageUuid}`, {
     method: 'PUT',
     data,
   });
@@ -313,7 +313,7 @@ export async function updateMoldUsage(usageUuid: string, data: UpdateMoldUsageDa
  * @param usageUuid - 模具使用记录 UUID
  */
 export async function deleteMoldUsage(usageUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/molds/usages/${usageUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/molds/usages/${usageUuid}`, {
     method: 'DELETE',
   });
 }

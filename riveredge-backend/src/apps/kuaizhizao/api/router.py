@@ -14,6 +14,12 @@ from .production import router as production_router
 from .purchase import router as purchase_router
 from .dashboard import router as dashboard_router
 
+# 导入设备管理路由
+from .equipment.equipment import router as equipment_router
+from .maintenance_plans.maintenance_plans import router as maintenance_plans_router
+from .equipment_faults.equipment_faults import router as equipment_faults_router
+from .molds.molds import router as molds_router
+
 # 创建主路由
 router = APIRouter(tags=["Kuaige Zhizao MES"])
 
@@ -24,6 +30,12 @@ router = APIRouter(tags=["Kuaige Zhizao MES"])
 router.include_router(production_router)
 router.include_router(purchase_router)
 router.include_router(dashboard_router)
+
+# 注册设备管理路由
+router.include_router(equipment_router)
+router.include_router(maintenance_plans_router)
+router.include_router(equipment_faults_router)
+router.include_router(molds_router)
 
 @router.get("/health")
 async def health_check():

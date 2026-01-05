@@ -60,6 +60,12 @@ from .production_plan_item import ProductionPlanItem
 from .mrp_result import MRPResult
 from .lrp_result import LRPResult
 
+# 设备模具管理模块
+from .equipment import Equipment
+from .maintenance_plan import MaintenancePlan, MaintenanceExecution
+from .equipment_fault import EquipmentFault, EquipmentRepair
+from .mold import Mold, MoldUsage
+
 __all__ = [
     # 生产执行模块
     'WorkOrder',
@@ -120,4 +126,13 @@ __all__ = [
     'ProductionPlanItem',
     'MRPResult',
     'LRPResult',
+
+    # 设备模具管理模块
+    'Equipment',
+    'MaintenancePlan',
+    'MaintenanceExecution',
+    'EquipmentFault',
+    'EquipmentRepair',
+    'Mold',
+    'MoldUsage',
 ]

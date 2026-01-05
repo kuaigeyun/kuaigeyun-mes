@@ -190,7 +190,7 @@ export interface UpdateEquipmentRepairData {
  * @returns 设备故障记录列表响应数据
  */
 export async function getEquipmentFaultList(params?: EquipmentFaultListParams): Promise<EquipmentFaultListResponse> {
-  return apiRequest<EquipmentFaultListResponse>('/core/equipment-faults', {
+  return apiRequest<EquipmentFaultListResponse>('/apps/kuaizhizao/equipment-faults', {
     params,
   });
 }
@@ -204,7 +204,7 @@ export async function getEquipmentFaultList(params?: EquipmentFaultListParams): 
  * @returns 设备故障记录信息
  */
 export async function getEquipmentFaultByUuid(faultUuid: string): Promise<EquipmentFault> {
-  return apiRequest<EquipmentFault>(`/core/equipment-faults/${faultUuid}`);
+  return apiRequest<EquipmentFault>(`/apps/kuaizhizao/equipment-faults/${faultUuid}`);
 }
 
 /**
@@ -216,7 +216,7 @@ export async function getEquipmentFaultByUuid(faultUuid: string): Promise<Equipm
  * @returns 创建的设备故障记录信息
  */
 export async function createEquipmentFault(data: CreateEquipmentFaultData): Promise<EquipmentFault> {
-  return apiRequest<EquipmentFault>('/core/equipment-faults', {
+  return apiRequest<EquipmentFault>('/apps/kuaizhizao/equipment-faults', {
     method: 'POST',
     data,
   });
@@ -232,7 +232,7 @@ export async function createEquipmentFault(data: CreateEquipmentFaultData): Prom
  * @returns 更新后的设备故障记录信息
  */
 export async function updateEquipmentFault(faultUuid: string, data: UpdateEquipmentFaultData): Promise<EquipmentFault> {
-  return apiRequest<EquipmentFault>(`/core/equipment-faults/${faultUuid}`, {
+  return apiRequest<EquipmentFault>(`/apps/kuaizhizao/equipment-faults/${faultUuid}`, {
     method: 'PUT',
     data,
   });
@@ -246,7 +246,7 @@ export async function updateEquipmentFault(faultUuid: string, data: UpdateEquipm
  * @param faultUuid - 设备故障记录 UUID
  */
 export async function deleteEquipmentFault(faultUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/equipment-faults/${faultUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/equipment-faults/${faultUuid}`, {
     method: 'DELETE',
   });
 }
@@ -260,7 +260,7 @@ export async function deleteEquipmentFault(faultUuid: string): Promise<void> {
  * @returns 设备维修记录列表响应数据
  */
 export async function getEquipmentRepairList(params?: EquipmentRepairListParams): Promise<EquipmentRepairListResponse> {
-  return apiRequest<EquipmentRepairListResponse>('/core/equipment-faults/repairs', {
+  return apiRequest<EquipmentRepairListResponse>('/apps/kuaizhizao/equipment-faults/repairs', {
     params,
   });
 }
@@ -274,7 +274,7 @@ export async function getEquipmentRepairList(params?: EquipmentRepairListParams)
  * @returns 设备维修记录信息
  */
 export async function getEquipmentRepairByUuid(repairUuid: string): Promise<EquipmentRepair> {
-  return apiRequest<EquipmentRepair>(`/core/equipment-faults/repairs/${repairUuid}`);
+  return apiRequest<EquipmentRepair>(`/apps/kuaizhizao/equipment-faults/repairs/${repairUuid}`);
 }
 
 /**
@@ -286,7 +286,7 @@ export async function getEquipmentRepairByUuid(repairUuid: string): Promise<Equi
  * @returns 创建的设备维修记录信息
  */
 export async function createEquipmentRepair(data: CreateEquipmentRepairData): Promise<EquipmentRepair> {
-  return apiRequest<EquipmentRepair>('/core/equipment-faults/repairs', {
+  return apiRequest<EquipmentRepair>('/apps/kuaizhizao/equipment-faults/repairs', {
     method: 'POST',
     data,
   });
@@ -302,7 +302,7 @@ export async function createEquipmentRepair(data: CreateEquipmentRepairData): Pr
  * @returns 更新后的设备维修记录信息
  */
 export async function updateEquipmentRepair(repairUuid: string, data: UpdateEquipmentRepairData): Promise<EquipmentRepair> {
-  return apiRequest<EquipmentRepair>(`/core/equipment-faults/repairs/${repairUuid}`, {
+  return apiRequest<EquipmentRepair>(`/apps/kuaizhizao/equipment-faults/repairs/${repairUuid}`, {
     method: 'PUT',
     data,
   });
@@ -316,7 +316,7 @@ export async function updateEquipmentRepair(repairUuid: string, data: UpdateEqui
  * @param repairUuid - 设备维修记录 UUID
  */
 export async function deleteEquipmentRepair(repairUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/equipment-faults/repairs/${repairUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/equipment-faults/repairs/${repairUuid}`, {
     method: 'DELETE',
   });
 }

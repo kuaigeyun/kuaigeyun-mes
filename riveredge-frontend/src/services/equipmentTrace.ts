@@ -66,6 +66,6 @@ export interface EquipmentTrace {
  * @returns 设备追溯信息
  */
 export async function getEquipmentTrace(equipmentUuid: string): Promise<EquipmentTrace> {
-  return apiRequest<EquipmentTrace>(`/core/equipment/${equipmentUuid}/trace`);
+  return apiRequest<EquipmentTrace>(`/apps/kuaizhizao/equipment/${equipmentUuid}/trace`);
 }
 
