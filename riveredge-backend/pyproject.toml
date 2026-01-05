@@ -15,7 +15,7 @@ dependencies = [
     "pydantic-settings>=2.6.0,<2.7.0",  # 主流稳定版
     "email-validator>=2.0.0",  # Pydantic EmailStr 类型验证所需
     "tortoise-orm==0.21.1",  # 回退到原来稳定版本
-    "aerich>=0.7.1",  # 主流稳定版,Tortoise ORM 数据库迁移工具
+    "aerich==0.7.1",  # 固定稳定版本，避免0.9.2的格式检测问题
     "asyncpg>=0.29.0",  # PostgreSQL 异步驱动,Python 3.11+ 预编译包
     "psycopg2-binary>=2.9.9",  # PostgreSQL 同步驱动,用于 Windows 环境下的同步数据库操作
     "redis[hiredis]>=6.0.0",  # redis-py,使用 redis.asyncio 异步接口,支持 hiredis
