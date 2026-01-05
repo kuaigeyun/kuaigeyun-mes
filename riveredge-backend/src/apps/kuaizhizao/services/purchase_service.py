@@ -151,7 +151,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         self,
         tenant_id: int,
         params: PurchaseOrderListParams
-    ) -> List[PurchaseOrderListResponse]:
+    ) -> Dict[str, Any]:
         """
         获取采购订单列表
 
@@ -204,7 +204,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_dict['items_count'] = items_count
             result.append(PurchaseOrderListResponse.model_validate(order))
 
-        return result
+        # 返回前端期望的格式 { data, total, success }
+        return {
+            "data": [item.model_dump() for item in result],
+            "total": total,
+            "success": True
+        }
 
     async def update_purchase_order(
         self,

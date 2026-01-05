@@ -54,7 +54,7 @@ async def create_purchase_order(
     )
 
 
-@router.get("/purchase-orders", response_model=List[PurchaseOrderListResponse], summary="获取采购订单列表")
+@router.get("/purchase-orders", summary="获取采购订单列表")
 async def list_purchase_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="返回数量"),
