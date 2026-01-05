@@ -7,6 +7,7 @@
 # 生产执行模块
 from .work_order import *
 from .reporting_record import *
+from .rework_order import *
 from .outsource_order import *
 from .scrap_record import *
 from .defect_record import *
@@ -49,6 +50,14 @@ __all__ = [
     'ReportingRecordUpdate',
     'ReportingRecordResponse',
     'ReportingRecordListResponse',
+
+    # 返工单相关
+    'ReworkOrderBase',
+    'ReworkOrderCreate',
+    'ReworkOrderUpdate',
+    'ReworkOrderResponse',
+    'ReworkOrderListResponse',
+    'ReworkOrderFromWorkOrderRequest',
 
     # 委外单相关
     'OutsourceOrderBase',
