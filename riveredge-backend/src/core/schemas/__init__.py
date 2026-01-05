@@ -100,6 +100,18 @@ from .equipment import (
     EquipmentListResponse,
 )
 
+# 维护保养计划 Schema
+from .maintenance_plan import (
+    MaintenancePlanCreate,
+    MaintenancePlanUpdate,
+    MaintenancePlanResponse,
+    MaintenancePlanListResponse,
+    MaintenanceExecutionCreate,
+    MaintenanceExecutionUpdate,
+    MaintenanceExecutionResponse,
+    MaintenanceExecutionListResponse,
+)
+
 # 文件管理 Schema
 from .file import (
     FileCreate,
