@@ -411,7 +411,13 @@ export async function apiRequest<T = any>(
     if (data && typeof data === 'object') {
       const responseObj = data as any;
 
-      // 如果是成功响应 { success: true, data: ... }
+      // 如果是列表响应格式 { success: true, data: [...], total: ... }
+      // 需要返回整个对象，而不是只返回 data，因为前端需要 total 和 success
+      if (responseObj.success === true && 'data' in responseObj && 'total' in responseObj) {
+        return responseObj;
+      }
+
+      // 如果是成功响应 { success: true, data: ... }（非列表响应）
       if (responseObj.success === true && 'data' in responseObj) {
         return responseObj.data;
       }
