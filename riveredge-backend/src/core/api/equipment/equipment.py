@@ -11,6 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from core.models.equipment import Equipment
+from core.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
+from core.models.equipment_fault import EquipmentFault, EquipmentRepair
 from core.schemas.equipment import (
     EquipmentCreate,
     EquipmentUpdate,
@@ -213,6 +215,130 @@ async def delete_equipment(
     """
     try:
         await EquipmentService.delete_equipment(tenant_id, uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/{uuid}/trace")
+async def get_equipment_trace(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备使用记录追溯
+    
+    获取设备的使用历史、维护历史、故障历史。
+    
+    Args:
+        uuid: 设备UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 设备追溯信息，包含使用历史、维护历史、故障历史
+        
+    Raises:
+        HTTPException: 当设备不存在时抛出
+    """
+    try:
+        # 验证设备是否存在
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        
+        # 获取维护计划历史
+        maintenance_plans = await MaintenancePlan.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-created_at").limit(50)
+        
+        # 获取维护执行记录历史
+        maintenance_executions = await MaintenanceExecution.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-execution_date").limit(50)
+        
+        # 获取故障记录历史
+        equipment_faults = await EquipmentFault.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-fault_date").limit(50)
+        
+        # 获取维修记录历史
+        equipment_repairs = await EquipmentRepair.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-repair_date").limit(50)
+        
+        return {
+            "equipment": {
+                "uuid": equipment.uuid,
+                "code": equipment.code,
+                "name": equipment.name,
+                "status": equipment.status,
+            },
+            "maintenance_plans": [
+                {
+                    "uuid": plan.uuid,
+                    "plan_no": plan.plan_no,
+                    "plan_name": plan.plan_name,
+                    "plan_type": plan.plan_type,
+                    "maintenance_type": plan.maintenance_type,
+                    "status": plan.status,
+                    "planned_start_date": plan.planned_start_date.isoformat() if plan.planned_start_date else None,
+                    "planned_end_date": plan.planned_end_date.isoformat() if plan.planned_end_date else None,
+                    "created_at": plan.created_at.isoformat(),
+                }
+                for plan in maintenance_plans
+            ],
+            "maintenance_executions": [
+                {
+                    "uuid": exec.uuid,
+                    "execution_no": exec.execution_no,
+                    "execution_date": exec.execution_date.isoformat(),
+                    "executor_name": exec.executor_name,
+                    "execution_result": exec.execution_result,
+                    "status": exec.status,
+                    "maintenance_cost": float(exec.maintenance_cost) if exec.maintenance_cost else None,
+                    "created_at": exec.created_at.isoformat(),
+                }
+                for exec in maintenance_executions
+            ],
+            "equipment_faults": [
+                {
+                    "uuid": fault.uuid,
+                    "fault_no": fault.fault_no,
+                    "fault_date": fault.fault_date.isoformat(),
+                    "fault_type": fault.fault_type,
+                    "fault_level": fault.fault_level,
+                    "status": fault.status,
+                    "repair_required": fault.repair_required,
+                    "created_at": fault.created_at.isoformat(),
+                }
+                for fault in equipment_faults
+            ],
+            "equipment_repairs": [
+                {
+                    "uuid": repair.uuid,
+                    "repair_no": repair.repair_no,
+                    "repair_date": repair.repair_date.isoformat(),
+                    "repair_type": repair.repair_type,
+                    "repairer_name": repair.repairer_name,
+                    "repair_duration": float(repair.repair_duration) if repair.repair_duration else None,
+                    "repair_cost": float(repair.repair_cost) if repair.repair_cost else None,
+                    "status": repair.status,
+                    "repair_result": repair.repair_result,
+                    "created_at": repair.created_at.isoformat(),
+                }
+                for repair in equipment_repairs
+            ],
+        }
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
