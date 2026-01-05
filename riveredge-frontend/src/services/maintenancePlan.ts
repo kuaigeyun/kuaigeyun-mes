@@ -196,7 +196,7 @@ export interface UpdateMaintenanceExecutionData {
  * @returns 维护计划列表响应数据
  */
 export async function getMaintenancePlanList(params?: MaintenancePlanListParams): Promise<MaintenancePlanListResponse> {
-  return apiRequest<MaintenancePlanListResponse>('/core/maintenance-plans', {
+  return apiRequest<MaintenancePlanListResponse>('/apps/kuaizhizao/maintenance-plans', {
     params,
   });
 }
@@ -210,7 +210,7 @@ export async function getMaintenancePlanList(params?: MaintenancePlanListParams)
  * @returns 维护计划信息
  */
 export async function getMaintenancePlanByUuid(maintenancePlanUuid: string): Promise<MaintenancePlan> {
-  return apiRequest<MaintenancePlan>(`/core/maintenance-plans/${maintenancePlanUuid}`);
+  return apiRequest<MaintenancePlan>(`/apps/kuaizhizao/maintenance-plans/${maintenancePlanUuid}`);
 }
 
 /**
@@ -222,7 +222,7 @@ export async function getMaintenancePlanByUuid(maintenancePlanUuid: string): Pro
  * @returns 创建的维护计划信息
  */
 export async function createMaintenancePlan(data: CreateMaintenancePlanData): Promise<MaintenancePlan> {
-  return apiRequest<MaintenancePlan>('/core/maintenance-plans', {
+  return apiRequest<MaintenancePlan>('/apps/kuaizhizao/maintenance-plans', {
     method: 'POST',
     data,
   });
@@ -238,7 +238,7 @@ export async function createMaintenancePlan(data: CreateMaintenancePlanData): Pr
  * @returns 更新后的维护计划信息
  */
 export async function updateMaintenancePlan(maintenancePlanUuid: string, data: UpdateMaintenancePlanData): Promise<MaintenancePlan> {
-  return apiRequest<MaintenancePlan>(`/core/maintenance-plans/${maintenancePlanUuid}`, {
+  return apiRequest<MaintenancePlan>(`/apps/kuaizhizao/maintenance-plans/${maintenancePlanUuid}`, {
     method: 'PUT',
     data,
   });
@@ -252,7 +252,7 @@ export async function updateMaintenancePlan(maintenancePlanUuid: string, data: U
  * @param maintenancePlanUuid - 维护计划 UUID
  */
 export async function deleteMaintenancePlan(maintenancePlanUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/maintenance-plans/${maintenancePlanUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/maintenance-plans/${maintenancePlanUuid}`, {
     method: 'DELETE',
   });
 }
@@ -266,7 +266,7 @@ export async function deleteMaintenancePlan(maintenancePlanUuid: string): Promis
  * @returns 维护执行记录列表响应数据
  */
 export async function getMaintenanceExecutionList(params?: MaintenanceExecutionListParams): Promise<MaintenanceExecutionListResponse> {
-  return apiRequest<MaintenanceExecutionListResponse>('/core/maintenance-plans/executions', {
+  return apiRequest<MaintenanceExecutionListResponse>('/apps/kuaizhizao/maintenance-plans/executions', {
     params,
   });
 }
@@ -280,7 +280,7 @@ export async function getMaintenanceExecutionList(params?: MaintenanceExecutionL
  * @returns 维护执行记录信息
  */
 export async function getMaintenanceExecutionByUuid(executionUuid: string): Promise<MaintenanceExecution> {
-  return apiRequest<MaintenanceExecution>(`/core/maintenance-plans/executions/${executionUuid}`);
+  return apiRequest<MaintenanceExecution>(`/apps/kuaizhizao/maintenance-plans/executions/${executionUuid}`);
 }
 
 /**
@@ -292,7 +292,7 @@ export async function getMaintenanceExecutionByUuid(executionUuid: string): Prom
  * @returns 创建的维护执行记录信息
  */
 export async function createMaintenanceExecution(data: CreateMaintenanceExecutionData): Promise<MaintenanceExecution> {
-  return apiRequest<MaintenanceExecution>('/core/maintenance-plans/executions', {
+  return apiRequest<MaintenanceExecution>('/apps/kuaizhizao/maintenance-plans/executions', {
     method: 'POST',
     data,
   });
@@ -308,7 +308,7 @@ export async function createMaintenanceExecution(data: CreateMaintenanceExecutio
  * @returns 更新后的维护执行记录信息
  */
 export async function updateMaintenanceExecution(executionUuid: string, data: UpdateMaintenanceExecutionData): Promise<MaintenanceExecution> {
-  return apiRequest<MaintenanceExecution>(`/core/maintenance-plans/executions/${executionUuid}`, {
+  return apiRequest<MaintenanceExecution>(`/apps/kuaizhizao/maintenance-plans/executions/${executionUuid}`, {
     method: 'PUT',
     data,
   });
@@ -322,7 +322,7 @@ export async function updateMaintenanceExecution(executionUuid: string, data: Up
  * @param executionUuid - 维护执行记录 UUID
  */
 export async function deleteMaintenanceExecution(executionUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/maintenance-plans/executions/${executionUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/maintenance-plans/executions/${executionUuid}`, {
     method: 'DELETE',
   });
 }

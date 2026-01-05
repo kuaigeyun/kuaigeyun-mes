@@ -120,7 +120,7 @@ export interface UpdateEquipmentData {
  * @returns 设备列表响应数据
  */
 export async function getEquipmentList(params?: EquipmentListParams): Promise<EquipmentListResponse> {
-  return apiRequest<EquipmentListResponse>('/core/equipment', {
+  return apiRequest<EquipmentListResponse>('/apps/kuaizhizao/equipment', {
     params,
   });
 }
@@ -134,7 +134,7 @@ export async function getEquipmentList(params?: EquipmentListParams): Promise<Eq
  * @returns 设备信息
  */
 export async function getEquipmentByUuid(equipmentUuid: string): Promise<Equipment> {
-  return apiRequest<Equipment>(`/core/equipment/${equipmentUuid}`);
+  return apiRequest<Equipment>(`/apps/kuaizhizao/equipment/${equipmentUuid}`);
 }
 
 /**
@@ -146,7 +146,7 @@ export async function getEquipmentByUuid(equipmentUuid: string): Promise<Equipme
  * @returns 创建设备信息
  */
 export async function createEquipment(data: CreateEquipmentData): Promise<Equipment> {
-  return apiRequest<Equipment>('/core/equipment', {
+  return apiRequest<Equipment>('/apps/kuaizhizao/equipment', {
     method: 'POST',
     data,
   });
@@ -162,7 +162,7 @@ export async function createEquipment(data: CreateEquipmentData): Promise<Equipm
  * @returns 更新后的设备信息
  */
 export async function updateEquipment(equipmentUuid: string, data: UpdateEquipmentData): Promise<Equipment> {
-  return apiRequest<Equipment>(`/core/equipment/${equipmentUuid}`, {
+  return apiRequest<Equipment>(`/apps/kuaizhizao/equipment/${equipmentUuid}`, {
     method: 'PUT',
     data,
   });
@@ -176,7 +176,7 @@ export async function updateEquipment(equipmentUuid: string, data: UpdateEquipme
  * @param equipmentUuid - 设备 UUID
  */
 export async function deleteEquipment(equipmentUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/equipment/${equipmentUuid}`, {
+  return apiRequest<void>(`/apps/kuaizhizao/equipment/${equipmentUuid}`, {
     method: 'DELETE',
   });
 }
