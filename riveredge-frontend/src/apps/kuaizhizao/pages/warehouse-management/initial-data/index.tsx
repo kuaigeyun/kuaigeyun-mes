@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import { App, Card, Steps, Button, Space, message, DatePicker } from 'antd';
 import { ImportOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniImport } from '../../../../../components/uni-import';
-import { importInitialInventory, importInitialWIP } from '../../../services/initial-data';
+import { importInitialInventory, importInitialWIP, importInitialReceivablesPayables } from '../../../services/initial-data';
 import dayjs, { Dayjs } from 'dayjs';
 
 const { Step } = Steps;
@@ -26,7 +26,43 @@ const InitialDataImportPage: React.FC = () => {
   const [snapshotTime, setSnapshotTime] = useState<Dayjs | null>(null);
   const [importVisible, setImportVisible] = useState(false);
   const [wipImportVisible, setWipImportVisible] = useState(false);
+  const [receivablesPayablesImportVisible, setReceivablesPayablesImportVisible] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  /**
+   * 处理期初应收应付导入
+   */
+  const handleImportReceivablesPayables = async (data: any[][]) => {
+    setImporting(true);
+    try {
+      const result = await importInitialReceivablesPayables(
+        data,
+        snapshotTime ? snapshotTime.format('YYYY-MM-DD HH:mm:ss') : undefined
+      );
+      
+      if (result.failure_count === 0) {
+        messageApi.success(`期初应收应付导入成功！成功导入 ${result.success_count} 条记录`);
+        setReceivablesPayablesImportVisible(false);
+        setCurrentStep(3); // 进入下一步
+      } else {
+        messageApi.warning(
+          `期初应收应付导入完成，成功 ${result.success_count} 条，失败 ${result.failure_count} 条`
+        );
+        // 显示错误详情
+        if (result.errors && result.errors.length > 0) {
+          const errorMessages = result.errors
+            .slice(0, 10) // 只显示前10个错误
+            .map(err => `第 ${err.row} 行: ${err.error}`)
+            .join('\n');
+          messageApi.error(`部分数据导入失败：\n${errorMessages}`, 10);
+        }
+      }
+    } catch (error: any) {
+      messageApi.error(`导入失败: ${error.message || '未知错误'}`);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   /**
    * 处理期初在制品导入
@@ -177,7 +213,26 @@ const InitialDataImportPage: React.FC = () => {
       description: '导入快照时间点的应收应付数据',
       content: (
         <Card>
-          <p style={{ color: '#999' }}>应收应付导入功能开发中...</p>
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <div>
+              <h3>导入数据</h3>
+              <p style={{ color: '#666', marginBottom: 16 }}>
+                点击下方按钮打开导入表格，填写期初应收应付数据。
+                <br />
+                <strong>必填字段：</strong>类型（应收/应付）、客户编码（应收时）/供应商编码（应付时）、单据类型、单据号、单据日期、应收金额（应收时）/应付金额（应付时）
+                <br />
+                <strong>可选字段：</strong>已收金额、已付金额、到期日期、发票号
+              </p>
+              <Button
+                type="primary"
+                icon={<ImportOutlined />}
+                onClick={() => setReceivablesPayablesImportVisible(true)}
+                size="large"
+              >
+                打开导入表格
+              </Button>
+            </div>
+          </Space>
         </Card>
       ),
     },
@@ -241,6 +296,16 @@ const InitialDataImportPage: React.FC = () => {
         title="导入期初在制品"
         headers={['工单号', '产品编码', '当前工序', '在制品数量', '已投入数量', '预计完成时间', '车间编码']}
         exampleRow={['', 'PROD001', 'OP001', '50', '100', '2026-01-20 18:00:00', 'WS001']}
+      />
+
+      {/* 期初应收应付导入弹窗 */}
+      <UniImport
+        visible={receivablesPayablesImportVisible}
+        onCancel={() => setReceivablesPayablesImportVisible(false)}
+        onConfirm={handleImportReceivablesPayables}
+        title="导入期初应收应付"
+        headers={['类型', '客户编码', '供应商编码', '单据类型', '单据号', '单据日期', '应收金额', '应付金额', '已收金额', '已付金额', '到期日期', '发票号']}
+        exampleRow={['应收', 'CUS001', '', '销售订单', 'SO001', '2026-01-10', '10000.00', '', '0', '', '2026-02-10', 'INV001']}
       />
     </div>
   );

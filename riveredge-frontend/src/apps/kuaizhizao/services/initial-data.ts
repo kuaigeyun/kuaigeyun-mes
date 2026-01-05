@@ -70,3 +70,20 @@ export async function importInitialWIP(
   });
 }
 
+/**
+ * 导入期初应收应付
+ */
+export async function importInitialReceivablesPayables(
+  data: any[][],
+  snapshotTime?: string
+): Promise<InitialInventoryImportResponse> {
+  return apiRequest<InitialInventoryImportResponse>({
+    url: '/apps/kuaizhizao/initial-data/receivables-payables/import',
+    method: 'POST',
+    data: {
+      data,
+      snapshot_time: snapshotTime,
+    },
+  });
+}
+
