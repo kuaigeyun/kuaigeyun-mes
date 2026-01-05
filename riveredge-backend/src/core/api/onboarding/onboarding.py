@@ -175,3 +175,34 @@ async def get_role_scenario_guide_by_code(
             detail=f"获取角色场景向导失败: {str(e)}"
         )
 
+
+@router.get("/quick-start")
+async def get_quick_start_tutorial(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取快速入门教程
+    
+    Args:
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        Dict[str, Any]: 快速入门教程信息
+    """
+    try:
+        tutorial = await OnboardingService.get_quick_start_tutorial(
+            tenant_id=tenant_id
+        )
+        return {
+            "success": True,
+            "data": tutorial,
+        }
+    except Exception as e:
+        logger.error(f"获取快速入门教程失败: {tenant_id}, 错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取快速入门教程失败: {str(e)}"
+        )
+
