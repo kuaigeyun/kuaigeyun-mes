@@ -20,6 +20,8 @@ from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.models.defect_record import DefectRecord
+from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+from apps.kuaizhizao.schemas.rework_order import ReworkOrderCreate
 from apps.kuaizhizao.schemas.reporting_record import (
     ReportingRecordCreate,
     ReportingRecordUpdate,
