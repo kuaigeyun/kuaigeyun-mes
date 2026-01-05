@@ -42,6 +42,13 @@ const sessionStorageMock = {
 }
 global.sessionStorage = sessionStorageMock as any
 
+// Mock ResizeObserver
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as any
+
 // 创建全局QueryClient用于测试
 const createTestQueryClient = () => {
   return new QueryClient({
