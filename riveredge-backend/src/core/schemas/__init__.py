@@ -92,49 +92,16 @@ from .integration_config import (
     TestConnectionResponse,
 )
 
-# 设备管理 Schema
-from .equipment import (
-    EquipmentCreate,
-    EquipmentUpdate,
-    EquipmentResponse,
-    EquipmentListResponse,
-)
-
-# 维护保养计划 Schema
-from .maintenance_plan import (
-    MaintenancePlanCreate,
-    MaintenancePlanUpdate,
-    MaintenancePlanResponse,
-    MaintenancePlanListResponse,
-    MaintenanceExecutionCreate,
-    MaintenanceExecutionUpdate,
-    MaintenanceExecutionResponse,
-    MaintenanceExecutionListResponse,
-)
-
-# 设备故障维修 Schema
-from .equipment_fault import (
-    EquipmentFaultCreate,
-    EquipmentFaultUpdate,
-    EquipmentFaultResponse,
-    EquipmentFaultListResponse,
-    EquipmentRepairCreate,
-    EquipmentRepairUpdate,
-    EquipmentRepairResponse,
-    EquipmentRepairListResponse,
-)
-
-# 模具管理 Schema
-from .mold import (
-    MoldCreate,
-    MoldUpdate,
-    MoldResponse,
-    MoldListResponse,
-    MoldUsageCreate,
-    MoldUsageUpdate,
-    MoldUsageResponse,
-    MoldUsageListResponse,
-)
+# 设备管理 Schema 已迁移到 apps/kuaizhizao/schemas
+# from .equipment import (
+#     EquipmentCreate,
+#     EquipmentUpdate,
+#     EquipmentResponse,
+#     EquipmentListResponse,
+# )
+# from .maintenance_plan import (...)
+# from .equipment_fault import (...)
+# from .mold import (...)
 
 # 文件管理 Schema
 from .file import (
