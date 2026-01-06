@@ -29,7 +29,7 @@ from apps.kuaizhizao.schemas.delivery_delay_exception import (
     DeliveryDelayExceptionResponse,
     DeliveryDelayExceptionListResponse,
 )
-from apps.kuaizhizao.services.base import AppBaseService
+from apps.base_service import AppBaseService
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity

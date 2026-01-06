@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 
-from apps.kuaizhizao.services.base import AppBaseService
+from apps.base_service import AppBaseService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity, get_material_inventory_info
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger

@@ -10,8 +10,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormList } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined, UploadOutlined, DownloadOutlined, SendOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined, UploadOutlined, DownloadOutlined, SendOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -862,7 +862,7 @@ const SalesOrdersPage: React.FC = () => {
               type: 'dashed',
               style: { width: '100%' },
             }}
-            itemRender={({ listDom, action }, { index }) => (
+            itemRender={({ listDom, action }) => (
               <div
                 style={{
                   display: 'flex',

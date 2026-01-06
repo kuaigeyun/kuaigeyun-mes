@@ -21,9 +21,11 @@ from apps.kuaizhizao.models.cost_rule import CostRule
 from apps.kuaizhizao.models.cost_calculation import CostCalculation
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
-from apps.kuaizhizao.models.production_picking import ProductionPicking, ProductionPickingItem
+from apps.kuaizhizao.models.production_picking import ProductionPicking
+from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
 from apps.master_data.models.material import Material
-from apps.master_data.models.bill_of_materials import BillOfMaterials, BillOfMaterialsItem
+# TODO: BOM模块尚未实现，暂时注释掉
+# from apps.master_data.models.bill_of_materials import BillOfMaterials, BillOfMaterialsItem
 from apps.kuaizhizao.schemas.cost import (
     CostRuleCreate,
     CostRuleUpdate,
@@ -543,35 +545,39 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         Returns:
             Decimal: 材料成本
         """
+        # TODO: BOM模块尚未实现，暂时返回0
         # 获取产品的BOM
-        bom = await BillOfMaterials.filter(
-            tenant_id=tenant_id,
-            product_id=product.id,
-            is_active=True,
-            deleted_at__isnull=True
-        ).first()
+        # bom = await BillOfMaterials.filter(
+        #     tenant_id=tenant_id,
+        #     product_id=product.id,
+        #     is_active=True,
+        #     deleted_at__isnull=True
+        # ).first()
 
-        if not bom:
-            return Decimal(0)
+        # if not bom:
+        #     return Decimal(0)
 
-        # 获取BOM明细
-        bom_items = await BillOfMaterialsItem.filter(
-            tenant_id=tenant_id,
-            bom_id=bom.id,
-            deleted_at__isnull=True
-        ).all()
+        # # 获取BOM明细
+        # bom_items = await BillOfMaterialsItem.filter(
+        #     tenant_id=tenant_id,
+        #     bom_id=bom.id,
+        #     deleted_at__isnull=True
+        # ).all()
 
-        total_material_cost = Decimal(0)
-        for item in bom_items:
-            # 获取物料信息
-            material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
-            if material:
-                # 计算材料成本（BOM数量 * 数量 * 单价）
-                # TODO: 实际应该从库存成本或价格表获取单价
-                unit_price = Decimal(100.00)  # 默认单价，实际应该从价格表获取
-                total_material_cost += item.quantity * quantity * unit_price
+        # total_material_cost = Decimal(0)
+        # for item in bom_items:
+        #     # 获取物料信息
+        #     material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+        #     if material:
+        #         # 计算材料成本（BOM数量 * 数量 * 单价）
+        #         # TODO: 实际应该从库存成本或价格表获取单价
+        #         unit_price = Decimal(100.00)  # 默认单价，实际应该从价格表获取
+        #         total_material_cost += item.quantity * quantity * unit_price
 
-        return total_material_cost
+        # return total_material_cost
+        
+        # 暂时返回0，等待BOM模块实现
+        return Decimal(0)
 
     async def _calculate_product_labor_cost(self, tenant_id: int, product: Material, quantity: Decimal) -> Decimal:
         """

@@ -151,8 +151,6 @@ from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertRuleUpdate,
     InventoryAlertRuleResponse,
     InventoryAlertRuleListResponse,
-    InventoryAlertCreate,
-    InventoryAlertUpdate,
     InventoryAlertResponse,
     InventoryAlertListResponse,
 )

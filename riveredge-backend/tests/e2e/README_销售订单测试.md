@@ -61,3 +61,4 @@ uv run pytest tests/e2e/test_sales_order_complete_workflow.py -v -s
 2. 确保测试租户和应用已正确配置
 3. 某些API端点可能尚未实现，测试会跳过或标记为预期失败
 
+

@@ -91,7 +91,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       onCancel={onClose}
       footer={null}
       width={width}
-      destroyOnClose
+      destroyOnHidden
       className={className}
     >
       <ProForm
