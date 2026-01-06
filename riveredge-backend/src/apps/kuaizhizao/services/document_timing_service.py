@@ -18,7 +18,7 @@ from apps.kuaizhizao.schemas.document_node_timing import (
     DocumentNodeTimingListResponse,
     DocumentTimingSummaryResponse,
 )
-from apps.kuaizhizao.services.base import AppBaseService
+from apps.base_service import AppBaseService
 from core.services.system.working_hours_config_service import WorkingHoursConfigService
 
 

@@ -7,7 +7,7 @@
  * @date 2025-12-29
  */
 
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
 
 // 导出销售预测API（重新导出，方便使用）
 export * from './sales-forecast';

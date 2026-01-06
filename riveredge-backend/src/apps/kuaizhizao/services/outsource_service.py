@@ -163,11 +163,11 @@ class OutsourceService(AppBaseService[OutsourceOrder]):
         work_order_operation_id: int,
         supplier_id: int,
         outsource_quantity: Decimal,
+        created_by: int,
         unit_price: Optional[Decimal] = None,
         planned_start_date: Optional[datetime] = None,
         planned_end_date: Optional[datetime] = None,
-        remarks: Optional[str] = None,
-        created_by: int
+        remarks: Optional[str] = None
     ) -> OutsourceOrderResponse:
         """
         从工单工序创建委外单
