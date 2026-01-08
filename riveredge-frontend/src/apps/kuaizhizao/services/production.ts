@@ -51,6 +51,11 @@ export const workOrderApi = {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data });
   },
 
+  // 开始工单工序
+  startOperation: async (workOrderId: string, operationId: number) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' });
+  },
+
   // 冻结工单
   freeze: async (id: string, data: { freeze_reason: string }) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/freeze`, { method: 'POST', data });

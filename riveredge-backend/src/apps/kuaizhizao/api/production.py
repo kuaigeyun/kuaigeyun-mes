@@ -299,7 +299,7 @@ async def create_work_order(
     )
 
 
-@router.get("/work-orders", response_model=List[WorkOrderListResponse], summary="获取工单列表")
+@router.get("/work-orders", summary="获取工单列表")
 async def list_work_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -312,24 +312,48 @@ async def list_work_orders(
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[WorkOrderListResponse]:
+):
     """
     获取工单列表
 
     支持多种筛选条件的高级搜索。
+    返回格式：{ "data": [], "total": 0, "success": true }
     """
-    return await WorkOrderService().list_work_orders(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        code=code,
-        name=name,
-        product_name=product_name,
-        production_mode=production_mode,
-        status=status,
-        workshop_id=workshop_id,
-        work_center_id=work_center_id,
-    )
+    try:
+        service = WorkOrderService()
+        result = await service.list_work_orders(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            code=code,
+            name=name,
+            product_name=product_name,
+            production_mode=production_mode,
+            status=status,
+            workshop_id=workshop_id,
+            work_center_id=work_center_id,
+        )
+        # 返回分页格式，包含总数
+        total = await service.get_work_order_count(
+            tenant_id=tenant_id,
+            code=code,
+            name=name,
+            product_name=product_name,
+            production_mode=production_mode,
+            status=status,
+            workshop_id=workshop_id,
+            work_center_id=work_center_id,
+        )
+        return {
+            "data": result,
+            "total": total,
+            "success": True
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.error(f"获取工单列表失败: {str(e)}")
+        logger.exception(e)
+        raise
 
 
 @router.get("/work-orders/{work_order_id}", response_model=WorkOrderResponse, summary="获取工单详情")
@@ -386,6 +410,29 @@ async def update_work_order_operations(
         work_order_id=work_order_id,
         operations_data=operations_data,
         updated_by=current_user.id
+    )
+
+
+@router.post("/work-orders/{work_order_id}/operations/{operation_id}/start", response_model=WorkOrderOperationResponse, summary="开始工单工序")
+async def start_work_order_operation(
+    work_order_id: int,
+    operation_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderOperationResponse:
+    """
+    开始工单工序
+
+    将工序状态从 pending 更新为 in_progress，并记录实际开始时间。
+
+    - **work_order_id**: 工单ID
+    - **operation_id**: 工序ID（工单工序的ID，不是工序模板的ID）
+    """
+    return await WorkOrderService().start_work_order_operation(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        started_by=current_user.id
     )
 
 

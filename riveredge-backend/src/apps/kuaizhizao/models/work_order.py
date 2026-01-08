@@ -76,7 +76,7 @@ class WorkOrder(BaseModel):
 
     # 基本信息
     code = fields.CharField(max_length=50, description="工单编码（组织内唯一）")
-    name = fields.CharField(max_length=200, description="工单名称")
+    name = fields.CharField(max_length=200, null=True, description="工单名称（可选）")
 
     # 产品信息
     product_id = fields.IntField(description="产品ID（关联物料）")
@@ -101,6 +101,9 @@ class WorkOrder(BaseModel):
     # 状态和优先级
     status = fields.CharField(max_length=20, description="工单状态", default="draft")
     priority = fields.CharField(max_length=10, description="优先级", default="normal")
+    
+    # 工序跳转控制
+    allow_operation_jump = fields.BooleanField(default=False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
     
     # 冻结信息
     is_frozen = fields.BooleanField(default=False, description="是否冻结")
@@ -128,3 +131,6 @@ class WorkOrder(BaseModel):
     created_by_name = fields.CharField(max_length=100, description="创建人姓名")
     updated_by = fields.IntField(null=True, description="更新人ID")
     updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
+
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

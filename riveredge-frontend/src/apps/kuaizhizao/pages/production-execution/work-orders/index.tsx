@@ -10,21 +10,23 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production';
+import { listSalesOrders } from '../../../services/sales';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
-import { operationApi } from '../../../../master-data/services/process';
+import { operationApi, processRouteApi } from '../../../../master-data/services/process';
 import { workshopApi } from '../../../../master-data/services/factory';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
-import { getCodeRuleList } from '../../../../../services/codeRule';
+import { getCodeRuleList, generateCode } from '../../../../../services/codeRule';
+import { getCodeRulePageConfig } from '../../../../../config/codeRulePages';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
@@ -59,6 +61,7 @@ interface WorkOrder {
   frozen_at?: string;
   frozen_by?: number;
   frozen_by_name?: string;
+  allow_operation_jump?: boolean;
   remarks?: string;
   created_at?: string;
   updated_at?: string;
@@ -73,9 +76,22 @@ const WorkOrdersPage: React.FC = () => {
   const [productList, setProductList] = useState<any[]>([]);
   // 编码规则列表状态
   const [codeRuleList, setCodeRuleList] = useState<any[]>([]);
+  // 销售订单列表状态（MTO模式）
+  const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
+  // 生产模式状态（用于控制MTO相关字段显示）
+  const [productionMode, setProductionMode] = useState<'MTS' | 'MTO'>('MTS');
+  // 工序列表状态
+  const [operationList, setOperationList] = useState<any[]>([]);
+  // 工艺路线列表状态
+  const [processRouteList, setProcessRouteList] = useState<any[]>([]);
+  // 选中的工序列表（用于创建工单时）
+  const [selectedOperations, setSelectedOperations] = useState<any[]>([]);
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null);
+  const formRef = useRef<any>(null);
 
   // 初始化产品列表和编码规则列表
   useEffect(() => {
@@ -85,30 +101,73 @@ const WorkOrdersPage: React.FC = () => {
         const products = await materialApi.list({ isActive: true });
         setProductList(products);
         
-        // 加载编码规则列表（只加载激活的规则）
+        // 加载编码规则列表（通过页面配置获取）
         try {
-          const codeRulesResponse = await getCodeRuleList({ page: 1, page_size: 1000, is_active: true });
-          // 兼容不同的响应格式：可能是 { items: [...] } 或直接是数组
-          const rules = Array.isArray(codeRulesResponse) ? codeRulesResponse : (codeRulesResponse?.items || []);
-          // 过滤出工单相关的编码规则
-          // 匹配规则：code 包含 WORK_ORDER、work-order、工单，或者以 auto-kuaizhizao-production-work-order 开头
-          const workOrderRules = rules.filter((rule: any) => {
-            if (!rule.code) return false;
-            const codeUpper = rule.code.toUpperCase();
-            const codeLower = rule.code.toLowerCase();
-            return (
-              codeUpper.includes('WORK_ORDER') ||
-              codeLower.includes('work-order') ||
-              codeLower.includes('workorder') ||
-              codeLower.includes('工单') ||
-              codeLower.startsWith('auto-kuaizhizao-production-work-order')
-            );
-          });
-          setCodeRuleList(workOrderRules);
-          console.log('加载的工单编码规则:', workOrderRules);
+          // 1. 获取工单管理页面的配置（从静态配置获取）
+          const workOrderPageConfig = getCodeRulePageConfig('kuaizhizao-production-work-order');
+          console.log('工单管理页面配置:', workOrderPageConfig);
+          
+          // 2. 检查 localStorage 中是否有保存的配置（编码规则管理页面可能更新了配置）
+          let ruleCode = workOrderPageConfig?.ruleCode;
+          try {
+            const savedConfigs = localStorage.getItem('codeRulePageConfigs');
+            if (savedConfigs) {
+              const parsed = JSON.parse(savedConfigs) as any[];
+              const savedConfig = parsed.find((p: any) => p.pageCode === 'kuaizhizao-production-work-order');
+              if (savedConfig?.ruleCode) {
+                ruleCode = savedConfig.ruleCode;
+                console.log('从 localStorage 读取的 ruleCode:', ruleCode);
+              }
+            }
+          } catch (error) {
+            console.error('读取 localStorage 配置失败:', error);
+          }
+          
+          console.log('最终使用的 ruleCode:', ruleCode);
+          
+          if (ruleCode) {
+            // 3. 根据 ruleCode 查找编码规则
+            const codeRulesResponse = await getCodeRuleList({ page: 1, page_size: 1000, is_active: true });
+            const rules = Array.isArray(codeRulesResponse) ? codeRulesResponse : (codeRulesResponse?.items || []);
+            console.log('所有编码规则列表:', rules);
+            console.log('查找 ruleCode:', ruleCode);
+            
+            // 4. 查找匹配的编码规则
+            const workOrderRule = rules.find((rule: any) => rule.code === ruleCode);
+            
+            if (workOrderRule) {
+              setCodeRuleList([workOrderRule]);
+              console.log('✓ 成功加载工单编码规则:', workOrderRule);
+            } else {
+              console.warn(`✗ 未找到编码规则: ${ruleCode}`);
+              console.warn('可用的编码规则代码:', rules.map((r: any) => r.code));
+              setCodeRuleList([]);
+            }
+          } else {
+            console.warn('✗ 工单管理页面未配置编码规则代码');
+            setCodeRuleList([]);
+          }
         } catch (error) {
           console.error('获取编码规则列表失败:', error);
           setCodeRuleList([]);
+        }
+
+        // 加载工序列表
+        try {
+          const operations = await operationApi.list({ is_active: true });
+          setOperationList(operations);
+        } catch (error) {
+          console.error('获取工序列表失败:', error);
+          setOperationList([]);
+        }
+
+        // 加载工艺路线列表
+        try {
+          const routes = await processRouteApi.list({ is_active: true });
+          setProcessRouteList(routes);
+        } catch (error) {
+          console.error('获取工艺路线列表失败:', error);
+          setProcessRouteList([]);
         }
       } catch (error) {
         console.error('获取数据失败:', error);
@@ -118,9 +177,23 @@ const WorkOrdersPage: React.FC = () => {
     };
     loadData();
   }, []);
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null);
-  const formRef = useRef<any>(null);
+
+  // 加载销售订单列表（MTO模式或编辑时）
+  useEffect(() => {
+    const loadSalesOrders = async () => {
+      // 如果是MTO模式，或者正在编辑且工单是MTO模式，加载销售订单列表
+      if (productionMode === 'MTO' || (modalVisible && currentWorkOrder?.production_mode === 'MTO')) {
+        try {
+          const orders = await listSalesOrders({ order_type: 'MTO', status: '已确认' });
+          setSalesOrderList(orders);
+        } catch (error) {
+          console.error('获取销售订单列表失败:', error);
+          setSalesOrderList([]);
+        }
+      }
+    };
+    loadSalesOrders();
+  }, [productionMode, modalVisible, currentWorkOrder]);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -173,21 +246,33 @@ const WorkOrdersPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentWorkOrder(null);
+    setProductionMode('MTS'); // 重置为MTS模式
+    setSelectedOperations([]); // 清空选中的工序
     setModalVisible(true);
     formRef.current?.resetFields();
     
-    // 自动设置编码规则（如果有）
-    setTimeout(() => {
-      if (codeRuleList.length === 1) {
-        // 只有一条编码规则，自动填充
-        formRef.current?.setFieldsValue({
-          code_rule: codeRuleList[0].code,
-        });
-      } else if (codeRuleList.length > 1) {
-        // 有多条编码规则，默认选择第一条
-        formRef.current?.setFieldsValue({
-          code_rule: codeRuleList[0].code,
-        });
+    // 自动生成编码（如果有编码规则）
+    setTimeout(async () => {
+      if (codeRuleList.length > 0) {
+        try {
+          // 使用第一条编码规则生成编码
+          const rule = codeRuleList[0];
+          const context = {
+            prefix: `WO${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+          };
+          const result = await generateCode({
+            rule_code: rule.code,
+            context,
+          });
+          // 自动填充生成的编码
+          formRef.current?.setFieldsValue({
+            code_rule: rule.code,
+            code: result.code,
+          });
+        } catch (error) {
+          console.error('生成编码失败:', error);
+          messageApi.warning('自动生成编码失败，请手动填写');
+        }
       }
       // 如果没有编码规则，允许手工填写编码
     }, 100);
@@ -205,13 +290,15 @@ const WorkOrdersPage: React.FC = () => {
       setModalVisible(true);
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
+        const mode = detail.production_mode || 'MTS';
+        setProductionMode(mode);
         formRef.current?.setFieldsValue({
           name: detail.name,
           product_id: detail.product_id,
           product_code: detail.product_code,
           product_name: detail.product_name,
           quantity: detail.quantity,
-          production_mode: detail.production_mode,
+          production_mode: mode,
           sales_order_id: detail.sales_order_id,
           sales_order_code: detail.sales_order_code,
           sales_order_name: detail.sales_order_name,
@@ -223,6 +310,7 @@ const WorkOrdersPage: React.FC = () => {
           priority: detail.priority,
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
+          allow_operation_jump: detail.allow_operation_jump ?? false,
           remarks: detail.remarks,
         });
       }, 100);
@@ -302,89 +390,132 @@ const WorkOrdersPage: React.FC = () => {
     const progressColor = getProgressColor(operation, qualifiedRate);
 
     return (
-      <div key={operation.id || index} style={{ display: 'inline-block', marginRight: 16, verticalAlign: 'top' }}>
-        <Card
-          size="small"
-          style={{
-            width: 200,
-            border: operation.status === 'completed' ? '2px solid #52c41a' : 
-                   operation.status === 'in_progress' ? '2px solid #1890ff' : 
-                   '1px solid #d9d9d9',
-          }}
-          title={
-            <div style={{ fontSize: 14, fontWeight: 'bold' }}>
-              {operation.operation_name}
+      <React.Fragment key={operation.id || index}>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Card
+            size="small"
+            style={{
+              width: 200,
+              border: operation.status === 'completed' ? '2px solid #52c41a' : 
+                     operation.status === 'in_progress' ? '2px solid #1890ff' : 
+                     '1px solid #d9d9d9',
+            }}
+            title={
+              <div style={{ fontSize: 14, fontWeight: 'bold' }}>
+                {operation.operation_name}
+              </div>
+            }
+            extra={
+              <Tag color={
+                operation.status === 'completed' ? 'success' :
+                operation.status === 'in_progress' ? 'processing' :
+                'default'
+              }>
+                {operation.status === 'completed' ? '已完成' :
+                 operation.status === 'in_progress' ? '进行中' :
+                 '待开始'}
+              </Tag>
+            }
+          >
+            {/* 环状图进度显示 */}
+            <div style={{ textAlign: 'center', marginBottom: 12 }}>
+              <Progress
+                type="circle"
+                percent={progress}
+                size={80}
+                strokeColor={progressColor}
+                format={(percent) => `${percent}%`}
+              />
+              <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
+                {operation.reporting_type === 'status' ? (
+                  <div>
+                    <div>状态：{operation.status === 'completed' ? '已完成' : '未完成'}</div>
+                  </div>
+                ) : (
+                  <div>
+                    <div>完成：{operation.completed_quantity || 0} / {workOrder.quantity}</div>
+                    <div>合格：{operation.qualified_quantity || 0} / 不合格：{operation.unqualified_quantity || 0}</div>
+                    {operation.completed_quantity > 0 && (
+                      <div style={{ color: qualifiedRate >= 95 ? '#52c41a' : qualifiedRate >= 80 ? '#faad14' : '#ff4d4f' }}>
+                        合格率：{qualifiedRate}%
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          }
-          extra={
-            <Tag color={
-              operation.status === 'completed' ? 'success' :
-              operation.status === 'in_progress' ? 'processing' :
-              'default'
-            }>
-              {operation.status === 'completed' ? '已完成' :
-               operation.status === 'in_progress' ? '进行中' :
-               '待开始'}
-            </Tag>
-          }
-        >
-          {/* 环状图进度显示 */}
-          <div style={{ textAlign: 'center', marginBottom: 12 }}>
-            <Progress
-              type="circle"
-              percent={progress}
-              size={80}
-              strokeColor={progressColor}
-              format={(percent) => `${percent}%`}
-            />
-            <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-              {operation.reporting_type === 'status' ? (
-                <div>
-                  <div>状态：{operation.status === 'completed' ? '已完成' : '未完成'}</div>
+
+            {/* 工序信息 */}
+            <div style={{ fontSize: 12, color: '#666' }}>
+              <div style={{ marginBottom: 4 }}>
+                <strong>车间：</strong>{operation.workshop_name || '-'}
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                <strong>工作中心：</strong>{operation.work_center_name || '-'}
+              </div>
+              {operation.planned_start_date && (
+                <div style={{ marginBottom: 4 }}>
+                  <strong>计划时间：</strong>
+                  <div>{new Date(operation.planned_start_date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
-              ) : (
-                <div>
-                  <div>完成：{operation.completed_quantity || 0} / {workOrder.quantity}</div>
-                  <div>合格：{operation.qualified_quantity || 0} / 不合格：{operation.unqualified_quantity || 0}</div>
-                  {operation.completed_quantity > 0 && (
-                    <div style={{ color: qualifiedRate >= 95 ? '#52c41a' : qualifiedRate >= 80 ? '#faad14' : '#ff4d4f' }}>
-                      合格率：{qualifiedRate}%
-                    </div>
-                  )}
+              )}
+              {operation.actual_start_date && (
+                <div style={{ marginBottom: 4 }}>
+                  <strong>实际开始：</strong>
+                  <div>{new Date(operation.actual_start_date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* 工序信息 */}
-          <div style={{ fontSize: 12, color: '#666' }}>
-            <div style={{ marginBottom: 4 }}>
-              <strong>车间：</strong>{operation.workshop_name || '-'}
+            {/* 操作按钮 */}
+            <div style={{ marginTop: 12, textAlign: 'center' }}>
+              {operation.status === 'pending' && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<PlayCircleOutlined />}
+                  onClick={async () => {
+                    try {
+                      // 开始工序
+                      await workOrderApi.startOperation(workOrder.id!.toString(), operation.id);
+                      messageApi.success('工序已开始');
+                      // 刷新工序列表
+                      const operations = await workOrderApi.getOperations(workOrder.id!.toString());
+                      setExpandedOperationsMap(prev => ({ ...prev, [workOrder.id!]: operations || [] }));
+                      // 刷新工单列表
+                      actionRef.current?.reload();
+                    } catch (error: any) {
+                      messageApi.error(error.message || '开始工序失败');
+                    }
+                  }}
+                >
+                  开始
+                </Button>
+              )}
+              {operation.status === 'in_progress' && (
+                <Tag color="processing" style={{ margin: 0 }}>进行中</Tag>
+              )}
+              {operation.status === 'completed' && (
+                <Tag color="success" style={{ margin: 0 }}>已完成</Tag>
+              )}
             </div>
-            <div style={{ marginBottom: 4 }}>
-              <strong>工作中心：</strong>{operation.work_center_name || '-'}
-            </div>
-            {operation.planned_start_date && (
-              <div style={{ marginBottom: 4 }}>
-                <strong>计划时间：</strong>
-                <div>{new Date(operation.planned_start_date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-              </div>
-            )}
-            {operation.actual_start_date && (
-              <div style={{ marginBottom: 4 }}>
-                <strong>实际开始：</strong>
-                <div>{new Date(operation.actual_start_date).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-              </div>
-            )}
-          </div>
-        </Card>
+          </Card>
+        </div>
         {/* 箭头连接（不是最后一个） */}
         {index < total - 1 && (
-          <div style={{ display: 'inline-block', verticalAlign: 'top', marginTop: 100, marginRight: 16 }}>
-            <RightOutlined style={{ fontSize: 20, color: '#d9d9d9' }} />
+          <div style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            height: '100%',
+            marginLeft: 8,
+            marginRight: 8,
+            alignSelf: 'center'
+          }}>
+            <RightOutlined style={{ fontSize: 24, color: '#d9d9d9' }} />
           </div>
         )}
-      </div>
+      </React.Fragment>
     );
   };
 
@@ -413,7 +544,7 @@ const WorkOrdersPage: React.FC = () => {
 
     return (
       <div style={{ padding: '20px', backgroundColor: '#fafafa', overflowX: 'auto' }}>
-        <div style={{ whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
           {operations.map((operation: any, index: number) => 
             renderOperationCard(operation, record, index, operations.length)
           )}
@@ -484,23 +615,76 @@ const WorkOrdersPage: React.FC = () => {
       delete values.code_rule_display;
       
       // 自动处理编码规则逻辑：
-      // 1. 如果手工填写了编码，优先使用手工编码
-      // 2. 如果没有手工编码，使用编码规则生成
-      // 3. 如果只有一条编码规则且未选择，自动使用该规则
-      if (values.code) {
-        // 如果手工填写了编码，移除 code_rule，使用手工编码
-        delete values.code_rule;
-      } else {
-        // 如果没有手工编码，使用编码规则
-        if (!values.code_rule && codeRuleList.length === 1) {
-          // 只有一条编码规则，自动使用
+      // 1. 工单编码是必填的
+      // 2. 如果有编码规则，必须使用编码规则生成的编码（不能手工填写）
+      // 3. 如果没有编码规则，必须手工填写编码
+      if (codeRuleList.length > 0) {
+        // 有编码规则，必须使用编码规则生成的编码
+        if (!values.code_rule) {
+          // 如果没有 code_rule，使用第一条规则
           values.code_rule = codeRuleList[0].code;
         }
-        // 如果既没有手工编码，也没有编码规则，后端会报错
-        if (!values.code_rule) {
-          messageApi.error('请填写工单编码或选择编码规则');
-          throw new Error('请填写工单编码或选择编码规则');
+        if (!values.code) {
+          // 如果没有编码，尝试生成
+          try {
+            const rule = codeRuleList.find(r => r.code === values.code_rule) || codeRuleList[0];
+            const context = {
+              prefix: `WO${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+            };
+            const result = await generateCode({
+              rule_code: rule.code,
+              context,
+            });
+            values.code = result.code;
+          } catch (error) {
+            messageApi.error('生成编码失败，请重试');
+            throw new Error('生成编码失败');
+          }
         }
+      } else {
+        // 没有编码规则，必须手工填写编码
+        if (!values.code) {
+          messageApi.error('请填写工单编码');
+          throw new Error('请填写工单编码');
+        }
+        // 手工填写编码时，删除 code_rule
+        delete values.code_rule;
+      }
+      
+      // 确保生产模式：如果选择了销售订单，自动设置为MTO，否则为MTS
+      if (values.sales_order_id) {
+        values.production_mode = 'MTO';
+      } else {
+        values.production_mode = values.production_mode || 'MTS';
+      }
+
+      // 处理工序设置
+      // 如果选择了工序，需要转换为后端需要的格式
+      if (values.operations && Array.isArray(values.operations) && values.operations.length > 0) {
+        // 将工序ID数组转换为工序对象数组（包含 operation_code 和 operation_name）
+        values.operations = values.operations.map((opId: number, index: number) => {
+          const operationDetail = operationList.find(op => op.id === opId);
+          if (!operationDetail) {
+            throw new Error(`工序ID ${opId} 不存在`);
+          }
+          return {
+            operation_id: opId,
+            operation_code: operationDetail.code,
+            operation_name: operationDetail.name,
+            sequence: index + 1,
+          };
+        });
+      } else if (selectedOperations.length > 0) {
+        // 使用从工艺路线加载的工序
+        values.operations = selectedOperations.map((op: any) => ({
+          operation_id: op.operation_id,
+          operation_code: op.operation_code,
+          operation_name: op.operation_name,
+          sequence: op.sequence,
+        }));
+      } else {
+        // 没有选择工序，删除该字段，让后端自动匹配
+        delete values.operations;
       }
       
       // 如果选择了产品，需要转换为产品编码和名称
@@ -1398,8 +1582,25 @@ const WorkOrdersPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
       >
-        {codeRuleList.length === 0 ? (
-          // 没有编码规则，显示手工填写编码
+        {/* 编码信息组 */}
+        <Divider style={{ marginTop: 0 }}>编码信息</Divider>
+        {codeRuleList.length > 0 ? (
+          // 有编码规则，自动生成编码并填充（只读显示）
+          <>
+            {/* 隐藏字段，用于提交实际的 code_rule 值 */}
+            <ProFormText name="code_rule" initialValue={codeRuleList[0].code} hidden />
+            <ProFormText
+              name="code"
+              label="工单编码"
+              placeholder="编码将根据编码规则自动生成"
+              disabled={true}
+              rules={[{ required: true, message: '工单编码为必填项' }]}
+              extra="编码已根据编码规则自动生成"
+              colProps={{ span: 12 }}
+            />
+          </>
+        ) : (
+          // 没有编码规则，工单编码留空让用户填写
           <ProFormText
             name="code"
             label="工单编码"
@@ -1407,71 +1608,59 @@ const WorkOrdersPage: React.FC = () => {
             disabled={isEdit}
             rules={[{ required: true, message: '请输入工单编码' }]}
             extra="未配置编码规则，请手工填写工单编码"
+            colProps={{ span: 12 }}
           />
-        ) : codeRuleList.length === 1 ? (
-          // 只有一条编码规则，自动使用（允许手工填写覆盖）
-          <>
-            <ProFormText
-              name="code_rule_display"
-              label="编码规则"
-              disabled
-              initialValue={`${codeRuleList[0].name} (${codeRuleList[0].code})`}
-              extra="已自动选择编码规则，如需手工填写编码，请清空此字段并在下方填写"
-            />
-            {/* 隐藏字段，用于提交实际的 code_rule 值 */}
-            <ProFormText name="code_rule" initialValue={codeRuleList[0].code} hidden />
-            <ProFormText
-              name="code"
-              label="工单编码（可选，手工填写）"
-              placeholder="如需手工填写编码，请在此输入（将覆盖编码规则）"
-              disabled={isEdit}
-              extra="如果填写了手工编码，将使用手工编码，否则使用编码规则自动生成"
-            />
-          </>
-        ) : (
-          // 有多条编码规则，显示选择框（也允许手工填写）
-          <>
-            <ProFormSelect
-              name="code_rule"
-              label="编码规则"
-              placeholder="请选择编码规则（可选）"
-              options={codeRuleList.map((rule: any) => ({
-                label: `${rule.name} (${rule.code})`,
-                value: rule.code,
-              }))}
-              disabled={isEdit}
-              extra="如果选择了编码规则，将自动生成编码；也可以不选择，在下方手工填写编码"
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-            />
-            <ProFormText
-              name="code"
-              label="工单编码（可选，手工填写）"
-              placeholder="如需手工填写编码，请在此输入（将覆盖编码规则）"
-              disabled={isEdit}
-              extra="如果填写了手工编码，将使用手工编码，否则使用选择的编码规则自动生成"
-            />
-          </>
         )}
+
+        {/* 基本信息组 */}
+        <Divider>基本信息</Divider>
         <ProFormText
           name="name"
           label="工单名称"
-          placeholder="请输入工单名称"
-          rules={[{ required: true, message: '请输入工单名称' }]}
+          placeholder="请输入工单名称（可选）"
           disabled={isEdit}
+          colProps={{ span: 12 }}
         />
+        {/* 隐藏生产模式字段，默认MTS，选择销售订单时自动变为MTO */}
+        <ProFormText name="production_mode" initialValue="MTS" hidden />
+        {/* 销售订单选择（选择后自动变为MTO模式） */}
         <ProFormSelect
-          name="production_mode"
-          label="生产模式"
-          placeholder="请选择生产模式"
-          options={[
-            { label: '按库存生产(MTS)', value: 'MTS' },
-            { label: '按订单生产(MTO)', value: 'MTO' },
-          ]}
-          rules={[{ required: true, message: '请选择生产模式' }]}
+          name="sales_order_id"
+          label="销售订单"
+          placeholder="请选择销售订单（可选，选择后自动切换为MTO模式）"
+          options={salesOrderList.map(order => ({
+            label: `${order.order_code} - ${order.customer_name || ''}`,
+            value: order.id,
+          }))}
           disabled={isEdit}
+          fieldProps={{
+            showSearch: true,
+            filterOption: (input: string, option: any) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+            onChange: (value: number | undefined) => {
+              if (value) {
+                // 选择了销售订单，自动设置为MTO模式
+                const selectedOrder = salesOrderList.find(order => order.id === value);
+                if (selectedOrder) {
+                  formRef.current?.setFieldsValue({
+                    production_mode: 'MTO',
+                    sales_order_code: selectedOrder.order_code,
+                    sales_order_name: selectedOrder.customer_name || selectedOrder.order_code,
+                  });
+                  setProductionMode('MTO');
+                }
+              } else {
+                // 清空销售订单，恢复为MTS模式
+                formRef.current?.setFieldsValue({
+                  production_mode: 'MTS',
+                  sales_order_code: undefined,
+                  sales_order_name: undefined,
+                });
+                setProductionMode('MTS');
+              }
+            }
+          }}
+          colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="product_id"
@@ -1483,10 +1672,12 @@ const WorkOrdersPage: React.FC = () => {
           }))}
           rules={[{ required: true, message: '请选择产品' }]}
           disabled={isEdit}
-          showSearch
-          filterOption={(input, option) =>
-            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
+          fieldProps={{
+            showSearch: true,
+            filterOption: (input: string, option: any) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }}
+          colProps={{ span: 12 }}
         />
         <ProFormDigit
           name="quantity"
@@ -1495,7 +1686,11 @@ const WorkOrdersPage: React.FC = () => {
           min={0}
           precision={2}
           rules={[{ required: true, message: '请输入计划数量' }]}
+          colProps={{ span: 12 }}
         />
+
+        {/* 优先级和时间组 */}
+        <Divider>优先级和时间</Divider>
         <ProFormSelect
           name="priority"
           label="优先级"
@@ -1507,19 +1702,183 @@ const WorkOrdersPage: React.FC = () => {
             { label: '紧急', value: 'urgent' },
           ]}
           initialValue="normal"
+          colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="planned_start_date"
           label="计划开始时间"
           placeholder="请选择计划开始时间"
           width="md"
+          colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="planned_end_date"
           label="计划结束时间"
           placeholder="请选择计划结束时间"
           width="md"
+          colProps={{ span: 12 }}
         />
+
+        {/* 工序设置组 */}
+        <Divider>工序设置（可选）</Divider>
+        <ProFormSelect
+          name="process_route_id"
+          label="工艺路线（可选）"
+          placeholder="请选择工艺路线（选择后自动加载工序）"
+          options={processRouteList.map(route => ({
+            label: `${route.code} - ${route.name}`,
+            value: route.id,
+          }))}
+          disabled={isEdit}
+          fieldProps={{
+            showSearch: true,
+            filterOption: (input: string, option: any) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+            onChange: async (value: number | undefined) => {
+              if (value) {
+                try {
+                  // 从工艺路线列表中找到路线（获取 uuid）
+                  const route = processRouteList.find(r => r.id === value);
+                  if (!route || !route.uuid) {
+                    messageApi.warning('未找到工艺路线信息');
+                    return;
+                  }
+
+                  // 调用详情 API 获取完整的工艺路线信息（包含工序序列）
+                  const routeDetail = await processRouteApi.get(route.uuid);
+                  
+                  if (routeDetail && routeDetail.operation_sequence) {
+                    // 解析工序序列（可能是列表或字典格式）
+                    let sequence: any[] = [];
+                    
+                    if (Array.isArray(routeDetail.operation_sequence)) {
+                      // 列表格式：[{"operation_id": 1, "sequence": 1}, ...]
+                      sequence = routeDetail.operation_sequence;
+                    } else if (typeof routeDetail.operation_sequence === 'object') {
+                      // 字典格式：{"1": {"operation_id": 1, "sequence": 1}, ...}
+                      sequence = Object.values(routeDetail.operation_sequence);
+                    }
+                    
+                    // 按 sequence 排序
+                    sequence.sort((a: any, b: any) => {
+                      const seqA = a.sequence || a.sequence || 0;
+                      const seqB = b.sequence || b.sequence || 0;
+                      return seqA - seqB;
+                    });
+                    
+                    // 转换为工序对象
+                    const operations = sequence
+                      .map((item: any, index: number) => {
+                        const opId = item.operation_id || item.operationId;
+                        if (!opId) return null;
+                        
+                        const op = operationList.find(o => o.id === opId);
+                        if (op) {
+                          return {
+                            operation_id: op.id,
+                            operation_code: op.code,
+                            operation_name: op.name,
+                            sequence: item.sequence || (index + 1),
+                          };
+                        } else {
+                          console.warn(`未找到工序 ID: ${opId}`);
+                          return null;
+                        }
+                      })
+                      .filter(Boolean);
+                    
+                    if (operations.length > 0) {
+                      setSelectedOperations(operations);
+                      // 更新表单中的工序字段
+                      formRef.current?.setFieldsValue({
+                        operations: operations.map((op: any) => op.operation_id),
+                      });
+                      messageApi.success(`已加载 ${operations.length} 个工序`);
+                    } else {
+                      messageApi.warning('该工艺路线未配置工序');
+                      setSelectedOperations([]);
+                      formRef.current?.setFieldsValue({
+                        operations: undefined,
+                      });
+                    }
+                  } else {
+                    messageApi.warning('该工艺路线未配置工序序列');
+                    setSelectedOperations([]);
+                    formRef.current?.setFieldsValue({
+                      operations: undefined,
+                    });
+                  }
+                } catch (error: any) {
+                  console.error('获取工艺路线工序失败:', error);
+                  messageApi.error(error.message || '获取工艺路线工序失败');
+                  setSelectedOperations([]);
+                  formRef.current?.setFieldsValue({
+                    operations: undefined,
+                  });
+                }
+              } else {
+                setSelectedOperations([]);
+                formRef.current?.setFieldsValue({
+                  operations: undefined,
+                });
+              }
+            }
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          mode="multiple"
+          name="operations"
+          label="选择工序（可选）"
+          placeholder="请选择工序（可多选，将按选择顺序排列）"
+          options={operationList.map(op => ({
+            label: `${op.code} - ${op.name}`,
+            value: op.id,
+          }))}
+          disabled={isEdit}
+          fieldProps={{
+            showSearch: true,
+            filterOption: (input: string, option: any) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+            onChange: (values: number[]) => {
+              // 更新选中的工序列表
+              const ops = values.map((id, index) => {
+                const op = operationList.find(o => o.id === id);
+                return op ? {
+                  operation_id: op.id,
+                  operation_code: op.code,
+                  operation_name: op.name,
+                  sequence: index + 1,
+                } : null;
+              }).filter(Boolean);
+              setSelectedOperations(ops);
+            }
+          }}
+          colProps={{ span: 12 }}
+        />
+        {selectedOperations.length > 0 && (
+          <div style={{ marginTop: 8, padding: 12, background: '#f5f5f5', borderRadius: 4, marginBottom: 16 }}>
+            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>已选工序（{selectedOperations.length}个）：</div>
+            {selectedOperations.map((op, index) => (
+              <div key={op.operation_id} style={{ marginBottom: 4 }}>
+                {index + 1}. {op.operation_code} - {op.operation_name}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 工序控制组 */}
+        <Divider>工序控制</Divider>
+        <ProFormSwitch
+          name="allow_operation_jump"
+          label="允许跳转工序"
+          extra="开启后，每道工序允许自由报工；关闭后，下一道工序的报工数量不可超过上一道工序"
+          initialValue={false}
+          colProps={{ span: 24 }}
+        />
+
+        {/* 备注组 */}
+        <Divider>备注信息</Divider>
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -1527,6 +1886,7 @@ const WorkOrdersPage: React.FC = () => {
           fieldProps={{
             rows: 4,
           }}
+          colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 

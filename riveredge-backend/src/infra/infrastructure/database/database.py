@@ -162,6 +162,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.product",  # 产品模型
                 # 快格轻制造模型
                 "apps.kuaizhizao.models.work_order",  # 工单模型
+                "apps.kuaizhizao.models.work_order_operation",  # 工单工序模型
                 "apps.kuaizhizao.models.reporting_record",  # 报工记录模型
                 "apps.kuaizhizao.models.production_picking",  # 生产领料模型
                 "apps.kuaizhizao.models.production_picking_item",  # 生产领料明细模型

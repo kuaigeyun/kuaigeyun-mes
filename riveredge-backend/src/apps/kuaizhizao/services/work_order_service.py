@@ -432,27 +432,112 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单创建节点时间失败: {e}")
 
-            # 自动匹配工艺路线并生成工序单（核心功能，参考黑湖小工单）
-            try:
-                process_route = await self._match_process_route_for_material(
-                    tenant_id=tenant_id,
-                    material_id=work_order.product_id
-                )
-                
-                if process_route:
-                    # 根据工艺路线自动生成工单工序单
-                    await self._generate_work_order_operations_from_route(
+            # 处理工序单（如果提供了 operations，使用提供的工序；否则自动匹配工艺路线）
+            operations = getattr(work_order_data, 'operations', None)
+            
+            if operations and len(operations) > 0:
+                # 使用提供的工序创建工单工序单
+                try:
+                    user_info = await self.get_user_info(created_by)
+                    work_order_operations = []
+                    
+                    # 计算计划时间
+                    planned_start = work_order.planned_start_date or datetime.now()
+                    current_time = planned_start
+                    
+                    for idx, op_data in enumerate(operations, 1):
+                        # 验证工序是否存在
+                        operation = await Operation.get_or_none(
+                            id=op_data.operation_id,
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True
+                        )
+                        
+                        if not operation:
+                            raise ValidationError(f"工序ID {op_data.operation_id} 不存在")
+                        
+                        # 使用提供的工序数据，如果没有则使用默认值
+                        sequence = op_data.sequence if op_data.sequence else idx
+                        workshop_id = op_data.workshop_id or work_order.workshop_id
+                        workshop_name = op_data.workshop_name or work_order.workshop_name
+                        work_center_id = op_data.work_center_id or work_order.work_center_id
+                        work_center_name = op_data.work_center_name or work_order.work_center_name
+                        
+                        # 计算计划时间（如果有标准工时）
+                        planned_start_date = op_data.planned_start_date or current_time
+                        planned_end_date = op_data.planned_end_date
+                        
+                        if not planned_end_date and op_data.standard_time:
+                            # 根据标准工时计算结束时间
+                            from datetime import timedelta
+                            standard_hours = float(op_data.standard_time)
+                            setup_hours = float(op_data.setup_time) if op_data.setup_time else 0
+                            total_hours = setup_hours + (standard_hours * float(work_order.quantity))
+                            planned_end_date = planned_start_date + timedelta(hours=total_hours)
+                        elif not planned_end_date:
+                            # 如果没有标准工时，默认1小时
+                            from datetime import timedelta
+                            planned_end_date = planned_start_date + timedelta(hours=1)
+                        
+                        # 创建工序单
+                        work_order_op = await WorkOrderOperation.create(
+                            tenant_id=tenant_id,
+                            uuid=str(uuid.uuid4()),
+                            work_order_id=work_order.id,
+                            work_order_code=work_order.code,
+                            operation_id=operation.id,
+                            operation_code=operation.code,
+                            operation_name=operation.name,
+                            sequence=sequence,
+                            workshop_id=workshop_id,
+                            workshop_name=workshop_name,
+                            work_center_id=work_center_id,
+                            work_center_name=work_center_name,
+                            planned_start_date=planned_start_date,
+                            planned_end_date=planned_end_date,
+                            standard_time=op_data.standard_time,
+                            setup_time=op_data.setup_time,
+                            remarks=op_data.remarks,
+                            status='pending',
+                            created_by=created_by,
+                            created_by_name=user_info["name"],
+                        )
+                        
+                        work_order_operations.append(work_order_op)
+                        current_time = planned_end_date
+                    
+                    # 更新工单的计划结束时间（最后一道工序的结束时间）
+                    if work_order_operations:
+                        last_op = work_order_operations[-1]
+                        work_order.planned_end_date = last_op.planned_end_date
+                        await work_order.save()
+                    
+                    logger.info(f"工单 {work_order.code} 已创建 {len(work_order_operations)} 个工序单（使用提供的工序）")
+                except Exception as e:
+                    logger.error(f"为工单 {work_order.code} 创建工序单失败: {e}", exc_info=True)
+                    raise ValidationError(f"创建工序单失败: {str(e)}")
+            else:
+                # 自动匹配工艺路线并生成工序单（核心功能，参考黑湖小工单）
+                try:
+                    process_route = await self._match_process_route_for_material(
                         tenant_id=tenant_id,
-                        work_order=work_order,
-                        process_route=process_route,
-                        created_by=created_by
+                        material_id=work_order.product_id
                     )
-                    logger.info(f"工单 {work_order.code} 已自动生成工序单（基于工艺路线: {process_route.code}）")
-                else:
-                    logger.warning(f"工单 {work_order.code} 未找到匹配的工艺路线，未自动生成工序单")
-            except Exception as e:
-                # 自动生成工序单失败不影响工单创建，记录日志
-                logger.error(f"为工单 {work_order.code} 自动生成工序单失败: {e}", exc_info=True)
+                    
+                    if process_route:
+                        # 根据工艺路线自动生成工单工序单
+                        await self._generate_work_order_operations_from_route(
+                            tenant_id=tenant_id,
+                            work_order=work_order,
+                            process_route=process_route,
+                            created_by=created_by
+                        )
+                        logger.info(f"工单 {work_order.code} 已自动生成工序单（基于工艺路线: {process_route.code}）")
+                    else:
+                        logger.warning(f"工单 {work_order.code} 未找到匹配的工艺路线，未自动生成工序单")
+                except Exception as e:
+                    # 自动生成工序单失败不影响工单创建，记录日志
+                    logger.error(f"为工单 {work_order.code} 自动生成工序单失败: {e}", exc_info=True)
 
             return WorkOrderResponse.model_validate(work_order)
 
@@ -535,7 +620,82 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         # 获取分页数据
         work_orders = await query.offset(skip).limit(limit).order_by("-created_at").all()
 
-        return [WorkOrderListResponse.model_validate(wo) for wo in work_orders]
+        # 转换为响应格式，添加错误处理
+        result = []
+        work_orders_to_update = []
+        
+        for wo in work_orders:
+            try:
+                # 确保 created_by_name 不为空
+                if not wo.created_by_name:
+                    user_info = await self.get_user_info(wo.created_by)
+                    wo.created_by_name = user_info.get("name", "未知用户")
+                    work_orders_to_update.append(wo)
+                
+                result.append(WorkOrderListResponse.model_validate(wo))
+            except Exception as e:
+                logger.error(f"序列化工单 {wo.id} 失败: {str(e)}")
+                logger.error(f"工单数据: id={wo.id}, code={wo.code}, created_by_name={wo.created_by_name}")
+                logger.exception(e)
+                # 跳过有问题的工单，继续处理其他工单
+                continue
+        
+        # 批量更新 created_by_name 为空的工单
+        if work_orders_to_update:
+            for wo in work_orders_to_update:
+                await wo.save(update_fields=["created_by_name"])
+        
+        return result
+
+    async def get_work_order_count(
+        self,
+        tenant_id: int,
+        code: Optional[str] = None,
+        name: Optional[str] = None,
+        product_name: Optional[str] = None,
+        production_mode: Optional[str] = None,
+        status: Optional[str] = None,
+        workshop_id: Optional[int] = None,
+        work_center_id: Optional[int] = None,
+    ) -> int:
+        """
+        获取工单总数（用于分页）
+
+        Args:
+            tenant_id: 组织ID
+            code: 工单编码（模糊搜索）
+            name: 工单名称（模糊搜索）
+            product_name: 产品名称（模糊搜索）
+            production_mode: 生产模式
+            status: 工单状态
+            workshop_id: 车间ID
+            work_center_id: 工作中心ID
+
+        Returns:
+            int: 工单总数
+        """
+        query = WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True  # 只查询未删除的工单
+        )
+
+        # 添加筛选条件（与 list_work_orders 保持一致）
+        if code:
+            query = query.filter(code__icontains=code)
+        if name:
+            query = query.filter(name__icontains=name)
+        if product_name:
+            query = query.filter(product_name__icontains=product_name)
+        if production_mode:
+            query = query.filter(production_mode=production_mode)
+        if status:
+            query = query.filter(status=status)
+        if workshop_id:
+            query = query.filter(workshop_id=workshop_id)
+        if work_center_id:
+            query = query.filter(work_center_id=work_center_id)
+
+        return await query.count()
 
     async def update_work_order(
         self,
@@ -1256,6 +1416,91 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 返回更新后的工序列表
             return await self.get_work_order_operations(tenant_id, work_order_id)
+
+    async def start_work_order_operation(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operation_id: int,
+        started_by: int
+    ) -> WorkOrderOperationResponse:
+        """
+        开始工单工序
+
+        将工序状态从 pending 更新为 in_progress，并记录实际开始时间。
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            operation_id: 工单工序ID（不是工序模板的ID）
+            started_by: 开始人ID
+
+        Returns:
+            WorkOrderOperationResponse: 更新后的工单工序
+
+        Raises:
+            NotFoundError: 工单或工序不存在
+            BusinessLogicError: 业务逻辑错误（如工序状态不正确）
+        """
+        async with in_transaction():
+            # 获取工单
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单状态
+            if work_order.status not in ['released', 'in_progress']:
+                raise BusinessLogicError(f"只能开始已下达或进行中的工单的工序，当前工单状态：{work_order.status}")
+
+            # 获取工单工序
+            work_order_operation = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                id=operation_id,
+                deleted_at__isnull=True
+            )
+
+            if not work_order_operation:
+                raise NotFoundError(f"工单工序不存在: 工单ID={work_order_id}, 工序ID={operation_id}")
+
+            # 检查工序状态
+            if work_order_operation.status != 'pending':
+                raise BusinessLogicError(f"只能开始待开始状态的工序，当前状态：{work_order_operation.status}")
+
+            # 检查跳转规则（如果不允许跳转，检查前序工序是否完成）
+            # 优先使用工单级别的跳转控制，如果没有则使用工序级别的
+            allow_jump = work_order.allow_operation_jump if hasattr(work_order, 'allow_operation_jump') else work_order_operation.allow_jump
+            
+            if not allow_jump:
+                # 检查是否有前序工序未完成
+                previous_operations = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order_id,
+                    sequence__lt=work_order_operation.sequence,
+                    deleted_at__isnull=True
+                ).all()
+
+                for prev_op in previous_operations:
+                    if prev_op.status != 'completed':
+                        raise BusinessLogicError(f"前序工序 {prev_op.operation_name} 未完成，不能开始当前工序")
+
+            # 获取开始人信息
+            user_info = await self.get_user_info(started_by)
+
+            # 更新工序状态
+            work_order_operation.status = 'in_progress'
+            work_order_operation.actual_start_date = datetime.now()
+            work_order_operation.updated_by = started_by
+            work_order_operation.updated_by_name = user_info["name"]
+            await work_order_operation.save()
+
+            # 如果工单状态是 released，更新为 in_progress
+            if work_order.status == 'released':
+                work_order.status = 'in_progress'
+                work_order.actual_start_date = work_order.actual_start_date or datetime.now()
+                work_order.updated_by = started_by
+                work_order.updated_by_name = user_info["name"]
+                await work_order.save()
+
+            return WorkOrderOperationResponse.model_validate(work_order_operation)
 
     async def freeze_work_order(
         self,
