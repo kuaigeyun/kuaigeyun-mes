@@ -111,6 +111,7 @@ TORTOISE_ORM = {
                 "infra.models.package",
                 "infra.models.saved_search",  # 保存搜索条件模型
                 "infra.models.industry_template",  # 行业模板模型
+                "infra.models.platform_settings",  # 平台设置模型
                 # 系统级模型（core）
                 "core.models.role",
                 "core.models.permission",

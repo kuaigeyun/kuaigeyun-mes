@@ -123,3 +123,20 @@ class CodeGenerationResponse(BaseModel):
     code: str = Field(..., description="生成的编码")
     rule_name: str = Field(..., description="规则名称")
 
+
+class CodeRulePageConfigResponse(BaseModel):
+    """
+    编码规则页面配置响应 Schema
+    
+    用于返回功能页面配置信息。
+    """
+    page_code: str = Field(..., description="页面唯一标识")
+    page_name: str = Field(..., description="页面名称")
+    page_path: str = Field(..., description="页面路径")
+    code_field: str = Field(..., description="编码字段名称")
+    code_field_label: str = Field(..., description="编码字段显示名称")
+    module: str = Field(..., description="所属模块")
+    module_icon: Optional[str] = Field(None, description="模块图标")
+    auto_generate: bool = Field(default=False, description="是否启用自动编码")
+    rule_code: Optional[str] = Field(None, description="关联的编码规则代码")
+

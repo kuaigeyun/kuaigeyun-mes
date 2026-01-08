@@ -93,3 +93,6 @@ class ReportingRecord(BaseModel):
     # 备注和设备信息
     remarks = fields.TextField(null=True, description="备注")
     device_info = fields.JSONField(null=True, description="设备信息（JSON格式）")
+    
+    # SOP参数数据（核心功能，新增）
+    sop_parameters = fields.JSONField(null=True, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")

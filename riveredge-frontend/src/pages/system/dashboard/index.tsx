@@ -8,7 +8,7 @@
  * Date: 2025-12-30
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Card,
   Row,
@@ -20,7 +20,10 @@ import {
   Button,
   Badge,
   Empty,
-  App
+  App,
+  Modal,
+  Tree,
+  message as antdMessage,
 } from 'antd';
 import {
   UserOutlined,
@@ -30,12 +33,19 @@ import {
   ClockCircleOutlined,
   RightOutlined,
   ShopOutlined,
+  SettingOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
+import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { DashboardTemplate, type QuickAction } from '../../../components/layout-templates';
 import { getTodos, getStatistics, getDashboard, handleTodo, type TodoItem, type StatisticsResponse } from '../../../services/dashboard';
+import { getMenuTree, type MenuTree } from '../../../services/menu';
+import { getUserPreference, updateUserPreference } from '../../../services/userPreference';
+import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
+import * as LucideIcons from 'lucide-react';
 import {
   PieChart,
   Pie,
@@ -83,27 +93,92 @@ const fetchNotifications = async () => {
 };
 
 
-// 快捷操作配置（转换为 DashboardTemplate 格式）
-const getQuickActions = (navigate: (path: string) => void): QuickAction[] => [
-  {
-    title: '用户管理',
-    icon: <UserOutlined />,
-    onClick: () => navigate('/system/users'),
-    type: 'default',
-  },
-  {
-    title: '角色管理',
-    icon: <TeamOutlined />,
-    onClick: () => navigate('/system/roles'),
-    type: 'default',
-  },
-  {
-    title: '部门管理',
-    icon: <ShopOutlined />,
-    onClick: () => navigate('/system/departments'),
-    type: 'default',
-  },
-];
+/**
+ * 渲染菜单图标
+ */
+const renderMenuIcon = (menu: MenuTree): React.ReactNode => {
+  if (!menu.icon) {
+    return <ShopOutlined />;
+  }
+
+  // 尝试从 Lucide Icons 获取
+  const lucideIconMap: Record<string, React.ComponentType<any>> = {
+    'AppstoreOutlined': ManufacturingIcons.appstore,
+    'ControlOutlined': ManufacturingIcons.control,
+    'ShopOutlined': ManufacturingIcons.shop,
+    'FileTextOutlined': ManufacturingIcons.fileCode,
+    'DatabaseOutlined': ManufacturingIcons.database,
+    'MonitorOutlined': ManufacturingIcons.monitor,
+    'GlobalOutlined': ManufacturingIcons.global,
+    'ApiOutlined': ManufacturingIcons.api,
+    'CodeOutlined': ManufacturingIcons.code,
+    'PrinterOutlined': ManufacturingIcons.printer,
+    'HistoryOutlined': ManufacturingIcons.history,
+    'UnorderedListOutlined': ManufacturingIcons.list,
+    'CalendarOutlined': ManufacturingIcons.calendar,
+    'PlayCircleOutlined': ManufacturingIcons.playCircle,
+    'InboxOutlined': ManufacturingIcons.inbox,
+    'SafetyOutlined': ManufacturingIcons.safety,
+    'ShoppingOutlined': ManufacturingIcons.shop,
+    'UserSwitchOutlined': ManufacturingIcons.userSwitch,
+    'SettingOutlined': ManufacturingIcons.mdSettings,
+    'BellOutlined': ManufacturingIcons.bell,
+    'LoginOutlined': ManufacturingIcons.login,
+    'UserOutlined': ManufacturingIcons.user,
+    'TeamOutlined': ManufacturingIcons.team,
+  };
+
+  // 先检查预定义映射
+  if (lucideIconMap[menu.icon]) {
+    const IconComponent = lucideIconMap[menu.icon];
+    return React.createElement(IconComponent, { size: 24 });
+  }
+
+  // 尝试直接从 Lucide Icons 中获取
+  const iconName = menu.icon as string;
+  let DirectIcon = (LucideIcons as any)[iconName];
+  
+  if (!DirectIcon) {
+    const pascalCaseName = iconName
+      .split(/[-_]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
+    DirectIcon = (LucideIcons as any)[pascalCaseName];
+  }
+
+  if (DirectIcon) {
+    return React.createElement(DirectIcon, { size: 24 });
+  }
+
+  // 默认图标
+  return <ShopOutlined />;
+};
+
+/**
+ * 将菜单树转换为树形数据
+ */
+const convertMenuTreeToTreeData = (menus: MenuTree[]): DataNode[] => {
+  return menus
+    .filter(menu => menu.path && !menu.is_external) // 只显示有路径且非外部链接的菜单
+    .map(menu => ({
+      title: menu.name,
+      key: menu.uuid,
+      icon: renderMenuIcon(menu),
+      children: menu.children ? convertMenuTreeToTreeData(menu.children) : undefined,
+      isLeaf: !menu.children || menu.children.length === 0,
+    }));
+};
+
+/**
+ * 快捷操作项接口（用于存储）
+ */
+interface QuickActionItem {
+  menu_uuid: string;
+  menu_name: string;
+  menu_path: string;
+  menu_icon?: string;
+  sort_order: number;
+}
 
 /**
  * 工作台页面组件
@@ -112,6 +187,8 @@ export default function DashboardPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [configModalVisible, setConfigModalVisible] = useState(false);
+  const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
 
   // 获取通知（暂时保留模拟数据）
   const { data: notifications, isLoading: notificationsLoading } = useQuery({
@@ -133,6 +210,127 @@ export default function DashboardPage() {
     queryFn: getStatistics,
     refetchInterval: 60000,
   });
+
+  // 获取菜单树
+  const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
+    queryKey: ['dashboard-menu-tree'],
+    queryFn: () => getMenuTree({ is_active: true }),
+    staleTime: 5 * 60 * 1000, // 5分钟缓存
+  });
+
+  // 获取用户偏好设置
+  const { data: userPreference, refetch: refetchUserPreference } = useQuery({
+    queryKey: ['dashboard-user-preference'],
+    queryFn: getUserPreference,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 更新用户偏好设置
+  const updatePreferenceMutation = useMutation({
+    mutationFn: (data: { preferences: Record<string, any> }) => updateUserPreference(data),
+    onSuccess: () => {
+      message.success('快捷操作配置已保存');
+      refetchUserPreference();
+      setConfigModalVisible(false);
+    },
+    onError: (error: any) => {
+      message.error(`保存失败: ${error.message || '未知错误'}`);
+    },
+  });
+
+  // 从菜单树中查找菜单项
+  const findMenuInTree = (menus: MenuTree[], uuid: string): MenuTree | null => {
+    for (const menu of menus) {
+      if (menu.uuid === uuid) {
+        return menu;
+      }
+      if (menu.children) {
+        const found = findMenuInTree(menu.children, uuid);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // 构建快捷操作列表
+  const quickActions = useMemo(() => {
+    if (!userPreference?.preferences?.dashboard_quick_actions || !menuTree) {
+      // 如果没有配置，返回默认快捷操作
+      return [
+        {
+          title: '用户管理',
+          icon: <UserOutlined />,
+          onClick: () => navigate('/system/users'),
+          type: 'default' as const,
+        },
+        {
+          title: '角色管理',
+          icon: <TeamOutlined />,
+          onClick: () => navigate('/system/roles'),
+          type: 'default' as const,
+        },
+        {
+          title: '部门管理',
+          icon: <ShopOutlined />,
+          onClick: () => navigate('/system/departments'),
+          type: 'default' as const,
+        },
+      ];
+    }
+
+    const actions: QuickActionItem[] = userPreference.preferences.dashboard_quick_actions;
+    return actions
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((action) => {
+        const menu = findMenuInTree(menuTree, action.menu_uuid);
+        if (!menu || !menu.path) {
+          return null;
+        }
+
+        return {
+          title: action.menu_name || menu.name,
+          icon: renderMenuIcon(menu),
+          onClick: () => navigate(menu.path!),
+          type: 'default' as const,
+        };
+      })
+      .filter((action): action is QuickAction => action !== null);
+  }, [userPreference, menuTree, navigate]);
+
+  // 打开配置模态框
+  const handleOpenConfig = () => {
+    if (!userPreference?.preferences?.dashboard_quick_actions) {
+      setSelectedMenuKeys([]);
+    } else {
+      const actions: QuickActionItem[] = userPreference.preferences.dashboard_quick_actions;
+      setSelectedMenuKeys(actions.map(a => a.menu_uuid));
+    }
+    setConfigModalVisible(true);
+  };
+
+  // 保存快捷操作配置
+  const handleSaveQuickActions = () => {
+    if (!menuTree) return;
+
+    const selectedMenus = selectedMenuKeys
+      .map(key => findMenuInTree(menuTree, key as string))
+      .filter((menu): menu is MenuTree => menu !== null && !!menu.path && !menu.is_external);
+
+    const quickActions: QuickActionItem[] = selectedMenus.map((menu, index) => ({
+      menu_uuid: menu.uuid,
+      menu_name: menu.name,
+      menu_path: menu.path!,
+      menu_icon: menu.icon,
+      sort_order: index,
+    }));
+
+    updatePreferenceMutation.mutate({
+      preferences: {
+        ...userPreference?.preferences,
+        dashboard_quick_actions: quickActions,
+      },
+    });
+  };
 
   // 处理待办事项
   const handleTodoMutation = useMutation({
@@ -165,10 +363,19 @@ export default function DashboardPage() {
     low: '低',
   };
 
+  // 树形数据
+  const treeData = useMemo(() => {
+    if (!menuTree) return [];
+    return convertMenuTreeToTreeData(menuTree);
+  }, [menuTree]);
+
   return (
-    <DashboardTemplate
-      quickActions={getQuickActions(navigate)}
-    >
+    <>
+      <DashboardTemplate
+        quickActions={quickActions}
+        showConfigButton={true}
+        onConfigClick={handleOpenConfig}
+      >
       {/* 欢迎区域 */}
       <Card style={{ marginBottom: 24 }}>
         <Space size="large">
@@ -509,6 +716,37 @@ export default function DashboardPage() {
           </Card>
         </Col>
       </Row>
-    </DashboardTemplate>
+      </DashboardTemplate>
+
+      {/* 快捷操作配置模态框 */}
+      <Modal
+        title="配置快捷操作"
+        open={configModalVisible}
+        onOk={handleSaveQuickActions}
+        onCancel={() => setConfigModalVisible(false)}
+        okText="保存"
+        cancelText="取消"
+        width={600}
+        confirmLoading={updatePreferenceMutation.isPending}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            请选择要添加到快捷操作的菜单项。只能选择有路径的菜单项。
+          </Text>
+        </div>
+        <Tree
+          checkable
+          checkedKeys={selectedMenuKeys}
+          onCheck={(checkedKeys) => {
+            setSelectedMenuKeys(checkedKeys as React.Key[]);
+          }}
+          treeData={treeData}
+          showIcon
+          checkStrictly
+          defaultExpandAll
+          style={{ maxHeight: 400, overflow: 'auto' }}
+        />
+      </Modal>
+    </>
   );
 }

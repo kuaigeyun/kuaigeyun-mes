@@ -13,7 +13,9 @@ from core.schemas.code_rule import (
     CodeRuleResponse,
     CodeGenerationRequest,
     CodeGenerationResponse,
+    CodeRulePageConfigResponse,
 )
+from core.config.code_rule_pages import CODE_RULE_PAGES
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.business.code_generation_service import CodeGenerationService
 from core.api.deps.deps import get_current_tenant
@@ -83,6 +85,19 @@ async def list_rules(
         is_active=is_active
     )
     return [CodeRuleResponse.model_validate(r) for r in rules]
+
+
+@router.get("/pages", response_model=List[CodeRulePageConfigResponse])
+async def list_code_rule_pages():
+    """
+    获取编码规则功能页面配置列表
+    
+    返回系统中所有有编码字段的功能页面配置，用于在编码规则页面展示和配置。
+    
+    Returns:
+        List[CodeRulePageConfigResponse]: 功能页面配置列表
+    """
+    return [CodeRulePageConfigResponse(**page) for page in CODE_RULE_PAGES]
 
 
 @router.get("/{uuid}", response_model=CodeRuleResponse)

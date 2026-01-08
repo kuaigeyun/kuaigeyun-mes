@@ -209,7 +209,7 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
         {/* 左侧组件库 */}
         <Sider width={200} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
           <Card title="组件库" size="small" style={{ height: '100%' }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <DraggableItem id="component-table" label="表格" />
               <DraggableItem id="component-chart" label="图表" />
               <DraggableItem id="component-text" label="文本" />

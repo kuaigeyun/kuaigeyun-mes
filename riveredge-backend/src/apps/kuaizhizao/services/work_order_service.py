@@ -42,6 +42,9 @@ from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_fro
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
+from apps.master_data.models.material import Material, MaterialGroup
+from apps.master_data.models.process import ProcessRoute, Operation
+from core.services.business.code_generation_service import CodeGenerationService
 from loguru import logger
 
 
@@ -54,6 +57,230 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
     def __init__(self):
         super().__init__(WorkOrder)
+
+    async def _match_process_route_for_material(
+        self,
+        tenant_id: int,
+        material_id: int
+    ) -> Optional[ProcessRoute]:
+        """
+        为物料自动匹配工艺路线
+        
+        匹配规则（优先级从高到低）：
+        1. 物料直接绑定的工艺路线（process_route_id）
+        2. 物料所属分组绑定的工艺路线（material_group.process_route_id）
+        
+        Args:
+            tenant_id: 组织ID
+            material_id: 物料ID
+            
+        Returns:
+            Optional[ProcessRoute]: 匹配到的工艺路线，如果未匹配到则返回None
+        """
+        # 1. 优先检查物料直接绑定的工艺路线
+        material = await Material.get_or_none(
+            id=material_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        
+        if not material:
+            return None
+        
+        if material.process_route_id:
+            process_route = await ProcessRoute.get_or_none(
+                id=material.process_route_id,
+                tenant_id=tenant_id,
+                is_active=True,
+                deleted_at__isnull=True
+            )
+            if process_route:
+                logger.info(f"物料 {material.code} 使用直接绑定的工艺路线: {process_route.code}")
+                return process_route
+        
+        # 2. 检查物料分组绑定的工艺路线
+        if material.group_id:
+            material_group = await MaterialGroup.get_or_none(
+                id=material.group_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            
+            if material_group and material_group.process_route_id:
+                process_route = await ProcessRoute.get_or_none(
+                    id=material_group.process_route_id,
+                    tenant_id=tenant_id,
+                    is_active=True,
+                    deleted_at__isnull=True
+                )
+                if process_route:
+                    logger.info(f"物料 {material.code} 使用分组绑定的工艺路线: {process_route.code}")
+                    return process_route
+        
+        logger.warning(f"物料 {material.code} 未找到匹配的工艺路线")
+        return None
+
+    async def _generate_work_order_operations_from_route(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        process_route: ProcessRoute,
+        created_by: int
+    ) -> List[WorkOrderOperation]:
+        """
+        根据工艺路线自动生成工单工序单
+        
+        Args:
+            tenant_id: 组织ID
+            work_order: 工单对象
+            process_route: 工艺路线对象
+            created_by: 创建人ID
+            
+        Returns:
+            List[WorkOrderOperation]: 生成的工单工序单列表
+        """
+        if not process_route.operation_sequence:
+            logger.warning(f"工艺路线 {process_route.code} 没有工序序列")
+            return []
+        
+        # 获取创建人信息
+        user_info = await self.get_user_info(created_by)
+        
+        # 解析工序序列
+        sequence_data = process_route.operation_sequence
+        operation_list = []
+        
+        if isinstance(sequence_data, list):
+            # 列表格式：[{"operation_id": 1, "sequence": 1, ...}, ...]
+            for item in sequence_data:
+                if isinstance(item, dict):
+                    op_id = item.get("operation_id") or item.get("operationId")
+                    sequence = item.get("sequence", len(operation_list) + 1)
+                    operation_list.append({
+                        "operation_id": op_id,
+                        "sequence": sequence,
+                        "extra_data": item  # 保存额外数据（如workshop_id, work_center_id等）
+                    })
+        elif isinstance(sequence_data, dict):
+            # 字典格式：{"operation_ids": [1, 2, 3]} 或其他格式
+            if "operation_ids" in sequence_data or "operationIds" in sequence_data:
+                op_ids = sequence_data.get("operation_ids") or sequence_data.get("operationIds", [])
+                for idx, op_id in enumerate(op_ids, 1):
+                    operation_list.append({
+                        "operation_id": op_id,
+                        "sequence": idx,
+                        "extra_data": {}
+                    })
+            else:
+                # 键值对格式
+                for key, value in sequence_data.items():
+                    if isinstance(value, dict):
+                        op_id = value.get("operation_id") or value.get("operationId") or (int(key) if key.isdigit() else None)
+                        sequence = value.get("sequence", len(operation_list) + 1)
+                        operation_list.append({
+                            "operation_id": op_id,
+                            "sequence": sequence,
+                            "extra_data": value
+                        })
+                    else:
+                        op_id = int(key) if key.isdigit() else None
+                        if op_id:
+                            operation_list.append({
+                                "operation_id": op_id,
+                                "sequence": len(operation_list) + 1,
+                                "extra_data": {}
+                            })
+        
+        # 按序列排序
+        operation_list.sort(key=lambda x: x["sequence"])
+        
+        # 获取所有工序信息
+        operation_ids = [op["operation_id"] for op in operation_list if op["operation_id"]]
+        operations = await Operation.filter(
+            id__in=operation_ids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).all()
+        
+        operation_map = {op.id: op for op in operations}
+        
+        # 计算计划时间
+        planned_start = work_order.planned_start_date or datetime.now()
+        current_time = planned_start
+        
+        # 创建工单工序单
+        work_order_operations = []
+        for op_data in operation_list:
+            op_id = op_data["operation_id"]
+            if op_id not in operation_map:
+                logger.warning(f"工序ID {op_id} 不存在，跳过")
+                continue
+            
+            operation = operation_map[op_id]
+            extra_data = op_data.get("extra_data", {})
+            
+            # 从额外数据中获取车间、工作中心等信息（如果工艺路线中配置了）
+            workshop_id = extra_data.get("workshop_id") or work_order.workshop_id
+            workshop_name = extra_data.get("workshop_name") or work_order.workshop_name
+            work_center_id = extra_data.get("work_center_id") or work_order.work_center_id
+            work_center_name = extra_data.get("work_center_name") or work_order.work_center_name
+            standard_time = extra_data.get("standard_time")
+            setup_time = extra_data.get("setup_time")
+            
+            # 从额外数据中获取报工类型和跳转规则（如果工艺路线中配置了）
+            reporting_type = extra_data.get("reporting_type", "quantity")  # 默认按数量报工
+            allow_jump = extra_data.get("allow_jump", False)  # 默认不允许跳转
+            
+            # 计算计划时间
+            # 准备时间
+            setup_hours = float(setup_time) if setup_time else 0
+            # 标准工时（小时/件）
+            standard_hours_per_unit = float(standard_time) if standard_time else 0
+            # 总工时 = 准备时间 + 标准工时 * 数量
+            total_hours = setup_hours + (standard_hours_per_unit * float(work_order.quantity))
+            
+            from datetime import timedelta
+            planned_start_date = current_time
+            planned_end_date = current_time + timedelta(hours=total_hours)
+            
+            # 创建工序单
+            work_order_op = await WorkOrderOperation.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                work_order_id=work_order.id,
+                work_order_code=work_order.code,
+                operation_id=operation.id,
+                operation_code=operation.code,
+                operation_name=operation.name,
+                sequence=op_data["sequence"],
+                workshop_id=workshop_id,
+                workshop_name=workshop_name,
+                work_center_id=work_center_id,
+                work_center_name=work_center_name,
+                planned_start_date=planned_start_date,
+                planned_end_date=planned_end_date,
+                standard_time=Decimal(str(standard_hours_per_unit)) if standard_hours_per_unit else None,
+                setup_time=Decimal(str(setup_hours)) if setup_hours else None,
+                reporting_type=reporting_type,
+                allow_jump=allow_jump,
+                status='pending',
+                created_by=created_by,
+                created_by_name=user_info["name"],
+            )
+            
+            work_order_operations.append(work_order_op)
+            
+            # 下一道工序的开始时间 = 当前工序的结束时间
+            current_time = planned_end_date
+        
+        # 更新工单的计划结束时间（最后一道工序的结束时间）
+        if work_order_operations:
+            last_op = work_order_operations[-1]
+            work_order.planned_end_date = last_op.planned_end_date
+            await work_order.save()
+        
+        logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
+        return work_order_operations
 
     async def create_work_order(
         self,
@@ -76,19 +303,85 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             ValidationError: 数据验证失败
         """
         async with in_transaction():
-            # 生成工单编码（如果未提供）
-            if not work_order_data.code:
-                today = datetime.now().strftime("%Y%m%d")
-                code = await self.generate_code(
+            # 处理工单编码
+            # 1. 如果提供了 code，验证唯一性并使用（手工填写）
+            # 2. 如果未提供 code 但提供了 code_rule，使用编码规则生成
+            # 3. 如果两者都未提供，抛出验证错误
+            code = work_order_data.code
+            # 获取 code_rule（如果 Schema 中有定义）
+            code_rule = getattr(work_order_data, 'code_rule', None)
+            
+            if code:
+                # 手工填写编码，验证唯一性
+                existing = await WorkOrder.filter(
                     tenant_id=tenant_id,
-                    code_type="WORK_ORDER_CODE",
-                    prefix=f"WO{today}"
+                    code=code,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if existing:
+                    raise ValidationError(f"工单编码 {code} 已存在")
+            elif code_rule:
+                # 使用编码规则生成编码
+                # 构建上下文变量
+                today = datetime.now().strftime("%Y%m%d")
+                context = {"prefix": f"WO{today}"}
+                
+                code = await CodeGenerationService.generate_code(
+                    tenant_id=tenant_id,
+                    rule_code=code_rule,
+                    context=context
                 )
             else:
-                code = work_order_data.code
+                raise ValidationError("必须提供 code 或 code_rule")
 
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
+
+            # 处理产品/物料信息
+            # 1. 如果提供了 product_id，验证物料是否存在并获取编码和名称
+            # 2. 如果未提供 product_id，则根据 product_code 查找物料
+            product_id = work_order_data.product_id
+            product_code = work_order_data.product_code
+            product_name = work_order_data.product_name
+            
+            if product_id:
+                # 验证物料是否存在
+                material = await Material.filter(
+                    tenant_id=tenant_id,
+                    id=product_id,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not material:
+                    raise ValidationError(f"物料ID {product_id} 不存在")
+                
+                if not material.is_active:
+                    raise ValidationError(f"物料ID {product_id} 已停用")
+                
+                # 使用物料的实际编码和名称（覆盖用户提供的内容）
+                product_code = material.code
+                product_name = material.name
+            elif product_code:
+                # 根据 product_code 查找物料
+                material = await Material.filter(
+                    tenant_id=tenant_id,
+                    code=product_code,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not material:
+                    raise ValidationError(f"物料编码 {product_code} 不存在")
+                
+                if not material.is_active:
+                    raise ValidationError(f"物料编码 {product_code} 已停用")
+                
+                product_id = material.id
+                product_code = material.code
+                if not product_name:
+                    product_name = material.name
+            else:
+                raise ValidationError("必须提供 product_id 或 product_code")
 
             # 创建工单
             work_order = await WorkOrder.create(
@@ -96,9 +389,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 uuid=str(uuid.uuid4()),
                 code=code,
                 name=work_order_data.name,
-                product_id=work_order_data.product_id,
-                product_code=work_order_data.product_code,
-                product_name=work_order_data.product_name,
+                product_id=product_id,
+                product_code=product_code,
+                product_name=product_name,
                 quantity=work_order_data.quantity,
                 production_mode=work_order_data.production_mode,
                 sales_order_id=work_order_data.sales_order_id,
@@ -138,6 +431,28 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             except Exception as e:
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单创建节点时间失败: {e}")
+
+            # 自动匹配工艺路线并生成工序单（核心功能，参考黑湖小工单）
+            try:
+                process_route = await self._match_process_route_for_material(
+                    tenant_id=tenant_id,
+                    material_id=work_order.product_id
+                )
+                
+                if process_route:
+                    # 根据工艺路线自动生成工单工序单
+                    await self._generate_work_order_operations_from_route(
+                        tenant_id=tenant_id,
+                        work_order=work_order,
+                        process_route=process_route,
+                        created_by=created_by
+                    )
+                    logger.info(f"工单 {work_order.code} 已自动生成工序单（基于工艺路线: {process_route.code}）")
+                else:
+                    logger.warning(f"工单 {work_order.code} 未找到匹配的工艺路线，未自动生成工序单")
+            except Exception as e:
+                # 自动生成工序单失败不影响工单创建，记录日志
+                logger.error(f"为工单 {work_order.code} 自动生成工序单失败: {e}", exc_info=True)
 
             return WorkOrderResponse.model_validate(work_order)
 
@@ -195,7 +510,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         query = WorkOrder.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True  # 只查询未删除的工单
         )
 
         # 添加筛选条件
@@ -214,6 +529,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if work_center_id:
             query = query.filter(work_center_id=work_center_id)
 
+        # 获取总数（用于分页）
+        total = await query.count()
+        
+        # 获取分页数据
         work_orders = await query.offset(skip).limit(limit).order_by("-created_at").all()
 
         return [WorkOrderListResponse.model_validate(wo) for wo in work_orders]
@@ -492,8 +811,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         now = datetime.now()
         query = WorkOrder.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
+            tenant_id=tenant_id
         )
 
         # 状态过滤

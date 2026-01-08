@@ -1276,14 +1276,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
         toolBarRender={(_action, { selectedRowKeys: toolBarSelectedRowKeys }) => {
           // 同步工具栏的选中行键到 state（用于头部按钮状态）
+          // 使用 useLayoutEffect 在渲染后更新，避免在渲染过程中更新状态
           if (toolBarSelectedRowKeys) {
-            // 使用 useEffect 或直接在这里更新，但要注意避免无限循环
-            // 这里使用浅比较，避免不必要的更新
             const currentKeys = selectedRowKeys;
             const newKeys = toolBarSelectedRowKeys;
             if (currentKeys.length !== newKeys.length || 
                 currentKeys.some((key, index) => key !== newKeys[index])) {
-              setSelectedRowKeys(newKeys);
+              // 使用 requestAnimationFrame 延迟更新，避免在渲染过程中更新
+              requestAnimationFrame(() => {
+                setSelectedRowKeys(newKeys);
+              });
             }
           }
 

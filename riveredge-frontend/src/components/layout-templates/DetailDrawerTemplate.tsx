@@ -86,6 +86,9 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       extra={extra}
     >
       {customContent || (
+        // ⚠️ 注意：ProDescriptions 组件会触发 Ant Design 的 contentStyle 弃用警告
+        // 这是 ProComponents 库内部的问题，无法直接修复，需要等待库更新
+        // 警告信息：[antd: Descriptions] `contentStyle` is deprecated. Please use `styles.content` instead.
         <ProDescriptions<T>
           dataSource={dataSource}
           column={column}

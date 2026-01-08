@@ -137,7 +137,7 @@ const TemplateSelectPage: React.FC = () => {
           </Button>,
         ]}
       >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ flex: 1 }}>
               <Title level={5} style={{ margin: 0, marginBottom: 8 }}>
@@ -164,7 +164,7 @@ const TemplateSelectPage: React.FC = () => {
           )}
 
           <div style={{ paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>使用次数：</Text>
                 <Text strong>{template.usage_count}</Text>

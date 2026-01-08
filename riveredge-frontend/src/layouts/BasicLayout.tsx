@@ -47,10 +47,13 @@ import {
   SafetyOutlined,
   ShoppingOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb, List, Typography, Empty } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { RightOutlined, CheckOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
 // 安全的翻译 hook，避免多语言初始化失败导致应用崩溃
 const useSafeTranslation = () => {
@@ -830,6 +833,29 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
     enabled: !!currentUser, // 只在用户登录后获取
   });
+
+  // 消息下拉菜单状态
+  const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
+
+  // 获取消息统计
+  const { data: messageStats, refetch: refetchMessageStats } = useQuery({
+    queryKey: ['userMessageStats'],
+    queryFn: () => getUserMessageStats(),
+    staleTime: 30 * 1000, // 30 秒缓存
+    refetchInterval: 60 * 1000, // 每分钟自动刷新
+    enabled: !!currentUser, // 只在用户登录后获取
+  });
+
+  // 获取最近的消息列表（仅在下拉菜单打开时获取）
+  const { data: recentMessages, isLoading: recentMessagesLoading, refetch: refetchRecentMessages } = useQuery({
+    queryKey: ['recentUserMessages'],
+    queryFn: () => getUserMessages({ page: 1, page_size: 10, unread_only: false }),
+    staleTime: 30 * 1000, // 30 秒缓存
+    enabled: !!currentUser && messageDropdownOpen, // 只在用户登录且下拉菜单打开时获取
+  });
+
+  // 未读消息数量
+  const unreadCount = messageStats?.unread || 0;
   
   // 判断字符串是否是UUID格式
   const isUUID = (str: string): boolean => {
@@ -3464,16 +3490,180 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 消息提醒（带数量徽标）
           actions.push(
-            <Badge key="notifications" count={5} size="small" offset={[-8,8]}>
-              <Tooltip title="消息通知">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<BellOutlined style={{ fontSize: 16 }} />}
-                  onClick={() => message.info('消息通知功能开发中')}
-                />
-              </Tooltip>
-            </Badge>
+            <Dropdown
+              key="notifications"
+              placement="bottomRight"
+              trigger={['click']}
+              open={messageDropdownOpen}
+              onOpenChange={(open) => {
+                setMessageDropdownOpen(open);
+                if (open) {
+                  refetchRecentMessages();
+                  refetchMessageStats();
+                }
+              }}
+              popupRender={() => {
+                const messages = recentMessages?.items || [];
+                const isUnread = (msg: UserMessage) => 
+                  msg.status === 'pending' || msg.status === 'sending' || msg.status === 'success';
+
+                return (
+                  <div
+                    style={{
+                      width: 400,
+                      maxHeight: 500,
+                      backgroundColor: token.colorBgElevated,
+                      borderRadius: token.borderRadiusLG,
+                      boxShadow: token.boxShadowSecondary,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* 标题栏 */}
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderBottom: `1px solid ${token.colorBorder}`,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Typography.Text strong style={{ fontSize: 16 }}>
+                        消息通知
+                        {unreadCount > 0 && (
+                          <Badge
+                            count={unreadCount}
+                            size="small"
+                            style={{ marginLeft: 8 }}
+                          />
+                        )}
+                      </Typography.Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => {
+                          setMessageDropdownOpen(false);
+                          navigate('/personal/messages');
+                        }}
+                      >
+                        查看全部 <RightOutlined />
+                      </Button>
+                    </div>
+
+                    {/* 消息列表 */}
+                    <div
+                      style={{
+                        maxHeight: 400,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {recentMessagesLoading ? (
+                        <div style={{ padding: '40px', textAlign: 'center' }}>
+                          <Spin />
+                        </div>
+                      ) : messages.length > 0 ? (
+                        <List
+                          dataSource={messages}
+                          renderItem={(item: UserMessage) => {
+                            const unread = isUnread(item);
+                            return (
+                              <List.Item
+                                style={{
+                                  padding: '12px 16px',
+                                  cursor: 'pointer',
+                                  backgroundColor: unread ? token.colorFillAlter : 'transparent',
+                                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                                }}
+                                onClick={async () => {
+                                  // 点击消息，跳转到消息详情页面
+                                  setMessageDropdownOpen(false);
+                                  navigate('/personal/messages');
+                                  
+                                  // 如果是未读消息，自动标记为已读
+                                  if (unread) {
+                                    try {
+                                      await markMessagesRead({
+                                        message_uuids: [item.uuid],
+                                      });
+                                      refetchMessageStats();
+                                      refetchRecentMessages();
+                                    } catch (error) {
+                                      // 静默失败
+                                    }
+                                  }
+                                }}
+                              >
+                                <List.Item.Meta
+                                  avatar={
+                                    <Badge dot={unread}>
+                                      <Avatar
+                                        size={40}
+                                        style={{
+                                          backgroundColor: unread ? token.colorPrimary : token.colorFillTertiary,
+                                        }}
+                                        icon={<BellOutlined />}
+                                      />
+                                    </Badge>
+                                  }
+                                  title={
+                                    <Space>
+                                      <Typography.Text strong={unread} ellipsis style={{ maxWidth: 250 }}>
+                                        {item.subject || '(无主题)'}
+                                      </Typography.Text>
+                                    </Space>
+                                  }
+                                  description={
+                                    <div>
+                                      <Typography.Paragraph
+                                        ellipsis={{ rows: 2 }}
+                                        style={{
+                                          marginBottom: 4,
+                                          fontSize: 12,
+                                          color: token.colorTextSecondary,
+                                        }}
+                                      >
+                                        {item.content}
+                                      </Typography.Paragraph>
+                                      <Typography.Text
+                                        type="secondary"
+                                        style={{ fontSize: 11 }}
+                                      >
+                                        {item.sent_at
+                                          ? dayjs(item.sent_at).format('YYYY-MM-DD HH:mm')
+                                          : dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
+                                      </Typography.Text>
+                                    </div>
+                                  }
+                                />
+                              </List.Item>
+                            );
+                          }}
+                        />
+                      ) : (
+                        <Empty
+                          description="暂无消息"
+                          style={{ padding: '40px 0' }}
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              }}
+            >
+              <Badge count={unreadCount} size="small" offset={[-8, 8]}>
+                <Tooltip title="消息通知" open={messageDropdownOpen ? false : undefined}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<BellOutlined style={{ fontSize: 16 }} />}
+                    onClick={() => {
+                      setMessageDropdownOpen(!messageDropdownOpen);
+                    }}
+                  />
+                </Tooltip>
+              </Badge>
+            </Dropdown>
           );
           
           // 语言切换下拉菜单

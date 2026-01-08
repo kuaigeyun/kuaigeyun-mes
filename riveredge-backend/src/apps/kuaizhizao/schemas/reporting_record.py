@@ -34,6 +34,7 @@ class ReportingRecordBase(BaseModel):
     reported_at: datetime = Field(..., description="报工时间")
     remarks: Optional[str] = Field(None, description="备注")
     device_info: Optional[Any] = Field(None, description="设备信息")
+    sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
 
 
 class ReportingRecordCreate(ReportingRecordBase):
@@ -58,6 +59,7 @@ class ReportingRecordUpdate(BaseModel):
     unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
     work_hours: Optional[Decimal] = Field(None, description="工时（小时）")
     remarks: Optional[str] = Field(None, description="备注")
+    sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
     status: Optional[str] = Field(None, description="审核状态")
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
@@ -77,6 +79,8 @@ class ReportingRecordResponse(ReportingRecordBase):
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
     rejection_reason: Optional[str] = Field(None, description="驳回原因")
+    device_info: Optional[Any] = Field(None, description="设备信息")
+    sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

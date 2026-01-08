@@ -1,0 +1,187 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'riveredge-backend/**'
+      - 'riveredge-frontend/**'
+      - '.github/workflows/e2e-tests.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'riveredge-backend/**'
+      - 'riveredge-frontend/**'
+      - '.github/workflows/e2e-tests.yml'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  backend-e2e:
+    name: Backend E2E Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: riveredge_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      
+      - name: Install dependencies
+        run: |
+          cd riveredge-backend
+          uv sync --dev
+      
+      - name: Set up test environment
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: riveredge_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: |
+          cd riveredge-backend
+          # 创建测试数据库（如果需要）
+          # 运行数据库迁移（如果需要）
+      
+      - name: Run E2E tests
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: riveredge_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: |
+          cd riveredge-backend
+          uv run pytest tests/e2e/ \
+            -v \
+            --tb=short \
+            --asyncio-mode=auto \
+            --junit-xml=test_results.xml \
+            --html=test_report.html \
+            --self-contained-html
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: |
+            riveredge-backend/test_results.xml
+            riveredge-backend/test_report.html
+      
+      - name: Upload test coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-coverage
+          path: riveredge-backend/htmlcov/
+
+  frontend-e2e:
+    name: Frontend E2E Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: riveredge-frontend/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd riveredge-frontend
+          npm ci
+      
+      - name: Run E2E tests
+        run: |
+          cd riveredge-frontend
+          npm run test:run
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-test-results
+          path: riveredge-frontend/coverage/
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [backend-e2e, frontend-e2e]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download backend test results
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend-results/
+      
+      - name: Download frontend test results
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-test-results
+          path: frontend-results/
+      
+      - name: Generate test summary
+        run: |
+          echo "## E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Backend Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -f backend-results/test_results.xml ]; then
+            echo "✅ Backend tests completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Backend tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Frontend Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -d frontend-results ]; then
+            echo "✅ Frontend tests completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Frontend tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+

@@ -997,7 +997,7 @@ const ProcessRoutesPage: React.FC = () => {
         <ProFormSwitch
           name="is_active"
           label={
-            <Space direction="vertical" size={4}>
+            <Space orientation="vertical" size={4}>
               <Typography.Text strong>是否启用</Typography.Text>
               <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
                 禁用后该工艺路线将不可用

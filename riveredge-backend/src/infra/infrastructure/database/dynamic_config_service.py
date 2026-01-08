@@ -117,6 +117,7 @@ class DynamicDatabaseConfigService:
             "infra.models.infra_superadmin",
             "infra.models.package",
             "infra.models.saved_search",
+            "infra.models.platform_settings",
             "infra.models.invitation_code",
 
             # Aerich 模型（数据库迁移）

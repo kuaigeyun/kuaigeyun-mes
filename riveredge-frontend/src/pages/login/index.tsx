@@ -19,6 +19,9 @@ import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { TenantSelectionModal, TermsModal, LongPressVerify } from '../../components';
 import { theme } from 'antd';
+import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/platformSettings';
+import { useQuery } from '@tanstack/react-query';
+import { getFilePreview } from '../../services/file';
 import './index.less';
 
 const { Title, Text } = Typography;
@@ -45,6 +48,74 @@ export default function LoginPage() {
   const { token } = theme.useToken(); // 获取主题 token
   // 使用全局状态管理（Zustand状态管理规范）
   const { setCurrentUser } = useGlobalStore();
+
+  // 获取平台设置（公开接口）
+  const { data: platformSettings } = useQuery({
+    queryKey: ['platformSettingsPublic'],
+    queryFn: getPlatformSettingsPublic,
+    staleTime: 5 * 60 * 1000, // 5分钟缓存
+  });
+
+  // LOGO URL状态（支持UUID和URL两种格式）
+  const [logoUrl, setLogoUrl] = useState<string>('/img/logo.png');
+
+  /**
+   * 判断字符串是否是UUID格式
+   */
+  const isUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  // 加载LOGO URL
+  useEffect(() => {
+    const loadLogo = async () => {
+      if (!platformSettings?.platform_logo) {
+        setLogoUrl('/img/logo.png');
+        return;
+      }
+
+      const logoValue = platformSettings.platform_logo.trim();
+      
+      // 如果是UUID格式，使用公开的文件预览接口
+      if (isUUID(logoValue)) {
+        try {
+          // 使用公开的文件预览接口（不需要认证）
+          const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
+          const response = await fetch(
+            `${baseUrl}/api/v1/core/files/${logoValue}/preview/public?category=platform-logo`
+          );
+          
+          if (response.ok) {
+            const previewInfo = await response.json();
+            setLogoUrl(previewInfo.preview_url);
+          } else {
+            console.error('获取LOGO预览URL失败:', response.statusText);
+            setLogoUrl('/img/logo.png');
+          }
+        } catch (error) {
+          console.error('获取LOGO预览URL失败:', error);
+          setLogoUrl('/img/logo.png');
+        }
+      } else {
+        // 如果是URL格式，直接使用
+        setLogoUrl(logoValue);
+      }
+    };
+
+    loadLogo();
+  }, [platformSettings?.platform_logo]);
+
+  // 设置页面标题
+  useEffect(() => {
+    const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
+    document.title = `${platformName} - 登录`;
+    
+    // 组件卸载时恢复默认标题
+    return () => {
+      document.title = 'RiverEdge SaaS - 多组织管理框架';
+    };
+  }, [platformSettings?.platform_name]);
 
   // 组织选择弹窗状态
   const [tenantSelectionVisible, setTenantSelectionVisible] = useState(false);
@@ -1083,8 +1154,8 @@ export default function LoginPage() {
         }}
       >
         <img 
-          src="/img/logo.png" 
-          alt="RiverEdge Logo" 
+          src={logoUrl} 
+          alt={platformSettings?.platform_name || "RiverEdge Logo"} 
           className="logo-img"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
@@ -1104,12 +1175,14 @@ export default function LoginPage() {
                   fontWeight: 'bold',
                   color: fixedThemeColor,
                 },
-                textContent: 'RE',
+                textContent: platformSettings?.platform_name?.substring(0, 2).toUpperCase() || 'RE',
               })
             );
           }}
         />
-        <Title level={2} className="logo-title">RiverEdge SaaS</Title>
+        <Title level={2} className="logo-title">
+          {platformSettings?.platform_name || 'RiverEdge SaaS'}
+        </Title>
       </div>
 
       {/* 左侧品牌展示区（桌面端显示，手机端隐藏） */}
@@ -1122,8 +1195,8 @@ export default function LoginPage() {
         {/* LOGO 和框架名称放在左上角（桌面端） */}
         <div className="logo-top-left">
           <img 
-            src="/img/logo.png" 
-            alt="RiverEdge Logo" 
+            src={logoUrl} 
+            alt={platformSettings?.platform_name || "RiverEdge Logo"} 
             className="logo-img"
             onError={(e) => {
               const target = e.target as HTMLImageElement;
@@ -1149,7 +1222,9 @@ export default function LoginPage() {
               );
             }}
           />
-          <Title level={2} className="logo-title">RiverEdge SaaS</Title>
+          <Title level={2} className="logo-title">
+            {platformSettings?.platform_name || 'RiverEdge SaaS'}
+          </Title>
         </div>
 
         <div className="login-left-content">
@@ -1169,12 +1244,27 @@ export default function LoginPage() {
 
           {/* 框架简介显示在图片下方 */}
           <div className="login-description">
-            <Title level={3} className="description-title">
-              多组织管理框架
-            </Title>
-            <Text className="description-text">
-              为企业提供安全、高效、可扩展的 SaaS 解决方案
-            </Text>
+            {platformSettings?.login_title || platformSettings?.login_content ? (
+              <>
+                <Title level={3} className="description-title">
+                  {platformSettings.login_title || platformSettings.platform_name}
+                </Title>
+                {platformSettings.login_content && (
+                  <Text className="description-text">
+                    {platformSettings.login_content}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Title level={3} className="description-title">
+                  多组织管理框架
+                </Title>
+                <Text className="description-text">
+                  为企业提供安全、高效、可扩展的 SaaS 解决方案
+                </Text>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1183,7 +1273,9 @@ export default function LoginPage() {
       <div className="login-right">
         <div className="login-form-wrapper">
           <div className="login-form-header">
-            <Title level={2} className="form-title">欢迎登录</Title>
+            <Title level={2} className="form-title">
+              {platformSettings?.platform_name ? `欢迎登录 ${platformSettings.platform_name}` : '欢迎登录'}
+            </Title>
             <Text className="form-subtitle">请输入您的账号信息</Text>
           </div>
 
@@ -1513,9 +1605,11 @@ export default function LoginPage() {
           {/* 底部链接（ICP备案、用户条款、隐私条款） */}
           <div className="login-footer-links">
             <Space separator={<span style={{ color: '#d9d9d9' }}>|</span>} size="small">
-              <Text type="secondary" style={{ fontSize: '12px' }}>
-                ICP备案：苏ICP备2021002752号-5
-              </Text>
+              {platformSettings?.icp_license && (
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  ICP备案：{platformSettings.icp_license}
+                </Text>
+              )}
               <Button
                 type="link"
                 size="small"
