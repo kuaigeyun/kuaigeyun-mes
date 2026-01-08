@@ -6,8 +6,8 @@
  */
 
 import { ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Space, Modal } from 'antd';
-import { LogoutOutlined } from '@ant-design/icons';
+import { App, Button, Space, Modal, Tabs } from 'antd';
+import { LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListPageTemplate } from '../../../components/layout-templates';
@@ -20,6 +20,7 @@ import {
 import { clearAuth } from '../../../utils/auth';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../stores';
+import PlatformSettingsPage from './settings';
 // import InfraSuperAdminForm from './form'; // 暂时注释掉，等待后续实现
 
 /**
@@ -95,67 +96,93 @@ export default function InfraSuperAdminPage() {
     });
   };
 
+  const tabItems = [
+    {
+      key: 'admin',
+      label: (
+        <span>
+          <UserOutlined />
+          管理员信息
+        </span>
+      ),
+      children: (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <h2 style={{ margin: 0 }}>平台管理员信息</h2>
+            <Button
+              icon={<LogoutOutlined />}
+              onClick={handleLogout}
+            >
+              退出登录
+            </Button>
+          </div>
+          {admin && (
+            <ProDescriptions<InfraSuperAdmin>
+              column={2}
+              dataSource={admin}
+              loading={isLoading}
+              columns={[
+                {
+                  title: 'ID',
+                  dataIndex: 'id',
+                },
+                {
+                  title: '用户名',
+                  dataIndex: 'username',
+                },
+                {
+                  title: '邮箱',
+                  dataIndex: 'email',
+                },
+                {
+                  title: '全名',
+                  dataIndex: 'full_name',
+                },
+                {
+                  title: '状态',
+                  dataIndex: 'is_active',
+                  valueType: 'switch',
+                  valueEnum: {
+                    true: { text: '激活', status: 'Success' },
+                    false: { text: '未激活', status: 'Error' },
+                  },
+                },
+                {
+                  title: '最后登录时间',
+                  dataIndex: 'last_login',
+                  valueType: 'dateTime',
+                },
+                {
+                  title: '创建时间',
+                  dataIndex: 'created_at',
+                  valueType: 'dateTime',
+                },
+                {
+                  title: '更新时间',
+                  dataIndex: 'updated_at',
+                  valueType: 'dateTime',
+                },
+              ]}
+            />
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'settings',
+      label: (
+        <span>
+          <SettingOutlined />
+          平台设置
+        </span>
+      ),
+      children: <PlatformSettingsPage />,
+    },
+  ];
+
   return (
     <ListPageTemplate>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ margin: 0 }}>平台管理员信息</h2>
-        <Button
-          icon={<LogoutOutlined />}
-          onClick={handleLogout}
-        >
-          退出登录
-        </Button>
-      </div>
-      {admin && (
-        <ProDescriptions<InfraSuperAdmin>
-          column={2}
-          dataSource={admin}
-          loading={isLoading}
-          columns={[
-            {
-              title: 'ID',
-              dataIndex: 'id',
-            },
-            {
-              title: '用户名',
-              dataIndex: 'username',
-            },
-            {
-              title: '邮箱',
-              dataIndex: 'email',
-            },
-            {
-              title: '全名',
-              dataIndex: 'full_name',
-            },
-            {
-              title: '状态',
-              dataIndex: 'is_active',
-              valueType: 'switch',
-              valueEnum: {
-                true: { text: '激活', status: 'Success' },
-                false: { text: '未激活', status: 'Error' },
-              },
-            },
-            {
-              title: '最后登录时间',
-              dataIndex: 'last_login',
-              valueType: 'dateTime',
-            },
-            {
-              title: '创建时间',
-              dataIndex: 'created_at',
-              valueType: 'dateTime',
-            },
-            {
-              title: '更新时间',
-              dataIndex: 'updated_at',
-              valueType: 'dateTime',
-            },
-          ]}
-        />
-      )}
-
+      <Tabs defaultActiveKey="admin" items={tabItems} />
     </ListPageTemplate>
   );
 }

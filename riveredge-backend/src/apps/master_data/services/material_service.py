@@ -136,9 +136,58 @@ class MaterialService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        material_groups = await query.offset(skip).limit(limit).order_by("code").all()
+        # 预加载关联关系（优化，修复500错误）
+        material_groups = await query.prefetch_related("process_route").offset(skip).limit(limit).order_by("code").all()
         
-        return [MaterialGroupResponse.model_validate(mg) for mg in material_groups]
+        # 构建响应数据（包含process_route_id和process_route_name）
+        result = []
+        for mg in material_groups:
+            try:
+                group_data = MaterialGroupResponse.model_validate(mg)
+                # 安全地添加process_route_id和process_route_name
+                # 优先使用模型的process_route_id字段（如果存在），否则从关联对象获取
+                if hasattr(mg, 'process_route_id'):
+                    group_data.process_route_id = getattr(mg, 'process_route_id', None)
+                elif hasattr(mg, 'process_route') and mg.process_route:
+                    group_data.process_route_id = getattr(mg.process_route, 'id', None)
+                else:
+                    group_data.process_route_id = None
+                
+                if hasattr(mg, 'process_route') and mg.process_route:
+                    group_data.process_route_name = getattr(mg.process_route, 'name', None)
+                else:
+                    group_data.process_route_name = None
+                result.append(group_data)
+            except Exception as e:
+                # 如果序列化失败，记录错误并跳过
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"序列化物料分组 {mg.id if hasattr(mg, 'id') else 'unknown'} 失败: {str(e)}")
+                # 尝试手动构建响应数据
+                try:
+                    group_dict = {
+                        "id": mg.id,
+                        "uuid": str(mg.uuid),
+                        "tenant_id": mg.tenant_id,
+                        "code": mg.code,
+                        "name": mg.name,
+                        "parent_id": getattr(mg, 'parent_id', None),
+                        "description": getattr(mg, 'description', None),
+                        "is_active": getattr(mg, 'is_active', True),
+                        "created_at": mg.created_at,
+                        "updated_at": mg.updated_at,
+                        "deleted_at": getattr(mg, 'deleted_at', None),
+                        "process_route_id": getattr(mg, 'process_route_id', None) if hasattr(mg, 'process_route_id') else (getattr(mg.process_route, 'id', None) if hasattr(mg, 'process_route') and mg.process_route else None),
+                        "process_route_name": getattr(mg.process_route, 'name', None) if hasattr(mg, 'process_route') and mg.process_route else None,
+                    }
+                    group_data = MaterialGroupResponse.model_validate(group_dict)
+                    result.append(group_data)
+                except Exception as e2:
+                    logger.error(f"手动构建物料分组 {mg.id if hasattr(mg, 'id') else 'unknown'} 响应数据失败: {str(e2)}")
+                    # 跳过该分组，继续处理下一个
+                    continue
+        
+        return result
     
     @staticmethod
     async def update_material_group(
@@ -386,9 +435,66 @@ class MaterialService:
             # 模糊匹配物料名称
             query = query.filter(name__icontains=name)
         
-        materials = await query.offset(skip).limit(limit).order_by("code").all()
+        # 预加载关联关系（优化，修复500错误）
+        materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by("code").all()
         
-        return [MaterialResponse.model_validate(m) for m in materials]
+        # 构建响应数据（包含process_route_id和process_route_name）
+        result = []
+        for m in materials:
+            try:
+                material_data = MaterialResponse.model_validate(m)
+                # 安全地添加process_route_id和process_route_name
+                # 优先使用模型的process_route_id字段（如果存在），否则从关联对象获取
+                if hasattr(m, 'process_route_id'):
+                    material_data.process_route_id = getattr(m, 'process_route_id', None)
+                elif hasattr(m, 'process_route') and m.process_route:
+                    material_data.process_route_id = getattr(m.process_route, 'id', None)
+                else:
+                    material_data.process_route_id = None
+                
+                if hasattr(m, 'process_route') and m.process_route:
+                    material_data.process_route_name = getattr(m.process_route, 'name', None)
+                else:
+                    material_data.process_route_name = None
+                result.append(material_data)
+            except Exception as e:
+                # 如果序列化失败，记录错误并尝试手动构建
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"序列化物料 {m.id if hasattr(m, 'id') else 'unknown'} 失败: {str(e)}")
+                # 尝试手动构建响应数据
+                try:
+                    material_dict = {
+                        "id": m.id,
+                        "uuid": str(m.uuid),
+                        "tenant_id": m.tenant_id,
+                        "code": m.code,
+                        "name": m.name,
+                        "group_id": m.group_id,
+                        "specification": getattr(m, 'specification', None),
+                        "base_unit": m.base_unit,
+                        "units": getattr(m, 'units', None),
+                        "batch_managed": getattr(m, 'batch_managed', False),
+                        "variant_managed": getattr(m, 'variant_managed', False),
+                        "variant_attributes": getattr(m, 'variant_attributes', None),
+                        "description": getattr(m, 'description', None),
+                        "brand": getattr(m, 'brand', None),
+                        "model": getattr(m, 'model', None),
+                        "is_active": getattr(m, 'is_active', True),
+                        "created_at": m.created_at,
+                        "updated_at": m.updated_at,
+                        "deleted_at": getattr(m, 'deleted_at', None),
+                        "process_route_id": getattr(m.process_route, 'id', None) if hasattr(m, 'process_route') and m.process_route else None,
+                        "process_route_name": getattr(m.process_route, 'name', None) if hasattr(m, 'process_route') and m.process_route else None,
+                    }
+                    material_data = MaterialResponse.model_validate(material_dict)
+                    result.append(material_data)
+                except Exception as e2:
+                    logger.error(f"手动构建物料 {m.id if hasattr(m, 'id') else 'unknown'} 响应数据失败: {str(e2)}")
+                    # 跳过该物料，继续处理下一个
+                    continue
+        
+        return result
     
     @staticmethod
     async def update_material(
@@ -991,7 +1097,7 @@ class MaterialService:
             MaterialTreeResponse
         )
         
-        # 查询所有物料分组
+        # 查询所有物料分组（预加载关联关系，修复500错误）
         group_query = MaterialGroup.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -999,7 +1105,7 @@ class MaterialService:
         if is_active is not None:
             group_query = group_query.filter(is_active=is_active)
         
-        groups = await group_query.order_by("code").all()
+        groups = await group_query.prefetch_related("process_route").order_by("code").all()
         
         # 查询所有物料
         material_query = Material.filter(
@@ -1009,7 +1115,8 @@ class MaterialService:
         if is_active is not None:
             material_query = material_query.filter(is_active=is_active)
         
-        materials = await material_query.prefetch_related("group").order_by("code").all()
+        # 预加载关联关系（优化，修复500错误）
+        materials = await material_query.prefetch_related("group", "process_route").order_by("code").all()
         
         # 构建物料映射（按分组ID分组）
         material_map: dict[Optional[int], List[MaterialTreeResponse]] = {}
@@ -1017,7 +1124,59 @@ class MaterialService:
             group_id = material.group_id
             if group_id not in material_map:
                 material_map[group_id] = []
-            material_map[group_id].append(MaterialTreeResponse.model_validate(material))
+            # 构建物料响应数据（包含process_route_id和process_route_name）
+            try:
+                material_data = MaterialTreeResponse.model_validate(material)
+                # 安全地设置process_route字段
+                # 优先使用模型的process_route_id字段（如果存在），否则从关联对象获取
+                if hasattr(material, 'process_route_id'):
+                    material_data.process_route_id = getattr(material, 'process_route_id', None)
+                elif hasattr(material, 'process_route') and material.process_route:
+                    material_data.process_route_id = getattr(material.process_route, 'id', None)
+                else:
+                    material_data.process_route_id = None
+                
+                if hasattr(material, 'process_route') and material.process_route:
+                    material_data.process_route_name = getattr(material.process_route, 'name', None)
+                else:
+                    material_data.process_route_name = None
+                material_map[group_id].append(material_data)
+            except Exception as e:
+                # 如果序列化失败，记录错误并尝试手动构建
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"序列化物料 {material.id if hasattr(material, 'id') else 'unknown'} 失败: {str(e)}")
+                # 尝试手动构建响应数据
+                try:
+                    material_dict = {
+                        "id": material.id,
+                        "uuid": str(material.uuid),
+                        "tenant_id": material.tenant_id,
+                        "code": material.code,
+                        "name": material.name,
+                        "group_id": material.group_id,
+                        "specification": getattr(material, 'specification', None),
+                        "base_unit": material.base_unit,
+                        "units": getattr(material, 'units', None),
+                        "batch_managed": getattr(material, 'batch_managed', False),
+                        "variant_managed": getattr(material, 'variant_managed', False),
+                        "variant_attributes": getattr(material, 'variant_attributes', None),
+                        "description": getattr(material, 'description', None),
+                        "brand": getattr(material, 'brand', None),
+                        "model": getattr(material, 'model', None),
+                        "is_active": getattr(material, 'is_active', True),
+                        "created_at": material.created_at,
+                        "updated_at": material.updated_at,
+                        "deleted_at": getattr(material, 'deleted_at', None),
+                        "process_route_id": getattr(material.process_route, 'id', None) if hasattr(material, 'process_route') and material.process_route else None,
+                        "process_route_name": getattr(material.process_route, 'name', None) if hasattr(material, 'process_route') and material.process_route else None,
+                    }
+                    material_data = MaterialTreeResponse.model_validate(material_dict)
+                    material_map[group_id].append(material_data)
+                except Exception as e2:
+                    logger.error(f"手动构建物料 {material.id if hasattr(material, 'id') else 'unknown'} 响应数据失败: {str(e2)}")
+                    # 跳过该物料，继续处理下一个
+                    continue
         
         # 构建分组映射（按父分组ID分组）
         group_map: dict[Optional[int], List[MaterialGroupTreeResponse]] = {}
@@ -1044,7 +1203,11 @@ class MaterialService:
                 "updated_at": group.updated_at,
                 "deleted_at": group.deleted_at,
                 "children": [],  # 先初始化为空，稍后递归填充
-                "materials": group_materials
+                "materials": group_materials,
+                # 添加process_route_id和process_route_name（修复500错误）
+                # 注意：使用getattr安全访问，避免字段不存在时出错
+                "process_route_id": getattr(group, 'process_route_id', None) if hasattr(group, 'process_route_id') else (getattr(group.process_route, 'id', None) if hasattr(group, 'process_route') and group.process_route else None),
+                "process_route_name": getattr(group.process_route, 'name', None) if hasattr(group, 'process_route') and group.process_route else None,
             }
             group_response = MaterialGroupTreeResponse.model_validate(group_dict)
             group_map[parent_id].append(group_response)

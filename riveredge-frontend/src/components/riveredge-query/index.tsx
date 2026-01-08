@@ -2072,7 +2072,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                 backgroundColor: token.colorBgContainer,
                 borderRadius: token.borderRadius,
               }}>
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                   <div>
                     <Tag color="default" style={{ marginRight: 8 }}>等于</Tag>
                     <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>完全一样</Typography.Text>
@@ -2136,7 +2136,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                 backgroundColor: token.colorBgContainer,
                 borderRadius: token.borderRadius,
               }}>
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <div style={{ 
                     padding: '12px',
                     backgroundColor: token.colorSuccessBg,
@@ -2393,7 +2393,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         onOk={handleConfirmSave}
         confirmLoading={createSavedSearchMutation.isPending || updateSavedSearchMutation.isPending}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <div>
             <label>搜索条件名称：</label>
             <Input

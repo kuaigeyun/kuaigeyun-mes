@@ -12,6 +12,7 @@ from infra.models.tenant_activity_log import TenantActivityLog
 from infra.models.package import Package
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.models.industry_template import IndustryTemplate
+from infra.models.platform_settings import PlatformSettings
 
 __all__ = [
     "BaseModel",
@@ -24,5 +25,6 @@ __all__ = [
     "Package",
     "InfraSuperAdmin",
     "IndustryTemplate",
+    "PlatformSettings",
 ]
 

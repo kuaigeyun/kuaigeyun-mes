@@ -17,6 +17,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.models.defect_record import DefectRecord
@@ -89,12 +90,51 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if work_order.status not in ['released', 'in_progress']:
                 raise ValidationError("只能对已下达或进行中的工单进行报工")
 
-            # 验证数量合理性
-            if reporting_data.reported_quantity <= 0:
-                raise ValidationError("报工数量必须大于0")
+            # 获取工单工序信息（用于校验跳转规则和报工类型）
+            work_order_operation = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=reporting_data.work_order_id,
+                operation_id=reporting_data.operation_id,
+                deleted_at__isnull=True
+            )
 
-            if reporting_data.qualified_quantity + reporting_data.unqualified_quantity != reporting_data.reported_quantity:
-                raise ValidationError("合格数量 + 不合格数量必须等于报工数量")
+            if not work_order_operation:
+                raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
+
+            # 工序跳转规则校验（核心功能，新增）
+            if not work_order_operation.allow_jump:
+                # 不允许跳转：检查前序工序是否完成
+                previous_operations = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=reporting_data.work_order_id,
+                    sequence__lt=work_order_operation.sequence,
+                    deleted_at__isnull=True
+                ).order_by('sequence').all()
+
+                for prev_op in previous_operations:
+                    if prev_op.status != 'completed':
+                        raise BusinessLogicError(
+                            f"工序跳转规则：必须先完成前序工序 '{prev_op.operation_name}'（工序顺序：{prev_op.sequence}）才能报工当前工序"
+                        )
+
+            # 根据报工类型验证数据（核心功能，新增）
+            reporting_type = work_order_operation.reporting_type or "quantity"
+            
+            if reporting_type == "status":
+                # 按状态报工：不需要数量，只需要状态
+                # 对于按状态报工，reported_quantity应该为0或1（0表示未完成，1表示完成）
+                if reporting_data.reported_quantity not in [0, 1]:
+                    raise ValidationError("按状态报工模式下，报工数量只能是0（未完成）或1（完成）")
+                # 按状态报工不需要合格/不合格数量
+                if reporting_data.qualified_quantity != 0 or reporting_data.unqualified_quantity != 0:
+                    logger.warning("按状态报工模式下，合格数量和不合格数量将被忽略")
+            else:
+                # 按数量报工：需要验证数量合理性
+                if reporting_data.reported_quantity <= 0:
+                    raise ValidationError("报工数量必须大于0")
+
+                if reporting_data.qualified_quantity + reporting_data.unqualified_quantity != reporting_data.reported_quantity:
+                    raise ValidationError("合格数量 + 不合格数量必须等于报工数量")
 
             # 创建报工记录
             reporting_record = await ReportingRecord.create(
@@ -118,11 +158,55 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 device_info=reporting_data.device_info,
             )
 
+            # 更新工单工序状态和进度（核心功能，新增）
+            if work_order_operation.status == 'pending':
+                work_order_operation.status = 'in_progress'
+                work_order_operation.actual_start_date = work_order_operation.actual_start_date or datetime.now()
+            
+            # 更新工序完成数量
+            work_order_operation.completed_quantity = (work_order_operation.completed_quantity or Decimal('0')) + reporting_data.reported_quantity
+            work_order_operation.qualified_quantity = (work_order_operation.qualified_quantity or Decimal('0')) + reporting_data.qualified_quantity
+            work_order_operation.unqualified_quantity = (work_order_operation.unqualified_quantity or Decimal('0')) + reporting_data.unqualified_quantity
+            
+            # 检查工序是否完成（按数量报工：完成数量>=计划数量，按状态报工：reported_quantity=1）
+            if reporting_type == "status":
+                # 按状态报工：reported_quantity=1表示完成
+                if reporting_data.reported_quantity == 1:
+                    work_order_operation.status = 'completed'
+                    work_order_operation.actual_end_date = datetime.now()
+            else:
+                # 按数量报工：完成数量>=计划数量（工单数量）
+                if work_order_operation.completed_quantity >= work_order.quantity:
+                    work_order_operation.status = 'completed'
+                    work_order_operation.actual_end_date = datetime.now()
+            
+            await work_order_operation.save()
+
             # 更新工单状态为进行中（如果是从released变为in_progress）
             if work_order.status == 'released':
                 work_order.status = 'in_progress'
                 work_order.actual_start_date = work_order.actual_start_date or datetime.now()
-                await work_order.save()
+            
+            # 更新工单完成数量
+            work_order.completed_quantity = (work_order.completed_quantity or Decimal('0')) + reporting_data.reported_quantity
+            work_order.qualified_quantity = (work_order.qualified_quantity or Decimal('0')) + reporting_data.qualified_quantity
+            work_order.unqualified_quantity = (work_order.unqualified_quantity or Decimal('0')) + reporting_data.unqualified_quantity
+            
+            # 检查工单是否完成（所有工序都完成）
+            all_operations = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order.id,
+                deleted_at__isnull=True
+            ).all()
+            
+            all_completed = all(op.status == 'completed' for op in all_operations)
+            if all_completed and work_order.status != 'completed':
+                work_order.status = 'completed'
+                work_order.actual_end_date = work_order.actual_end_date or datetime.now()
+            
+            await work_order.save()
+
+            logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
             return ReportingRecordResponse.model_validate(reporting_record)
 

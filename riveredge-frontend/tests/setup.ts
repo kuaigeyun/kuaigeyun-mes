@@ -1,78 +1,45 @@
 /**
- * Vitest测试环境配置
+ * 测试环境配置
  * 
- * 配置测试所需的全局设置和mock。
+ * 配置测试环境的基础设置，包括API URL、认证等
  */
 
-import '@testing-library/jest-dom'
 import { vi } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactNode } from 'react'
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
+// 配置测试环境的API基础URL
+// 如果设置了环境变量，使用环境变量，否则使用默认值
+const TEST_BACKEND_URL = process.env.VITE_BACKEND_URL || process.env.VITE_API_TARGET || 'http://localhost:8100'
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-}
-global.localStorage = localStorageMock as any
-
-// Mock sessionStorage
-const sessionStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-}
-global.sessionStorage = sessionStorageMock as any
-
-// Mock ResizeObserver
-global.ResizeObserver = class ResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-} as any
-
-// 创建全局QueryClient用于测试
-const createTestQueryClient = () => {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        cacheTime: 0,
-      },
-      mutations: {
-        retry: false,
-      },
-    },
-  })
+// 设置全局测试配置
+globalThis.TEST_CONFIG = {
+  BACKEND_URL: TEST_BACKEND_URL,
+  API_BASE_URL: `${TEST_BACKEND_URL}/api/v1`,
 }
 
-// 导出测试工具函数
-export const renderWithProviders = (ui: ReactNode) => {
-  const queryClient = createTestQueryClient()
-  return {
-    queryClient,
-    // 这个函数可以在测试中使用
+// Mock localStorage（如果需要）
+if (typeof localStorage === 'undefined') {
+  const localStorageMock = {
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
   }
+  global.localStorage = localStorageMock as any
 }
 
-// 全局设置QueryClient（如果需要）
-global.createTestQueryClient = createTestQueryClient
+// 设置测试token（如果需要）
+if (typeof localStorage !== 'undefined') {
+  // 可以从环境变量或测试配置中获取token
+  const testToken = process.env.TEST_AUTH_TOKEN
+  if (testToken) {
+    localStorage.setItem('token', testToken)
+  }
+  
+  // 设置测试租户ID
+  const testTenantId = process.env.TEST_TENANT_ID || '1'
+  localStorage.setItem('tenant_id', testTenantId)
+}
 
+console.log('🧪 测试环境配置:')
+console.log(`  后端URL: ${TEST_BACKEND_URL}`)
+console.log(`  API基础URL: ${globalThis.TEST_CONFIG.API_BASE_URL}`)

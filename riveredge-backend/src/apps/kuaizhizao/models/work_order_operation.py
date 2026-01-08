@@ -100,6 +100,17 @@ class WorkOrderOperation(BaseModel):
     # 状态信息
     status = fields.CharField(max_length=20, default="pending", description="工序状态（pending/in_progress/completed/cancelled）")
 
+    # 报工类型和跳转规则（从工艺路线中继承）
+    reporting_type = fields.CharField(
+        max_length=20,
+        default="quantity",
+        description="报工类型（quantity:按数量报工, status:按状态报工）"
+    )
+    allow_jump = fields.BooleanField(
+        default=False,
+        description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）"
+    )
+
     # 备注
     remarks = fields.TextField(null=True, description="备注")
 

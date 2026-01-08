@@ -8,23 +8,20 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Radio, Divider, Collapse } from 'antd';
+import { App, Button, Tag, Alert, Typography, Input, theme, Card, Space, Radio, Divider, Collapse, Spin } from 'antd';
 import { PAGE_SPACING } from '../../../../components/layout-templates/constants';
 import { SearchOutlined, DatabaseOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
   getCodeRuleList,
   createCodeRule,
   updateCodeRule,
+  getCodeRulePages,
   CodeRule,
   CreateCodeRuleData,
   UpdateCodeRuleData,
-} from '../../../../services/codeRule';
-import {
-  CODE_RULE_PAGES,
-  getCodeRulePagesByModule,
-  getCodeRuleModules,
   CodeRulePageConfig,
-} from '../../../../config/codeRulePages';
+} from '../../../../services/codeRule';
+import { apiRequest } from '../../../../services/api';
 
 const { Text, Paragraph } = Typography;
 
@@ -36,10 +33,11 @@ const CodeRuleListPage: React.FC = () => {
   const { token } = theme.useToken();
   
   // 功能页面配置状态（左右结构）
-  const [pageConfigs, setPageConfigs] = useState<CodeRulePageConfig[]>(CODE_RULE_PAGES);
+  const [pageConfigs, setPageConfigs] = useState<CodeRulePageConfig[]>([]);
   const [codeRules, setCodeRules] = useState<CodeRule[]>([]);
   const [selectedPageCode, setSelectedPageCode] = useState<string | null>(null);
   const [pageSearchValue, setPageSearchValue] = useState<string>('');
+  const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
   
   // 页面规则配置表单状态
   const pageRuleFormRef = useRef<ProFormInstance>();
@@ -167,11 +165,106 @@ const CodeRuleListPage: React.FC = () => {
    */
   const getAllCodeRules = async (): Promise<CodeRule[]> => {
     try {
-      const response = await getCodeRuleList({ page: 1, page_size: 1000 });
-      return response?.items || [];
+      // 后端 API 返回的是 List[CodeRuleResponse]（直接是数组），不是分页格式
+      // 直接调用 API 获取列表，使用 skip 和 limit 参数
+      const response = await apiRequest<CodeRule[]>('/core/code-rules', {
+        params: {
+          skip: 0,
+          limit: 1000,
+          // 不传递 is_active 参数，获取所有规则（包括禁用的）
+        },
+      });
+      
+      // 后端直接返回数组
+      return Array.isArray(response) ? response : [];
     } catch (error: any) {
       console.error('获取编码规则列表失败:', error);
       return [];
+    }
+  };
+
+  /**
+   * 加载页面配置列表
+   */
+  const loadPageConfigs = async () => {
+    try {
+      setPageConfigsLoading(true);
+      const pages = await getCodeRulePages();
+      
+      // 合并保存的配置和默认配置，确保所有页面都存在
+      const savedConfigs = localStorage.getItem('codeRulePageConfigs');
+      if (savedConfigs) {
+        try {
+          const parsed = JSON.parse(savedConfigs);
+          const mergedConfigs = pages.map(defaultPage => {
+            const savedPage = parsed.find((p: any) => p.pageCode === defaultPage.pageCode);
+            if (savedPage) {
+              // 合并保存的配置，确保保存的字段（如 ruleCode, autoGenerate）覆盖默认配置
+              return {
+                ...defaultPage,
+                // 只覆盖保存的字段，其他字段使用默认值
+                ruleCode: savedPage.ruleCode ?? defaultPage.ruleCode,
+                autoGenerate: savedPage.autoGenerate ?? defaultPage.autoGenerate,
+              };
+            }
+            return defaultPage;
+          });
+          setPageConfigs(mergedConfigs);
+          
+          // 默认选中第一个页面（仅当没有选中页面时）
+          if (mergedConfigs.length > 0) {
+            setPageConfigs(mergedConfigs);
+            const currentSelected = selectedPageCode || null;
+            if (!currentSelected) {
+              const firstPageCode = mergedConfigs[0].pageCode;
+              setSelectedPageCode(firstPageCode);
+              // 延迟初始化表单，确保 codeRules 加载完成后再加载规则
+              setTimeout(() => {
+                const firstPageConfig = mergedConfigs.find(p => p.pageCode === firstPageCode);
+                if (firstPageConfig?.ruleCode) {
+                  setTimeout(() => {
+                    handleSelectPage(firstPageCode);
+                  }, 200);
+                } else {
+                  resetPageRuleForm(firstPageCode);
+                }
+              }, 100);
+            }
+          } else {
+            setPageConfigs(mergedConfigs);
+          }
+        } catch (error) {
+          console.error('加载功能页面配置失败:', error);
+          setPageConfigs(pages);
+        }
+      } else {
+        setPageConfigs(pages);
+        
+        // 如果没有保存的配置，默认选中第一个页面（仅当没有选中页面时）
+        if (pages.length > 0) {
+          const currentSelected = selectedPageCode || null;
+          if (!currentSelected) {
+            const firstPageCode = pages[0].pageCode;
+            setSelectedPageCode(firstPageCode);
+            // 延迟初始化表单，等待 codeRules 加载完成后再加载规则
+            setTimeout(() => {
+              const firstPageConfig = pages.find(p => p.pageCode === firstPageCode);
+              if (firstPageConfig?.ruleCode) {
+                setTimeout(() => {
+                  handleSelectPage(firstPageCode);
+                }, 200);
+              } else {
+                resetPageRuleForm(firstPageCode);
+              }
+            }, 100);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('加载页面配置列表失败:', error);
+      messageApi.error('加载页面配置失败');
+    } finally {
+      setPageConfigsLoading(false);
     }
   };
 
@@ -196,6 +289,12 @@ const CodeRuleListPage: React.FC = () => {
     }
   };
 
+  // 初始化加载页面配置和编码规则
+  useEffect(() => {
+    loadPageConfigs();
+    loadCodeRules();
+  }, []);
+
   /**
    * 处理选择功能页面
    */
@@ -205,8 +304,7 @@ const CodeRuleListPage: React.FC = () => {
     // 延迟加载规则，确保规则列表已加载
     setTimeout(async () => {
       // 加载该页面对应的编码规则
-      const pageConfig = pageConfigs.find(p => p.pageCode === pageCode) || 
-                         CODE_RULE_PAGES.find(p => p.pageCode === pageCode);
+      const pageConfig = pageConfigs.find(p => p.pageCode === pageCode);
       if (pageConfig?.ruleCode) {
         try {
           // 从所有规则中查找（包括禁用的规则）
@@ -228,8 +326,20 @@ const CodeRuleListPage: React.FC = () => {
             const parsed = parseExpressionToBuilder(rule.expression);
             setExpressionBuilder(parsed);
           } else {
-            // 如果规则不存在，重置表单
-            resetPageRuleForm(pageCode);
+            // 如果规则不存在，重置表单（但保留规则代码，允许用户修改）
+            const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
+            pageRuleFormRef.current?.setFieldsValue({
+              name: `${pageConfig?.pageName || ''}编码规则`,
+              code: pageConfig.ruleCode, // 保留原有的规则代码
+              expression: defaultExpression,
+              description: `自动为${pageConfig?.pageName || ''}生成编码`,
+              seq_start: 1,
+              seq_step: 1,
+              seq_reset_rule: 'never',
+              is_active: true,
+            });
+            const parsed = parseExpressionToBuilder(defaultExpression);
+            setExpressionBuilder(parsed);
           }
         } catch (error) {
           console.error('加载规则失败:', error);
@@ -246,9 +356,9 @@ const CodeRuleListPage: React.FC = () => {
    * 重置页面规则表单
    */
   const resetPageRuleForm = (pageCode: string) => {
-    // 从 pageConfigs 或 CODE_RULE_PAGES 中查找页面配置
-    const pageConfig = pageConfigs.find(p => p.pageCode === pageCode) || 
-                       CODE_RULE_PAGES.find(p => p.pageCode === pageCode);
+      // 从 pageConfigs 中查找页面配置
+    const pageConfig = pageConfigs.find(p => p.pageCode === pageCode) ||
+                       pageConfigs.find(p => p.pageCode === pageCode);
     const defaultRuleCode = `auto-${pageCode}`;
     const defaultExpression = '{YYYY}{MM}{DD}-{SEQ:4}';
     pageRuleFormRef.current?.setFieldsValue({
@@ -289,15 +399,23 @@ const CodeRuleListPage: React.FC = () => {
       
       if (existingRule) {
         // 规则已存在，更新现有规则
-        await updateCodeRule(existingRule.uuid, values as UpdateCodeRuleData);
-        messageApi.success('规则更新成功');
+        try {
+          await updateCodeRule(existingRule.uuid, values as UpdateCodeRuleData);
+          messageApi.success('规则更新成功');
+        } catch (updateError: any) {
+          // 更新失败，显示错误信息
+          const errorMessage = updateError?.message || updateError?.error?.message || String(updateError);
+          console.error('更新规则失败:', updateError);
+          messageApi.error(`更新规则失败: ${errorMessage}`);
+          throw updateError;
+        }
       } else {
         // 规则不存在，尝试创建新规则
         try {
           await createCodeRule(values as CreateCodeRuleData);
           messageApi.success('规则创建成功');
         } catch (createError: any) {
-          // 如果创建失败，可能是规则代码已存在（并发情况）
+          // 如果创建失败，可能是规则代码已存在（并发情况或其他原因）
           const errorMessage = createError?.message || createError?.error?.message || String(createError);
           const isDuplicateError = errorMessage.includes('已存在') || 
                                    errorMessage.includes('exists') || 
@@ -305,25 +423,36 @@ const CodeRuleListPage: React.FC = () => {
                                    errorMessage.includes('unique');
           
           if (isDuplicateError) {
-            // 重新获取所有规则，可能规则刚刚被创建
+            // 重新获取所有规则，可能规则刚刚被创建或之前查询有遗漏
             const reloadRules = await getAllCodeRules();
             const ruleAfterReload = reloadRules.find(r => r.code === values.code);
             
             if (ruleAfterReload) {
               // 如果找到了，更新它
-              await updateCodeRule(ruleAfterReload.uuid, values as UpdateCodeRuleData);
-              messageApi.success('规则更新成功');
+              try {
+                await updateCodeRule(ruleAfterReload.uuid, values as UpdateCodeRuleData);
+                messageApi.success('规则更新成功');
+              } catch (updateError: any) {
+                const updateErrorMessage = updateError?.message || updateError?.error?.message || String(updateError);
+                console.error('更新规则失败:', updateError);
+                messageApi.error(`更新规则失败: ${updateErrorMessage}`);
+                throw updateError;
+              }
             } else {
-              // 如果还是找不到，可能是数据库约束问题，显示详细错误
+              // 如果还是找不到，可能是数据库约束问题或其他原因
               console.error('规则代码已存在但无法找到:', {
                 ruleCode: values.code,
                 allRulesCount: reloadRules.length,
+                allRuleCodes: reloadRules.map(r => r.code),
                 error: createError
               });
-              messageApi.error(`规则代码 "${values.code}" 已存在。如果问题持续，请刷新页面后重试。`);
+              messageApi.error(`规则代码 "${values.code}" 已存在，但无法找到该规则。请刷新页面后重试。`);
+              throw createError;
             }
           } else {
             // 其他错误直接抛出
+            console.error('创建规则失败:', createError);
+            messageApi.error(`创建规则失败: ${errorMessage}`);
             throw createError;
           }
         }
@@ -372,6 +501,33 @@ const CodeRuleListPage: React.FC = () => {
   };
 
   /**
+   * 获取所有模块列表
+   */
+  const getCodeRuleModules = (): string[] => {
+    const modules = new Set<string>();
+    pageConfigs.forEach(page => {
+      if (page.module) {
+        modules.add(page.module);
+      }
+    });
+    return Array.from(modules);
+  };
+
+  /**
+   * 根据模块分组页面配置
+   */
+  const getCodeRulePagesByModule = (): Record<string, CodeRulePageConfig[]> => {
+    const grouped: Record<string, CodeRulePageConfig[]> = {};
+    pageConfigs.forEach(page => {
+      if (!grouped[page.module]) {
+        grouped[page.module] = [];
+      }
+      grouped[page.module].push(page);
+    });
+    return grouped;
+  };
+
+  /**
    * 获取当前选中的页面配置
    */
   const getSelectedPageConfig = (): CodeRulePageConfig | undefined => {
@@ -388,69 +544,18 @@ const CodeRuleListPage: React.FC = () => {
         page.pageCode === pageCode ? { ...page, ...updates } : page
       );
       // 保存到 localStorage（实际应该保存到后端）
-      localStorage.setItem('codeRulePageConfigs', JSON.stringify(updated));
+      // 只保存需要持久化的字段，避免保存过多数据
+      const configsToSave = updated.map(page => ({
+        pageCode: page.pageCode,
+        ruleCode: page.ruleCode,
+        autoGenerate: page.autoGenerate,
+      }));
+      localStorage.setItem('codeRulePageConfigs', JSON.stringify(configsToSave));
       return updated;
     });
     messageApi.success('配置已保存');
   };
 
-  /**
-   * 初始化功能页面配置（从 localStorage 加载）
-   */
-  useEffect(() => {
-    const savedConfigs = localStorage.getItem('codeRulePageConfigs');
-    if (savedConfigs) {
-      try {
-        const parsed = JSON.parse(savedConfigs);
-        // 合并保存的配置和默认配置，确保所有页面都存在
-        const mergedConfigs = CODE_RULE_PAGES.map(defaultPage => {
-          const savedPage = parsed.find((p: CodeRulePageConfig) => p.pageCode === defaultPage.pageCode);
-          return savedPage ? { ...defaultPage, ...savedPage } : defaultPage;
-        });
-        setPageConfigs(mergedConfigs);
-        // 默认选中第一个页面
-        if (mergedConfigs.length > 0 && !selectedPageCode) {
-          const firstPageCode = mergedConfigs[0].pageCode;
-          setSelectedPageCode(firstPageCode);
-          // 延迟初始化表单，确保 pageConfigs 已设置，并在 codeRules 加载后加载规则
-          setTimeout(() => {
-            // 先尝试加载已有规则，如果没有则重置为默认值
-            const firstPageConfig = mergedConfigs.find(p => p.pageCode === firstPageCode);
-            if (firstPageConfig?.ruleCode) {
-              // 等待 codeRules 加载完成后再加载规则
-              setTimeout(() => {
-                handleSelectPage(firstPageCode);
-              }, 200);
-            } else {
-              resetPageRuleForm(firstPageCode);
-            }
-          }, 100);
-        }
-      } catch (error) {
-        console.error('加载功能页面配置失败:', error);
-      }
-    } else {
-      // 如果没有保存的配置，默认选中第一个页面
-      if (CODE_RULE_PAGES.length > 0 && !selectedPageCode) {
-        const firstPageCode = CODE_RULE_PAGES[0].pageCode;
-        setSelectedPageCode(firstPageCode);
-        // 延迟初始化表单，等待 codeRules 加载完成后再加载规则
-        setTimeout(() => {
-          const firstPageConfig = pageConfigs.find(p => p.pageCode === firstPageCode);
-          if (firstPageConfig?.ruleCode) {
-            // 等待 codeRules 加载完成后再加载规则
-            setTimeout(() => {
-              handleSelectPage(firstPageCode);
-            }, 200);
-          } else {
-            resetPageRuleForm(firstPageCode);
-          }
-        }, 100);
-      }
-    }
-    // 加载编码规则列表
-    loadCodeRules();
-  }, []);
 
   // 获取过滤后的页面列表和选中的页面配置
   const filteredPages = getFilteredPages();
@@ -518,7 +623,15 @@ const CodeRuleListPage: React.FC = () => {
 
           {/* 功能页面列表 */}
           <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-            {getCodeRuleModules().map(module => {
+            {pageConfigsLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
+                  加载页面配置中...
+                </div>
+              </div>
+            ) : (
+              getCodeRuleModules().map(module => {
               const modulePages = (filteredPages || []).filter(page => page?.module === module);
               if (modulePages.length === 0) return null;
 
@@ -589,7 +702,7 @@ const CodeRuleListPage: React.FC = () => {
                   })}
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
 

@@ -91,14 +91,45 @@ export interface CodeGenerationResponse {
  * 获取编码规则列表
  * 
  * 自动过滤当前组织的编码规则。
+ * 注意：后端返回的是 List[CodeRuleResponse]（数组），需要转换为分页格式。
  * 
  * @param params - 查询参数
  * @returns 编码规则列表响应数据
  */
 export async function getCodeRuleList(params?: CodeRuleListParams): Promise<CodeRuleListResponse> {
-  return apiRequest<CodeRuleListResponse>('/core/code-rules', {
-    params,
+  // 后端 API 使用 skip 和 limit 参数，而不是 page 和 page_size
+  const queryParams: any = {};
+  if (params?.page && params?.page_size) {
+    queryParams.skip = (params.page - 1) * params.page_size;
+    queryParams.limit = params.page_size;
+  }
+  if (params?.is_active !== undefined) {
+    queryParams.is_active = params.is_active;
+  }
+  
+  // 后端返回的是数组，需要转换为分页格式
+  const response = await apiRequest<CodeRule[]>('/core/code-rules', {
+    params: queryParams,
   });
+  
+  // 如果是数组，转换为分页格式
+  if (Array.isArray(response)) {
+    return {
+      items: response,
+      total: response.length,
+    };
+  }
+  
+  // 如果已经是分页格式，直接返回
+  if (response && typeof response === 'object' && 'items' in response) {
+    return response as CodeRuleListResponse;
+  }
+  
+  // 默认返回空列表
+  return {
+    items: [],
+    total: 0,
+  };
 }
 
 /**
@@ -182,5 +213,58 @@ export async function testGenerateCode(request: CodeGenerationRequest): Promise<
     method: 'POST',
     data: request,
   });
+}
+
+/**
+ * 编码规则页面配置接口（后端返回格式，snake_case）
+ */
+export interface CodeRulePageConfigResponse {
+  page_code: string;
+  page_name: string;
+  page_path: string;
+  code_field: string;
+  code_field_label: string;
+  module: string;
+  module_icon?: string;
+  auto_generate?: boolean;
+  rule_code?: string;
+}
+
+/**
+ * 编码规则页面配置接口（前端使用格式，camelCase）
+ */
+export interface CodeRulePageConfig {
+  pageCode: string;
+  pageName: string;
+  pagePath: string;
+  codeField: string;
+  codeFieldLabel: string;
+  module: string;
+  moduleIcon?: string;
+  autoGenerate?: boolean;
+  ruleCode?: string;
+}
+
+/**
+ * 获取编码规则功能页面配置列表
+ * 
+ * 返回系统中所有有编码字段的功能页面配置。
+ * 
+ * @returns 功能页面配置列表（已转换为camelCase格式）
+ */
+export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
+  const pages = await apiRequest<CodeRulePageConfigResponse[]>('/core/code-rules/pages');
+  // 转换字段名从 snake_case 到 camelCase
+  return pages.map(page => ({
+    pageCode: page.page_code,
+    pageName: page.page_name,
+    pagePath: page.page_path,
+    codeField: page.code_field,
+    codeFieldLabel: page.code_field_label,
+    module: page.module,
+    moduleIcon: page.module_icon,
+    autoGenerate: page.auto_generate ?? false,
+    ruleCode: page.rule_code,
+  }));
 }
 

@@ -344,7 +344,7 @@ export default function AnalysisPage() {
               </Space>
             }
           >
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
+            <Space orientation="vertical" style={{ width: '100%' }} size="large">
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text>月度销售额目标</Text>

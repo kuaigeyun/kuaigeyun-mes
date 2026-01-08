@@ -7,6 +7,8 @@
 from tortoise import fields
 from core.models.base import BaseModel
 
+# 注意：ProcessRoute 在 process.py 中定义，使用字符串引用避免循环导入
+
 
 class MaterialGroup(BaseModel):
     """
@@ -38,6 +40,7 @@ class MaterialGroup(BaseModel):
             ("code",),
             ("uuid",),
             ("parent_id",),
+            ("process_route_id",),
         ]
         unique_together = [("tenant_id", "code")]
     
@@ -55,6 +58,14 @@ class MaterialGroup(BaseModel):
         related_name="children",
         null=True,
         description="父分组（用于层级结构）"
+    )
+    
+    # 工艺路线绑定（物料分组级别，优先级低于物料绑定）
+    process_route = fields.ForeignKeyField(
+        "models.ProcessRoute",
+        related_name="material_groups",
+        null=True,
+        description="绑定的工艺路线（分组级别，物料未绑定时使用）"
     )
     
     # 状态信息
@@ -106,6 +117,7 @@ class Material(BaseModel):
             ("code",),
             ("uuid",),
             ("group_id",),
+            ("process_route_id",),
         ]
         unique_together = [("tenant_id", "code")]
     
@@ -139,6 +151,14 @@ class Material(BaseModel):
         related_name="materials",
         null=True,
         description="物料分组"
+    )
+    
+    # 工艺路线绑定（物料优先级大于物料分组）
+    process_route = fields.ForeignKeyField(
+        "models.ProcessRoute",
+        related_name="materials",
+        null=True,
+        description="绑定的工艺路线（物料级别，优先级最高）"
     )
     
     # 状态信息

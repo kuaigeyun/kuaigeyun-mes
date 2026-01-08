@@ -204,7 +204,8 @@ const SalesOrdersPage: React.FC = () => {
 
   // 处理下推到销售出库
   const handlePushToDelivery = async (record: SalesOrder) => {
-    Modal.confirm({
+    const { modal } = App.useApp();
+    modal.confirm({
       title: '下推到销售出库',
       content: `确定要从销售订单 "${record.order_code}" 下推生成销售出库单吗？`,
       onOk: async () => {

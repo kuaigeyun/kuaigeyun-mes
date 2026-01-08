@@ -181,7 +181,7 @@ const InitialDataImportPage: React.FC = () => {
       description: '导入快照时间点的库存数据',
       content: (
         <Card>
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Space orientation="vertical" style={{ width: '100%' }} size="large">
             <div>
               <h3>快照时间点</h3>
               <p style={{ color: '#666', marginBottom: 16 }}>
@@ -223,7 +223,7 @@ const InitialDataImportPage: React.FC = () => {
       description: '导入快照时间点的在制品数据',
       content: (
         <Card>
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Space orientation="vertical" style={{ width: '100%' }} size="large">
             <div>
               <h3>导入数据</h3>
               <p style={{ color: '#666', marginBottom: 16 }}>
@@ -251,7 +251,7 @@ const InitialDataImportPage: React.FC = () => {
       description: '导入快照时间点的应收应付数据',
       content: (
         <Card>
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Space orientation="vertical" style={{ width: '100%' }} size="large">
             <div>
               <h3>导入数据</h3>
               <p style={{ color: '#666', marginBottom: 16 }}>

@@ -351,9 +351,8 @@ async def test_material(db_setup, test_tenant) -> AsyncGenerator:
             uuid=str(uuid_module.uuid4()),
             code="TEST-MAT-001",
             name="测试物料",
-            spec="测试规格",
-            unit="个",
-            material_type="成品",
+            specification="测试规格",
+            base_unit="个",
             is_active=True
         )
     except Exception:

@@ -733,7 +733,7 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         
         # 检查是否有未出库的明细
         has_outstanding = any(
-            (item.delivered_quantity or 0) < (item.ordered_quantity or 0) 
+            (item.delivered_quantity or 0) < (item.order_quantity or 0) 
             for item in order_items
         )
         if not has_outstanding:
@@ -749,14 +749,14 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             if delivery_quantities and item.id in delivery_quantities:
                 delivery_quantity = Decimal(str(delivery_quantities[item.id]))
             else:
-                delivery_quantity = Decimal(str(item.ordered_quantity or 0)) - Decimal(str(item.delivered_quantity or 0))
+                delivery_quantity = Decimal(str(item.order_quantity or 0)) - Decimal(str(item.delivered_quantity or 0))
             
             # 跳过数量为0的明细
             if delivery_quantity <= 0:
                 continue
             
             # 验证出库数量不超过未出库数量
-            outstanding = Decimal(str(item.ordered_quantity or 0)) - Decimal(str(item.delivered_quantity or 0))
+            outstanding = Decimal(str(item.order_quantity or 0)) - Decimal(str(item.delivered_quantity or 0))
             if delivery_quantity > outstanding:
                 raise ValidationError(f"物料 {item.material_code} 的出库数量 {delivery_quantity} 超过未出库数量 {outstanding}")
             

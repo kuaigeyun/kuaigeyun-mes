@@ -4,13 +4,15 @@
  * 提供报工记录的管理和查询功能，支持移动端扫码报工。
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
-import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormText, ProFormDatePicker, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Input, Alert, Spin, Form, Radio } from 'antd';
+import { QrcodeOutlined, ScanOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, WarningOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { reportingApi } from '../../../services/production';
+import { reportingApi, workOrderApi, materialBindingApi } from '../../../services/production';
+import { materialApi } from '../../../../master-data/services/material';
+import { sopApi } from '../../../../master-data/services/process';
 
 interface ReportingRecord {
   id: number;
@@ -35,9 +37,16 @@ const ReportingPage: React.FC = () => {
   // 报工Modal状态
   const [reportingModalVisible, setReportingModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+  const scanFormRef = useRef<any>(null);
 
   // 扫码报工Modal状态
   const [scanModalVisible, setScanModalVisible] = useState(false);
+  const [scanWorkOrderCode, setScanWorkOrderCode] = useState<string>('');
+  const [currentWorkOrder, setCurrentWorkOrder] = useState<any>(null);
+  const [workOrderOperations, setWorkOrderOperations] = useState<any[]>([]);
+  const [currentOperation, setCurrentOperation] = useState<any>(null);
+  const [loadingOperations, setLoadingOperations] = useState(false);
+  const [jumpRuleError, setJumpRuleError] = useState<string>('');
 
   // 报废记录Modal状态
   const [scrapModalVisible, setScrapModalVisible] = useState(false);
@@ -54,11 +63,386 @@ const ReportingPage: React.FC = () => {
   const [currentReportingRecordForCorrect, setCurrentReportingRecordForCorrect] = useState<ReportingRecord | null>(null);
   const correctFormRef = useRef<any>(null);
 
+  // 工站上下料物料绑定状态
+  const [materialBindingVisible, setMaterialBindingVisible] = useState(false);
+  const [bindingType, setBindingType] = useState<'feeding' | 'discharging' | null>(null);
+  const [feedingList, setFeedingList] = useState<any[]>([]);
+  const [dischargingList, setDischargingList] = useState<any[]>([]);
+  const materialBindingFormRef = useRef<any>(null);
+  const [materialList, setMaterialList] = useState<any[]>([]);
+
+  // SOP参数收集状态
+  const [sopFormConfig, setSopFormConfig] = useState<any>(null);
+  const [sopParameters, setSopParameters] = useState<Record<string, any>>({});
+  const [loadingSOP, setLoadingSOP] = useState(false);
+  const [currentSOP, setCurrentSOP] = useState<any>(null);
+
   /**
    * 处理扫码报工
    */
   const handleScanReporting = () => {
     setScanModalVisible(true);
+    setScanWorkOrderCode('');
+    setCurrentWorkOrder(null);
+    setWorkOrderOperations([]);
+    setCurrentOperation(null);
+    setJumpRuleError('');
+  };
+
+  /**
+   * 处理扫码输入（模拟扫码功能）
+   */
+  const handleScanInput = async (value: string) => {
+    if (!value || value.trim() === '') {
+      return;
+    }
+
+    setLoadingOperations(true);
+    setJumpRuleError('');
+
+    try {
+      // 根据工单编码获取工单信息
+      const workOrders = await workOrderApi.list({ code: value.trim() });
+      if (!workOrders || workOrders.length === 0) {
+        messageApi.error('未找到该工单');
+        setLoadingOperations(false);
+        return;
+      }
+
+      const workOrder = workOrders[0];
+      setCurrentWorkOrder(workOrder);
+
+      // 获取工单工序列表
+      const operations = await workOrderApi.getOperations(workOrder.id.toString());
+      setWorkOrderOperations(operations || []);
+
+      // 自动选择第一个未完成的工序
+      const pendingOperation = operations?.find((op: any) => op.status !== 'completed');
+      if (pendingOperation) {
+        setCurrentOperation(pendingOperation);
+        // 检查跳转规则
+        await checkJumpRule(pendingOperation, operations);
+      } else {
+        messageApi.warning('该工单所有工序已完成');
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '获取工单信息失败');
+    } finally {
+      setLoadingOperations(false);
+    }
+  };
+
+  /**
+   * 检查工序跳转规则
+   */
+  const checkJumpRule = async (operation: any, allOperations: any[]) => {
+    if (operation.allow_jump) {
+      setJumpRuleError('');
+      return;
+    }
+
+    // 检查前序工序是否完成
+    const previousOperations = allOperations.filter(
+      (op: any) => op.sequence < operation.sequence && op.status !== 'completed'
+    );
+
+    if (previousOperations.length > 0) {
+      const prevOpNames = previousOperations.map((op: any) => op.operation_name).join('、');
+      setJumpRuleError(`工序跳转规则：必须先完成前序工序 "${prevOpNames}" 才能报工当前工序`);
+    } else {
+      setJumpRuleError('');
+    }
+  };
+
+  /**
+   * 处理选择工序
+   */
+  const handleSelectOperation = async (operationId: number) => {
+    const operation = workOrderOperations.find((op: any) => op.operation_id === operationId);
+    if (operation) {
+      setCurrentOperation(operation);
+      await checkJumpRule(operation, workOrderOperations);
+      
+      // 加载SOP参数配置（如果工序关联了SOP）（核心功能，优化）
+      setLoadingSOP(true);
+      try {
+        // 根据工序ID查询关联的SOP
+        const sops = await sopApi.list({ operationId: operation.operation_id, isActive: true });
+        if (sops && sops.length > 0) {
+          const sop = sops[0]; // 取第一个启用的SOP
+          setCurrentSOP(sop);
+          if (sop.formConfig && sop.formConfig.properties && Object.keys(sop.formConfig.properties).length > 0) {
+            setSopFormConfig(sop.formConfig);
+            // 初始化参数值
+            const initialParams: Record<string, any> = {};
+            if (sop.formConfig.properties) {
+              Object.keys(sop.formConfig.properties).forEach((key) => {
+                const field = sop.formConfig.properties[key];
+                if (field.default !== undefined) {
+                  initialParams[key] = field.default;
+                }
+              });
+            }
+            setSopParameters(initialParams);
+            // 设置表单初始值
+            setTimeout(() => {
+              scanFormRef.current?.setFieldsValue({
+                sop_params: initialParams,
+              });
+            }, 100);
+          } else {
+            setSopFormConfig(null);
+            setSopParameters({});
+            setCurrentSOP(null);
+          }
+        } else {
+          setSopFormConfig(null);
+          setSopParameters({});
+          setCurrentSOP(null);
+        }
+      } catch (error: any) {
+        console.error('获取SOP信息失败:', error);
+        messageApi.warning('获取SOP信息失败，将不显示参数收集表单');
+        setSopFormConfig(null);
+        setSopParameters({});
+        setCurrentSOP(null);
+      } finally {
+        setLoadingSOP(false);
+      }
+    }
+  };
+
+  /**
+   * 处理添加上料绑定
+   */
+  const handleAddFeeding = () => {
+    setBindingType('feeding');
+    setMaterialBindingVisible(true);
+    materialBindingFormRef.current?.resetFields();
+  };
+
+  /**
+   * 处理添加下料绑定
+   */
+  const handleAddDischarging = () => {
+    setBindingType('discharging');
+    setMaterialBindingVisible(true);
+    materialBindingFormRef.current?.resetFields();
+  };
+
+  /**
+   * 处理提交物料绑定
+   */
+  const handleSubmitMaterialBinding = async (values: any) => {
+    try {
+      const bindingData = {
+        material_id: values.material_id,
+        material_code: values.material_code || '',
+        material_name: values.material_name || '',
+        batch_no: values.batch_no || '',
+        serial_no: values.serial_no || '',
+        quantity: values.quantity,
+        storage_location_id: values.storage_location_id,
+        remarks: values.remarks,
+      };
+
+      if (bindingType === 'feeding') {
+        setFeedingList([...feedingList, bindingData]);
+      } else {
+        setDischargingList([...dischargingList, bindingData]);
+      }
+
+      setMaterialBindingVisible(false);
+      setBindingType(null);
+      materialBindingFormRef.current?.resetFields();
+      messageApi.success(`${bindingType === 'feeding' ? '上料' : '下料'}绑定添加成功`);
+    } catch (error: any) {
+      messageApi.error(error.message || '添加物料绑定失败');
+      throw error;
+    }
+  };
+
+  /**
+   * 处理删除上料绑定
+   */
+  const handleRemoveFeeding = (index: number) => {
+    const newList = [...feedingList];
+    newList.splice(index, 1);
+    setFeedingList(newList);
+  };
+
+  /**
+   * 处理删除下料绑定
+   */
+  const handleRemoveDischarging = (index: number) => {
+    const newList = [...dischargingList];
+    newList.splice(index, 1);
+    setDischargingList(newList);
+  };
+
+  /**
+   * 初始化物料列表
+   */
+  useEffect(() => {
+    const loadMaterials = async () => {
+      try {
+        const materials = await materialApi.list({ isActive: true });
+        setMaterialList(materials || []);
+      } catch (error) {
+        console.error('获取物料列表失败:', error);
+        setMaterialList([]);
+      }
+    };
+    loadMaterials();
+  }, []);
+
+  /**
+   * 根据SOP form_config渲染参数表单字段（核心功能，新增）
+   */
+  const renderSOPParameters = () => {
+    if (!sopFormConfig || !sopFormConfig.properties) {
+      return null;
+    }
+
+    const fields: React.ReactNode[] = [];
+    Object.entries(sopFormConfig.properties).forEach(([fieldCode, fieldSchema]: [string, any]) => {
+      const fieldName = `sop_params.${fieldCode}`;
+      const label = fieldSchema.title || fieldCode;
+      const placeholder = fieldSchema['x-component-props']?.placeholder || fieldSchema.description || `请输入${label}`;
+      const required = fieldSchema.required || false;
+      const component = fieldSchema['x-component'] || 'Input';
+      const componentProps = fieldSchema['x-component-props'] || {};
+      const defaultValue = fieldSchema.default;
+
+      // 根据组件类型渲染不同的ProForm组件
+      switch (component) {
+        case 'Input':
+        case 'Input.Text':
+          fields.push(
+            <ProFormText
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              placeholder={placeholder}
+              rules={required ? [{ required: true, message: `请输入${label}` }] : []}
+              initialValue={defaultValue}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        case 'Input.TextArea':
+          fields.push(
+            <ProFormTextArea
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              placeholder={placeholder}
+              rules={required ? [{ required: true, message: `请输入${label}` }] : []}
+              initialValue={defaultValue}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        case 'InputNumber':
+        case 'NumberPicker':
+          fields.push(
+            <ProFormDigit
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              placeholder={placeholder}
+              rules={required ? [{ required: true, message: `请输入${label}` }] : []}
+              initialValue={defaultValue}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        case 'Select':
+          fields.push(
+            <ProFormSelect
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              placeholder={placeholder}
+              rules={required ? [{ required: true, message: `请选择${label}` }] : []}
+              initialValue={defaultValue}
+              options={fieldSchema.enum ? fieldSchema.enum.map((val: any, idx: number) => ({
+                label: fieldSchema.enumNames?.[idx] || val,
+                value: val,
+              })) : []}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        case 'DatePicker':
+          fields.push(
+            <ProFormDatePicker
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              placeholder={placeholder}
+              rules={required ? [{ required: true, message: `请选择${label}` }] : []}
+              initialValue={defaultValue}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        case 'Switch':
+          fields.push(
+            <ProFormSwitch
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              rules={required ? [{ required: true, message: `请选择${label}` }] : []}
+              initialValue={defaultValue !== undefined ? defaultValue : false}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        case 'Radio.Group':
+          fields.push(
+            <ProFormRadio.Group
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              rules={required ? [{ required: true, message: `请选择${label}` }] : []}
+              initialValue={defaultValue}
+              options={fieldSchema.enum ? fieldSchema.enum.map((val: any, idx: number) => ({
+                label: fieldSchema.enumNames?.[idx] || val,
+                value: val,
+              })) : []}
+              fieldProps={componentProps}
+            />
+          );
+          break;
+        default:
+          // 默认使用文本输入框
+          fields.push(
+            <ProFormText
+              key={fieldCode}
+              name={fieldName}
+              label={label}
+              placeholder={placeholder}
+              rules={required ? [{ required: true, message: `请输入${label}` }] : []}
+              initialValue={defaultValue}
+              fieldProps={componentProps}
+            />
+          );
+      }
+    });
+
+    if (fields.length === 0) {
+      return null;
+    }
+
+    return (
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
+        <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: 16 }}>SOP参数收集：</div>
+        <Card size="small" style={{ backgroundColor: '#fafafa' }}>
+          {fields}
+        </Card>
+      </div>
+    );
   };
 
   /**
@@ -74,13 +458,45 @@ const ReportingPage: React.FC = () => {
    */
   const handleReportingSubmit = async (values: any) => {
     try {
-      // 这里添加报工逻辑
+      // 如果是扫码报工模式
+      if (scanModalVisible && currentWorkOrder && currentOperation) {
+        const reportingData = {
+          work_order_id: currentWorkOrder.id,
+          work_order_code: currentWorkOrder.code,
+          work_order_name: currentWorkOrder.name,
+          operation_id: currentOperation.operation_id,
+          operation_code: currentOperation.operation_code,
+          operation_name: currentOperation.operation_name,
+          worker_id: 1, // TODO: 从用户信息获取
+          worker_name: '当前用户', // TODO: 从用户信息获取
+          reported_quantity: values.reported_quantity || (values.completed_status === 'completed' ? 1 : 0),
+          qualified_quantity: values.qualified_quantity || 0,
+          unqualified_quantity: values.unqualified_quantity || 0,
+          work_hours: values.work_hours || 0,
+          status: 'pending',
+          reported_at: new Date().toISOString(),
+          remarks: values.remarks,
+        };
+
+        await reportingApi.create(reportingData);
+        messageApi.success('报工成功');
+        setScanModalVisible(false);
+        setCurrentWorkOrder(null);
+        setWorkOrderOperations([]);
+        setCurrentOperation(null);
+        setScanWorkOrderCode('');
+        actionRef.current?.reload();
+        return;
+      }
+
+      // 手动报工模式（原有逻辑）
+      await reportingApi.create(values);
       messageApi.success('报工成功');
       setReportingModalVisible(false);
       formRef.current?.resetFields();
       actionRef.current?.reload();
-    } catch (error) {
-      messageApi.error('报工失败');
+    } catch (error: any) {
+      messageApi.error(error.message || '报工失败');
       throw error;
     }
   };
@@ -551,34 +967,394 @@ const ReportingPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 扫码报工 Modal - 保留原有Modal，因为这是特殊功能 */}
+      {/* 扫码报工 Modal - 优化版，支持自动填充和按报工类型显示 */}
       <Modal
         title="扫码报工"
         open={scanModalVisible}
-        onCancel={() => setScanModalVisible(false)}
+        onCancel={() => {
+          setScanModalVisible(false);
+          setScanWorkOrderCode('');
+          setCurrentWorkOrder(null);
+          setWorkOrderOperations([]);
+          setCurrentOperation(null);
+          setJumpRuleError('');
+        }}
         footer={null}
-        width={400}
+        width={600}
       >
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <div style={{
-            width: 200,
-            height: 200,
-            margin: '0 auto 20px',
-            background: '#f5f5f5',
-            border: '2px dashed #d9d9d9',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#999'
-          }}>
-            <QrcodeOutlined style={{ fontSize: '48px' }} />
+        <Spin spinning={loadingOperations}>
+          <div style={{ padding: '20px 0' }}>
+            {/* 扫码输入 */}
+            <div style={{ marginBottom: 20 }}>
+              <Input
+                placeholder="扫描或输入工单编码"
+                value={scanWorkOrderCode}
+                onChange={(e) => setScanWorkOrderCode(e.target.value)}
+                onPressEnter={() => handleScanInput(scanWorkOrderCode)}
+                prefix={<QrcodeOutlined />}
+                size="large"
+                allowClear
+              />
+              <Button
+                type="primary"
+                style={{ marginTop: 10, width: '100%' }}
+                onClick={() => handleScanInput(scanWorkOrderCode)}
+                loading={loadingOperations}
+              >
+                确认
+              </Button>
+            </div>
+
+            {/* 工单信息 */}
+            {currentWorkOrder && (
+              <Card size="small" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <div><strong>工单编码：</strong>{currentWorkOrder.code}</div>
+                  </Col>
+                  <Col span={12}>
+                    <div><strong>产品：</strong>{currentWorkOrder.product_name}</div>
+                  </Col>
+                  <Col span={12} style={{ marginTop: 8 }}>
+                    <div><strong>计划数量：</strong>{currentWorkOrder.quantity}</div>
+                  </Col>
+                  <Col span={12} style={{ marginTop: 8 }}>
+                    <div><strong>状态：</strong>
+                      <Tag color={currentWorkOrder.status === 'in_progress' ? 'processing' : 'default'}>
+                        {currentWorkOrder.status === 'in_progress' ? '进行中' : currentWorkOrder.status}
+                      </Tag>
+                    </div>
+                  </Col>
+                </Row>
+              </Card>
+            )}
+
+            {/* 工序选择 */}
+            {workOrderOperations.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 8, fontWeight: 'bold' }}>选择工序：</div>
+                <ProFormSelect
+                  name="operation_id"
+                  placeholder="请选择工序"
+                  options={workOrderOperations.map((op: any) => ({
+                    label: `${op.operation_name} (${op.status === 'completed' ? '已完成' : op.status === 'in_progress' ? '进行中' : '待开始'})`,
+                    value: op.operation_id,
+                    disabled: op.status === 'completed',
+                  }))}
+                  fieldProps={{
+                    onChange: handleSelectOperation,
+                    value: currentOperation?.operation_id,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 跳转规则提示 */}
+            {jumpRuleError && (
+              <Alert
+                message={jumpRuleError}
+                type="error"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
+
+            {/* 报工表单 - 根据报工类型显示不同界面 */}
+            {currentOperation && !jumpRuleError && (
+              <Card 
+                size="small" 
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span>报工 - {currentOperation.operation_name}</span>
+                    {currentSOP && (
+                      <Tag color="blue" style={{ marginLeft: 8 }}>
+                        SOP: {currentSOP.name}
+                      </Tag>
+                    )}
+                    {loadingSOP && (
+                      <Spin size="small" style={{ marginLeft: 8 }} />
+                    )}
+                  </div>
+                }
+              >
+                <Form
+                  ref={scanFormRef}
+                  layout="vertical"
+                  onFinish={async (values) => {
+                    try {
+                      // 验证SOP必填参数（优化，新增）
+                      if (sopFormConfig && sopFormConfig.properties) {
+                        const missingParams: string[] = [];
+                        Object.entries(sopFormConfig.properties).forEach(([key, field]: [string, any]) => {
+                          if (field.required && (!values.sop_params || !values.sop_params[key])) {
+                            missingParams.push(field.title || key);
+                          }
+                        });
+                        if (missingParams.length > 0) {
+                          messageApi.error(`请填写SOP必填参数：${missingParams.join('、')}`);
+                          return;
+                        }
+                      }
+
+                      // 收集SOP参数数据（核心功能，新增）
+                      const sopParams: Record<string, any> = {};
+                      if (values.sop_params) {
+                        Object.entries(values.sop_params).forEach(([key, value]) => {
+                          sopParams[key] = value;
+                        });
+                      }
+
+                      const reportingData = {
+                        work_order_id: currentWorkOrder.id,
+                        work_order_code: currentWorkOrder.code,
+                        work_order_name: currentWorkOrder.name,
+                        operation_id: currentOperation.operation_id,
+                        operation_code: currentOperation.operation_code,
+                        operation_name: currentOperation.operation_name,
+                        worker_id: 1, // TODO: 从用户信息获取
+                        worker_name: '当前用户', // TODO: 从用户信息获取
+                        reported_quantity: currentOperation.reporting_type === 'status' 
+                          ? (values.completed_status === 'completed' ? 1 : 0)
+                          : values.reported_quantity,
+                        qualified_quantity: values.qualified_quantity || 0,
+                        unqualified_quantity: values.unqualified_quantity || 0,
+                        work_hours: values.work_hours || 0,
+                        status: 'pending',
+                        reported_at: new Date().toISOString(),
+                        remarks: values.remarks,
+                        // SOP参数数据（核心功能，新增）
+                        sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
+                      };
+
+                      const reportingRecord = await reportingApi.create(reportingData);
+                      messageApi.success('报工成功');
+
+                      // 保存上料下料绑定记录（如果存在）
+                      if (feedingList.length > 0 || dischargingList.length > 0) {
+                        try {
+                          // 保存上料绑定
+                          for (const feeding of feedingList) {
+                            await materialBindingApi.createFeeding(reportingRecord.id.toString(), feeding);
+                          }
+                          // 保存下料绑定
+                          for (const discharging of dischargingList) {
+                            await materialBindingApi.createDischarging(reportingRecord.id.toString(), discharging);
+                          }
+                        } catch (error: any) {
+                          console.error('保存物料绑定记录失败:', error);
+                          // 物料绑定失败不影响报工成功，只记录日志
+                        }
+                      }
+
+                      // 自动切换到下一工序（核心功能，新增）
+                      const remainingOperations = workOrderOperations.filter(
+                        (op: any) => op.sequence > currentOperation.sequence && op.status !== 'completed'
+                      );
+                      
+                      if (remainingOperations.length > 0) {
+                        const nextOperation = remainingOperations[0];
+                        setCurrentOperation(nextOperation);
+                        await checkJumpRule(nextOperation, workOrderOperations);
+                        // 自动加载下一工序的SOP（核心功能，优化）
+                        await handleSelectOperation(nextOperation.operation_id);
+                        scanFormRef.current?.resetFields();
+                        messageApi.success(`已自动切换到下一工序：${nextOperation.operation_name}`);
+                      } else {
+                        // 所有工序已完成，关闭报工窗口
+                        setScanModalVisible(false);
+                        setCurrentWorkOrder(null);
+                        setWorkOrderOperations([]);
+                        setCurrentOperation(null);
+                        setScanWorkOrderCode('');
+                        setFeedingList([]);
+                        setDischargingList([]);
+                        scanFormRef.current?.resetFields();
+                        actionRef.current?.reload();
+                      }
+                    } catch (error: any) {
+                      messageApi.error(error.message || '报工失败');
+                    }
+                  }}
+                >
+                  {currentOperation.reporting_type === 'status' ? (
+                    // 按状态报工
+                    <>
+                      <Form.Item
+                        name="completed_status"
+                        label="完成状态"
+                        rules={[{ required: true, message: '请选择完成状态' }]}
+                      >
+                        <Radio.Group>
+                          <Radio value="completed">完成</Radio>
+                          <Radio value="incomplete">未完成</Radio>
+                        </Radio.Group>
+                      </Form.Item>
+                      <ProFormDigit
+                        name="work_hours"
+                        label="工时(小时)"
+                        placeholder="工时"
+                        min={0}
+                        fieldProps={{ step: 0.1 }}
+                      />
+                      
+                      {/* SOP参数收集表单（核心功能，新增） */}
+                      {renderSOPParameters()}
+
+                      <ProFormTextArea
+                        name="remarks"
+                        label="备注"
+                        placeholder="请输入备注信息"
+                        fieldProps={{ rows: 3 }}
+                      />
+                    </>
+                  ) : (
+                    // 按数量报工
+                    <>
+                      <ProFormDigit
+                        name="reported_quantity"
+                        label="报工数量"
+                        placeholder="报工数量"
+                        rules={[{ required: true, message: '请输入报工数量' }]}
+                        min={0}
+                        fieldProps={{
+                          precision: 2,
+                          max: currentWorkOrder.quantity - (currentOperation.completed_quantity || 0),
+                        }}
+                      />
+                      <ProFormDigit
+                        name="qualified_quantity"
+                        label="合格数量"
+                        placeholder="合格数量"
+                        rules={[{ required: true, message: '请输入合格数量' }]}
+                        min={0}
+                        fieldProps={{ precision: 2 }}
+                      />
+                      <ProFormDigit
+                        name="unqualified_quantity"
+                        label="不合格数量"
+                        placeholder="不合格数量"
+                        rules={[{ required: true, message: '请输入不合格数量' }]}
+                        min={0}
+                        fieldProps={{ precision: 2 }}
+                      />
+                      <ProFormDigit
+                        name="work_hours"
+                        label="工时(小时)"
+                        placeholder="工时"
+                        min={0}
+                        fieldProps={{ step: 0.1 }}
+                      />
+                      
+                      {/* 工站上下料物料绑定（核心功能，新增） */}
+                      <div style={{ marginTop: 16, marginBottom: 16 }}>
+                        <div style={{ marginBottom: 8, fontWeight: 'bold' }}>工站上下料物料绑定：</div>
+                        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                          {/* 上料绑定 */}
+                          <Card size="small" title="上料绑定">
+                            <Space direction="vertical" style={{ width: '100%' }} size="small">
+                              {feedingList.map((feeding, index) => (
+                                <Card key={index} size="small" style={{ backgroundColor: '#f5f5f5' }}>
+                                  <Row gutter={16}>
+                                    <Col span={8}><strong>物料：</strong>{feeding.material_name || feeding.material_code}</Col>
+                                    <Col span={6}><strong>数量：</strong>{feeding.quantity}</Col>
+                                    <Col span={6}><strong>批次：</strong>{feeding.batch_no || '-'}</Col>
+                                    <Col span={4}>
+                                      <Button
+                                        type="link"
+                                        danger
+                                        size="small"
+                                        icon={<MinusOutlined />}
+                                        onClick={() => handleRemoveFeeding(index)}
+                                      >
+                                        删除
+                                      </Button>
+                                    </Col>
+                                  </Row>
+                                </Card>
+                              ))}
+                              <Button
+                                type="dashed"
+                                block
+                                icon={<PlusOutlined />}
+                                onClick={handleAddFeeding}
+                              >
+                                添加上料绑定
+                              </Button>
+                            </Space>
+                          </Card>
+
+                          {/* 下料绑定 */}
+                          <Card size="small" title="下料绑定">
+                            <Space direction="vertical" style={{ width: '100%' }} size="small">
+                              {dischargingList.map((discharging, index) => (
+                                <Card key={index} size="small" style={{ backgroundColor: '#f5f5f5' }}>
+                                  <Row gutter={16}>
+                                    <Col span={8}><strong>物料：</strong>{discharging.material_name || discharging.material_code}</Col>
+                                    <Col span={6}><strong>数量：</strong>{discharging.quantity}</Col>
+                                    <Col span={6}><strong>批次：</strong>{discharging.batch_no || '-'}</Col>
+                                    <Col span={4}>
+                                      <Button
+                                        type="link"
+                                        danger
+                                        size="small"
+                                        icon={<MinusOutlined />}
+                                        onClick={() => handleRemoveDischarging(index)}
+                                      >
+                                        删除
+                                      </Button>
+                                    </Col>
+                                  </Row>
+                                </Card>
+                              ))}
+                              <Button
+                                type="dashed"
+                                block
+                                icon={<PlusOutlined />}
+                                onClick={handleAddDischarging}
+                              >
+                                添加下料绑定
+                              </Button>
+                            </Space>
+                          </Card>
+                        </Space>
+                      </div>
+
+                      {/* SOP参数收集表单（核心功能，新增） */}
+                      {renderSOPParameters()}
+
+                      <ProFormTextArea
+                        name="remarks"
+                        label="备注"
+                        placeholder="请输入备注信息"
+                        fieldProps={{ rows: 3 }}
+                      />
+                    </>
+                  )}
+                  <div style={{ marginTop: 16, textAlign: 'right' }}>
+                    <Button
+                      onClick={() => {
+                        setScanModalVisible(false);
+                        setCurrentWorkOrder(null);
+                        setWorkOrderOperations([]);
+                      setCurrentOperation(null);
+                      setScanWorkOrderCode('');
+                      setFeedingList([]);
+                      setDischargingList([]);
+                      scanFormRef.current?.resetFields();
+                      }}
+                      style={{ marginRight: 8 }}
+                    >
+                      取消
+                    </Button>
+                    <Button type="primary" htmlType="submit">
+                      提交报工
+                    </Button>
+                  </div>
+                </Form>
+              </Card>
+            )}
           </div>
-          <p>请使用手机扫描工单二维码进行报工</p>
-          <p style={{ color: '#666', fontSize: '12px', marginTop: '8px' }}>
-            扫码后将自动跳转到报工页面
-          </p>
-        </div>
+        </Spin>
       </Modal>
 
       {/* 创建报废记录Modal */}

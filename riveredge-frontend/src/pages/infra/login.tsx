@@ -4,15 +4,16 @@
  * 用于平台超级管理员登录系统
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, Button, message, App, ConfigProvider } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { infraSuperAdminLogin } from '../../services/infraAdmin';
 import { setToken, setUserInfo, setTenantId } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { theme } from 'antd';
+import { getPlatformSettingsPublic } from '../../services/platformSettings';
 
 /**
  * 平台超级管理员登录表单数据
@@ -33,6 +34,24 @@ export default function PlatformLoginPage() {
   
   // 固定主题颜色（不受全局主题影响）
   const fixedThemeColor = '#1890ff';
+
+  // 获取平台设置（公开接口）
+  const { data: platformSettings } = useQuery({
+    queryKey: ['platformSettingsPublic'],
+    queryFn: getPlatformSettingsPublic,
+    staleTime: 5 * 60 * 1000, // 5分钟缓存
+  });
+
+  // 设置页面标题
+  useEffect(() => {
+    const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
+    document.title = `${platformName} - 平台登录`;
+    
+    // 组件卸载时恢复默认标题
+    return () => {
+      document.title = 'RiverEdge SaaS - 多组织管理框架';
+    };
+  }, [platformSettings?.platform_name]);
 
   // 登录请求
   const loginMutation = useMutation({
@@ -105,7 +124,7 @@ export default function PlatformLoginPage() {
           }}
           title={
             <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold' }}>
-              RiverEdge SaaS 平台登录
+              {platformSettings?.platform_name ? `${platformSettings.platform_name} 平台登录` : 'RiverEdge SaaS 平台登录'}
             </div>
           }
         >

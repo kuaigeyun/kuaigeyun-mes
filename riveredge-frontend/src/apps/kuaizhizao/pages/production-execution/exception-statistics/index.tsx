@@ -85,7 +85,7 @@ const ExceptionStatisticsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <div style={{ padding: '24px' }}>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           {/* 日期筛选 */}
           <Card>
             <Space>

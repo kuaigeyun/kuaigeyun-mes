@@ -68,8 +68,18 @@ class WorkOrderCreate(WorkOrderBase):
     工单创建Schema
 
     用于创建新工单的数据验证。
+    
+    注意：
+    - product_id 和 product_code 至少提供一个
+    - 如果提供 product_id，product_code 和 product_name 将被自动填充
+    - 如果只提供 product_code，product_id 将被自动查找
+    - code 和 code_rule 至少提供一个：如果提供 code 则手工填写，如果提供 code_rule 则使用编码规则生成
     """
-    code: Optional[str] = Field(None, description="工单编码（可选，如果不提供则自动生成）")
+    code: Optional[str] = Field(None, description="工单编码（可选，如果未提供 code_rule 则为必填）")
+    code_rule: Optional[str] = Field(None, description="编码规则代码（可选，如果未提供 code 则为必填）")
+    product_id: Optional[int] = Field(None, description="产品ID（可选，如果未提供则根据 product_code 自动查找）")
+    product_code: Optional[str] = Field(None, description="产品编码（可选，如果未提供 product_id 则为必填）")
+    product_name: Optional[str] = Field(None, description="产品名称（可选，如果未提供则从物料中获取）")
 
 
 class WorkOrderUpdate(BaseModel):
@@ -130,8 +140,8 @@ class WorkOrderListResponse(BaseModel):
     status: str = Field(..., description="工单状态")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
-    completed_quantity: Decimal = Field(..., description="已完成数量")
-    created_by_name: str = Field(..., description="创建人姓名")
+    completed_quantity: Decimal = Field(default=Decimal("0"), description="已完成数量")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
     created_at: datetime = Field(..., description="创建时间")
 
 

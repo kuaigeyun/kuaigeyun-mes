@@ -10,6 +10,7 @@
 
 import React, { ReactNode } from 'react';
 import { Row, Col, Card, Button, Badge, theme, Space } from 'antd';
+import { SettingOutlined } from '@ant-design/icons';
 import { DASHBOARD_CONFIG, PAGE_SPACING, ANT_DESIGN_TOKENS } from './constants';
 
 const { useToken } = theme;
@@ -93,6 +94,10 @@ export interface DashboardTemplateProps {
   className?: string;
   /** 自定义样式 */
   style?: React.CSSProperties;
+  /** 是否显示配置按钮 */
+  showConfigButton?: boolean;
+  /** 配置按钮点击事件 */
+  onConfigClick?: () => void;
 }
 
 /**
@@ -121,6 +126,8 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
   children,
   className,
   style,
+  showConfigButton = false,
+  onConfigClick,
 }) => {
   const { token } = useToken();
 
@@ -134,34 +141,71 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
         ...style,
       }}
     >
-      {/* 快捷操作区 */}
+      {/* 快捷操作区 - 图标化显示 */}
       {quickActions.length > 0 && (
         <Card
           title="快捷操作"
           style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}
+          extra={
+            showConfigButton && onConfigClick ? (
+              <Button
+                type="text"
+                size="small"
+                icon={<SettingOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConfigClick();
+                }}
+              >
+                配置
+              </Button>
+            ) : undefined
+          }
         >
           <Row gutter={ANT_DESIGN_TOKENS.SPACING.MD}>
             {quickActions.map((action, index) => (
               <Col
                 key={index}
-                xs={DASHBOARD_CONFIG.QUICK_ACTION_COLUMNS.xs * 12}
-                sm={DASHBOARD_CONFIG.QUICK_ACTION_COLUMNS.sm * 12}
-                md={DASHBOARD_CONFIG.QUICK_ACTION_COLUMNS.md * 6}
-                lg={DASHBOARD_CONFIG.QUICK_ACTION_COLUMNS.lg * 6}
-                xl={DASHBOARD_CONFIG.QUICK_ACTION_COLUMNS.xl * 6}
-                xxl={DASHBOARD_CONFIG.QUICK_ACTION_COLUMNS.xxl * 6}
+                xs={12}
+                sm={8}
+                md={6}
+                lg={4}
+                xl={4}
+                xxl={3}
               >
-                <Button
-                  type={action.type || 'primary'}
-                  icon={action.icon}
-                  block
-                  size="large"
+                <Card
+                  hoverable
                   onClick={action.onClick}
                   disabled={action.disabled}
-                  style={{ height: 'auto', padding: `${ANT_DESIGN_TOKENS.SPACING.MD}px` }}
+                  style={{
+                    cursor: action.disabled ? 'not-allowed' : 'pointer',
+                    textAlign: 'center',
+                    padding: `${ANT_DESIGN_TOKENS.SPACING.MD}px`,
+                    opacity: action.disabled ? 0.5 : 1,
+                  }}
                 >
-                  {action.title}
-                </Button>
+                  <div
+                    style={{
+                      fontSize: ANT_DESIGN_TOKENS.FONT_SIZE.XXL * 1.5,
+                      marginBottom: ANT_DESIGN_TOKENS.SPACING.SM,
+                      color: action.type === 'primary' ? token.colorPrimary : token.colorText,
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {action.icon}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: ANT_DESIGN_TOKENS.FONT_SIZE.SM,
+                      color: token.colorText,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {action.title}
+                  </div>
+                </Card>
               </Col>
             ))}
           </Row>

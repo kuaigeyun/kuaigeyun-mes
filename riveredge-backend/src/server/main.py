@@ -39,6 +39,8 @@ from infra.api.monitoring.statistics import router as monitoring_statistics_rout
 from infra.api.saved_searches.saved_searches import router as saved_searches_router
 from infra.api.init.init_wizard import router as init_wizard_router
 from infra.api.templates.templates import router as industry_template_router
+from infra.api.platform_settings.platform_settings import router as platform_settings_router
+from infra.api.platform_settings.public import router as platform_settings_public_router
 
 # 导入所有系统级 API 路由（core）
 import sys
@@ -65,6 +67,7 @@ from core.api.applications.applications import router as applications_router
 from core.api.menus.menus import router as menus_router
 from core.api.integration_configs.integration_configs import router as integration_configs_router
 from core.api.files.files import router as files_router
+from core.api.files.public import router as files_public_router
 from core.api.apis.apis import router as apis_router
 from core.api.data_sources.data_sources import router as data_sources_router
 from core.api.datasets.datasets import router as datasets_router
@@ -412,6 +415,10 @@ app.include_router(auth_router, prefix="/api/v1")
 
 # 公开的组织接口（不需要认证，用于注册等功能）
 app.include_router(tenants_public_router, prefix="/api/v1")
+# 公开的平台设置接口（不需要认证，用于登录页等）
+app.include_router(platform_settings_public_router, prefix="/api/v1/infra")
+# 公开的文件接口（不需要认证，用于平台LOGO等公开资源）
+app.include_router(files_public_router, prefix="/api/v1/core")
 
 # 平台级功能路由 (Platform Level APIs) - 对应 infra/ 文件夹
 app.include_router(packages_config_router, prefix="/api/v1/infra")
@@ -424,6 +431,7 @@ app.include_router(infra_superadmin_router, prefix="/api/v1/infra")
 app.include_router(saved_searches_router, prefix="/api/v1")
 app.include_router(init_wizard_router, prefix="/api/v1/infra")
 app.include_router(industry_template_router, prefix="/api/v1/infra")
+app.include_router(platform_settings_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
 app.include_router(users_router, prefix="/api/v1/core")
