@@ -194,6 +194,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.performance",
                 f"apps.{module_code}.models.product",
                 f"apps.{module_code}.models.work_order",
+                f"apps.{module_code}.models.work_order_operation",
                 f"apps.{module_code}.models.reporting_record",
                 # 仓储管理模块
                 f"apps.{module_code}.models.production_picking",
@@ -323,6 +324,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.performance",
                 f"apps.{module_code}.models.product",
                 f"apps.{module_code}.models.work_order",
+                f"apps.{module_code}.models.work_order_operation",
                 f"apps.{module_code}.models.reporting_record",
                 # 仓储管理模块
                 f"apps.{module_code}.models.production_picking",

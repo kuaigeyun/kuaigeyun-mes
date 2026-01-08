@@ -102,8 +102,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
 
             # 工序跳转规则校验（核心功能，新增）
-            if not work_order_operation.allow_jump:
-                # 不允许跳转：检查前序工序是否完成
+            # 优先使用工单级别的跳转控制，如果没有则使用工序级别的
+            allow_jump = work_order.allow_operation_jump if hasattr(work_order, 'allow_operation_jump') else work_order_operation.allow_jump
+            
+            if not allow_jump:
+                # 不允许跳转：检查前序工序的报工数量
                 previous_operations = await WorkOrderOperation.filter(
                     tenant_id=tenant_id,
                     work_order_id=reporting_data.work_order_id,
@@ -111,10 +114,20 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     deleted_at__isnull=True
                 ).order_by('sequence').all()
 
-                for prev_op in previous_operations:
-                    if prev_op.status != 'completed':
+                if previous_operations:
+                    # 获取前一道工序（sequence最大的前序工序）
+                    previous_operation = previous_operations[-1]
+                    
+                    # 检查前序工序的报工数量
+                    previous_completed = Decimal(str(previous_operation.completed_quantity or 0))
+                    current_completed = Decimal(str(work_order_operation.completed_quantity or 0))
+                    reported_quantity = Decimal(str(reporting_data.reported_quantity))
+                    new_total = current_completed + reported_quantity
+                    
+                    # 下一道工序的报工数量不可超过上一道工序
+                    if new_total > previous_completed:
                         raise BusinessLogicError(
-                            f"工序跳转规则：必须先完成前序工序 '{prev_op.operation_name}'（工序顺序：{prev_op.sequence}）才能报工当前工序"
+                            f"工序跳转规则：当前工序的累计报工数量（{new_total}）不能超过前序工序 '{previous_operation.operation_name}' 的报工数量（{previous_completed}）"
                         )
 
             # 根据报工类型验证数据（核心功能，新增）

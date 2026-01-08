@@ -52,6 +52,7 @@ class WorkOrderOperation(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_work_order_operations"
+        app = "models"  # 指定 Tortoise ORM app 名称
         indexes = [
             ("tenant_id",),
             ("work_order_id",),

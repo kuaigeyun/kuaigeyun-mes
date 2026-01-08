@@ -5,9 +5,12 @@
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
+
+if TYPE_CHECKING:
+    from typing import ForwardRef
 
 
 class WorkOrderBase(BaseModel):
@@ -18,8 +21,8 @@ class WorkOrderBase(BaseModel):
     """
     model_config = ConfigDict(from_attributes=True)
 
-    code: Optional[str] = Field(None, description="工单编码（可选，创建时自动生成）")
-    name: str = Field(..., description="工单名称")
+    code: Optional[str] = Field(None, description="工单编码（必填，可通过编码规则自动生成）")
+    name: Optional[str] = Field(None, description="工单名称（可选）")
     product_id: int = Field(..., description="产品ID")
     product_code: str = Field(..., description="产品编码")
     product_name: str = Field(..., description="产品名称")
@@ -40,6 +43,9 @@ class WorkOrderBase(BaseModel):
     # 状态和优先级
     status: str = Field("draft", description="工单状态")
     priority: str = Field("normal", description="优先级")
+    
+    # 工序跳转控制
+    allow_operation_jump: bool = Field(False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
     
     # 冻结信息
     is_frozen: bool = Field(False, description="是否冻结")
@@ -74,12 +80,14 @@ class WorkOrderCreate(WorkOrderBase):
     - 如果提供 product_id，product_code 和 product_name 将被自动填充
     - 如果只提供 product_code，product_id 将被自动查找
     - code 和 code_rule 至少提供一个：如果提供 code 则手工填写，如果提供 code_rule 则使用编码规则生成
+    - operations: 可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成工序
     """
     code: Optional[str] = Field(None, description="工单编码（可选，如果未提供 code_rule 则为必填）")
     code_rule: Optional[str] = Field(None, description="编码规则代码（可选，如果未提供 code 则为必填）")
     product_id: Optional[int] = Field(None, description="产品ID（可选，如果未提供则根据 product_code 自动查找）")
     product_code: Optional[str] = Field(None, description="产品编码（可选，如果未提供 product_id 则为必填）")
     product_name: Optional[str] = Field(None, description="产品名称（可选，如果未提供则从物料中获取）")
+    operations: Optional[List["WorkOrderOperationCreate"]] = Field(None, description="工单工序列表（可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成）")
 
 
 class WorkOrderUpdate(BaseModel):
@@ -132,7 +140,7 @@ class WorkOrderListResponse(BaseModel):
     id: int = Field(..., description="工单ID")
     uuid: str = Field(..., description="业务ID")
     code: str = Field(..., description="工单编码")
-    name: str = Field(..., description="工单名称")
+    name: Optional[str] = Field(None, description="工单名称（可选）")
     product_name: str = Field(..., description="产品名称")
     quantity: Decimal = Field(..., description="计划生产数量")
     production_mode: str = Field(..., description="生产模式")
@@ -187,7 +195,7 @@ class WorkOrderOperationBase(BaseModel):
     """工单工序基础Schema"""
     model_config = ConfigDict(from_attributes=True)
 
-    work_order_id: int = Field(..., description="工单ID")
+    work_order_id: Optional[int] = Field(None, description="工单ID（创建工单时不需要，创建工序单时需要）")
     operation_id: int = Field(..., description="工序ID")
     operation_code: str = Field(..., max_length=50, description="工序编码")
     operation_name: str = Field(..., max_length=200, description="工序名称")
@@ -278,3 +286,7 @@ class WorkOrderMergeResponse(BaseModel):
     merged_work_order: WorkOrderResponse = Field(..., description="合并后的工单")
     original_work_order_ids: list[int] = Field(..., description="原工单ID列表")
     original_work_order_codes: list[str] = Field(..., description="原工单编码列表")
+
+
+# 更新前向引用（Pydantic v2 需要）
+WorkOrderCreate.model_rebuild()
