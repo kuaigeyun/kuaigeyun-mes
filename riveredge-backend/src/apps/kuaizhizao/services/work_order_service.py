@@ -1816,3 +1816,158 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 original_work_order_ids=original_ids,
                 original_work_order_codes=original_codes,
             )
+
+    async def revoke_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        revoked_by: int
+    ) -> WorkOrderResponse:
+        """
+        撤回工单（从已下达或指定结束状态撤回为草稿状态）
+
+        撤回条件：
+        - 工单状态为 'released'（已下达）或 'completed'（已完成且为指定结束）
+        - 工单没有产生过报工记录
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            revoked_by: 撤回人ID
+
+        Returns:
+            WorkOrderResponse: 更新后的工单信息
+
+        Raises:
+            NotFoundError: 工单不存在
+            ValidationError: 不允许撤回的工单状态
+            BusinessLogicError: 工单已有报工记录，不允许撤回
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单状态：只能撤回已下达或指定结束的工单
+            if work_order.status not in ['released', 'completed']:
+                raise ValidationError(f"只能撤回已下达或指定结束的工单，当前状态：{work_order.status}")
+
+            # 如果是已完成状态，必须是指定结束的工单才能撤回
+            if work_order.status == 'completed' and not work_order.manually_completed:
+                raise ValidationError("只能撤回指定结束的工单，正常完成的工单不允许撤回")
+
+            # 检查是否有报工记录
+            reporting_records = await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).all()
+
+            if reporting_records:
+                raise BusinessLogicError("工单已有报工记录，不允许撤回。只能撤回未报工的工单。")
+
+            # 保存原始状态用于节点时间记录
+            original_status = work_order.status
+
+            # 更新状态为草稿
+            work_order = await self.update_with_user(
+                tenant_id=tenant_id,
+                record_id=work_order_id,
+                updated_by=revoked_by,
+                status='draft',
+                manually_completed=False  # 清除指定结束标记
+            )
+
+            # 记录节点时间
+            try:
+                timing_service = DocumentTimingService()
+                # 结束"下达"节点（如果存在）
+                if original_status == 'released':
+                    await timing_service.record_node_end(
+                        tenant_id=tenant_id,
+                        document_type="work_order",
+                        document_id=work_order_id,
+                        node_code="released",
+                        operator_id=revoked_by,
+                    )
+            except Exception as e:
+                # 节点时间记录失败不影响主流程，记录日志
+                logger.warning(f"记录工单撤回节点时间失败: {e}")
+
+            logger.info(f"工单 {work_order.code} 已撤回为草稿状态")
+            return WorkOrderResponse.model_validate(work_order)
+
+    async def manually_complete_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        completed_by: int
+    ) -> WorkOrderResponse:
+        """
+        指定结束工单
+
+        将工单状态改为已完成，并标记为指定结束。
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            completed_by: 完成人ID
+
+        Returns:
+            WorkOrderResponse: 更新后的工单信息
+
+        Raises:
+            NotFoundError: 工单不存在
+            ValidationError: 不允许指定结束的工单状态
+        """
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+
+            # 检查工单状态：不能对已取消的工单指定结束
+            if work_order.status == 'cancelled':
+                raise ValidationError("已取消的工单不能指定结束")
+
+            # 如果已经是已完成状态，直接返回
+            if work_order.status == 'completed' and work_order.manually_completed:
+                return WorkOrderResponse.model_validate(work_order)
+
+            # 更新状态为已完成，并标记为指定结束
+            from datetime import datetime
+            work_order = await self.update_with_user(
+                tenant_id=tenant_id,
+                record_id=work_order_id,
+                updated_by=completed_by,
+                status='completed',
+                manually_completed=True,
+                actual_end_date=datetime.now()  # 设置实际结束时间
+            )
+
+            # 记录节点时间
+            try:
+                timing_service = DocumentTimingService()
+                # 结束当前节点（如果存在）
+                if work_order.status in ['released', 'in_progress']:
+                    current_node = 'released' if work_order.status == 'released' else 'in_progress'
+                    await timing_service.record_node_end(
+                        tenant_id=tenant_id,
+                        document_type="work_order",
+                        document_id=work_order_id,
+                        node_code=current_node,
+                        operator_id=completed_by,
+                    )
+                # 开始"完成"节点
+                completed_by_info = await self.get_user_info(completed_by)
+                await timing_service.record_node_start(
+                    tenant_id=tenant_id,
+                    document_type="work_order",
+                    document_id=work_order_id,
+                    document_code=work_order.code,
+                    node_name="完成",
+                    node_code="completed",
+                    operator_id=completed_by,
+                    operator_name=completed_by_info["name"],
+                )
+            except Exception as e:
+                # 节点时间记录失败不影响主流程，记录日志
+                logger.warning(f"记录工单指定结束节点时间失败: {e}")
+
+            logger.info(f"工单 {work_order.code} 已指定结束")
+            return WorkOrderResponse.model_validate(work_order)

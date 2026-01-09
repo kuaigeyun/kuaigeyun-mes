@@ -28,6 +28,21 @@ from .system_parameter import SystemParameter
 from .code_rule import CodeRule
 from .code_sequence import CodeSequence
 
+# 物料编码规则模型
+from .material_code_rule import (
+    MaterialCodeRuleMain,
+    MaterialTypeConfig,
+    MaterialCodeRuleAlias,
+    MaterialCodeRuleHistory,
+    MaterialSequenceCounter,
+)
+
+# 变体属性定义模型
+from .material_variant_attribute import (
+    MaterialVariantAttributeDefinition,
+    MaterialVariantAttributeHistory,
+)
+
 # 自定义字段模型
 from .custom_field import CustomField
 from .custom_field_value import CustomFieldValue
@@ -119,6 +134,15 @@ __all__ = [
     # 编码规则模型
     "CodeRule",
     "CodeSequence",
+    # 物料编码规则模型
+    "MaterialCodeRuleMain",
+    "MaterialTypeConfig",
+    "MaterialCodeRuleAlias",
+    "MaterialCodeRuleHistory",
+    "MaterialSequenceCounter",
+    # 变体属性定义模型
+    "MaterialVariantAttributeDefinition",
+    "MaterialVariantAttributeHistory",
     # 自定义字段模型
     "CustomField",
     "CustomFieldValue",

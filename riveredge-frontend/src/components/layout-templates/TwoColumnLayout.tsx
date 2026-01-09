@@ -340,7 +340,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           style={{
             flex: 1,
             overflow: 'auto',
-            padding: 0,
+            padding: '16px',
             backgroundColor: contentBackgroundColor,
           }}
         >

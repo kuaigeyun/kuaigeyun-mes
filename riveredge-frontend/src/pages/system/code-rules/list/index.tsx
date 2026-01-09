@@ -51,6 +51,7 @@ const CodeRuleListPage: React.FC = () => {
     separator: '-',
     seqFormat: '4',
     suffix: '',
+    fields: [] as string[], // 选中的字段列表
   });
 
   /**
@@ -64,8 +65,21 @@ const CodeRuleListPage: React.FC = () => {
       parts.push(builder.prefix);
     }
     
+    // 字段引用（在前缀之后、日期之前）
+    if (builder.fields && builder.fields.length > 0) {
+      builder.fields.forEach(field => {
+        if (parts.length > 0 && builder.separator) {
+          parts.push(builder.separator);
+        }
+        parts.push(`{FIELD:${field}}`);
+      });
+    }
+    
     // 日期格式
     if (builder.dateFormat !== 'none') {
+      if (parts.length > 0 && builder.separator) {
+        parts.push(builder.separator);
+      }
       const dateMap: Record<string, string> = {
         'YYYYMMDD': '{YYYY}{MM}{DD}',
         'YYYYMM': '{YYYY}{MM}',
@@ -92,6 +106,9 @@ const CodeRuleListPage: React.FC = () => {
     
     // 后缀
     if (builder.suffix) {
+      if (parts.length > 0 && builder.separator) {
+        parts.push(builder.separator);
+      }
       parts.push(builder.suffix);
     }
     
@@ -109,7 +126,17 @@ const CodeRuleListPage: React.FC = () => {
       separator: '-',
       seqFormat: '4',
       suffix: '',
+      fields: [] as string[],
     };
+    
+    // 解析字段引用 {FIELD:field_name}
+    const fieldPattern = /\{FIELD:([^}]+)\}/g;
+    const fieldMatches = expression.matchAll(fieldPattern);
+    const fields: string[] = [];
+    for (const match of fieldMatches) {
+      fields.push(match[1]);
+    }
+    builder.fields = fields;
     
     // 匹配日期格式
     if (expression.includes('{YYYY}{MM}{DD}')) {
@@ -850,6 +877,52 @@ const CodeRuleListPage: React.FC = () => {
                             </div>
                             
                             <Text type="secondary" style={{ fontSize: '16px' }}>+</Text>
+                            
+                            {/* 字段引用 */}
+                            {(() => {
+                              const currentPageConfig = pageConfigs.find(p => p.pageCode === selectedPageCode);
+                              const availableFields = currentPageConfig?.availableFields || [];
+                              
+                              // 调试日志
+                              if (selectedPageCode) {
+                                console.log('当前页面配置:', currentPageConfig);
+                                console.log('可用字段:', availableFields);
+                              }
+                              
+                              if (availableFields && availableFields.length > 0) {
+                                return (
+                                  <>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                      <Text type="secondary" style={{ fontSize: '12px' }}>字段</Text>
+                                      <Space size={[4, 4]} wrap>
+                                        {availableFields.map((field) => (
+                                          <Button
+                                            key={field.fieldName}
+                                            size="small"
+                                            type={expressionBuilder.fields?.includes(field.fieldName) ? 'primary' : 'default'}
+                                            onClick={() => {
+                                              const currentFields = expressionBuilder.fields || [];
+                                              const newFields = currentFields.includes(field.fieldName)
+                                                ? currentFields.filter((f: string) => f !== field.fieldName)
+                                                : [...currentFields, field.fieldName];
+                                              const newBuilder = { ...expressionBuilder, fields: newFields };
+                                              setExpressionBuilder(newBuilder);
+                                              const expression = buildExpressionFromBuilder(newBuilder);
+                                              pageRuleFormRef.current?.setFieldValue('expression', expression);
+                                            }}
+                                            title={field.description || field.fieldLabel}
+                                          >
+                                            {field.fieldLabel}
+                                          </Button>
+                                        ))}
+                                      </Space>
+                                    </div>
+                                    <Text type="secondary" style={{ fontSize: '16px' }}>+</Text>
+                                  </>
+                                );
+                              }
+                              return null;
+                            })()}
                             
                             {/* 日期格式 */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

@@ -938,6 +938,50 @@ async def release_work_order(
     )
 
 
+@router.post("/work-orders/{work_order_id}/revoke", response_model=WorkOrderResponse, summary="撤回工单")
+async def revoke_work_order(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    撤回工单
+
+    将已下达或指定结束的工单撤回为草稿状态。
+    撤回条件：
+    - 工单状态为 'released'（已下达）或 'completed'（已完成且为指定结束）
+    - 工单没有产生过报工记录
+
+    - **work_order_id**: 工单ID
+    """
+    return await WorkOrderService().revoke_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        revoked_by=current_user.id
+    )
+
+
+@router.post("/work-orders/{work_order_id}/complete", response_model=WorkOrderResponse, summary="指定结束工单")
+async def manually_complete_work_order(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderResponse:
+    """
+    指定结束工单
+
+    将工单状态改为已完成，并标记为指定结束。
+    指定结束的工单也允许撤回（如果工单没有产生过报工记录）。
+
+    - **work_order_id**: 工单ID
+    """
+    return await WorkOrderService().manually_complete_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        completed_by=current_user.id
+    )
+
+
 @router.get("/work-orders/delayed", summary="查询延期工单")
 async def get_delayed_work_orders(
     days_threshold: int = Query(0, ge=0, description="延期天数阈值（默认0，即只要超过计划结束日期就算延期）"),

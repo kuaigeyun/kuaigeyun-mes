@@ -23,10 +23,13 @@ import type { MenuProps } from 'antd';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { UniTable } from '../../../../components/uni-table';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
+import { MaterialForm } from '../../components/MaterialForm';
 
 // 导入服务和类型
-import { materialApi, materialGroupApi } from '../../../../apps/master-data/services/material';
-import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '../../../../apps/master-data/types/material';
+import { materialApi, materialGroupApi } from '../../services/material';
+import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '../../types/material';
+import { testGenerateCode } from '../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../utils/codeRulePage';
 
 /**
  * 物料管理合并页面组件
@@ -250,9 +253,65 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 物料相关操作
    */
-  const handleCreateMaterial = () => {
+  const handleCreateMaterial = async () => {
     setMaterialIsEdit(false);
+    setCurrentMaterial(null);
     setMaterialModalVisible(true);
+    materialFormRef.current?.resetFields();
+    
+    // 检查是否启用自动编码
+    if (isAutoGenerateEnabled('master-data-material')) {
+      const ruleCode = getPageRuleCode('master-data-material');
+      if (ruleCode) {
+        try {
+          // 获取当前表单值，用于构建上下文（如物料分组编码）
+          const formValues = materialFormRef.current?.getFieldsValue() || {};
+          const context: Record<string, any> = {};
+          
+          // 如果选择了物料分组，获取分组信息
+          if (formValues.groupId) {
+            const group = materialGroups.find(g => g.id === formValues.groupId);
+            if (group) {
+              context.group_code = group.code;
+              context.group_name = group.name;
+            }
+          }
+          
+          // 添加物料类型（如果有）
+          if (formValues.materialType) {
+            context.material_type = formValues.materialType;
+          }
+          
+          // 添加物料名称（如果有）
+          if (formValues.name) {
+            context.name = formValues.name;
+          }
+          
+          // 使用测试生成API预览编码（不更新序号）
+          const codeResponse = await testGenerateCode({ 
+            rule_code: ruleCode,
+            context: Object.keys(context).length > 0 ? context : undefined
+          });
+          materialFormRef.current?.setFieldsValue({
+            mainCode: codeResponse.code,
+            isActive: true,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          materialFormRef.current?.setFieldsValue({
+            isActive: true,
+          });
+        }
+      } else {
+        materialFormRef.current?.setFieldsValue({
+          isActive: true,
+        });
+      }
+    } else {
+      materialFormRef.current?.setFieldsValue({
+        isActive: true,
+      });
+    }
   };
 
   const handleEditMaterial = async (record: Material) => {
@@ -299,7 +358,14 @@ const MaterialsManagementPage: React.FC = () => {
         await materialApi.update(currentMaterial.uuid, values as MaterialUpdate);
         messageApi.success('更新成功');
       } else {
-        await materialApi.create(values as MaterialCreate);
+        // 新建物料时，如果启用了自动编码，不传递 mainCode，让后端自动生成
+        // 这样序号只在真正创建成功时才更新
+        const submitValues = { ...values };
+        if (isAutoGenerateEnabled('master-data-material')) {
+          // 移除预览的编码，让后端在创建时自动生成
+          delete submitValues.mainCode;
+        }
+        await materialApi.create(submitValues as MaterialCreate);
         messageApi.success('创建成功');
       }
 
@@ -724,159 +790,41 @@ const MaterialsManagementPage: React.FC = () => {
         </ProForm>
       </Modal>
 
-      {/* 物料创建/编辑 Modal */}
-      <Modal
-        title={materialIsEdit ? '编辑物料' : '新建物料'}
+      {/* 物料创建/编辑 Modal - 使用新的多标签页表单组件 */}
+      <MaterialForm
         open={materialModalVisible}
-        onCancel={() => setMaterialModalVisible(false)}
-        footer={null}
-        width={800}
-        destroyOnHidden
-      >
-        <ProForm
-          formRef={materialFormRef}
-          submitter={{
-            searchConfig: {
-              submitText: materialIsEdit ? '更新' : '创建',
-            },
-            resetButtonProps: {
-              style: { display: 'none' },
-            },
-          }}
-          onFinish={handleMaterialSubmit}
-          loading={materialFormLoading}
-          initialValues={
-            materialIsEdit && currentMaterial
-              ? {
-                  code: currentMaterial.code,
-                  name: currentMaterial.name,
-                  groupId: currentMaterial.groupId,
-                  specification: currentMaterial.specification,
-                  baseUnit: currentMaterial.baseUnit,
-                  batchManaged: currentMaterial.batchManaged,
-                  variantManaged: currentMaterial.variantManaged,
-                  description: currentMaterial.description,
-                  brand: currentMaterial.brand,
-                  model: currentMaterial.model,
-                  isActive: currentMaterial.isActive,
-                }
-              : {
-                  groupId: selectedGroupId || undefined,
-                  isActive: true,
-                  batchManaged: false,
-                  variantManaged: false,
-                }
-          }
-          layout="vertical"
-          grid={true}
-          rowProps={{ gutter: 16 }}
-        >
-          <SafeProFormSelect
-            name="groupId"
-            label="物料分组"
-            placeholder="请选择物料分组（可选）"
-            colProps={{ span: 12 }}
-            options={materialGroups.map(g => ({
-              label: `${g.code} - ${g.name}`,
-              value: g.id,
-            }))}
-            fieldProps={{
-              loading: materialGroupsLoading,
-              showSearch: true,
-              allowClear: true,
-              filterOption: (input, option) => {
-                const label = option?.label as string || '';
-                return label.toLowerCase().includes(input.toLowerCase());
-              },
-            }}
-          />
-          <ProFormText
-            name="code"
-            label="物料编码"
-            placeholder="请输入物料编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入物料编码' },
-              { max: 50, message: '物料编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="物料名称"
-            placeholder="请输入物料名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入物料名称' },
-              { max: 200, message: '物料名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormText
-            name="baseUnit"
-            label="基础单位"
-            placeholder="请输入基础单位（如：个、件、kg等）"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入基础单位' },
-              { max: 20, message: '基础单位不能超过20个字符' },
-            ]}
-          />
-          <ProFormText
-            name="specification"
-            label="规格"
-            placeholder="请输入规格"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 500, message: '规格不能超过500个字符' },
-            ]}
-          />
-          <ProFormText
-            name="brand"
-            label="品牌"
-            placeholder="请输入品牌"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 100, message: '品牌不能超过100个字符' },
-            ]}
-          />
-          <ProFormText
-            name="model"
-            label="型号"
-            placeholder="请输入型号"
-            colProps={{ span: 12 }}
-            rules={[
-              { max: 100, message: '型号不能超过100个字符' },
-            ]}
-          />
-          <ProFormSwitch
-            name="batchManaged"
-            label="是否启用批号管理"
-            colProps={{ span: 12 }}
-          />
-          <ProFormSwitch
-            name="variantManaged"
-            label="是否启用变体管理"
-            colProps={{ span: 12 }}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
-        </ProForm>
-      </Modal>
+        onClose={() => setMaterialModalVisible(false)}
+        onFinish={handleMaterialSubmit}
+        isEdit={materialIsEdit}
+        material={currentMaterial || undefined}
+        materialGroups={materialGroups}
+        loading={materialFormLoading}
+        initialValues={
+          materialIsEdit && currentMaterial
+            ? {
+                mainCode: currentMaterial.mainCode,
+                name: currentMaterial.name,
+                groupId: currentMaterial.groupId,
+                materialType: (currentMaterial as any).materialType || 'RAW',
+                specification: currentMaterial.specification,
+                baseUnit: currentMaterial.baseUnit,
+                batchManaged: currentMaterial.batchManaged,
+                variantManaged: currentMaterial.variantManaged,
+                variantAttributes: currentMaterial.variantAttributes,
+                description: currentMaterial.description,
+                brand: currentMaterial.brand,
+                model: currentMaterial.model,
+                isActive: currentMaterial.isActive,
+              }
+            : {
+                groupId: selectedGroupId || undefined,
+                isActive: true,
+                batchManaged: false,
+                variantManaged: false,
+                materialType: 'RAW',
+              }
+        }
+      />
 
       {/* 物料详情 Drawer */}
       <Drawer

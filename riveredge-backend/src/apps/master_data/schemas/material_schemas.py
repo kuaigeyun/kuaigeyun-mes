@@ -87,8 +87,10 @@ class MaterialGroupResponse(MaterialGroupBase):
 class MaterialBase(BaseModel):
     """物料基础 Schema"""
     
-    code: str = Field(..., max_length=50, description="物料编码")
+    main_code: Optional[str] = Field(None, max_length=50, description="主编码（系统自动生成，格式：MAT-{类型}-{序号}）")
+    code: Optional[str] = Field(None, max_length=50, description="物料编码（已废弃，保留用于向后兼容，建议使用部门编码）")
     name: str = Field(..., max_length=200, description="物料名称")
+    material_type: str = Field("RAW", max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     group_id: Optional[int] = Field(None, description="物料分组ID")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: str = Field(..., max_length=20, description="基础单位")
@@ -101,12 +103,25 @@ class MaterialBase(BaseModel):
     model: Optional[str] = Field(None, max_length=100, description="型号")
     is_active: bool = Field(True, description="是否启用")
     
-    @validator("code")
-    def validate_code(cls, v):
-        """验证编码格式"""
-        if not v or not v.strip():
-            raise ValueError("物料编码不能为空")
-        return v.strip().upper()
+    # 部门编码列表（用于创建时输入）
+    department_codes: Optional[List[Dict[str, Any]]] = Field(None, description="部门编码列表，格式：[{'code_type': 'SALE', 'code': 'SALE-A001', 'department': '销售部'}]")
+    
+    # 客户编码列表（用于创建时输入）
+    customer_codes: Optional[List[Dict[str, Any]]] = Field(None, description="客户编码列表，格式：[{'customer_id': 1, 'code': 'CUST-A-PART-12345', 'description': '描述'}]")
+    
+    # 供应商编码列表（用于创建时输入）
+    supplier_codes: Optional[List[Dict[str, Any]]] = Field(None, description="供应商编码列表，格式：[{'supplier_id': 1, 'code': 'SUP-B-MAT-67890', 'description': '描述'}]")
+    
+    # 默认值设置（用于创建时输入）
+    defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
+    
+    @validator("material_type")
+    def validate_material_type(cls, v):
+        """验证物料类型"""
+        valid_types = ["FIN", "SEMI", "RAW", "PACK", "AUX"]
+        if v not in valid_types:
+            raise ValueError(f"物料类型必须是以下之一: {', '.join(valid_types)}")
+        return v
     
     @validator("name")
     def validate_name(cls, v):
@@ -134,6 +149,7 @@ class MaterialUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=50, description="物料编码")
     name: Optional[str] = Field(None, max_length=200, description="物料名称")
     group_id: Optional[int] = Field(None, description="物料分组ID")
+    material_type: Optional[str] = Field(None, max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: Optional[str] = Field(None, max_length=20, description="基础单位")
     units: Optional[Dict[str, Any]] = Field(None, description="多单位管理（JSON格式）")
@@ -144,6 +160,18 @@ class MaterialUpdate(BaseModel):
     brand: Optional[str] = Field(None, max_length=100, description="品牌")
     model: Optional[str] = Field(None, max_length=100, description="型号")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    
+    # 部门编码列表（用于更新时输入）
+    department_codes: Optional[List[Dict[str, Any]]] = Field(None, description="部门编码列表")
+    
+    # 客户编码列表（用于更新时输入）
+    customer_codes: Optional[List[Dict[str, Any]]] = Field(None, description="客户编码列表")
+    
+    # 供应商编码列表（用于更新时输入）
+    supplier_codes: Optional[List[Dict[str, Any]]] = Field(None, description="供应商编码列表")
+    
+    # 默认值设置（用于更新时输入）
+    defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
     
     @validator("code")
     def validate_code(cls, v):
@@ -167,12 +195,29 @@ class MaterialUpdate(BaseModel):
         return v.strip() if v else None
 
 
+class MaterialCodeAliasResponse(BaseModel):
+    """物料编码别名响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    code_type: str = Field(..., description="编码类型")
+    code: str = Field(..., description="编码（部门编码、客户编码或供应商编码）")
+    department: Optional[str] = Field(None, description="部门名称（可选，用于部门编码）")
+    external_entity_type: Optional[str] = Field(None, description="外部实体类型（customer/supplier，用于客户编码和供应商编码）")
+    external_entity_id: Optional[int] = Field(None, description="外部实体ID（客户ID或供应商ID）")
+    description: Optional[str] = Field(None, description="描述")
+    is_primary: bool = Field(False, description="是否为主要编码")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MaterialResponse(MaterialBase):
     """物料响应 Schema"""
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
     tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    # main_code 从 MaterialBase 继承，但在这里确保它是必填的（实际数据库中总是有值）
+    main_code: str = Field(..., description="主编码（系统内部唯一标识）")
     group_id: Optional[int] = Field(None, alias="groupId", description="物料分组ID")
     process_route_id: Optional[int] = Field(None, alias="processRouteId", description="工艺路线ID")
     process_route_name: Optional[str] = Field(None, alias="processRouteName", description="工艺路线名称")
@@ -180,6 +225,12 @@ class MaterialResponse(MaterialBase):
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
+    
+    # 默认值设置（从数据库加载）
+    defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
+    
+    # 编码别名列表（可选，需要时加载）
+    code_aliases: Optional[List[MaterialCodeAliasResponse]] = Field(None, description="编码别名列表")
     
     model_config = ConfigDict(
         from_attributes=True,

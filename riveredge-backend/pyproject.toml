@@ -31,6 +31,7 @@ dependencies = [
     "inngest>=0.3.0",  # 工作流引擎
     "openpyxl>=3.1.0",  # Excel文件生成（MIT许可证，商业友好）
     "weasyprint>=60.0",  # PDF文件生成（BSD许可证，商业友好）
+    "openai>=1.0.0",  # OpenAI SDK（大语言模型支持）
 ]
 
 [project.optional-dependencies]

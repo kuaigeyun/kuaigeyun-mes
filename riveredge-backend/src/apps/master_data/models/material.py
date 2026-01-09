@@ -114,21 +114,27 @@ class Material(BaseModel):
         table = "apps_master_data_materials"
         indexes = [
             ("tenant_id",),
-            ("code",),
+            ("main_code",),
+            ("code",),  # 保留用于向后兼容
             ("uuid",),
             ("group_id",),
             ("process_route_id",),
+            ("material_type",),
         ]
-        unique_together = [("tenant_id", "code")]
+        unique_together = [("tenant_id", "main_code")]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
     
     # 基本信息
-    code = fields.CharField(max_length=50, description="物料编码（组织内唯一）")
+    main_code = fields.CharField(max_length=50, description="主编码（系统内部唯一标识，格式：MAT-{类型}-{序号}）")
     name = fields.CharField(max_length=200, description="物料名称")
+    material_type = fields.CharField(max_length=20, default="RAW", description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification = fields.CharField(max_length=500, null=True, description="规格")
     base_unit = fields.CharField(max_length=20, description="基础单位")
+    
+    # 兼容字段：保留code字段作为main_code的别名（向后兼容）
+    code = fields.CharField(max_length=50, null=True, description="物料编码（已废弃，使用main_code，保留用于向后兼容）")
     
     # 多单位管理（JSON格式存储）
     units = fields.JSONField(null=True, description="多单位管理（JSON格式，存储单位列表及换算关系）")
@@ -139,6 +145,9 @@ class Material(BaseModel):
     # 变体管理
     variant_managed = fields.BooleanField(default=False, description="是否启用变体管理")
     variant_attributes = fields.JSONField(null=True, description="变体属性（JSON格式，如颜色、尺寸等）")
+    
+    # 默认值设置（JSON格式存储）
+    defaults = fields.JSONField(null=True, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
     # 扩展信息
     description = fields.TextField(null=True, description="描述")

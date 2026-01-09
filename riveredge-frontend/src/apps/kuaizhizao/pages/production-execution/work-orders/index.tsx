@@ -17,7 +17,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production';
 import { listSalesOrders } from '../../../services/sales';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
@@ -62,6 +62,7 @@ interface WorkOrder {
   frozen_by?: number;
   frozen_by_name?: string;
   allow_operation_jump?: boolean;
+  manually_completed?: boolean;
   remarks?: string;
   created_at?: string;
   updated_at?: string;
@@ -988,6 +989,44 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
+   * 处理撤回工单
+   */
+  const handleRevoke = async (record: WorkOrder) => {
+    Modal.confirm({
+      title: '确认撤回',
+      content: `确定要撤回工单"${record.code}"吗？撤回后工单将变为草稿状态。`,
+      onOk: async () => {
+        try {
+          await workOrderApi.revoke(record.id!.toString());
+          messageApi.success('工单撤回成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '工单撤回失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理指定结束工单
+   */
+  const handleComplete = async (record: WorkOrder) => {
+    Modal.confirm({
+      title: '确认指定结束',
+      content: `确定要指定结束工单"${record.code}"吗？指定结束的工单如果没有报工记录，可以撤回。`,
+      onOk: async () => {
+        try {
+          await workOrderApi.complete(record.id!.toString());
+          messageApi.success('工单已指定结束');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '指定结束失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理创建返工单
    */
   const handleCreateRework = async (record: WorkOrder) => {
@@ -1331,6 +1370,119 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
+   * 触屏视图卡片渲染函数
+   */
+  const renderTouchCard = (workOrder: WorkOrder, index: number) => {
+    const statusColor = 
+      workOrder.status === '草稿' ? 'default' :
+      workOrder.status === '已下达' ? 'processing' :
+      workOrder.status === '生产中' ? 'processing' :
+      workOrder.status === '已完成' ? 'success' :
+      'error';
+
+    return (
+      <Card
+        key={workOrder.id}
+        style={{
+          marginBottom: TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP,
+          fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE,
+        }}
+        bodyStyle={{
+          padding: `${TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP}px`,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP }}>
+          {/* 工单编号和状态 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: TOUCH_SCREEN_CONFIG.TITLE_FONT_SIZE, fontWeight: 600 }}>
+              {workOrder.code}
+            </div>
+            <Tag color={statusColor} style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, padding: '8px 16px' }}>
+              {workOrder.status}
+            </Tag>
+          </div>
+
+          {/* 工单名称 */}
+          {workOrder.name && (
+            <div style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, color: '#666' }}>
+              {workOrder.name}
+            </div>
+          )}
+
+          {/* 产品信息 */}
+          <div style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE }}>
+            <strong>产品：</strong>{workOrder.product_name || workOrder.product_code}
+          </div>
+
+          {/* 数量信息 */}
+          <div style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE }}>
+            <strong>数量：</strong>{workOrder.quantity}
+            {workOrder.completed_quantity !== undefined && workOrder.completed_quantity > 0 && (
+              <span style={{ marginLeft: 16, color: '#52c41a' }}>
+                已完成：{workOrder.completed_quantity}
+              </span>
+            )}
+          </div>
+
+          {/* 生产模式 */}
+          <div style={{ fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE }}>
+            <strong>生产模式：</strong>
+            <Tag color={workOrder.production_mode === 'MTO' ? 'blue' : 'default'} style={{ marginLeft: 8 }}>
+              {workOrder.production_mode === 'MTO' ? '按订单生产' : '按库存生产'}
+            </Tag>
+          </div>
+
+          {/* 操作按钮 */}
+          <div style={{ display: 'flex', gap: TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP, marginTop: TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP }}>
+            <Button
+              type="primary"
+              size="large"
+              icon={<EyeOutlined />}
+              onClick={() => handleDetail(workOrder)}
+              style={{
+                height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE,
+                flex: 1,
+              }}
+            >
+              查看详情
+            </Button>
+            {workOrder.status === '草稿' && (
+              <Button
+                type="default"
+                size="large"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(workOrder)}
+                style={{
+                  height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                  fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE,
+                  flex: 1,
+                }}
+              >
+                编辑
+              </Button>
+            )}
+            {workOrder.status === '草稿' && (
+              <Button
+                type="primary"
+                size="large"
+                onClick={() => handleRelease(workOrder)}
+                style={{
+                  height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                  fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE,
+                  flex: 1,
+                }}
+              >
+                下达
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<WorkOrder>[] = [
@@ -1467,6 +1619,35 @@ const WorkOrdersPage: React.FC = () => {
               下达
             </Button>
           )}
+          {(record.status === '已下达' || record.status === 'released') && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              onClick={() => handleRevoke(record)}
+            >
+              撤回
+            </Button>
+          )}
+          {(record.status === '已完成' || record.status === 'completed') && record.manually_completed && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              onClick={() => handleRevoke(record)}
+            >
+              撤回
+            </Button>
+          )}
+          {record.status !== '已完成' && record.status !== 'completed' && record.status !== '已取消' && record.status !== 'cancelled' && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleComplete(record)}
+            >
+              指定结束
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -1565,6 +1746,11 @@ const WorkOrdersPage: React.FC = () => {
             </Button>,
           ]}
           onDelete={handleDelete}
+          viewTypes={['table', 'touch']}
+          touchViewConfig={{
+            renderCard: renderTouchCard,
+            columns: 1,
+          }}
         />
       </ListPageTemplate>
 

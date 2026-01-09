@@ -85,6 +85,8 @@ class DynamicDatabaseConfigService:
             "core.models.system_parameter",
             "core.models.code_rule",
             "core.models.code_sequence",
+            "core.models.material_code_rule",  # 物料编码规则模型
+            "core.models.material_variant_attribute",  # 物料变体属性定义模型
             "core.models.custom_field",
             "core.models.custom_field_value",
             "core.models.site_setting",
@@ -188,6 +190,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.factory",
                 f"apps.{module_code}.models.warehouse",
                 f"apps.{module_code}.models.material",
+                f"apps.{module_code}.models.material_code_alias",
                 f"apps.{module_code}.models.process",
                 f"apps.{module_code}.models.customer",
                 f"apps.{module_code}.models.supplier",
@@ -318,6 +321,7 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.factory",
                 f"apps.{module_code}.models.warehouse",
                 f"apps.{module_code}.models.material",
+                f"apps.{module_code}.models.material_code_alias",
                 f"apps.{module_code}.models.process",
                 f"apps.{module_code}.models.customer",
                 f"apps.{module_code}.models.supplier",
