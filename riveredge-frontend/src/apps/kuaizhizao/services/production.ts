@@ -36,6 +36,16 @@ export const workOrderApi = {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/release`, { method: 'POST' });
   },
 
+  // 撤回工单
+  revoke: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/revoke`, { method: 'POST' });
+  },
+
+  // 指定结束工单
+  complete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST' });
+  },
+
   // 拆分工单
   split: async (id: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data });

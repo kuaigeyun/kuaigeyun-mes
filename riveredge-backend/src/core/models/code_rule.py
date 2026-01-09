@@ -81,7 +81,7 @@ class CodeRule(BaseModel):
         pattern = r'\{[A-Z0-9_:]+\}'
         matches = re.findall(pattern, self.expression)
         # 验证变量是否支持
-        supported_vars = ['YYYY', 'YY', 'MM', 'DD', 'SEQ', 'DICT']
+        supported_vars = ['YYYY', 'YY', 'MM', 'DD', 'SEQ', 'DICT', 'FIELD']
         for match in matches:
             var = match.strip('{}').split(':')[0]
             if var not in supported_vars:

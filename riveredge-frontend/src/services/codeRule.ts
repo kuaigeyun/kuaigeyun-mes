@@ -228,6 +228,12 @@ export interface CodeRulePageConfigResponse {
   module_icon?: string;
   auto_generate?: boolean;
   rule_code?: string;
+  available_fields?: Array<{
+    field_name: string;
+    field_label: string;
+    field_type: string;
+    description?: string;
+  }>;
 }
 
 /**
@@ -243,6 +249,12 @@ export interface CodeRulePageConfig {
   moduleIcon?: string;
   autoGenerate?: boolean;
   ruleCode?: string;
+  availableFields?: Array<{
+    fieldName: string;
+    fieldLabel: string;
+    fieldType: string;
+    description?: string;
+  }>;
 }
 
 /**
@@ -265,6 +277,12 @@ export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
     moduleIcon: page.module_icon,
     autoGenerate: page.auto_generate ?? false,
     ruleCode: page.rule_code,
+    availableFields: page.available_fields?.map(field => ({
+      fieldName: field.field_name,
+      fieldLabel: field.field_label,
+      fieldType: field.field_type,
+      description: field.description,
+    })),
   }));
 }
 

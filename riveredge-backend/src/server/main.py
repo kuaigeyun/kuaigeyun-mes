@@ -59,6 +59,8 @@ from core.api.positions.positions import router as positions_router
 from core.api.data_dictionaries.data_dictionaries import router as data_dictionaries_router
 from core.api.system_parameters.system_parameters import router as system_parameters_router
 from core.api.code_rules.code_rules import router as code_rules_router
+from core.api.code_rules.material_code_rules import router as material_code_rules_router
+from core.api.variant_attributes.variant_attributes import router as variant_attributes_router
 from core.api.custom_fields.custom_fields import router as custom_fields_router
 from core.api.site_settings.site_settings import router as site_settings_router
 from core.api.invitation_codes.invitation_codes import router as invitation_codes_router
@@ -246,6 +248,7 @@ from core.inngest.functions import (
     approval_action_workflow_function,
     sop_execution_workflow_function,
     sop_node_complete_workflow_function,
+    material_ai_suggestion_workflow,
 )
 
 # 挂载 Inngest 服务端点 - 暂时禁用
@@ -447,6 +450,8 @@ app.include_router(positions_router, prefix="/api/v1/core")
 app.include_router(data_dictionaries_router, prefix="/api/v1/core")
 app.include_router(system_parameters_router, prefix="/api/v1/core")
 app.include_router(code_rules_router, prefix="/api/v1/core")
+app.include_router(material_code_rules_router, prefix="/api/v1/core")
+app.include_router(variant_attributes_router, prefix="/api/v1/core")
 app.include_router(custom_fields_router, prefix="/api/v1/core")
 app.include_router(site_settings_router, prefix="/api/v1/core")
 app.include_router(invitation_codes_router, prefix="/api/v1/core")

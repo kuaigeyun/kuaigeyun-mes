@@ -8,7 +8,7 @@
 import React, { useRef, useLayoutEffect, ReactNode, useState, useEffect } from 'react';
 import { ProTable, ActionType, ProColumns, ProFormInstance, ProTableProps } from '@ant-design/pro-components';
 import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme, Empty } from 'antd';
-import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined, SearchOutlined } from '@ant-design/icons';
+import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined, SearchOutlined, TabletOutlined } from '@ant-design/icons';
 import { QuerySearchButton } from '../riveredge-query';
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
 // 内联的 useProTableSearch hook（简化实现）
@@ -327,18 +327,18 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   showQuickJumper?: boolean;
   /**
    * 视图类型配置
-   * 支持：'table' | 'card' | 'kanban' | 'stats'
+   * 支持：'table' | 'card' | 'kanban' | 'stats' | 'touch'
    * 默认：['table', 'card', 'kanban', 'stats'] - 支持所有视图类型
    */
-  viewTypes?: Array<'table' | 'card' | 'kanban' | 'stats'>;
+  viewTypes?: Array<'table' | 'card' | 'kanban' | 'stats' | 'touch'>;
   /**
    * 默认视图类型（默认：'table'）
    */
-  defaultViewType?: 'table' | 'card' | 'kanban' | 'stats';
+  defaultViewType?: 'table' | 'card' | 'kanban' | 'stats' | 'touch';
   /**
    * 视图切换回调
    */
-  onViewTypeChange?: (viewType: 'table' | 'card' | 'kanban' | 'stats') => void;
+  onViewTypeChange?: (viewType: 'table' | 'card' | 'kanban' | 'stats' | 'touch') => void;
   /**
    * 卡片视图配置（仅当 viewTypes 包含 'card' 时生效）
    */
@@ -397,6 +397,21 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
       config?: any;
     }>;
   };
+  /**
+   * 触屏视图配置（仅当 viewTypes 包含 'touch' 时生效）
+   */
+  touchViewConfig?: {
+    /**
+     * 卡片渲染函数
+     * @param item - 数据项
+     * @param index - 索引
+     */
+    renderCard?: (item: T, index: number) => ReactNode;
+    /**
+     * 每行卡片数量（默认：1，触屏模式通常单列显示）
+     */
+    columns?: number;
+  };
 }
 
 /**
@@ -440,6 +455,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   cardViewConfig,
   kanbanViewConfig,
   statsViewConfig,
+  touchViewConfig,
   actionRef: externalActionRef,
   formRef: externalFormRef,
   ...restProps
@@ -492,7 +508,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [columns]);
   
   // 视图类型状态
-  const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats'>(defaultViewType);
+  const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats' | 'touch'>(defaultViewType);
   // 表格数据状态（用于其他视图）
   const [tableData, setTableData] = useState<T[]>([]);
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
@@ -709,7 +725,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /**
    * 处理视图类型切换
    */
-  const handleViewTypeChange = (viewType: 'table' | 'card' | 'kanban' | 'stats') => {
+  const handleViewTypeChange = (viewType: 'table' | 'card' | 'kanban' | 'stats' | 'touch') => {
     setCurrentViewType(viewType);
     if (onViewTypeChange) {
       onViewTypeChange(viewType);
@@ -729,6 +745,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       { value: 'card', label: '卡片', icon: AppstoreOutlined },
       { value: 'kanban', label: '看板', icon: BarsOutlined },
       { value: 'stats', label: '统计', icon: BarChartOutlined },
+      { value: 'touch', label: '触屏', icon: TabletOutlined },
     ].filter(option => viewTypes.includes(option.value as any));
 
     return (
@@ -1460,6 +1477,52 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               <div style={{ fontSize: '16px', marginBottom: '8px' }}>统计视图</div>
               <div style={{ fontSize: '14px', color: '#999' }}>
                 请配置 <code>statsViewConfig.metrics</code> 来启用统计视图
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 触屏视图 */}
+      {currentViewType === 'touch' && viewTypes.includes('touch') && (
+        <div style={{ 
+          padding: '20px', 
+          minHeight: '400px',
+          fontSize: '24px', // 触屏模式大字体
+        }}>
+          {touchViewConfig?.renderCard ? (
+            tableData.length > 0 ? (
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '20px' // 触屏模式大间距
+              }}>
+                {tableData.map((item, index) => (
+                  <div key={index}>
+                    {touchViewConfig.renderCard!(item, index)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty 
+                description="暂无数据" 
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                style={{ marginTop: '60px' }}
+              />
+            )
+          ) : (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '60px 20px', 
+              color: '#999',
+              background: '#fafafa',
+              borderRadius: '4px',
+              border: '1px dashed #d9d9d9'
+            }}>
+              <TabletOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+              <div style={{ fontSize: '24px', marginBottom: '8px' }}>触屏视图</div>
+              <div style={{ fontSize: '20px', color: '#999' }}>
+                请配置 <code>touchViewConfig.renderCard</code> 来启用触屏视图
               </div>
             </div>
           )}

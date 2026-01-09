@@ -124,6 +124,8 @@ TORTOISE_ORM = {
                 "core.models.system_parameter",
                 "core.models.code_rule",
                 "core.models.code_sequence",
+                "core.models.material_code_rule",  # 物料编码规则模型
+                "core.models.material_variant_attribute",  # 物料变体属性定义模型
                 "core.models.custom_field",
                 "core.models.custom_field_value",
                 "core.models.site_setting",
@@ -155,6 +157,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.factory",  # 工厂数据模型（车间、产线、工位）
                 "apps.master_data.models.warehouse",  # 仓库数据模型（仓库、库区、库位）
                 "apps.master_data.models.material",  # 物料数据模型（物料分组、物料、BOM）
+                "apps.master_data.models.material_code_alias",  # 物料编码别名模型（主编码和部门编码映射）
                 "apps.master_data.models.process",  # 工艺数据模型（不良品、工序、工艺路线、SOP）
                 "apps.master_data.models.customer",  # 供应链数据模型（客户）
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）

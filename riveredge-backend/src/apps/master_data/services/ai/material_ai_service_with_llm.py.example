@@ -1,0 +1,131 @@
+"""
+物料 AI 服务集成 LLM 示例
+
+展示如何在 MaterialAIService 中集成大语言模型。
+
+Author: Luigi Lu
+Date: 2026-01-09
+"""
+
+from typing import Dict, Any, List, Optional
+from loguru import logger
+
+from apps.master_data.models.material import Material
+from apps.master_data.services.material_code_service import MaterialCodeService
+from core.services.ai.llm import LLMService
+
+
+class MaterialAIServiceWithLLM:
+    """
+    物料 AI 服务（集成 LLM 版本）
+    
+    在原有规则引擎基础上，增加 LLM 增强建议。
+    """
+    
+    @staticmethod
+    async def generate_suggestions(
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        material_name: Optional[str] = None,
+        specification: Optional[str] = None,
+        base_unit: Optional[str] = None,
+        material_type: Optional[str] = None,
+        use_llm: bool = True,  # 是否使用 LLM
+    ) -> List[Dict[str, Any]]:
+        """
+        生成物料 AI 建议（集成 LLM）
+        
+        结合规则引擎和 LLM 生成建议。
+        """
+        suggestions = []
+        
+        # 1. 使用规则引擎生成基础建议（必须）
+        # ... 原有的规则引擎逻辑 ...
+        
+        # 2. 使用 LLM 生成增强建议（可选）
+        if use_llm:
+            try:
+                llm_suggestions = await MaterialAIServiceWithLLM._generate_llm_suggestions(
+                    tenant_id=tenant_id,
+                    material_name=material_name,
+                    specification=specification,
+                    base_unit=base_unit,
+                    material_type=material_type,
+                )
+                suggestions.extend(llm_suggestions)
+            except Exception as e:
+                logger.warning(f"LLM 建议生成失败，降级到规则引擎: {e}")
+                # LLM 失败时不影响基础建议
+        
+        return suggestions
+    
+    @staticmethod
+    async def _generate_llm_suggestions(
+        tenant_id: int,
+        material_name: Optional[str] = None,
+        specification: Optional[str] = None,
+        base_unit: Optional[str] = None,
+        material_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        使用 LLM 生成增强建议
+        """
+        suggestions = []
+        
+        # 构建提示词
+        prompt = f"""
+请分析以下物料信息，提供专业的配置建议：
+
+物料名称：{material_name or '未提供'}
+物料类型：{material_type or '未提供'}
+规格：{specification or '未提供'}
+基础单位：{base_unit or '未提供'}
+
+请从以下角度提供建议：
+1. 物料配置建议（安全库存、默认仓库等）
+2. 业务使用建议（采购、销售、生产等）
+3. 数据完整性建议（需要补充的字段）
+
+请以 JSON 格式返回，格式如下：
+{{
+    "suggestions": [
+        {{
+            "type": "configuration",
+            "level": "info",
+            "title": "建议标题",
+            "message": "建议消息",
+            "details": ["详细说明1", "详细说明2"]
+        }}
+    ]
+}}
+"""
+        
+        # 调用 LLM
+        try:
+            response_text = await LLMService.generate_text(
+                prompt=prompt,
+                system_prompt="你是一个专业的物料管理专家，能够提供准确、有用的配置建议。",
+                temperature=0.7,
+                max_tokens=500,
+            )
+            
+            # 解析 LLM 响应（简化版，实际应该更健壮）
+            import json
+            # 尝试提取 JSON（LLM 可能返回 Markdown 格式）
+            if "```json" in response_text:
+                json_start = response_text.find("```json") + 7
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+            elif "```" in response_text:
+                json_start = response_text.find("```") + 3
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+            
+            result = json.loads(response_text)
+            suggestions = result.get("suggestions", [])
+            
+        except Exception as e:
+            logger.error(f"LLM 响应解析失败: {e}")
+            # 返回空列表，不影响其他建议
+        
+        return suggestions

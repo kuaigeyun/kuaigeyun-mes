@@ -124,6 +124,16 @@ class CodeGenerationResponse(BaseModel):
     rule_name: str = Field(..., description="规则名称")
 
 
+class CodeRulePageFieldConfig(BaseModel):
+    """
+    编码规则页面可用字段配置 Schema
+    """
+    field_name: str = Field(..., description="字段名称")
+    field_label: str = Field(..., description="字段显示名称")
+    field_type: str = Field(..., description="字段类型")
+    description: Optional[str] = Field(None, description="字段描述")
+
+
 class CodeRulePageConfigResponse(BaseModel):
     """
     编码规则页面配置响应 Schema
@@ -139,4 +149,5 @@ class CodeRulePageConfigResponse(BaseModel):
     module_icon: Optional[str] = Field(None, description="模块图标")
     auto_generate: bool = Field(default=False, description="是否启用自动编码")
     rule_code: Optional[str] = Field(None, description="关联的编码规则代码")
+    available_fields: Optional[list[CodeRulePageFieldConfig]] = Field(None, description="可用字段列表（用于字段引用）")
 

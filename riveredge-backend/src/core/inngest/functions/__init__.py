@@ -60,6 +60,13 @@ if INNGEST_AVAILABLE:
     except ImportError:
         sop_execution_workflow_function = None
         sop_node_complete_workflow_function = None
+    
+    try:
+        from apps.master_data.inngest.functions.material_ai_suggestion_workflow import (
+            material_ai_suggestion_workflow
+        )
+    except ImportError:
+        material_ai_suggestion_workflow = None
 
 __all__ = [
     "test_integration_function",
@@ -70,5 +77,6 @@ __all__ = [
     "approval_action_workflow_function",
     "sop_execution_workflow_function",
     "sop_node_complete_workflow_function",
+    "material_ai_suggestion_workflow",
 ]
 

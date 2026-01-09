@@ -88,11 +88,38 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "page_code": "master-data-material",
         "page_name": "物料管理",
         "page_path": "/apps/master-data/materials",
-        "code_field": "code",
-        "code_field_label": "物料编码",
+        "code_field": "main_code",
+        "code_field_label": "物料主编码",
         "module": "主数据管理",
         "module_icon": "database",
-        "auto_generate": False,
+        "auto_generate": True,
+        "rule_code": "MATERIAL_CODE",
+        "available_fields": [
+            {
+                "field_name": "group_code",
+                "field_label": "物料分组编码",
+                "field_type": "string",
+                "description": "物料所属分组的编码"
+            },
+            {
+                "field_name": "group_name",
+                "field_label": "物料分组名称",
+                "field_type": "string",
+                "description": "物料所属分组的名称"
+            },
+            {
+                "field_name": "material_type",
+                "field_label": "物料类型",
+                "field_type": "string",
+                "description": "物料类型（FIN/SEMI/RAW/PACK/AUX）"
+            },
+            {
+                "field_name": "name",
+                "field_label": "物料名称",
+                "field_type": "string",
+                "description": "物料名称"
+            }
+        ]
     },
     # 主数据管理 - 工艺管理
     {

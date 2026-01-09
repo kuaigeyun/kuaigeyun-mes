@@ -127,3 +127,16 @@ async def get_current_tenant(
 
     return tenant_id
 
+
+async def get_current_user_id(user: User = Depends(get_current_user)) -> Optional[int]:
+    """
+    获取当前用户ID
+    
+    Args:
+        user: 当前用户对象（依赖注入）
+    
+    Returns:
+        Optional[int]: 当前用户ID
+    """
+    return user.id if user else None
+

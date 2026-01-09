@@ -41,13 +41,26 @@ export interface MaterialGroupListParams {
   isActive?: boolean;
 }
 
+export interface MaterialCodeAlias {
+  id: number;
+  codeType: string;
+  code: string;
+  department?: string;
+  externalEntityType?: string;
+  externalEntityId?: number;
+  description?: string;
+  isPrimary: boolean;
+}
+
 export interface Material {
   id: number;
   uuid: string;
   tenantId: number;
-  code: string;
+  code?: string; // 已废弃，保留用于向后兼容
+  mainCode?: string; // 主编码（系统内部唯一标识）
   name: string;
   groupId?: number;
+  materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit: string;
   units?: Record<string, any>;
@@ -58,15 +71,87 @@ export interface Material {
   brand?: string;
   model?: string;
   isActive: boolean;
+  defaults?: MaterialDefaults; // 默认值设置
+  codeAliases?: MaterialCodeAlias[]; // 编码别名列表
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
 }
 
+// 编码映射类型定义
+export interface DepartmentCodeMapping {
+  code_type: string; // 编码类型（SALE/DES/PUR/WH/PROD等）
+  code: string; // 编码
+  department?: string; // 部门名称
+  description?: string; // 描述
+}
+
+export interface CustomerCodeMapping {
+  customerId: number; // 客户ID
+  customerUuid?: string; // 客户UUID
+  customerName?: string; // 客户名称（用于显示）
+  code: string; // 客户编码
+  description?: string; // 描述
+}
+
+export interface SupplierCodeMapping {
+  supplierId: number; // 供应商ID
+  supplierUuid?: string; // 供应商UUID
+  supplierName?: string; // 供应商名称（用于显示）
+  code: string; // 供应商编码
+  description?: string; // 描述
+}
+
+// 默认值类型定义
+export interface MaterialDefaults {
+  // 财务默认值
+  defaultTaxRate?: number; // 默认税率（百分比，如13表示13%）
+  defaultAccount?: string; // 默认科目
+  
+  // 采购默认值
+  defaultSuppliers?: Array<{
+    supplierId: number;
+    supplierUuid?: string;
+    supplierName?: string;
+    priority?: number; // 优先级（1为最高）
+  }>;
+  defaultPurchasePrice?: number; // 默认采购价格
+  defaultPurchaseUnit?: string; // 默认采购单位
+  defaultPurchaseLeadTime?: number; // 默认采购周期（天数）
+  
+  // 销售默认值
+  defaultSalePrice?: number; // 默认销售价格
+  defaultSaleUnit?: string; // 默认销售单位
+  defaultCustomers?: Array<{
+    customerId: number;
+    customerUuid?: string;
+    customerName?: string;
+  }>;
+  
+  // 库存默认值
+  defaultWarehouses?: Array<{
+    warehouseId: number;
+    warehouseUuid?: string;
+    warehouseName?: string;
+    priority?: number; // 优先级
+  }>;
+  defaultLocation?: string; // 默认库位
+  safetyStock?: number; // 安全库存
+  maxStock?: number; // 最大库存
+  minStock?: number; // 最小库存
+  
+  // 生产默认值
+  defaultProcessRoute?: number; // 默认工艺路线ID
+  defaultProcessRouteUuid?: string; // 默认工艺路线UUID
+  defaultProductionUnit?: string; // 默认生产单位
+}
+
 export interface MaterialCreate {
-  code: string;
+  code?: string; // 已废弃，保留用于向后兼容
+  mainCode?: string; // 主编码（如果未提供，系统会根据编码规则自动生成）
   name: string;
   groupId?: number;
+  materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit: string;
   units?: Record<string, any>;
@@ -77,12 +162,19 @@ export interface MaterialCreate {
   brand?: string;
   model?: string;
   isActive?: boolean;
+  // 编码映射
+  departmentCodes?: DepartmentCodeMapping[]; // 部门编码列表
+  customerCodes?: CustomerCodeMapping[]; // 客户编码列表
+  supplierCodes?: SupplierCodeMapping[]; // 供应商编码列表
+  // 默认值设置
+  defaults?: MaterialDefaults;
 }
 
 export interface MaterialUpdate {
   code?: string;
   name?: string;
   groupId?: number;
+  materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit?: string;
   units?: Record<string, any>;
@@ -93,6 +185,12 @@ export interface MaterialUpdate {
   brand?: string;
   model?: string;
   isActive?: boolean;
+  // 编码映射
+  departmentCodes?: DepartmentCodeMapping[]; // 部门编码列表
+  customerCodes?: CustomerCodeMapping[]; // 客户编码列表
+  supplierCodes?: SupplierCodeMapping[]; // 供应商编码列表
+  // 默认值设置
+  defaults?: MaterialDefaults;
 }
 
 export interface MaterialListParams {

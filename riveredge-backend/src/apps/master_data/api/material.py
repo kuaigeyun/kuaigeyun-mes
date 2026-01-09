@@ -19,6 +19,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
     MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse
 )
+from apps.master_data.services.ai.material_ai_service import MaterialAIService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/materials", tags=["Material"])
@@ -692,4 +693,89 @@ async def batch_import_material_code_mappings(
         - **errors**: 错误列表
     """
     return await MaterialCodeMappingService.batch_create_mappings(tenant_id, mappings_data)
+
+
+# ==================== AI 建议相关接口 ====================
+
+@router.get("/ai-suggestions/preview", summary="预览 AI 建议（创建前）")
+async def preview_ai_suggestions(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    material_name: str = Query(..., description="物料名称"),
+    specification: Optional[str] = Query(None, description="规格"),
+    base_unit: Optional[str] = Query(None, description="基础单位"),
+    material_type: Optional[str] = Query(None, description="物料类型")
+):
+    """
+    预览 AI 建议（创建前）
+    
+    在创建物料前，基于输入信息生成 AI 建议，主要用于：
+    - 识别重复物料
+    - 配置建议
+    
+    - **material_name**: 物料名称（必填）
+    - **specification**: 规格（可选）
+    - **base_unit**: 基础单位（可选）
+    - **material_type**: 物料类型（可选）
+    """
+    try:
+        suggestions = await MaterialAIService.generate_suggestions(
+            tenant_id=tenant_id,
+            material_id=None,  # 创建前，material_id 为 None
+            material_name=material_name,
+            specification=specification,
+            base_unit=base_unit,
+            material_type=material_type,
+        )
+        return {
+            "suggestions": suggestions,
+            "count": len(suggestions)
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成 AI 建议失败: {str(e)}"
+        )
+
+
+@router.get("/{material_uuid}/ai-suggestions", summary="获取物料 AI 建议（创建后）")
+async def get_material_ai_suggestions(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取物料 AI 建议（创建后）
+    
+    在物料创建后，基于已创建的物料生成 AI 建议，主要用于：
+    - 识别重复物料
+    - 配置建议
+    - 数据完整性检查
+    
+    - **material_uuid**: 物料UUID
+    """
+    try:
+        # 先获取物料信息
+        material = await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
+        
+        suggestions = await MaterialAIService.generate_suggestions(
+            tenant_id=tenant_id,
+            material_id=material.id,
+            material_name=material.name,
+            specification=material.specification,
+            base_unit=material.base_unit,
+            material_type=material.material_type,
+        )
+        return {
+            "material_uuid": material_uuid,
+            "suggestions": suggestions,
+            "count": len(suggestions)
+        }
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成 AI 建议失败: {str(e)}"
+        )
 

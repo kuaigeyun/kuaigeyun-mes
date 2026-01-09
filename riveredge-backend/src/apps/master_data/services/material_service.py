@@ -6,15 +6,21 @@
 
 from typing import List, Optional, TYPE_CHECKING
 from decimal import Decimal
+import json
 
 from tortoise.models import Q
 from apps.master_data.models.material import MaterialGroup, Material, BOM
+from apps.master_data.models.material_code_alias import MaterialCodeAlias
+from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate
 )
+from core.services.business.code_generation_service import CodeGenerationService
+from core.config.code_rule_pages import CODE_RULE_PAGES
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from loguru import logger
 
 if TYPE_CHECKING:
     from apps.master_data.schemas.material_schemas import (
@@ -324,7 +330,8 @@ class MaterialService:
         Raises:
             ValidationError: 当编码已存在或分组不存在时抛出
         """
-        # 如果指定了分组，检查分组是否存在
+        # 如果指定了分组，检查分组是否存在并获取分组信息
+        group = None
         if data.group_id:
             group = await MaterialGroup.filter(
                 tenant_id=tenant_id,
@@ -335,23 +342,369 @@ class MaterialService:
             if not group:
                 raise ValidationError(f"物料分组 {data.group_id} 不存在")
         
-        # 检查编码是否已存在
-        existing = await Material.filter(
-            tenant_id=tenant_id,
-            code=data.code,
-            deleted_at__isnull=True
-        ).first()
+        # 生成主编码（如果未提供）
+        if not data.main_code:
+            # 首先尝试使用编码规则生成编码
+            material_page_config = next(
+                (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
+                None
+            )
+            
+            if material_page_config and material_page_config.get("rule_code"):
+                try:
+                    # 构建上下文变量，包含物料分组编码等字段值
+                    context = {}
+                    
+                    # 如果指定了分组，添加分组信息到上下文
+                    if group:
+                        context["group_code"] = group.code
+                        context["group_name"] = group.name
+                    
+                    # 添加物料类型
+                    context["material_type"] = data.material_type
+                    
+                    # 添加物料名称（如果需要）
+                    context["name"] = data.name
+                    
+                    # 使用编码规则生成编码
+                    data.main_code = await CodeGenerationService.generate_code(
+                        tenant_id=tenant_id,
+                        rule_code=material_page_config["rule_code"],
+                        context=context
+                    )
+                    logger.info(f"使用编码规则生成物料主编码: {data.main_code}")
+                except Exception as e:
+                    # 如果编码规则生成失败，回退到默认生成方式
+                    logger.warning(f"使用编码规则生成物料编码失败: {e}，回退到默认生成方式")
+                    data.main_code = await MaterialCodeService.generate_main_code(
+                        tenant_id=tenant_id,
+                        material_type=data.material_type
+                    )
+            else:
+                # 如果没有配置编码规则，使用默认生成方式
+                data.main_code = await MaterialCodeService.generate_main_code(
+                    tenant_id=tenant_id,
+                    material_type=data.material_type
+                )
         
-        if existing:
-            raise ValidationError(f"物料编码 {data.code} 已存在")
+        # 变体管理相关验证
+        master_material = None
+        if data.variant_managed and data.variant_attributes:
+            # 如果是变体物料，需要找到主物料
+            # 主物料：variant_managed=True, variant_attributes=null
+            master_material = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=data.main_code,
+                variant_managed=True,
+                variant_attributes__isnull=True,  # 主物料的variant_attributes为null
+                deleted_at__isnull=True
+            ).first()
+            
+            if not master_material:
+                raise ValidationError(
+                    f"变体物料必须关联到已存在的主物料。主编码 {data.main_code} 对应的主物料不存在。"
+                    f"请先创建主物料（variant_managed=True, variant_attributes=null）"
+                )
+            
+            # 验证变体属性值
+            from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
+            for attr_name, attr_value in data.variant_attributes.items():
+                is_valid, error_message = await MaterialVariantAttributeService.validate_variant_attribute_value(
+                    tenant_id=tenant_id,
+                    attribute_name=attr_name,
+                    attribute_value=attr_value,
+                )
+                if not is_valid:
+                    raise ValidationError(f"变体属性验证失败: {error_message}")
+            
+            # 检查变体组合唯一性（同一主物料下，相同的属性组合必须唯一）
+            # 注意：PostgreSQL的JSONB字段比较是精确匹配，需要确保属性顺序一致
+            # 使用排序后的JSON字符串进行比较，确保键顺序一致
+            variant_attributes_json = json.dumps(data.variant_attributes, sort_keys=True)
+            
+            # 查询该主物料的所有变体（variant_managed=True, variant_attributes不为null）
+            existing_variants = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=data.main_code,
+                variant_managed=True,
+                variant_attributes__isnull=False,  # 只查询变体物料，不包括主物料
+                deleted_at__isnull=True
+            ).all()
+            
+            # 检查是否有相同的变体属性组合
+            for existing in existing_variants:
+                if existing.variant_attributes:
+                    # 使用排序后的JSON字符串进行比较，确保键顺序一致
+                    existing_attrs_json = json.dumps(existing.variant_attributes, sort_keys=True)
+                    if existing_attrs_json == variant_attributes_json:
+                        raise ValidationError(
+                            f"变体属性组合已存在: {data.variant_attributes}，"
+                            f"已存在的物料: {existing.name} ({existing.main_code})"
+                        )
+        else:
+            # 如果不是变体物料，检查主编码是否已存在（主编码必须唯一，除非是变体物料）
+            existing = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=data.main_code,
+                deleted_at__isnull=True
+            ).first()
+            
+            if existing:
+                # 如果已存在的物料是主物料（variant_managed=True, variant_attributes=null）
+                # 则允许创建变体，但当前逻辑不允许创建非变体物料
+                if existing.variant_managed and existing.variant_attributes is None:
+                    raise ValidationError(
+                        f"主编码 {data.main_code} 已存在主物料。"
+                        f"如需创建变体，请设置 variant_managed=True 并提供 variant_attributes"
+                    )
+                else:
+                    raise ValidationError(f"主编码 {data.main_code} 已存在")
+        
+        # 智能识别重复物料
+        duplicates = await MaterialCodeService.find_duplicate_materials(
+            tenant_id=tenant_id,
+            name=data.name,
+            specification=data.specification,
+            base_unit=data.base_unit
+        )
+        
+        # 如果有高置信度的重复物料，记录警告（但不阻止创建）
+        if duplicates:
+            high_confidence_duplicates = [d for d in duplicates if d["confidence"] == "high"]
+            if high_confidence_duplicates:
+                logger.warning(
+                    f"检测到高置信度重复物料: {data.name}，"
+                    f"可能重复的物料: {[d['material'].main_code for d in high_confidence_duplicates]}"
+                )
+        
+        # 准备创建数据
+        # 使用 model_dump 方法（Pydantic v2）或 dict 方法（Pydantic v1）
+        if hasattr(data, 'model_dump'):
+            material_data = data.model_dump(exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+        else:
+            material_data = data.dict(exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+        # 兼容处理：如果提供了code但没有main_code，将code作为main_code（向后兼容）
+        if not material_data.get("main_code") and material_data.get("code"):
+            material_data["main_code"] = material_data["code"]
+        
+        # 处理变体属性：确保JSON键顺序一致（用于数据库唯一性索引）
+        if material_data.get("variant_attributes"):
+            # 使用排序后的JSON，确保键顺序一致
+            sorted_attrs = dict(sorted(material_data["variant_attributes"].items()))
+            material_data["variant_attributes"] = sorted_attrs
+        
+        # 处理默认值
+        if data.defaults:
+            material_data["defaults"] = data.defaults
         
         # 创建物料
         material = await Material.create(
             tenant_id=tenant_id,
-            **data.dict()
+            **material_data
         )
         
-        return MaterialResponse.model_validate(material)
+        # 如果是变体物料，自动生成变体编码并作为部门编码（类型：VARIANT）存储
+        if data.variant_managed and data.variant_attributes and master_material:
+            try:
+                # 生成变体标识（简化版本：使用属性值的首字母或缩写）
+                # TODO: 后续可以通过变体编码规则配置来生成更复杂的变体标识
+                variant_parts = []
+                for attr_name, attr_value in sorted(data.variant_attributes.items()):
+                    # 简化处理：如果是枚举值，使用前3个字符；如果是文本，使用前3个字符；如果是数字，直接使用
+                    if isinstance(attr_value, (int, float)):
+                        variant_parts.append(str(attr_value))
+                    elif isinstance(attr_value, str):
+                        # 如果是中文，取前2个字符；如果是英文，取前3个字符并转大写
+                        if any('\u4e00' <= char <= '\u9fff' for char in attr_value):
+                            variant_parts.append(attr_value[:2])
+                        else:
+                            variant_parts.append(attr_value[:3].upper())
+                    else:
+                        variant_parts.append(str(attr_value)[:3].upper())
+                
+                variant_suffix = "-".join(variant_parts)
+                variant_code = f"{material.main_code}-{variant_suffix}"
+                
+                # 将变体编码作为部门编码（类型：VARIANT）存储
+                await MaterialCodeService.create_code_alias(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type="VARIANT",
+                    code=variant_code,
+                    description=f"变体编码：{', '.join([f'{k}={v}' for k, v in sorted(data.variant_attributes.items())])}"
+                )
+                logger.info(f"自动生成变体编码: {variant_code} (material_id={material.id})")
+            except Exception as e:
+                # 如果变体编码生成失败，记录警告但不阻止创建
+                logger.warning(f"生成变体编码失败: {e}")
+        
+        # 创建部门编码别名（如果提供了部门编码）
+        if data.department_codes:
+            for alias_data in data.department_codes:
+                try:
+                    await MaterialCodeService.create_code_alias(
+                        tenant_id=tenant_id,
+                        material_id=material.id,
+                        code_type=alias_data.get("code_type", "CUSTOM"),
+                        code=alias_data.get("code"),
+                        department=alias_data.get("department"),
+                        description=alias_data.get("description"),
+                        is_primary=alias_data.get("is_primary", False)
+                    )
+                except ValidationError as e:
+                    # 如果编码已存在，记录警告但不阻止创建
+                    logger.warning(f"创建编码别名失败: {e}")
+        
+        # 创建客户编码别名（如果提供了客户编码）
+        if data.customer_codes:
+            for customer_code_data in data.customer_codes:
+                try:
+                    await MaterialCodeService.create_code_alias(
+                        tenant_id=tenant_id,
+                        material_id=material.id,
+                        code_type="CUSTOMER",
+                        code=customer_code_data.get("code"),
+                        description=customer_code_data.get("description"),
+                        external_entity_type="customer",
+                        external_entity_id=customer_code_data.get("customer_id")
+                    )
+                except ValidationError as e:
+                    logger.warning(f"创建客户编码别名失败: {e}")
+        
+        # 创建供应商编码别名（如果提供了供应商编码）
+        if data.supplier_codes:
+            for supplier_code_data in data.supplier_codes:
+                try:
+                    await MaterialCodeService.create_code_alias(
+                        tenant_id=tenant_id,
+                        material_id=material.id,
+                        code_type="SUPPLIER",
+                        code=supplier_code_data.get("code"),
+                        description=supplier_code_data.get("description"),
+                        external_entity_type="supplier",
+                        external_entity_id=supplier_code_data.get("supplier_id")
+                    )
+                except ValidationError as e:
+                    logger.warning(f"创建供应商编码别名失败: {e}")
+        
+        # 加载编码别名
+        aliases = await MaterialCodeService.get_material_aliases(
+            tenant_id=tenant_id,
+            material_id=material.id
+        )
+        
+        # 构建响应
+        from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
+        response = MaterialResponse.model_validate(material)
+        response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
+        # 确保defaults字段被包含在响应中
+        if hasattr(material, 'defaults'):
+            response.defaults = material.defaults
+        
+        # 发送 Inngest 事件，触发 AI 建议工作流（异步处理）
+        try:
+            from core.inngest.client import inngest_client
+            from inngest import Event
+            
+            await inngest_client.send_event(
+                event=Event(
+                    name="material/created",
+                    data={
+                        "tenant_id": tenant_id,
+                        "material_id": material.id,
+                        "material_uuid": str(material.uuid),
+                        "material_name": material.name,
+                        "material_type": material.material_type,
+                        "specification": material.specification,
+                        "base_unit": material.base_unit,
+                    }
+                )
+            )
+            logger.info(f"已发送物料创建事件到 Inngest: material_id={material.id}")
+        except Exception as e:
+            # Inngest 事件发送失败不影响物料创建，仅记录警告
+            logger.warning(f"发送物料创建事件到 Inngest 失败: {e}")
+        
+        return response
+    
+    @staticmethod
+    async def get_material_variants(
+        tenant_id: int,
+        master_material_id: Optional[int] = None,
+        master_material_uuid: Optional[str] = None,
+        main_code: Optional[str] = None
+    ) -> List[MaterialResponse]:
+        """
+        获取主物料的所有变体
+        
+        Args:
+            tenant_id: 租户ID
+            master_material_id: 主物料ID（可选）
+            master_material_uuid: 主物料UUID（可选）
+            main_code: 主编码（可选，如果提供，将查询该主编码下的所有变体）
+            
+        Returns:
+            List[MaterialResponse]: 变体物料列表
+            
+        Raises:
+            NotFoundError: 当主物料不存在时抛出
+            ValidationError: 当参数不足时抛出
+        """
+        # 确定主物料
+        master_material = None
+        
+        if master_material_id:
+            master_material = await Material.filter(
+                tenant_id=tenant_id,
+                id=master_material_id,
+                deleted_at__isnull=True
+            ).first()
+        elif master_material_uuid:
+            master_material = await Material.filter(
+                tenant_id=tenant_id,
+                uuid=master_material_uuid,
+                deleted_at__isnull=True
+            ).first()
+        elif main_code:
+            # 通过主编码查找主物料（variant_managed=True, variant_attributes=null）
+            master_material = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=main_code,
+                variant_managed=True,
+                variant_attributes__isnull=True,
+                deleted_at__isnull=True
+            ).first()
+        else:
+            raise ValidationError("必须提供 master_material_id、master_material_uuid 或 main_code 之一")
+        
+        if not master_material:
+            identifier = master_material_id or master_material_uuid or main_code
+            raise NotFoundError(f"主物料不存在: {identifier}")
+        
+        # 查询该主物料的所有变体（variant_managed=True, variant_attributes不为null）
+        variants = await Material.filter(
+            tenant_id=tenant_id,
+            main_code=master_material.main_code,
+            variant_managed=True,
+            variant_attributes__isnull=False,  # 变体物料的variant_attributes不为null
+            deleted_at__isnull=True
+        ).prefetch_related("group").all()
+        
+        # 加载编码别名并构建响应
+        from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
+        result = []
+        for variant in variants:
+            aliases = await MaterialCodeService.get_material_aliases(
+                tenant_id=tenant_id,
+                material_id=variant.id
+            )
+            response = MaterialResponse.model_validate(variant)
+            response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
+            if hasattr(variant, 'defaults'):
+                response.defaults = variant.defaults
+            result.append(response)
+        
+        return result
     
     @staticmethod
     async def get_material_by_uuid(
@@ -380,7 +733,21 @@ class MaterialService:
         if not material:
             raise NotFoundError(f"物料 {material_uuid} 不存在")
         
-        return MaterialResponse.model_validate(material)
+        # 加载编码别名
+        aliases = await MaterialCodeService.get_material_aliases(
+            tenant_id=tenant_id,
+            material_id=material.id
+        )
+        
+        # 构建响应
+        from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
+        response = MaterialResponse.model_validate(material)
+        response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
+        # 确保defaults字段被包含在响应中
+        if hasattr(material, 'defaults'):
+            response.defaults = material.defaults
+        
+        return response
     
     @staticmethod
     async def list_materials(
@@ -420,23 +787,42 @@ class MaterialService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        # 添加搜索条件
+        # 添加搜索条件（支持主编码和部门编码搜索）
         if keyword:
-            # 关键词搜索物料编码或名称
-            query = query.filter(
-                Q(code__icontains=keyword) | Q(name__icontains=keyword)
-            )
+            # 首先尝试通过主编码或名称搜索
+            main_code_query = Q(main_code__icontains=keyword) | Q(name__icontains=keyword)
+            # 如果有关键词，也尝试通过部门编码搜索
+            code_aliases = await MaterialCodeAlias.filter(
+                tenant_id=tenant_id,
+                code__icontains=keyword,
+                deleted_at__isnull=True
+            ).values_list("material_id", flat=True)
+            
+            if code_aliases:
+                # 如果找到部门编码匹配，添加到查询条件
+                query = query.filter(main_code_query | Q(id__in=code_aliases))
+            else:
+                query = query.filter(main_code_query)
 
         if code:
-            # 精确匹配物料编码
-            query = query.filter(code__icontains=code)
+            # 首先尝试通过主编码匹配
+            material_by_code = await MaterialCodeService.get_material_by_code(
+                tenant_id=tenant_id,
+                code=code
+            )
+            if material_by_code:
+                # 如果找到物料，只返回该物料
+                query = query.filter(id=material_by_code.id)
+            else:
+                # 如果未找到，尝试模糊匹配主编码
+                query = query.filter(main_code__icontains=code)
 
         if name:
             # 模糊匹配物料名称
             query = query.filter(name__icontains=name)
         
         # 预加载关联关系（优化，修复500错误）
-        materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by("code").all()
+        materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by("main_code").all()
         
         # 构建响应数据（包含process_route_id和process_route_name）
         result = []
@@ -468,8 +854,10 @@ class MaterialService:
                         "id": m.id,
                         "uuid": str(m.uuid),
                         "tenant_id": m.tenant_id,
-                        "code": m.code,
+                        "main_code": getattr(m, 'main_code', getattr(m, 'code', '')),
+                        "code": getattr(m, 'code', None),  # 向后兼容
                         "name": m.name,
+                        "material_type": getattr(m, 'material_type', 'RAW'),
                         "group_id": m.group_id,
                         "specification": getattr(m, 'specification', None),
                         "base_unit": m.base_unit,
@@ -549,14 +937,163 @@ class MaterialService:
             if existing:
                 raise ValidationError(f"物料编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 如果是变体物料，验证变体组合唯一性和属性值
+        if data.variant_managed is not None and data.variant_managed and data.variant_attributes is not None:
+            # 验证变体属性值
+            from core.services.business.material_variant_attribute_service import MaterialVariantAttributeService
+            for attr_name, attr_value in data.variant_attributes.items():
+                is_valid, error_message = await MaterialVariantAttributeService.validate_variant_attribute_value(
+                    tenant_id=tenant_id,
+                    attribute_name=attr_name,
+                    attribute_value=attr_value,
+                )
+                if not is_valid:
+                    raise ValidationError(f"变体属性验证失败: {error_message}")
+            
+            # 检查变体组合唯一性（排除当前物料）
+            variant_attributes_json = json.dumps(data.variant_attributes, sort_keys=True)
+            existing_variants = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=material.main_code,
+                variant_managed=True,
+                variant_attributes__isnull=False,
+                deleted_at__isnull=True
+            ).exclude(id=material.id).all()  # 排除当前物料
+            
+            # 检查是否有相同的变体属性组合
+            for existing in existing_variants:
+                if existing.variant_attributes:
+                    existing_attrs_json = json.dumps(existing.variant_attributes, sort_keys=True)
+                    if existing_attrs_json == variant_attributes_json:
+                        raise ValidationError(
+                            f"变体属性组合已存在: {data.variant_attributes}，"
+                            f"已存在的物料: {existing.name} ({existing.main_code})"
+                        )
+        
+        # 更新字段（排除编码映射和默认值，单独处理）
+        # 使用 model_dump 方法（Pydantic v2）或 dict 方法（Pydantic v1）
+        if hasattr(data, 'model_dump'):
+            update_data = data.model_dump(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+        else:
+            update_data = data.dict(exclude_unset=True, exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+        
+        # 处理变体属性：确保JSON键顺序一致（用于数据库唯一性索引）
+        if "variant_attributes" in update_data and update_data["variant_attributes"]:
+            sorted_attrs = dict(sorted(update_data["variant_attributes"].items()))
+            update_data["variant_attributes"] = sorted_attrs
+        
         for key, value in update_data.items():
             setattr(material, key, value)
         
+        # 处理默认值
+        if data.defaults is not None:
+            material.defaults = data.defaults
+        
         await material.save()
         
-        return MaterialResponse.model_validate(material)
+        # 处理编码映射更新
+        # 如果提供了编码映射，先删除旧的编码别名，然后创建新的
+        if data.department_codes is not None or data.customer_codes is not None or data.supplier_codes is not None:
+            # 删除旧的编码别名（软删除）
+            from datetime import datetime
+            from tortoise import timezone
+            
+            # 确定要删除的编码类型
+            code_types_to_delete = []
+            if data.department_codes is not None:
+                # 获取所有部门编码类型
+                existing_dept_aliases = await MaterialCodeAlias.filter(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type__in=["SALE", "DES", "PUR", "WH", "PROD"],
+                    deleted_at__isnull=True
+                ).all()
+                for alias in existing_dept_aliases:
+                    alias.deleted_at = timezone.now()
+                    await alias.save()
+            
+            if data.customer_codes is not None:
+                # 删除旧的客户编码
+                existing_customer_aliases = await MaterialCodeAlias.filter(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type="CUSTOMER",
+                    deleted_at__isnull=True
+                ).all()
+                for alias in existing_customer_aliases:
+                    alias.deleted_at = timezone.now()
+                    await alias.save()
+            
+            if data.supplier_codes is not None:
+                # 删除旧的供应商编码
+                existing_supplier_aliases = await MaterialCodeAlias.filter(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    code_type="SUPPLIER",
+                    deleted_at__isnull=True
+                ).all()
+                for alias in existing_supplier_aliases:
+                    alias.deleted_at = timezone.now()
+                    await alias.save()
+            
+            # 创建新的编码别名
+            if data.department_codes:
+                for alias_data in data.department_codes:
+                    try:
+                        await MaterialCodeService.create_code_alias(
+                            tenant_id=tenant_id,
+                            material_id=material.id,
+                            code_type=alias_data.get("code_type", "CUSTOM"),
+                            code=alias_data.get("code"),
+                            department=alias_data.get("department"),
+                            description=alias_data.get("description"),
+                            is_primary=alias_data.get("is_primary", False)
+                        )
+                    except ValidationError as e:
+                        logger.warning(f"创建编码别名失败: {e}")
+            
+            if data.customer_codes:
+                for customer_code_data in data.customer_codes:
+                    try:
+                        await MaterialCodeService.create_code_alias(
+                            tenant_id=tenant_id,
+                            material_id=material.id,
+                            code_type="CUSTOMER",
+                            code=customer_code_data.get("code"),
+                            description=customer_code_data.get("description"),
+                            external_entity_type="customer",
+                            external_entity_id=customer_code_data.get("customer_id")
+                        )
+                    except ValidationError as e:
+                        logger.warning(f"创建客户编码别名失败: {e}")
+            
+            if data.supplier_codes:
+                for supplier_code_data in data.supplier_codes:
+                    try:
+                        await MaterialCodeService.create_code_alias(
+                            tenant_id=tenant_id,
+                            material_id=material.id,
+                            code_type="SUPPLIER",
+                            code=supplier_code_data.get("code"),
+                            description=supplier_code_data.get("description"),
+                            external_entity_type="supplier",
+                            external_entity_id=supplier_code_data.get("supplier_id")
+                        )
+                    except ValidationError as e:
+                        logger.warning(f"创建供应商编码别名失败: {e}")
+        
+        # 加载编码别名
+        aliases = await MaterialCodeService.get_material_aliases(
+            tenant_id=tenant_id,
+            material_id=material.id
+        )
+        
+        # 构建响应
+        from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
+        response = MaterialResponse.model_validate(material)
+        response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
+        
+        return response
     
     @staticmethod
     async def delete_material(
@@ -1152,7 +1689,9 @@ class MaterialService:
                         "id": material.id,
                         "uuid": str(material.uuid),
                         "tenant_id": material.tenant_id,
-                        "code": material.code,
+                        "main_code": getattr(material, 'main_code', getattr(material, 'code', '')),
+                        "code": getattr(material, 'code', None),  # 向后兼容
+                        "material_type": getattr(material, 'material_type', 'RAW'),
                         "name": material.name,
                         "group_id": material.group_id,
                         "specification": getattr(material, 'specification', None),

@@ -44,6 +44,9 @@ class WorkOrderBase(BaseModel):
     status: str = Field("draft", description="工单状态")
     priority: str = Field("normal", description="优先级")
     
+    # 指定结束标记
+    manually_completed: bool = Field(False, description="是否指定结束（true:手动指定结束, false:正常完成）")
+    
     # 工序跳转控制
     allow_operation_jump: bool = Field(False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
     

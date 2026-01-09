@@ -79,6 +79,12 @@
                         "path": "/apps/master-data/materials/bom",
                         "permission": "master-data:material:bom:view",
                         "sort_order": 2
+                    },
+                    {
+                        "title": "变体属性",
+                        "path": "/apps/master-data/materials/variant-attributes",
+                        "permission": "master-data:material:variant-attribute:view",
+                        "sort_order": 3
                     }
                 ]
             },
@@ -190,6 +196,10 @@
         "master-data:material:bom:create",
         "master-data:material:bom:update",
         "master-data:material:bom:delete",
+        "master-data:material:variant-attribute:view",
+        "master-data:material:variant-attribute:create",
+        "master-data:material:variant-attribute:update",
+        "master-data:material:variant-attribute:delete",
         "master-data:process:defect-type:view",
         "master-data:process:defect-type:create",
         "master-data:process:defect-type:update",

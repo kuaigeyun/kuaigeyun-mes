@@ -102,6 +102,9 @@ class WorkOrder(BaseModel):
     status = fields.CharField(max_length=20, description="工单状态", default="draft")
     priority = fields.CharField(max_length=10, description="优先级", default="normal")
     
+    # 指定结束标记
+    manually_completed = fields.BooleanField(default=False, description="是否指定结束（true:手动指定结束, false:正常完成）")
+    
     # 工序跳转控制
     allow_operation_jump = fields.BooleanField(default=False, description="是否允许跳转工序（true:允许自由报工, false:下一道工序报工数量不可超过上一道工序）")
     

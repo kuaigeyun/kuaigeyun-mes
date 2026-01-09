@@ -171,10 +171,25 @@ class CodeGenerationService:
         
         code = re.sub(dict_pattern, replace_dict, code)
         
-        # 替换上下文变量
+        # 替换字段引用变量 {FIELD:field_name}
+        # 例如：{FIELD:group_code} 表示引用物料分组编码
+        field_pattern = r'\{FIELD:([^}]+)\}'
+        def replace_field(match):
+            field_name = match.group(1)
+            if context and field_name in context:
+                return str(context[field_name])
+            # 如果字段不存在，返回空字符串或占位符
+            return f"[FIELD:{field_name}]"  # 字段不存在时的占位符
+        
+        code = re.sub(field_pattern, replace_field, code)
+        
+        # 替换上下文变量（兼容旧格式，直接使用变量名）
+        # 例如：{group_code} 等同于 {FIELD:group_code}
         if context:
             for key, value in context.items():
-                code = code.replace(f"{{{key}}}", str(value))
+                # 避免重复替换已经被 FIELD: 格式替换的变量
+                if f"{{FIELD:{key}}}" not in rule.expression:
+                    code = code.replace(f"{{{key}}}", str(value))
         
         return code
 
