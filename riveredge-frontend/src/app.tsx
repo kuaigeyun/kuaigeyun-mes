@@ -229,7 +229,9 @@ export default function App() {
     borderRadius?: number;
     fontSize?: number;
     compact?: boolean;
-    siderBgColor?: string; // 左侧菜单栏背景色（仅浅色模式）
+    siderBgColor?: string; // 左侧菜单栏背景色（仅浅色模式，支持透明度）
+    headerBgColor?: string; // 顶栏背景色（支持透明度）
+    tabsBgColor?: string; // 标签栏背景色（支持透明度）
   } | null>(null);
   const [themeConfig, setThemeConfig] = useState<{
     algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm | Array<typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm>;
@@ -297,7 +299,7 @@ export default function App() {
   // 应用主题配置（合并用户偏好和站点设置）
   const applyThemeConfig = (
     userThemePreference: string,
-    siteTheme: { colorPrimary?: string; borderRadius?: number; fontSize?: number; compact?: boolean; siderBgColor?: string } | null
+    siteTheme: { colorPrimary?: string; borderRadius?: number; fontSize?: number; compact?: boolean; siderBgColor?: string; headerBgColor?: string; tabsBgColor?: string } | null
   ) => {
     // 确定基础算法（用户偏好）
     let baseAlgorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm = theme.defaultAlgorithm;
@@ -330,7 +332,7 @@ export default function App() {
     // 立即应用主题配置，不使用过渡动画
     setThemeConfig({ algorithm, token });
     
-    // 设置左侧菜单栏背景色（仅浅色模式支持自定义背景色）
+    // 设置左侧菜单栏背景色（仅浅色模式支持自定义背景色，支持透明度）
     // 将自定义背景色存储到全局变量，供 BasicLayout 使用
     if (userThemePreference === 'light' && siteTheme?.siderBgColor !== undefined) {
       // 仅在浅色模式下应用自定义背景色
@@ -343,6 +345,32 @@ export default function App() {
     } else {
       // 深色模式下，清除自定义背景色（使用深色模式的默认背景色）
       delete (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+    }
+
+    // 设置顶栏背景色（支持透明度，浅色和深色模式都支持）
+    // 将自定义背景色存储到全局变量，供 BasicLayout 使用
+    if (siteTheme?.headerBgColor !== undefined) {
+      if (siteTheme.headerBgColor && siteTheme.headerBgColor.trim() !== '') {
+        (window as any).__RIVEREDGE_HEADER_BG_COLOR__ = siteTheme.headerBgColor;
+      } else {
+        // 如果为空字符串，清除自定义背景色（使用默认背景色）
+        delete (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+      }
+    } else {
+      delete (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+    }
+
+    // 设置标签栏背景色（支持透明度，浅色和深色模式都支持）
+    // 将自定义背景色存储到全局变量，供 UniTabs 组件使用
+    if (siteTheme?.tabsBgColor !== undefined) {
+      if (siteTheme.tabsBgColor && siteTheme.tabsBgColor.trim() !== '') {
+        (window as any).__RIVEREDGE_TABS_BG_COLOR__ = siteTheme.tabsBgColor;
+      } else {
+        // 如果为空字符串，清除自定义背景色（使用默认背景色）
+        delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+      }
+    } else {
+      delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
     }
     
     // 强制立即更新 DOM，清除可能的缓存

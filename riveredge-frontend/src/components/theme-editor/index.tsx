@@ -5,8 +5,8 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider } from 'antd';
-import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, AppstoreOutlined, LayoutOutlined } from '@ant-design/icons';
+import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider, Tooltip, Popover } from 'antd';
+import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { getUserPreference, updateUserPreference } from '../../services/userPreference';
@@ -45,31 +45,98 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const [colorMode, setColorMode] = useState<'light' | 'dark' | 'auto'>('light');
   const [tabsPersistenceValue, setTabsPersistenceValue] = useState<boolean>(false);
   const [compactValue, setCompactValue] = useState<boolean>(false); // 颜色模式：浅色/深色/跟随系统
-  const [layoutMode, setLayoutMode] = useState<'mix' | 'mix-integrated'>('mix'); // MIX布局模式：标准MIX | LOGO融合MIX
 
-  // 预设主题颜色
+  /**
+   * B端主流配色最佳实践 - 统一预设颜色配置
+   * 
+   * 设计原则：
+   * 1. 主题色：使用专业、稳重的蓝色系为主，辅以其他常用品牌色
+   * 2. 背景色：浅色系（适合浅色模式）和深色系（适合深色模式）分别提供
+   * 3. 统一性：所有背景色预设保持一致，便于用户统一配置
+   */
+  
+  // 预设主题颜色（B端主流配色）
   const presetColors = [
-    { color: '#1890ff' },
-    { color: '#52c41a' },
-    { color: '#722ed1' },
-    { color: '#ff4d4f' },
-    { color: '#fa8c16' },
-    { color: '#595959' },
+    { color: '#1890ff', label: '经典蓝' },      // Ant Design 默认蓝
+    { color: '#1677ff', label: '现代蓝' },      // Ant Design 5.x 新蓝
+    { color: '#0958d9', label: '深蓝' },        // 深蓝色
+    { color: '#13c2c2', label: '青蓝' },        // 青色系
+    { color: '#52c41a', label: '绿色' },        // 成功色
+    { color: '#722ed1', label: '紫色' },        // 紫色系
+    { color: '#eb2f96', label: '粉色' },        // 粉色系
+    { color: '#fa8c16', label: '橙色' },        // 警告色
+    { color: '#f5222d', label: '红色' },        // 错误色
   ];
 
-  // 预设菜单栏背景颜色（包含浅色和深色选项，共6个）
-  const presetSiderBgColors = [
-    { color: '#ffffff', label: '纯白' },
-    { color: '#f5f5f5', label: '灰白' },
-    { color: '#fafbfc', label: '蓝灰' },
-    { color: '#001529', label: '深蓝' },
-    { color: '#1f1f1f', label: '深灰' },
-    { color: '#141414', label: '深黑' },
-  ];
+  /**
+   * 计算颜色的亮度值（用于排序）
+   * @param color - 颜色值（十六进制格式）
+   * @returns 亮度值（0-255）
+   */
+  const calculateColorBrightness = (color: string): number => {
+    if (!color || typeof color !== 'string' || !color.startsWith('#')) return 255;
+    const hex = color.slice(1);
+    const fullHex = hex.length === 3 
+      ? hex.split('').map(c => c + c).join('')
+      : hex;
+    const r = parseInt(fullHex.slice(0, 2), 16);
+    const g = parseInt(fullHex.slice(2, 4), 16);
+    const b = parseInt(fullHex.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000;
+  };
+
+  // 左侧菜单栏和顶栏的预设颜色（3个浅色 + 3个深色，按颜色深度排序）
+  // 浅色按从浅到深排序（亮度从高到低）
+  // 深色按从深到浅排序（亮度从低到高）
+  const presetSiderAndHeaderColors = [
+    // 浅色系（3个）
+    { color: '#ffffff', label: '纯白', category: 'light' },
+    { color: '#fafafa', label: '浅灰', category: 'light' },
+    { color: '#f5f5f5', label: '灰白', category: 'light' },
+    // 深色系（3个）
+    { color: '#001529', label: '深蓝', category: 'dark' },
+    { color: '#141414', label: '深黑', category: 'dark' },
+    { color: '#1f1f1f', label: '深灰', category: 'dark' },
+  ]
+    .map(item => ({
+      ...item,
+      brightness: calculateColorBrightness(item.color)
+    }))
+    .sort((a, b) => {
+      // 浅色按从浅到深排序（亮度从高到低）
+      if (a.category === 'light' && b.category === 'light') {
+        return b.brightness - a.brightness;
+      }
+      // 深色按从深到浅排序（亮度从低到高）
+      if (a.category === 'dark' && b.category === 'dark') {
+        return a.brightness - b.brightness;
+      }
+      // 浅色在前，深色在后
+      if (a.category === 'light' && b.category === 'dark') return -1;
+      if (a.category === 'dark' && b.category === 'light') return 1;
+      return 0;
+    });
+
+  // 标签栏的预设颜色（6个浅色，按颜色深度排序，从浅到深）
+  const presetTabsColors = [
+    { color: '#ffffff', label: '纯白', category: 'light' },
+    { color: '#fafafa', label: '浅灰', category: 'light' },
+    { color: '#f5f5f5', label: '灰白', category: 'light' },
+    { color: '#f0f0f0', label: '中灰', category: 'light' },
+    { color: '#fafbfc', label: '蓝灰', category: 'light' },
+    { color: '#f0f2f5', label: '浅蓝灰', category: 'light' },
+  ]
+    .map(item => ({
+      ...item,
+      brightness: calculateColorBrightness(item.color)
+    }))
+    .sort((a, b) => b.brightness - a.brightness); // 按从浅到深排序（亮度从高到低）
 
   // 使用 useState 管理表单值变化（避免在 Form 外部使用 Form.useWatch）
   const [colorPrimaryValue, setColorPrimaryValue] = useState<string>('#1890ff');
   const [siderBgColorValue, setSiderBgColorValue] = useState<string>('');
+  const [headerBgColorValue, setHeaderBgColorValue] = useState<string>('');
+  const [tabsBgColorValue, setTabsBgColorValue] = useState<string>('');
 
   /**
    * 规范化颜色值为字符串格式（用于 ColorPicker 的 value 属性）
@@ -120,6 +187,96 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     // 确保返回值是有效的字符串，避免传递 undefined 或 null
     return normalized || '';
   }, [siderBgColorValue]);
+
+  // 规范化顶栏和标签栏背景色（支持 rgba 格式的透明度）
+  const normalizeBackgroundColor = (color: any, defaultValue: string = ''): string => {
+    if (!color) return defaultValue;
+    if (typeof color === 'string') {
+      // 如果是 rgba 格式，直接返回；如果是 hex 格式，也直接返回
+      return color;
+    }
+    // 处理颜色对象
+    if (color && typeof color.toRgbString === 'function') {
+      try {
+        // 使用 toRgbString 方法获取 rgba 格式（支持透明度）
+        return color.toRgbString();
+      } catch (e) {
+        console.warn('Color toRgbString failed:', e);
+      }
+    }
+    if (color && typeof color.toHexString === 'function') {
+      try {
+        // 如果没有透明度，使用 toHexString
+        return color.toHexString();
+      } catch (e) {
+        console.warn('Color toHexString failed:', e);
+      }
+    }
+    return defaultValue;
+  };
+
+  const normalizedHeaderBgColor = useMemo(() => {
+    return normalizeBackgroundColor(headerBgColorValue, '') || '';
+  }, [headerBgColorValue]);
+
+  const normalizedTabsBgColor = useMemo(() => {
+    return normalizeBackgroundColor(tabsBgColorValue, '') || '';
+  }, [tabsBgColorValue]);
+
+  /**
+   * 带提示按钮的标题组件
+   */
+  interface TitleWithHintProps {
+    /** 标题文本 */
+    title: string;
+    /** 提示内容 */
+    hint?: React.ReactNode;
+  }
+
+  const TitleWithHint: React.FC<TitleWithHintProps> = ({ title, hint }) => {
+    if (!hint) {
+      return <span>{title}</span>;
+    }
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>{title}</span>
+        <Popover
+          content={
+            <div style={{ 
+              fontSize: 12, 
+              color: token.colorTextSecondary,
+              lineHeight: 1.6,
+              maxWidth: 300
+            }}>
+              {hint}
+            </div>
+          }
+          title={null}
+          trigger="click"
+          placement="topLeft"
+          overlayStyle={{ maxWidth: 320 }}
+        >
+          <Button
+            type="text"
+            size="small"
+            icon={<QuestionCircleOutlined style={{ fontSize: 14 }} />}
+            style={{
+              padding: '2px 4px',
+              height: 20,
+              width: 20,
+              minWidth: 20,
+              color: token.colorTextTertiary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          />
+        </Popover>
+      </div>
+    );
+  };
+
 
   /**
    * 加载站点主题配置和用户偏好设置
@@ -186,9 +343,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         fontSize: currentFontSize,
         compact: themeConfig.compact || false,
         siderBgColor: themeConfig.siderBgColor || '',
+        headerBgColor: themeConfig.headerBgColor || '',
+        tabsBgColor: themeConfig.tabsBgColor || '',
         colorMode: userThemeMode,
         tabsPersistence: tabsPersistence,
-        layoutMode: themeConfig.layoutMode || 'mix',
+        layoutMode: 'mix', // 固定使用 MIX 布局模式
       };
 
       form.setFieldsValue(formValues);
@@ -196,9 +355,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 初始化状态变量
       setColorPrimaryValue(colorPrimaryValue);
       setSiderBgColorValue(themeConfig.siderBgColor || '');
+      setHeaderBgColorValue(themeConfig.headerBgColor || '');
+      setTabsBgColorValue(themeConfig.tabsBgColor || '');
       setTabsPersistenceValue(tabsPersistence);
       setCompactValue(themeConfig.compact || false);
-      setLayoutMode(themeConfig.layoutMode || 'mix');
       
       // 应用预览主题
       applyPreviewTheme(form.getFieldsValue(), userThemeMode);
@@ -269,15 +429,26 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       setSiderBgColorValue(siderBgValue);
     }
 
+    // 如果 headerBgColor 改变，更新状态（支持 rgba 格式的透明度）
+    if (changedValues.headerBgColor !== undefined) {
+      const headerBgValue = normalizeBackgroundColor(changedValues.headerBgColor, '');
+      allValues.headerBgColor = headerBgValue;
+      setHeaderBgColorValue(headerBgValue);
+    }
+
+    // 如果 tabsBgColor 改变，更新状态（支持 rgba 格式的透明度）
+    if (changedValues.tabsBgColor !== undefined) {
+      const tabsBgValue = normalizeBackgroundColor(changedValues.tabsBgColor, '');
+      allValues.tabsBgColor = tabsBgValue;
+      setTabsBgColorValue(tabsBgValue);
+    }
+
     // 如果颜色模式改变，更新状态
     if (changedValues.colorMode) {
       setColorMode(changedValues.colorMode);
     }
 
-    // 如果布局模式改变，更新状态
-    if (changedValues.layoutMode) {
-      setLayoutMode(changedValues.layoutMode);
-    }
+    // 布局模式固定为 'mix'，不需要处理
 
     applyPreviewTheme(allValues, allValues.colorMode);
   };
@@ -347,6 +518,12 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           siderBgColorValue = '';
         }
       }
+
+      // 确保 headerBgColor 是字符串格式（支持 rgba 格式的透明度）
+      let headerBgColorValue = normalizeBackgroundColor(values.headerBgColor, '') || '';
+      
+      // 确保 tabsBgColor 是字符串格式（支持 rgba 格式的透明度）
+      let tabsBgColorValue = normalizeBackgroundColor(values.tabsBgColor, '') || '';
       
       // 使用用户最终选择的颜色值
       const themeConfig: any = {
@@ -354,7 +531,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         borderRadius: values.borderRadius || 6,
         fontSize: values.fontSize || 14,
         compact: values.compact || false,
-        layoutMode: values.layoutMode || 'mix',
+        layoutMode: 'mix', // 固定使用 MIX 布局模式
       };
 
       
@@ -369,6 +546,22 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       } else {
         // 深色模式下，不保存自定义背景色（使用深色模式的默认背景色）
         themeConfig.siderBgColor = '';
+      }
+
+      // 保存顶栏背景色（浅色和深色模式都支持，支持透明度）
+      if (headerBgColorValue) {
+        themeConfig.headerBgColor = headerBgColorValue;
+      } else {
+        // 如果为空，也保存空字符串，表示使用默认背景色
+        themeConfig.headerBgColor = '';
+      }
+
+      // 保存标签栏背景色（浅色和深色模式都支持，支持透明度）
+      if (tabsBgColorValue) {
+        themeConfig.tabsBgColor = tabsBgColorValue;
+      } else {
+        // 如果为空，也保存空字符串，表示使用默认背景色
+        themeConfig.tabsBgColor = '';
       }
       
       // 保存标签栏持久化配置
@@ -460,7 +653,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const handleReset = () => {
     setTabsPersistenceValue(false);
     setCompactValue(false);
-    setLayoutMode('mix');
     form.setFieldsValue({
       colorPrimary: '#1890ff',
       borderRadius: 6,
@@ -468,8 +660,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       compact: false,
       colorMode: 'light',
       siderBgColor: '', // 重置时设置为空字符串，表示使用默认背景色（无色）
+      headerBgColor: '', // 重置时设置为空字符串，表示使用默认背景色（无色）
+      tabsBgColor: '', // 重置时设置为空字符串，表示使用默认背景色（无色）
       tabsPersistence: false, // 重置时关闭标签栏持久化
-      layoutMode: 'mix', // 重置时恢复到标准MIX布局
+      layoutMode: 'mix', // 固定使用 MIX 布局模式
     });
 
     // 重置时清除本地存储的持久化配置
@@ -484,6 +678,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     setColorMode('light');
     setColorPrimaryValue('#1890ff');
     setSiderBgColorValue('');
+    setHeaderBgColorValue('');
+    setTabsBgColorValue('');
     applyPreviewTheme(form.getFieldsValue(), 'light');
   };
 
@@ -681,51 +877,53 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         {/* 主题颜色 */}
         <Card 
           size="small" 
-          title="主题颜色" 
+          title={
+            <TitleWithHint 
+              title="主题颜色"
+              hint="选择您喜欢的主题颜色，这将应用于按钮、链接和选中状态等界面元素"
+            />
+          }
           style={{ marginBottom: 16 }}
           bodyStyle={{ padding: '16px' }}
         >
-          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-            选择您喜欢的主题颜色，这将应用于按钮、链接和选中状态等界面元素
-          </Paragraph>
-          
           {/* 预设颜色 */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
             <Space wrap>
               {presetColors.map((preset, index) => (
-                <div
-                  key={index}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    backgroundColor: preset.color,
-                    border: form.getFieldValue('colorPrimary') === preset.color 
-                      ? `2px solid ${preset.color}` 
-                      : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: form.getFieldValue('colorPrimary') === preset.color 
-                      ? `0 0 0 2px ${preset.color}40` 
-                      : 'none',
-                  }}
-                  onClick={() => {
-                    form.setFieldValue('colorPrimary', preset.color);
-                  }}
-                  onMouseEnter={(e) => {
-                    if (form.getFieldValue('colorPrimary') !== preset.color) {
-                      e.currentTarget.style.transform = 'scale(1.1)';
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (form.getFieldValue('colorPrimary') !== preset.color) {
-                      e.currentTarget.style.transform = 'scale(1)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }
-                  }}
-                />
+                <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      backgroundColor: preset.color,
+                      border: form.getFieldValue('colorPrimary') === preset.color 
+                        ? `2px solid ${preset.color}` 
+                        : '2px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      boxShadow: form.getFieldValue('colorPrimary') === preset.color 
+                        ? `0 0 0 2px ${preset.color}40` 
+                        : 'none',
+                    }}
+                    onClick={() => {
+                      form.setFieldValue('colorPrimary', preset.color);
+                    }}
+                    onMouseEnter={(e) => {
+                      if (form.getFieldValue('colorPrimary') !== preset.color) {
+                        e.currentTarget.style.transform = 'scale(1.1)';
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (form.getFieldValue('colorPrimary') !== preset.color) {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }
+                    }}
+                  />
+                </Tooltip>
               ))}
             </Space>
           </div>
@@ -757,54 +955,70 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         {(form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
           <Card 
             size="small" 
-            title="左侧菜单栏" 
+            title={
+              <TitleWithHint 
+                title="左侧菜单栏"
+                hint="自定义左侧菜单栏的背景颜色"
+              />
+            }
             style={{ marginBottom: 16 }}
             bodyStyle={{ padding: '16px' }}
           >
-            <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-              自定义左侧菜单栏的背景颜色（仅在浅色模式下生效）
-            </Paragraph>
-            
-            {/* 预设颜色 */}
+            {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
+            <div style={{ 
+              marginBottom: 12, 
+              padding: '6px 10px', 
+              backgroundColor: token.colorWarningBg || '#fff7e6', 
+              borderRadius: 6,
+              fontSize: 12,
+              color: token.colorWarning || '#fa8c16',
+              border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`
+            }}>
+              <Text type="warning" style={{ fontSize: 12 }}>
+                提示：仅在浅色模式下生效
+              </Text>
+            </div>
+            {/* 预设颜色 - 左侧菜单栏使用3个浅色+3个深色预设（按深度排序） */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
               <Space wrap>
-                {presetSiderBgColors.map((preset, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      backgroundColor: preset.color,
-                      border: form.getFieldValue('siderBgColor') === preset.color 
-                        ? `2px solid ${preset.color}` 
-                        : '2px solid transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      boxShadow: form.getFieldValue('siderBgColor') === preset.color 
-                        ? `0 0 0 2px ${preset.color}40` 
-                        : 'none',
-                      position: 'relative',
-                    }}
-                    onClick={() => {
-                      form.setFieldValue('siderBgColor', preset.color);
-                    }}
-                    onMouseEnter={(e) => {
-                      if (form.getFieldValue('siderBgColor') !== preset.color) {
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                        e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (form.getFieldValue('siderBgColor') !== preset.color) {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }
-                    }}
-                    title={preset.label}
-                  />
-                ))}
+                {presetSiderAndHeaderColors
+                  .map((preset, index) => (
+                    <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          backgroundColor: preset.color,
+                          border: form.getFieldValue('siderBgColor') === preset.color 
+                            ? `2px solid ${preset.color}` 
+                            : '2px solid transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: form.getFieldValue('siderBgColor') === preset.color 
+                            ? `0 0 0 2px ${preset.color}40` 
+                            : 'none',
+                          position: 'relative',
+                        }}
+                        onClick={() => {
+                          form.setFieldValue('siderBgColor', preset.color);
+                        }}
+                        onMouseEnter={(e) => {
+                          if (form.getFieldValue('siderBgColor') !== preset.color) {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (form.getFieldValue('siderBgColor') !== preset.color) {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }
+                        }}
+                      />
+                    </Tooltip>
+                  ))}
               </Space>
             </div>
             
@@ -893,17 +1107,254 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           </Card>
         )}
 
+        {/* 顶栏设置（仅浅色模式支持自定义背景色） */}
+        {(form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+          <Card 
+            size="small" 
+            title={
+              <TitleWithHint 
+                title="顶栏背景色"
+                hint="自定义顶栏的背景颜色，支持透明度设置（支持 rgba 格式，如：rgba(255, 255, 255, 0.8)）"
+              />
+            }
+            style={{ marginBottom: 16 }}
+            bodyStyle={{ padding: '16px' }}
+          >
+            {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
+            <div style={{ 
+              marginBottom: 12, 
+              padding: '6px 10px', 
+              backgroundColor: token.colorWarningBg || '#fff7e6', 
+              borderRadius: 6,
+              fontSize: 12,
+              color: token.colorWarning || '#fa8c16',
+              border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`
+            }}>
+              <Text type="warning" style={{ fontSize: 12 }}>
+                提示：仅在浅色模式下生效
+              </Text>
+            </div>
+            
+            {/* 预设颜色 - 顶栏使用3个浅色+3个深色预设（按深度排序） */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+              <Space wrap>
+                {presetSiderAndHeaderColors
+                  .map((preset, index) => (
+                    <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          backgroundColor: preset.color,
+                          border: form.getFieldValue('headerBgColor') === preset.color 
+                            ? `2px solid ${preset.color}` 
+                            : '2px solid transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: form.getFieldValue('headerBgColor') === preset.color 
+                            ? `0 0 0 2px ${preset.color}40` 
+                            : 'none',
+                          position: 'relative',
+                        }}
+                        onClick={() => {
+                          form.setFieldValue('headerBgColor', preset.color);
+                        }}
+                        onMouseEnter={(e) => {
+                          if (form.getFieldValue('headerBgColor') !== preset.color) {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (form.getFieldValue('headerBgColor') !== preset.color) {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }
+                        }}
+                      />
+                    </Tooltip>
+                  ))}
+              </Space>
+            </div>
+            
+            {/* 自定义颜色 */}
+            <Form.Item
+              name="headerBgColor"
+              label="自定义颜色"
+              getValueFromEvent={(color) => {
+                if (!color) return '';
+                if (typeof color === 'string') return color;
+                // 处理颜色对象：优先使用 toRgbString 方法（支持透明度）
+                if (color && typeof color.toRgbString === 'function') {
+                  try {
+                    return color.toRgbString();
+                  } catch (e) {
+                    console.warn('Color toRgbString failed:', e);
+                  }
+                }
+                // 如果没有透明度，使用 toHexString
+                if (color && typeof color.toHexString === 'function') {
+                  try {
+                    return color.toHexString();
+                  } catch (e) {
+                    console.warn('Color toHexString failed:', e);
+                  }
+                }
+                return '';
+              }}
+            >
+              <ColorPicker 
+                showText 
+                format="rgba"
+                value={normalizedHeaderBgColor || undefined}
+                onChange={(color) => {
+                  // 处理清除按钮点击（color 为 null 或 undefined）
+                  if (!color || color === null) {
+                    form.setFieldValue('headerBgColor', '');
+                    return;
+                  }
+                  const colorValue = normalizeBackgroundColor(color, '');
+                  form.setFieldValue('headerBgColor', colorValue);
+                }}
+              allowClear
+              placeholder="使用默认背景色"
+            />
+          </Form.Item>
+        </Card>
+        )}
+
+        {/* 标签栏设置（仅浅色模式支持自定义背景色） */}
+        {(form.getFieldValue('colorMode') === 'light' || (!form.getFieldValue('colorMode') && colorMode === 'light')) && (
+          <Card 
+            size="small" 
+            title={
+              <TitleWithHint 
+                title="标签栏背景色"
+                hint="自定义标签栏的背景颜色，支持透明度设置（支持 rgba 格式，如：rgba(255, 255, 255, 0.8)）"
+              />
+            }
+            style={{ marginBottom: 16 }}
+            bodyStyle={{ padding: '16px' }}
+          >
+            {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
+            <div style={{ 
+              marginBottom: 12, 
+              padding: '6px 10px', 
+              backgroundColor: token.colorWarningBg || '#fff7e6', 
+              borderRadius: 6,
+              fontSize: 12,
+              color: token.colorWarning || '#fa8c16',
+              border: `1px solid ${token.colorWarningBorder || '#ffe7ba'}`
+            }}>
+              <Text type="warning" style={{ fontSize: 12 }}>
+                提示：仅在浅色模式下生效
+              </Text>
+            </div>
+            
+            {/* 预设颜色 - 标签栏使用6个浅色预设（按深度排序） */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 500 }}>快速选择</div>
+              <Space wrap>
+                {presetTabsColors
+                  .map((preset, index) => (
+                    <Tooltip key={index} title={preset.label || preset.color} placement="top">
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          backgroundColor: preset.color,
+                          border: form.getFieldValue('tabsBgColor') === preset.color 
+                            ? `2px solid ${preset.color}` 
+                            : '2px solid transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: form.getFieldValue('tabsBgColor') === preset.color 
+                            ? `0 0 0 2px ${preset.color}40` 
+                            : 'none',
+                          position: 'relative',
+                        }}
+                        onClick={() => {
+                          form.setFieldValue('tabsBgColor', preset.color);
+                        }}
+                        onMouseEnter={(e) => {
+                          if (form.getFieldValue('tabsBgColor') !== preset.color) {
+                            e.currentTarget.style.transform = 'scale(1.1)';
+                            e.currentTarget.style.boxShadow = `0 0 0 2px ${preset.color}40`;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (form.getFieldValue('tabsBgColor') !== preset.color) {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }
+                        }}
+                      />
+                    </Tooltip>
+                  ))}
+              </Space>
+            </div>
+            
+            {/* 自定义颜色 */}
+            <Form.Item
+              name="tabsBgColor"
+              label="自定义颜色"
+              getValueFromEvent={(color) => {
+                if (!color) return '';
+                if (typeof color === 'string') return color;
+                // 处理颜色对象：优先使用 toRgbString 方法（支持透明度）
+                if (color && typeof color.toRgbString === 'function') {
+                  try {
+                    return color.toRgbString();
+                  } catch (e) {
+                    console.warn('Color toRgbString failed:', e);
+                  }
+                }
+                // 如果没有透明度，使用 toHexString
+                if (color && typeof color.toHexString === 'function') {
+                  try {
+                    return color.toHexString();
+                  } catch (e) {
+                    console.warn('Color toHexString failed:', e);
+                  }
+                }
+                return '';
+              }}
+            >
+              <ColorPicker 
+                showText 
+                format="rgba"
+                value={normalizedTabsBgColor || undefined}
+                onChange={(color) => {
+                  // 处理清除按钮点击（color 为 null 或 undefined）
+                  if (!color || color === null) {
+                    form.setFieldValue('tabsBgColor', '');
+                    return;
+                  }
+                  const colorValue = normalizeBackgroundColor(color, '');
+                  form.setFieldValue('tabsBgColor', colorValue);
+                }}
+              allowClear
+              placeholder="使用默认背景色"
+            />
+          </Form.Item>
+        </Card>
+        )}
+
         {/* 界面样式 */}
         <Card 
           size="small" 
-          title="界面样式" 
+          title={
+            <TitleWithHint 
+              title="界面样式"
+              hint="调整界面的圆角和间距，让界面更符合您的使用习惯"
+            />
+          }
           style={{ marginBottom: 16 }}
           bodyStyle={{ padding: '16px' }}
         >
-          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-            调整界面的圆角和间距，让界面更符合您的使用习惯
-          </Paragraph>
-          
           <Form.Item
             name="borderRadius"
             label={
@@ -931,14 +1382,15 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         {/* 文字设置 */}
         <Card 
           size="small" 
-          title="文字设置" 
+          title={
+            <TitleWithHint 
+              title="文字设置"
+              hint="调整文字大小，让阅读更舒适"
+            />
+          }
           style={{ marginBottom: 16 }}
           bodyStyle={{ padding: '16px' }}
         >
-          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-            调整文字大小，让阅读更舒适
-          </Paragraph>
-          
           <Form.Item
             name="fontSize"
             label={
@@ -964,126 +1416,18 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           </Form.Item>
         </Card>
 
-        {/* 布局模式 */}
-        <Card
-          size="small"
-          title="布局模式"
-          style={{ marginBottom: 16 }}
-          bodyStyle={{ padding: '16px' }}
-        >
-          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-            选择MIX布局的显示方式（LOGO模块与左侧菜单栏的融合程度）
-          </Paragraph>
-
-          <Form.Item
-            name="layoutMode"
-            style={{ marginBottom: 0 }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-              {/* 标准MIX布局 */}
-              <div
-                style={{
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  padding: '16px',
-                  borderRadius: 8,
-                  transition: 'all 0.2s',
-                  backgroundColor: form.getFieldValue('layoutMode') === 'mix'
-                    ? `${token.colorPrimary || '#1890ff'}15`
-                    : 'transparent',
-                  border: form.getFieldValue('layoutMode') === 'mix'
-                    ? `2px solid ${token.colorPrimary || '#1890ff'}`
-                    : '2px solid transparent',
-                }}
-                onClick={() => {
-                  form.setFieldValue('layoutMode', 'mix');
-                  setLayoutMode('mix');
-                }}
-                onMouseEnter={(e) => {
-                  if (form.getFieldValue('layoutMode') !== 'mix') {
-                    const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-                    e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (form.getFieldValue('layoutMode') !== 'mix') {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                <AppstoreOutlined
-                  style={{
-                    fontSize: 32,
-                    color: form.getFieldValue('layoutMode') === 'mix'
-                      ? token.colorPrimary || '#1890ff'
-                      : '#8c8c8c',
-                    marginBottom: 8,
-                    display: 'block',
-                  }}
-                />
-                <div style={{ fontWeight: 500, fontSize: 14 }}>标准MIX</div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>LOGO独立显示</div>
-              </div>
-
-              {/* LOGO融合MIX布局 */}
-              <div
-                style={{
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  padding: '16px',
-                  borderRadius: 8,
-                  transition: 'all 0.2s',
-                  backgroundColor: form.getFieldValue('layoutMode') === 'mix-integrated'
-                    ? `${token.colorPrimary || '#1890ff'}15`
-                    : 'transparent',
-                  border: form.getFieldValue('layoutMode') === 'mix-integrated'
-                    ? `2px solid ${token.colorPrimary || '#1890ff'}`
-                    : '2px solid transparent',
-                }}
-                onClick={() => {
-                  form.setFieldValue('layoutMode', 'mix-integrated');
-                  setLayoutMode('mix-integrated');
-                }}
-                onMouseEnter={(e) => {
-                  if (form.getFieldValue('layoutMode') !== 'mix-integrated') {
-                    const isDark = colorMode === 'dark' || (colorMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-                    e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (form.getFieldValue('layoutMode') !== 'mix-integrated') {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                <LayoutOutlined
-                  style={{
-                    fontSize: 32,
-                    color: form.getFieldValue('layoutMode') === 'mix-integrated'
-                      ? token.colorPrimary || '#1890ff'
-                      : '#8c8c8c',
-                    marginBottom: 8,
-                    display: 'block',
-                  }}
-                />
-                <div style={{ fontWeight: 500, fontSize: 14 }}>LOGO融合</div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>LOGO与菜单栏一体</div>
-              </div>
-            </div>
-          </Form.Item>
-        </Card>
-
         {/* 主题配置 */}
         <Card
           size="small"
-          title="主题配置"
+          title={
+            <TitleWithHint 
+              title="主题配置"
+              hint="调整主题相关的配置选项"
+            />
+          }
           style={{ marginBottom: 16 }}
           bodyStyle={{ padding: '16px' }}
         >
-          <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 16 }}>
-            调整主题相关的配置选项
-          </Paragraph>
-          
           <Form.Item
             name="compact"
             label="紧凑模式"

@@ -4,7 +4,7 @@
  * 提供多标签页管理功能，支持标签的添加、切换、关闭等操作
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip } from 'antd';
 import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined } from '@ant-design/icons';
@@ -61,6 +61,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [tabsPersistence, setTabsPersistence] = useState<boolean>(false); // 标签栏持久化配置
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 是否已初始化（避免重复恢复）
+  
+  // 标签栏背景色状态（用于响应主题更新，支持透明度）
+  const [tabsBgColorState, setTabsBgColorState] = useState<string | undefined>(() => {
+    return (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+  });
 
   /**
    * 根据路径获取标签标题（使用统一的翻译逻辑）
@@ -805,6 +810,100 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     };
   }, [tabs, checkScrollability]);
 
+  // 监听主题更新事件，实时更新标签栏背景色
+  useEffect(() => {
+    const handleThemeUpdate = () => {
+      // 延迟一下，确保全局变量已经更新
+      setTimeout(() => {
+        const customBgColor = (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+        setTabsBgColorState(customBgColor);
+      }, 0);
+    };
+
+    window.addEventListener('siteThemeUpdated', handleThemeUpdate);
+    return () => {
+      window.removeEventListener('siteThemeUpdated', handleThemeUpdate);
+    };
+  }, []);
+
+  /**
+   * 计算颜色的亮度值
+   * @param color - 颜色值（十六进制或 rgb/rgba 格式）
+   * @returns 亮度值（0-255）
+   */
+  const calculateColorBrightness = (color: string): number => {
+    if (!color || typeof color !== 'string') return 255; // 默认返回浅色
+    
+    // 处理十六进制颜色
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      // 处理 3 位十六进制（如 #fff）
+      const fullHex = hex.length === 3 
+        ? hex.split('').map(c => c + c).join('')
+        : hex;
+      const r = parseInt(fullHex.slice(0, 2), 16);
+      const g = parseInt(fullHex.slice(2, 4), 16);
+      const b = parseInt(fullHex.slice(4, 6), 16);
+      // 计算亮度 (使用相对亮度公式)
+      return (r * 299 + g * 587 + b * 114) / 1000;
+    }
+    
+    // 处理 rgb/rgba 格式
+    if (color.startsWith('rgb')) {
+      const match = color.match(/\d+/g);
+      if (match && match.length >= 3) {
+        const r = parseInt(match[0]);
+        const g = parseInt(match[1]);
+        const b = parseInt(match[2]);
+        return (r * 299 + g * 587 + b * 114) / 1000;
+      }
+    }
+    
+    return 255; // 默认返回浅色
+  };
+
+  // 使用 Ant Design 原生方式判断是否为深色模式
+  // 通过检查 token 中的背景色值来判断（深色模式下 colorBgContainer 通常是深色）
+  // 更可靠的方法：检查 colorBgContainer 的亮度值
+  const isDarkMode = useMemo(() => {
+    const bgColor = token.colorBgContainer;
+    const brightness = calculateColorBrightness(bgColor);
+    // 如果亮度小于 128，认为是深色模式
+    return brightness < 128;
+  }, [token.colorBgContainer]);
+
+  // 计算标签栏背景色（支持透明度）
+  const tabsBgColor = useMemo(() => {
+    // 深色模式下，不使用自定义背景色，使用默认背景色
+    if (isDarkMode) {
+      return token.colorBgContainer;
+    }
+    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
+    const customBgColor = tabsBgColorState || (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+    return customBgColor || token.colorBgContainer;
+  }, [tabsBgColorState, token.colorBgContainer, isDarkMode]);
+
+  // 根据标签栏背景色计算文字颜色（参考左侧菜单栏的实现）
+  const tabsTextColor = useMemo(() => {
+    // 深色模式下，使用深色模式的默认文字颜色
+    if (isDarkMode) {
+      return 'var(--ant-colorText)';
+    }
+    
+    // 浅色模式下，检查是否有自定义背景色
+    const customBgColor = tabsBgColorState || (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+    
+    if (customBgColor) {
+      // 如果有自定义背景色，根据背景色亮度计算文字颜色
+      const brightness = calculateColorBrightness(customBgColor);
+      // 如果背景色较暗（亮度 < 128），使用浅色文字；否则使用深色文字
+      return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
+    } else {
+      // 如果没有自定义背景色（使用默认背景色），使用默认文字颜色
+      return 'var(--ant-colorText)';
+    }
+  }, [tabsBgColorState, isDarkMode]);
+
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
     return <>{children}</>;
@@ -813,7 +912,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   return (
     <>
       <style>{`
-        /* 标签栏样式优化 */
+        /* 标签栏样式优化 - 支持自定义背景色（支持透明度） */
         .uni-tabs-container .ant-tabs {
           margin: 0 !important;
           margin-bottom: 0 !important;
@@ -821,7 +920,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border-bottom: none !important;
           box-shadow: none !important;
           outline: none !important;
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
         }
           .ant-tabs{
             padding-top: 2px;
@@ -887,14 +986,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           display: none !important;
           border-bottom: none !important;
         }
-        /* Chrome 式标签样式 - 所有标签都有顶部圆角 */
+        /* Chrome 式标签样式 - 所有标签都有顶部圆角 - 支持自定义背景色（支持透明度） */
         .uni-tabs-container .ant-tabs-tab {
           margin: 0 !important;
           padding: 8px 16px !important;
           padding-bottom: 8px !important;
           border: none !important;
           border-bottom: none !important;
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
           border-top-left-radius: 8px !important;
           border-top-right-radius: 8px !important;
           border-bottom-left-radius: 0 !important;
@@ -1016,10 +1115,27 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           margin-left: -1px !important;
           padding-left: 17px !important;
         }
-        /* Chrome 式效果：激活标签文字颜色 */
+        /* ==================== 标签栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
+        /* 未激活标签文字颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-btn {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
+          font-weight: normal !important;
+        }
+        /* 未激活标签分隔线颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active)::after {
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.16)'} !important;
+        }
+        /* Chrome 式效果：激活标签文字颜色 - 激活标签使用内容区背景，文字颜色使用默认主题色 */
         .uni-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
           color: var(--ant-colorText) !important;
           font-weight: 500 !important;
+        }
+        /* 标签关闭按钮颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-remove {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
+        }
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-remove:hover {
+          color: ${tabsTextColor} !important;
         }
         /* Chrome 式效果：激活标签与相邻未激活标签之间的分隔线隐藏 */
         /* 注意：不能隐藏激活标签的 ::after，因为需要用它来实现右侧圆角 */
@@ -1042,8 +1158,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           flex-direction: column;
           overflow: visible !important;
         }
+        /* 标签栏头部背景色 - 支持自定义背景色（支持透明度） */
         .uni-tabs-header {
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
           flex-shrink: 0;
           padding-bottom: 0;
           margin-bottom: 0;
@@ -1055,20 +1172,20 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         /* 确保背景色生效 - 增加选择器优先级，支持深色模式 */
         div.uni-tabs-header {
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
         }
-        /* 标签栏容器背景色与菜单栏一致 */
+        /* 标签栏容器背景色 - 支持自定义背景色（支持透明度） */
         .uni-tabs-container {
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
         }
         .uni-tabs-container .ant-tabs-nav {
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
         }
         .uni-tabs-container .ant-tabs-nav-wrap {
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
         }
         .uni-tabs-container .ant-tabs-nav-list {
-          background: var(--ant-colorBgContainer) !important;
+          background: ${tabsBgColor} !important;
         }
         /* 确保单个标签时也没有底部间距 */
         .uni-tabs-container .ant-tabs-nav {
@@ -1115,7 +1232,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-header-wrapper .uni-tabs-container {
           pointer-events: auto;
         }
-        /* 滚动按钮样式 - 默认主题色（可点击时）统一大小和padding */
+        /* 滚动按钮样式 - 根据标签栏背景色自动适配颜色，统一大小和padding */
         .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
         .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]),
@@ -1133,7 +1250,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border-bottom: none !important;
           background: transparent !important;
           box-shadow: none !important;
-          color: ${token.colorPrimary} !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
           cursor: pointer !important;
           pointer-events: auto !important;
           position: relative !important;
@@ -1142,7 +1259,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           margin-top: 0 !important;
           line-height: 1 !important;
         }
-        /* 按钮图标颜色 - 可点击时使用主题色 */
+        /* 按钮图标颜色 - 根据标签栏背景色自动适配（深色背景使用浅色图标，浅色背景使用主题色） */
         .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
         .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
         .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon,
@@ -1154,8 +1271,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
         .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
         .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg {
-          color: ${token.colorPrimary} !important;
-          fill: ${token.colorPrimary} !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+          fill: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
         }
         /* 去掉按钮的所有伪元素和边框 */
         .uni-tabs-header-wrapper .uni-tabs-scroll-button::before,
@@ -1248,6 +1365,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           position: relative;
           z-index: 2;
         }
+        /* 左按钮右侧分割线 - 根据标签栏背景色自动适配 */
         .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after {
           content: '';
           position: absolute;
@@ -1255,16 +1373,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           top: -1px;
           bottom: 0; /* 确保分割线到底部 */
           width: 1px;
-          background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'} !important;
           z-index: 1;
           opacity: 1 !important;
         }
-        /* 深色模式下的分割线颜色 */
-        html[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after,
-        body[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after {
-          background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
-        }
-        /* 左侧阴影 - 显示在左按钮右侧，当可以向左滚动时显示 */
+        /* 左侧阴影 - 显示在左按钮右侧，当可以向左滚动时显示，根据标签栏背景色自动适配 */
         .uni-tabs-header-wrapper.can-scroll-left::before {
           content: '';
           position: absolute;
@@ -1272,14 +1385,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           top: 0;
           bottom: 0; /* 与右侧阴影保持一致，确保对称 */
           width: 20px;
-          background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent) !important; /* 提高不透明度，确保可见 */
+          background: linear-gradient(to right, ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'}, transparent) !important;
           pointer-events: none;
           z-index: 1; /* 与右侧阴影一致，确保不遮挡标签文字 */
-        }
-        /* 深色模式下的左侧阴影 */
-        html[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-left::before,
-        body[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-left::before {
-          background: linear-gradient(to right, rgba(255, 255, 255, 0.08), transparent) !important; /* 提高不透明度，确保可见 */
         }
         /* 右按钮容器 - 左侧分割线（移除右侧分割线避免重复） */
         .uni-tabs-scroll-button-right {
@@ -1287,6 +1395,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           position: relative;
           z-index: 2;
         }
+        /* 右按钮左侧分割线 - 根据标签栏背景色自动适配 */
         .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before {
           content: '';
           position: absolute;
@@ -1294,16 +1403,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           top: -1px;
           bottom: 0; /* 确保分割线到底部 */
           width: 1px;
-          background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'} !important;
           z-index: 1;
           opacity: 1 !important;
         }
-        /* 深色模式下的分割线颜色 */
-        html[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before,
-        body[data-theme='dark'] .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before {
-          background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
-        }
-        /* 右侧阴影 - 显示在小箭头按钮左侧，固定位置不随滚动移动 */
+        /* 右侧阴影 - 显示在小箭头按钮左侧，固定位置不随滚动移动，根据标签栏背景色自动适配 */
         .uni-tabs-header-wrapper.can-scroll-right::after {
           content: '';
           position: absolute;
@@ -1311,14 +1415,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           top: 0;
           bottom: 0;
           width: 20px;
-          background: linear-gradient(to left, rgba(0, 0, 0, 0.06), transparent);
+          background: linear-gradient(to left, ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'}, transparent);
           pointer-events: none;
           z-index: 1;
-        }
-        /* 深色模式下的右侧阴影 */
-        html[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-right::after,
-        body[data-theme='dark'] .uni-tabs-header-wrapper.can-scroll-right::after {
-          background: linear-gradient(to left, rgba(255, 255, 255, 0.06), transparent);
         }
         /* 如果有全屏按钮且没有右按钮，右侧阴影直接在全屏按钮左侧 */
         .uni-tabs-header-wrapper.can-scroll-right:has(.uni-tabs-fullscreen-button-wrapper):not(:has(.uni-tabs-scroll-button-right))::after {
@@ -1344,7 +1443,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           flex-shrink: 0; /* 防止被压缩 */
           z-index: 2;
         }
-        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，等高 */
+        /* 全屏按钮左侧分割线 - 与标签页分割线样式一致，等高，根据标签栏背景色自动适配 */
         .uni-tabs-fullscreen-button-wrapper::before {
           content: '';
           position: absolute;
@@ -1352,16 +1451,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           top: -1px;
           bottom: 0; /* 确保分割线到底部 */
           width: 1px;
-          background: rgba(0, 0, 0, 0.06) !important; /* 与顶栏分割线颜色一致 */
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'} !important;
           z-index: 1;
           opacity: 1 !important;
         }
-        /* 深色模式下的分割线颜色 */
-        html[data-theme='dark'] .uni-tabs-fullscreen-button-wrapper::before,
-        body[data-theme='dark'] .uni-tabs-fullscreen-button-wrapper::before {
-          background: rgba(255, 255, 255, 0.08) !important; /* 深色模式与顶栏分割线颜色一致 */
-        }
-        /* 全屏按钮样式 - 单独设置，保持左右padding为13px（与左右按钮不同） */
+        /* 全屏按钮样式 - 单独设置，保持左右padding为13px（与左右按钮不同），根据标签栏背景色自动适配 */
         .uni-tabs-header-wrapper .uni-tabs-fullscreen-button,
         .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn,
         .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text,
@@ -1371,6 +1465,27 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           width: 40px !important; /* 正方形，与高度一致 */
           height: 40px !important; /* 总高40px */
           padding: 13px !important; /* 四周padding相等（左右13px），图标14px居中 */
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+        }
+        /* 全屏按钮图标颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn-text .anticon {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+        }
+        /* 全屏按钮 hover 状态 - 根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button:hover,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn:hover,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text:hover {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 1)' : 'var(--ant-colorPrimaryHover)'} !important;
+        }
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button:hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn:hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text:hover .anticon {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 1)' : 'var(--ant-colorPrimaryHover)'} !important;
         }
         /* 标签栏容器 - 允许横向滚动，底部允许溢出显示外圆角 */
         .uni-tabs-container {
@@ -1401,6 +1516,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         /* 移除所有可能移动的阴影效果和分隔线 */
         .uni-tabs-container .ant-tabs-nav-more {
           box-shadow: none !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
+        }
+        /* 更多标签按钮图标颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-nav-more .anticon {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
         }
         .uni-tabs-container .ant-tabs-nav-operations {
           box-shadow: none !important;
