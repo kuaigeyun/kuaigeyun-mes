@@ -335,16 +335,17 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       
       // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
       '/apps/kuaizhizao/plan-management': ManufacturingIcons.calendar, // 计划管理 - 使用日历图标
-      '/apps/kuaizhizao/production-execution': ManufacturingIcons.production, // 生产执行 - 使用生产图标
+      '/apps/kuaizhizao/production-execution': ManufacturingIcons.activity, // 生产执行 - 使用活动/执行图标
       '/apps/kuaizhizao/purchase-management': ManufacturingIcons.shoppingBag, // 采购管理 - 使用购物袋图标
-      '/apps/kuaizhizao/sales-management': ManufacturingIcons.shoppingCart, // 销售管理 - 使用购物车图标
+      '/apps/kuaizhizao/sales-management': ManufacturingIcons.chartLine, // 销售管理 - 使用趋势上升图标（销售增长）
       '/apps/kuaizhizao/warehouse-management': ManufacturingIcons.warehouse, // 仓储管理 - 使用仓库图标
       '/apps/kuaizhizao/quality-management': ManufacturingIcons.quality, // 质量管理 - 使用质量图标
       '/apps/kuaizhizao/cost-management': ManufacturingIcons.calculator, // 成本管理 - 使用计算器图标
       '/apps/kuaizhizao/equipment-management': ManufacturingIcons.machine, // 设备管理 - 使用机器图标
-      '/apps/kuaizhizao/finance-management': ManufacturingIcons.calculator, // 财务管理 - 使用计算器图标（不使用美元符号）
+      '/apps/kuaizhizao/finance-management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
       '/apps/kuaizhizao/reports': ManufacturingIcons.analytics, // 报表分析 - 使用分析图标
       '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
+      '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
     };
     
     // 精确路径匹配
@@ -375,14 +376,17 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'Personal Center': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
     // 应用菜单名称映射（后备方案）
     'Plan Management': ManufacturingIcons.calendar,
-    'Production Execution': ManufacturingIcons.production,
+    'Production Execution': ManufacturingIcons.activity, // 生产执行 - 使用活动/执行图标
     'Purchase Management': ManufacturingIcons.shoppingBag,
-    'Sales Management': ManufacturingIcons.shoppingCart,
+    'Sales Management': ManufacturingIcons.chartLine, // 销售管理 - 使用趋势上升图标（销售增长）
     'Warehouse Management': ManufacturingIcons.warehouse,
     'Quality Management': ManufacturingIcons.quality,
     'Cost Management': ManufacturingIcons.calculator,
     'Equipment Management': ManufacturingIcons.machine,
-    'Finance Management': ManufacturingIcons.calculator, // 财务管理 - 使用计算器图标（不使用美元符号）
+    'Finance Management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
+    // 基础数据管理相关
+    '仓库数据': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标
+    'Warehouse Data': ManufacturingIcons.archive, // 基础数据管理-仓库数据（英文）
     // ... 其他常见的英文名称可以在这里添加
   };
   

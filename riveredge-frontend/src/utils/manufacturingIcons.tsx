@@ -135,6 +135,7 @@ export const ManufacturingIcons = {
   analytics: getLucideIcon('BarChart3'),
   report: getLucideIcon('PieChart'),
   chartLine: getLucideIcon('TrendingUp'),
+  trendingUp: getLucideIcon('TrendingUp'), // 销售增长/趋势上升
   chartBar: getLucideIcon('BarChart3'),
   chartPie: getLucideIcon('PieChart'),
   
@@ -293,7 +294,12 @@ export const ManufacturingIcons = {
   trophy: getLucideIcon('Trophy'), // EPM 企业绩效
   'cloud-server': getLucideIcon('Cloud'), // IOT 物联网
   experiment: getLucideIcon('FlaskConical'), // LIMS/PDM 实验/研发（使用已有的 FlaskConical）
-  calculator: getLucideIcon('Calculator'), // 成本管理/财务管理/MRP - 使用计算器图标（通用，不含货币符号）
+  calculator: getLucideIcon('Calculator'), // 成本管理/MRP - 使用计算器图标（通用，不含货币符号）
+  wallet: getLucideIcon('Wallet'), // 财务管理 - 使用钱包图标
+  dollarSign: getLucideIcon('DollarSign'), // 财务/货币相关
+  creditCard: getLucideIcon('CreditCard'), // 销售/支付相关
+  archive: getLucideIcon('Archive'), // 仓库数据/归档
+  boxes: getLucideIcon('Boxes'), // 多个盒子（仓库存储）
   project: getLucideIcon('FolderKanban'), // PM 项目管理
   'safety-certificate': getLucideIcon('ShieldCheck'), // QMS 质量认证（使用已有的 ShieldCheck）
   apartment: getLucideIcon('Building2'), // SCM 供应链（使用已有的 Building2）

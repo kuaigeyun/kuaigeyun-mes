@@ -40,7 +40,7 @@
             },
             {
                 "title": "仓库数据",
-                "icon": "warehouse",
+                "icon": "archive",
                 "sort_order": 2,
                 "children": [
                     {
