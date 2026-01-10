@@ -883,27 +883,90 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [queryClient]);
   
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
-  // 优化缓存策略：确保用户刷新或重新登录时能获取最新菜单
+  // 优化缓存策略：使用 localStorage 缓存，避免每次刷新都重新加载
   const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
     queryKey: ['applicationMenus'],
-    queryFn: () => getMenuTree({ is_active: true }),
-    staleTime: process.env.NODE_ENV === 'development' ? 0 : 2 * 60 * 1000, // 开发环境不缓存，生产环境2分钟缓存（降低缓存时间，确保新菜单及时显示）
-    refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
-    refetchOnWindowFocus: true, // 窗口聚焦时刷新（用户切换标签页回来时获取最新菜单）
-    refetchOnMount: true, // 组件挂载时刷新（用户刷新页面时获取最新菜单）
-    refetchOnReconnect: true, // 网络重连时刷新
-    select: (data) => {
+    queryFn: async () => {
+      // 获取菜单数据
+      const menuData = await getMenuTree({ is_active: true });
       // 只返回应用菜单（application_uuid 不为空）
-      const appMenus = data.filter(menu => menu.application_uuid);
+      const appMenus = menuData.filter(menu => menu.application_uuid);
+      
+      // 更新 localStorage 缓存（包含时间戳，用于判断是否过期）
+      try {
+        const cacheData = {
+          data: appMenus,
+          timestamp: Date.now(),
+          tenantId: currentUser?.tenant_id, // 添加租户ID，确保不同租户的缓存不冲突
+        };
+        localStorage.setItem('applicationMenusCache', JSON.stringify(cacheData));
+      } catch (error) {
+        // 忽略存储错误（localStorage 可能已满或被禁用）
+        console.warn('保存应用菜单缓存失败:', error);
+      }
+      
       return appMenus;
+    },
+    enabled: !!currentUser, // 只在用户登录后加载
+    staleTime: process.env.NODE_ENV === 'development' ? 30 * 1000 : 5 * 60 * 1000, // 开发环境30秒缓存，生产环境5分钟缓存
+    gcTime: 10 * 60 * 1000, // 缓存保留时间10分钟
+    refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
+    refetchOnWindowFocus: false, // 窗口聚焦时不自动刷新（避免频繁刷新）
+    refetchOnMount: (query) => {
+      // 智能刷新策略：
+      // 1. 如果查询从未执行过（首次启用），总是刷新
+      // 2. 如果数据过期，刷新
+      if (!query.state.data || query.isStale()) {
+        return true;
+      }
+      
+      // 如果有缓存数据且未过期，不刷新
+      // 租户ID匹配检查在 useEffect 中处理，避免闭包问题
+      return false;
+    },
+    refetchOnReconnect: true, // 网络重连时刷新
+    placeholderData: () => {
+      // 使用缓存数据作为占位符，避免闪烁
+      try {
+        const cachedStr = localStorage.getItem('applicationMenusCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          // 检查缓存是否过期（超过5分钟视为过期）和租户是否匹配
+          const cacheAge = Date.now() - (cached.timestamp || 0);
+          const isExpired = cacheAge > 5 * 60 * 1000;
+          const isTenantMatch = cached.tenantId === currentUser?.tenant_id;
+          
+          if (!isExpired && isTenantMatch && cached.data) {
+            return cached.data;
+          }
+        }
+      } catch (error) {
+        // 忽略解析错误
+      }
+      return undefined;
     },
   });
   
-  // 监听用户登录事件，清除菜单缓存（确保重新登录时获取最新菜单）
+  // 监听用户登录事件，清除菜单缓存并触发菜单查询（确保重新登录时获取最新菜单）
   useEffect(() => {
     const handleUserLogin = () => {
-      console.log('🔄 用户登录，清除菜单缓存...');
+      console.log('🔄 用户登录，清除菜单缓存并触发菜单加载...');
+      // 清除 localStorage 缓存
+      try {
+        localStorage.removeItem('applicationMenusCache');
+      } catch (error) {
+        // 忽略清除错误
+      }
+      // 清除 React Query 缓存
       queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+      // 使用 requestAnimationFrame 替代 setTimeout，减少延迟（约 16ms 而非 100ms）
+      // 这样可以在下一个渲染帧执行，此时 currentUser 应该已经更新
+      requestAnimationFrame(() => {
+        // 使用 setTimeout 0 确保在 React 状态更新后执行
+        setTimeout(() => {
+          refetchApplicationMenus();
+        }, 0);
+      });
     };
 
     // 监听自定义事件（在登录页面触发）
@@ -912,12 +975,81 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return () => {
       window.removeEventListener('user-logged-in', handleUserLogin);
     };
-  }, [queryClient]);
+  }, [queryClient, refetchApplicationMenus]);
+
+  // 使用 ref 记录 previous currentUser，用于检测用户从无到有的变化
+  const prevCurrentUserRef = useRef(currentUser);
+  
+  // 监听 currentUser 变化，当用户从无到有时主动触发菜单查询
+  // 这解决了登录后菜单不显示的问题
+  useEffect(() => {
+    const prevUser = prevCurrentUserRef.current;
+    
+    // 检测用户从无到有的变化（登录场景）
+    const userJustLoggedIn = !prevUser && currentUser;
+    
+    // 更新 ref
+    prevCurrentUserRef.current = currentUser;
+    
+    if (userJustLoggedIn) {
+      console.log('🔄 检测到用户登录（从无到有），主动触发菜单加载...');
+      // 清除可能存在的旧缓存
+      try {
+        localStorage.removeItem('applicationMenusCache');
+      } catch (error) {
+        // 忽略清除错误
+      }
+      // 由于 currentUser 已经更新，查询应该已经启用（enabled: !!currentUser）
+      // 使用 requestAnimationFrame + setTimeout 0 确保在 React 渲染周期后执行，最小化延迟
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          refetchApplicationMenus();
+        }, 0);
+      });
+    } else if (currentUser && !applicationMenusLoading) {
+      // 如果用户已登录但没有菜单数据，尝试加载
+      const hasMenuData = applicationMenus && applicationMenus.length > 0;
+      if (!hasMenuData) {
+        console.log('🔄 用户已登录但没有菜单数据，主动触发菜单加载...');
+        refetchApplicationMenus();
+      }
+    }
+  }, [currentUser, applicationMenus, applicationMenusLoading, refetchApplicationMenus]);
+
+  // 监听租户ID变化，清除菜单缓存（确保切换组织时获取最新菜单）
+  useEffect(() => {
+    if (currentUser?.tenant_id) {
+      // 检查缓存中的租户ID是否与当前租户ID匹配
+      try {
+        const cachedStr = localStorage.getItem('applicationMenusCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          // 如果租户ID不匹配，清除缓存并重新加载
+          if (cached.tenantId !== currentUser.tenant_id) {
+            console.log('🔄 检测到租户ID变化，清除菜单缓存并重新加载...');
+            localStorage.removeItem('applicationMenusCache');
+            queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+            // 主动触发菜单查询
+            refetchApplicationMenus();
+          }
+        }
+      } catch (error) {
+        // 忽略解析错误
+      }
+    }
+  }, [currentUser?.tenant_id, queryClient, refetchApplicationMenus]);
 
   // 监听应用状态变更事件，主动刷新菜单
   useEffect(() => {
     const handleApplicationStatusChange = () => {
       console.log('🔄 检测到应用状态变更，刷新菜单...');
+      // 清除 localStorage 缓存
+      try {
+        localStorage.removeItem('applicationMenusCache');
+      } catch (error) {
+        // 忽略清除错误
+      }
+      // 重新获取菜单
       refetchApplicationMenus();
     };
 
