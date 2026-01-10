@@ -3,6 +3,10 @@
  *
  * 负责异步加载业务应用路由，与系统核心路由完全隔离
  * 应用加载失败不会影响系统核心功能的正常使用
+ * 
+ * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
+ * 应用路由直接返回应用组件，与系统级路由共享同一个 BasicLayout 实例
+ * 这样可以避免从系统级路由切换到应用级路由时整个页面重新挂载的问题
  */
 
 import React, { useEffect, useState, Suspense } from 'react';
@@ -11,7 +15,7 @@ import { Alert, Button } from 'antd';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
-import BasicLayout from '../layouts/BasicLayout';
+// ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再导入
 import PageSkeleton from '../components/page-skeleton';
 
 // 应用组件错误边界
@@ -181,28 +185,28 @@ const AppRoutes: React.FC = () => {
                   key={`app-${app.code}-${relativePath}`}
                   path={`${relativePath}/*`}
                   element={
-                    <BasicLayout>
-                      <Suspense fallback={
-                        <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7', margin: '10px' }}>
-                          <h3>🔄 正在加载应用: {app.name}</h3>
-                          <p>路由: {routeConfig.path}</p>
-                          <p>时间: {new Date().toLocaleTimeString()}</p>
-                        </div>
-                      }>
-                        <AppErrorBoundary appName={app.name}>
-                          {(() => {
+                    // ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
+                    // 直接返回应用组件，与系统级路由共享同一个 BasicLayout 实例
+                    <Suspense fallback={
+                      <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7', margin: '10px' }}>
+                        <h3>🔄 正在加载应用: {app.name}</h3>
+                        <p>路由: {routeConfig.path}</p>
+                        <p>时间: {new Date().toLocaleTimeString()}</p>
+                      </div>
+                    }>
+                      <AppErrorBoundary appName={app.name}>
+                        {(() => {
 
-                            // 尝试直接渲染组件，看是否能触发错误
-                            try {
-                              return React.createElement(routeConfig.component);
-                            } catch (renderError) {
-                              console.error(`❌ 组件渲染失败:`, renderError);
-                              throw renderError;
-                            }
-                          })()}
-                        </AppErrorBoundary>
-                      </Suspense>
-                    </BasicLayout>
+                          // 尝试直接渲染组件，看是否能触发错误
+                          try {
+                            return React.createElement(routeConfig.component);
+                          } catch (renderError) {
+                            console.error(`❌ 组件渲染失败:`, renderError);
+                            throw renderError;
+                          }
+                        })()}
+                      </AppErrorBoundary>
+                    </Suspense>
                   }
                 />
               );
