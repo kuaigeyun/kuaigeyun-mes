@@ -47,7 +47,7 @@ import {
   SafetyOutlined,
   ShoppingOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb, List, Typography, Empty } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Input, Breadcrumb, List, Typography, Empty, Divider } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -730,7 +730,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<'mix' | 'mix-integrated'>('mix');
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const [breadcrumbVisible, setBreadcrumbVisible] = useState(true);
@@ -1247,35 +1246,23 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
   });
 
-  // 初始化布局模式配置
-  useEffect(() => {
-    const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
-    try {
-      const savedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-      if (savedThemeConfig) {
-        const themeConfig = JSON.parse(savedThemeConfig);
-        const savedLayoutMode = themeConfig.layoutMode || 'mix';
-        setLayoutMode(savedLayoutMode);
-        (window as any).__RIVEREDGE_LAYOUT_MODE__ = savedLayoutMode;
-      }
-    } catch (error) {
-      console.warn('Failed to load layout mode from localStorage:', error);
-    }
-  }, []);
+  // 顶栏背景色状态（用于响应主题更新）
+  const [headerBgColorState, setHeaderBgColorState] = useState<string | undefined>(() => {
+    return (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+  });
 
-  // 监听主题更新事件，实时更新菜单栏背景色
+  // 监听主题更新事件，实时更新菜单栏和顶栏背景色
   useEffect(() => {
     const handleThemeUpdate = (event?: any) => {
       // 延迟一下，确保全局变量已经更新
       setTimeout(() => {
-        const customBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-        const themeConfig = event?.detail?.themeConfig || {};
-        const currentLayoutMode = themeConfig.layoutMode || (window as any).__RIVEREDGE_LAYOUT_MODE__ || 'mix';
-        setSiderBgColorState(customBgColor);
-        setLayoutMode(currentLayoutMode);
-
-        // 设置全局变量供其他组件使用
-        (window as any).__RIVEREDGE_LAYOUT_MODE__ = currentLayoutMode;
+        const customSiderBgColor = (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+        const customHeaderBgColor = (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+        setSiderBgColorState(customSiderBgColor);
+        setHeaderBgColorState(customHeaderBgColor);
+        
+        // 固定使用 MIX 布局模式
+        (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
       }, 0);
     };
 
@@ -1295,6 +1282,43 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
     return customBgColor || token.colorBgContainer;
   }, [siderBgColorState, token.colorBgContainer, isDarkMode]);
+
+  // 计算顶栏背景色（支持透明度）
+  const headerBgColor = React.useMemo(() => {
+    // 深色模式下，不使用自定义背景色，使用默认背景色
+    if (isDarkMode) {
+      return token.colorBgContainer;
+    }
+    // 浅色模式下，优先使用状态中的自定义背景色，否则使用全局变量，最后使用默认背景色
+    const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+    return customBgColor || token.colorBgContainer;
+  }, [headerBgColorState, token.colorBgContainer, isDarkMode]);
+
+  // 根据顶栏背景色计算文字颜色（参考左侧菜单栏的实现）
+  const headerTextColor = React.useMemo(() => {
+    // 深色模式下，使用深色模式的默认文字颜色
+    if (isDarkMode) {
+      return 'var(--ant-colorText)';
+    }
+    
+    // 浅色模式下，检查是否有自定义背景色
+    const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+    
+    if (customBgColor) {
+      // 如果有自定义背景色，根据背景色亮度计算文字颜色
+      const brightness = calculateColorBrightness(customBgColor);
+      // 如果背景色较暗（亮度 < 128），使用浅色文字；否则使用深色文字
+      return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
+    } else {
+      // 如果没有自定义背景色（使用默认背景色），使用默认文字颜色
+      return 'var(--ant-colorText)';
+    }
+  }, [headerBgColorState, isDarkMode]);
+
+  // 判断显示模式：浅色模式浅色背景
+  const isLightModeLightBg = React.useMemo(() => {
+    return !isDarkMode && headerTextColor !== '#ffffff';
+  }, [isDarkMode, headerTextColor]);
 
   // 根据菜单栏背景色计算文字颜色
   const siderTextColor = React.useMemo(() => {
@@ -1452,6 +1476,60 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       observer.disconnect();
     };
   }, [currentUser]); // 当用户或菜单数据变化时重新添加 className
+
+  /**
+   * 动态设置 LOGO 后标题文字颜色（H1元素）- 确保在浅色模式深色背景时与深色模式文字颜色一致
+   */
+  useEffect(() => {
+    const updateLogoTitleColor = () => {
+      // 计算应该使用的文字颜色
+      const logoTitleColor = isDarkMode 
+        ? 'var(--ant-colorText)' 
+        : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)');
+      
+      // 直接查找 h1 元素（LOGO 后的标题文字）
+      const h1Selectors = [
+        '.ant-pro-global-header-logo h1',
+        '.ant-pro-global-header-logo a h1',
+        '.ant-pro-layout-header .ant-pro-global-header-logo h1',
+        '.ant-pro-layout-header .ant-pro-global-header-logo a h1',
+        '.ant-layout-header .ant-pro-global-header-logo h1',
+        '.ant-layout-header .ant-pro-global-header-logo a h1',
+      ];
+
+      h1Selectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach((element) => {
+          if (element instanceof HTMLElement) {
+            element.style.setProperty('color', logoTitleColor, 'important');
+          }
+        });
+      });
+    };
+
+    // 初始设置
+    updateLogoTitleColor();
+
+    // 使用 MutationObserver 监听 DOM 变化，确保新增的元素也能应用颜色
+    const observer = new MutationObserver(() => {
+      updateLogoTitleColor();
+    });
+
+    // 观察顶栏容器
+    const headerContainer = document.querySelector('.ant-pro-layout-header, .ant-layout-header');
+    if (headerContainer) {
+      observer.observe(headerContainer, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+      });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isDarkMode, isLightModeLightBg]); // 当主题或背景色变化时重新设置
 
   // 获取翻译后的菜单配置（必须在 generateBreadcrumb 之前定义）
   const menuConfig = useMemo(() => getMenuConfig(t), [t]);
@@ -2845,6 +2923,69 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           margin-bottom: 10px !important;
           padding-bottom: 0 !important;
         }
+        /* 侧边栏底部收起按钮区域样式 - 根据菜单栏背景色自动适配 */
+        .ant-pro-layout .ant-pro-sider-footer,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer,
+        /* 覆盖 collapsedButtonRender 返回的 div */
+        .ant-pro-layout .ant-pro-sider-footer > div,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div {
+          border-top: 1px solid ${siderTextColor === '#ffffff' 
+            ? 'rgba(255, 255, 255, 0.15)' 
+            : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)')} !important;
+        }
+        /* 侧边栏底部收起按钮样式 - 根据菜单栏背景色自动适配 */
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn {
+          width: 100% !important;
+          color: ${siderTextColor} !important;
+        }
+        /* 侧边栏底部收起按钮图标样式 - 根据菜单栏背景色自动适配 */
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn .anticon,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn svg,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn .anticon,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn svg {
+          color: ${siderTextColor} !important;
+        }
+        /* 侧边栏底部收起按钮 hover 状态 */
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:hover,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:hover,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:hover {
+          color: ${siderTextColor} !important;
+        }
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn:hover svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:hover svg,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:hover svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:hover svg {
+          color: ${siderTextColor} !important;
+        }
+        /* 侧边栏底部收起按钮 active 状态 */
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn:active,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:active,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:active,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active {
+          color: ${siderTextColor} !important;
+        }
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn:active .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:active .anticon,
+        .ant-pro-layout .ant-pro-sider-footer .ant-btn:active svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer .ant-btn:active svg,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:active .anticon,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active .anticon,
+        .ant-pro-layout .ant-pro-sider-footer > div .ant-btn:active svg,
+        .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active svg {
+          color: ${siderTextColor} !important;
+        }
         /* ==================== 全局滚动条样式 ==================== */
         /* 隐藏整个页面的滚动条，只保留UniTable的滚动条 */
         html::-webkit-scrollbar,
@@ -2918,11 +3059,72 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         :root {
           --ant-colorBgContainer: ${token.colorBgContainer};
         }
+        /* 顶栏背景色（支持透明度） */
         .ant-pro-layout .ant-pro-layout-header,
         .ant-pro-layout .ant-layout-header {
-          background: ${token.colorBgContainer} !important;
+          background: ${headerBgColor} !important;
           backdrop-filter: blur(8px) !important;
           -webkit-backdrop-filter: blur(8px) !important;
+          border-bottom: 1px solid ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.12)'} !important;
+        }
+        /* ==================== 顶栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
+        /* 顶栏文字颜色 - 根据背景色亮度自动适配 */
+        .ant-pro-layout .ant-pro-layout-header,
+        .ant-pro-layout .ant-layout-header {
+          color: ${headerTextColor} !important;
+        }
+        /* 顶栏按钮文字颜色和图标颜色 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn,
+        .ant-pro-layout .ant-layout-header .ant-btn {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn .anticon,
+        .ant-pro-layout .ant-layout-header .ant-btn .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 16px !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn svg,
+        .ant-pro-layout .ant-layout-header .ant-btn svg {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          width: 16px !important;
+          height: 16px !important;
+          font-size: 16px !important;
+        }
+        /* 顶栏按钮 hover 状态 - 浅色模式浅色背景无hover */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover,
+        .ant-pro-layout .ant-layout-header .ant-btn:hover {
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-layout-header .ant-btn:hover .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 16px !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover svg,
+        .ant-pro-layout .ant-layout-header .ant-btn:hover svg {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          width: 16px !important;
+          height: 16px !important;
+          font-size: 16px !important;
+        }
+        /* 顶栏按钮 active 状态 - 浅色模式浅色背景无active效果 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:active,
+        .ant-pro-layout .ant-layout-header .ant-btn:active {
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon,
+        .ant-pro-layout .ant-layout-header .ant-btn:active .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 16px !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-btn:active svg,
+        .ant-pro-layout .ant-layout-header .ant-btn:active svg {
+          color: ${isDarkMode ? 'var(--ant-colorText)' : 'rgba(0, 0, 0, 0.85)'} !important;
+          width: 16px !important;
+          height: 16px !important;
+          font-size: 16px !important;
         }
         /* 内容区背景颜色与 PageContainer 一致 - 使用 token 值 */
         .ant-pro-layout-bg-list {
@@ -3099,8 +3301,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .ant-space {
           gap: 8px !important;
         }
-        /* 统一按钮样式 - 保留圆形背景，使用 token 值确保深色/浅色模式都正确 */
-        .ant-pro-layout .ant-pro-layout-header .ant-btn {
+        /* 统一按钮样式 - 保留圆形背景，浅色背景时图标颜色统一为黑色 */
+        /* 注意：这些样式会被之前的通用顶栏按钮样式覆盖，但保留这里作为备用和补充 */
+        .ant-pro-layout .ant-pro-layout-header .ant-btn,
+        .ant-pro-layout .ant-layout-header .ant-btn {
           width: 32px !important;
           height: 32px !important;
           padding: 0 !important;
@@ -3108,49 +3312,70 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center !important;
           justify-content: center !important;
           border-radius: 50% !important;
-          background-color: ${token.colorFillTertiary} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           border: none !important;
           transition: none !important;
-          color: ${token.colorText} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
-        .ant-pro-layout .ant-pro-layout-header .ant-btn .anticon {
-          color: ${token.colorText} !important;
+        .ant-pro-layout .ant-pro-layout-header .ant-btn .anticon,
+        .ant-pro-layout .ant-layout-header .ant-btn .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 16px !important;
         }
-        /* 保留圆形背景的 hover 效果 */
-        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover,
-        .ant-pro-layout .ant-pro-layout-header .ant-btn:active {
-          background-color: ${token.colorFillTertiary} !important;
-          color: ${token.colorText} !important;
-          border-radius: 50% !important;
-        }
-        .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon,
-        .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon {
-          color: ${token.colorText} !important;
-        }
-        /* Badge 内按钮样式 - 确保按钮样式一致，保留圆形背景 */
-        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn {
+        /* Badge 内按钮样式 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn,
+        .ant-pro-layout .ant-layout-header .ant-badge .ant-btn {
           width: 32px !important;
           height: 32px !important;
           padding: 0 !important;
           border-radius: 50% !important;
-          background-color: ${token.colorFillTertiary} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           transition: none !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
-        /* 保留 Badge 内按钮的圆形背景 hover 效果 */
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn .anticon,
+        .ant-pro-layout .ant-layout-header .ant-badge .ant-btn .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 16px !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn svg,
+        .ant-pro-layout .ant-layout-header .ant-badge .ant-btn svg {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          width: 16px !important;
+          height: 16px !important;
+          font-size: 16px !important;
+        }
+        /* Badge 内按钮 hover 状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover,
-        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn {
-          background-color: ${token.colorFillTertiary} !important;
-          color: ${token.colorText} !important;
+        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn,
+        .ant-pro-layout .ant-layout-header .ant-badge .ant-btn:hover,
+        .ant-pro-layout .ant-layout-header .ant-badge:hover .ant-btn {
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           border-color: transparent !important;
           box-shadow: none !important;
           transform: none !important;
           border-radius: 50% !important;
         }
-        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover .anticon {
-          color: ${token.colorText} !important;
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn .anticon,
+        .ant-pro-layout .ant-layout-header .ant-badge .ant-btn:hover .anticon,
+        .ant-pro-layout .ant-layout-header .ant-badge:hover .ant-btn .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          font-size: 16px !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn:hover svg,
+        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn svg,
+        .ant-pro-layout .ant-layout-header .ant-badge .ant-btn:hover svg,
+        .ant-pro-layout .ant-layout-header .ant-badge:hover .ant-btn svg {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+          width: 16px !important;
+          height: 16px !important;
+          font-size: 16px !important;
         }
         /* 确保 Badge 本身无任何 hover 效果 */
-        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover {
+        .ant-pro-layout .ant-pro-layout-header .ant-badge:hover,
+        .ant-pro-layout .ant-layout-header .ant-badge:hover {
           background-color: transparent !important;
           border-color: transparent !important;
           box-shadow: none !important;
@@ -3164,40 +3389,56 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           padding: 0;
           transition: none !important;
         }
-        /* 租户选择器 wrapper 内的 span（系统级用户显示组织名称） - 胶囊型背景 */
+        /* 租户选择器 wrapper 内的 span（系统级用户显示组织名称） - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper > span {
           display: inline-block;
           padding: 4px 12px;
           border-radius: 16px !important;
-          background-color: ${token.colorFillTertiary} !important;
-          color: ${token.colorText} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           font-size: 14px;
           font-weight: 500;
           height: 32px;
           line-height: 24px;
         }
-        /* 租户选择器内的选择框样式 - 胶囊型（与搜索框完全一致，使用 token 值） */
+        /* 租户选择器内的选择框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-selector {
           border-radius: 16px !important; /* 胶囊型圆角 */
           border: none !important;
           box-shadow: none !important;
-          background-color: ${token.colorFillTertiary} !important;
-          background: ${token.colorFillTertiary} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
           height: 32px !important;
+        }
+        /* 租户选择器文字颜色 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-item,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-placeholder,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        /* 租户选择器箭头图标颜色 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)'} !important;
         }
         .ant-select-content-value{
           padding-left: 10px !important;
         }
-        /* 租户选择器所有状态 - 确保颜色与搜索框完全一致 */
+        /* 租户选择器所有状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
           border: none !important;
           box-shadow: none !important;
-          background: ${token.colorFillTertiary} !important;
+          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+        }
+        /* 租户选择器 hover 和 focused 状态下的文字颜色 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selection-item,
+        .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select.ant-select-focused .ant-select-selection-item {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         /* 租户选择器内部输入框样式 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-selection-search-input,
@@ -3217,11 +3458,22 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper:hover {
           background-color: transparent !important;
         }
-        /* 搜索框样式 - 使用 token 值，与按钮背景色一致 */
+        /* 搜索框样式 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper {
           border: none !important;
           box-shadow: none !important;
-          background-color: ${token.colorFillTertiary} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+        }
+        /* 搜索框文字颜色和占位符颜色 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper .ant-input {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper .ant-input::placeholder {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.45)'} !important;
+        }
+        /* 搜索框图标颜色 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)'} !important;
         }
         /* 手机模式下隐藏搜索框 */
         @media (max-width: 768px) {
@@ -3230,37 +3482,134 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             display: none !important;
           }
         }
+        /* 搜索框 hover 状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper:hover,
         .ant-pro-layout .ant-pro-layout-header .ant-input-affix-wrapper-focused {
           border: none !important;
           box-shadow: none !important;
-          background-color: ${token.colorFillTertiary} !important;
+          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-input {
           background-color: transparent !important;
           border: none !important;
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
-        /* LOGO 样式 - 设置 min-width */
+        .ant-pro-global-header{
+          margin-inline: 0 !important;
+        }
+        .ant-layout-sider-children{
+          padding-inline: 0 !important;
+        }
+        /* LOGO 样式 - 设置 min-width 和垂直对齐 */
         .ant-pro-global-header-logo {
           min-width: 167px !important;
+          display: flex !important;
+          align-items: center !important;
+          height: 100% !important;
+        }
+        /* LOGO 图片垂直对齐 */
+        .ant-pro-global-header-logo img {
+          display: inline-block !important;
+          vertical-align: middle !important;
+          max-height: 32px !important;
+          height: auto !important;
+          width: auto !important;
+        }
+        /* LOGO 标题文字垂直对齐和颜色 - 根据顶栏背景色自动适配，浅色模式深色背景时与深色模式文字颜色一致 */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-title,
+        .ant-pro-layout .ant-layout-header .ant-pro-global-header-title,
+        .ant-pro-layout-header .ant-pro-global-header-title,
+        .ant-layout-header .ant-pro-global-header-title,
+        .ant-pro-global-header-title {
+          display: inline-flex !important;
+          align-items: center !important;
+          vertical-align: middle !important;
+          line-height: 1.5 !important;
+          height: auto !important;
+          font-size: 16px !important;
+          color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+        }
+        /* LOGO 容器内的链接和文字垂直对齐和颜色 - 根据顶栏背景色自动适配，浅色模式深色背景时与深色模式文字颜色一致 */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo a,
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo span,
+        .ant-pro-layout .ant-layout-header .ant-pro-global-header-logo a,
+        .ant-pro-layout .ant-layout-header .ant-pro-global-header-logo span,
+        .ant-pro-layout-header .ant-pro-global-header-logo a,
+        .ant-pro-layout-header .ant-pro-global-header-logo span,
+        .ant-layout-header .ant-pro-global-header-logo a,
+        .ant-layout-header .ant-pro-global-header-logo span,
+        .ant-pro-global-header-logo a,
+        .ant-pro-global-header-logo span {
+          display: inline-flex !important;
+          align-items: center !important;
+          vertical-align: middle !important;
+          line-height: 1.5 !important;
+          color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+        }
+        /* LOGO 后标题文字（H1元素）颜色 - 根据顶栏背景色自动适配，浅色模式深色背景时与深色模式文字颜色一致 */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo h1,
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header-logo a h1,
+        .ant-pro-layout .ant-layout-header .ant-pro-global-header-logo h1,
+        .ant-pro-layout .ant-layout-header .ant-pro-global-header-logo a h1,
+        .ant-pro-layout-header .ant-pro-global-header-logo h1,
+        .ant-pro-layout-header .ant-pro-global-header-logo a h1,
+        .ant-layout-header .ant-pro-global-header-logo h1,
+        .ant-layout-header .ant-pro-global-header-logo a h1,
+        .ant-pro-global-header-logo h1,
+        .ant-pro-global-header-logo a h1 {
+          color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+        }
+        /* ==================== 顶栏布局调整 ==================== */
+        /* 顶栏主容器：左侧 LOGO组 + 分割线 + 面包屑，右侧 操作按钮组 */
+        .ant-pro-layout .ant-pro-layout-header,
+        .ant-pro-layout .ant-layout-header {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          padding: 0 16px !important;
+        }
+        /* 顶栏左侧区域：LOGO组 + 分割线 + 面包屑 */
+        .ant-pro-layout .ant-pro-layout-header > div:first-child,
+        .ant-pro-layout .ant-layout-header > div:first-child {
+          display: flex !important;
+          align-items: center !important;
+          flex: 1 !important;
+          min-width: 0 !important;
+          overflow: visible !important;
+        }
+        /* headerContentRender 容器样式 */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-content,
+        .ant-pro-layout .ant-layout-header .ant-pro-layout-header-content {
+          display: flex !important;
+          align-items: center !important;
+          gap: 12px !important;
+          flex: 1 !important;
+          min-width: 0 !important;
+          overflow: visible !important;
+          height: 100% !important;
+        }
+        /* headerContentRender 容器内的分割线垂直居中 - 根据显示模式统一 */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-content .ant-divider,
+        .ant-pro-layout .ant-layout-header .ant-pro-layout-header-content .ant-divider {
+          align-self: center !important;
+          margin: 0 !important;
+          height: 32px !important;
+          border-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)'} !important;
         }
         /* ==================== 面包屑样式 ==================== */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
         .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
-          padding-left: 16px;
-          font-size: 14px;
-        }
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
-        .ant-pro-layout-container .ant-pro-layout-header .ant-breadcrumb {
+          font-size: 14px !important;
+          line-height: 1.5 !important;
           display: flex !important;
-          align-items: center;
-          height: 100%;
-          position: relative;
+          align-items: center !important;
+          height: 100% !important;
+          position: relative !important;
           white-space: nowrap !important;
-          overflow: hidden !important;
-          flex: 1 1 auto;
-          min-width: 0;
-          max-width: none;
+          overflow: visible !important;
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
         }
         /* 面包屑内部容器防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb ol,
@@ -3278,11 +3627,29 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center !important;
           min-width: 0;
           max-width: 100%;
-          overflow: hidden;
+          overflow: visible !important;
+          padding: 0 4px !important;
+          line-height: 1.5 !important;
+          vertical-align: middle !important;
         }
-        /* 最后一个面包屑项不收缩，优先显示完整 */
+        /* 第一项左侧 padding，确保 hover 背景完整显示 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:first-child {
+          padding-left: 8px !important;
+          margin-left: -8px !important;
+        }
+        /* 最后一个面包屑项不收缩，优先显示完整，确保对齐 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:last-child {
           flex-shrink: 0 !important;
+          line-height: 1.5 !important;
+          vertical-align: middle !important;
+        }
+        /* 最后一项内部的文本和链接，确保与其他项对齐（即使加粗） */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:last-child span,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:last-child a {
+          line-height: 1.5 !important;
+          vertical-align: middle !important;
+          display: inline-flex !important;
+          align-items: center !important;
         }
         /* 面包屑分隔符防止换行 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-separator {
@@ -3309,6 +3676,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-link {
           display: inline-flex !important;
           align-items: center !important;
+          padding: 4px 8px !important;
+          margin: -4px -8px !important;
+          border-radius: 4px !important;
+        }
+        /* 第一项链接的左侧 padding，确保 hover 背景完整显示 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:first-child .ant-breadcrumb-link {
+          margin-left: -8px !important;
+          padding-left: 8px !important;
         }
         /* 面包屑下拉箭头对齐 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .anticon {
@@ -3316,22 +3691,46 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center !important;
           vertical-align: middle !important;
         }
-        /* 面包屑前面的小竖线 - 使用主题边框颜色 */
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 1px;
-          height: 16px;
-          background-color: ${token.colorBorder} !important;
+        /* 面包屑文字颜色 - 根据显示模式统一 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb span,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item span {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a {
-          color: var(--ant-colorText);
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
-        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb a:hover {
-          color: var(--riveredge-menu-primary-color);
+        /* 完全禁用面包屑项本身的 hover 背景（包括 Ant Design 默认样式） */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:hover {
+          background-color: transparent !important;
+          background: transparent !important;
+        }
+        /* 面包屑链接 hover 样式 - 根据显示模式统一，浅色模式浅色背景无hover */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item a:hover,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item .ant-breadcrumb-link:hover {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 1)'} !important;
+          background-color: ${isLightModeLightBg ? 'transparent' : 'rgba(255, 255, 255, 0.1)'} !important;
+          border-radius: 4px !important;
+        }
+        /* 确保当链接 hover 时，父级面包屑项本身不显示背景（但允许链接显示背景） */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:hover {
+          background-color: transparent !important;
+        }
+        /* 第一项链接 hover 时确保左侧背景完整显示 - 浅色模式浅色背景无hover */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:first-child a:hover,
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-item:first-child .ant-breadcrumb-link:hover {
+          margin-left: -8px !important;
+          padding-left: 8px !important;
+          background-color: ${isLightModeLightBg ? 'transparent' : 'rgba(255, 255, 255, 0.1)'} !important;
+        }
+        /* 面包屑分隔符颜色 - 根据显示模式统一 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-breadcrumb-separator {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.45)'} !important;
+        }
+        /* 面包屑图标颜色 - 根据显示模式统一 */
+        .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .anticon {
+          color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         /* 面包屑下拉菜单样式优化 - 确保完整显示 */
         .ant-pro-layout-container .ant-layout-header .ant-breadcrumb .ant-dropdown {
@@ -3413,80 +3812,36 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       `}</style>
       <ProLayout
         title={siteName}
-        logo={layoutMode === 'mix-integrated' ? false : siteLogo} // 融合模式下禁用顶栏LOGO
-        layout="mix" // 恢复到mix布局
+        logo={siteLogo}
+        layout="mix" // 固定使用 MIX 布局模式
         navTheme={isDarkMode ? "realDark" : "light"}
-        className={layoutMode === 'mix-integrated' ? 'ant-pro-layout-mix-integrated' : ''}
-        // 根据布局模式调整头部渲染
-        {...(layoutMode === 'mix-integrated' ? {
-          // MIX融合模式：修改左侧菜单栏头部样式，让LOGO与菜单栏视觉融合
-          menuHeaderRender: (logo: React.ReactNode, title: React.ReactNode, props: any) => (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '0 16px',
-              height: '64px',
-              background: token.colorBgContainer,
-              borderRight: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-              borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-              // 让侧边栏头部到顶
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 'auto',
-              width: '208px',
-              zIndex: 1001,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {/* 自定义更大的LOGO */}
-                <img
-                  src={siteLogo}
-                  alt={siteName}
-                  style={{
-                    height: '48px', // 增大LOGO尺寸
-                    width: 'auto',
-                  }}
-                />
-                {/* 调整字体大小 */}
-                <span style={{
-                  fontSize: '14px', // 减小字体大小
-                  fontWeight: 600,
-                  color: token.colorText,
-                  whiteSpace: 'nowrap',
-                }}>
-                  {siteName}
-                </span>
-              </div>
-              {/* 为融合模式添加特殊样式，让菜单内容在头部下面开始 */}
-              <style dangerouslySetInnerHTML={{
-                __html: `
-                  .ant-pro-layout-mix-integrated .ant-pro-sider-menu {
-                    padding-top: 72px !important;
-                  }
-                `
-              }} />
+        collapsedButtonRender={(collapsed) => {
+          // 根据菜单栏文字颜色计算分割线颜色
+          // 如果是浅色文字（深色背景），使用浅色分割线；否则使用深色分割线
+          const dividerColor = siderTextColor === '#ffffff' 
+            ? 'rgba(255, 255, 255, 0.15)' 
+            : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)');
+          
+          return (
+            <div
+              style={{
+                padding: '8px',
+                borderTop: `1px solid ${dividerColor}`,
+              }}
+            >
+              <Button
+                type="text"
+                icon={collapsed ? <MenuUnfoldOutlined style={{ color: siderTextColor }} /> : <MenuFoldOutlined style={{ color: siderTextColor }} />}
+                onClick={() => setCollapsed(!collapsed)}
+                style={{
+                  width: '100%',
+                  color: siderTextColor,
+                }}
+                title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
+              />
             </div>
-          ),
-        } : {})}
-        collapsedButtonRender={(collapsed) => (
-        <div
-          style={{
-            padding: '8px',
-            borderTop: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-          }}
-        >
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              width: '100%',
-              color: token.colorTextSecondary,
-            }}
-            title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
-          />
-        </div>
-      )}
+          );
+        }}
         contentWidth="Fluid"
         fixedHeader
         fixSiderbar
@@ -3521,26 +3876,33 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }),
         }}
         headerContentRender={() => (
-          <div ref={breadcrumbRef}>
-            <Breadcrumb
-              style={{
-                display: breadcrumbVisible ? 'flex' : 'none',
-                alignItems: 'center',
-                height: '100%',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-              }}
-              items={generateBreadcrumb.map((item, index) => ({
+          <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
+            {/* 分割线 */}
+            <Divider 
+              type="vertical" 
+              style={{ 
+                height: '20px', 
+                margin: '4px 0 0 2px',
+                borderColor: isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)',
+                alignSelf: 'center',
+                verticalAlign: 'middle',
+              }} 
+            />
+            {/* 面包屑 */}
+            <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 8 }}>
+              <Breadcrumb
+                style={{
+                  display: breadcrumbVisible ? 'flex' : 'none',
+                  alignItems: 'center',
+                  height: '100%',
+                  whiteSpace: 'nowrap',
+                  overflow: 'visible',
+                }}
+                items={generateBreadcrumb.map((item, index) => ({
                 title: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {/* 只有第一项（一级菜单）显示图标 */}
-                    {item.icon && index === 0 && (
-                      <span style={{ fontSize: 14, display: 'flex', alignItems: 'center' }}>
-                        {item.icon}
-                      </span>
-                    )}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
                     {index === generateBreadcrumb.length - 1 ? (
-                      <span style={{ color: 'var(--ant-colorText)', fontWeight: 500 }}>{item.title}</span>
+                      <span style={{ color: 'var(--ant-colorText)', fontWeight: 500, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
                     ) : (
                       <a
                         onClick={() => {
@@ -3548,7 +3910,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                             navigate(item.path);
                           }
                         }}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', lineHeight: '1.5', verticalAlign: 'middle' }}
                       >
                         {item.title}
                       </a>
@@ -3557,7 +3919,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 ),
                 menu: item.menu,
               }))}
-            />
+              />
+            </div>
           </div>
         )}
         actionsRender={() => {
@@ -3568,7 +3931,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             <Input
               key="search"
               placeholder="搜索菜单、功能..."
-              prefix={<SearchOutlined style={{ fontSize: 16, color: 'var(--ant-colorTextSecondary)' }} />}
+              prefix={<SearchOutlined style={{ fontSize: 16 }} />}
               size="small"
               onPressEnter={(e) => {
                 const value = (e.target as HTMLInputElement).value;
@@ -3578,7 +3941,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 width: 280,
                 height: 32,
                 borderRadius: '16px',
-                backgroundColor: token.colorFillTertiary,
+                backgroundColor: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
               }}
               allowClear
             />
@@ -3752,7 +4115,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   <Button
                     type="text"
                     size="small"
-                    icon={<BellOutlined style={{ fontSize: 16 }} />}
+                    icon={<BellOutlined />}
                     onClick={() => {
                       setMessageDropdownOpen(!messageDropdownOpen);
                     }}
@@ -3787,7 +4150,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 <Button
                   type="text"
                   size="small"
-                  icon={<TranslationOutlined style={{ fontSize: 16 }} />}
+                  icon={<TranslationOutlined />}
                 />
               </Tooltip>
             </Dropdown>
@@ -3799,7 +4162,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <Button
                 type="text"
                 size="small"
-                icon={<BgColorsOutlined style={{ fontSize: 16 }} />}
+                icon={<BgColorsOutlined />}
                 onClick={handleThemeChange}
               />
             </Tooltip>
@@ -3813,9 +4176,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 size="small"
                 icon={
                   isFullscreen ? (
-                    <FullscreenExitOutlined style={{ fontSize: 16 }} />
+                    <FullscreenExitOutlined />
                   ) : (
-                    <FullscreenOutlined style={{ fontSize: 16 }} />
+                    <FullscreenOutlined />
                   )
                 }
                 onClick={handleFullscreen}
@@ -3861,7 +4224,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '16px',
-                    background: token.colorFillTertiary,
+                    background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
                   }}
                 >
                   {avatarUrl ? (
@@ -3895,7 +4258,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   <span
                     style={{
                       fontSize: 14,
-                      color: token.colorText,
+                      color: isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)',
                       lineHeight: '32px',
                       height: '32px',
                       display: 'flex',
@@ -3916,7 +4279,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <Button
                 type="text"
                 size="small"
-                icon={<LockOutlined style={{ fontSize: 16 }} />}
+                icon={<LockOutlined />}
                 onClick={handleLockScreen}
               />
             </Tooltip>
