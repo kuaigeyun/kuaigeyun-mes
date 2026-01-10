@@ -2,11 +2,12 @@
  * 系统核心路由
  *
  * 这些路由不依赖应用加载，即使应用层完全失效，系统核心功能也能正常工作
+ * 
+ * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
  */
 
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import BasicLayout from '../layouts/BasicLayout';
 
 // 核心系统页面（立即加载）
 import IndexPage from '../pages';
@@ -75,26 +76,16 @@ import MonitoringPage from '../pages/infra/monitoring';
 import PlatformAdminPage from '../pages/infra/admin';
 
 /**
- * 页面布局包装函数
- *
- * 为系统和平台页面提供统一的BasicLayout包装
- * 公开页面（如登录页）不使用此包装
- */
-const renderWithLayout = (PageComponent: React.ComponentType) => (
-  <BasicLayout>
-    <PageComponent />
-  </BasicLayout>
-);
-
-/**
  * 系统核心路由组件
  *
  * 包含所有系统级和平台级功能路由，这些路由不依赖外部应用加载
+ * 
+ * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里直接返回页面组件
  */
 const SystemRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* 公开页面 */}
+      {/* 公开页面（不需要 BasicLayout，在 MainRoutes 中已处理） */}
       <Route path="/" element={<IndexPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/infra/login" element={<InfraLoginPage />} />
@@ -104,77 +95,77 @@ const SystemRoutes: React.FC = () => {
       <Route path="/init/wizard" element={<InitWizardPage />} />
       <Route path="/init/template-select" element={<TemplateSelectPage />} />
 
-      {/* 系统级路由 */}
+      {/* 系统级路由（需要 BasicLayout，在 MainRoutes 中已包裹） */}
       {/* 仪表盘重定向到工作台 */}
       <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
 
       {/* 工作台页面 */}
-      <Route path="/system/dashboard/workplace" element={renderWithLayout(DashboardPage)} />
+      <Route path="/system/dashboard/workplace" element={<DashboardPage />} />
 
       {/* 分析页面 */}
-      <Route path="/system/dashboard/analysis" element={renderWithLayout(DashboardAnalysisPage)} />
-      <Route path="/system/roles" element={renderWithLayout(RolesPage)} />
-      <Route path="/system/permissions" element={renderWithLayout(PermissionsPage)} />
-      <Route path="/system/departments" element={renderWithLayout(DepartmentsPage)} />
-      <Route path="/system/positions" element={renderWithLayout(PositionsPage)} />
-      <Route path="/system/equipment" element={renderWithLayout(EquipmentPage)} />
-      <Route path="/system/equipment/:uuid/trace" element={renderWithLayout(EquipmentTracePage)} />
-      <Route path="/system/maintenance-plans" element={renderWithLayout(MaintenancePlansPage)} />
-      <Route path="/system/equipment-faults" element={renderWithLayout(EquipmentFaultsPage)} />
-      <Route path="/system/molds" element={renderWithLayout(MoldsPage)} />
-      <Route path="/system/users" element={renderWithLayout(UsersPage)} />
-      <Route path="/system/user-profile" element={renderWithLayout(UserProfilePage)} />
-      <Route path="/system/languages" element={renderWithLayout(LanguagesPage)} />
-      <Route path="/system/site-settings" element={renderWithLayout(SiteSettingsPage)} />
-      <Route path="/system/applications" element={renderWithLayout(ApplicationCenterPage)} />
-      <Route path="/system/plugin-manager" element={renderWithLayout(PluginManagerPage)} />
-      <Route path="/system/operation-logs" element={renderWithLayout(OperationLogsPage)} />
-      <Route path="/system/login-logs" element={renderWithLayout(LoginLogsPage)} />
-      <Route path="/system/online-users" element={renderWithLayout(OnlineUsersPage)} />
-      <Route path="/system/scheduled-tasks" element={renderWithLayout(ScheduledTasksPage)} />
-      <Route path="/system/scripts" element={renderWithLayout(ScriptsPage)} />
-      <Route path="/system/print-devices" element={renderWithLayout(PrintDevicesPage)} />
-      <Route path="/system/print-templates" element={renderWithLayout(PrintTemplatesPage)} />
-      <Route path="/system/code-rules" element={renderWithLayout(CodeRulesPage)} />
-      <Route path="/system/data-dictionaries" element={renderWithLayout(DataDictionariesPage)} />
-      <Route path="/system/data-sources" element={renderWithLayout(DataSourcesPage)} />
-      <Route path="/system/datasets" element={renderWithLayout(DatasetsPage)} />
-      <Route path="/system/data-backups" element={renderWithLayout(DataBackupsPage)} />
-      <Route path="/system/custom-fields" element={renderWithLayout(CustomFieldsPage)} />
-      <Route path="/system/api-services" element={renderWithLayout(ApiServicesPage)} />
-      <Route path="/system/apis" element={renderWithLayout(ApisPage)} />
-      <Route path="/system/integration-configs" element={renderWithLayout(IntegrationConfigsPage)} />
-      <Route path="/system/message-templates" element={renderWithLayout(MessageTemplatesPage)} />
-      <Route path="/system/messages/template" element={renderWithLayout(MessageTemplatesPage)} />
-      <Route path="/system/message-configs" element={renderWithLayout(MessageConfigsPage)} />
-      <Route path="/system/messages/config" element={renderWithLayout(MessageConfigsPage)} />
-      <Route path="/system/menus" element={renderWithLayout(MenusPage)} />
-      <Route path="/system/system-parameters" element={renderWithLayout(SystemParametersPage)} />
-      <Route path="/system/files" element={renderWithLayout(FilesPage)} />
-      <Route path="/system/approval-processes" element={renderWithLayout(ApprovalProcessesPage)} />
-      <Route path="/system/approval-instances" element={renderWithLayout(ApprovalInstancesPage)} />
-      <Route path="/system/report-templates" element={renderWithLayout(ReportTemplatesPage)} />
-      <Route path="/system/report-templates/:id/design" element={renderWithLayout(ReportDesignPage)} />
-      <Route path="/system/inngest" element={renderWithLayout(InngestDashboardPage)} />
+      <Route path="/system/dashboard/analysis" element={<DashboardAnalysisPage />} />
+      <Route path="/system/roles" element={<RolesPage />} />
+      <Route path="/system/permissions" element={<PermissionsPage />} />
+      <Route path="/system/departments" element={<DepartmentsPage />} />
+      <Route path="/system/positions" element={<PositionsPage />} />
+      <Route path="/system/equipment" element={<EquipmentPage />} />
+      <Route path="/system/equipment/:uuid/trace" element={<EquipmentTracePage />} />
+      <Route path="/system/maintenance-plans" element={<MaintenancePlansPage />} />
+      <Route path="/system/equipment-faults" element={<EquipmentFaultsPage />} />
+      <Route path="/system/molds" element={<MoldsPage />} />
+      <Route path="/system/users" element={<UsersPage />} />
+      <Route path="/system/user-profile" element={<UserProfilePage />} />
+      <Route path="/system/languages" element={<LanguagesPage />} />
+      <Route path="/system/site-settings" element={<SiteSettingsPage />} />
+      <Route path="/system/applications" element={<ApplicationCenterPage />} />
+      <Route path="/system/plugin-manager" element={<PluginManagerPage />} />
+      <Route path="/system/operation-logs" element={<OperationLogsPage />} />
+      <Route path="/system/login-logs" element={<LoginLogsPage />} />
+      <Route path="/system/online-users" element={<OnlineUsersPage />} />
+      <Route path="/system/scheduled-tasks" element={<ScheduledTasksPage />} />
+      <Route path="/system/scripts" element={<ScriptsPage />} />
+      <Route path="/system/print-devices" element={<PrintDevicesPage />} />
+      <Route path="/system/print-templates" element={<PrintTemplatesPage />} />
+      <Route path="/system/code-rules" element={<CodeRulesPage />} />
+      <Route path="/system/data-dictionaries" element={<DataDictionariesPage />} />
+      <Route path="/system/data-sources" element={<DataSourcesPage />} />
+      <Route path="/system/datasets" element={<DatasetsPage />} />
+      <Route path="/system/data-backups" element={<DataBackupsPage />} />
+      <Route path="/system/custom-fields" element={<CustomFieldsPage />} />
+      <Route path="/system/api-services" element={<ApiServicesPage />} />
+      <Route path="/system/apis" element={<ApisPage />} />
+      <Route path="/system/integration-configs" element={<IntegrationConfigsPage />} />
+      <Route path="/system/message-templates" element={<MessageTemplatesPage />} />
+      <Route path="/system/messages/template" element={<MessageTemplatesPage />} />
+      <Route path="/system/message-configs" element={<MessageConfigsPage />} />
+      <Route path="/system/messages/config" element={<MessageConfigsPage />} />
+      <Route path="/system/menus" element={<MenusPage />} />
+      <Route path="/system/system-parameters" element={<SystemParametersPage />} />
+      <Route path="/system/files" element={<FilesPage />} />
+      <Route path="/system/approval-processes" element={<ApprovalProcessesPage />} />
+      <Route path="/system/approval-instances" element={<ApprovalInstancesPage />} />
+      <Route path="/system/report-templates" element={<ReportTemplatesPage />} />
+      <Route path="/system/report-templates/:id/design" element={<ReportDesignPage />} />
+      <Route path="/system/inngest" element={<InngestDashboardPage />} />
 
       {/* 个人相关路由 */}
-      <Route path="/personal/profile" element={renderWithLayout(PersonalProfilePage)} />
-      <Route path="/personal/preferences" element={renderWithLayout(PersonalPreferencesPage)} />
-      <Route path="/personal/messages" element={renderWithLayout(PersonalMessagesPage)} />
-      <Route path="/personal/tasks" element={renderWithLayout(PersonalTasksPage)} />
+      <Route path="/personal/profile" element={<PersonalProfilePage />} />
+      <Route path="/personal/preferences" element={<PersonalPreferencesPage />} />
+      <Route path="/personal/messages" element={<PersonalMessagesPage />} />
+      <Route path="/personal/tasks" element={<PersonalTasksPage />} />
 
       {/* 调试路由 */}
 
       {/* 平台级路由 */}
-      <Route path="/infra/admin" element={renderWithLayout(PlatformAdminPage)} />
-      <Route path="/infra/operation" element={renderWithLayout(PlatformOperationPage)} />
-      <Route path="/platform/operation" element={renderWithLayout(PlatformOperationPage)} />
-      <Route path="/infra/tenants" element={renderWithLayout(TenantsPage)} />
-      <Route path="/infra/packages" element={renderWithLayout(PackagesPage)} />
-      <Route path="/infra/monitoring" element={renderWithLayout(MonitoringPage)} />
-      <Route path="/infra/inngest" element={renderWithLayout(InngestDashboardPage)} />
+      <Route path="/infra/admin" element={<PlatformAdminPage />} />
+      <Route path="/infra/operation" element={<PlatformOperationPage />} />
+      <Route path="/platform/operation" element={<PlatformOperationPage />} />
+      <Route path="/infra/tenants" element={<TenantsPage />} />
+      <Route path="/infra/packages" element={<PackagesPage />} />
+      <Route path="/infra/monitoring" element={<MonitoringPage />} />
+      <Route path="/infra/inngest" element={<InngestDashboardPage />} />
 
-      {/* 404 页面 */}
+      {/* 404 页面（不需要 BasicLayout） */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
