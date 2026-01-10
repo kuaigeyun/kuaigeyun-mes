@@ -50,14 +50,57 @@ export default function LoginPage() {
   const { setCurrentUser } = useGlobalStore();
 
   // 获取平台设置（公开接口）
-  const { data: platformSettings } = useQuery({
+  const { data: platformSettings, isLoading: isLoadingPlatformSettings } = useQuery({
     queryKey: ['platformSettingsPublic'],
     queryFn: getPlatformSettingsPublic,
     staleTime: 5 * 60 * 1000, // 5分钟缓存
   });
 
+  // 从缓存读取平台设置作为初始值，避免闪烁
+  const [cachedPlatformName, setCachedPlatformName] = useState<string | null>(() => {
+    try {
+      const cachedSettings = localStorage.getItem('platformSettingsPublic');
+      if (cachedSettings) {
+        const parsed = JSON.parse(cachedSettings);
+        return parsed?.platform_name || null;
+      }
+    } catch (error) {
+      // 忽略解析错误
+    }
+    return null;
+  });
+
   // LOGO URL状态（支持UUID和URL两种格式）
-  const [logoUrl, setLogoUrl] = useState<string>('/img/logo.png');
+  // 初始值：尝试从 localStorage 读取缓存的设置，避免闪烁
+  const [logoUrl, setLogoUrl] = useState<string>(() => {
+    try {
+      const cachedSettings = localStorage.getItem('platformSettingsPublic');
+      if (cachedSettings) {
+        const parsed = JSON.parse(cachedSettings);
+        // 优先使用缓存的LOGO URL
+        if (parsed?.platform_logo_url) {
+          return parsed.platform_logo_url;
+        }
+        if (parsed?.platform_logo) {
+          const logoValue = parsed.platform_logo.trim();
+          // 如果是URL格式，直接返回；如果是UUID，需要异步加载，先返回默认值
+          if (!logoValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            return logoValue;
+          }
+        }
+      }
+    } catch (error) {
+      // 忽略解析错误
+    }
+    return '/img/logo.png';
+  });
+
+  // 记录是否已加载LOGO，用于控制显示
+  // 初始值：如果logoUrl不是默认值，说明已经从缓存读取，应该立即显示
+  const [isLogoLoaded, setIsLogoLoaded] = useState<boolean>(() => {
+    // 如果logoUrl不是默认值，说明已经加载了（可能是从缓存读取的）
+    return logoUrl !== '/img/logo.png';
+  });
 
   /**
    * 判断字符串是否是UUID格式
@@ -70,8 +113,22 @@ export default function LoginPage() {
   // 加载LOGO URL
   useEffect(() => {
     const loadLogo = async () => {
+      // 如果正在加载平台设置，先隐藏LOGO，避免显示默认值
+      if (isLoadingPlatformSettings) {
+        setIsLogoLoaded(false);
+        return;
+      }
+
+      // 如果平台设置加载完成但没有LOGO，使用默认值
       if (!platformSettings?.platform_logo) {
         setLogoUrl('/img/logo.png');
+        setIsLogoLoaded(true);
+        // 更新缓存
+        try {
+          localStorage.setItem('platformSettingsPublic', JSON.stringify({ platform_logo: null }));
+        } catch (error) {
+          // 忽略存储错误
+        }
         return;
       }
 
@@ -89,33 +146,92 @@ export default function LoginPage() {
           if (response.ok) {
             const previewInfo = await response.json();
             setLogoUrl(previewInfo.preview_url);
+            setIsLogoLoaded(true);
+            // 更新缓存
+            try {
+              localStorage.setItem('platformSettingsPublic', JSON.stringify({
+                platform_logo: logoValue,
+                platform_logo_url: previewInfo.preview_url,
+              }));
+            } catch (error) {
+              // 忽略存储错误
+            }
           } else {
             console.error('获取LOGO预览URL失败:', response.statusText);
             setLogoUrl('/img/logo.png');
+            setIsLogoLoaded(true);
           }
         } catch (error) {
           console.error('获取LOGO预览URL失败:', error);
           setLogoUrl('/img/logo.png');
+          setIsLogoLoaded(true);
         }
       } else {
         // 如果是URL格式，直接使用
         setLogoUrl(logoValue);
+        setIsLogoLoaded(true);
+        // 更新缓存
+        try {
+          localStorage.setItem('platformSettingsPublic', JSON.stringify({
+            platform_logo: logoValue,
+            platform_logo_url: logoValue,
+          }));
+        } catch (error) {
+          // 忽略存储错误
+        }
       }
     };
 
     loadLogo();
-  }, [platformSettings?.platform_logo]);
+  }, [platformSettings?.platform_logo, isLoadingPlatformSettings]);
+
+  // 更新平台设置缓存（包含platform_name）
+  useEffect(() => {
+    if (platformSettings && !isLoadingPlatformSettings) {
+      try {
+        const cachedData: any = { ...platformSettings };
+        // 如果有LOGO URL，也缓存
+        if (logoUrl && logoUrl !== '/img/logo.png') {
+          cachedData.platform_logo_url = logoUrl;
+        }
+        localStorage.setItem('platformSettingsPublic', JSON.stringify(cachedData));
+        // 更新缓存的平台名称，用于显示
+        if (platformSettings.platform_name) {
+          setCachedPlatformName(platformSettings.platform_name);
+        }
+      } catch (error) {
+        // 忽略存储错误
+      }
+    }
+  }, [platformSettings, isLoadingPlatformSettings, logoUrl]);
 
   // 设置页面标题
   useEffect(() => {
-    const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
-    document.title = `${platformName} - 登录`;
+    if (isLoadingPlatformSettings) {
+      // 加载中时，尝试从缓存读取
+      try {
+        const cachedSettings = localStorage.getItem('platformSettingsPublic');
+        if (cachedSettings) {
+          const parsed = JSON.parse(cachedSettings);
+          if (parsed?.platform_name) {
+            document.title = `${parsed.platform_name} - 登录`;
+            return;
+          }
+        }
+      } catch (error) {
+        // 忽略解析错误
+      }
+      document.title = 'RiverEdge SaaS - 登录';
+    } else {
+      const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
+      document.title = `${platformName} - 登录`;
+    }
     
     // 组件卸载时恢复默认标题
     return () => {
       document.title = 'RiverEdge SaaS - 多组织管理框架';
     };
-  }, [platformSettings?.platform_name]);
+  }, [platformSettings?.platform_name, isLoadingPlatformSettings]);
 
   // 组织选择弹窗状态
   const [tenantSelectionVisible, setTenantSelectionVisible] = useState(false);
@@ -1151,37 +1267,49 @@ export default function LoginPage() {
         className="logo-header"
         style={{
           background: fixedThemeColor,
+          opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+          transition: 'opacity 0.3s ease-in-out',
         }}
       >
         <img 
           src={logoUrl} 
-          alt={platformSettings?.platform_name || "RiverEdge Logo"} 
+          alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
           className="logo-img"
+          style={{
+            opacity: (isLogoLoaded || logoUrl !== '/img/logo.png') && (!isLoadingPlatformSettings || cachedPlatformName || platformSettings) ? 1 : 0,
+            transition: 'opacity 0.3s ease-in-out',
+          }}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
-            target.parentElement?.appendChild(
-              Object.assign(document.createElement('div'), {
-                className: 'logo-placeholder',
-                style: {
-                  width: '50px',
-                  height: '50px',
-                  borderRadius: '50%',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '20px',
-                  fontWeight: 'bold',
-                  color: fixedThemeColor,
-                },
-                textContent: platformSettings?.platform_name?.substring(0, 2).toUpperCase() || 'RE',
-              })
-            );
+            const placeholder = target.parentElement?.querySelector('.logo-placeholder');
+            if (!placeholder) {
+              target.parentElement?.appendChild(
+                Object.assign(document.createElement('div'), {
+                  className: 'logo-placeholder',
+                  style: {
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    color: fixedThemeColor,
+                  },
+                  textContent: (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')?.substring(0, 2).toUpperCase() || 'RE',
+                })
+              );
+            }
           }}
         />
-        <Title level={2} className="logo-title">
-          {platformSettings?.platform_name || 'RiverEdge SaaS'}
+        <Title level={2} className="logo-title" style={{
+          opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+          transition: 'opacity 0.3s ease-in-out',
+        }}>
+          {platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS'}
         </Title>
       </div>
 
@@ -1193,37 +1321,50 @@ export default function LoginPage() {
         }}
       >
         {/* LOGO 和框架名称放在左上角（桌面端） */}
-        <div className="logo-top-left">
+        <div className="logo-top-left" style={{
+          opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+          transition: 'opacity 0.3s ease-in-out',
+        }}>
           <img 
             src={logoUrl} 
-            alt={platformSettings?.platform_name || "RiverEdge Logo"} 
+            alt={platformSettings?.platform_name || cachedPlatformName || "RiverEdge Logo"} 
             className="logo-img"
+            style={{
+              opacity: (isLogoLoaded || logoUrl !== '/img/logo.png') && (!isLoadingPlatformSettings || cachedPlatformName || platformSettings) ? 1 : 0,
+              transition: 'opacity 0.3s ease-in-out',
+            }}
             onError={(e) => {
               const target = e.target as HTMLImageElement;
               target.style.display = 'none';
-              target.parentElement?.appendChild(
-                Object.assign(document.createElement('div'), {
-                  className: 'logo-placeholder',
-                  style: {
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    color: fixedThemeColor,
-                    marginRight: '16px',
-                  },
-                  textContent: 'RE',
-                })
-              );
+              const placeholder = target.parentElement?.querySelector('.logo-placeholder');
+              if (!placeholder) {
+                target.parentElement?.appendChild(
+                  Object.assign(document.createElement('div'), {
+                    className: 'logo-placeholder',
+                    style: {
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.9)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      color: fixedThemeColor,
+                      marginRight: '16px',
+                    },
+                    textContent: (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')?.substring(0, 2).toUpperCase() || 'RE',
+                  })
+                );
+              }
             }}
           />
-          <Title level={2} className="logo-title">
-            {platformSettings?.platform_name || 'RiverEdge SaaS'}
+          <Title level={2} className="logo-title" style={{
+            opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+            transition: 'opacity 0.3s ease-in-out',
+          }}>
+            {platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS'}
           </Title>
         </div>
 
@@ -1273,8 +1414,11 @@ export default function LoginPage() {
       <div className="login-right">
         <div className="login-form-wrapper">
           <div className="login-form-header">
-            <Title level={2} className="form-title">
-              {platformSettings?.platform_name ? `欢迎登录 ${platformSettings.platform_name}` : '欢迎登录'}
+            <Title level={2} className="form-title" style={{
+              opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
+              transition: 'opacity 0.3s ease-in-out',
+            }}>
+              {(platformSettings?.platform_name || cachedPlatformName) ? `欢迎登录 ${platformSettings?.platform_name || cachedPlatformName}` : '欢迎登录'}
             </Title>
             <Text className="form-subtitle">请输入您的账号信息</Text>
           </div>
