@@ -9,7 +9,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip } from 'antd';
 import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import { getUserPreference } from '../../services/userPreference';
+import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
 
 /**
  * 标签项接口
@@ -23,118 +25,6 @@ export interface TabItem {
   pinned?: boolean;
 }
 
-/**
- * 将路径片段转换为中文名称（作为后备方案）
- */
-const translatePathToChinese = (pathSegment: string): string => {
-  const pathMap: Record<string, string> = {
-    // 工厂数据
-    'workshops': '车间',
-    'production-lines': '产线',
-    'workstations': '工位',
-    'factory': '工厂数据',
-    // 仓库数据
-    'warehouses': '仓库',
-    'storage-areas': '库区',
-    'storage-locations': '库位',
-    'warehouse': '仓库数据',
-    // 物料数据
-    'groups': '物料分组',
-    'materials': '物料',
-    'bom': 'BOM',
-    'material': '物料数据',
-    // 工艺数据
-    'defect-types': '不良品',
-    'operations': '工序',
-    'routes': '工艺路线',
-    'sop': '作业程序',
-    'process': '工艺数据',
-    // 供应链数据
-    'customers': '客户',
-    'suppliers': '供应商',
-    'supply-chain': '供应链数据',
-    // 绩效数据
-    'holidays': '假期',
-    'skills': '技能',
-    'performance': '绩效数据',
-    // 快格轻制造APP
-    'kuaizhizao': '快格轻制造',
-    'plan-management': '计划管理',
-    'demand-management': '需求管理',
-    'scheduling': '计划排程',
-    'production-execution': '生产执行',
-    'work-orders': '工单管理',
-    'reporting': '报工管理',
-    'sales-management': '销售管理',
-    'sales-orders': '销售订单',
-    'quality-management': '质量管理',
-    'incoming-inspection': '来料检验',
-    'process-inspection': '过程检验',
-    'finished-goods-inspection': '成品检验',
-    'finance-management': '财务管理',
-    'accounts-payable': '应付管理',
-    'accounts-receivable': '应收管理',
-    'reports': '报表分析',
-    'inventory-report': '库存报表',
-    'production-report': '生产报表',
-    'quality-report': '质量报表',
-    'warehouse-management': '仓储管理',
-    'inventory': '库存查询',
-    'inbound': '入库管理',
-    'finished-goods-inventory': '成品入库',
-    'sales-outbound': '销售出库',
-    'outbound': '出库管理',
-    'common': '通用功能',
-    'data-import-export': '数据导入导出',
-    'system-settings': '系统设置',
-    // 应用路径
-    'master-data': '基础数据管理',
-    'apps': '应用',
-  };
-  
-  return pathMap[pathSegment] || pathSegment;
-};
-
-/**
- * 从菜单配置中查找页面标题
- */
-const findMenuTitle = (path: string, menuConfig: MenuDataItem[]): string => {
-  const findInMenu = (items: MenuDataItem[] | undefined): string | null => {
-    // 防御性检查：如果 items 为空或未定义，直接返回 null
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return null;
-    }
-    
-    for (const item of items) {
-      // 精确匹配
-      if (item.path === path) {
-        return item.name as string;
-      }
-      // 子菜单递归查找
-      if (item.children) {
-        const found = findInMenu(item.children);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  // 防御性检查：如果 menuConfig 为空或未定义，直接返回路径的最后一部分
-  if (!menuConfig || !Array.isArray(menuConfig) || menuConfig.length === 0) {
-    // 如果路径匹配应用路由，尝试从路径中提取中文名称
-    const pathSegment = path.split('/').pop() || '';
-    return translatePathToChinese(pathSegment) || '未命名页面';
-  }
-
-  const menuTitle = findInMenu(menuConfig);
-  if (menuTitle) {
-    return menuTitle;
-  }
-  
-  // 如果没有找到菜单项，尝试从路径中提取中文名称
-  const pathSegment = path.split('/').pop() || '';
-  return translatePathToChinese(pathSegment) || '未命名页面';
-};
 
 /**
  * 统一标签栏组件属性
@@ -162,6 +52,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
+  const { t } = useTranslation(); // 获取翻译函数
   const [tabs, setTabs] = useState<TabItem[]>([]);
   const [activeKey, setActiveKey] = useState<string>('');
   const tabsNavRef = useRef<HTMLDivElement>(null);
@@ -172,13 +63,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 是否已初始化（避免重复恢复）
 
   /**
-   * 根据路径获取标签标题
+   * 根据路径获取标签标题（使用统一的翻译逻辑）
    */
   const getTabTitle = useCallback(
     (path: string): string => {
-      return findMenuTitle(path, menuConfig);
+      return findMenuTitleWithTranslation(path, menuConfig, t);
     },
-    [menuConfig]
+    [menuConfig, t]
   );
 
   /**
@@ -768,7 +659,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const menuItems: MenuProps['items'] = [
       {
         key: 'refresh',
-        label: '刷新',
+        label: t('tabs.refresh'),
         icon: <ReloadOutlined />,
       },
       {
@@ -776,7 +667,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       },
       {
         key: 'pin',
-        label: isPinned ? '取消固定' : '固定',
+        label: isPinned ? t('tabs.unpin') : t('tabs.pin'),
         icon: <PushpinOutlined style={{ transform: isPinned ? 'rotate(-45deg)' : 'none' }} />,
       },
       {
@@ -784,22 +675,22 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       },
       {
         key: 'close',
-        label: '关闭',
+        label: t('tabs.close'),
         disabled: isWorkplace || isPinned, // 工作台和固定标签不可关闭
       },
       {
         key: 'closeRight',
-        label: '关闭右侧',
+        label: t('tabs.closeRight'),
         disabled: !hasRightTabs || isWorkplace,
       },
       {
         key: 'closeOthers',
-        label: '关闭其他',
+        label: t('tabs.closeOthers'),
         disabled: !hasOtherTabs || isWorkplace,
       },
       {
         key: 'closeAll',
-        label: '全部关闭',
+        label: t('tabs.closeAll'),
         disabled: tabs.length <= 1 || (tabs.length === 1 && isWorkplace),
       },
     ];
@@ -1611,7 +1502,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             {/* 全屏按钮 */}
             {onToggleFullscreen && (
               <div className="uni-tabs-scroll-button-wrapper uni-tabs-fullscreen-button-wrapper">
-                <Tooltip title={isFullscreen ? '退出全屏' : '全屏'} placement="left">
+                <Tooltip title={isFullscreen ? t('tabs.exitFullscreen') : t('tabs.fullscreen')} placement="left">
                   <Button
                     type="text"
                     size="small"

@@ -100,9 +100,16 @@ from core.api.plugin_manager.plugin_manager import router as plugin_manager_rout
 # 应用路由现在通过 ApplicationRegistryService 动态注册
 # 无需手动导入应用路由模块
 
-# Inngest 集成 - 暂时禁用以便测试
-# from core.inngest.client import inngest_client
-# from inngest.fast_api import serve as inngest_serve
+# Inngest 集成
+try:
+    from core.inngest.client import inngest_client
+    from inngest.fast_api import serve as inngest_serve
+    INNGEST_AVAILABLE = True
+except ImportError:
+    inngest_client = None
+    inngest_serve = None
+    INNGEST_AVAILABLE = False
+    logger.warning("⚠️ Inngest 模块不可用，已禁用 Inngest 集成")
 
 # 获取运行模式 - 默认为SaaS模式
 MODE = os.getenv("MODE", "saas")
@@ -239,57 +246,59 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # 注册 Inngest 服务
 # 导入 Inngest 函数（确保函数被注册）
-# 注意：test_integration_function已在__init__.py中处理导入错误
-from core.inngest.functions import (
-    message_sender_function,
-    scheduled_task_executor_function,
-    scheduled_task_scheduler_function,
-    approval_workflow_function,
-    approval_action_workflow_function,
-    sop_execution_workflow_function,
-    sop_node_complete_workflow_function,
-    material_ai_suggestion_workflow,
-)
-
-# 挂载 Inngest 服务端点 - 暂时禁用
-# serve() 函数需要 app, client, 和 functions 参数
-# 必须注册所有 Inngest 函数，确保它们被 Inngest Dev Server 发现
-try:
-    # inngest_serve(
-    #     app,
-    #     inngest_client,
-    #     [
-    #         # 测试函数
-    #         test_integration_function,
-    #         # 消息发送
-    #         message_sender_function,
-    #         # 定时任务
-    #         scheduled_task_executor_function,
-    #         scheduled_task_scheduler_function,
-    #         # 审批流程
-    #         approval_workflow_function,
-    #         approval_action_workflow_function,
-    #         # SOP执行流程
-    #         sop_execution_workflow_function,
-    #         sop_node_complete_workflow_function,
-    #     ]
-    # )
-    logger.info("ℹ️ Inngest 服务端点已暂时禁用")
-    inngest_functions = [
-        # test_integration_function,
-        # message_sender_function,
-        # scheduled_task_executor_function,
-        # scheduled_task_scheduler_function,
-        # approval_workflow_function,
-        # approval_action_workflow_function,
-        # sop_execution_workflow_function,
-        # sop_node_complete_workflow_function,
-    ]
-    logger.info(f"ℹ️ Inngest 函数注册已暂时禁用，当前注册 {len(inngest_functions)} 个函数")
-except Exception as e:
-    logger.error(f"❌ Inngest 服务端点注册失败: {e}")
-    import traceback
-    traceback.print_exc()
+# 注意：函数导入已在__init__.py中处理导入错误和可用性检查
+if INNGEST_AVAILABLE:
+    try:
+        from core.inngest.functions import (
+            test_integration_function,
+            message_sender_function,
+            scheduled_task_executor_function,
+            scheduled_task_scheduler_function,
+            approval_workflow_function,
+            approval_action_workflow_function,
+            sop_execution_workflow_function,
+            sop_node_complete_workflow_function,
+            material_ai_suggestion_workflow,
+        )
+        
+        # 准备所有 Inngest 函数列表（过滤掉 None 值）
+        inngest_functions = [
+            func for func in [
+                test_integration_function,
+                message_sender_function,
+                scheduled_task_executor_function,
+                scheduled_task_scheduler_function,
+                approval_workflow_function,
+                approval_action_workflow_function,
+                sop_execution_workflow_function,
+                sop_node_complete_workflow_function,
+                material_ai_suggestion_workflow,
+            ] if func is not None
+        ]
+        
+        # 使用 app.mount() 挂载 Inngest 服务端点
+        # 这会注册 /api/inngest/serve 和 /api/inngest/function/run 等端点
+        if inngest_functions:
+            app.mount(
+                "/api/inngest",
+                inngest_serve(
+                    app,
+                    inngest_client,
+                    inngest_functions,
+                ),
+            )
+            logger.info(f"✅ Inngest 服务端点注册成功")
+            logger.info(f"✅ 已注册 {len(inngest_functions)} 个 Inngest 函数")
+            logger.info(f"✅ Inngest 端点路径: /api/inngest")
+        else:
+            logger.warning("⚠️ 没有可用的 Inngest 函数，跳过服务端点注册")
+            
+    except Exception as e:
+        logger.error(f"❌ Inngest 服务端点注册失败: {e}")
+        import traceback
+        traceback.print_exc()
+else:
+    logger.info("ℹ️ Inngest 模块不可用，跳过 Inngest 服务端点注册")
 
 # 健康检查端点
 @app.get("/health")

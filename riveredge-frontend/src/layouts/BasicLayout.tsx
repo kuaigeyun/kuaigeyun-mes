@@ -52,6 +52,7 @@ import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined, CheckOutlined } from '@ant-design/icons';
+import { translateMenuName, translatePathTitle, translateAppMenuName, translateAppMenuItemName, extractAppCodeFromPath } from '../utils/menuTranslation';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -99,6 +100,7 @@ import { getFilePreview } from '../services/file';
 const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { currentUser, loading, setCurrentUser, setLoading } = useGlobalStore();
+  const { t } = useSafeTranslation(); // 使用安全的翻译 hook
 
   // 检查用户类型（平台超级管理员还是系统级用户）
   const userInfo = getUserInfo();
@@ -110,7 +112,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
   if (isInfraSuperAdmin && isSystemPage && !currentTenantId) {
-    message.warning('请先选择要管理的组织');
+    message.warning(t('common.selectOrganizationFirst', { defaultValue: '请先选择要管理的组织' }));
     // 重定向到infra登录页
     return <Navigate to="/infra/login" replace />;
   }
@@ -279,147 +281,117 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
  * @returns React 图标组件，总是返回 Lucide 图标
  */
 const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
-  // 根据菜单名称和路径映射到制造业图标
-  // 只对制造业相关的菜单使用制造业图标，系统配置类菜单继续使用 Ant Design 图标
-  const iconMap: Record<string, React.ComponentType<any>> = {
-    // 仪表盘相关 - 使用工业仪表盘图标，增强工业关联度
-    '仪表盘': ManufacturingIcons.industrialDashboard, // 使用 Gauge 仪表盘图标
-    '工作台': ManufacturingIcons.production,
-    '分析页': ManufacturingIcons.chartLine,
-    '运营看板': ManufacturingIcons.analytics,
-    
-    // 用户管理相关 - 使用安全和组织图标
-    '角色权限': ManufacturingIcons.quality,
-    '部门管理': ManufacturingIcons.building,
-    '职位管理': ManufacturingIcons.tool,
-    '账户管理': ManufacturingIcons.safety,
-    
-    // 核心配置 - 使用工业齿轮图标，增强工业关联度
-    '系统配置': ManufacturingIcons.systemConfig, // 使用齿轮图标，更符合工业系统配置
-    '应用中心': ManufacturingIcons.factory,
-    '菜单管理': ManufacturingIcons.checklist,
-    '站点设置': ManufacturingIcons.mdSettings,
-    '参数设置': ManufacturingIcons.mdConfiguration,
-    '数据字典': ManufacturingIcons.warehouse, // 使用仓库图标表示数据存储
-    '编码规则': ManufacturingIcons.mdPrecision,
-    '集成设置': ManufacturingIcons.automation,
-    '语言管理': ManufacturingIcons.clipboardList, // 使用清单图标
-    '自定义字段': ManufacturingIcons.toolbox,
-    '邀请码管理': ManufacturingIcons.clipboardCheck, // 使用检查清单图标
-    
-    // 数据中心 - 使用仓储和库存图标
-    '文件管理': ManufacturingIcons.box, // 使用箱子图标
-    '接口管理': ManufacturingIcons.automation,
-    '数据源管理': ManufacturingIcons.warehouse,
-    '数据集管理': ManufacturingIcons.inventory,
-    
-    // 流程管理 - 使用生产线和检查图标
-    '消息配置': ManufacturingIcons.clipboardList, // 使用清单图标
-    '消息模板': ManufacturingIcons.clipboardList,
-    '定时任务': ManufacturingIcons.mdSettings,
-    '审批流程': ManufacturingIcons.productionLine,
-    '审批实例': ManufacturingIcons.checkCircle,
-    '脚本管理': ManufacturingIcons.mdPrecision,
-    '打印模板': ManufacturingIcons.clipboardList,
-    '打印设备': ManufacturingIcons.machine, // 使用机器图标
-    
-    // 个人中心 - 使用安全和个人相关图标
-    '个人中心': ManufacturingIcons.safety, // 使用安全帽图标
-    '个人资料': ManufacturingIcons.safety,
-    '偏好设置': ManufacturingIcons.mdSettings,
-    '我的消息': ManufacturingIcons.clipboardList,
-    '我的任务': ManufacturingIcons.checklist,
-    
-    // 监控运维 - 使用仓储和检查图标
-    '操作日志': ManufacturingIcons.clipboardList,
-    '登录日志': ManufacturingIcons.clipboardList,
-    '在线用户': ManufacturingIcons.safety, // 使用安全帽图标表示人员
-    '数据备份': ManufacturingIcons.warehouse,
-    
-    // 运营中心 - 使用工厂图标，增强工业关联度
-    '运营中心': ManufacturingIcons.operationsCenter, // 使用工厂图标，更符合工业运营中心
-    '组织管理': ManufacturingIcons.building,
-    '套餐管理': ManufacturingIcons.shoppingBag, // 使用购物袋图标
-    '系统监控': ManufacturingIcons.analytics, // 使用分析图标
-    '流程后台': ManufacturingIcons.automation,
-    '平台管理': ManufacturingIcons.quality, // 使用质量图标表示管理
-    
-    // MES 相关菜单 - 使用工厂图标，增强工业关联度
-    '快格轻MES': ManufacturingIcons.production, // 使用生产图标，更符合制造执行系统
-    '生产计划': ManufacturingIcons.checklist, // 使用清单图标，更符合生产计划场景
-    '生产执行': ManufacturingIcons.production, // 使用生产趋势图标，更符合生产执行场景
-    '物料管理': ManufacturingIcons.warehouse, // 使用仓库图标，更符合工业物料管理场景
-    '质量管控': ManufacturingIcons.quality, // 使用质量盾牌图标，更符合质量管控场景
-    '工单管理': ManufacturingIcons.checklist,
-    '生产排程': ManufacturingIcons.productionLine,
-    '实时报工': ManufacturingIcons.production,
-    '进度跟踪': ManufacturingIcons.chartLine,
-    '库存明细': ManufacturingIcons.inventory,
-    '出入库操作': ManufacturingIcons.warehouse,
-    '质检标准': ManufacturingIcons.quality,
-    '质量追溯': ManufacturingIcons.inspection,
-    '不良品处理': ManufacturingIcons.exclamationTriangle,
-  };
+  // 根据菜单路径和名称映射到制造业图标
+  // 优先使用路径匹配（路径是固定的，不受翻译影响）
+  // 路径映射作为主要方式，名称映射作为后备方案（为了向后兼容）
   
-  // 优先使用菜单名称匹配
-  if (iconMap[menuName]) {
-    const IconComponent = iconMap[menuName];
-    return React.createElement(IconComponent, { size: 16 });
-  }
-  
-  // 如果名称不匹配，尝试根据路径匹配
+  // 路径映射（优先使用，因为路径是固定的，不受翻译影响）
   if (menuPath) {
     const pathMap: Record<string, React.ComponentType<any>> = {
-      '/system': ManufacturingIcons.systemConfig, // 系统配置（使用齿轮图标，更工业）
-      '/system/dashboard': ManufacturingIcons.industrialDashboard, // 工业仪表盘
-      '/system/roles': ManufacturingIcons.quality,
-      '/system/departments': ManufacturingIcons.building,
-      '/system/positions': ManufacturingIcons.tool,
-      '/system/users': ManufacturingIcons.safety,
-      '/system/applications': ManufacturingIcons.factory,
-      '/system/menus': ManufacturingIcons.checklist,
-      '/system/site-settings': ManufacturingIcons.mdSettings,
-      '/system/system-parameters': ManufacturingIcons.mdConfiguration,
-      '/system/data-dictionaries': ManufacturingIcons.warehouse,
-      '/system/code-rules': ManufacturingIcons.mdPrecision,
-      '/system/integration-configs': ManufacturingIcons.automation,
-      '/system/languages': ManufacturingIcons.clipboardList,
-      '/system/custom-fields': ManufacturingIcons.toolbox,
-      '/system/files': ManufacturingIcons.box,
-      '/system/apis': ManufacturingIcons.automation,
-      '/system/data-sources': ManufacturingIcons.warehouse,
-      '/system/datasets': ManufacturingIcons.inventory,
-      '/system/messages/config': ManufacturingIcons.clipboardList,
-      '/system/messages/template': ManufacturingIcons.clipboardList,
-      '/system/scheduled-tasks': ManufacturingIcons.mdSettings,
-      '/system/approval-processes': ManufacturingIcons.productionLine,
-      '/system/approval-instances': ManufacturingIcons.checkCircle,
-      '/system/scripts': ManufacturingIcons.mdPrecision,
-      '/system/print-templates': ManufacturingIcons.clipboardList,
-      '/system/print-devices': ManufacturingIcons.machine,
-      '/personal': ManufacturingIcons.safety,
-      '/system/operation-logs': ManufacturingIcons.clipboardList,
-      '/system/login-logs': ManufacturingIcons.clipboardList,
-      '/system/online-users': ManufacturingIcons.safety,
-      '/system/data-backups': ManufacturingIcons.warehouse,
-      '/infra/operation': ManufacturingIcons.operationsCenter, // 运营中心
-      '/infra/tenants': ManufacturingIcons.building,
-      '/infra/packages': ManufacturingIcons.shoppingBag,
-      '/infra/monitoring': ManufacturingIcons.analytics,
-      '/infra/inngest': ManufacturingIcons.automation,
-      '/infra/admin': ManufacturingIcons.quality,
+      '/system': ManufacturingIcons.systemConfig,
+      '/system/dashboard': ManufacturingIcons.industrialDashboard,
+      '/system/dashboard/workplace': ManufacturingIcons.production,
+      '/system/dashboard/analysis': ManufacturingIcons.chartLine,
+      '/system/roles': ManufacturingIcons.shield, // 角色权限管理 - 使用盾牌图标
+      '/system/departments': ManufacturingIcons.building, // 部门管理 - 使用建筑图标
+      '/system/positions': ManufacturingIcons.userCog, // 职位管理 - 使用用户配置图标
+      '/system/users': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
+      '/system/applications': ManufacturingIcons.factory, // 应用中心 - 使用工厂图标
+      '/system/menus': ManufacturingIcons.checklist, // 菜单管理 - 使用清单图标
+      '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
+      '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 使用配置图标
+      '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
+      '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
+      '/system/integration-configs': ManufacturingIcons.network, // 集成配置 - 使用网络图标
+      '/system/languages': ManufacturingIcons.languages, // 语言管理 - 使用语言图标
+      '/system/custom-fields': ManufacturingIcons.toolbox, // 自定义字段 - 使用工具箱图标
+      '/system/files': ManufacturingIcons.folder, // 文件管理 - 使用文件夹图标
+      '/system/apis': ManufacturingIcons.api, // API管理 - 使用API图标
+      '/system/data-sources': ManufacturingIcons.database, // 数据源 - 使用数据库图标
+      '/system/datasets': ManufacturingIcons.inventory, // 数据集 - 使用库存图标
+      '/system/messages/config': ManufacturingIcons.bell, // 消息配置 - 使用铃铛图标
+      '/system/messages/template': ManufacturingIcons.fileText, // 消息模板 - 使用文件文本图标
+      '/system/scheduled-tasks': ManufacturingIcons.clock, // 定时任务 - 使用时钟图标
+      '/system/approval-processes': ManufacturingIcons.workflow, // 审批流程 - 使用工作流图标
+      '/system/approval-instances': ManufacturingIcons.checkCircle, // 审批实例 - 使用检查圆圈图标
+      '/system/scripts': ManufacturingIcons.fileCode, // 脚本管理 - 使用代码文件图标
+      '/system/print-templates': ManufacturingIcons.fileText, // 打印模板 - 使用文件文本图标
+      '/system/print-devices': ManufacturingIcons.printer, // 打印设备 - 使用打印机图标
+      '/personal': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
+      '/personal/profile': ManufacturingIcons.user, // 个人资料 - 使用用户图标
+      '/personal/preferences': ManufacturingIcons.mdSettings, // 偏好设置 - 使用设置图标
+      '/personal/messages': ManufacturingIcons.bell, // 我的消息 - 使用铃铛图标
+      '/personal/tasks': ManufacturingIcons.checklist, // 我的任务 - 使用清单图标
+      '/system/operation-logs': ManufacturingIcons.history, // 操作日志 - 使用历史图标
+      '/system/login-logs': ManufacturingIcons.logIn, // 登录日志 - 使用登录图标
+      '/system/online-users': ManufacturingIcons.users, // 在线用户 - 使用用户组图标
+      '/system/data-backups': ManufacturingIcons.hardDrive, // 数据备份 - 使用硬盘图标
+      '/infra/operation': ManufacturingIcons.analytics, // 运营中心 - 使用分析图标
+      '/infra/tenants': ManufacturingIcons.building, // 租户管理 - 使用建筑图标（保持）
+      '/infra/packages': ManufacturingIcons.package, // 应用包管理 - 使用包裹图标
+      '/infra/monitoring': ManufacturingIcons.monitor, // 系统监控 - 使用显示器图标
+      '/infra/inngest': ManufacturingIcons.workflow, // Inngest工作流 - 使用工作流图标
+      '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
       
-      // 应用路径图标映射 - 通过动态应用配置加载，不在此处硬编码
-      // '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 由应用配置动态加载
+      // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
+      '/apps/kuaizhizao/plan-management': ManufacturingIcons.calendar, // 计划管理 - 使用日历图标
+      '/apps/kuaizhizao/production-execution': ManufacturingIcons.production, // 生产执行 - 使用生产图标
+      '/apps/kuaizhizao/purchase-management': ManufacturingIcons.shoppingBag, // 采购管理 - 使用购物袋图标
+      '/apps/kuaizhizao/sales-management': ManufacturingIcons.shoppingCart, // 销售管理 - 使用购物车图标
+      '/apps/kuaizhizao/warehouse-management': ManufacturingIcons.warehouse, // 仓储管理 - 使用仓库图标
+      '/apps/kuaizhizao/quality-management': ManufacturingIcons.quality, // 质量管理 - 使用质量图标
+      '/apps/kuaizhizao/cost-management': ManufacturingIcons.calculator, // 成本管理 - 使用计算器图标
+      '/apps/kuaizhizao/equipment-management': ManufacturingIcons.machine, // 设备管理 - 使用机器图标
+      '/apps/kuaizhizao/finance-management': ManufacturingIcons.calculator, // 财务管理 - 使用计算器图标（不使用美元符号）
+      '/apps/kuaizhizao/reports': ManufacturingIcons.analytics, // 报表分析 - 使用分析图标
+      '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
     };
     
+    // 精确路径匹配
     if (pathMap[menuPath]) {
       const IconComponent = pathMap[menuPath];
       return React.createElement(IconComponent, { size: 16 });
     }
+    
+    // 前缀路径匹配（用于父级菜单）
+    const matchedPath = Object.keys(pathMap).find(path => menuPath.startsWith(path));
+    if (matchedPath) {
+      const IconComponent = pathMap[matchedPath];
+      return React.createElement(IconComponent, { size: 16 });
+    }
   }
   
-  // 如果找不到匹配的图标，返回默认的 Lucide 图标（LayoutDashboard）
+  // 名称映射（后备方案，为了向后兼容，支持中英文）
+  // 注意：由于菜单名称可能已翻译，这里作为最后的后备方案
+  const nameMap: Record<string, React.ComponentType<any>> = {
+    // 常见的中文和英文名称映射（保留作为后备）
+    'Dashboard': ManufacturingIcons.industrialDashboard,
+    'Workplace': ManufacturingIcons.production,
+    'Analysis': ManufacturingIcons.chartLine,
+    'Operations Dashboard': ManufacturingIcons.analytics,
+    'Operations Center': ManufacturingIcons.operationsCenter,
+    'User Management': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
+    'System Configuration': ManufacturingIcons.systemConfig,
+    'Personal Center': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
+    // 应用菜单名称映射（后备方案）
+    'Plan Management': ManufacturingIcons.calendar,
+    'Production Execution': ManufacturingIcons.production,
+    'Purchase Management': ManufacturingIcons.shoppingBag,
+    'Sales Management': ManufacturingIcons.shoppingCart,
+    'Warehouse Management': ManufacturingIcons.warehouse,
+    'Quality Management': ManufacturingIcons.quality,
+    'Cost Management': ManufacturingIcons.calculator,
+    'Equipment Management': ManufacturingIcons.machine,
+    'Finance Management': ManufacturingIcons.calculator, // 财务管理 - 使用计算器图标（不使用美元符号）
+    // ... 其他常见的英文名称可以在这里添加
+  };
+  
+  if (nameMap[menuName]) {
+    const IconComponent = nameMap[menuName];
+    return React.createElement(IconComponent, { size: 16 });
+  }
+  
+  // 如果找不到匹配的图标，返回默认的 Lucide 图标
   return React.createElement(ManufacturingIcons.dashboard, { size: 16 });
 };
 
@@ -445,18 +417,18 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
   // 可见范围：平台级、系统级、应用级 都可见
   {
     path: '/system/dashboard',
-    name: t('menu.dashboard') || '仪表盘',
-    icon: getMenuIcon(t('menu.dashboard') || '仪表盘', '/system/dashboard'),
+    name: t('menu.dashboard'),
+    icon: getMenuIcon(t('menu.dashboard'), '/system/dashboard'),
     children: [
       {
         path: '/system/dashboard/workplace',
-        name: t('menu.dashboard.workplace') || '工作台',
-        icon: getMenuIcon(t('menu.dashboard.workplace') || '工作台', '/system/dashboard/workplace'),
+        name: t('menu.dashboard.workplace'),
+        icon: getMenuIcon(t('menu.dashboard.workplace'), '/system/dashboard/workplace'),
       },
       {
         path: '/system/dashboard/analysis',
-        name: t('menu.dashboard.analysis') || '分析页',
-        icon: getMenuIcon(t('menu.dashboard.analysis') || '分析页', '/system/dashboard/analysis'),
+        name: t('menu.dashboard.analysis'),
+        icon: getMenuIcon(t('menu.dashboard.analysis'), '/system/dashboard/analysis'),
       },
     ],
   },
@@ -473,37 +445,37 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
   // 注意：组织管理已移除，组织管理在平台级运营中心进行管理
   {
     path: '/system',
-    name: '系统配置',
-    icon: getMenuIcon('系统配置', '/system'),
+    name: t('menu.system'),
+    icon: getMenuIcon(t('menu.system'), '/system'),
     children: [
       // 用户管理分组标题（使用 Ant Design Menu 的 type: 'group'）
       {
         key: 'user-management-group',
         type: 'group',
-        name: '用户管理',  // ProLayout 使用 name，但 type: 'group' 会传递给 Ant Design Menu 作为 label
-        label: '用户管理',  // 同时提供 label 以确保 Ant Design Menu 能正确显示
+        name: t('menu.group.user-management'),  // ProLayout 使用 name，但 type: 'group' 会传递给 Ant Design Menu 作为 label
+        label: t('menu.group.user-management'),  // 同时提供 label 以确保 Ant Design Menu 能正确显示
         className: 'riveredge-menu-group-title',  // 自定义 className，用于专门设置样式
         children: [
           // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
           {
             path: '/system/roles',
-            name: '角色权限',
-            icon: getMenuIcon('角色权限', '/system/roles'),
+            name: t('menu.system.roles-permissions'),
+            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
           },
           {
             path: '/system/departments',
-            name: '部门管理',
-            icon: getMenuIcon('部门管理', '/system/departments'),
+            name: t('menu.system.departments'),
+            icon: getMenuIcon(t('menu.system.departments'), '/system/departments'),
           },
           {
             path: '/system/positions',
-            name: '职位管理',
-            icon: getMenuIcon('职位管理', '/system/positions'),
+            name: t('menu.system.positions'),
+            icon: getMenuIcon(t('menu.system.positions'), '/system/positions'),
           },
           {
             path: '/system/users',
-            name: '账户管理',
-            icon: getMenuIcon('账户管理', '/system/users'),
+            name: t('menu.system.users'),
+            icon: getMenuIcon(t('menu.system.users'), '/system/users'),
           },
         ],
       },
@@ -511,54 +483,54 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
       {
         key: 'core-config-group',
         type: 'group',
-        name: t('menu.group.core-config') || '核心配置',
-        label: t('menu.group.core-config') || '核心配置',
+        name: t('menu.group.core-config'),
+        label: t('menu.group.core-config'),
         className: 'riveredge-menu-group-title',
         children: [
           {
             path: '/system/applications',
-            name: t('menu.system.applications') || '应用中心',
-            icon: getMenuIcon(t('menu.system.applications') || '应用中心', '/system/applications'),
+            name: t('menu.system.applications'),
+            icon: getMenuIcon(t('menu.system.applications'), '/system/applications'),
           },
           {
             path: '/system/menus',
-            name: t('menu.system.menus') || '菜单管理',
-            icon: getMenuIcon(t('menu.system.menus') || '菜单管理', '/system/menus'),
+            name: t('menu.system.menus'),
+            icon: getMenuIcon(t('menu.system.menus'), '/system/menus'),
           },
           {
             path: '/system/site-settings',
-            name: t('menu.system.site-settings') || '站点设置',
-            icon: getMenuIcon(t('menu.system.site-settings') || '站点设置', '/system/site-settings'),
+            name: t('menu.system.site-settings'),
+            icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'),
           },
           {
             path: '/system/system-parameters',
-            name: t('menu.system.system-parameters') || '参数设置',
-            icon: getMenuIcon(t('menu.system.system-parameters') || '参数设置', '/system/system-parameters'),
+            name: t('menu.system.system-parameters'),
+            icon: getMenuIcon(t('menu.system.system-parameters'), '/system/system-parameters'),
           },
           {
             path: '/system/data-dictionaries',
-            name: t('menu.system.data-dictionaries') || '数据字典',
-            icon: getMenuIcon(t('menu.system.data-dictionaries') || '数据字典', '/system/data-dictionaries'),
+            name: t('menu.system.data-dictionaries'),
+            icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'),
           },
           {
             path: '/system/code-rules',
-            name: t('menu.system.code-rules') || '编码规则',
-            icon: getMenuIcon(t('menu.system.code-rules') || '编码规则', '/system/code-rules'),
+            name: t('menu.system.code-rules'),
+            icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'),
           },
           {
             path: '/system/integration-configs',
-            name: t('menu.system.integration-configs') || '集成设置',
-            icon: getMenuIcon(t('menu.system.integration-configs') || '集成设置', '/system/integration-configs'),
+            name: t('menu.system.integration-configs'),
+            icon: getMenuIcon(t('menu.system.integration-configs'), '/system/integration-configs'),
           },
           {
             path: '/system/languages',
-            name: t('menu.system.languages') || '语言管理',
-            icon: getMenuIcon(t('menu.system.languages') || '语言管理', '/system/languages'),
+            name: t('menu.system.languages'),
+            icon: getMenuIcon(t('menu.system.languages'), '/system/languages'),
           },
           {
             path: '/system/custom-fields',
-            name: t('menu.system.custom-fields') || '自定义字段',
-            icon: getMenuIcon(t('menu.system.custom-fields') || '自定义字段', '/system/custom-fields'),
+            name: t('menu.system.custom-fields'),
+            icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'),
           },
         ],
       },
@@ -566,29 +538,29 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
       {
         key: 'data-center-group',
         type: 'group',
-        name: '数据中心',
-        label: '数据中心',
+        name: t('menu.group.data-center'),
+        label: t('menu.group.data-center'),
         className: 'riveredge-menu-group-title',
         children: [
           {
             path: '/system/files',
-            name: '文件管理',
-            icon: getMenuIcon('文件管理', '/system/files'),
+            name: t('menu.system.files'),
+            icon: getMenuIcon(t('menu.system.files'), '/system/files'),
           },
           {
             path: '/system/apis',
-            name: '接口管理',
-            icon: getMenuIcon('接口管理', '/system/apis'),
+            name: t('menu.system.apis'),
+            icon: getMenuIcon(t('menu.system.apis'), '/system/apis'),
           },
           {
             path: '/system/data-sources',
-            name: '数据源管理',
-            icon: getMenuIcon('数据源管理', '/system/data-sources'),
+            name: t('menu.system.data-sources'),
+            icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'),
           },
           {
             path: '/system/datasets',
-            name: '数据集管理',
-            icon: getMenuIcon('数据集管理', '/system/datasets'),
+            name: t('menu.system.datasets'),
+            icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'),
           },
         ],
       },
@@ -596,76 +568,76 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
       {
         key: 'process-management-group',
         type: 'group',
-        name: '流程管理',
-        label: '流程管理',
+        name: t('menu.group.process-management'),
+        label: t('menu.group.process-management'),
         className: 'riveredge-menu-group-title',
         children: [
           {
             path: '/system/messages/config',
-            name: '消息配置',
-            icon: getMenuIcon('消息配置', '/system/messages/config'),
+            name: t('menu.system.messages.config'),
+            icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'),
           },
           {
             path: '/system/messages/template',
-            name: '消息模板',
-            icon: getMenuIcon('消息模板', '/system/messages/template'),
+            name: t('menu.system.messages.template'),
+            icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'),
           },
           {
             path: '/system/scheduled-tasks',
-            name: '定时任务',
-            icon: getMenuIcon('定时任务', '/system/scheduled-tasks'),
+            name: t('menu.system.scheduled-tasks'),
+            icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks'),
           },
           {
             path: '/system/approval-processes',
-            name: '审批流程',
-            icon: getMenuIcon('审批流程', '/system/approval-processes'),
+            name: t('menu.system.approval-processes'),
+            icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'),
           },
           {
             path: '/system/approval-instances',
-            name: '审批实例',
-            icon: getMenuIcon('审批实例', '/system/approval-instances'),
+            name: t('menu.system.approval-instances'),
+            icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'),
           },
           {
             path: '/system/scripts',
-            name: '脚本管理',
-            icon: getMenuIcon('脚本管理', '/system/scripts'),
+            name: t('menu.system.scripts'),
+            icon: getMenuIcon(t('menu.system.scripts'), '/system/scripts'),
           },
           {
             path: '/system/print-templates',
-            name: '打印模板',
-            icon: getMenuIcon('打印模板', '/system/print-templates'),
+            name: t('menu.system.print-templates'),
+            icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'),
           },
           {
             path: '/system/print-devices',
-            name: '打印设备',
-            icon: getMenuIcon('打印设备', '/system/print-devices'),
+            name: t('menu.system.print-devices'),
+            icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'),
           },
         ],
       },
       {
         path: '/personal',
-        name: '个人中心',
-        icon: getMenuIcon('个人中心', '/personal'),
+        name: t('menu.personal'),
+        icon: getMenuIcon(t('menu.personal'), '/personal'),
         children: [
           {
             path: '/personal/profile',
-            name: '个人资料',
-            icon: getMenuIcon('个人资料', '/personal/profile'),
+            name: t('menu.personal.profile'),
+            icon: getMenuIcon(t('menu.personal.profile'), '/personal/profile'),
           },
           {
             path: '/personal/preferences',
-            name: '偏好设置',
-            icon: getMenuIcon('偏好设置', '/personal/preferences'),
+            name: t('menu.personal.preferences'),
+            icon: getMenuIcon(t('menu.personal.preferences'), '/personal/preferences'),
           },
           {
             path: '/personal/messages',
-            name: '我的消息',
-            icon: getMenuIcon('我的消息', '/personal/messages'),
+            name: t('menu.personal.messages'),
+            icon: getMenuIcon(t('menu.personal.messages'), '/personal/messages'),
           },
           {
             path: '/personal/tasks',
-            name: '我的任务',
-            icon: getMenuIcon('我的任务', '/personal/tasks'),
+            name: t('menu.personal.tasks'),
+            icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks'),
           },
         ],
       },
@@ -673,29 +645,29 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
       {
         key: 'monitoring-ops-group',
         type: 'group',
-        name: '监控运维',
-        label: '监控运维',
+        name: t('menu.group.monitoring-ops'),
+        label: t('menu.group.monitoring-ops'),
         className: 'riveredge-menu-group-title',
         children: [
           {
             path: '/system/operation-logs',
-            name: '操作日志',
-            icon: getMenuIcon('操作日志', '/system/operation-logs'),
+            name: t('menu.system.operation-logs'),
+            icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'),
           },
           {
             path: '/system/login-logs',
-            name: '登录日志',
-            icon: getMenuIcon('登录日志', '/system/login-logs'),
+            name: t('menu.system.login-logs'),
+            icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'),
           },
           {
             path: '/system/online-users',
-            name: '在线用户',
-            icon: getMenuIcon('在线用户', '/system/online-users'),
+            name: t('menu.system.online-users'),
+            icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'),
           },
           {
             path: '/system/data-backups',
-            name: '数据备份',
-            icon: getMenuIcon('数据备份', '/system/data-backups'),
+            name: t('menu.system.data-backups'),
+            icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'),
           },
         ],
       },
@@ -706,38 +678,38 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
   // 可见范围：仅平台级管理员可见
   {
     // 父菜单不设置 path，避免与子菜单路径冲突
-    name: '运营中心',
-    icon: getMenuIcon('运营中心', '/infra/operation'),
+    name: t('menu.infra'),
+    icon: getMenuIcon(t('menu.infra'), '/infra/operation'),
     children: [
       {
         path: '/infra/operation',
-        name: '运营看板',
-        icon: getMenuIcon('运营看板', '/infra/operation'),
+        name: t('menu.infra.operation'),
+        icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation'),
       },
       {
         path: '/infra/tenants',
-        name: '组织管理',
-        icon: getMenuIcon('组织管理', '/infra/tenants'),
+        name: t('menu.infra.tenants'),
+        icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants'),
       },
       {
         path: '/infra/packages',
-        name: '套餐管理',
-        icon: getMenuIcon('套餐管理', '/infra/packages'),
+        name: t('menu.infra.packages'),
+        icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages'),
       },
       {
         path: '/infra/monitoring',
-        name: t('menu.infra.monitoring') || '系统监控',
-        icon: getMenuIcon(t('menu.infra.monitoring') || '系统监控', '/infra/monitoring'),
+        name: t('menu.infra.monitoring'),
+        icon: getMenuIcon(t('menu.infra.monitoring'), '/infra/monitoring'),
       },
       {
         path: '/infra/inngest',
-        name: t('menu.infra.inngest') || '流程后台',
-        icon: getMenuIcon(t('menu.infra.inngest') || '流程后台', '/infra/inngest'),
+        name: t('menu.infra.inngest'),
+        icon: getMenuIcon(t('menu.infra.inngest'), '/infra/inngest'),
       },
       {
         path: '/infra/admin',
-        name: t('menu.infra.admin') || '平台管理',
-        icon: getMenuIcon(t('menu.infra.admin') || '平台管理', '/infra/admin'),
+        name: t('menu.infra.admin'),
+        icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin'),
       },
     ],
   },
@@ -959,8 +931,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   
   /**
    * 将 MenuTree 转换为 MenuDataItem
+   * 支持应用菜单的国际化翻译
    */
-  const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree): MenuDataItem => {
+  const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false): MenuDataItem => {
     // 处理图标：左侧菜单全部使用 Lucide 图标
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
@@ -981,18 +954,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         
         // 尝试映射 Ant Design 图标名称
         const lucideIconMap: Record<string, React.ComponentType<any>> = {
-          'DashboardOutlined': ManufacturingIcons.dashboard,
+          'DashboardOutlined': ManufacturingIcons.industrialDashboard,
           'UserOutlined': ManufacturingIcons.user,
-          'TeamOutlined': ManufacturingIcons.team,
+          'TeamOutlined': ManufacturingIcons.users,
           'ApartmentOutlined': ManufacturingIcons.building,
           'CrownOutlined': ManufacturingIcons.crown,
-          'AppstoreOutlined': ManufacturingIcons.appstore,
-          'ControlOutlined': ManufacturingIcons.control,
+          'AppstoreOutlined': ManufacturingIcons.factory,
+          'ControlOutlined': ManufacturingIcons.systemConfig,
           'ShopOutlined': ManufacturingIcons.shop,
-          'FileTextOutlined': ManufacturingIcons.fileCode,
+          'FileTextOutlined': ManufacturingIcons.fileText,
           'DatabaseOutlined': ManufacturingIcons.database,
           'MonitorOutlined': ManufacturingIcons.monitor,
-          'GlobalOutlined': ManufacturingIcons.global,
+          'GlobalOutlined': ManufacturingIcons.languages, // 语言管理使用语言图标
           'ApiOutlined': ManufacturingIcons.api,
           'CodeOutlined': ManufacturingIcons.code,
           'PrinterOutlined': ManufacturingIcons.printer,
@@ -1001,12 +974,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           'CalendarOutlined': ManufacturingIcons.calendar,
           'PlayCircleOutlined': ManufacturingIcons.playCircle,
           'InboxOutlined': ManufacturingIcons.inbox,
-          'SafetyOutlined': ManufacturingIcons.safety,
-          'ShoppingOutlined': ManufacturingIcons.shop,
-          'UserSwitchOutlined': ManufacturingIcons.userSwitch,
+          'SafetyOutlined': ManufacturingIcons.shield, // 安全相关使用盾牌图标
+          'ShoppingOutlined': ManufacturingIcons.shoppingCart,
+          'UserSwitchOutlined': ManufacturingIcons.userCog,
           'SettingOutlined': ManufacturingIcons.mdSettings,
           'BellOutlined': ManufacturingIcons.bell,
-          'LoginOutlined': ManufacturingIcons.login,
+          'LoginOutlined': ManufacturingIcons.logIn,
+          'BookOutlined': ManufacturingIcons.bookOpen, // 数据字典
+          'ClockCircleOutlined': ManufacturingIcons.clock, // 定时任务
+          'CheckCircleOutlined': ManufacturingIcons.checkCircle, // 审批实例
           // 快格轻制造应用图标映射
           'planning': ManufacturingIcons.calendar, // 计划管理使用日历图标
           'shopping-cart': ManufacturingIcons.shoppingCart, // 销售管理使用购物车图标
@@ -1054,14 +1030,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
     }
 
+    // 处理菜单名称翻译
+    let menuName = menu.name;
+    if (isAppMenu && menuName) {
+      // 应用菜单使用应用菜单翻译函数
+      menuName = translateAppMenuItemName(menuName, menu.path, t);
+    } else if (menuName) {
+      // 系统菜单使用通用菜单翻译函数
+      menuName = translateMenuName(menuName, t);
+    }
+
     const menuItem: MenuDataItem = {
       path: menu.path,
-      name: menu.name,
+      name: menuName,
       icon: iconElement,
       key: menu.uuid || menu.path, // 添加 key 字段，ProLayout 需要
-      // 如果菜单有子项，确保子项也有 key
+      // 如果菜单有子项，确保子项也有 key（应用菜单的子项也是应用菜单）
       children: menu.children && menu.children.length > 0
-        ? menu.children.map(child => convertMenuTreeToMenuDataItem(child))
+        ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu))
         : undefined,
     };
 
@@ -1073,7 +1059,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     return menuItem;
-  }, []);
+  }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的
   
   // 当前语言代码
   const currentLanguage = i18nInstance.language || 'zh-CN';
@@ -1338,86 +1324,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 获取翻译后的菜单配置（必须在 generateBreadcrumb 之前定义）
   const menuConfig = useMemo(() => getMenuConfig(t), [t]);
 
-  /**
-   * 将路径片段转换为中文名称（作为后备方案）
-   */
-  const translatePathSegmentToChinese = (segment: string): string => {
-    const pathMap: Record<string, string> = {
-      // 工厂数据
-      'workshops': '车间',
-      'production-lines': '产线',
-      'workstations': '工位',
-      'factory': '工厂数据',
-      // 仓库数据
-      'warehouses': '仓库',
-      'storage-areas': '库区',
-      'storage-locations': '库位',
-      'warehouse': '仓库数据',
-      // 物料数据
-      'groups': '物料分组',
-      'materials': '物料数据',
-      'bom': 'BOM',
-      'list': '物料管理',
-      // 工艺数据
-      'defect-types': '不良品',
-      'operations': '工序',
-      'routes': '工艺路线',
-      'sop': '作业程序',
-      'process': '工艺数据',
-      // 供应链数据
-      'customers': '客户',
-      'suppliers': '供应商',
-      'supply-chain': '供应链数据',
-      // 绩效数据
-      'holidays': '假期',
-      'skills': '技能',
-      'performance': '绩效数据',
-      // 快格轻制造APP
-      'kuaizhizao': '快格轻制造',
-      'plan-management': '计划管理',
-      'demand-management': '需求管理',
-      'scheduling': '计划排程',
-      'production-execution': '生产执行',
-      'work-orders': '工单管理',
-      'reporting': '报工管理',
-      'sales-management': '销售管理',
-      'sales-orders': '销售订单',
-      'quality-management': '质量管理',
-      'incoming-inspection': '来料检验',
-      'process-inspection': '过程检验',
-      'finished-goods-inspection': '成品检验',
-      'finance-management': '财务管理',
-      'accounts-payable': '应付管理',
-      'accounts-receivable': '应收管理',
-      'reports': '报表分析',
-      'inventory-report': '库存报表',
-      'production-report': '生产报表',
-      'quality-report': '质量报表',
-      'warehouse-management': '仓储管理',
-      'inventory': '库存查询',
-      'inbound': '入库管理',
-      'finished-goods-inventory': '成品入库',
-      'sales-outbound': '销售出库',
-      'outbound': '出库管理',
-      'common': '通用功能',
-      'data-import-export': '数据导入导出',
-      'system-settings': '系统设置',
-      // 应用路径
-      'master-data': '基础数据管理',
-      'apps': '应用',
-    };
-    
-    return pathMap[segment] || segment;
-  };
-  
-  /**
-   * 根据完整路径转换为中文名称（更精确的匹配）
-   */
-  const translateFullPathToChinese = (path: string): string => {
-    // 移除硬编码的路径映射，依赖应用配置中的菜单标题
-    // 应用菜单的中文标题应在应用的 manifest.json 中定义
-    return translatePathSegmentToChinese(path.split('/').pop() || '');
-  };
 
   /**
    * 根据当前路径和菜单配置生成面包屑
@@ -1525,7 +1431,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   .filter(child => child.name && child.path)
                   .map(child => ({
                     key: child.path!,
-                    label: child.name as string,
+                    label: translateMenuName(child.name as string, t), // 使用统一的翻译逻辑
                     onClick: () => {
                       navigate(child.path!);
                     },
@@ -1535,7 +1441,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }
           
           breadcrumbItems.push({
-            title: item.name as string,
+            title: translateMenuName(item.name as string, t), // 使用统一的翻译逻辑
             path: actualPath, // 使用实际路径（可能是第一个菜单组下的第一个菜单项）
             icon: item.icon,
             menu: menu,
@@ -1559,18 +1465,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       if (child.type === 'group') {
                         const firstItem = findFirstActualMenuItem(child.children);
                         if (firstItem && firstItem.path) {
+                          // 检查是否是应用菜单（通过路径判断）
+                          const isAppMenu = firstItem.path.startsWith('/apps/');
+                          const label = isAppMenu 
+                            ? translateAppMenuName(child.name as string, firstItem.path, undefined, t)
+                            : translateMenuName(child.name as string, t);
                           return {
                             key: firstItem.path,
-                            label: child.name as string,
+                            label: label,
                             onClick: () => {
                               navigate(firstItem.path!);
                             },
                           };
                         }
                       } else if (child.path) {
+                        // 检查是否是应用菜单（通过路径判断）
+                        const isAppMenu = child.path.startsWith('/apps/');
+                        const label = isAppMenu
+                          ? translateAppMenuItemName(child.name as string, child.path, t)
+                          : translateMenuName(child.name as string, t);
                         return {
                           key: child.path,
-                          label: child.name as string,
+                          label: label,
                           onClick: () => {
                             navigate(child.path!);
                           },
@@ -1583,8 +1499,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
             
+            // 检查是否是应用菜单（通过路径判断）
+            const isAppMenu = firstMenuItem.path?.startsWith('/apps/');
+            const breadcrumbTitle = isAppMenu
+              ? translateAppMenuItemName(item.name as string, firstMenuItem.path, t)
+              : translateMenuName(item.name as string, t);
             breadcrumbItems.push({
-              title: item.name as string,
+              title: breadcrumbTitle,
               path: firstMenuItem.path, // 使用第一个实际菜单项的路径
               icon: item.icon,
               menu: menu,
@@ -1593,14 +1514,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
       });
     } else {
-      // 如果没有找到匹配的菜单项，使用路径作为面包屑，并转换为中文
+      // 如果没有找到匹配的菜单项，使用路径翻译
       const pathSegments = location.pathname.split('/').filter(Boolean);
       pathSegments.forEach((segment, index) => {
         const path = '/' + pathSegments.slice(0, index + 1).join('/');
-        // 优先使用完整路径匹配，如果失败则使用路径片段匹配
-        const chineseTitle = translateFullPathToChinese(path) || translatePathSegmentToChinese(segment);
+        // 使用统一的路径翻译逻辑
+        const translatedTitle = translatePathTitle(path, t);
         breadcrumbItems.push({
-          title: chineseTitle,
+          title: translatedTitle,
           path: path,
         });
       });
@@ -1677,11 +1598,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   /**
    * 用户菜单项
    */
-  const getUserMenuItems = (logout: () => void): MenuProps['items'] => [
+  const getUserMenuItems = (logout: () => void, t: (key: string) => string): MenuProps['items'] => [
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: '个人资料',
+      label: t('ui.user.profile'),
     },
     {
       type: 'divider',
@@ -1689,7 +1610,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     {
       key: 'copyright',
       icon: <FileTextOutlined />,
-      label: '版权声明',
+      label: t('ui.copyright'),
     },
     {
       type: 'divider',
@@ -1697,7 +1618,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: '退出登录',
+      label: t('ui.logout'),
       onClick: logout,
     },
   ];
@@ -1788,9 +1709,33 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 所以我们创建一个临时的子菜单项，然后在 menuItemRender 中处理
           // 菜单收起时不显示分组标题
           if (!collapsed) {
+            // 翻译应用名称（直接从路径提取应用 code，不依赖数据库中存储的名称）
+            // 这样可以确保无论数据库中的名称是什么（中文或英文），都能正确翻译
+            const firstChildPath = appMenu.children[0]?.path;
+            let translatedAppName = appMenu.name; // 默认使用数据库中的名称
+            
+            // 优先从路径提取应用 code 并使用翻译 key
+            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
+              const appCode = extractAppCodeFromPath(firstChildPath);
+              if (appCode) {
+                // 直接使用翻译 key app.{app-code}.name，不依赖 appMenu.name 的值
+                const appNameKey = `app.${appCode}.name`;
+                const appNameTranslated = t(appNameKey, { defaultValue: appMenu.name });
+                // 如果翻译成功（翻译结果不等于 key），使用翻译后的名称
+                if (appNameTranslated && appNameTranslated !== appNameKey) {
+                  translatedAppName = appNameTranslated;
+                }
+              }
+            }
+            
+            // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
+            if (translatedAppName === appMenu.name) {
+              translatedAppName = translateAppMenuName(appMenu.name, firstChildPath, appMenu.application_uuid, t);
+            }
+            
             const groupTitle: MenuDataItem = {
-              name: appMenu.name,
-              label: appMenu.name, // Ant Design Menu 使用 label 显示分组标题
+              name: translatedAppName,
+              label: translatedAppName, // Ant Design Menu 使用 label 显示分组标题
               key: `app-group-${appMenu.uuid}`,
               type: 'group', // 使用原生 group 类型
               className: 'menu-group-title-app app-menu-container-start', // 用于样式识别和容器开始标记
@@ -1810,7 +1755,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           
           // 2. 将应用的子菜单提升到主菜单级别，并添加应用菜单容器的 className
           appMenu.children.forEach(childMenu => {
-            const converted = convertMenuTreeToMenuDataItem(childMenu);
+            // 传递 isAppMenu=true 标记这是应用菜单，使用应用菜单翻译逻辑
+            // 注意：应用菜单的子菜单也需要使用应用菜单翻译逻辑，递归处理子菜单时也会传递 isAppMenu=true
+            const converted = convertMenuTreeToMenuDataItem(childMenu, true);
             // 为应用菜单项添加特殊的 className，用于 CSS 容器样式
             if (converted.className) {
               converted.className = `${converted.className} app-menu-item`;
@@ -1828,15 +1775,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     // 【第四组】运营中心：仅平台级管理员可见
+    // 根据路径过滤，而不是名称（因为名称可能已翻译）
     if (!currentUser.is_infra_admin) {
-      menuItems = menuItems.filter(item => item.name !== '运营中心');
+      // 过滤掉运营中心菜单（通过检查是否有 /infra/operation 路径的子菜单来判断）
+      menuItems = menuItems.filter(item => {
+        // 如果菜单有子菜单，检查是否包含运营中心相关的路径
+        if (item.children) {
+          const hasInfraOperation = item.children.some(child => 
+            child.path?.startsWith('/infra/operation') || 
+            child.path?.startsWith('/infra/tenants') ||
+            child.path?.startsWith('/infra/packages') ||
+            child.path?.startsWith('/infra/monitoring') ||
+            child.path?.startsWith('/infra/inngest') ||
+            child.path?.startsWith('/infra/admin')
+          );
+          return !hasInfraOperation;
+        }
+        // 如果菜单没有子菜单，保留它（不是运营中心菜单）
+        return true;
+      });
     }
 
     // 注意：组织管理已从第三组移除，移至运营中心（第四组）
     // 因此不再需要过滤第三组的组织管理菜单
 
     return menuItems;
-  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed]);
+  }, [currentUser, applicationMenus, convertMenuTreeToMenuDataItem, collapsed, t]);
 
   // 计算应该展开的菜单 key（只展开当前路径的直接父菜单）
   const requiredOpenKeys = useMemo(() => {
@@ -1956,7 +1920,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       message.success(`已切换到${LANGUAGE_MAP[languageCode] || languageCode}`);
     } catch (error: any) {
       console.error('切换语言失败:', error);
-      message.error(error?.message || '切换语言失败，请重试');
+      message.error(error?.message || t('common.switchLanguageFailed'));
     }
   }, []);
   
@@ -3387,7 +3351,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               width: '100%',
               color: token.colorTextSecondary,
             }}
-            title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+            title={collapsed ? t('ui.sidebar.expand') : t('ui.sidebar.collapse')}
           />
         </div>
       )}
@@ -3608,7 +3572,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                                   title={
                                     <Space>
                                       <Typography.Text strong={unread} ellipsis style={{ maxWidth: 250 }}>
-                                        {item.subject || '(无主题)'}
+                                        {item.subject || t('common.noSubject')}
                                       </Typography.Text>
                                     </Space>
                                   }
@@ -3641,7 +3605,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         />
                       ) : (
                         <Empty
-                          description="暂无消息"
+                          description={t('common.noMessages')}
                           style={{ padding: '40px 0' }}
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
                         />
@@ -3652,7 +3616,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }}
             >
               <Badge count={unreadCount} size="small" offset={[-8, 8]}>
-                <Tooltip title="消息通知" open={messageDropdownOpen ? false : undefined}>
+                <Tooltip title={t('ui.message.notification')} open={messageDropdownOpen ? false : undefined}>
                   <Button
                     type="text"
                     size="small"
@@ -3682,7 +3646,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }}
             >
               <Tooltip 
-                title={`当前语言: ${LANGUAGE_MAP[currentLanguage] || currentLanguage}`}
+                title={`${t('ui.current.language')}: ${LANGUAGE_MAP[currentLanguage] || currentLanguage}`}
                 trigger={['hover']}
                 mouseEnterDelay={0.5}
                 open={languageDropdownOpen ? false : undefined}
@@ -3699,7 +3663,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 颜色配置
           actions.push(
-            <Tooltip key="theme" title="主题颜色">
+            <Tooltip key="theme" title={t('ui.theme.color')}>
               <Button
                 type="text"
                 size="small"
@@ -3711,7 +3675,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 全屏按钮
           actions.push(
-            <Tooltip key="fullscreen" title={isFullscreen ? '退出全屏' : '全屏'}>
+            <Tooltip key="fullscreen" title={isFullscreen ? t('ui.fullscreen.exit') : t('ui.fullscreen.enter')}>
               <Button
                 type="text"
                 size="small"
@@ -3750,7 +3714,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               <Dropdown
                 key="user"
                 menu={{
-                  items: getUserMenuItems(logout),
+                  items: getUserMenuItems(logout, t),
                   onClick: handleUserMenuClick,
                 }}
                 placement="bottomRight"
@@ -3816,7 +3780,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 锁定屏幕按钮 - 移到最后一个防止误点
           actions.push(
-            <Tooltip key="lock" title="锁定屏幕" placement="bottomRight">
+            <Tooltip key="lock" title={t('ui.lock.screen')} placement="bottomRight">
               <Button
                 type="text"
                 size="small"
@@ -3885,6 +3849,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 系统级菜单的分组标题（type: 'group'）由 Ant Design Menu 原生处理，不需要自定义渲染
         // 检查条件：path 以 #app-group- 开头，或者有 menu-group-title-app className
         if (item.className && (item.className.includes('menu-group-title-app') || item.className.includes('app-menu-container-start'))) {
+          // 确保应用菜单分组标题使用最新的翻译（在渲染时重新翻译，确保语言切换后能正确显示）
+          // 从第一个子菜单的路径中提取应用 code，然后直接使用翻译 key
+          const firstChildPath = item.children?.[0]?.path;
+          let groupTitle = item.name || item.label || '';
+          
+          // 如果第一个子菜单路径存在且是应用菜单路径，直接从路径提取应用 code 并使用翻译 key
+          if (firstChildPath && firstChildPath.startsWith('/apps/')) {
+            const appCode = extractAppCodeFromPath(firstChildPath);
+            if (appCode) {
+              // 直接使用翻译 key app.{app-code}.name 进行翻译，不依赖 item.name 的值
+              // 这样可以确保无论 item.name 是什么值（中文或英文），都能根据当前语言正确翻译
+              const appNameKey = `app.${appCode}.name`;
+              const appNameTranslated = t(appNameKey, { defaultValue: groupTitle });
+              if (appNameTranslated && appNameTranslated !== appNameKey) {
+                groupTitle = appNameTranslated;
+              }
+            }
+          }
+          
           return (
             <div
               className="menu-group-title-app"
@@ -3920,14 +3903,57 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 }
               }}
             >
-              {item.name}
+              {groupTitle}
             </div>
           );
         }
+        
+        // 如果是系统级菜单的分组标题（type: 'group'），确保使用翻译后的名称
+        // 注意：系统级菜单的分组标题在菜单配置中已经使用 t() 函数翻译，但 dom 参数可能还未翻译
+        if (item.type === 'group' && item.name) {
+          // 检查是否是应用菜单（通过路径判断）
+          const firstChildPath = item.children?.[0]?.path;
+          const isAppMenu = firstChildPath?.startsWith('/apps/');
+          const translatedName = isAppMenu
+            ? translateAppMenuName(item.name as string, firstChildPath, undefined, t)
+            : translateMenuName(item.name as string, t);
+          // 如果翻译后的名称与 dom 不一致，返回翻译后的名称
+          // 否则直接返回 dom（因为 dom 可能已经是翻译后的）
+          if (translatedName !== item.name && translatedName !== dom) {
+            return (
+              <span>
+                {translatedName}
+              </span>
+            );
+          }
+        }
+        
         // ⚠️ 关键修复：使用 ProLayout 原生方式，返回 React Router 的 Link 组件
         // Link 组件会自动处理 SPA 路由，不会整页刷新
         if (item.path && !item.disabled) {
           // 内部路由：使用 Link 组件进行 SPA 路由跳转
+          // 确保应用菜单的子菜单项使用翻译后的名称
+          // item.name 已经在 convertMenuTreeToMenuDataItem 中翻译过，但 Ant Design Menu 可能使用原始的 dom
+          // 如果是应用菜单项，确保使用翻译后的名称
+          let finalDom = dom;
+          if (item.path.startsWith('/apps/') && item.name) {
+            // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
+            const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
+            // 如果翻译成功且与 dom 不一致，使用翻译后的名称
+            if (translatedName && translatedName !== item.name) {
+              // 如果 dom 是 React 元素，需要重新构建；如果是字符串，直接替换
+              if (typeof dom === 'string') {
+                finalDom = translatedName;
+              } else if (dom && typeof dom === 'object' && 'props' in dom) {
+                // 如果是 React 元素，尝试替换其中的文本内容
+                // 这里我们直接使用翻译后的名称创建一个新的元素
+                finalDom = <span>{translatedName}</span>;
+              } else {
+                finalDom = translatedName;
+              }
+            }
+          }
+          
           // 包装在 div 中并阻止事件冒泡，防止 Menu 的默认行为
           return (
             <div
@@ -3938,7 +3964,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               style={{ display: 'block', width: '100%' }}
             >
               <Link to={item.path} style={{ display: 'block', width: '100%' }}>
-                {dom}
+                {finalDom}
               </Link>
             </div>
           );

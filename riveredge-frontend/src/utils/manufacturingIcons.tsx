@@ -119,8 +119,8 @@ export const ManufacturingIcons = {
   // 安全和质量
   safety: getLucideIcon('HardHat'),
   hardHat: getLucideIcon('HardHat'),
-  quality: getLucideIcon('Shield'),
-  shield: getLucideIcon('Shield'),
+  quality: getLucideIcon('Shield'), // 质量 - 使用盾牌图标（保持向后兼容）
+  shield: getLucideIcon('Shield'), // 角色/权限/安全 - 统一使用盾牌图标
   inspection: getLucideIcon('ClipboardCheck'),
   
   // 订单和交付
@@ -192,6 +192,14 @@ export const ManufacturingIcons = {
   globe2: getLucideIcon('Globe2'),
   activity: getLucideIcon('Activity'),
   server: getLucideIcon('Server'),
+  languages: getLucideIcon('Languages'), // 语言管理
+  bookOpen: getLucideIcon('BookOpen'), // 数据字典/书籍
+  userCircle: getLucideIcon('UserCircle'), // 个人中心
+  hardDrive: getLucideIcon('HardDrive'), // 数据备份/存储
+  network: getLucideIcon('Network'), // API/网络接口
+  fileText: getLucideIcon('FileText'), // 模板/文件
+  logIn: getLucideIcon('LogIn'), // 登录日志
+  userCog: getLucideIcon('UserCog'), // 用户管理/角色管理
   
   // 增强工业关联度的图标
   industrialDashboard: getLucideIcon('Gauge'), // 工业仪表盘
@@ -277,7 +285,7 @@ export const ManufacturingIcons = {
   'menu-square': getLucideIcon('Menu'), // 使用 Menu 替代 MenuSquare
   
   // 应用图标映射
-  dollar: getLucideIcon('DollarSign'), // 财务
+  // 注意：已移除 dollar 图标，使用更通用的图标（如 Calculator, TrendingUp 等）
   schedule: getLucideIcon('Calendar'), // APS 排程
   certificate: getLucideIcon('Award'), // 认证
   'customer-service': getLucideIcon('Phone'), // CRM 客户服务
@@ -285,7 +293,7 @@ export const ManufacturingIcons = {
   trophy: getLucideIcon('Trophy'), // EPM 企业绩效
   'cloud-server': getLucideIcon('Cloud'), // IOT 物联网
   experiment: getLucideIcon('FlaskConical'), // LIMS/PDM 实验/研发（使用已有的 FlaskConical）
-  calculator: getLucideIcon('Calculator'), // MRP 物料需求计划
+  calculator: getLucideIcon('Calculator'), // 成本管理/财务管理/MRP - 使用计算器图标（通用，不含货币符号）
   project: getLucideIcon('FolderKanban'), // PM 项目管理
   'safety-certificate': getLucideIcon('ShieldCheck'), // QMS 质量认证（使用已有的 ShieldCheck）
   apartment: getLucideIcon('Building2'), // SCM 供应链（使用已有的 Building2）

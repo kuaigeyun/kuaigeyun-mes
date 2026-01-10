@@ -4,7 +4,7 @@
 定期检查需要执行的定时任务，并触发任务执行。
 """
 
-from inngest import Event, TriggerCron
+from inngest import TriggerCron
 from typing import Dict, Any
 from datetime import datetime, timedelta
 from loguru import logger
@@ -19,16 +19,16 @@ from inngest import Event as InngestEvent
     name="定时任务调度器",
     trigger=TriggerCron(cron="* * * * *"),  # 每分钟执行一次
 )
-async def scheduled_task_scheduler_function(event: Event) -> Dict[str, Any]:
+async def scheduled_task_scheduler_function(*args, **kwargs) -> Dict[str, Any]:
     """
     定时任务调度器工作流函数
     
     每分钟执行一次，检查所有启用的定时任务，判断是否需要执行。
     如果需要执行，发送事件触发任务执行。
     
-    Args:
-        event: Inngest 事件对象
-        
+    注意：使用 TriggerCron 时，Inngest 可能会传递 ctx (Context) 参数。
+    使用 *args 和 **kwargs 来接受任意参数，确保兼容不同版本的 SDK。
+    
     Returns:
         Dict[str, Any]: 调度结果
     """
