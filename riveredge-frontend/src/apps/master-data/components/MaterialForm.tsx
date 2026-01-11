@@ -12,10 +12,10 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse } from 'antd';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
-import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults } from '../types/material';
+import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit } from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
@@ -29,6 +29,7 @@ import type { VariantAttributeDefinition } from '../types/variant-attribute';
 import { variantAttributeApi } from '../services/variant-attribute';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { testGenerateCode } from '../../../services/codeRule';
+import DictionarySelect from '../../../components/dictionary-select';
 
 const { Panel } = Collapse;
 
@@ -343,20 +344,60 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   };
 
   return (
-    <Modal
-      title={isEdit ? '编辑物料' : '新建物料'}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={1000}
-      destroyOnClose
-    >
-      <ProForm
+    <>
+      <style>{`
+        /* 确保 Modal 内的 Collapse 占满宽度并使用标准 padding */
+        .ant-modal .ant-collapse {
+          width: 100% !important;
+          margin: 0 !important;
+        }
+        .ant-modal .ant-collapse-item {
+          width: 100% !important;
+        }
+        .ant-modal .ant-collapse-header {
+          width: 100% !important;
+        }
+        .ant-modal .ant-collapse-content-box {
+          padding: 16px !important;
+        }
+        /* Tabs 内容区域底部 padding，确保按钮上方有间距 */
+        .ant-modal .ant-tabs-content-holder {
+          padding-bottom: 16px !important;
+        }
+        /* 确保 Modal 内的 Table 占满宽度 */
+        .ant-modal .ant-table-wrapper {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .ant-modal .ant-table {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .ant-modal .ant-table-container {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .ant-modal .ant-table-body {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+      `}</style>
+      <Modal
+        title={isEdit ? '编辑物料' : '新建物料'}
+        open={open}
+        onCancel={onClose}
+        footer={null}
+        width={1000}
+        destroyOnHidden
+      >
+        <ProForm
         formRef={formRef}
         loading={loading}
         onFinish={handleSubmit}
         initialValues={initialValues}
         layout="vertical"
+        grid={true}
+        rowProps={{ gutter: 16 }}
         submitter={{
           searchConfig: {
             submitText: isEdit ? '更新' : '创建',
@@ -392,6 +433,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                 <VariantManagementTab
                   formRef={formRef}
                 />
+              ),
+            },
+            {
+              key: 'units',
+              label: '多单位管理',
+              children: (
+                <MaterialUnitsManager formRef={formRef} />
               ),
             },
             {
@@ -434,6 +482,399 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         />
       </ProForm>
     </Modal>
+    </>
+  );
+};
+
+/**
+ * 多单位管理组件
+ */
+interface MaterialUnitsManagerProps {
+  formRef: React.RefObject<ProFormInstance>;
+}
+
+const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) => {
+  const [units, setUnits] = useState<MaterialUnit[]>([]);
+  const [scenarios, setScenarios] = useState<{
+    purchase?: string;
+    sale?: string;
+    production?: string;
+    inventory?: string;
+  }>({});
+  const [baseUnit, setBaseUnit] = useState<string>('');
+
+  // 初始化数据并监听表单变化
+  useEffect(() => {
+    const updateFromForm = () => {
+      const formValues = formRef?.current?.getFieldsValue();
+      if (formValues) {
+        const unitsData = formValues.units;
+        if (unitsData && (unitsData.units || unitsData.scenarios)) {
+          setUnits(unitsData.units || []);
+          setScenarios(unitsData.scenarios || {});
+        }
+        if (formValues.baseUnit && formValues.baseUnit !== baseUnit) {
+          setBaseUnit(formValues.baseUnit);
+        }
+      }
+    };
+    
+    // 立即执行一次
+    updateFromForm();
+    
+    // 监听表单字段变化（使用较短的间隔以确保响应及时）
+    const timer = setInterval(updateFromForm, 500);
+    
+    return () => clearInterval(timer);
+  }, [formRef]);
+
+  // 添加辅助单位
+  const handleAddUnit = () => {
+    const newUnit: MaterialUnit = {
+      unit: '',
+      numerator: 1,
+      denominator: 1,
+      scenarios: [],
+    };
+    setUnits([...units, newUnit]);
+  };
+
+  // 删除辅助单位
+  const handleDeleteUnit = (index: number) => {
+    const newUnits = units.filter((_, i) => i !== index);
+    setUnits(newUnits);
+    updateFormValue(newUnits, scenarios);
+  };
+
+  // 更新单位信息
+  const handleUnitChange = (index: number, field: keyof MaterialUnit, value: any) => {
+    const newUnits = [...units];
+    newUnits[index] = { ...newUnits[index], [field]: value };
+    setUnits(newUnits);
+    updateFormValue(newUnits, scenarios);
+  };
+
+  // 更新场景映射
+  const handleScenarioChange = (scenario: string, unit: string) => {
+    const newScenarios = { ...scenarios, [scenario]: unit };
+    setScenarios(newScenarios);
+    updateFormValue(units, newScenarios);
+  };
+
+  // 更新表单值
+  const updateFormValue = (newUnits: MaterialUnit[], newScenarios: typeof scenarios) => {
+    formRef?.current?.setFieldsValue({
+      units: {
+        units: newUnits,
+        scenarios: newScenarios,
+      },
+    });
+  };
+
+  // 所有可用单位（基础单位 + 辅助单位）
+  const allUnits = baseUnit ? [baseUnit, ...units.map(u => u.unit).filter(Boolean)] : [];
+
+  const columns = [
+    {
+      title: '单位名称',
+      dataIndex: 'unit',
+      render: (_: any, record: MaterialUnit, index: number) => (
+        <Input
+          value={record.unit}
+          placeholder="请输入单位名称"
+          onChange={(e) => handleUnitChange(index, 'unit', e.target.value)}
+          maxLength={20}
+        />
+      ),
+    },
+    {
+      title: '换算关系',
+      dataIndex: 'conversion',
+      render: (_: any, record: MaterialUnit, index: number) => {
+        const numerator = record.numerator || 1;
+        const denominator = record.denominator || 1;
+        const conversionRate = numerator / denominator;
+        const isInteger = Number.isInteger(conversionRate);
+        
+        return (
+          <div>
+            <Input.Group compact style={{ marginBottom: 4 }}>
+              <Input
+                style={{ width: '28%' }}
+                type="number"
+                value={numerator}
+                placeholder="分子"
+                onChange={(e) => {
+                  const num = parseInt(e.target.value) || 1;
+                  handleUnitChange(index, 'numerator', num);
+                }}
+                min={1}
+                step={1}
+              />
+              <span style={{ width: '8%', display: 'inline-block', lineHeight: '32px', textAlign: 'center', background: '#f5f5f5' }}>
+                /
+              </span>
+              <Input
+                style={{ width: '28%' }}
+                type="number"
+                value={denominator}
+                placeholder="分母"
+                onChange={(e) => {
+                  const den = parseInt(e.target.value) || 1;
+                  handleUnitChange(index, 'denominator', den);
+                }}
+                min={1}
+                step={1}
+              />
+              <span style={{ width: '36%', display: 'inline-block', lineHeight: '32px', textAlign: 'center', background: '#f5f5f5', fontSize: '12px' }}>
+                {baseUnit ? ` = ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${baseUnit}` : ''}
+              </span>
+            </Input.Group>
+          </div>
+        );
+      },
+    },
+    {
+      title: '使用场景',
+      dataIndex: 'scenarios',
+      render: (_: any, record: MaterialUnit, index: number) => (
+        <Select
+          mode="multiple"
+          value={record.scenarios || []}
+          onChange={(value: string[]) => handleUnitChange(index, 'scenarios', value)}
+          placeholder="选择使用场景"
+          style={{ width: '100%' }}
+          options={[
+            { label: '采购', value: 'purchase' },
+            { label: '销售', value: 'sale' },
+            { label: '生产', value: 'production' },
+            { label: '库存', value: 'inventory' },
+          ]}
+        />
+      ),
+    },
+    {
+      title: '操作',
+      render: (_: any, __: MaterialUnit, index: number) => (
+        <Button
+          type="link"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => handleDeleteUnit(index)}
+        >
+          删除
+        </Button>
+      ),
+    },
+  ];
+
+  // 验证多单位配置是否正确
+  const validateUnits = () => {
+    const errors: string[] = [];
+    const unitNames = new Set<string>();
+    
+    units.forEach((unit, index) => {
+      if (!unit.unit || !unit.unit.trim()) {
+        errors.push(`第${index + 1}行的单位名称不能为空`);
+      } else {
+        const unitName = unit.unit.trim();
+        if (unitNames.has(unitName)) {
+          errors.push(`单位"${unitName}"重复，请使用不同的单位名称`);
+        }
+        unitNames.add(unitName);
+      }
+      
+      if (unit.unit && unit.unit.trim() === baseUnit) {
+        errors.push(`单位"${unit.unit}"与基础单位重复，辅助单位不能与基础单位相同`);
+      }
+      
+      if (!unit.numerator || unit.numerator <= 0) {
+        errors.push(`单位"${unit.unit || `第${index + 1}行`}"的换算分子必须大于0`);
+      }
+      
+      if (!unit.denominator || unit.denominator <= 0) {
+        errors.push(`单位"${unit.unit || `第${index + 1}行`}"的换算分母必须大于0`);
+      }
+    });
+    
+    return errors;
+  };
+
+  const validationErrors = validateUnits();
+  const hasErrors = validationErrors.length > 0;
+
+  return (
+    <div style={{ width: '100%', display: 'block', boxSizing: 'border-box' }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontWeight: 500 }}>多单位管理</div>
+        {baseUnit && (
+          <div style={{ 
+            padding: '4px 12px', 
+            background: '#e6f7ff', 
+            borderRadius: '4px', 
+            border: '1px solid #91d5ff',
+            fontSize: '12px',
+            color: '#1890ff'
+          }}>
+            基础单位：<strong>{baseUnit}</strong>
+          </div>
+        )}
+      </div>
+      {!baseUnit && (
+        <Alert
+          message='请先在"基本信息"标签页设置基础单位'
+          type="warning"
+          showIcon
+          style={{ marginBottom: 8 }}
+        />
+      )}
+      <Alert
+        message="使用说明"
+        description={
+          <>
+            <div style={{ marginBottom: 4 }}>
+              <strong>换算关系设置：</strong>使用"分子/分母"的方式表示换算关系，避免精度丢失。例如：1吨 = 1000kg，则分子=1000，分母=1（即 1000/1）。
+            </div>
+            <div>
+              <strong>换算公式：</strong>1个辅助单位 = (分子/分母) × 1个基础单位
+            </div>
+          </>
+        }
+        type="info"
+        showIcon
+        style={{ marginBottom: 8 }}
+      />
+      {hasErrors && (
+        <Alert
+          message="配置错误"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              {validationErrors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          }
+          type="error"
+          showIcon
+          style={{ marginBottom: 8 }}
+        />
+      )}
+      {units.length > 0 && !hasErrors && baseUnit && (
+        <Alert
+          message="多单位配置正确"
+          description={
+            <>
+              <div style={{ marginBottom: 4 }}>
+                <strong>基础单位：</strong>{baseUnit}（库存单位）
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                <strong>辅助单位配置：</strong>
+              </div>
+              {units.map((unit, index) => {
+                const numerator = unit.numerator || 1;
+                const denominator = unit.denominator || 1;
+                const conversionRate = numerator / denominator;
+                const isInteger = Number.isInteger(conversionRate);
+                return (
+                  <div key={index} style={{ marginLeft: 16, marginBottom: 2 }}>
+                    • {unit.unit}：1 {unit.unit} = {isInteger ? conversionRate : `${numerator}/${denominator}`} {baseUnit}
+                  </div>
+                );
+              })}
+              {(scenarios.purchase || scenarios.sale || scenarios.production) && (
+                <>
+                  <div style={{ marginTop: 8, marginBottom: 4 }}>
+                    <strong>场景单位映射：</strong>
+                  </div>
+                  {scenarios.purchase && (
+                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 采购单位：{scenarios.purchase}</div>
+                  )}
+                  {scenarios.sale && (
+                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 销售单位：{scenarios.sale}</div>
+                  )}
+                  {scenarios.production && (
+                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 生产单位：{scenarios.production}</div>
+                  )}
+                  <div style={{ marginLeft: 16 }}>• 库存单位：{baseUnit}（基础单位）</div>
+                </>
+              )}
+            </>
+          }
+          type="success"
+          showIcon
+          style={{ marginBottom: 8 }}
+        />
+      )}
+      <Table
+        columns={columns}
+        dataSource={units}
+        rowKey={(_, index) => `unit-${index}`}
+        pagination={false}
+        size="small"
+        style={{ width: '100%' }}
+        footer={() => (
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={handleAddUnit}
+            block
+          >
+            添加辅助单位
+          </Button>
+        )}
+      />
+      {units.length > 0 && allUnits.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>场景单位映射（可选）</div>
+          <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>
+            为不同业务场景指定默认使用的单位，如果不指定，则使用基础单位
+          </div>
+          <Row gutter={16}>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>采购单位</div>
+              <Select
+                value={scenarios.purchase}
+                onChange={(value: string) => handleScenarioChange('purchase', value)}
+                placeholder="选择采购单位"
+                allowClear
+                style={{ width: '100%' }}
+                options={allUnits.map(u => ({ label: u, value: u }))}
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>销售单位</div>
+              <Select
+                value={scenarios.sale}
+                onChange={(value: string) => handleScenarioChange('sale', value)}
+                placeholder="选择销售单位"
+                allowClear
+                style={{ width: '100%' }}
+                options={allUnits.map(u => ({ label: u, value: u }))}
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>生产单位</div>
+              <Select
+                value={scenarios.production}
+                onChange={(value: string) => handleScenarioChange('production', value)}
+                placeholder="选择生产单位"
+                allowClear
+                style={{ width: '100%' }}
+                options={allUnits.map(u => ({ label: u, value: u }))}
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>库存单位</div>
+              <Input
+                value={baseUnit || ''}
+                disabled
+                placeholder="基础单位"
+              />
+            </Col>
+          </Row>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -456,108 +897,137 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
   isEdit,
 }) => {
   return (
-    <div style={{ padding: '16px 0' }}>
-      <SafeProFormSelect
-        name="groupId"
-        label="物料分组"
-        placeholder="请选择物料分组（可选）"
-        options={materialGroups.map(g => ({
-          label: `${g.code} - ${g.name}`,
-          value: g.id,
-        }))}
-        fieldProps={{
-          showSearch: true,
-          allowClear: true,
-        }}
-      />
-      <ProFormText
-        name="mainCode"
-        label="物料主编码"
-        placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成' : '请输入物料主编码'}
-        rules={[
-          { required: true, message: '请输入物料主编码' },
-          { max: 50, message: '物料主编码不能超过50个字符' },
-        ]}
-        fieldProps={{
-          style: { textTransform: 'uppercase' },
-          disabled: !isEdit && isAutoGenerateEnabled('master-data-material'),
-        }}
-        extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成' : undefined}
-      />
-      <ProFormSelect
-        name="materialType"
-        label="物料类型"
-        placeholder="请选择物料类型"
-        options={[
-          { label: '成品', value: 'FIN' },
-          { label: '半成品', value: 'SEMI' },
-          { label: '原材料', value: 'RAW' },
-          { label: '包装材料', value: 'PACK' },
-          { label: '辅助材料', value: 'AUX' },
-        ]}
-        rules={[{ required: true, message: '请选择物料类型' }]}
-      />
-      <ProFormText
-        name="name"
-        label="物料名称"
-        placeholder="请输入物料名称"
-        rules={[
-          { required: true, message: '请输入物料名称' },
-          { max: 200, message: '物料名称不能超过200个字符' },
-        ]}
-      />
-      <ProFormText
-        name="baseUnit"
-        label="基础单位"
-        placeholder="请输入基础单位（如：个、件、kg等）"
-        rules={[
-          { required: true, message: '请输入基础单位' },
-          { max: 20, message: '基础单位不能超过20个字符' },
-        ]}
-      />
-      <ProFormText
-        name="specification"
-        label="规格"
-        placeholder="请输入规格"
-        rules={[{ max: 500, message: '规格不能超过500个字符' }]}
-      />
-      <ProFormText
-        name="brand"
-        label="品牌"
-        placeholder="请输入品牌"
-        rules={[{ max: 100, message: '品牌不能超过100个字符' }]}
-      />
-      <ProFormText
-        name="model"
-        label="型号"
-        placeholder="请输入型号"
-        rules={[{ max: 100, message: '型号不能超过100个字符' }]}
-      />
-      <ProFormSwitch
-        name="batchManaged"
-        label="是否启用批号管理"
-      />
-      <ProFormSwitch
-        name="variantManaged"
-        label="是否启用变体管理"
-        fieldProps={{
-          onChange: onVariantManagedChange,
-        }}
-      />
-      <ProFormTextArea
-        name="description"
-        label="描述"
-        placeholder="请输入描述"
-        fieldProps={{
-          rows: 4,
-          maxLength: 500,
-        }}
-      />
-      <ProFormSwitch
-        name="isActive"
-        label="是否启用"
-      />
-    </div>
+    <Row gutter={16}>
+      {/* 1. 物料主编码 */}
+      <Col span={12}>
+        <ProFormText
+          name="mainCode"
+          label="物料主编码"
+          placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成' : '请输入物料主编码'}
+          rules={[
+            { required: true, message: '请输入物料主编码' },
+            { max: 50, message: '物料主编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            style: { textTransform: 'uppercase' },
+            disabled: !isEdit && isAutoGenerateEnabled('master-data-material'),
+          }}
+          extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成' : undefined}
+        />
+      </Col>
+      {/* 2. 物料名称 */}
+      <Col span={12}>
+        <ProFormText
+          name="name"
+          label="物料名称"
+          placeholder="请输入物料名称"
+          rules={[
+            { required: true, message: '请输入物料名称' },
+            { max: 200, message: '物料名称不能超过200个字符' },
+          ]}
+        />
+      </Col>
+      {/* 3. 物料分组 */}
+      <Col span={12}>
+        <SafeProFormSelect
+          name="groupId"
+          label="物料分组"
+          placeholder="请选择物料分组（可选）"
+          options={materialGroups.map(g => ({
+            label: `${g.code} - ${g.name}`,
+            value: g.id,
+          }))}
+          fieldProps={{
+            showSearch: true,
+            allowClear: true,
+          }}
+        />
+      </Col>
+      {/* 4. 物料类型 */}
+      <Col span={12}>
+        <DictionarySelect
+          dictionaryCode="MATERIAL_TYPE"
+          name="materialType"
+          label="物料类型"
+          placeholder="请选择物料类型"
+          required
+          formRef={formRef}
+        />
+      </Col>
+      {/* 5. 规格 */}
+      <Col span={12}>
+        <ProFormText
+          name="specification"
+          label="规格"
+          placeholder="请输入规格"
+          rules={[{ max: 500, message: '规格不能超过500个字符' }]}
+        />
+      </Col>
+      {/* 6. 型号 */}
+      <Col span={12}>
+        <ProFormText
+          name="model"
+          label="型号"
+          placeholder="请输入型号"
+          rules={[{ max: 100, message: '型号不能超过100个字符' }]}
+        />
+      </Col>
+      {/* 7. 基础单位 */}
+      <Col span={12}>
+        <ProFormText
+          name="baseUnit"
+          label="基础单位"
+          placeholder="请输入基础单位（如：个、件、kg等）"
+          rules={[
+            { required: true, message: '请输入基础单位' },
+            { max: 20, message: '基础单位不能超过20个字符' },
+          ]}
+          extra="基础单位作为库存单位，用于库存管理和计量"
+        />
+      </Col>
+      {/* 8. 品牌 */}
+      <Col span={12}>
+        <ProFormText
+          name="brand"
+          label="品牌"
+          placeholder="请输入品牌"
+          rules={[{ max: 100, message: '品牌不能超过100个字符' }]}
+        />
+      </Col>
+      {/* 剩余字段保持不变 */}
+      <Col span={12}>
+        <ProFormSwitch
+          name="batchManaged"
+          label="是否启用批号管理"
+        />
+      </Col>
+      <Col span={12}>
+        <ProFormSwitch
+          name="variantManaged"
+          label="是否启用变体管理"
+          fieldProps={{
+            onChange: onVariantManagedChange,
+          }}
+        />
+      </Col>
+      <Col span={24}>
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入描述"
+          fieldProps={{
+            rows: 4,
+            maxLength: 500,
+          }}
+        />
+      </Col>
+      <Col span={12}>
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+        />
+      </Col>
+    </Row>
   );
 };
 
@@ -699,54 +1169,57 @@ const VariantManagementTab: React.FC<VariantManagementTabProps> = ({ formRef }) 
   }
 
   return (
-    <div style={{ padding: '16px 0' }}>
+    <Row gutter={16}>
       {variantAttributeDefinitions.map((def) => (
-        <ProForm.Item
-          key={def.attribute_name}
-          name={['variantAttributes', def.attribute_name]}
-          label={def.display_name}
-          required={def.is_required}
-          tooltip={def.description}
-          rules={[
-            {
-              required: def.is_required,
-              message: `请输入${def.display_name}`,
-            },
-            {
-              validator: async (_, value) => {
-                if (!value && def.is_required) {
-                  throw new Error(`请输入${def.display_name}`);
-                }
-                // 验证属性值
-                if (value) {
-                  try {
-                    const result = await variantAttributeApi.validate({
-                      attribute_name: def.attribute_name,
-                      attribute_value: value,
-                    });
-                    if (!result.is_valid) {
-                      throw new Error(result.error_message || '属性值验证失败');
-                    }
-                  } catch (error: any) {
-                    throw new Error(error.message || '属性值验证失败');
-                  }
-                }
+        <Col span={12} key={def.attribute_name}>
+          <ProForm.Item
+            name={['variantAttributes', def.attribute_name]}
+            label={def.display_name}
+            required={def.is_required}
+            tooltip={def.description}
+            rules={[
+              {
+                required: def.is_required,
+                message: `请输入${def.display_name}`,
               },
-            },
-          ]}
-        >
-          {renderAttributeInput(def)}
-        </ProForm.Item>
+              {
+                validator: async (_, value) => {
+                  if (!value && def.is_required) {
+                    throw new Error(`请输入${def.display_name}`);
+                  }
+                  // 验证属性值
+                  if (value) {
+                    try {
+                      const result = await variantAttributeApi.validate({
+                        attribute_name: def.attribute_name,
+                        attribute_value: value,
+                      });
+                      if (!result.is_valid) {
+                        throw new Error(result.error_message || '属性值验证失败');
+                      }
+                    } catch (error: any) {
+                      throw new Error(error.message || '属性值验证失败');
+                    }
+                  }
+                },
+              },
+            ]}
+          >
+            {renderAttributeInput(def)}
+          </ProForm.Item>
+        </Col>
       ))}
       {Object.keys(variantAttributes).length > 0 && (
-        <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>当前变体属性：</div>
-          <pre style={{ margin: 0, fontSize: 12 }}>
-            {JSON.stringify(variantAttributes, null, 2)}
-          </pre>
-        </div>
+        <Col span={24}>
+          <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>当前变体属性：</div>
+            <pre style={{ margin: 0, fontSize: 12 }}>
+              {JSON.stringify(variantAttributes, null, 2)}
+            </pre>
+          </div>
+        </Col>
       )}
-    </div>
+    </Row>
   );
 };
 
@@ -782,6 +1255,11 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   const [customerForm] = Form.useForm();
   const [supplierForm] = Form.useForm();
 
+  // Modal 状态
+  const [deptModalVisible, setDeptModalVisible] = useState(false);
+  const [customerModalVisible, setCustomerModalVisible] = useState(false);
+  const [supplierModalVisible, setSupplierModalVisible] = useState(false);
+
   // 部门编码类型选项
   const departmentCodeTypes = [
     { label: '销售编码', value: 'SALE' },
@@ -791,11 +1269,20 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
     { label: '生产编码', value: 'PROD' },
   ];
 
+  // 打开部门编码 Modal
+  const handleOpenDeptModal = () => {
+    setDeptModalVisible(true);
+    deptForm.resetFields();
+  };
+
   // 添加部门编码
   const handleAddDepartmentCode = () => {
-    deptForm.validateFields().then((values) => {
-      onDepartmentCodesChange([...departmentCodes, values]);
+    deptForm.validateFields().then((validatedValues) => {
+      onDepartmentCodesChange([...departmentCodes, validatedValues]);
       deptForm.resetFields();
+      setDeptModalVisible(false);
+    }).catch(() => {
+      // 验证失败，不做任何操作
     });
   };
 
@@ -806,19 +1293,28 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
     onDepartmentCodesChange(newCodes);
   };
 
+  // 打开客户编码 Modal
+  const handleOpenCustomerModal = () => {
+    setCustomerModalVisible(true);
+    customerForm.resetFields();
+  };
+
   // 添加客户编码
   const handleAddCustomerCode = () => {
-    customerForm.validateFields().then((values) => {
-      const customer = customers.find(c => c.id === values.customerId);
+    customerForm.validateFields().then((validatedValues) => {
+      const customer = customers.find(c => c.id === validatedValues.customerId);
       onCustomerCodesChange([
         ...customerCodes,
         {
-          ...values,
+          ...validatedValues,
           customerName: customer?.name,
           customerUuid: customer?.uuid,
         },
       ]);
       customerForm.resetFields();
+      setCustomerModalVisible(false);
+    }).catch(() => {
+      // 验证失败，不做任何操作
     });
   };
 
@@ -829,19 +1325,28 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
     onCustomerCodesChange(newCodes);
   };
 
+  // 打开供应商编码 Modal
+  const handleOpenSupplierModal = () => {
+    setSupplierModalVisible(true);
+    supplierForm.resetFields();
+  };
+
   // 添加供应商编码
   const handleAddSupplierCode = () => {
-    supplierForm.validateFields().then((values) => {
-      const supplier = suppliers.find(s => s.id === values.supplierId);
+    supplierForm.validateFields().then((validatedValues) => {
+      const supplier = suppliers.find(s => s.id === validatedValues.supplierId);
       onSupplierCodesChange([
         ...supplierCodes,
         {
-          ...values,
+          ...validatedValues,
           supplierName: supplier?.name,
           supplierUuid: supplier?.uuid,
         },
       ]);
       supplierForm.resetFields();
+      setSupplierModalVisible(false);
+    }).catch(() => {
+      // 验证失败，不做任何操作
     });
   };
 
@@ -853,166 +1358,228 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   };
 
   return (
-    <div style={{ padding: '16px 0' }}>
-      <Collapse defaultActiveKey={['department', 'customer', 'supplier']}>
-        {/* 公司内部部门编码 */}
-        <Panel header="公司内部部门编码" key="department">
-          <Table
-            dataSource={departmentCodes}
-            columns={[
-              { title: '编码类型', dataIndex: 'code_type', key: 'code_type' },
-              { title: '编码', dataIndex: 'code', key: 'code' },
-              { title: '部门', dataIndex: 'department', key: 'department' },
-              { title: '描述', dataIndex: 'description', key: 'description' },
-              {
-                title: '操作',
-                key: 'action',
-                render: (_, __, index) => (
-                  <Button
-                    type="link"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleDeleteDepartmentCode(index)}
-                  >
-                    删除
-                  </Button>
-                ),
-              },
-            ]}
-            pagination={false}
-            size="small"
-            locale={{ emptyText: '暂无部门编码' }}
-          />
-          <Form form={deptForm} layout="inline" style={{ marginTop: 16 }}>
-            <Form.Item name="code_type" rules={[{ required: true, message: '请选择编码类型' }]}>
-              <Select placeholder="编码类型" style={{ width: 120 }} options={departmentCodeTypes} />
-            </Form.Item>
-            <Form.Item name="code" rules={[{ required: true, message: '请输入编码' }]}>
-              <Input placeholder="编码" style={{ width: 150 }} />
-            </Form.Item>
-            <Form.Item name="department">
-              <Input placeholder="部门（可选）" style={{ width: 120 }} />
-            </Form.Item>
-            <Form.Item name="description">
-              <Input placeholder="描述（可选）" style={{ width: 200 }} />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDepartmentCode}>
-                添加
-              </Button>
-            </Form.Item>
-          </Form>
-        </Panel>
+    <>
+      {/* 公司内部部门编码 */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>公司内部部门编码</div>
+        <Table
+          dataSource={departmentCodes}
+          columns={[
+            { title: '编码类型', dataIndex: 'code_type', key: 'code_type', width: 120 },
+            { title: '编码', dataIndex: 'code', key: 'code', width: 150 },
+            { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
+            { title: '部门', dataIndex: 'department', key: 'department', width: 120 },
+            { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+            {
+              title: '操作',
+              key: 'action',
+              width: 80,
+              fixed: 'right' as const,
+              render: (_, __, index) => (
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDeleteDepartmentCode(index)}
+                >
+                  删除
+                </Button>
+              ),
+            },
+          ]}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: '暂无部门编码' }}
+          footer={() => (
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={handleOpenDeptModal}
+              block
+            >
+              添加部门编码
+            </Button>
+          )}
+        />
+      </div>
 
-        {/* 客户物料编码 */}
-        <Panel header="客户物料编码" key="customer">
-          <Table
-            dataSource={customerCodes}
-            columns={[
-              { title: '客户', dataIndex: 'customerName', key: 'customerName' },
-              { title: '客户编码', dataIndex: 'code', key: 'code' },
-              { title: '描述', dataIndex: 'description', key: 'description' },
-              {
-                title: '操作',
-                key: 'action',
-                render: (_, __, index) => (
-                  <Button
-                    type="link"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleDeleteCustomerCode(index)}
-                  >
-                    删除
-                  </Button>
-                ),
-              },
-            ]}
-            pagination={false}
-            size="small"
-            locale={{ emptyText: '暂无客户编码' }}
-          />
-          <Form form={customerForm} layout="inline" style={{ marginTop: 16 }}>
-            <Form.Item name="customerId" rules={[{ required: true, message: '请选择客户' }]}>
-              <Select
-                placeholder="选择客户"
-                style={{ width: 200 }}
-                loading={customersLoading}
-                showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
-              />
-            </Form.Item>
-            <Form.Item name="code" rules={[{ required: true, message: '请输入客户编码' }]}>
-              <Input placeholder="客户编码" style={{ width: 200 }} />
-            </Form.Item>
-            <Form.Item name="description">
-              <Input placeholder="描述（可选）" style={{ width: 200 }} />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCustomerCode}>
-                添加
-              </Button>
-            </Form.Item>
-          </Form>
-        </Panel>
+      {/* 客户物料编码 */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>客户物料编码</div>
+        <Table
+          dataSource={customerCodes}
+          columns={[
+            { title: '客户', dataIndex: 'customerName', key: 'customerName', width: 200 },
+            { title: '客户编码', dataIndex: 'code', key: 'code', width: 150 },
+            { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
+            { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+            {
+              title: '操作',
+              key: 'action',
+              width: 80,
+              fixed: 'right' as const,
+              render: (_, __, index) => (
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDeleteCustomerCode(index)}
+                >
+                  删除
+                </Button>
+              ),
+            },
+          ]}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: '暂无客户编码' }}
+          footer={() => (
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={handleOpenCustomerModal}
+              block
+            >
+              添加客户编码
+            </Button>
+          )}
+        />
+      </div>
 
-        {/* 供应商物料编码 */}
-        <Panel header="供应商物料编码" key="supplier">
-          <Table
-            dataSource={supplierCodes}
-            columns={[
-              { title: '供应商', dataIndex: 'supplierName', key: 'supplierName' },
-              { title: '供应商编码', dataIndex: 'code', key: 'code' },
-              { title: '描述', dataIndex: 'description', key: 'description' },
-              {
-                title: '操作',
-                key: 'action',
-                render: (_, __, index) => (
-                  <Button
-                    type="link"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleDeleteSupplierCode(index)}
-                  >
-                    删除
-                  </Button>
-                ),
-              },
-            ]}
-            pagination={false}
-            size="small"
-            locale={{ emptyText: '暂无供应商编码' }}
-          />
-          <Form form={supplierForm} layout="inline" style={{ marginTop: 16 }}>
-            <Form.Item name="supplierId" rules={[{ required: true, message: '请选择供应商' }]}>
-              <Select
-                placeholder="选择供应商"
-                style={{ width: 200 }}
-                loading={suppliersLoading}
-                showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-              />
-            </Form.Item>
-            <Form.Item name="code" rules={[{ required: true, message: '请输入供应商编码' }]}>
-              <Input placeholder="供应商编码" style={{ width: 200 }} />
-            </Form.Item>
-            <Form.Item name="description">
-              <Input placeholder="描述（可选）" style={{ width: 200 }} />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddSupplierCode}>
-                添加
-              </Button>
-            </Form.Item>
-          </Form>
-        </Panel>
-      </Collapse>
-    </div>
+      {/* 供应商物料编码 */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>供应商物料编码</div>
+        <Table
+          dataSource={supplierCodes}
+          columns={[
+            { title: '供应商', dataIndex: 'supplierName', key: 'supplierName', width: 200 },
+            { title: '供应商编码', dataIndex: 'code', key: 'code', width: 150 },
+            { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
+            { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+            {
+              title: '操作',
+              key: 'action',
+              width: 80,
+              fixed: 'right' as const,
+              render: (_, __, index) => (
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDeleteSupplierCode(index)}
+                >
+                  删除
+                </Button>
+              ),
+            },
+          ]}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: '暂无供应商编码' }}
+          footer={() => (
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={handleOpenSupplierModal}
+              block
+            >
+              添加供应商编码
+            </Button>
+          )}
+        />
+      </div>
+
+      {/* 部门编码 Modal */}
+      <Modal
+        title="添加部门编码"
+        open={deptModalVisible}
+        onOk={handleAddDepartmentCode}
+        onCancel={() => setDeptModalVisible(false)}
+        width={600}
+      >
+        <Form form={deptForm} layout="vertical">
+          <Form.Item name="code_type" label="编码类型" rules={[{ required: true, message: '请选择编码类型' }]}>
+            <Select placeholder="编码类型" options={departmentCodeTypes} />
+          </Form.Item>
+          <Form.Item name="code" label="编码" rules={[{ required: true, message: '请输入编码' }]}>
+            <Input placeholder="编码" />
+          </Form.Item>
+          <Form.Item name="name" label="名称（可选）">
+            <Input placeholder="名称（可选）" />
+          </Form.Item>
+          <Form.Item name="department" label="部门（可选）">
+            <Input placeholder="部门（可选）" />
+          </Form.Item>
+          <Form.Item name="description" label="描述（可选）">
+            <Input.TextArea placeholder="描述（可选）" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 客户编码 Modal */}
+      <Modal
+        title="添加客户编码"
+        open={customerModalVisible}
+        onOk={handleAddCustomerCode}
+        onCancel={() => setCustomerModalVisible(false)}
+        width={600}
+      >
+        <Form form={customerForm} layout="vertical">
+          <Form.Item name="customerId" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+            <Select
+              placeholder="选择客户"
+              loading={customersLoading}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
+            />
+          </Form.Item>
+          <Form.Item name="code" label="客户编码" rules={[{ required: true, message: '请输入客户编码' }]}>
+            <Input placeholder="客户编码" />
+          </Form.Item>
+          <Form.Item name="name" label="名称（可选）">
+            <Input placeholder="名称（可选）" />
+          </Form.Item>
+          <Form.Item name="description" label="描述（可选）">
+            <Input.TextArea placeholder="描述（可选）" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 供应商编码 Modal */}
+      <Modal
+        title="添加供应商编码"
+        open={supplierModalVisible}
+        onOk={handleAddSupplierCode}
+        onCancel={() => setSupplierModalVisible(false)}
+        width={600}
+      >
+        <Form form={supplierForm} layout="vertical">
+          <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}>
+            <Select
+              placeholder="选择供应商"
+              loading={suppliersLoading}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+            />
+          </Form.Item>
+          <Form.Item name="code" label="供应商编码" rules={[{ required: true, message: '请输入供应商编码' }]}>
+            <Input placeholder="供应商编码" />
+          </Form.Item>
+          <Form.Item name="name" label="名称（可选）">
+            <Input placeholder="名称（可选）" />
+          </Form.Item>
+          <Form.Item name="description" label="描述（可选）">
+            <Input.TextArea placeholder="描述（可选）" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   );
 };
 
@@ -1052,8 +1619,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   };
 
   return (
-    <div style={{ padding: '16px 0' }}>
-      <Collapse defaultActiveKey={['finance', 'purchase', 'sale', 'inventory', 'production']}>
+    <Collapse defaultActiveKey={['finance', 'purchase', 'sale', 'inventory', 'production']}>
         {/* 财务默认值 */}
         <Panel header="财务默认值" key="finance">
           <ProFormDigit
@@ -1061,6 +1627,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             placeholder="请输入默认税率，如：13表示13%"
             min={0}
             max={100}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultTaxRate,
               onChange: (value) => updateDefaults('defaultTaxRate', value),
@@ -1070,6 +1637,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           <ProFormText
             label="默认科目"
             placeholder="请输入默认科目"
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultAccount,
               onChange: (e) => updateDefaults('defaultAccount', e.target.value),
@@ -1079,20 +1647,19 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
 
         {/* 采购默认值 */}
         <Panel header="采购默认值" key="purchase">
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>默认供应商（可多选，按优先级排序）</div>
-            <Select
-              mode="multiple"
-              placeholder="请选择默认供应商"
-              style={{ width: '100%' }}
-              loading={suppliersLoading}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-              value={defaults.defaultSuppliers?.map(s => s.supplierId)}
-              onChange={(values) => {
+          <ProFormSelect
+            label="默认供应商（可多选，按优先级排序）"
+            placeholder="请选择默认供应商"
+            colProps={{ span: 12 }}
+            options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+            fieldProps={{
+              mode: 'multiple',
+              loading: suppliersLoading,
+              showSearch: true,
+              filterOption: (input: string, option: any) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              value: defaults.defaultSuppliers?.map(s => s.supplierId),
+              onChange: (values: number[]) => {
                 const selectedSuppliers = values.map((id, index) => {
                   const supplier = suppliers.find(s => s.id === id);
                   return {
@@ -1103,13 +1670,14 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                   };
                 });
                 updateDefaults('defaultSuppliers', selectedSuppliers);
-              }}
-            />
-          </div>
+              },
+            }}
+          />
           <ProFormDigit
             label="默认采购价格"
             placeholder="请输入默认采购价格"
             min={0}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultPurchasePrice,
               onChange: (value) => updateDefaults('defaultPurchasePrice', value),
@@ -1119,6 +1687,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           <ProFormText
             label="默认采购单位"
             placeholder="请输入默认采购单位"
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultPurchaseUnit,
               onChange: (e) => updateDefaults('defaultPurchaseUnit', e.target.value),
@@ -1128,6 +1697,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             label="默认采购周期（天）"
             placeholder="请输入默认采购周期"
             min={0}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultPurchaseLeadTime,
               onChange: (value) => updateDefaults('defaultPurchaseLeadTime', value),
@@ -1142,6 +1712,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             label="默认销售价格"
             placeholder="请输入默认销售价格"
             min={0}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultSalePrice,
               onChange: (value) => updateDefaults('defaultSalePrice', value),
@@ -1151,25 +1722,25 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           <ProFormText
             label="默认销售单位"
             placeholder="请输入默认销售单位"
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultSaleUnit,
               onChange: (e) => updateDefaults('defaultSaleUnit', e.target.value),
             }}
           />
-          <div style={{ marginTop: 16 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>默认客户（可多选）</div>
-            <Select
-              mode="multiple"
-              placeholder="请选择默认客户"
-              style={{ width: '100%' }}
-              loading={customersLoading}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
-              value={defaults.defaultCustomers?.map(c => c.customerId)}
-              onChange={(values) => {
+          <ProFormSelect
+            label="默认客户（可多选）"
+            placeholder="请选择默认客户"
+            colProps={{ span: 12 }}
+            options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
+            fieldProps={{
+              mode: 'multiple',
+              loading: customersLoading,
+              showSearch: true,
+              filterOption: (input: string, option: any) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              value: defaults.defaultCustomers?.map(c => c.customerId),
+              onChange: (values: number[]) => {
                 const selectedCustomers = values.map((id) => {
                   const customer = customers.find(c => c.id === id);
                   return {
@@ -1179,27 +1750,26 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                   };
                 });
                 updateDefaults('defaultCustomers', selectedCustomers);
-              }}
-            />
-          </div>
+              },
+            }}
+          />
         </Panel>
 
         {/* 库存默认值 */}
         <Panel header="库存默认值" key="inventory">
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>默认仓库（可多选，按优先级排序）</div>
-            <Select
-              mode="multiple"
-              placeholder="请选择默认仓库"
-              style={{ width: '100%' }}
-              loading={warehousesLoading}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={warehouses.map(w => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
-              value={defaults.defaultWarehouses?.map(w => w.warehouseId)}
-              onChange={(values) => {
+          <ProFormSelect
+            label="默认仓库（可多选，按优先级排序）"
+            placeholder="请选择默认仓库"
+            colProps={{ span: 12 }}
+            options={warehouses.map(w => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
+            fieldProps={{
+              mode: 'multiple',
+              loading: warehousesLoading,
+              showSearch: true,
+              filterOption: (input: string, option: any) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              value: defaults.defaultWarehouses?.map(w => w.warehouseId),
+              onChange: (values: number[]) => {
                 const selectedWarehouses = values.map((id, index) => {
                   const warehouse = warehouses.find(w => w.id === id);
                   return {
@@ -1210,12 +1780,13 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                   };
                 });
                 updateDefaults('defaultWarehouses', selectedWarehouses);
-              }}
-            />
-          </div>
+              },
+            }}
+          />
           <ProFormText
             label="默认库位"
             placeholder="请输入默认库位"
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultLocation,
               onChange: (e) => updateDefaults('defaultLocation', e.target.value),
@@ -1225,6 +1796,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             label="安全库存"
             placeholder="请输入安全库存"
             min={0}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.safetyStock,
               onChange: (value) => updateDefaults('safetyStock', value),
@@ -1235,6 +1807,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             label="最大库存"
             placeholder="请输入最大库存"
             min={0}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.maxStock,
               onChange: (value) => updateDefaults('maxStock', value),
@@ -1245,6 +1818,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
             label="最小库存"
             placeholder="请输入最小库存"
             min={0}
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.minStock,
               onChange: (value) => updateDefaults('minStock', value),
@@ -1255,29 +1829,29 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
 
         {/* 生产默认值 */}
         <Panel header="生产默认值" key="production">
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>默认工艺路线</div>
-            <Select
-              placeholder="请选择默认工艺路线"
-              style={{ width: '100%' }}
-              loading={processRoutesLoading}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
-              value={defaults.defaultProcessRouteUuid}
-              onChange={(value) => {
+          <ProFormSelect
+            label="默认工艺路线"
+            placeholder="请选择默认工艺路线"
+            colProps={{ span: 12 }}
+            options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
+            fieldProps={{
+              loading: processRoutesLoading,
+              showSearch: true,
+              filterOption: (input: string, option: any) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+              allowClear: true,
+              value: defaults.defaultProcessRouteUuid,
+              onChange: (value: string) => {
                 const route = processRoutes.find(pr => pr.uuid === value);
                 updateDefaults('defaultProcessRoute', route?.id);
                 updateDefaults('defaultProcessRouteUuid', value);
-              }}
-              allowClear
-            />
-          </div>
+              },
+            }}
+          />
           <ProFormText
             label="默认生产单位"
             placeholder="请输入默认生产单位"
+            colProps={{ span: 12 }}
             fieldProps={{
               value: defaults.defaultProductionUnit,
               onChange: (e) => updateDefaults('defaultProductionUnit', e.target.value),
@@ -1285,7 +1859,6 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           />
         </Panel>
       </Collapse>
-    </div>
   );
 };
 
