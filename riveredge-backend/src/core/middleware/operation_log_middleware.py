@@ -125,6 +125,10 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             
             # 如果无法获取组织ID或用户ID，跳过记录
             if not tenant_id or not user_id:
+                logger.debug(
+                    f"跳过操作日志记录: tenant_id={tenant_id}, user_id={user_id}, "
+                    f"path={request.url.path}"
+                )
                 return
             
             # 解析操作类型和模块
@@ -160,19 +164,28 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 request_path=request.url.path,
             )
             
-            # 更新用户活动时间（异步执行，不阻塞）
+            # 更新用户活动时间（直接 await，确保执行）
+            # 注意：这里直接 await 而不是使用 create_task，确保数据一定被写入
+            # 虽然会稍微影响响应时间，但能保证数据一致性
             try:
                 from core.services.logging.online_user_service import OnlineUserService
-                asyncio.create_task(
-                    OnlineUserService.update_user_activity(
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        login_ip=ip_address,
-                    )
+                # 直接 await 确保数据写入，避免异步任务未执行的问题
+                await OnlineUserService.update_user_activity(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    login_ip=ip_address,
                 )
-            except Exception:
-                # 更新活动时间失败不影响业务，静默处理
-                pass
+                logger.debug(
+                    f"用户活动时间已更新: tenant_id={tenant_id}, "
+                    f"user_id={user_id}, path={request.url.path}"
+                )
+            except Exception as e:
+                # 更新活动时间失败不影响业务，记录错误日志
+                logger.error(
+                    f"更新用户活动时间失败: tenant_id={tenant_id}, "
+                    f"user_id={user_id}, error={e}",
+                    exc_info=True
+                )
         except Exception as e:
             # 日志记录失败不影响业务，静默处理
             logger.warning(f"记录操作日志失败: {e}")
