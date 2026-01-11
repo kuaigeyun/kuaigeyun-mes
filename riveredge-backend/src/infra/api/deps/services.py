@@ -118,8 +118,8 @@ def get_auth_service_with_fallback() -> Any:
         async def register(self, data: Any) -> Any:
             return await self._auth_service.register(data)
         
-        async def guest_login(self) -> Dict[str, Any]:
-            return await self._auth_service.guest_login()
+        async def guest_login(self, request: Any = None) -> Dict[str, Any]:
+            return await self._auth_service.guest_login(request)
         
         async def register_personal(self, data: Any) -> Dict[str, Any]:
             return await self._auth_service.register_personal(data)

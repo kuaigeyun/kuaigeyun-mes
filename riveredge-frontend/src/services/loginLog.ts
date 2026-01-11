@@ -57,17 +57,12 @@ export async function getLoginLogs(params?: {
  * 获取登录日志详情
  */
 export async function getLoginLog(uuid: string): Promise<LoginLog> {
-  return apiRequest<LoginLog>(`/core/login-logs/${uuid}`, {
-    method: 'GET',
-  });
+  return apiRequest<LoginLog>(`/core/login-logs/${uuid}`);
 }
 
 /**
  * 获取登录日志统计
  */
 export async function getLoginLogStats(): Promise<LoginLogStats> {
-  return apiRequest<LoginLogStats>('/core/login-logs/statistics', {
-    method: 'GET',
-  });
+  return apiRequest<LoginLogStats>('/core/login-logs/statistics');
 }
-

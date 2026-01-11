@@ -89,7 +89,17 @@ def verify_token(token: str) -> Optional[Dict[str, Any]]:
             algorithms=[settings.JWT_ALGORITHM]
         )
         return payload
-    except JWTError:
+    except JWTError as e:
+        from loguru import logger
+        logger.error(f"❌ Token 验证失败 (JWTError): {e}")
+        logger.error(f"❌ Token 前50个字符: {token[:50] if token else 'None'}")
+        logger.error(f"❌ JWT_SECRET_KEY 长度: {len(settings.JWT_SECRET_KEY) if settings.JWT_SECRET_KEY else 0}")
+        logger.error(f"❌ JWT_ALGORITHM: {settings.JWT_ALGORITHM}")
+        return None
+    except Exception as e:
+        from loguru import logger
+        logger.error(f"❌ Token 验证失败 (Exception): {e}")
+        logger.error(f"❌ Token 前50个字符: {token[:50] if token else 'None'}")
         return None
 
 

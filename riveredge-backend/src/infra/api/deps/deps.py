@@ -57,12 +57,15 @@ async def get_current_user(
         ```
     """
     # 检查 Token 是否存在
+    from loguru import logger
     if not token:
+        logger.error(f"❌ get_current_user: Token 缺失 (token={token}, type={type(token)})")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token缺失",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    logger.debug(f"🔍 get_current_user: 收到 Token，长度: {len(token) if token else 0}")
 
     # ⚠️ 关键修复：先尝试验证平台超级管理员 Token
     infra_superadmin_payload = get_infra_superadmin_token_payload(token)
@@ -112,13 +115,17 @@ async def get_current_user(
         return virtual_user
 
     # 验证普通用户 Token
+    from loguru import logger
+    logger.debug(f"🔍 开始验证普通用户 Token，Token 长度: {len(token) if token else 0}")
     payload = get_token_payload(token)
     if not payload:
+        logger.error(f"❌ 普通用户 Token 验证失败，Token 前50个字符: {token[:50] if token else 'None'}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的 Token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    logger.debug(f"✅ 普通用户 Token 验证成功，user_id: {payload.get('sub')}, tenant_id: {payload.get('tenant_id')}")
     
     # 获取用户 ID 和组织 ID
     user_id = int(payload.get("sub"))
@@ -129,20 +136,25 @@ async def get_current_user(
         set_current_tenant_id(tenant_id)
     
     # 获取用户
+    logger.debug(f"🔍 开始查询用户，user_id: {user_id}")
     user = await User.get_or_none(id=user_id)
     if not user:
+        logger.error(f"❌ 用户不存在，user_id: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    logger.debug(f"✅ 用户查询成功，user_id: {user.id}, username: {user.username}, is_active: {user.is_active}")
     
     if not user.is_active:
+        logger.error(f"❌ 用户未激活，user_id: {user.id}, username: {user.username}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="用户未激活",
         )
     
+    logger.debug(f"✅ get_current_user 返回用户，user_id: {user.id}, username: {user.username}")
     return user
 
 

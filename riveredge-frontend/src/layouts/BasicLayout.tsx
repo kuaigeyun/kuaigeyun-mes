@@ -3883,7 +3883,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
             {/* 分割线 */}
             <Divider 
-              type="vertical" 
+              orientation="vertical" 
               style={{ 
                 height: '20px', 
                 margin: '4px 0 0 2px',
