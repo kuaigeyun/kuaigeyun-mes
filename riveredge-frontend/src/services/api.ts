@@ -32,10 +32,18 @@ function getAuthToken(): string | null {
  * @returns 组织ID 或 null
  */
 function getCurrentTenantId(): string | null {
-  // 优先从 localStorage 的 tenant_id 获取
-  const tenantId = localStorage.getItem('tenant_id');
-  if (tenantId) {
-    return tenantId;
+  try {
+    // 优先从 localStorage 的 tenant_id 获取
+    const tenantId = localStorage.getItem('tenant_id');
+    // ⚠️ 关键修复：检查 tenantId 是否有效（不为 null、undefined 或空字符串）
+    if (tenantId !== null && tenantId !== undefined && tenantId !== '') {
+      const trimmedTenantId = tenantId.trim();
+      if (trimmedTenantId !== '') {
+        return trimmedTenantId;
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ 读取 localStorage tenant_id 失败:', error);
   }
   
   // 如果 localStorage 中没有，尝试从 user_info 中获取
@@ -45,20 +53,15 @@ function getCurrentTenantId(): string | null {
       const userInfo = JSON.parse(userInfoStr);
       // 尝试多个可能的字段名：tenant_id, tenantId
       const tenantIdFromUserInfo = userInfo?.tenant_id || userInfo?.tenantId;
-      if (tenantIdFromUserInfo) {
+      if (tenantIdFromUserInfo !== undefined && tenantIdFromUserInfo !== null) {
         // 如果从 user_info 中获取到，同时保存到 tenant_id，避免下次再查找
-        const tenantIdStr = String(tenantIdFromUserInfo);
-        localStorage.setItem('tenant_id', tenantIdStr);
-        console.log('✅ 从 user_info 中恢复 tenant_id:', tenantIdStr);
-        return tenantIdStr;
-      } else {
-        console.warn('⚠️ user_info 中未找到 tenant_id 字段:', {
-          userInfoKeys: Object.keys(userInfo || {}),
-          userInfo: userInfo,
-        });
+        const tenantIdStr = String(tenantIdFromUserInfo).trim();
+        if (tenantIdStr !== '') {
+          localStorage.setItem('tenant_id', tenantIdStr);
+          console.log('✅ 从 user_info 中恢复 tenant_id:', tenantIdStr);
+          return tenantIdStr;
+        }
       }
-    } else {
-      console.warn('⚠️ localStorage 中没有 user_info');
     }
   } catch (error) {
     console.warn('⚠️ 解析 user_info 失败:', error);
@@ -127,105 +130,116 @@ export async function apiRequest<T = any>(
   }
 
   // 检查是否是公开接口（登录、注册等接口不应该携带 token）
+  // ⚠️ 关键修复：使用精确匹配，避免误匹配包含 '/login' 的其他路径（如 '/core/login-logs'）
   const isPublicEndpoint = 
-    url.includes('/auth/login') || 
-    url.includes('/auth/guest-login') ||  // 免注册体验登录接口
-    url.includes('/login') ||
-    url.includes('/auth/register') ||
-    url.includes('/register') ||
-    url.includes('/tenants/search') ||
-    url.includes('/tenants/check-domain');
+    url === '/auth/login' ||
+    url.startsWith('/auth/login?') ||
+    url === '/auth/guest-login' ||
+    url.startsWith('/auth/guest-login?') ||
+    (url === '/login' || url === '/infra/login') ||
+    url.startsWith('/login?') ||
+    url === '/auth/register' ||
+    url.startsWith('/auth/register?') ||
+    url === '/register' ||
+    url.startsWith('/register?') ||
+    url.startsWith('/tenants/search') ||
+    url.startsWith('/tenants/check-domain');
   
-  // 获取认证 Token
-  const token = getAuthToken();
+  // ========== 重写：简化 Token 和 Tenant ID 获取逻辑 ==========
   
-  // 检查 Token 是否存在（公开接口除外）
-  if (!token && !isPublicEndpoint) {
-    console.warn(`⚠️ API 请求 ${url} 没有 Token`);
+  // 1. 获取 Token（公开接口不需要）
+  const token = !isPublicEndpoint ? localStorage.getItem('token') : null;
+  
+  // 调试日志：检查 Token
+  if (!isPublicEndpoint) {
+    console.log('🔍 apiRequest 调试:', {
+      url,
+      hasToken: !!token,
+      tokenLength: token?.length || 0,
+      tokenPreview: token ? `${token.substring(0, 20)}...` : 'null',
+    });
   }
   
-  // 获取当前选择的组织ID（公开接口不需要组织上下文）
-  const currentTenantId = isPublicEndpoint ? null : getCurrentTenantId();
-  
-  // 检查是否是平台超级管理员（从 user_info 中获取）
+  // 2. 获取 Tenant ID 和用户信息（公开接口不需要）
+  let tenantId: string | null = null;
   let isInfraSuperAdmin = false;
-  try {
-    const userInfoStr = localStorage.getItem('user_info');
-    if (userInfoStr) {
-      const userInfo = JSON.parse(userInfoStr);
-      isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin' || userInfo?.is_infra_admin === true;
+  
+  if (!isPublicEndpoint) {
+    // 优先从 localStorage 获取 tenant_id
+    const tenantIdFromStorage = localStorage.getItem('tenant_id');
+    if (tenantIdFromStorage && tenantIdFromStorage.trim()) {
+      tenantId = tenantIdFromStorage.trim();
+    } else {
+      // 如果 localStorage 中没有，尝试从 user_info 恢复
+      try {
+        const userInfoStr = localStorage.getItem('user_info');
+        if (userInfoStr) {
+          const userInfo = JSON.parse(userInfoStr);
+          const tenantIdFromUserInfo = userInfo?.tenant_id || userInfo?.tenantId;
+          if (tenantIdFromUserInfo != null) {
+            tenantId = String(tenantIdFromUserInfo).trim();
+            // 保存到 localStorage，避免下次再查找
+            if (tenantId) {
+              localStorage.setItem('tenant_id', tenantId);
+            }
+          }
+          // 检查是否是平台超级管理员
+          isInfraSuperAdmin = userInfo?.user_type === 'infra_superadmin' || userInfo?.is_infra_admin === true;
+        }
+      } catch (error) {
+        // 忽略解析错误
+      }
     }
-  } catch (error) {
-    // 忽略解析错误
   }
   
-  // 检查 body 是否是 FormData
-  const isFormData = options?.body instanceof FormData;
-  
-  // 判断是否需要组织上下文（系统级API和个人中心API需要）
+  // 3. 判断是否需要组织上下文
   const needsTenantContext = url.startsWith('/core/') || 
     url.startsWith('/api/v1/core/') || 
     url.startsWith('/personal/') || 
     url.startsWith('/api/v1/personal/');
   
-  // 如果需要组织上下文但没有 tenant_id，输出警告（平台超级管理员除外，后端会处理默认租户）
-  if (needsTenantContext && !currentTenantId && !isInfraSuperAdmin) {
-    console.error('⚠️ 组织上下文未设置:', {
-      url,
-      tenantId: currentTenantId,
-      isInfraSuperAdmin,
-      localStorage_tenant_id: localStorage.getItem('tenant_id'),
-      user_info: localStorage.getItem('user_info'),
-    });
-  }
-  
-  // 构建请求头（如果是 FormData，需要删除 Content-Type，让浏览器自动设置）
+  // 4. 构建请求头
   const headers: Record<string, string> = {};
   
-  // 如果是 FormData，不设置 Content-Type，让浏览器自动设置（包含 boundary）
+  // Content-Type（FormData 时不设置，让浏览器自动设置）
+  const isFormData = options?.body instanceof FormData;
   if (!isFormData) {
     headers['Content-Type'] = 'application/json';
   }
   
-  // 如果存在 Token 且不是公开接口，添加到请求头
-  // ⚠️ 关键修复：公开接口（登录、注册等）不应该携带 token，避免过期 token 干扰验证
+  // Authorization（公开接口不需要）
   if (token && !isPublicEndpoint) {
     headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  // 如果存在组织ID且需要组织上下文，添加到请求头
-  // ⚠️ 关键修复：系统级API和个人中心API需要组织上下文，平台级API不需要
-  // ⚠️ 重要：对于系统级API和个人中心API，必须要有组织上下文
-  // ⚠️ 平台超级管理员：即使没有 tenant_id，也允许发送请求（后端会使用默认租户）
-  if (needsTenantContext) {
-    if (currentTenantId) {
-      headers['X-Tenant-ID'] = currentTenantId;
-    } else if (isInfraSuperAdmin) {
-      // 平台超级管理员即使没有 tenant_id，也允许发送请求
-      // 后端会检测到是平台超级管理员，并使用默认租户
-    } else {
-      // 非平台超级管理员且没有 tenant_id，输出详细错误信息
-      console.error('❌ 组织上下文未设置，无法添加 X-Tenant-ID 请求头:', {
-        url,
-        currentTenantId,
-        isInfraSuperAdmin,
-        localStorage_tenant_id: localStorage.getItem('tenant_id'),
-        user_info: localStorage.getItem('user_info'),
-        needsTenantContext,
-      });
-    }
-  }
-  
-  // 合并用户自定义的 headers（如果是 FormData，需要删除 Content-Type）
-  if (options?.headers) {
-    Object.entries(options.headers).forEach(([key, value]) => {
-      // 如果是 FormData，忽略 Content-Type，让浏览器自动设置
-      if (isFormData && key.toLowerCase() === 'content-type') {
-        return;
-      }
-      headers[key] = value;
+    console.log('✅ apiRequest: 添加 Authorization 头');
+  } else if (!isPublicEndpoint) {
+    console.error('❌ apiRequest: Token 缺失，无法添加 Authorization 头', {
+      url,
+      isPublicEndpoint,
+      token: token ? 'exists' : 'null',
     });
   }
+  
+  // X-Tenant-ID（需要组织上下文时添加）
+  if (needsTenantContext && tenantId) {
+    headers['X-Tenant-ID'] = tenantId;
+  }
+  
+  // 5. 验证必需信息（需要认证的接口必须有 Token）
+  // ⚠️ 移除前端检查，让请求发送到后端，由后端统一处理认证失败
+  // 这样可以避免前端和后端认证逻辑不一致的问题
+  // if (!isPublicEndpoint && !token) {
+  //   console.error('❌ apiRequest: 前端检查 Token 缺失，拒绝请求', {
+  //     url,
+  //     isPublicEndpoint,
+  //   });
+  //   return Promise.reject({
+  //     response: {
+  //       status: 401,
+  //       data: { detail: 'Token缺失' },
+  //     },
+  //     message: 'Token缺失',
+  //   });
+  // }
   
   // 合并用户自定义的 headers（如果是 FormData，需要删除 Content-Type）
   if (options?.headers) {
@@ -299,14 +313,20 @@ export async function apiRequest<T = any>(
       // 处理 401 未授权错误
       if (response.status === 401) {
         // ⚠️ 关键修复：区分公开接口和其他接口的错误处理
+        // ⚠️ 关键修复：使用精确匹配，避免误匹配包含 '/login' 的其他路径（如 '/core/login-logs'）
         const isPublicEndpoint = 
-          url.includes('/auth/login') || 
-          url.includes('/auth/guest-login') ||  // 免注册体验登录接口
-          url.includes('/login') ||
-          url.includes('/auth/register') ||
-          url.includes('/register') ||
-          url.includes('/tenants/search') ||
-          url.includes('/tenants/check-domain');
+          url === '/auth/login' ||
+          url.startsWith('/auth/login?') ||
+          url === '/auth/guest-login' ||
+          url.startsWith('/auth/guest-login?') ||
+          (url === '/login' || url === '/infra/login') ||
+          url.startsWith('/login?') ||
+          url === '/auth/register' ||
+          url.startsWith('/auth/register?') ||
+          url === '/register' ||
+          url.startsWith('/register?') ||
+          url.startsWith('/tenants/search') ||
+          url.startsWith('/tenants/check-domain');
         if (isPublicEndpoint) {
           // 公开接口返回 401，说明认证失败（登录：用户名或密码错误；注册：可能的问题）
           // 尝试从响应中提取错误信息

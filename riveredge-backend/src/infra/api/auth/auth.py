@@ -115,6 +115,7 @@ async def refresh_token(token: str):
 
 @router.post("/guest-login", response_model=LoginResponse)
 async def guest_login(
+    request: Request,
     auth_service: Any = Depends(get_auth_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
@@ -136,7 +137,7 @@ async def guest_login(
     """
     # ⚠️ 第三阶段改进：使用依赖注入的服务
     # 异常由全局异常处理中间件统一处理
-    result = await auth_service.guest_login()
+    result = await auth_service.guest_login(request)
     return LoginResponse(**result)
 
 

@@ -127,7 +127,7 @@ class LoginLogService:
         
         log = await LoginLog.get_or_none(query)
         if not log:
-            raise NotFoundError("登录日志不存在")
+            raise NotFoundError("登录日志", uuid)
         
         return LoginLogResponse.model_validate(log)
     

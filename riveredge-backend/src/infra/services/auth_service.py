@@ -797,7 +797,7 @@ class AuthService:
             "expires_in": expires_in,
         }
     
-    async def guest_login(self) -> dict:
+    async def guest_login(self, request: Request = None) -> dict:
         """
         免注册体验登录
         
@@ -933,7 +933,7 @@ class AuthService:
             if not default_tenant:
                 raise ValueError("默认组织不存在或创建失败")
             
-            return {
+            result = {
                 "access_token": access_token,
                 "token_type": "bearer",
                 "expires_in": expires_in,
@@ -942,6 +942,19 @@ class AuthService:
                 "default_tenant_id": default_tenant.id,
                 "requires_tenant_selection": False,
             }
+            
+            # 记录登录成功日志（异步执行，不阻塞响应）
+            if request:
+                asyncio.create_task(self._log_login_attempt(
+                    tenant_id=default_tenant.id,
+                    user_id=guest_user.id,
+                    username=guest_user.username,
+                    login_status="success",
+                    failure_reason=None,
+                    request=request
+                ))
+            
+            return result
             
         except Exception as e:
             import traceback
@@ -1031,22 +1044,57 @@ class AuthService:
         try:
             from core.services.interfaces.service_registry import ServiceLocator
 
-            # 获取 IP 地址
+            # 获取客户端真实IP地址（优先获取外网IP）
+            # 优先级：X-Forwarded-For > X-Real-IP > request.client.host
             login_ip = None
-            if request.client:
-                login_ip = request.client.host
-            # 优先从 X-Forwarded-For 获取（代理服务器）
+            
+            # 1. 优先从 X-Forwarded-For 获取（代理服务器转发，第一个IP通常是客户端真实IP）
             forwarded_for = request.headers.get("X-Forwarded-For")
             if forwarded_for:
+                # X-Forwarded-For 可能包含多个 IP（代理链），格式：client, proxy1, proxy2
+                # 取第一个 IP（客户端真实IP）
                 login_ip = forwarded_for.split(",")[0].strip()
-            # 从 X-Real-IP 获取
+            
+            # 2. 如果 X-Forwarded-For 不存在，从 X-Real-IP 获取（Nginx 等代理服务器）
             if not login_ip:
                 real_ip = request.headers.get("X-Real-IP")
                 if real_ip:
-                    login_ip = real_ip
+                    login_ip = real_ip.strip()
+            
+            # 3. 最后从 request.client.host 获取（直接连接，可能是内网IP）
+            if not login_ip and request.client:
+                login_ip = request.client.host
+            
+            # 4. 如果都没有，使用默认值
+            if not login_ip:
+                login_ip = "0.0.0.0"
+            
+            # 5. 如果是内网IP（127.0.0.1、localhost等），尝试获取本机公网IP
+            # ⚠️ 注意：这仅用于开发环境，生产环境应该通过代理服务器获取真实客户端IP
+            from core.utils.ip_parser import is_private_ip, get_public_ip
+            if is_private_ip(login_ip) or login_ip in ["0.0.0.0", "localhost"]:
+                try:
+                    # 异步获取公网IP（不阻塞，超时时间短）
+                    public_ip = await get_public_ip()
+                    if public_ip:
+                        logger.debug(f"检测到内网IP {login_ip}，获取到公网IP: {public_ip}")
+                        login_ip = public_ip
+                except Exception as e:
+                    # 获取公网IP失败不影响登录流程，继续使用原IP
+                    logger.debug(f"获取公网IP失败，继续使用原IP {login_ip}: {e}")
 
             # 获取用户代理
             user_agent = request.headers.get("User-Agent", "")
+            
+            # 解析IP地址和User-Agent信息（异步执行，不阻塞登录流程）
+            # 包括：地理位置、浏览器、设备类型
+            ip_info = {}
+            try:
+                from core.utils.ip_parser import parse_ip_info
+                ip_info = await parse_ip_info(login_ip, user_agent)
+            except Exception as e:
+                # IP解析失败不影响登录流程，静默处理
+                logger.debug(f"IP地址解析失败: {login_ip}, 错误: {e}")
 
             # 通过服务接口记录登录事件
             audit_log_service = ServiceLocator.get_service("audit_log_service")
@@ -1056,6 +1104,9 @@ class AuthService:
                 username=username,
                 login_ip=login_ip,
                 user_agent=user_agent,
+                login_location=ip_info.get("location"),  # IP地理位置
+                login_device=ip_info.get("device"),  # 设备类型
+                login_browser=ip_info.get("browser"),  # 浏览器信息
                 success=(login_status == "success"),
                 failure_reason=failure_reason,
             )

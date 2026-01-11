@@ -284,7 +284,9 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
     
     def _get_client_ip(self, request: Request) -> Optional[str]:
         """
-        获取客户端 IP 地址
+        获取客户端真实IP地址（优先获取外网IP）
+        
+        优先级：X-Forwarded-For > X-Real-IP > request.client.host
         
         Args:
             request: 请求对象
@@ -292,18 +294,19 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
         Returns:
             Optional[str]: 客户端 IP 地址
         """
-        # 优先从 X-Forwarded-For 获取（代理服务器）
+        # 1. 优先从 X-Forwarded-For 获取（代理服务器转发，第一个IP通常是客户端真实IP）
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            # X-Forwarded-For 可能包含多个 IP，取第一个
+            # X-Forwarded-For 可能包含多个 IP（代理链），格式：client, proxy1, proxy2
+            # 取第一个 IP（客户端真实IP）
             return forwarded_for.split(",")[0].strip()
         
-        # 从 X-Real-IP 获取
+        # 2. 如果 X-Forwarded-For 不存在，从 X-Real-IP 获取（Nginx 等代理服务器）
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
-            return real_ip
+            return real_ip.strip()
         
-        # 从客户端地址获取
+        # 3. 最后从 request.client.host 获取（直接连接，可能是内网IP）
         if request.client:
             return request.client.host
         

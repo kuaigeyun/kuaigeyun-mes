@@ -127,6 +127,9 @@ class AuditLogServiceInterface(ServiceInterface):
         username: str,
         login_ip: Optional[str] = None,
         user_agent: Optional[str] = None,
+        login_location: Optional[str] = None,
+        login_device: Optional[str] = None,
+        login_browser: Optional[str] = None,
         success: bool = True,
         failure_reason: Optional[str] = None,
     ) -> None:
@@ -139,6 +142,9 @@ class AuditLogServiceInterface(ServiceInterface):
             username: 用户名
             login_ip: 登录IP
             user_agent: 用户代理
+            login_location: 登录地点（IP地理位置，可选）
+            login_device: 登录设备（PC、Mobile等，可选）
+            login_browser: 登录浏览器（可选）
             success: 是否成功
             failure_reason: 失败原因
         """

@@ -124,7 +124,8 @@ async def get_current_tenant(
 
     # 设置到上下文（确保后续操作都能获取到）
     set_current_tenant_id(tenant_id)
-
+    
+    logger.debug(f"✅ get_current_tenant 返回 tenant_id: {tenant_id}")
     return tenant_id
 
 

@@ -46,9 +46,9 @@ class AuthServiceImpl(AuthServiceInterface):
         """用户注册"""
         return await self._auth_service.register(data)
     
-    async def guest_login(self) -> Dict[str, Any]:
+    async def guest_login(self, request: Any = None) -> Dict[str, Any]:
         """体验登录"""
-        return await self._auth_service.guest_login()
+        return await self._auth_service.guest_login(request)
     
     async def register_personal(self, data: Any) -> Dict[str, Any]:
         """个人注册"""

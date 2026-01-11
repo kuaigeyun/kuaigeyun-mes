@@ -43,6 +43,9 @@ class AuditLogServiceImpl(AuditLogServiceInterface):
         username: str,
         login_ip: Optional[str] = None,
         user_agent: Optional[str] = None,
+        login_location: Optional[str] = None,
+        login_device: Optional[str] = None,
+        login_browser: Optional[str] = None,
         success: bool = True,
         failure_reason: Optional[str] = None,
     ) -> None:
@@ -55,16 +58,24 @@ class AuditLogServiceImpl(AuditLogServiceInterface):
             username: 用户名
             login_ip: 登录IP
             user_agent: 用户代理
+            login_location: 登录地点（IP地理位置，可选）
+            login_device: 登录设备（PC、Mobile等，可选）
+            login_browser: 登录浏览器（可选）
             success: 是否成功
             failure_reason: 失败原因
         """
+        # ⚠️ 关键修复：将 success 布尔值转换为 login_status 字符串
+        login_status = "success" if success else "failed"
+        
         login_log_data = LoginLogCreate(
-            tenant_id=tenant_id,
-            user_id=user_id,
+            tenant_id=tenant_id if tenant_id != 0 else None,  # 0 表示未提供，应该为 None
+            user_id=user_id if user_id != 0 else None,  # 0 表示未提供，应该为 None
             username=username,
-            login_ip=login_ip,
-            user_agent=user_agent,
-            success=success,
+            login_ip=login_ip or "0.0.0.0",  # 确保有默认值
+            login_location=login_location,  # IP地理位置
+            login_device=login_device,  # 设备类型
+            login_browser=login_browser,  # 浏览器信息
+            login_status=login_status,
             failure_reason=failure_reason,
         )
 
