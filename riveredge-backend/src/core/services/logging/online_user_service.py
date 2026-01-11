@@ -92,13 +92,20 @@ class OnlineUserService:
             
             # 存储到 Redis，设置过期时间为在线阈值 + 10分钟（缓冲时间）
             expire_seconds = (OnlineUserService.ONLINE_THRESHOLD_MINUTES + 10) * 60
-            await cache.set(
+            result = await cache.set(
                 activity_key,
                 json.dumps(activity_data),
                 expire=expire_seconds
             )
+            
+            # 调试日志：记录写入的键和结果
+            logger.debug(
+                f"更新用户活动时间: 键={activity_key}, "
+                f"tenant_id={tenant_id}, user_id={user_id}, "
+                f"过期时间={expire_seconds}秒, 结果={result}"
+            )
         except Exception as e:
-            logger.warning(f"更新用户活动时间失败: {e}")
+            logger.error(f"更新用户活动时间失败: {e}", exc_info=True)
     
     @staticmethod
     async def list_online_users(
@@ -130,65 +137,79 @@ class OnlineUserService:
                 # 查询所有活动键
                 pattern = f"{OnlineUserService.ACTIVITY_KEY_PREFIX}:*"
             
+            logger.debug(f"查询在线用户，模式: {pattern}, tenant_id: {tenant_id}")
+            
             # 使用 SCAN 代替 KEYS（避免阻塞）
+            all_keys = []
             cursor = 0
             while True:
                 cursor, keys = await redis_client.scan(cursor, match=pattern, count=100)
-                for key in keys:
-                    try:
-                        # 获取活动数据
-                        activity_data_str = await cache.get(key)
-                        if not activity_data_str:
-                            continue
-                        
-                        activity_data = json.loads(activity_data_str)
-                        
-                        # 检查最后活动时间
-                        last_activity_time_str = activity_data.get("last_activity_time")
-                        if not last_activity_time_str:
-                            continue
-                        
-                        last_activity_time = datetime.fromisoformat(last_activity_time_str)
-                        if last_activity_time < activity_threshold:
-                            # 超过阈值，视为不在线
-                            continue
-                        
-                        # 获取用户信息
-                        user_id = activity_data.get("user_id")
-                        if not user_id:
-                            continue
-                        
-                        user = await User.filter(id=user_id).first()
-                        if not user or not user.is_active:
-                            continue
-                        
-                        # 构建在线用户信息
-                        login_time_str = activity_data.get("login_time")
-                        login_time = datetime.fromisoformat(login_time_str) if login_time_str else None
-                        
-                        online_user = OnlineUserResponse(
-                            user_id=user.id,
-                            username=user.username,
-                            email=user.email,
-                            full_name=user.full_name,
-                            tenant_id=activity_data.get("tenant_id", tenant_id) if tenant_id else activity_data.get("tenant_id"),
-                            login_ip=activity_data.get("login_ip"),
-                            login_time=login_time,
-                            last_activity_time=last_activity_time,
-                            session_id=None,  # JWT Token 没有会话ID
-                        )
-                        
-                        online_users.append(online_user)
-                    except Exception as e:
-                        logger.warning(f"解析活动数据失败 {key}: {e}")
-                        continue
-                
+                all_keys.extend(keys)
+                logger.debug(f"扫描到 {len(keys)} 个键，总计 {len(all_keys)} 个键")
                 if cursor == 0:
                     break
             
+            logger.debug(f"总共找到 {len(all_keys)} 个活动键")
+            
+            for key in all_keys:
+                try:
+                    # 获取活动数据
+                    activity_data_str = await cache.get(key)
+                    if not activity_data_str:
+                        logger.debug(f"键 {key} 的数据为空或已过期")
+                        continue
+                    
+                    activity_data = json.loads(activity_data_str)
+                    
+                    # 检查最后活动时间
+                    last_activity_time_str = activity_data.get("last_activity_time")
+                    if not last_activity_time_str:
+                        logger.debug(f"键 {key} 缺少最后活动时间")
+                        continue
+                    
+                    last_activity_time = datetime.fromisoformat(last_activity_time_str)
+                    if last_activity_time < activity_threshold:
+                        # 超过阈值，视为不在线
+                        logger.debug(f"键 {key} 的活动时间已超过阈值: {last_activity_time} < {activity_threshold}")
+                        continue
+                    
+                    # 获取用户信息
+                    user_id = activity_data.get("user_id")
+                    if not user_id:
+                        logger.debug(f"键 {key} 缺少用户ID")
+                        continue
+                    
+                    user = await User.filter(id=user_id).first()
+                    if not user or not user.is_active:
+                        logger.debug(f"用户 {user_id} 不存在或已禁用")
+                        continue
+                    
+                    # 构建在线用户信息
+                    login_time_str = activity_data.get("login_time")
+                    login_time = datetime.fromisoformat(login_time_str) if login_time_str else None
+                    
+                    online_user = OnlineUserResponse(
+                        user_id=user.id,
+                        username=user.username,
+                        email=user.email,
+                        full_name=user.full_name,
+                        tenant_id=activity_data.get("tenant_id", tenant_id) if tenant_id else activity_data.get("tenant_id"),
+                        login_ip=activity_data.get("login_ip"),
+                        login_time=login_time,
+                        last_activity_time=last_activity_time,
+                        session_id=None,  # JWT Token 没有会话ID
+                    )
+                    
+                    online_users.append(online_user)
+                    logger.debug(f"添加在线用户: {user.username} (ID: {user_id})")
+                except Exception as e:
+                    logger.warning(f"解析活动数据失败 {key}: {e}", exc_info=True)
+                    continue
+            
+            logger.info(f"查询到 {len(online_users)} 个在线用户")
             return online_users
         except Exception as e:
-            logger.error(f"获取在线用户列表失败: {e}")
+            logger.error(f"获取在线用户列表失败: {e}", exc_info=True)
             return []
     
     @staticmethod

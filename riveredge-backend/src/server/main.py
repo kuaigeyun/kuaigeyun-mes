@@ -121,6 +121,16 @@ async def lifespan(app: FastAPI):
     # 注册 Tortoise ORM 数据库连接
     await register_db(app)
     logger.info("✅ Tortoise ORM 已注册")
+    
+    # 初始化 Redis 连接
+    try:
+        from infra.infrastructure.cache.cache import cache
+        await cache.connect()
+        logger.info("✅ Redis 连接已初始化")
+    except Exception as e:
+        logger.error(f"❌ Redis 连接初始化失败: {e}")
+        # Redis 连接失败不影响应用启动，但会影响相关功能
+        logger.warning("⚠️  在线用户等功能将不可用")
 
     # 初始化服务接口层（系统级）
     await ServiceInitializer.initialize_services()
@@ -160,6 +170,14 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # 关闭 Redis 连接
+    try:
+        from infra.infrastructure.cache.cache import cache
+        await cache.disconnect()
+        logger.info("✅ Redis 连接已关闭")
+    except Exception as e:
+        logger.warning(f"关闭 Redis 连接时出错: {e}")
+    
     # ⚠️ 注意：close_db_connections 已经在 register_db 中注册为 shutdown 事件
     # 这里不需要再次关闭，避免重复关闭导致错误
     # await Tortoise.close_connections()
