@@ -62,10 +62,11 @@ async def get_operation_logs(
     )
 
 
-@router.get("/stats", response_model=OperationLogStatsResponse)
+@router.get("/statistics", response_model=OperationLogStatsResponse)
 async def get_operation_log_stats(
     start_time: Optional[datetime] = Query(None, description="开始时间过滤"),
     end_time: Optional[datetime] = Query(None, description="结束时间过滤"),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -74,6 +75,8 @@ async def get_operation_log_stats(
     Args:
         start_time: 开始时间过滤
         end_time: 结束时间过滤
+        current_user: 当前用户
+        tenant_id: 当前组织ID
         
     Returns:
         OperationLogStatsResponse: 操作日志统计
@@ -82,5 +85,28 @@ async def get_operation_log_stats(
         tenant_id=tenant_id,
         start_time=start_time,
         end_time=end_time,
+    )
+
+
+@router.get("/{uuid}", response_model=OperationLogResponse)
+async def get_operation_log(
+    uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取操作日志详情
+    
+    Args:
+        uuid: 操作日志UUID
+        current_user: 当前用户
+        tenant_id: 当前组织ID
+        
+    Returns:
+        OperationLogResponse: 操作日志详情
+    """
+    return await OperationLogService.get_operation_log_by_uuid(
+        tenant_id=tenant_id,
+        uuid=uuid,
     )
 

@@ -5,12 +5,12 @@
  * 支持树形结构展示、创建、编辑、删除等功能。
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown, Card } from 'antd';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, MoreOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Drawer, Modal, Tree, Empty, Dropdown } from 'antd';
+import { FormModalTemplate, DetailDrawerTemplate, TwoColumnLayout, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import {
   getMenuTree,
@@ -34,10 +34,12 @@ const MenuListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { currentUser } = useGlobalStore();
   const formRef = useRef<ProFormInstance>();
+  const rightFormRef = useRef<ProFormInstance>();
   const [treeData, setTreeData] = useState<DataNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<Menu | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [autoExpandParent, setAutoExpandParent] = useState(true);
+  const [treeSearchValue, setTreeSearchValue] = useState<string>('');
   
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -86,76 +88,9 @@ const MenuListPage: React.FC = () => {
       // 转换为 Ant Design Tree 原生数据格式
       const convertToTreeData = (items: MenuTree[]): DataNode[] => {
         return items.map(item => {
-          // 构建节点标题
-          const titleContent = (
-            <div className="menu-tree-title-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-              <div className="menu-tree-title-left" style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                <span className="menu-tree-text" style={{ fontWeight: 500 }}>{item.name}</span>
-                <div className="menu-tree-tags" style={{ display: 'flex', gap: '4px' }}>
-                  <Tag color={item.is_active ? 'success' : 'default'}>
-                    {item.is_active ? '启用' : '禁用'}
-                  </Tag>
-                  {item.is_external && (
-                    <Tag color="orange">外部链接</Tag>
-                  )}
-                  {item.path && (
-                    <Tag color="blue">{item.path}</Tag>
-                  )}
-                  {item.children && item.children.length > 0 && (
-                    <Tag color="purple">{item.children.length} 子菜单</Tag>
-                  )}
-                </div>
-              </div>
-              <div className="menu-tree-actions">
-                <Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'view',
-                        label: '查看详情',
-                        icon: <EyeOutlined />,
-                        onClick: () => handleView(item),
-                      },
-                      {
-                        key: 'edit',
-                        label: '编辑',
-                        icon: <EditOutlined />,
-                        onClick: () => handleEdit(item),
-                      },
-                      {
-                        key: 'add-child',
-                        label: '添加子菜单',
-                        icon: <PlusOutlined />,
-                        onClick: () => handleCreate(item.uuid),
-                      },
-                      {
-                        type: 'divider',
-                      },
-                      {
-                        key: 'delete',
-                        label: '删除',
-                        icon: <DeleteOutlined />,
-                        danger: true,
-                        onClick: () => handleDelete(item),
-                      },
-                    ],
-                  }}
-                  trigger={['click']}
-                >
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<MoreOutlined />}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ opacity: 0.6 }}
-                  />
-                </Dropdown>
-              </div>
-            </div>
-          );
-
+          // 只显示菜单名
           return {
-            title: titleContent,
+            title: item.name,
             key: item.uuid,
             isLeaf: !item.children || item.children.length === 0,
             children: item.children && item.children.length > 0 ? convertToTreeData(item.children) : undefined,
@@ -193,11 +128,43 @@ const MenuListPage: React.FC = () => {
   }, [currentUser]);
 
   /**
+   * 过滤树数据（根据搜索关键词）
+   */
+  const filterTreeData = (nodes: DataNode[], keyword: string): DataNode[] => {
+    if (!keyword.trim()) {
+      return nodes;
+    }
+    
+    const filtered: DataNode[] = [];
+    const keywordLower = keyword.toLowerCase();
+    
+    nodes.forEach(node => {
+      const menu = node.data as Menu;
+      const matches = menu?.name?.toLowerCase().includes(keywordLower) ||
+                     menu?.path?.toLowerCase().includes(keywordLower);
+      
+      const filteredChildren = node.children ? filterTreeData(node.children, keyword) : [];
+      
+      if (matches || filteredChildren.length > 0) {
+        filtered.push({
+          ...node,
+          children: filteredChildren.length > 0 ? filteredChildren : undefined,
+        });
+      }
+    });
+    
+    return filtered;
+  };
+
+  const filteredTreeData = useMemo(() => filterTreeData(treeData, treeSearchValue), [treeData, treeSearchValue]);
+
+  /**
    * 处理树节点选择
    */
-  const handleSelect = (selectedKeys: React.Key[]) => {
+  const handleSelect = async (selectedKeys: React.Key[]) => {
     if (selectedKeys.length === 0) {
       setSelectedNode(null);
+      setDetailData(null);
       return;
     }
     
@@ -217,7 +184,35 @@ const MenuListPage: React.FC = () => {
     
     const node = findNode(treeData, selectedKeys[0]);
     if (node && node.data) {
-      setSelectedNode(node.data as Menu);
+      const menu = node.data as Menu;
+      setSelectedNode(menu);
+      
+      // 自动加载详情并填充到右侧表单
+      try {
+        setDetailLoading(true);
+        const detail = await getMenuDetail(menu.uuid);
+        setDetailData(detail);
+        
+        // 填充表单数据
+        rightFormRef.current?.setFieldsValue({
+          name: detail.name,
+          path: detail.path,
+          icon: detail.icon,
+          component: detail.component,
+          permission_code: detail.permission_code,
+          application_uuid: detail.application_uuid,
+          parent_uuid: detail.parent_uuid,
+          sort_order: detail.sort_order,
+          is_active: detail.is_active,
+          is_external: detail.is_external,
+          external_url: detail.external_url,
+          meta: detail.meta ? JSON.stringify(detail.meta, null, 2) : '',
+        });
+      } catch (error: any) {
+        messageApi.error(error.message || '获取菜单详情失败');
+      } finally {
+        setDetailLoading(false);
+      }
     }
   };
 
@@ -403,42 +398,182 @@ const MenuListPage: React.FC = () => {
   }
 
   return (
-    <ListPageTemplate>
-      <Card>
-        <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
+    <>
+      <TwoColumnLayout
+        leftPanel={{
+          search: {
+            placeholder: '搜索菜单',
+            value: treeSearchValue,
+            onChange: setTreeSearchValue,
+            allowClear: true,
+          },
+          actions: [
             <Button
+              key="create"
               type="primary"
               icon={<PlusOutlined />}
+              block
               onClick={() => handleCreate()}
             >
               创建菜单
-            </Button>
-          </div>
-          <div>
+            </Button>,
             <Button
+              key="expand"
               icon={expandedKeys.length === 0 ? <ExpandOutlined /> : <CompressOutlined />}
+              block
               onClick={handleExpandAll}
             >
               {expandedKeys.length === 0 ? '展开全部' : '收起全部'}
-            </Button>
-          </div>
-        </div>
-
-        {treeData.length === 0 ? (
-          <Empty description="暂无菜单数据" />
-        ) : (
-          <Tree
-            treeData={treeData}
-            expandedKeys={expandedKeys}
-            selectedKeys={selectedNode ? [selectedNode.uuid] : []}
-            onExpand={(keys) => setExpandedKeys(keys as React.Key[])}
-            onSelect={handleSelect}
-            autoExpandParent={autoExpandParent}
-            blockNode
-          />
-        )}
-      </Card>
+            </Button>,
+          ],
+          tree: {
+            treeData: filteredTreeData.length > 0 || !treeSearchValue.trim() ? filteredTreeData : treeData,
+            selectedKeys: selectedNode ? [selectedNode.uuid] : [],
+            expandedKeys,
+            onSelect: handleSelect,
+            onExpand: (keys) => setExpandedKeys(keys as React.Key[]),
+            blockNode: true,
+            autoExpandParent,
+          },
+          width: 350,
+        }}
+        rightPanel={{
+          header: {
+            center: selectedNode ? (
+              <Space>
+                <span style={{ fontWeight: 500, fontSize: 16 }}>菜单详情</span>
+                {selectedNode.is_active ? (
+                  <Tag color="success">启用</Tag>
+                ) : (
+                  <Tag>禁用</Tag>
+                )}
+                {selectedNode.is_external && <Tag color="orange">外部链接</Tag>}
+              </Space>
+            ) : (
+              <span style={{ fontWeight: 500, fontSize: 16 }}>请选择菜单</span>
+            ),
+            right: selectedNode ? (
+              <Space>
+                <Button icon={<EditOutlined />} onClick={() => handleEdit(selectedNode)}>
+                  编辑
+                </Button>
+                <Button icon={<EyeOutlined />} onClick={() => handleView(selectedNode)}>
+                  查看详情
+                </Button>
+              </Space>
+            ) : null,
+          },
+          content: selectedNode ? (
+            <div style={{ padding: '24px' }}>
+              <ProForm
+                formRef={rightFormRef}
+                onFinish={async (values) => {
+                  try {
+                    setFormLoading(true);
+                    
+                    // 处理 meta 字段（如果是字符串，转换为 JSON）
+                    if (values.meta && typeof values.meta === 'string') {
+                      try {
+                        values.meta = JSON.parse(values.meta);
+                      } catch {
+                        values.meta = {};
+                      }
+                    }
+                    
+                    await updateMenu(selectedNode.uuid, values);
+                    messageApi.success('更新成功');
+                    loadMenuTree();
+                    
+                    // 重新加载详情
+                    const detail = await getMenuDetail(selectedNode.uuid);
+                    setDetailData(detail);
+                  } catch (error: any) {
+                    messageApi.error(error.message || '更新失败');
+                    throw error;
+                  } finally {
+                    setFormLoading(false);
+                  }
+                }}
+                submitter={{
+                  searchConfig: {
+                    submitText: '保存',
+                  },
+                  resetButtonProps: {
+                    style: { display: 'none' },
+                  },
+                }}
+                loading={detailLoading}
+                layout="vertical"
+              >
+                <ProFormText
+                  name="name"
+                  label="菜单名称"
+                  rules={[{ required: true, message: '请输入菜单名称' }]}
+                  placeholder="请输入菜单名称"
+                />
+                <ProFormText
+                  name="path"
+                  label="菜单路径"
+                  placeholder="请输入菜单路径（如：/system/users）"
+                />
+                <ProFormText
+                  name="icon"
+                  label="菜单图标"
+                  placeholder="请输入 Ant Design 图标名称（如：UserOutlined）"
+                />
+                <ProFormText
+                  name="component"
+                  label="前端组件路径"
+                  placeholder="请输入前端组件路径（可选）"
+                />
+                <SafeProFormSelect
+                  name="application_uuid"
+                  label="关联应用"
+                  options={applications}
+                  placeholder="请选择关联应用（可选）"
+                />
+                <ProFormText
+                  name="permission_code"
+                  label="权限代码"
+                  placeholder="请输入权限代码（可选）"
+                />
+                <ProFormText
+                  name="parent_uuid"
+                  label="父菜单UUID"
+                  placeholder="父菜单UUID（只读）"
+                  disabled={true}
+                />
+                <ProFormText
+                  name="sort_order"
+                  label="排序顺序"
+                  fieldProps={{ type: 'number', min: 0 }}
+                />
+                <ProFormSwitch
+                  name="is_active"
+                  label="是否启用"
+                />
+                <ProFormSwitch
+                  name="is_external"
+                  label="是否外部链接"
+                />
+                <ProFormText
+                  name="external_url"
+                  label="外部链接URL"
+                  placeholder="请输入外部链接URL（如果 is_external 为 true）"
+                />
+                <ProFormTextArea
+                  name="meta"
+                  label="菜单元数据（JSON）"
+                  placeholder='请输入 JSON 格式的元数据（可选，如：{"key": "value"})'
+                  fieldProps={{ rows: 4 }}
+                />
+              </ProForm>
+            </div>
+          ) : (
+            <Empty description="请从左侧选择菜单进行编辑" style={{ marginTop: 100 }} />
+          ),
+        }}
+      />
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
@@ -549,7 +684,7 @@ const MenuListPage: React.FC = () => {
         columns={detailColumns}
         column={1}
       />
-    </ListPageTemplate>
+    </>
   );
 };
 

@@ -61,8 +61,14 @@ export async function getOperationLogStats(params?: {
   start_time?: string;
   end_time?: string;
 }): Promise<OperationLogStats> {
-  return apiRequest<OperationLogStats>('/core/operation-logs/stats', {
+  return apiRequest<OperationLogStats>('/core/operation-logs/statistics', {
     params,
   });
 }
 
+/**
+ * 根据UUID获取操作日志详情
+ */
+export async function getOperationLogByUuid(uuid: string): Promise<OperationLog> {
+  return apiRequest<OperationLog>(`/core/operation-logs/${uuid}`);
+}

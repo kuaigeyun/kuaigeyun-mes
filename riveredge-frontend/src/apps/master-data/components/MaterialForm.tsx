@@ -88,8 +88,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [customerCodes, setCustomerCodes] = useState<CustomerCodeMapping[]>([]);
   const [supplierCodes, setSupplierCodes] = useState<SupplierCodeMapping[]>([]);
 
-  // 默认值数据
-  const [defaults, setDefaults] = useState<MaterialDefaults>({});
 
   /**
    * 加载客户列表
@@ -220,18 +218,42 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
         
         // 加载默认值（兼容处理：后端可能返回 snake_case 或 camelCase）
+        // 将默认值转换为表单字段格式（对象数组转换为 ID 数组）
         const materialDefaults = (material as any).defaults;
         if (materialDefaults) {
-          setDefaults(materialDefaults);
-        } else {
-          setDefaults({});
+          const formDefaults: any = { ...materialDefaults };
+          
+          // 将对象数组转换为 ID 数组
+          if (materialDefaults.defaultSuppliers && Array.isArray(materialDefaults.defaultSuppliers)) {
+            formDefaults.defaultSupplierIds = materialDefaults.defaultSuppliers.map((s: any) => s.supplierId || s.supplier_id);
+          }
+          
+          if (materialDefaults.defaultCustomers && Array.isArray(materialDefaults.defaultCustomers)) {
+            formDefaults.defaultCustomerIds = materialDefaults.defaultCustomers.map((c: any) => c.customerId || c.customer_id);
+          }
+          
+          if (materialDefaults.defaultWarehouses && Array.isArray(materialDefaults.defaultWarehouses)) {
+            formDefaults.defaultWarehouseIds = materialDefaults.defaultWarehouses.map((w: any) => w.warehouseId || w.warehouse_id);
+          }
+          
+          // 移除对象数组字段（已转换为 ID 数组）
+          delete formDefaults.defaultSuppliers;
+          delete formDefaults.defaultCustomers;
+          delete formDefaults.defaultWarehouses;
+          delete formDefaults.defaultProcessRoute; // 只保留 UUID
+          
+          // 设置到表单
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({
+              defaults: formDefaults,
+            });
+          }, 100);
         }
       } else {
         // 新建模式，重置数据
         setDepartmentCodes([]);
         setCustomerCodes([]);
         setSupplierCodes([]);
-        setDefaults({});
       }
     }
   }, [open, isEdit, material]);
@@ -297,9 +319,71 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    */
   const handleSubmit = async (values: any) => {
     try {
+      // 处理默认值数据转换
+      const formDefaults = values.defaults || {};
+      const processedDefaults: any = { ...formDefaults };
+      
+      // 将 ID 数组转换为对象数组
+      if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
+        processedDefaults.defaultSuppliers = formDefaults.defaultSupplierIds.map((id: number, index: number) => {
+          const supplier = suppliers.find(s => s.id === id);
+          return {
+            supplierId: id,
+            supplierUuid: supplier?.uuid,
+            supplierName: supplier?.name,
+            priority: index + 1,
+          };
+        });
+        delete processedDefaults.defaultSupplierIds;
+      }
+      
+      if (formDefaults.defaultCustomerIds && Array.isArray(formDefaults.defaultCustomerIds)) {
+        processedDefaults.defaultCustomers = formDefaults.defaultCustomerIds.map((id: number) => {
+          const customer = customers.find(c => c.id === id);
+          return {
+            customerId: id,
+            customerUuid: customer?.uuid,
+            customerName: customer?.name,
+          };
+        });
+        delete processedDefaults.defaultCustomerIds;
+      }
+      
+      if (formDefaults.defaultWarehouseIds && Array.isArray(formDefaults.defaultWarehouseIds)) {
+        processedDefaults.defaultWarehouses = formDefaults.defaultWarehouseIds.map((id: number, index: number) => {
+          const warehouse = warehouses.find(w => w.id === id);
+          return {
+            warehouseId: id,
+            warehouseUuid: warehouse?.uuid,
+            warehouseName: warehouse?.name,
+            priority: index + 1,
+          };
+        });
+        delete processedDefaults.defaultWarehouseIds;
+      }
+      
+      // 处理默认工艺路线
+      if (formDefaults.defaultProcessRouteUuid && processRoutes.length > 0) {
+        const route = processRoutes.find(pr => pr.uuid === formDefaults.defaultProcessRouteUuid);
+        if (route) {
+          processedDefaults.defaultProcessRoute = route.id;
+          processedDefaults.defaultProcessRouteUuid = route.uuid;
+        }
+      }
+      
+      // 过滤空值
+      const filteredDefaults: any = {};
+      Object.keys(processedDefaults).forEach(key => {
+        const value = processedDefaults[key];
+        if (value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+          filteredDefaults[key] = value;
+        }
+      });
+      
       // 组装完整的数据
+      const { defaults: _defaults, ...restValues } = values;
       const submitData: MaterialCreate | MaterialUpdate = {
-        ...values,
+        ...restValues,
         // 部门编码
         departmentCodes: departmentCodes.length > 0 ? departmentCodes.map(code => ({
           code_type: code.code_type,
@@ -320,7 +404,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           description: code.description,
         })) : undefined,
         // 默认值
-        defaults: Object.keys(defaults).length > 0 ? defaults : undefined,
+        defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
       };
 
       await onFinish(submitData);
@@ -346,49 +430,72 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   return (
     <>
       <style>{`
-        /* 确保 Modal 内的 Collapse 占满宽度并使用标准 padding */
-        .ant-modal .ant-collapse {
-          width: 100% !important;
-          margin: 0 !important;
+        /* ==================== MaterialForm Modal 样式 - 完全重写（按 Ant Design 最佳实践） ==================== */
+        /* 备份说明：原样式已移除，以下为按 Ant Design 最佳实践完全重写的样式 */
+        
+        /* Modal 内的 Tabs 内容区域 - 去除顶部多余 padding */
+        .material-form-modal .ant-pro-form .ant-tabs-content-holder {
+          padding-top: 0;
         }
-        .ant-modal .ant-collapse-item {
-          width: 100% !important;
+        
+        /* Modal 内的 Tab 内容 - 确保占满宽度并统一边距（使用硬编码宽度） */
+        .material-form-modal .ant-pro-form .ant-tabs-tabpane {
+          width: 968px;
+          padding: 0 8px 16px 8px;
+          box-sizing: border-box;
         }
-        .ant-modal .ant-collapse-header {
-          width: 100% !important;
+        
+        /* 基本信息 和 变体管理 Tab - 移除左右padding */
+        .material-form-modal .ant-pro-form .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane:nth-child(1),
+        .material-form-modal .ant-pro-form .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane:nth-child(2) {
+          padding-left: 0;
+          padding-right: 0;
         }
-        .ant-modal .ant-collapse-content-box {
-          padding: 16px !important;
+        
+        /* Modal 内的 Collapse - 确保占满宽度 */
+        .material-form-modal .ant-collapse {
+          width: 100%;
         }
-        /* Tabs 内容区域底部 padding，确保按钮上方有间距 */
-        .ant-modal .ant-tabs-content-holder {
-          padding-bottom: 16px !important;
+        
+        /* 默认值设置Tab的Collapse - 增加底部margin */
+        .material-form-modal .ant-tabs-tabpane .ant-collapse {
+          margin-bottom: 16px;
         }
-        /* 确保 Modal 内的 Table 占满宽度 */
-        .ant-modal .ant-table-wrapper {
-          width: 100% !important;
-          max-width: 100% !important;
+        
+        /* Modal 内 Collapse 的 Panel 内容 - 确保占满宽度 */
+        .material-form-modal .ant-collapse-content-box {
+          width: 100%;
         }
-        .ant-modal .ant-table {
-          width: 100% !important;
-          max-width: 100% !important;
+        
+        /* Modal 内 Collapse 的 Panel 内容 - 确保占满宽度 */
+        .material-form-modal .ant-collapse-content-box {
+          width: 100%;
         }
-        .ant-modal .ant-table-container {
-          width: 100% !important;
-          max-width: 100% !important;
+        
+        /* Modal 内的 Table - 确保占满宽度 */
+        .material-form-modal .ant-table-wrapper {
+          width: 100%;
         }
-        .ant-modal .ant-table-body {
-          width: 100% !important;
-          max-width: 100% !important;
+        
+        /* Modal 内的 Alert - 确保间距合理 */
+        .material-form-modal .ant-alert {
+          margin-bottom: 16px;
+        }
+        .material-form-modal .ant-alert:last-child {
+          margin-bottom: 0;
+        }
+        .ant-tabs-nav {
+          margin: 0 8px 16px 8px !important;
         }
       `}</style>
       <Modal
+        className="material-form-modal"
         title={isEdit ? '编辑物料' : '新建物料'}
         open={open}
         onCancel={onClose}
         footer={null}
         width={1000}
-        destroyOnHidden
+        destroyOnClose
       >
         <ProForm
         formRef={formRef}
@@ -430,9 +537,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               label: '变体管理',
               disabled: !variantManaged,
               children: (
-                <VariantManagementTab
-                  formRef={formRef}
-                />
+                <VariantManagementTab />
               ),
             },
             {
@@ -465,7 +570,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               label: '默认值设置',
               children: (
                 <DefaultsTab
-                  defaults={defaults}
                   suppliers={suppliers}
                   customers={customers}
                   warehouses={warehouses}
@@ -474,7 +578,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   customersLoading={customersLoading}
                   warehousesLoading={warehousesLoading}
                   processRoutesLoading={processRoutesLoading}
-                  onDefaultsChange={setDefaults}
                 />
               ),
             },
@@ -1034,13 +1137,8 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
 /**
  * 变体管理标签页
  */
-interface VariantManagementTabProps {
-  formRef: React.RefObject<ProFormInstance>;
-}
-
-const VariantManagementTab: React.FC<VariantManagementTabProps> = ({ formRef }) => {
+const VariantManagementTab: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const [variantAttributes, setVariantAttributes] = useState<Record<string, any>>({});
   const [variantAttributeDefinitions, setVariantAttributeDefinitions] = useState<VariantAttributeDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
 
@@ -1063,98 +1161,6 @@ const VariantManagementTab: React.FC<VariantManagementTabProps> = ({ formRef }) 
     loadDefinitions();
   }, []);
 
-  // 初始化时从表单获取变体属性
-  useEffect(() => {
-    const formValues = formRef.current?.getFieldsValue();
-    if (formValues?.variantAttributes) {
-      setVariantAttributes(formValues.variantAttributes);
-    }
-  }, []);
-
-  const handleAttributeChange = (attributeName: string, value: any) => {
-    const newAttributes = {
-      ...variantAttributes,
-      [attributeName]: value,
-    };
-    setVariantAttributes(newAttributes);
-    formRef.current?.setFieldsValue({
-      variantAttributes: newAttributes,
-    });
-  };
-
-  // 渲染属性输入组件
-  const renderAttributeInput = (def: VariantAttributeDefinition) => {
-    const value = variantAttributes[def.attribute_name];
-    
-    switch (def.attribute_type) {
-      case 'enum':
-        return (
-          <Select
-            value={value}
-            onChange={(val) => handleAttributeChange(def.attribute_name, val)}
-            placeholder={`请选择${def.display_name}`}
-            style={{ width: '100%' }}
-            options={def.enum_values?.map(v => ({ label: v, value: v }))}
-          />
-        );
-      
-      case 'text':
-        return (
-          <Input
-            value={value}
-            onChange={(e) => handleAttributeChange(def.attribute_name, e.target.value)}
-            placeholder={`请输入${def.display_name}`}
-            maxLength={def.validation_rules?.max_length}
-          />
-        );
-      
-      case 'number':
-        return (
-          <Input
-            type="number"
-            value={value}
-            onChange={(e) => handleAttributeChange(def.attribute_name, parseFloat(e.target.value) || 0)}
-            placeholder={`请输入${def.display_name}`}
-            min={def.validation_rules?.min}
-            max={def.validation_rules?.max}
-          />
-        );
-      
-      case 'date':
-        return (
-          <Input
-            type="date"
-            value={value}
-            onChange={(e) => handleAttributeChange(def.attribute_name, e.target.value)}
-            placeholder={`请选择${def.display_name}`}
-          />
-        );
-      
-      case 'boolean':
-        return (
-          <Select
-            value={value}
-            onChange={(val) => handleAttributeChange(def.attribute_name, val)}
-            placeholder={`请选择${def.display_name}`}
-            style={{ width: '100%' }}
-            options={[
-              { label: '是', value: true },
-              { label: '否', value: false },
-            ]}
-          />
-        );
-      
-      default:
-        return (
-          <Input
-            value={value}
-            onChange={(e) => handleAttributeChange(def.attribute_name, e.target.value)}
-            placeholder={`请输入${def.display_name}`}
-          />
-        );
-    }
-  };
-
   if (definitionsLoading) {
     return <div>加载中...</div>;
   }
@@ -1170,55 +1176,267 @@ const VariantManagementTab: React.FC<VariantManagementTabProps> = ({ formRef }) 
 
   return (
     <Row gutter={16}>
-      {variantAttributeDefinitions.map((def) => (
-        <Col span={12} key={def.attribute_name}>
-          <ProForm.Item
-            name={['variantAttributes', def.attribute_name]}
-            label={def.display_name}
-            required={def.is_required}
-            tooltip={def.description}
-            rules={[
-              {
-                required: def.is_required,
-                message: `请输入${def.display_name}`,
-              },
-              {
-                validator: async (_, value) => {
-                  if (!value && def.is_required) {
-                    throw new Error(`请输入${def.display_name}`);
-                  }
-                  // 验证属性值
-                  if (value) {
-                    try {
-                      const result = await variantAttributeApi.validate({
-                        attribute_name: def.attribute_name,
-                        attribute_value: value,
-                      });
-                      if (!result.is_valid) {
-                        throw new Error(result.error_message || '属性值验证失败');
-                      }
-                    } catch (error: any) {
-                      throw new Error(error.message || '属性值验证失败');
-                    }
-                  }
-                },
-              },
-            ]}
-          >
-            {renderAttributeInput(def)}
-          </ProForm.Item>
-        </Col>
-      ))}
-      {Object.keys(variantAttributes).length > 0 && (
-        <Col span={24}>
-          <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>当前变体属性：</div>
-            <pre style={{ margin: 0, fontSize: 12 }}>
-              {JSON.stringify(variantAttributes, null, 2)}
-            </pre>
-          </div>
-        </Col>
-      )}
+      {variantAttributeDefinitions.map((def) => {
+        const fieldName = ['variantAttributes', def.attribute_name];
+        
+        // 根据属性类型渲染对应的ProForm组件
+        switch (def.attribute_type) {
+          case 'enum':
+            return (
+              <Col span={12} key={def.attribute_name}>
+                <ProFormSelect
+                  name={fieldName}
+                  label={def.display_name}
+                  placeholder={`请选择${def.display_name}`}
+                  required={def.is_required}
+                  tooltip={def.description}
+                  options={def.enum_values?.map(v => ({ label: v, value: v }))}
+                  rules={[
+                    {
+                      required: def.is_required,
+                      message: `请选择${def.display_name}`,
+                    },
+                    {
+                      validator: async (_: any, value: any) => {
+                        if (!value && def.is_required) {
+                          throw new Error(`请选择${def.display_name}`);
+                        }
+                        // 验证属性值
+                        if (value) {
+                          try {
+                            const result = await variantAttributeApi.validate({
+                              attribute_name: def.attribute_name,
+                              attribute_value: value,
+                            });
+                            if (!result.is_valid) {
+                              throw new Error(result.error_message || '属性值验证失败');
+                            }
+                          } catch (error: any) {
+                            throw new Error(error.message || '属性值验证失败');
+                          }
+                        }
+                      },
+                    },
+                  ]}
+                />
+              </Col>
+            );
+          
+          case 'text':
+            return (
+              <Col span={12} key={def.attribute_name}>
+                <ProFormText
+                  name={fieldName}
+                  label={def.display_name}
+                  placeholder={`请输入${def.display_name}`}
+                  required={def.is_required}
+                  tooltip={def.description}
+                  fieldProps={{
+                    maxLength: def.validation_rules?.max_length,
+                  }}
+                  rules={[
+                    {
+                      required: def.is_required,
+                      message: `请输入${def.display_name}`,
+                    },
+                    {
+                      validator: async (_: any, value: any) => {
+                        if (!value && def.is_required) {
+                          throw new Error(`请输入${def.display_name}`);
+                        }
+                        // 验证属性值
+                        if (value) {
+                          try {
+                            const result = await variantAttributeApi.validate({
+                              attribute_name: def.attribute_name,
+                              attribute_value: value,
+                            });
+                            if (!result.is_valid) {
+                              throw new Error(result.error_message || '属性值验证失败');
+                            }
+                          } catch (error: any) {
+                            throw new Error(error.message || '属性值验证失败');
+                          }
+                        }
+                      },
+                    },
+                  ]}
+                />
+              </Col>
+            );
+          
+          case 'number':
+            return (
+              <Col span={12} key={def.attribute_name}>
+                <ProFormDigit
+                  name={fieldName}
+                  label={def.display_name}
+                  placeholder={`请输入${def.display_name}`}
+                  required={def.is_required}
+                  tooltip={def.description}
+                  fieldProps={{
+                    min: def.validation_rules?.min,
+                    max: def.validation_rules?.max,
+                  }}
+                  rules={[
+                    {
+                      required: def.is_required,
+                      message: `请输入${def.display_name}`,
+                    },
+                    {
+                      validator: async (_: any, value: any) => {
+                        if (!value && def.is_required) {
+                          throw new Error(`请输入${def.display_name}`);
+                        }
+                        // 验证属性值
+                        if (value) {
+                          try {
+                            const result = await variantAttributeApi.validate({
+                              attribute_name: def.attribute_name,
+                              attribute_value: value,
+                            });
+                            if (!result.is_valid) {
+                              throw new Error(result.error_message || '属性值验证失败');
+                            }
+                          } catch (error: any) {
+                            throw new Error(error.message || '属性值验证失败');
+                          }
+                        }
+                      },
+                    },
+                  ]}
+                />
+              </Col>
+            );
+          
+          case 'date':
+            return (
+              <Col span={12} key={def.attribute_name}>
+                <ProFormText
+                  name={fieldName}
+                  label={def.display_name}
+                  placeholder={`请选择${def.display_name}`}
+                  required={def.is_required}
+                  tooltip={def.description}
+                  fieldProps={{
+                    type: 'date',
+                  }}
+                  rules={[
+                    {
+                      required: def.is_required,
+                      message: `请选择${def.display_name}`,
+                    },
+                    {
+                      validator: async (_: any, value: any) => {
+                        if (!value && def.is_required) {
+                          throw new Error(`请选择${def.display_name}`);
+                        }
+                        // 验证属性值
+                        if (value) {
+                          try {
+                            const result = await variantAttributeApi.validate({
+                              attribute_name: def.attribute_name,
+                              attribute_value: value,
+                            });
+                            if (!result.is_valid) {
+                              throw new Error(result.error_message || '属性值验证失败');
+                            }
+                          } catch (error: any) {
+                            throw new Error(error.message || '属性值验证失败');
+                          }
+                        }
+                      },
+                    },
+                  ]}
+                />
+              </Col>
+            );
+          
+          case 'boolean':
+            return (
+              <Col span={12} key={def.attribute_name}>
+                <ProFormSelect
+                  name={fieldName}
+                  label={def.display_name}
+                  placeholder={`请选择${def.display_name}`}
+                  required={def.is_required}
+                  tooltip={def.description}
+                  options={[
+                    { label: '是', value: true },
+                    { label: '否', value: false },
+                  ]}
+                  rules={[
+                    {
+                      required: def.is_required,
+                      message: `请选择${def.display_name}`,
+                    },
+                    {
+                      validator: async (_, value) => {
+                        if (!value && def.is_required) {
+                          throw new Error(`请选择${def.display_name}`);
+                        }
+                        // 验证属性值
+                        if (value !== undefined && value !== null) {
+                          try {
+                            const result = await variantAttributeApi.validate({
+                              attribute_name: def.attribute_name,
+                              attribute_value: value,
+                            });
+                            if (!result.is_valid) {
+                              throw new Error(result.error_message || '属性值验证失败');
+                            }
+                          } catch (error: any) {
+                            throw new Error(error.message || '属性值验证失败');
+                          }
+                        }
+                      },
+                    },
+                  ]}
+                />
+              </Col>
+            );
+          
+          default:
+            return (
+              <Col span={12} key={def.attribute_name}>
+                <ProFormText
+                  name={fieldName}
+                  label={def.display_name}
+                  placeholder={`请输入${def.display_name}`}
+                  required={def.is_required}
+                  tooltip={def.description}
+                  rules={[
+                    {
+                      required: def.is_required,
+                      message: `请输入${def.display_name}`,
+                    },
+                    {
+                      validator: async (_: any, value: any) => {
+                        if (!value && def.is_required) {
+                          throw new Error(`请输入${def.display_name}`);
+                        }
+                        // 验证属性值
+                        if (value) {
+                          try {
+                            const result = await variantAttributeApi.validate({
+                              attribute_name: def.attribute_name,
+                              attribute_value: value,
+                            });
+                            if (!result.is_valid) {
+                              throw new Error(result.error_message || '属性值验证失败');
+                            }
+                          } catch (error: any) {
+                            throw new Error(error.message || '属性值验证失败');
+                          }
+                        }
+                      },
+                    },
+                  ]}
+                />
+              </Col>
+            );
+        }
+      })}
     </Row>
   );
 };
@@ -1587,7 +1805,6 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
  * 默认值设置标签页
  */
 interface DefaultsTabProps {
-  defaults: MaterialDefaults;
   suppliers: Supplier[];
   customers: Customer[];
   warehouses: Warehouse[];
@@ -1596,11 +1813,9 @@ interface DefaultsTabProps {
   customersLoading: boolean;
   warehousesLoading: boolean;
   processRoutesLoading: boolean;
-  onDefaultsChange: (defaults: MaterialDefaults) => void;
 }
 
 const DefaultsTab: React.FC<DefaultsTabProps> = ({
-  defaults,
   suppliers,
   customers,
   warehouses,
@@ -1609,254 +1824,189 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
   customersLoading,
   warehousesLoading,
   processRoutesLoading,
-  onDefaultsChange,
 }) => {
-  const updateDefaults = (key: keyof MaterialDefaults, value: any) => {
-    onDefaultsChange({
-      ...defaults,
-      [key]: value,
-    });
-  };
-
   return (
     <Collapse defaultActiveKey={['finance', 'purchase', 'sale', 'inventory', 'production']}>
         {/* 财务默认值 */}
         <Panel header="财务默认值" key="finance">
-          <ProFormDigit
-            label="默认税率（%）"
-            placeholder="请输入默认税率，如：13表示13%"
-            min={0}
-            max={100}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultTaxRate,
-              onChange: (value) => updateDefaults('defaultTaxRate', value),
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormText
-            label="默认科目"
-            placeholder="请输入默认科目"
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultAccount,
-              onChange: (e) => updateDefaults('defaultAccount', e.target.value),
-            }}
-          />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultTaxRate"
+                label="默认税率（%）"
+                placeholder="请输入默认税率，如：13表示13%"
+                min={0}
+                max={100}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="defaults.defaultAccount"
+                label="默认科目"
+                placeholder="请输入默认科目"
+              />
+            </Col>
+          </Row>
         </Panel>
 
         {/* 采购默认值 */}
         <Panel header="采购默认值" key="purchase">
-          <ProFormSelect
-            label="默认供应商（可多选，按优先级排序）"
-            placeholder="请选择默认供应商"
-            colProps={{ span: 12 }}
-            options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-            fieldProps={{
-              mode: 'multiple',
-              loading: suppliersLoading,
-              showSearch: true,
-              filterOption: (input: string, option: any) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-              value: defaults.defaultSuppliers?.map(s => s.supplierId),
-              onChange: (values: number[]) => {
-                const selectedSuppliers = values.map((id, index) => {
-                  const supplier = suppliers.find(s => s.id === id);
-                  return {
-                    supplierId: id,
-                    supplierUuid: supplier?.uuid,
-                    supplierName: supplier?.name,
-                    priority: index + 1,
-                  };
-                });
-                updateDefaults('defaultSuppliers', selectedSuppliers);
-              },
-            }}
-          />
-          <ProFormDigit
-            label="默认采购价格"
-            placeholder="请输入默认采购价格"
-            min={0}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultPurchasePrice,
-              onChange: (value) => updateDefaults('defaultPurchasePrice', value),
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormText
-            label="默认采购单位"
-            placeholder="请输入默认采购单位"
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultPurchaseUnit,
-              onChange: (e) => updateDefaults('defaultPurchaseUnit', e.target.value),
-            }}
-          />
-          <ProFormDigit
-            label="默认采购周期（天）"
-            placeholder="请输入默认采购周期"
-            min={0}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultPurchaseLeadTime,
-              onChange: (value) => updateDefaults('defaultPurchaseLeadTime', value),
-              style: { width: '100%' },
-            }}
-          />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultSupplierIds"
+                label="默认供应商（可多选，按优先级排序）"
+                placeholder="请选择默认供应商"
+                options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: suppliersLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultPurchasePrice"
+                label="默认采购价格"
+                placeholder="请输入默认采购价格"
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="defaults.defaultPurchaseUnit"
+                label="默认采购单位"
+                placeholder="请输入默认采购单位"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultPurchaseLeadTime"
+                label="默认采购周期（天）"
+                placeholder="请输入默认采购周期"
+                min={0}
+              />
+            </Col>
+          </Row>
         </Panel>
 
         {/* 销售默认值 */}
         <Panel header="销售默认值" key="sale">
-          <ProFormDigit
-            label="默认销售价格"
-            placeholder="请输入默认销售价格"
-            min={0}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultSalePrice,
-              onChange: (value) => updateDefaults('defaultSalePrice', value),
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormText
-            label="默认销售单位"
-            placeholder="请输入默认销售单位"
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultSaleUnit,
-              onChange: (e) => updateDefaults('defaultSaleUnit', e.target.value),
-            }}
-          />
-          <ProFormSelect
-            label="默认客户（可多选）"
-            placeholder="请选择默认客户"
-            colProps={{ span: 12 }}
-            options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
-            fieldProps={{
-              mode: 'multiple',
-              loading: customersLoading,
-              showSearch: true,
-              filterOption: (input: string, option: any) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-              value: defaults.defaultCustomers?.map(c => c.customerId),
-              onChange: (values: number[]) => {
-                const selectedCustomers = values.map((id) => {
-                  const customer = customers.find(c => c.id === id);
-                  return {
-                    customerId: id,
-                    customerUuid: customer?.uuid,
-                    customerName: customer?.name,
-                  };
-                });
-                updateDefaults('defaultCustomers', selectedCustomers);
-              },
-            }}
-          />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultSalePrice"
+                label="默认销售价格"
+                placeholder="请输入默认销售价格"
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="defaults.defaultSaleUnit"
+                label="默认销售单位"
+                placeholder="请输入默认销售单位"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultCustomerIds"
+                label="默认客户（可多选）"
+                placeholder="请选择默认客户"
+                options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: customersLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+          </Row>
         </Panel>
 
         {/* 库存默认值 */}
         <Panel header="库存默认值" key="inventory">
-          <ProFormSelect
-            label="默认仓库（可多选，按优先级排序）"
-            placeholder="请选择默认仓库"
-            colProps={{ span: 12 }}
-            options={warehouses.map(w => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
-            fieldProps={{
-              mode: 'multiple',
-              loading: warehousesLoading,
-              showSearch: true,
-              filterOption: (input: string, option: any) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-              value: defaults.defaultWarehouses?.map(w => w.warehouseId),
-              onChange: (values: number[]) => {
-                const selectedWarehouses = values.map((id, index) => {
-                  const warehouse = warehouses.find(w => w.id === id);
-                  return {
-                    warehouseId: id,
-                    warehouseUuid: warehouse?.uuid,
-                    warehouseName: warehouse?.name,
-                    priority: index + 1,
-                  };
-                });
-                updateDefaults('defaultWarehouses', selectedWarehouses);
-              },
-            }}
-          />
-          <ProFormText
-            label="默认库位"
-            placeholder="请输入默认库位"
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultLocation,
-              onChange: (e) => updateDefaults('defaultLocation', e.target.value),
-            }}
-          />
-          <ProFormDigit
-            label="安全库存"
-            placeholder="请输入安全库存"
-            min={0}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.safetyStock,
-              onChange: (value) => updateDefaults('safetyStock', value),
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormDigit
-            label="最大库存"
-            placeholder="请输入最大库存"
-            min={0}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.maxStock,
-              onChange: (value) => updateDefaults('maxStock', value),
-              style: { width: '100%' },
-            }}
-          />
-          <ProFormDigit
-            label="最小库存"
-            placeholder="请输入最小库存"
-            min={0}
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.minStock,
-              onChange: (value) => updateDefaults('minStock', value),
-              style: { width: '100%' },
-            }}
-          />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultWarehouseIds"
+                label="默认仓库（可多选，按优先级排序）"
+                placeholder="请选择默认仓库"
+                options={warehouses.map(w => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: warehousesLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="defaults.defaultLocation"
+                label="默认库位"
+                placeholder="请输入默认库位"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.safetyStock"
+                label="安全库存"
+                placeholder="请输入安全库存"
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.maxStock"
+                label="最大库存"
+                placeholder="请输入最大库存"
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.minStock"
+                label="最小库存"
+                placeholder="请输入最小库存"
+                min={0}
+              />
+            </Col>
+          </Row>
         </Panel>
 
         {/* 生产默认值 */}
         <Panel header="生产默认值" key="production">
-          <ProFormSelect
-            label="默认工艺路线"
-            placeholder="请选择默认工艺路线"
-            colProps={{ span: 12 }}
-            options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
-            fieldProps={{
-              loading: processRoutesLoading,
-              showSearch: true,
-              filterOption: (input: string, option: any) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-              allowClear: true,
-              value: defaults.defaultProcessRouteUuid,
-              onChange: (value: string) => {
-                const route = processRoutes.find(pr => pr.uuid === value);
-                updateDefaults('defaultProcessRoute', route?.id);
-                updateDefaults('defaultProcessRouteUuid', value);
-              },
-            }}
-          />
-          <ProFormText
-            label="默认生产单位"
-            placeholder="请输入默认生产单位"
-            colProps={{ span: 12 }}
-            fieldProps={{
-              value: defaults.defaultProductionUnit,
-              onChange: (e) => updateDefaults('defaultProductionUnit', e.target.value),
-            }}
-          />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultProcessRouteUuid"
+                label="默认工艺路线"
+                placeholder="请选择默认工艺路线"
+                options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
+                fieldProps={{
+                  loading: processRoutesLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                  allowClear: true,
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="defaults.defaultProductionUnit"
+                label="默认生产单位"
+                placeholder="请输入默认生产单位"
+              />
+            </Col>
+          </Row>
         </Panel>
       </Collapse>
   );

@@ -47,6 +47,8 @@ export interface DataDictionaryListParams {
   page?: number;
   page_size?: number;
   is_active?: boolean;
+  name?: string;
+  code?: string;
 }
 
 /**
