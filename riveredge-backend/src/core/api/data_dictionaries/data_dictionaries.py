@@ -13,6 +13,7 @@ from core.schemas.data_dictionary import (
     DataDictionaryCreate,
     DataDictionaryUpdate,
     DataDictionaryResponse,
+    DataDictionaryListResponse,
 )
 from core.schemas.dictionary_item import (
     DictionaryItemCreate,
@@ -59,11 +60,13 @@ async def create_dictionary(
         )
 
 
-@router.get("", response_model=List[DataDictionaryResponse])
+@router.get("", response_model=DataDictionaryListResponse)
 async def list_dictionaries(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    name: Optional[str] = Query(None, description="字典名称（模糊搜索）"),
+    code: Optional[str] = Query(None, description="字典代码（模糊搜索）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
@@ -72,21 +75,28 @@ async def list_dictionaries(
     获取当前组织的数据字典列表，支持分页和筛选。
     
     Args:
-        skip: 跳过数量（默认 0）
-        limit: 限制数量（默认 100，最大 1000）
+        page: 页码（默认 1）
+        page_size: 每页数量（默认 20，最大 1000）
         is_active: 是否启用（可选）
+        name: 字典名称（模糊搜索，可选）
+        code: 字典代码（模糊搜索，可选）
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
-        List[DataDictionaryResponse]: 数据字典列表
+        DataDictionaryListResponse: 数据字典列表（分页）
     """
-    dictionaries = await DataDictionaryService.list_dictionaries(
+    dictionaries, total = await DataDictionaryService.list_dictionaries(
         tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        is_active=is_active
+        page=page,
+        page_size=page_size,
+        is_active=is_active,
+        name=name,
+        code=code,
     )
-    return [DataDictionaryResponse.model_validate(d) for d in dictionaries]
+    return DataDictionaryListResponse(
+        items=[DataDictionaryResponse.model_validate(d) for d in dictionaries],
+        total=total,
+    )
 
 
 @router.get("/{uuid}", response_model=DataDictionaryResponse)
@@ -319,10 +329,26 @@ async def list_items(
             uuid=dictionary_uuid
         )
         
-        return [
-            DictionaryItemResponse.model_validate(item, update={"dictionary_uuid": dictionary.uuid})
-            for item in items
-        ]
+        result = []
+        for item in items:
+            # 手动构建响应数据，因为 DictionaryItem 模型没有 dictionary_uuid 字段
+            response_data = {
+                "uuid": str(item.uuid),
+                "tenant_id": item.tenant_id,
+                "dictionary_uuid": str(dictionary.uuid),
+                "label": item.label,
+                "value": item.value,
+                "description": item.description,
+                "color": item.color,
+                "icon": item.icon,
+                "sort_order": item.sort_order,
+                "is_active": item.is_active,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+            }
+            response = DictionaryItemResponse.model_validate(response_data)
+            result.append(response)
+        return result
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

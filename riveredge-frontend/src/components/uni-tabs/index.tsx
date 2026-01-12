@@ -913,7 +913,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     <>
       <style>{`
         /* 标签栏样式优化 - 支持自定义背景色（支持透明度） */
-        .uni-tabs-container .ant-tabs {
+        .uni-tabs-header .ant-tabs {
           margin: 0 !important;
           margin-bottom: 0 !important;
           border: none !important;
@@ -921,11 +921,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           box-shadow: none !important;
           outline: none !important;
           background: ${tabsBgColor} !important;
+          padding-top: 2px !important;
+          padding-left: 8px !important;
         }
-          .ant-tabs{
-            padding-top: 2px;
-            padding-left: 8px;
-          }
         /* 覆盖 Ant Design Tabs 原生下边框样式 */
         .uni-tabs-container .ant-tabs-nav {
           margin: 0 !important;
@@ -1040,6 +1038,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-container .ant-tabs-content-holder {
           display: none;
         }
+        
         /* 移除标签底部指示线 */
         .uni-tabs-container .ant-tabs-ink-bar {
           display: none !important;
@@ -1509,12 +1508,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-container .ant-tabs-tab {
           overflow: visible !important;
         }
-          .ant-tabs-nav-more{
-            padding: 8px 0px 8px 8px!important;
-            box-shadow: none !important;
-          }
         /* 移除所有可能移动的阴影效果和分隔线 */
         .uni-tabs-container .ant-tabs-nav-more {
+          padding: 8px 0px 8px 8px !important;
           box-shadow: none !important;
           color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
         }

@@ -3426,9 +3426,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select .ant-select-arrow {
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)'} !important;
         }
-        .ant-select-content-value{
-          padding-left: 10px !important;
-        }
         /* 租户选择器所有状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selector,
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select-focused .ant-select-selector,

@@ -58,3 +58,13 @@ class DataDictionaryResponse(DataDictionaryBase):
     
     model_config = ConfigDict(from_attributes=True)
 
+
+class DataDictionaryListResponse(BaseModel):
+    """
+    数据字典列表响应 Schema
+    
+    用于返回数据字典列表（分页）。
+    """
+    items: List[DataDictionaryResponse] = Field(..., description="数据字典列表")
+    total: int = Field(..., ge=0, description="总数")
+

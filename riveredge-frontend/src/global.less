@@ -36,62 +36,49 @@ code {
   font-size: 0.9em;
 }
 
-/* 滚动条样式 - 使用主题变量，支持深色模式 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* 全局滚动条设置 - 不显示的滚动条不占用宽度 */
+/* Firefox */
+* {
+  scrollbar-width: none !important;
 }
 
-/* 隐藏滚动条按钮（小三角）- 使用最强制的方式 */
-::-webkit-scrollbar-button {
+/* IE/Edge */
+* {
+  -ms-overflow-style: none !important;
+}
+
+/* Chrome/Safari/Webkit - 全局隐藏滚动条且不占用宽度 */
+*::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  max-width: 0 !important;
-  max-height: 0 !important;
   background: transparent !important;
-  border: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
   -webkit-appearance: none !important;
   appearance: none !important;
 }
 
-/* 系统级隐藏所有滚动条轨道 - 最高优先级 */
-html body *::-webkit-scrollbar-track,
-html body ::-webkit-scrollbar-track,
-::-webkit-scrollbar-track {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
+/* 滚动条按钮 - 完全隐藏且不占用空间 */
+*::-webkit-scrollbar-button {
+  display: none !important;
   width: 0 !important;
   height: 0 !important;
-  clip-path: inset(100%) !important;
-  position: absolute !important;
-  pointer-events: none !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
+  background: transparent !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--ant-colorTextQuaternary);
-  border-radius: 4px;
-  border: 1px solid transparent;
-  background-clip: padding-box;
-  transition: background-color 0.2s ease;
+/* 滚动条轨道 - 完全隐藏且不占用空间 */
+*::-webkit-scrollbar-track {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ant-colorTextTertiary);
-}
-
-::-webkit-scrollbar-thumb:active {
-  background: var(--ant-colorTextSecondary);
+/* 滚动条滑块 - 完全隐藏且不占用空间 */
+*::-webkit-scrollbar-thumb {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 
 /* 高级搜索 Modal 动画统一 */
@@ -248,4 +235,15 @@ html body ::-webkit-scrollbar-track,
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
+}
+
+/* ProTable 全局边框设置（排除 uni-table 中的 ProTable） */
+/* 仅外圈边框模式：显示卡片边框，内部表格保持默认 */
+  .ant-table {
+  /* 显示卡片边框 */
+    border: 1px solid var(--ant-) !important;
+}
+
+  :where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-switcher:before{
+    top: 4px !important;
 }

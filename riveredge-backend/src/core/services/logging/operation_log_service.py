@@ -147,6 +147,32 @@ class OperationLogService:
         )
     
     @staticmethod
+    async def get_operation_log_by_uuid(
+        tenant_id: int,
+        uuid: str
+    ) -> OperationLogResponse:
+        """
+        根据UUID获取操作日志详情
+        
+        Args:
+            tenant_id: 组织ID
+            uuid: 操作日志UUID
+            
+        Returns:
+            OperationLogResponse: 操作日志详情
+            
+        Raises:
+            NotFoundError: 当操作日志不存在时抛出
+        """
+        from infra.exceptions.exceptions import NotFoundError
+        
+        log = await OperationLog.filter(tenant_id=tenant_id, uuid=uuid).first()
+        if not log:
+            raise NotFoundError("操作日志", uuid)
+        
+        return OperationLogResponse.model_validate(log)
+    
+    @staticmethod
     async def get_operation_log_stats(
         tenant_id: int,
         start_time: Optional[datetime] = None,
@@ -163,6 +189,8 @@ class OperationLogService:
         Returns:
             OperationLogStatsResponse: 操作日志统计
         """
+        from tortoise.functions import Count
+        
         # 构建查询条件
         query = Q(tenant_id=tenant_id)
         
@@ -175,18 +203,25 @@ class OperationLogService:
         # 查询总数
         total = await OperationLog.filter(query).count()
         
-        # 按操作类型统计
+        # 按操作类型统计（使用聚合查询优化性能）
+        # 注意：Tortoise ORM 的聚合查询语法是 annotate().group_by().values()
         by_type: Dict[str, int] = {}
-        logs_by_type = await OperationLog.filter(query).all()
-        for log in logs_by_type:
-            by_type[log.operation_type] = by_type.get(log.operation_type, 0) + 1
+        logs_by_type = await OperationLog.filter(query).annotate(
+            count=Count('id')
+        ).group_by('operation_type').values('operation_type', 'count')
         
-        # 按操作模块统计
+        for item in logs_by_type:
+            by_type[item['operation_type']] = item['count']
+        
+        # 按操作模块统计（使用聚合查询优化性能）
         by_module: Dict[str, int] = {}
-        logs_by_module = await OperationLog.filter(query).all()
-        for log in logs_by_module:
-            if log.operation_module:
-                by_module[log.operation_module] = by_module.get(log.operation_module, 0) + 1
+        logs_by_module = await OperationLog.filter(query & Q(operation_module__not_isnull=True)).annotate(
+            count=Count('id')
+        ).group_by('operation_module').values('operation_module', 'count')
+        
+        for item in logs_by_module:
+            if item['operation_module']:
+                by_module[item['operation_module']] = item['count']
         
         return OperationLogStatsResponse(
             total=total,

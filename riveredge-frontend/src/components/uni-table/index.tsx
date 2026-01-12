@@ -1124,8 +1124,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group-addon,
         html body .uni-table-fuzzy-search .anticon-search,
         html body .pro-table-button-container .uni-table-fuzzy-search .anticon-search,
-        html body .uni-table-fuzzy-search .ant-input-suffix .anticon,
-        html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-suffix .anticon,
         html body .uni-table-fuzzy-search .ant-input-group .ant-input-group-addon,
         html body .pro-table-button-container .uni-table-fuzzy-search .ant-input-group .ant-input-group-addon {
           display: none !important;
@@ -1254,6 +1252,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           search={false}
           className="uni-table-pro-table"
           style={{ margin: 0, padding: 0 }}
+          bordered={false}
+          cardBordered={true}
           toolbar={{
             // 合并自定义 actions 和用户传入的 actions
             actions: [

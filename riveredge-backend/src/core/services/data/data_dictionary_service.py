@@ -207,31 +207,53 @@ class DataDictionaryService:
     @staticmethod
     async def list_dictionaries(
         tenant_id: int,
-        skip: int = 0,
-        limit: int = 100,
-        is_active: Optional[bool] = None
-    ) -> List[DataDictionary]:
+        page: int = 1,
+        page_size: int = 20,
+        is_active: Optional[bool] = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
+    ) -> tuple[List[DataDictionary], int]:
         """
         获取字典列表
         
         Args:
             tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
+            page: 页码（从1开始）
+            page_size: 每页数量
             is_active: 是否启用（可选）
+            name: 字典名称（模糊搜索，可选）
+            code: 字典代码（模糊搜索，可选）
             
         Returns:
-            List[DataDictionary]: 字典列表
+            tuple[List[DataDictionary], int]: (字典列表, 总数)
         """
+        from tortoise.expressions import Q
+        
         query = DataDictionary.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
         
+        # 启用状态筛选
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        return await query.order_by("-created_at").offset(skip).limit(limit)
+        # 名称模糊搜索
+        if name:
+            query = query.filter(name__icontains=name)
+        
+        # 代码模糊搜索
+        if code:
+            query = query.filter(code__icontains=code)
+        
+        # 获取总数
+        total = await query.count()
+        
+        # 分页查询
+        offset = (page - 1) * page_size
+        dictionaries = await query.order_by("-created_at").offset(offset).limit(page_size).all()
+        
+        return dictionaries, total
     
     @staticmethod
     async def update_dictionary(

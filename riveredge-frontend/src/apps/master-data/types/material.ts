@@ -52,6 +52,30 @@ export interface MaterialCodeAlias {
   isPrimary: boolean;
 }
 
+// 多单位管理类型定义
+export interface MaterialUnit {
+  /** 单位名称 */
+  unit: string;
+  /** 换算分子（相对于基础单位，如1吨=1000kg，则numerator=1000，denominator=1） */
+  numerator: number;
+  /** 换算分母（相对于基础单位，如1kg=1000g，则numerator=1，denominator=1000） */
+  denominator: number;
+  /** 使用场景（purchase/sale/production/inventory） */
+  scenarios?: string[];
+}
+
+export interface MaterialUnits {
+  /** 辅助单位列表 */
+  units: MaterialUnit[];
+  /** 场景对应的单位映射 */
+  scenarios?: {
+    purchase?: string; // 采购单位
+    sale?: string; // 销售单位
+    production?: string; // 生产单位
+    inventory?: string; // 库存单位（默认等于baseUnit）
+  };
+}
+
 export interface Material {
   id: number;
   uuid: string;
@@ -63,7 +87,7 @@ export interface Material {
   materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit: string;
-  units?: Record<string, any>;
+  units?: MaterialUnits;
   batchManaged: boolean;
   variantManaged: boolean;
   variantAttributes?: Record<string, any>;
@@ -82,6 +106,7 @@ export interface Material {
 export interface DepartmentCodeMapping {
   code_type: string; // 编码类型（SALE/DES/PUR/WH/PROD等）
   code: string; // 编码
+  name?: string; // 名称
   department?: string; // 部门名称
   description?: string; // 描述
 }
@@ -91,6 +116,7 @@ export interface CustomerCodeMapping {
   customerUuid?: string; // 客户UUID
   customerName?: string; // 客户名称（用于显示）
   code: string; // 客户编码
+  name?: string; // 名称
   description?: string; // 描述
 }
 
@@ -99,6 +125,7 @@ export interface SupplierCodeMapping {
   supplierUuid?: string; // 供应商UUID
   supplierName?: string; // 供应商名称（用于显示）
   code: string; // 供应商编码
+  name?: string; // 名称
   description?: string; // 描述
 }
 
@@ -154,7 +181,7 @@ export interface MaterialCreate {
   materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit: string;
-  units?: Record<string, any>;
+  units?: MaterialUnits;
   batchManaged?: boolean;
   variantManaged?: boolean;
   variantAttributes?: Record<string, any>;
@@ -177,7 +204,7 @@ export interface MaterialUpdate {
   materialType?: string; // 物料类型（FIN/SEMI/RAW/PACK/AUX）
   specification?: string;
   baseUnit?: string;
-  units?: Record<string, any>;
+  units?: MaterialUnits;
   batchManaged?: boolean;
   variantManaged?: boolean;
   variantAttributes?: Record<string, any>;
