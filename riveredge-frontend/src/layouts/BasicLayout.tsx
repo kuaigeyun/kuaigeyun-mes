@@ -2563,6 +2563,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           --riveredge-menu-primary-color: ${token.colorPrimary};
           --ant-colorPrimary: ${token.colorPrimary};
           --ant-colorBgLayout: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')};
+          --ant-colorBorder: ${token.colorBorder};
+          --ant-borderRadius: ${token.borderRadius}px;
         }
         /* ==================== PageContainer 相关 ==================== */
         .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,

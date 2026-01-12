@@ -239,9 +239,10 @@ code {
 
 /* ProTable 全局边框设置（排除 uni-table 中的 ProTable） */
 /* 仅外圈边框模式：显示卡片边框，内部表格保持默认 */
-  .ant-table {
+  .ant-modal .ant-table {
   /* 显示卡片边框 */
-    border: 1px solid var(--ant-) !important;
+    border: 1px solid var(--ant-colorBorder) !important;
+    border-radius: var(--ant-borderRadius) !important;
 }
 
   :where(.css-dev-only-do-not-override-dbp7pc).ant-tree .ant-tree-switcher:before{
