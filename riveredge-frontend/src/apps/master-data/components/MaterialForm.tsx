@@ -445,11 +445,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           box-sizing: border-box;
         }
         
-        /* 基本信息 和 变体管理 Tab - 移除左右padding */
-        .material-form-modal .ant-pro-form .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane:nth-child(1),
-        .material-form-modal .ant-pro-form .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane:nth-child(2) {
-          padding-left: 0;
-          padding-right: 0;
+        /* 基本信息 和 变体管理 Tab - 移除左右padding（使用:has()选择器，基于内容特征） */
+        /* 基本信息Tab和变体管理Tab都直接包含.ant-row.gutter，而多单位管理和编码映射Tab不直接包含 */
+        .material-form-modal .ant-pro-form .ant-tabs-tabpane:has(> .ant-row[class*="gutter"]:first-child) {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
         }
         
         /* Modal 内的 Collapse - 确保占满宽度 */
