@@ -465,6 +465,149 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 导入弹窗状态
   const [importModalVisible, setImportModalVisible] = useState(false);
   
+  // 表格容器高度（用于两栏布局中的滚动）
+  const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 检测是否在两栏布局中，并计算表格高度
+  useEffect(() => {
+    if (!tableContainerRef.current) return;
+    
+    // 检查是否在两栏布局中
+    const isInTwoColumnLayout = tableContainerRef.current.closest('.two-column-layout-content') !== null;
+    
+    if (!isInTwoColumnLayout) {
+      setTableScrollY(undefined);
+      return;
+    }
+    
+    // 计算表格可用高度
+    const calculateHeight = () => {
+      if (!tableContainerRef.current) return;
+      
+      const container = tableContainerRef.current.closest('.two-column-layout-content');
+      if (!container) return;
+      
+      // 方法1：直接使用容器高度减去固定元素高度
+      // 获取容器高度（clientHeight 已经减去了 padding 和 border）
+      const containerHeight = container.clientHeight;
+      
+      // 查找表格相关的固定高度元素
+      const proTable = tableContainerRef.current.querySelector('.ant-pro-table');
+      if (!proTable) return;
+      
+      // 查找按钮容器（模糊搜索框等）
+      const buttonContainer = tableContainerRef.current.querySelector('.pro-table-button-container');
+      
+      // 查找工具栏（ProTable 的工具栏，包含密度、列设置等）
+      const toolbar = proTable.querySelector('.ant-pro-table-list-toolbar');
+      
+      // 查找 headerTitle（如果有）
+      const headerTitle = proTable.querySelector('.ant-pro-table-list-toolbar-title');
+      
+      // 查找分页器
+      const pagination = proTable.querySelector('.ant-pagination');
+      
+      // 查找 ProCard 的 padding（如果有）
+      const proCard = proTable.closest('.ant-pro-card');
+      const proCardBody = proCard?.querySelector('.ant-pro-card-body');
+      
+      let fixedHeight = 0;
+      
+      // 按钮容器高度
+      if (buttonContainer) {
+        const buttonStyle = window.getComputedStyle(buttonContainer);
+        fixedHeight += buttonContainer.clientHeight;
+        // 获取实际的 margin-bottom
+        const marginBottom = parseInt(buttonStyle.marginBottom) || 0;
+        fixedHeight += marginBottom;
+      }
+      
+      // 工具栏高度
+      if (toolbar) {
+        fixedHeight += toolbar.clientHeight;
+      }
+      
+      // headerTitle 高度（如果单独存在）
+      if (headerTitle && !toolbar?.contains(headerTitle)) {
+        fixedHeight += headerTitle.clientHeight;
+      }
+      
+      // 分页器高度
+      if (pagination) {
+        const paginationStyle = window.getComputedStyle(pagination);
+        fixedHeight += pagination.clientHeight;
+        // 获取实际的 margin-top
+        const marginTop = parseInt(paginationStyle.marginTop) || 0;
+        fixedHeight += marginTop;
+      }
+      
+      // ProCard 的 padding（上下各 24px，但可能被覆盖）
+      if (proCardBody) {
+        const cardBodyStyle = window.getComputedStyle(proCardBody);
+        const paddingTop = parseInt(cardBodyStyle.paddingTop) || 0;
+        const paddingBottom = parseInt(cardBodyStyle.paddingBottom) || 0;
+        fixedHeight += paddingTop + paddingBottom;
+      }
+      
+      // 方法2：直接测量表格容器到分页器之间的高度（更准确）
+      // 查找表格容器（.ant-table-wrapper）
+      const tableWrapper = proTable.querySelector('.ant-table-wrapper');
+      let measuredHeight = 0;
+      
+      if (tableWrapper) {
+        // 获取表格容器的实际可用高度
+        const tableWrapperRect = tableWrapper.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
+        // 计算表格容器在内容区内的实际高度
+        // 需要考虑表格容器上方和下方的元素
+        const tableTop = tableWrapperRect.top;
+        const containerTop = containerRect.top;
+        const containerBottom = containerRect.bottom;
+        
+        // 表格容器上方的高度（按钮容器、工具栏等）
+        const topOffset = tableTop - containerTop;
+        
+        // 表格容器下方的高度（分页器等）
+        let bottomOffset = 0;
+        if (pagination) {
+          const paginationRect = pagination.getBoundingClientRect();
+          bottomOffset = containerBottom - paginationRect.bottom;
+        }
+        
+        // 计算表格主体可用高度
+        measuredHeight = containerHeight - topOffset - bottomOffset;
+      }
+      
+      // 使用两种方法中更准确的一个（优先使用方法2，如果不可用则使用方法1）
+      const availableHeight = measuredHeight > 0 ? measuredHeight : (containerHeight - fixedHeight);
+      
+      if (availableHeight > 100) {
+        setTableScrollY(availableHeight);
+      } else {
+        setTableScrollY(undefined);
+      }
+    };
+    
+    // 初始计算（延迟一下，确保 DOM 已渲染）
+    setTimeout(calculateHeight, 100);
+    
+    // 使用 ResizeObserver 监听容器大小变化
+    const resizeObserver = new ResizeObserver(() => {
+      calculateHeight();
+    });
+    
+    const container = tableContainerRef.current.closest('.two-column-layout-content');
+    if (container) {
+      resizeObserver.observe(container);
+    }
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+  
   // 预加载拼音库（组件挂载时）
   useEffect(() => {
     import('../../utils/pinyin').then(({ preloadPinyinLib }) => {
@@ -1062,8 +1205,49 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           overflow-x: auto !important;
           overflow-y: visible !important;
         }
-        /* 当表格内容没有超出容器高度时，隐藏垂直滚动条 */
-        .uni-table-pro-table .ant-table-body:not(:has(.ant-table-tbody > tr:last-child)) {
+        /* 两栏布局中的表格需要垂直滚动 */
+        .two-column-layout-content .uni-table-pro-table .ant-table-body {
+          overflow-y: auto !important;
+          /* 确保滚动条可见 */
+          scrollbar-width: thin !important;
+          -ms-overflow-style: auto !important;
+        }
+        
+        /* 两栏布局中的表格滚动条样式 - 覆盖全局隐藏样式 */
+        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar {
+          display: block !important;
+          width: 8px !important;
+          height: 8px !important;
+          background: transparent !important;
+          -webkit-appearance: auto !important;
+          appearance: auto !important;
+        }
+        
+        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-button {
+          display: none !important;
+        }
+        
+        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-track {
+          display: block !important;
+          background: #f5f5f5 !important;
+          border-radius: 4px !important;
+          width: 8px !important;
+          height: 8px !important;
+        }
+        
+        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb {
+          display: block !important;
+          background: #bfbfbf !important;
+          border-radius: 4px !important;
+          width: 8px !important;
+          height: 8px !important;
+        }
+        
+        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb:hover {
+          background: #999 !important;
+        }
+        /* 当表格内容没有超出容器高度时，隐藏垂直滚动条（非两栏布局） */
+        .uni-table-pro-table .ant-table-body:not(:has(.ant-table-tbody > tr:last-child)):not(.two-column-layout-content .ant-table-body) {
           overflow-y: hidden !important;
         }
         /* 优化滚动条显示：只在内容超出时显示 */
@@ -1204,6 +1388,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           width: '100%',
         }}
       >
+      <div ref={tableContainerRef} style={{ width: '100%', height: '100%' }}>
       {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
       {/* 模糊搜索框始终显示，其他按钮根据条件显示 */}
       <div
@@ -1318,12 +1503,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
         }}
         scroll={
-          hasActionColumn
-            ? {
-                x: 'max-content', // 有操作列时，只在内容超出时显示水平滚动条
-                // 不设置y，让表格自适应内容高度，避免不必要的垂直滚动条
-              }
-            : undefined // 没有操作列时，不设置scroll，让表格自然布局，避免不必要的滚动条
+          (() => {
+            const scrollConfig: { x?: string | number; y?: number } = {};
+            
+            // 如果有操作列，设置水平滚动
+            if (hasActionColumn) {
+              scrollConfig.x = 'max-content';
+            }
+            
+            // 如果在两栏布局中且有计算出的高度，设置垂直滚动
+            if (tableScrollY !== undefined) {
+              scrollConfig.y = tableScrollY;
+            }
+            
+            return Object.keys(scrollConfig).length > 0 ? scrollConfig : undefined;
+          })()
         }
         {...(() => {
           // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
@@ -1539,6 +1733,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           exampleRow={finalImportExampleRow}
         />
       )}
+      </div>
       </div>
     </>
   );

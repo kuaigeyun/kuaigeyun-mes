@@ -230,6 +230,11 @@ export interface MaterialListParams {
   name?: string;
 }
 
+/**
+ * BOM（物料清单）类型定义
+ * 
+ * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+ */
 export interface BOM {
   id: number;
   uuid: string;
@@ -237,7 +242,13 @@ export interface BOM {
   materialId: number;
   componentId: number;
   quantity: number;
-  unit: string;
+  unit?: string;
+  // 损耗率和必选标识（根据优化设计规范新增）
+  wasteRate: number; // 损耗率（百分比，如：5.00表示5%）
+  isRequired: boolean; // 是否必选（默认：true）
+  // 层级信息（用于多层级BOM展开，根据优化设计规范新增）
+  level: number; // 层级深度（0为顶层）
+  path?: string; // 层级路径（如：1/2/3）
   // 版本控制
   version: string;
   bomCode?: string;
@@ -266,7 +277,13 @@ export interface BOMCreate {
   materialId: number;
   componentId: number;
   quantity: number;
-  unit: string;
+  unit?: string;
+  // 损耗率和必选标识（根据优化设计规范新增）
+  wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
+  isRequired?: boolean; // 是否必选（默认：true）
+  // 层级信息（根据优化设计规范新增）
+  level?: number; // 层级深度（0为顶层）
+  path?: string; // 层级路径（如：1/2/3）
   isAlternative?: boolean;
   alternativeGroupId?: number;
   priority?: number;
@@ -279,6 +296,12 @@ export interface BOMUpdate {
   componentId?: number;
   quantity?: number;
   unit?: string;
+  // 损耗率和必选标识（根据优化设计规范新增）
+  wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
+  isRequired?: boolean; // 是否必选
+  // 层级信息（根据优化设计规范新增）
+  level?: number; // 层级深度（0为顶层）
+  path?: string; // 层级路径（如：1/2/3）
   isAlternative?: boolean;
   alternativeGroupId?: number;
   priority?: number;
@@ -296,7 +319,10 @@ export interface BOMListParams {
 export interface BOMItemCreate {
   componentId: number;
   quantity: number;
-  unit: string;
+  unit?: string;
+  // 损耗率和必选标识（根据优化设计规范新增）
+  wasteRate?: number; // 损耗率（百分比，如：5.00表示5%）
+  isRequired?: boolean; // 是否必选（默认：true）
   isAlternative?: boolean;
   alternativeGroupId?: number;
   priority?: number;
@@ -319,6 +345,157 @@ export interface BOMBatchCreate {
   description?: string;
   remark?: string;
   isActive?: boolean;
+}
+
+/**
+ * BOM批量导入项类型定义
+ * 
+ * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+ * 支持使用任意部门编码，系统自动映射到主编码。
+ */
+export interface BOMBatchImportItem {
+  parentCode: string; // 父件编码（支持任意部门编码：SALE-A001、DES-A001、主编码MAT-FIN-0001）
+  componentCode: string; // 子件编码（支持任意部门编码：PROD-A001、主编码MAT-SEMI-0001）
+  quantity: number; // 子件数量（必填，数字）
+  unit?: string; // 子件单位（可选，如：个、kg、m等）
+  wasteRate?: number; // 损耗率（可选，百分比，如：5%表示5.00）
+  isRequired?: boolean; // 是否必选（可选，是/否，默认：是）
+  remark?: string; // 备注（可选）
+}
+
+/**
+ * BOM批量导入类型定义
+ * 
+ * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+ * 支持universheet批量导入，支持部门编码自动映射。
+ */
+export interface BOMBatchImport {
+  items: BOMBatchImportItem[]; // BOM导入项列表
+  version?: string; // BOM版本号（可选，默认：1.0）
+  bomCode?: string; // BOM编码（可选）
+  effectiveDate?: string; // 生效日期（可选）
+  description?: string; // 描述（可选）
+}
+
+/**
+ * BOM版本创建类型定义
+ * 
+ * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+ */
+export interface BOMVersionCreate {
+  version: string; // 版本号（如：v1.1）
+  versionDescription?: string; // 版本说明
+  effectiveDate?: string; // 生效日期（可选）
+  applyStrategy: 'new_only' | 'all'; // 版本应用策略：new_only（仅新工单使用新版本，推荐）或 all（所有工单使用新版本，谨慎使用）
+}
+
+/**
+ * BOM版本对比类型定义
+ * 
+ * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+ */
+export interface BOMVersionCompare {
+  version1: string; // 版本1（如：v1.0）
+  version2: string; // 版本2（如：v1.1）
+}
+
+/**
+ * BOM版本对比结果类型定义
+ */
+export interface BOMVersionCompareResult {
+  materialId: number;
+  version1: string;
+  version2: string;
+  added: Array<{
+    componentId: number;
+    componentCode: string;
+    componentName: string;
+    quantity: number;
+    unit?: string;
+    wasteRate: number;
+  }>; // 新增的子件
+  removed: Array<{
+    componentId: number;
+    componentCode: string;
+    componentName: string;
+    quantity: number;
+    unit?: string;
+    wasteRate: number;
+  }>; // 删除的子件
+  modified: Array<{
+    componentId: number;
+    componentCode: string;
+    componentName: string;
+    version1: {
+      quantity: number;
+      unit?: string;
+      wasteRate: number;
+      isRequired: boolean;
+    };
+    version2: {
+      quantity: number;
+      unit?: string;
+      wasteRate: number;
+      isRequired: boolean;
+    };
+  }>; // 修改的子件
+}
+
+/**
+ * BOM层级结构项类型定义
+ */
+export interface BOMHierarchyItem {
+  componentId: number;
+  componentCode: string;
+  componentName: string;
+  quantity: number;
+  unit?: string;
+  wasteRate: number;
+  isRequired: boolean;
+  level: number;
+  path: string;
+  children: BOMHierarchyItem[]; // 子项（递归结构）
+}
+
+/**
+ * BOM层级结构类型定义
+ */
+export interface BOMHierarchy {
+  materialId: number;
+  materialCode: string;
+  materialName: string;
+  version: string;
+  items: BOMHierarchyItem[];
+}
+
+/**
+ * BOM用量计算结果类型定义
+ */
+export interface BOMQuantityComponent {
+  componentId: number;
+  componentCode: string;
+  componentName: string;
+  baseQuantity: number; // 基础用量
+  wasteRate: number; // 损耗率
+  actualQuantity: number; // 实际用量（考虑损耗率）
+  unit?: string;
+  level: number; // 层级
+}
+
+/**
+ * BOM用量计算结果类型定义
+ */
+export interface BOMQuantityResult {
+  materialId: number;
+  parentQuantity: number; // 父物料数量
+  components: BOMQuantityComponent[]; // 子物料用量列表
+}
+
+/**
+ * BOM循环依赖检测结果类型定义
+ */
+export interface BOMCycleDetectionResult {
+  hasCycle: boolean; // 是否会导致循环依赖
 }
 
 

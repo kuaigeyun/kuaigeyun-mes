@@ -110,6 +110,8 @@ class CodeGenerationRequest(BaseModel):
     
     用于测试编码生成功能。
     """
+    check_duplicate: Optional[bool] = Field(default=False, description="是否检查重复（如果为True，会自动递增直到找到不重复的编码）")
+    entity_type: Optional[str] = Field(default=None, description="实体类型（如：'material'，用于检查重复）")
     rule_code: str = Field(..., description="规则代码")
     context: Optional[dict] = Field(None, description="上下文变量（可选，用于自定义变量）")
 

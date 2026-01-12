@@ -81,6 +81,198 @@ code {
   background: transparent !important;
 }
 
+/* uni-table 中的表格恢复横向滚动条 */
+.uni-table-container .ant-table-wrapper,
+.uni-table-container .ant-table-container,
+.uni-table-container .ant-table-content {
+  /* Firefox - 恢复横向滚动条 */
+  scrollbar-width: thin !important;
+  
+  /* IE/Edge - 恢复横向滚动条 */
+  -ms-overflow-style: auto !important;
+  
+  /* Chrome/Safari/Webkit - 恢复横向滚动条 */
+  &::-webkit-scrollbar {
+    display: block !important;
+    height: 8px !important;
+    width: 8px !important;
+    background: transparent !important;
+  }
+  
+  &::-webkit-scrollbar-button {
+    display: none !important;
+  }
+  
+  &::-webkit-scrollbar-track {
+    display: block !important;
+    background: #f5f5f5 !important;
+    border-radius: 4px !important;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    display: block !important;
+    background: #bfbfbf !important;
+    border-radius: 4px !important;
+    
+    &:hover {
+      background: #999 !important;
+    }
+  }
+}
+
+/* 两栏布局中的 uni-table 高度限制 */
+.two-column-layout-content {
+  /* 确保内容区使用 flex 布局 */
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  
+  /* uni-table 容器在 two-column-layout 中时，高度填满容器 */
+  > .uni-table-container {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    
+    /* ProTable 容器 */
+    > div {
+      flex: 1 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      min-height: 0 !important;
+      height: 100% !important;
+      
+      /* ProTable 本身 */
+      .ant-pro-table {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        
+        /* ProTable 内容区 */
+        .ant-pro-table-list-toolbar {
+          flex-shrink: 0 !important;
+        }
+        
+        .ant-pro-table-container {
+          flex: 1 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          min-height: 0 !important;
+          height: 100% !important;
+          
+          /* 表格容器 */
+          .ant-table-wrapper {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            
+            /* 表格内容 */
+            .ant-spin-nested-loading {
+              flex: 1 !important;
+              display: flex !important;
+              flex-direction: column !important;
+              min-height: 0 !important;
+              height: 100% !important;
+              overflow: hidden !important;
+              
+              .ant-spin-container {
+                flex: 1 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                min-height: 0 !important;
+                height: 100% !important;
+                overflow: hidden !important;
+                
+                .ant-table {
+                  display: flex !important;
+                  flex-direction: column !important;
+                  height: 100% !important;
+                  
+                  .ant-table-container {
+                    flex: 1 !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    min-height: 0 !important;
+                    height: 100% !important;
+                    overflow: hidden !important;
+                    
+                    .ant-table-header {
+                      flex-shrink: 0 !important;
+                    }
+                    
+                    /* 确保表头和表体列宽一致 - 使用 table-layout: fixed */
+                    .ant-table {
+                      table-layout: fixed !important;
+                    }
+                    
+                    /* 确保表头和表体容器宽度一致 */
+                    .ant-table-header table,
+                    .ant-table-body table {
+                      width: 100% !important;
+                      table-layout: fixed !important;
+                    }
+                    
+                    .ant-table-body {
+                      flex: 1 !important;
+                      min-height: 0 !important;
+                      overflow-y: auto !important;
+                      overflow-x: auto !important;
+                      /* 确保滚动条可见 - 使用最高优先级覆盖全局样式 */
+                      scrollbar-width: thin !important;
+                      -ms-overflow-style: auto !important;
+                    }
+                    
+                    /* 确保滚动条在 Webkit 浏览器中可见 - 使用最高优先级覆盖全局样式 */
+                    .two-column-layout-content .ant-table-body::-webkit-scrollbar {
+                      display: block !important;
+                      width: 8px !important;
+                      height: 8px !important;
+                      background: transparent !important;
+                      -webkit-appearance: auto !important;
+                      appearance: auto !important;
+                    }
+                    
+                    .two-column-layout-content .ant-table-body::-webkit-scrollbar-button {
+                      display: none !important;
+                    }
+                    
+                    .two-column-layout-content .ant-table-body::-webkit-scrollbar-track {
+                      display: block !important;
+                      background: #f5f5f5 !important;
+                      border-radius: 4px !important;
+                      width: 8px !important;
+                      height: 8px !important;
+                    }
+                    
+                    .two-column-layout-content .ant-table-body::-webkit-scrollbar-thumb {
+                      display: block !important;
+                      background: #bfbfbf !important;
+                      border-radius: 4px !important;
+                      width: 8px !important;
+                      height: 8px !important;
+                    }
+                    
+                    .two-column-layout-content .ant-table-body::-webkit-scrollbar-thumb:hover {
+                      background: #999 !important;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 /* 高级搜索 Modal 动画统一 */
 .query-search-modal-wrap {
   /* 确保 Modal 动画方向一致：始终从上向下弹出 */
@@ -151,7 +343,59 @@ code {
 }
 
 
+/* BOM子物料表格滚动条 - 显示滚动条（优先级最高，覆盖全局隐藏滚动条设置） */
+.ant-modal-body .bom-items-table-scroll,
+.bom-items-table-container .bom-items-table-scroll,
+.bom-items-table-scroll {
+  /* Firefox - 显示横向滚动条 */
+  scrollbar-width: thin !important;
+  
+  /* IE/Edge - 显示横向滚动条 */
+  -ms-overflow-style: auto !important;
+}
+
+/* Chrome/Safari/Webkit - 显示横向滚动条（使用更具体的选择器覆盖全局 * 选择器） */
+.ant-modal-body .bom-items-table-scroll::-webkit-scrollbar,
+.bom-items-table-container .bom-items-table-scroll::-webkit-scrollbar,
+.bom-items-table-scroll::-webkit-scrollbar {
+  display: block !important;
+  height: 8px !important;
+  width: 8px !important;
+  background: transparent !important;
+  -webkit-appearance: auto !important;
+  appearance: auto !important;
+}
+
+.ant-modal-body .bom-items-table-scroll::-webkit-scrollbar-button,
+.bom-items-table-container .bom-items-table-scroll::-webkit-scrollbar-button,
+.bom-items-table-scroll::-webkit-scrollbar-button {
+  display: none !important;
+}
+
+.ant-modal-body .bom-items-table-scroll::-webkit-scrollbar-track,
+.bom-items-table-container .bom-items-table-scroll::-webkit-scrollbar-track,
+.bom-items-table-scroll::-webkit-scrollbar-track {
+  display: block !important;
+  background: #f5f5f5 !important;
+  border-radius: 4px !important;
+}
+
+.ant-modal-body .bom-items-table-scroll::-webkit-scrollbar-thumb,
+.bom-items-table-container .bom-items-table-scroll::-webkit-scrollbar-thumb,
+.bom-items-table-scroll::-webkit-scrollbar-thumb {
+  display: block !important;
+  background: #bfbfbf !important;
+  border-radius: 4px !important;
+}
+
+.ant-modal-body .bom-items-table-scroll::-webkit-scrollbar-thumb:hover,
+.bom-items-table-container .bom-items-table-scroll::-webkit-scrollbar-thumb:hover,
+.bom-items-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #999 !important;
+}
+
 /* 通用隐藏滚动条样式 - 不显示滚动条且不占用宽度 */
+
 .hide-scrollbar,
 .left-panel-scroll-container {
   scrollbar-width: none !important; /* Firefox */

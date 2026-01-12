@@ -77,6 +77,8 @@ export interface UpdateCodeRuleData {
 export interface CodeGenerationRequest {
   rule_code: string;
   context?: Record<string, any>;
+  check_duplicate?: boolean; // 是否检查重复（如果为True，会自动递增直到找到不重复的编码）
+  entity_type?: string; // 实体类型（如：'material'，用于检查重复）
 }
 
 /**

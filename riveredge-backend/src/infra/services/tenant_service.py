@@ -534,6 +534,7 @@ class TenantService:
             tenant_id: 组织 ID
         """
         from core.services.default.default_values_service import DefaultValuesService
+        from core.services.data.data_dictionary_service import DataDictionaryService
         
         try:
             # 创建默认编码规则和系统参数
@@ -543,6 +544,17 @@ class TenantService:
         except Exception as e:
             # 初始化失败不影响组织创建，记录日志即可
             logger.error(f"组织 {tenant_id} 默认数据初始化失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        try:
+            # 初始化系统字典
+            await DataDictionaryService.initialize_system_dictionaries(tenant_id)
+            
+            logger.info(f"组织 {tenant_id} 系统字典初始化完成")
+        except Exception as e:
+            # 初始化失败不影响组织创建，记录日志即可
+            logger.error(f"组织 {tenant_id} 系统字典初始化失败: {e}")
             import traceback
             logger.error(traceback.format_exc())
             

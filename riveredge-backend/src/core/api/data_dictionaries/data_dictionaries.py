@@ -27,6 +27,34 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(prefix="/data-dictionaries", tags=["Core Data Dictionaries"])
 
 
+@router.post("/initialize-system", status_code=status.HTTP_200_OK)
+async def initialize_system_dictionaries(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    初始化系统字典
+    
+    为当前租户加载所有系统字典及其字典项。
+    如果字典已存在，则更新字典项；如果不存在，则创建新字典。
+    
+    Args:
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        Dict[str, Any]: 初始化结果
+    """
+    try:
+        result = await DataDictionaryService.initialize_system_dictionaries(
+            tenant_id=tenant_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"初始化系统字典失败: {str(e)}"
+        )
+
+
 @router.post("", response_model=DataDictionaryResponse, status_code=status.HTTP_201_CREATED)
 async def create_dictionary(
     data: DataDictionaryCreate,

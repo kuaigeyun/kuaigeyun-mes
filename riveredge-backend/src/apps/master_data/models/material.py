@@ -129,7 +129,7 @@ class Material(BaseModel):
     # 基本信息
     main_code = fields.CharField(max_length=50, description="主编码（系统内部唯一标识，格式：MAT-{类型}-{序号}）")
     name = fields.CharField(max_length=200, description="物料名称")
-    material_type = fields.CharField(max_length=20, default="RAW", description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
+    material_type = fields.CharField(max_length=20, null=True, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification = fields.CharField(max_length=500, null=True, description="规格")
     base_unit = fields.CharField(max_length=20, description="基础单位")
     
@@ -185,20 +185,35 @@ class BOM(BaseModel):
     """
     物料清单（BOM）模型
     
-    物料清单，支持替代料管理。
+    物料清单，支持替代料管理、版本管理、多层级结构、损耗率计算。
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
     
     Attributes:
         id: 主键ID（自增ID，内部使用）
         uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
         tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
-        material_id: 主物料ID（外键）
-        component_id: 子物料ID（外键）
-        quantity: 用量
-        unit: 单位
+        material_id: 主物料ID（外键，父件）
+        component_id: 子物料ID（外键，子件）
+        quantity: 用量（必填，数字）
+        unit: 单位（可选，如：个、kg、m等）
+        waste_rate: 损耗率（可选，百分比，如：5%，用于计算实际用料数量）
+        is_required: 是否必选（可选，是/否，默认：是）
+        level: 层级深度（0为顶层，用于多层级BOM展开）
+        path: 层级路径（如：1/2/3，用于快速查询和排序）
         is_alternative: 是否为替代料
         alternative_group_id: 替代料组ID（同一组的替代料互斥）
         priority: 优先级（数字越小优先级越高）
         description: 描述
+        remark: 备注
+        version: BOM版本号
+        bom_code: BOM编码（同一主物料的不同版本使用相同编码）
+        effective_date: 生效日期
+        expiry_date: 失效日期
+        approval_status: 审核状态
+        approved_by: 审核人ID
+        approved_at: 审核时间
+        approval_comment: 审核意见
         is_active: 是否启用
         created_at: 创建时间（继承自BaseModel）
         updated_at: 更新时间（继承自BaseModel）
@@ -219,14 +234,30 @@ class BOM(BaseModel):
             ("bom_code",),
             ("version",),
             ("approval_status",),
+            ("level",),  # 用于层级查询
+            ("path",),  # 用于路径查询
+            ("material_id", "version"),  # 用于查询特定物料的特定版本BOM
         ]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
     
     # 基本信息
-    quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="用量")
-    unit = fields.CharField(max_length=20, description="单位")
+    quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="用量（必填，数字）")
+    unit = fields.CharField(max_length=20, null=True, description="单位（可选，如：个、kg、m等）")
+    
+    # 损耗率和必选标识（根据优化设计规范新增）
+    waste_rate = fields.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0.00, 
+        description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
+    )
+    is_required = fields.BooleanField(default=True, description="是否必选（是/否，默认：是）")
+    
+    # 层级信息（用于多层级BOM展开，根据优化设计规范新增）
+    level = fields.IntField(default=0, description="层级深度（0为顶层，用于多层级BOM展开）")
+    path = fields.CharField(max_length=500, null=True, description="层级路径（如：1/2/3，用于快速查询和排序）")
     
     # 版本控制
     version = fields.CharField(max_length=50, default="1.0", description="BOM版本号")

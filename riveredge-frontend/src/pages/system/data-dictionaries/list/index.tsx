@@ -21,6 +21,7 @@ import {
   createDictionaryItem,
   updateDictionaryItem,
   deleteDictionaryItem,
+  initializeSystemDictionaries,
   DataDictionary,
   CreateDataDictionaryData,
   UpdateDataDictionaryData,
@@ -37,6 +38,7 @@ const DataDictionaryListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const itemFormRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [initializing, setInitializing] = useState(false);
   
   // Modal 相关状态（创建/编辑字典）
   const [modalVisible, setModalVisible] = useState(false);
@@ -231,6 +233,24 @@ const DataDictionaryListPage: React.FC = () => {
       }
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  /**
+   * 处理初始化系统字典
+   */
+  const handleInitializeSystemDictionaries = async () => {
+    try {
+      setInitializing(true);
+      const result = await initializeSystemDictionaries();
+      messageApi.success(
+        `系统字典初始化完成！创建 ${result.dictionaries_count} 个字典，创建 ${result.items_created_count} 个字典项，更新 ${result.items_updated_count} 个字典项`
+      );
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '初始化系统字典失败');
+    } finally {
+      setInitializing(false);
     }
   };
 
@@ -509,6 +529,14 @@ const DataDictionaryListPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
+          <Button
+            key="initialize"
+            icon={<SettingOutlined />}
+            onClick={handleInitializeSystemDictionaries}
+            loading={initializing}
+          >
+            加载系统字典
+          </Button>,
           <Button
             key="create"
             type="primary"

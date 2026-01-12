@@ -15,7 +15,8 @@ from apps.master_data.services.material_code_service import MaterialCodeService
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
-    BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate
+    BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
+    BOMBatchImport, BOMVersionCreate, BOMVersionCompare
 )
 from core.services.business.code_generation_service import CodeGenerationService
 from core.config.code_rule_pages import CODE_RULE_PAGES
@@ -458,7 +459,65 @@ class MaterialService:
                         f"如需创建变体，请设置 variant_managed=True 并提供 variant_attributes"
                     )
                 else:
-                    raise ValidationError(f"主编码 {data.main_code} 已存在")
+                    # 如果编码已存在，自动重新生成一个新的编码
+                    logger.warning(f"主编码 {data.main_code} 已存在，自动重新生成新编码")
+                    
+                    # 获取物料分组信息（如果之前没有获取）
+                    if not group and data.group_id:
+                        group = await MaterialGroup.filter(
+                            tenant_id=tenant_id,
+                            id=data.group_id,
+                            deleted_at__isnull=True
+                        ).first()
+                    
+                    # 尝试使用编码规则重新生成编码
+                    material_page_config = next(
+                        (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
+                        None
+                    )
+                    
+                    if material_page_config and material_page_config.get("rule_code"):
+                        try:
+                            # 构建上下文变量
+                            context = {}
+                            if group:
+                                context["group_code"] = group.code
+                                context["group_name"] = group.name
+                            context["material_type"] = data.material_type
+                            context["name"] = data.name
+                            
+                            # 重新生成编码（会自动递增序号）
+                            data.main_code = await CodeGenerationService.generate_code(
+                                tenant_id=tenant_id,
+                                rule_code=material_page_config["rule_code"],
+                                context=context
+                            )
+                            logger.info(f"自动重新生成物料主编码: {data.main_code}")
+                        except Exception as e:
+                            # 如果编码规则生成失败，回退到默认生成方式
+                            logger.warning(f"使用编码规则重新生成物料编码失败: {e}，回退到默认生成方式")
+                            data.main_code = await MaterialCodeService.generate_main_code(
+                                tenant_id=tenant_id,
+                                material_type=data.material_type
+                            )
+                    else:
+                        # 如果没有配置编码规则，使用默认生成方式
+                        data.main_code = await MaterialCodeService.generate_main_code(
+                            tenant_id=tenant_id,
+                            material_type=data.material_type
+                        )
+                    
+                    # 再次检查新生成的编码是否已存在（理论上不应该，但为了安全）
+                    existing_check = await Material.filter(
+                        tenant_id=tenant_id,
+                        main_code=data.main_code,
+                        deleted_at__isnull=True
+                    ).first()
+                    if existing_check:
+                        raise ValidationError(
+                            f"自动生成的编码 {data.main_code} 仍然已存在，"
+                            f"请检查编码规则配置或联系系统管理员"
+                        )
         
         # 智能识别重复物料
         duplicates = await MaterialCodeService.find_duplicate_materials(
@@ -758,7 +817,12 @@ class MaterialService:
         is_active: Optional[bool] = None,
         keyword: Optional[str] = None,
         code: Optional[str] = None,
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        material_type: Optional[str] = None,
+        specification: Optional[str] = None,
+        brand: Optional[str] = None,
+        model: Optional[str] = None,
+        base_unit: Optional[str] = None
     ) -> List[MaterialResponse]:
         """
         获取物料列表
@@ -772,6 +836,11 @@ class MaterialService:
             keyword: 搜索关键词（物料编码或名称）
             code: 物料编码（精确匹配）
             name: 物料名称（模糊匹配）
+            material_type: 物料类型（可选，用于过滤）
+            specification: 规格（可选，模糊匹配）
+            brand: 品牌（可选，模糊匹配）
+            model: 型号（可选，模糊匹配）
+            base_unit: 基础单位（可选，精确匹配）
 
         Returns:
             List[MaterialResponse]: 物料列表
@@ -782,10 +851,37 @@ class MaterialService:
         )
 
         if group_id is not None:
-            query = query.filter(group_id=group_id)
+            # 递归获取所有子分组ID（包括当前分组本身）
+            async def get_all_child_group_ids(parent_group_id: int) -> List[int]:
+                """递归获取所有子分组ID（包括父分组本身）"""
+                group_ids = [parent_group_id]
+                # 获取直接子分组
+                child_groups = await MaterialGroup.filter(
+                    tenant_id=tenant_id,
+                    parent_id=parent_group_id,
+                    deleted_at__isnull=True
+                ).values_list("id", flat=True)
+                
+                # 递归获取子分组的子分组
+                for child_id in child_groups:
+                    child_ids = await get_all_child_group_ids(child_id)
+                    group_ids.extend(child_ids)
+                
+                return group_ids
+            
+            # 获取当前分组及其所有子分组的ID
+            all_group_ids = await get_all_child_group_ids(group_id)
+            # 使用 in 查询，查询所有相关分组的物料
+            query = query.filter(group_id__in=all_group_ids)
 
         if is_active is not None:
             query = query.filter(is_active=is_active)
+
+        if material_type is not None:
+            query = query.filter(material_type=material_type)
+
+        if base_unit is not None:
+            query = query.filter(base_unit=base_unit)
 
         # 添加搜索条件（支持主编码和部门编码搜索）
         if keyword:
@@ -820,6 +916,18 @@ class MaterialService:
         if name:
             # 模糊匹配物料名称
             query = query.filter(name__icontains=name)
+
+        if specification:
+            # 模糊匹配规格
+            query = query.filter(specification__icontains=specification)
+
+        if brand:
+            # 模糊匹配品牌
+            query = query.filter(brand__icontains=brand)
+
+        if model:
+            # 模糊匹配型号
+            query = query.filter(model__icontains=model)
         
         # 预加载关联关系（优化，修复500错误）
         materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by("main_code").all()
@@ -1260,6 +1368,10 @@ class MaterialService:
                 component_id=item.component_id,
                 quantity=item.quantity,
                 unit=item.unit,
+                waste_rate=item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
+                is_required=item.is_required if hasattr(item, 'is_required') else True,
+                level=0,  # 默认层级，后续可以根据实际需求优化
+                path=f"{data.material_id}/{item.component_id}",  # 默认路径
                 version=data.version,
                 bom_code=data.bom_code,
                 effective_date=data.effective_date,
@@ -1767,4 +1879,634 @@ class MaterialService:
         
         # 从根分组（parent_id 为 None）开始构建树
         return build_tree(None)
+    
+    # ==================== BOM批量导入和验证相关方法（根据优化设计规范新增） ====================
+    
+    @staticmethod
+    async def batch_import_bom(
+        tenant_id: int,
+        data: BOMBatchImport
+    ) -> List[BOMResponse]:
+        """
+        批量导入BOM（支持universheet批量导入，支持部门编码自动映射）
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            data: BOM批量导入数据
+            
+        Returns:
+            List[BOMResponse]: 创建的BOM对象列表
+            
+        Raises:
+            ValidationError: 当编码不存在、循环依赖、重复子件等时抛出
+        """
+        from collections import defaultdict
+        
+        # 步骤1：编码映射 - 将部门编码映射到物料ID
+        code_to_material = {}  # 编码 -> 物料ID的映射
+        material_id_to_code = {}  # 物料ID -> 编码的映射（用于错误提示）
+        
+        # 收集所有需要查询的编码
+        all_codes = set()
+        for item in data.items:
+            all_codes.add(item.parent_code)
+            all_codes.add(item.component_code)
+        
+        # 批量查询物料（通过主编码和部门编码）
+        for code in all_codes:
+            material = await MaterialCodeService.get_material_by_code(
+                tenant_id=tenant_id,
+                code=code
+            )
+            if not material:
+                raise ValidationError(f"编码不存在：{code}，请先创建物料")
+            code_to_material[code] = material.id
+            material_id_to_code[material.id] = code
+        
+        # 步骤2：数据完整性验证
+        # 验证父件编码是否存在（已在步骤1完成）
+        # 验证子件编码是否存在（已在步骤1完成）
+        # 验证子件数量是否大于0（已在Schema验证）
+        # 验证损耗率（已在Schema验证）
+        
+        # 步骤3：检测重复子件（同一父件下，子件编码不能重复）
+        parent_component_map = defaultdict(set)  # 父件ID -> 子件编码集合
+        for item in data.items:
+            parent_id = code_to_material[item.parent_code]
+            component_id = code_to_material[item.component_code]
+            if component_id in parent_component_map[parent_id]:
+                raise ValidationError(
+                    f"父件 {item.parent_code} 下，子件 {item.component_code} 重复"
+                )
+            parent_component_map[parent_id].add(component_id)
+        
+        # 步骤4：检测循环依赖
+        # 构建物料依赖图
+        dependency_graph = defaultdict(set)  # 物料ID -> 依赖的物料ID集合
+        for item in data.items:
+            parent_id = code_to_material[item.parent_code]
+            component_id = code_to_material[item.component_code]
+            dependency_graph[parent_id].add(component_id)
+        
+        # 检测循环依赖（使用DFS）
+        def has_cycle(node: int, visited: set, rec_stack: set) -> bool:
+            """检测从node开始的路径是否有循环"""
+            visited.add(node)
+            rec_stack.add(node)
+            
+            for neighbor in dependency_graph.get(node, set()):
+                if neighbor not in visited:
+                    if has_cycle(neighbor, visited, rec_stack):
+                        return True
+                elif neighbor in rec_stack:
+                    # 找到循环
+                    return True
+            
+            rec_stack.remove(node)
+            return False
+        
+        # 检查所有节点是否有循环
+        all_nodes = set(dependency_graph.keys()) | set(
+            component_id for components in dependency_graph.values() for component_id in components
+        )
+        visited = set()
+        for node in all_nodes:
+            if node not in visited:
+                if has_cycle(node, visited, set()):
+                    # 找到循环，构建循环路径用于提示
+                    cycle_path = []
+                    rec_stack = set()
+                    def find_cycle_path(node: int, path: list):
+                        if node in rec_stack:
+                            # 找到循环起点
+                            cycle_start = path.index(node)
+                            cycle_path.extend(path[cycle_start:] + [node])
+                            return True
+                        rec_stack.add(node)
+                        path.append(node)
+                        for neighbor in dependency_graph.get(node, set()):
+                            if find_cycle_path(neighbor, path):
+                                return True
+                        path.pop()
+                        rec_stack.remove(node)
+                        return False
+                    find_cycle_path(node, [])
+                    cycle_codes = [material_id_to_code.get(nid, str(nid)) for nid in cycle_path]
+                    raise ValidationError(
+                        f"检测到循环依赖：{' -> '.join(cycle_codes)}，请检查BOM配置"
+                    )
+        
+        # 步骤5：生成BOM层级结构
+        # 构建父件到子件的映射（用于计算层级）
+        parent_to_children = defaultdict(list)
+        for item in data.items:
+            parent_id = code_to_material[item.parent_code]
+            component_id = code_to_material[item.component_code]
+            parent_to_children[parent_id].append((component_id, item))
+        
+        # 计算层级和路径
+        def calculate_level_and_path(
+            material_id: int,
+            current_level: int = 0,
+            current_path: str = ""
+        ) -> tuple:
+            """递归计算层级和路径"""
+            if current_path:
+                new_path = f"{current_path}/{material_id}"
+            else:
+                new_path = str(material_id)
+            
+            return current_level, new_path
+        
+        # 步骤6：创建BOM数据
+        bom_list = []
+        bom_code_map = {}  # 父件ID -> BOM编码的映射
+        
+        for item in data.items:
+            parent_id = code_to_material[item.parent_code]
+            component_id = code_to_material[item.component_code]
+            
+            # 检查主物料和子物料不能相同
+            if parent_id == component_id:
+                raise ValidationError(
+                    f"主物料和子物料不能相同：{item.parent_code}"
+                )
+            
+            # 获取或生成BOM编码
+            if not data.bom_code:
+                if parent_id not in bom_code_map:
+                    parent_material = await Material.get(id=parent_id)
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    bom_code_map[parent_id] = f"BOM-{parent_material.main_code}-{timestamp}"
+                bom_code = bom_code_map[parent_id]
+            else:
+                bom_code = data.bom_code
+            
+            # 计算层级和路径（简化版，实际应该递归计算）
+            level = 0  # 默认层级，后续可以根据实际需求优化
+            path = f"{parent_id}/{component_id}"
+            
+            # 创建BOM
+            bom = await BOM.create(
+                tenant_id=tenant_id,
+                material_id=parent_id,
+                component_id=component_id,
+                quantity=item.quantity,
+                unit=item.unit,
+                waste_rate=item.waste_rate or Decimal("0.00"),
+                is_required=item.is_required if item.is_required is not None else True,
+                level=level,
+                path=path,
+                version=data.version or "1.0",
+                bom_code=bom_code,
+                effective_date=data.effective_date,
+                description=data.description,
+                remark=item.remark,
+                is_active=True,
+            )
+            bom_list.append(bom)
+        
+        logger.info(f"批量导入BOM成功，共创建 {len(bom_list)} 条BOM记录")
+        
+        return [BOMResponse.model_validate(bom) for bom in bom_list]
+    
+    @staticmethod
+    async def detect_bom_cycle(
+        tenant_id: int,
+        material_id: int,
+        component_id: int
+    ) -> bool:
+        """
+        检测BOM循环依赖
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 主物料ID（父件）
+            component_id: 子物料ID（子件）
+            
+        Returns:
+            bool: 如果添加该BOM关系会导致循环依赖，返回True
+        """
+        from collections import defaultdict
+        
+        # 构建依赖图：component_id -> 它作为父件时的所有子件ID集合
+        dependency_graph = defaultdict(set)
+        
+        # 查询所有BOM关系
+        all_boms = await BOM.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).all()
+        
+        for bom in all_boms:
+            dependency_graph[bom.component_id].add(bom.material_id)
+        
+        # 检查添加 material_id -> component_id 是否会导致循环
+        # 即检查从 component_id 开始，是否能到达 material_id
+        def can_reach(start: int, target: int, visited: set) -> bool:
+            """检查从start是否能到达target"""
+            if start == target:
+                return True
+            
+            visited.add(start)
+            for neighbor in dependency_graph.get(start, set()):
+                if neighbor not in visited:
+                    if can_reach(neighbor, target, visited):
+                        return True
+            return False
+        
+        # 检查从component_id是否能到达material_id
+        # 如果能到达，说明添加 material_id -> component_id 会形成循环
+        return can_reach(component_id, material_id, set())
+    
+    @staticmethod
+    async def generate_bom_hierarchy(
+        tenant_id: int,
+        material_id: int,
+        version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        生成BOM层级结构
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 主物料ID
+            version: BOM版本（可选，如果不提供则使用最新版本）
+            
+        Returns:
+            Dict[str, Any]: BOM层级结构
+        """
+        from collections import defaultdict
+        
+        # 查询BOM数据
+        query = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            is_active=True
+        )
+        
+        if version:
+            query = query.filter(version=version)
+        else:
+            # 使用最新版本
+            latest_bom = await query.order_by("-version").first()
+            if latest_bom:
+                query = query.filter(version=latest_bom.version)
+        
+        bom_items = await query.prefetch_related("component").all()
+        
+        if not bom_items:
+            return {
+                "material_id": material_id,
+                "version": version or "1.0",
+                "items": []
+            }
+        
+        # 构建层级结构
+        def build_tree(parent_id: int, level: int = 0, path: str = "") -> List[Dict[str, Any]]:
+            """递归构建BOM树"""
+            result = []
+            
+            # 查找所有以parent_id为父件的BOM项
+            for bom in bom_items:
+                if bom.material_id == parent_id:
+                    component = await Material.get(id=bom.component_id)
+                    current_path = f"{path}/{bom.component_id}" if path else str(bom.component_id)
+                    
+                    item_data = {
+                        "component_id": bom.component_id,
+                        "component_code": component.main_code,
+                        "component_name": component.name,
+                        "quantity": float(bom.quantity),
+                        "unit": bom.unit,
+                        "waste_rate": float(bom.waste_rate),
+                        "is_required": bom.is_required,
+                        "level": level,
+                        "path": current_path,
+                        "children": []
+                    }
+                    
+                    # 递归查找子件
+                    child_items = await BOM.filter(
+                        tenant_id=tenant_id,
+                        material_id=bom.component_id,
+                        version=version or bom.version,
+                        deleted_at__isnull=True,
+                        is_active=True
+                    ).all()
+                    
+                    if child_items:
+                        item_data["children"] = build_tree(
+                            bom.component_id,
+                            level + 1,
+                            current_path
+                        )
+                    
+                    result.append(item_data)
+            
+            return result
+        
+        tree = build_tree(material_id)
+        
+        material = await Material.get(id=material_id)
+        
+        return {
+            "material_id": material_id,
+            "material_code": material.main_code,
+            "material_name": material.name,
+            "version": version or bom_items[0].version,
+            "items": tree
+        }
+    
+    @staticmethod
+    async def calculate_bom_quantity(
+        tenant_id: int,
+        material_id: int,
+        parent_quantity: Decimal = Decimal("1.0"),
+        version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        计算BOM用量（考虑多层级和损耗率）
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 主物料ID
+            parent_quantity: 父物料数量（默认1.0）
+            version: BOM版本（可选）
+            
+        Returns:
+            Dict[str, Any]: 计算结果，包含每个子物料的实际用量
+        """
+        from collections import defaultdict
+        
+        # 查询BOM数据
+        query = BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+            is_active=True
+        )
+        
+        if version:
+            query = query.filter(version=version)
+        else:
+            # 使用最新版本
+            latest_bom = await query.order_by("-version").first()
+            if latest_bom:
+                query = query.filter(version=latest_bom.version)
+        
+        bom_items = await query.prefetch_related("component").all()
+        
+        result = {
+            "material_id": material_id,
+            "parent_quantity": float(parent_quantity),
+            "components": []
+        }
+        
+        # 递归计算每个子物料的用量
+        def calculate_component_quantity(
+            comp_id: int,
+            comp_quantity: Decimal,
+            comp_waste_rate: Decimal,
+            parent_qty: Decimal
+        ) -> Decimal:
+            """计算子物料的实际用量（考虑损耗率）"""
+            # 实际需要 = 基础用量 × (1 + 损耗率) × 父物料数量
+            actual_quantity = comp_quantity * (Decimal("1") + comp_waste_rate / Decimal("100")) * parent_qty
+            return actual_quantity
+        
+        # 计算直接子物料的用量
+        component_quantities = defaultdict(Decimal)
+        
+        for bom in bom_items:
+            if bom.is_required:
+                actual_qty = calculate_component_quantity(
+                    bom.component_id,
+                    bom.quantity,
+                    bom.waste_rate or Decimal("0.00"),
+                    parent_quantity
+                )
+                component_quantities[bom.component_id] += actual_qty
+                
+                component = await Material.get(id=bom.component_id)
+                result["components"].append({
+                    "component_id": bom.component_id,
+                    "component_code": component.main_code,
+                    "component_name": component.name,
+                    "base_quantity": float(bom.quantity),
+                    "waste_rate": float(bom.waste_rate or Decimal("0.00")),
+                    "actual_quantity": float(actual_qty),
+                    "unit": bom.unit,
+                    "level": 0
+                })
+                
+                # 递归计算子物料的子物料用量
+                child_boms = await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=bom.component_id,
+                    version=version or bom.version,
+                    deleted_at__isnull=True,
+                    is_active=True
+                ).all()
+                
+                if child_boms:
+                    child_result = await MaterialService.calculate_bom_quantity(
+                        tenant_id=tenant_id,
+                        material_id=bom.component_id,
+                        parent_quantity=actual_qty,
+                        version=version or bom.version
+                    )
+                    
+                    # 合并子物料的用量
+                    for child_comp in child_result["components"]:
+                        child_comp_id = child_comp["component_id"]
+                        if child_comp_id in component_quantities:
+                            component_quantities[child_comp_id] += Decimal(str(child_comp["actual_quantity"]))
+                        else:
+                            component_quantities[child_comp_id] = Decimal(str(child_comp["actual_quantity"]))
+                            child_comp["level"] = 1
+                            result["components"].append(child_comp)
+        
+        return result
+    
+    @staticmethod
+    async def create_bom_version(
+        tenant_id: int,
+        material_id: int,
+        data: BOMVersionCreate
+    ) -> List[BOMResponse]:
+        """
+        创建BOM新版本
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 主物料ID
+            data: BOM版本创建数据
+            
+        Returns:
+            List[BOMResponse]: 新版本的BOM对象列表
+        """
+        # 查找当前版本的BOM
+        current_boms = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True
+        ).order_by("-version").all()
+        
+        if not current_boms:
+            raise NotFoundError(f"物料 {material_id} 的BOM不存在")
+        
+        # 获取当前版本号
+        current_version = current_boms[0].version
+        current_bom_code = current_boms[0].bom_code
+        
+        # 创建新版本的BOM（复制当前版本）
+        new_bom_list = []
+        for bom in current_boms:
+            if bom.version == current_version:
+                new_bom = await BOM.create(
+                    tenant_id=tenant_id,
+                    material_id=bom.material_id,
+                    component_id=bom.component_id,
+                    quantity=bom.quantity,
+                    unit=bom.unit,
+                    waste_rate=bom.waste_rate,
+                    is_required=bom.is_required,
+                    level=bom.level,
+                    path=bom.path,
+                    version=data.version,
+                    bom_code=current_bom_code,  # 使用相同的BOM编码
+                    effective_date=data.effective_date or bom.effective_date,
+                    expiry_date=bom.expiry_date,
+                    approval_status="draft",  # 新版本默认为草稿
+                    is_alternative=bom.is_alternative,
+                    alternative_group_id=bom.alternative_group_id,
+                    priority=bom.priority,
+                    description=data.version_description or bom.description,
+                    remark=bom.remark,
+                    is_active=bom.is_active,
+                )
+                new_bom_list.append(new_bom)
+        
+        logger.info(
+            f"创建BOM新版本成功：物料 {material_id}，"
+            f"从版本 {current_version} 创建版本 {data.version}"
+        )
+        
+        return [BOMResponse.model_validate(bom) for bom in new_bom_list]
+    
+    @staticmethod
+    async def compare_bom_versions(
+        tenant_id: int,
+        material_id: int,
+        data: BOMVersionCompare
+    ) -> Dict[str, Any]:
+        """
+        对比BOM版本
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 主物料ID
+            data: BOM版本对比数据
+            
+        Returns:
+            Dict[str, Any]: 版本对比结果
+        """
+        # 查询两个版本的BOM
+        version1_boms = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=data.version1,
+            deleted_at__isnull=True
+        ).prefetch_related("component").all()
+        
+        version2_boms = await BOM.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            version=data.version2,
+            deleted_at__isnull=True
+        ).prefetch_related("component").all()
+        
+        # 构建版本1的映射（component_id -> BOM）
+        version1_map = {bom.component_id: bom for bom in version1_boms}
+        version2_map = {bom.component_id: bom for bom in version2_boms}
+        
+        # 找出差异
+        added = []  # 新增的子件
+        removed = []  # 删除的子件
+        modified = []  # 修改的子件
+        
+        # 检查版本2中新增或修改的子件
+        for bom2 in version2_boms:
+            component = await Material.get(id=bom2.component_id)
+            if bom2.component_id not in version1_map:
+                # 新增
+                added.append({
+                    "component_id": bom2.component_id,
+                    "component_code": component.main_code,
+                    "component_name": component.name,
+                    "quantity": float(bom2.quantity),
+                    "unit": bom2.unit,
+                    "waste_rate": float(bom2.waste_rate or Decimal("0.00")),
+                })
+            else:
+                # 检查是否修改
+                bom1 = version1_map[bom2.component_id]
+                if (bom1.quantity != bom2.quantity or
+                    bom1.unit != bom2.unit or
+                    bom1.waste_rate != bom2.waste_rate or
+                    bom1.is_required != bom2.is_required):
+                    modified.append({
+                        "component_id": bom2.component_id,
+                        "component_code": component.main_code,
+                        "component_name": component.name,
+                        "version1": {
+                            "quantity": float(bom1.quantity),
+                            "unit": bom1.unit,
+                            "waste_rate": float(bom1.waste_rate or Decimal("0.00")),
+                            "is_required": bom1.is_required,
+                        },
+                        "version2": {
+                            "quantity": float(bom2.quantity),
+                            "unit": bom2.unit,
+                            "waste_rate": float(bom2.waste_rate or Decimal("0.00")),
+                            "is_required": bom2.is_required,
+                        }
+                    })
+        
+        # 检查版本1中删除的子件
+        for bom1 in version1_boms:
+            if bom1.component_id not in version2_map:
+                component = await Material.get(id=bom1.component_id)
+                removed.append({
+                    "component_id": bom1.component_id,
+                    "component_code": component.main_code,
+                    "component_name": component.name,
+                    "quantity": float(bom1.quantity),
+                    "unit": bom1.unit,
+                    "waste_rate": float(bom1.waste_rate or Decimal("0.00")),
+                })
+        
+        return {
+            "material_id": material_id,
+            "version1": data.version1,
+            "version2": data.version2,
+            "added": added,
+            "removed": removed,
+            "modified": modified
+        }
 

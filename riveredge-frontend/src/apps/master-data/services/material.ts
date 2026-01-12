@@ -18,6 +18,13 @@ import type {
   BOMCreate,
   BOMUpdate,
   BOMListParams,
+  BOMBatchImport,
+  BOMHierarchy,
+  BOMQuantityResult,
+  BOMVersionCreate,
+  BOMVersionCompare,
+  BOMVersionCompareResult,
+  BOMCycleDetectionResult,
   MaterialCodeMapping,
   MaterialCodeMappingCreate,
   MaterialCodeMappingUpdate,
@@ -212,6 +219,82 @@ export const bomApi = {
    */
   getVersions: async (bomCode: string): Promise<BOM[]> => {
     return api.get(`/apps/master-data/materials/bom/versions/${bomCode}`);
+  },
+  
+  /**
+   * 批量导入BOM（支持部门编码）
+   * 
+   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   */
+  batchImport: async (data: BOMBatchImport): Promise<BOM[]> => {
+    return api.post('/apps/master-data/materials/bom/batch-import', data);
+  },
+  
+  /**
+   * 生成BOM层级结构
+   * 
+   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   */
+  getHierarchy: async (
+    materialId: number,
+    version?: string
+  ): Promise<BOMHierarchy> => {
+    return api.get(`/apps/master-data/materials/bom/material/${materialId}/hierarchy`, {
+      params: { version },
+    });
+  },
+  
+  /**
+   * 计算BOM用量（考虑损耗率）
+   * 
+   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   */
+  calculateQuantity: async (
+    materialId: number,
+    parentQuantity: number = 1.0,
+    version?: string
+  ): Promise<BOMQuantityResult> => {
+    return api.get(`/apps/master-data/materials/bom/material/${materialId}/quantity`, {
+      params: { parent_quantity: parentQuantity, version },
+    });
+  },
+  
+  /**
+   * 创建BOM新版本
+   * 
+   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   */
+  createVersion: async (
+    materialId: number,
+    data: BOMVersionCreate
+  ): Promise<BOM[]> => {
+    return api.post(`/apps/master-data/materials/bom/material/${materialId}/version`, data);
+  },
+  
+  /**
+   * 对比BOM版本
+   * 
+   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   */
+  compareVersions: async (
+    materialId: number,
+    data: BOMVersionCompare
+  ): Promise<BOMVersionCompareResult> => {
+    return api.post(`/apps/master-data/materials/bom/material/${materialId}/compare-versions`, data);
+  },
+  
+  /**
+   * 检测BOM循环依赖
+   * 
+   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   */
+  detectCycle: async (
+    materialId: number,
+    componentId: number
+  ): Promise<BOMCycleDetectionResult> => {
+    return api.get('/apps/master-data/materials/bom/detect-cycle', {
+      params: { material_id: materialId, component_id: componentId },
+    });
   },
 };
 

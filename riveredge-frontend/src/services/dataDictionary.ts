@@ -249,3 +249,32 @@ export async function deleteDictionaryItem(itemUuid: string): Promise<void> {
   });
 }
 
+/**
+ * 初始化系统字典响应数据
+ */
+export interface InitializeSystemDictionariesResponse {
+  tenant_id: number;
+  dictionaries: Array<{
+    code: string;
+    name: string;
+    uuid: string;
+    items_created: number;
+    items_updated: number;
+  }>;
+  dictionaries_count: number;
+  items_created_count: number;
+  items_updated_count: number;
+}
+
+/**
+ * 初始化系统字典
+ * 
+ * 为当前租户加载所有系统字典及其字典项。
+ * 
+ * @returns 初始化结果
+ */
+export async function initializeSystemDictionaries(): Promise<InitializeSystemDictionariesResponse> {
+  return apiRequest<InitializeSystemDictionariesResponse>('/core/data-dictionaries/initialize-system', {
+    method: 'POST',
+  });
+}

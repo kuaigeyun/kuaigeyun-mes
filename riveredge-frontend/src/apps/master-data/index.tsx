@@ -18,6 +18,7 @@ import StorageLocationsPage from './pages/warehouse/storage-locations';
 // 物料管理页面
 import MaterialsManagementPage from './pages/materials/management';
 import BOMPage from './pages/materials/bom';
+import BOMDesignerPage from './pages/materials/bom/designer';
 import MaterialCodeMappingPage from './pages/materials/code-mapping';
 import VariantAttributesPage from './pages/materials/variant-attributes';
 
@@ -53,6 +54,7 @@ const MasterDataApp: React.FC = () => {
       {/* 物料管理路由 */}
       <Route path="materials" element={<MaterialsManagementPage />} />
       <Route path="materials/bom" element={<BOMPage />} />
+      <Route path="materials/bom/designer" element={<BOMDesignerPage />} />
       <Route path="materials/code-mapping" element={<MaterialCodeMappingPage />} />
       <Route path="materials/variant-attributes" element={<VariantAttributesPage />} />
 
