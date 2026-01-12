@@ -15,6 +15,7 @@ from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
     BOMCreate, BOMUpdate, BOMResponse, BOMBatchCreate,
+    BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     MaterialGroupTreeResponse,
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
     MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse
@@ -395,6 +396,178 @@ async def get_bom_versions(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post("/bom/batch-import", response_model=List[BOMResponse], summary="批量导入BOM（支持部门编码）")
+async def batch_import_bom(
+    data: BOMBatchImport,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量导入BOM（支持universheet批量导入，支持部门编码自动映射）
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    
+    - **items**: BOM导入项列表（必填）
+      - **parent_code**: 父件编码（支持任意部门编码：SALE-A001、DES-A001、主编码MAT-FIN-0001）
+      - **component_code**: 子件编码（支持任意部门编码：PROD-A001、主编码MAT-SEMI-0001）
+      - **quantity**: 子件数量（必填，数字）
+      - **unit**: 子件单位（可选，如：个、kg、m等）
+      - **waste_rate**: 损耗率（可选，百分比，如：5%表示5.00）
+      - **is_required**: 是否必选（可选，是/否，默认：是）
+      - **remark**: 备注（可选）
+    - **version**: BOM版本号（可选，默认：1.0）
+    - **bom_code**: BOM编码（可选）
+    - **effective_date**: 生效日期（可选）
+    - **description**: 描述（可选）
+    
+    系统会自动：
+    - 识别部门编码，自动映射到主编码
+    - 验证BOM数据完整性
+    - 检测循环依赖
+    - 检测重复子件
+    - 生成BOM层级结构
+    """
+    try:
+        return await MaterialService.batch_import_bom(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/bom/material/{material_id}/hierarchy", summary="生成BOM层级结构")
+async def get_bom_hierarchy(
+    material_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    version: Optional[str] = Query(None, description="BOM版本（可选，如果不提供则使用最新版本）")
+):
+    """
+    生成BOM层级结构
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    
+    - **material_id**: 主物料ID
+    - **version**: BOM版本（可选，如果不提供则使用最新版本）
+    
+    返回完整的BOM树形结构，支持多层级BOM展开。
+    """
+    try:
+        return await MaterialService.generate_bom_hierarchy(tenant_id, material_id, version)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/bom/material/{material_id}/quantity", summary="计算BOM用量（考虑损耗率）")
+async def calculate_bom_quantity(
+    material_id: int,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    parent_quantity: float = Query(1.0, ge=0, description="父物料数量（默认1.0）"),
+    version: Optional[str] = Query(None, description="BOM版本（可选，如果不提供则使用最新版本）")
+):
+    """
+    计算BOM用量（考虑多层级和损耗率）
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    
+    - **material_id**: 主物料ID
+    - **parent_quantity**: 父物料数量（默认1.0）
+    - **version**: BOM版本（可选，如果不提供则使用最新版本）
+    
+    返回每个子物料的实际用量（考虑损耗率）。
+    """
+    try:
+        from decimal import Decimal
+        return await MaterialService.calculate_bom_quantity(
+            tenant_id, material_id, Decimal(str(parent_quantity)), version
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/bom/material/{material_id}/version", response_model=List[BOMResponse], summary="创建BOM新版本")
+async def create_bom_version(
+    material_id: int,
+    data: BOMVersionCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建BOM新版本
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    
+    - **material_id**: 主物料ID
+    - **version**: 版本号（如：v1.1）
+    - **version_description**: 版本说明（可选）
+    - **effective_date**: 生效日期（可选）
+    - **apply_strategy**: 版本应用策略（new_only：仅新工单使用新版本，推荐；all：所有工单使用新版本，谨慎使用）
+    
+    系统会自动复制当前版本创建新版本。
+    """
+    try:
+        return await MaterialService.create_bom_version(tenant_id, material_id, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/bom/material/{material_id}/compare-versions", summary="对比BOM版本")
+async def compare_bom_versions(
+    material_id: int,
+    data: BOMVersionCompare,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    对比BOM版本
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    
+    - **material_id**: 主物料ID
+    - **version1**: 版本1（如：v1.0）
+    - **version2**: 版本2（如：v1.1）
+    
+    返回版本对比结果，包括新增、删除、修改的子件。
+    """
+    try:
+        return await MaterialService.compare_bom_versions(tenant_id, material_id, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/bom/detect-cycle", summary="检测BOM循环依赖")
+async def detect_bom_cycle(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    material_id: int = Query(..., description="主物料ID（父件）"),
+    component_id: int = Query(..., description="子物料ID（子件）")
+):
+    """
+    检测BOM循环依赖
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    
+    - **material_id**: 主物料ID（父件）
+    - **component_id**: 子物料ID（子件）
+    
+    返回是否会导致循环依赖（true：会形成循环，false：不会形成循环）。
+    """
+    try:
+        has_cycle = await MaterialService.detect_bom_cycle(tenant_id, material_id, component_id)
+        return {"has_cycle": has_cycle}
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 # ==================== 物料相关接口 ====================
 # 注意：物料详情路由必须在 BOM 路由之后，避免 /bom 被 /{material_uuid} 匹配
 
@@ -433,11 +606,16 @@ async def list_materials(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    group_id: Optional[int] = Query(None, description="物料分组ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用"),
+    group_id: Optional[int] = Query(None, alias="groupId", description="物料分组ID（过滤）"),
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),
     code: Optional[str] = Query(None, description="物料编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="物料名称（模糊匹配）")
+    name: Optional[str] = Query(None, description="物料名称（模糊匹配）"),
+    material_type: Optional[str] = Query(None, alias="materialType", description="物料类型（过滤）"),
+    specification: Optional[str] = Query(None, description="规格（模糊匹配）"),
+    brand: Optional[str] = Query(None, description="品牌（模糊匹配）"),
+    model: Optional[str] = Query(None, description="型号（模糊匹配）"),
+    base_unit: Optional[str] = Query(None, alias="baseUnit", description="基础单位（精确匹配）")
 ):
     """
     获取物料列表
@@ -449,8 +627,16 @@ async def list_materials(
     - **keyword**: 搜索关键词（物料编码或名称）
     - **code**: 物料编码（精确匹配）
     - **name**: 物料名称（模糊匹配）
+    - **material_type**: 物料类型（可选，用于过滤）
+    - **specification**: 规格（可选，模糊匹配）
+    - **brand**: 品牌（可选，模糊匹配）
+    - **model**: 型号（可选，模糊匹配）
+    - **base_unit**: 基础单位（可选，精确匹配）
     """
-    return await MaterialService.list_materials(tenant_id, skip, limit, group_id, is_active, keyword, code, name)
+    return await MaterialService.list_materials(
+        tenant_id, skip, limit, group_id, is_active, keyword, code, name,
+        material_type, specification, brand, model, base_unit
+    )
 
 
 @router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")

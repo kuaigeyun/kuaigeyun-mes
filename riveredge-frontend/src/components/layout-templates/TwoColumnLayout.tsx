@@ -259,7 +259,17 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       >
         {/* 搜索栏 */}
         {search && (
-          <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
+          <div
+            style={{
+              padding: '8px',
+              borderBottom: `1px solid ${token.colorBorder}`,
+              display: 'flex',
+              alignItems: 'center',
+              height: '48px',
+              boxSizing: 'border-box',
+              lineHeight: '32px',
+            }}
+          >
             <Input
               placeholder={search.placeholder || '搜索'}
               prefix={<SearchOutlined />}
@@ -327,6 +337,9 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
+              height: '48px',
+              boxSizing: 'border-box',
+              lineHeight: '32px',
             }}
           >
             {header.left && <Space>{header.left}</Space>}
@@ -337,11 +350,15 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
 
         {/* 内容区 */}
         <div
+          className="two-column-layout-content"
           style={{
             flex: 1,
-            overflow: 'auto',
+            overflow: 'hidden',
             padding: '16px',
             backgroundColor: contentBackgroundColor,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
           }}
         >
           {content}

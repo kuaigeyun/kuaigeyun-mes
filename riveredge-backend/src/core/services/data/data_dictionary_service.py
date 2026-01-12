@@ -4,7 +4,7 @@
 提供数据字典的 CRUD 操作和字典项管理。
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
 import json
@@ -526,4 +526,124 @@ class DataDictionaryService:
         from datetime import datetime
         item.deleted_at = datetime.utcnow()
         await item.save()
+    
+    @staticmethod
+    async def initialize_system_dictionaries(tenant_id: int) -> Dict[str, Any]:
+        """
+        初始化系统字典
+        
+        为新租户创建所有系统字典及其字典项。
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            Dict[str, Any]: 初始化结果
+        """
+        from loguru import logger
+        from core.config.system_dictionaries import SYSTEM_DICTIONARIES
+        from core.schemas.data_dictionary import DataDictionaryCreate
+        from core.schemas.dictionary_item import DictionaryItemCreate
+        from core.models.data_dictionary import DataDictionary
+        from core.models.dictionary_item import DictionaryItem
+        
+        logger.info(f"开始为组织 {tenant_id} 初始化系统字典")
+        
+        created_dictionaries = []
+        created_items_count = 0
+        updated_items_count = 0
+        
+        for dict_config in SYSTEM_DICTIONARIES:
+            try:
+                # 检查字典是否已存在
+                existing_dict = await DataDictionary.filter(
+                    tenant_id=tenant_id,
+                    code=dict_config["code"],
+                    deleted_at__isnull=True
+                ).first()
+                
+                if existing_dict:
+                    logger.info(f"系统字典 {dict_config['code']} 已存在，UUID: {existing_dict.uuid}")
+                    dictionary = existing_dict
+                else:
+                    # 创建系统字典
+                    logger.info(f"创建系统字典 {dict_config['code']}...")
+                    dictionary_data = DataDictionaryCreate(
+                        name=dict_config["name"],
+                        code=dict_config["code"],
+                        description=dict_config.get("description"),
+                        is_system=True,  # 标记为系统字典
+                        is_active=True,
+                    )
+                    dictionary = await DataDictionaryService.create_dictionary(
+                        tenant_id=tenant_id,
+                        data=dictionary_data
+                    )
+                    logger.info(f"系统字典 {dict_config['code']} 创建成功，UUID: {dictionary.uuid}")
+                
+                # 创建或更新字典项
+                dictionary_uuid = str(dictionary.uuid)
+                items_created = 0
+                items_updated = 0
+                
+                for item_config in dict_config.get("items", []):
+                    # 检查字典项是否已存在
+                    existing_item = await DictionaryItem.filter(
+                        tenant_id=tenant_id,
+                        dictionary_id=dictionary.id,
+                        value=item_config["value"],
+                        deleted_at__isnull=True
+                    ).first()
+                    
+                    if existing_item:
+                        # 更新现有字典项
+                        existing_item.label = item_config["label"]
+                        existing_item.description = item_config.get("description")
+                        existing_item.sort_order = item_config["sort_order"]
+                        existing_item.is_active = True
+                        await existing_item.save()
+                        items_updated += 1
+                    else:
+                        # 创建新字典项
+                        item_create_data = DictionaryItemCreate(
+                            dictionary_uuid=dictionary_uuid,
+                            label=item_config["label"],
+                            value=item_config["value"],
+                            description=item_config.get("description"),
+                            sort_order=item_config["sort_order"],
+                            is_active=True,
+                        )
+                        await DataDictionaryService.create_item(
+                            tenant_id=tenant_id,
+                            data=item_create_data
+                        )
+                        items_created += 1
+                
+                created_dictionaries.append({
+                    "code": dict_config["code"],
+                    "name": dict_config["name"],
+                    "uuid": str(dictionary.uuid),
+                    "items_created": items_created,
+                    "items_updated": items_updated,
+                })
+                created_items_count += items_created
+                updated_items_count += items_updated
+                
+                logger.info(f"系统字典 {dict_config['code']} 初始化完成：创建 {items_created} 个字典项，更新 {items_updated} 个字典项")
+                
+            except Exception as e:
+                logger.error(f"初始化系统字典 {dict_config['code']} 失败: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # 继续处理其他字典，不中断整个流程
+        
+        logger.info(f"组织 {tenant_id} 系统字典初始化完成！创建 {len(created_dictionaries)} 个字典，创建 {created_items_count} 个字典项，更新 {updated_items_count} 个字典项")
+        
+        return {
+            "tenant_id": tenant_id,
+            "dictionaries": created_dictionaries,
+            "dictionaries_count": len(created_dictionaries),
+            "items_created_count": created_items_count,
+            "items_updated_count": updated_items_count,
+        }
 

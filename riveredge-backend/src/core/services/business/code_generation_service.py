@@ -89,7 +89,9 @@ class CodeGenerationService:
     async def test_generate_code(
         tenant_id: int,
         rule_code: str,
-        context: Optional[Dict] = None
+        context: Optional[Dict] = None,
+        check_duplicate: bool = False,
+        entity_type: Optional[str] = None
     ) -> str:
         """
         测试生成编码（不更新序号）
@@ -98,6 +100,8 @@ class CodeGenerationService:
             tenant_id: 组织ID
             rule_code: 规则代码
             context: 上下文变量（可选）
+            check_duplicate: 是否检查重复（如果为True，会自动递增直到找到不重复的编码）
+            entity_type: 实体类型（如：'material'，用于检查重复）
             
         Returns:
             str: 生成的编码（测试用）
@@ -119,9 +123,67 @@ class CodeGenerationService:
         
         # 生成编码（使用当前序号 + 步长，但不保存）
         test_seq = current_seq + rule.seq_step
-        return await CodeGenerationService._render_expression(
+        test_code = await CodeGenerationService._render_expression(
             rule, test_seq, context
         )
+        
+        # 如果需要检查重复，自动递增直到找到不重复的编码
+        if check_duplicate and entity_type:
+            max_attempts = 100  # 最多尝试100次
+            attempt = 0
+            
+            while attempt < max_attempts:
+                # 检查编码是否已存在
+                is_duplicate = await CodeGenerationService._check_code_exists(
+                    tenant_id=tenant_id,
+                    code=test_code,
+                    entity_type=entity_type
+                )
+                
+                if not is_duplicate:
+                    # 找到不重复的编码，返回
+                    return test_code
+                
+                # 编码已存在，递增序号继续尝试
+                test_seq += rule.seq_step
+                test_code = await CodeGenerationService._render_expression(
+                    rule, test_seq, context
+                )
+                attempt += 1
+            
+            # 如果尝试100次仍然重复，返回最后一次生成的编码（虽然理论上不应该发生）
+            return test_code
+        
+        return test_code
+    
+    @staticmethod
+    async def _check_code_exists(
+        tenant_id: int,
+        code: str,
+        entity_type: str
+    ) -> bool:
+        """
+        检查编码是否已存在
+        
+        Args:
+            tenant_id: 组织ID
+            code: 编码
+            entity_type: 实体类型（如：'material'）
+            
+        Returns:
+            bool: 如果编码已存在返回True，否则返回False
+        """
+        if entity_type == 'material':
+            from apps.master_data.models.material import Material
+            existing = await Material.filter(
+                tenant_id=tenant_id,
+                main_code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+        
+        # 其他实体类型的检查可以在这里扩展
+        return False
     
     @staticmethod
     async def _render_expression(

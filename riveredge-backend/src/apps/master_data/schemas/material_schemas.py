@@ -90,7 +90,7 @@ class MaterialBase(BaseModel):
     main_code: Optional[str] = Field(None, max_length=50, description="主编码（系统自动生成，格式：MAT-{类型}-{序号}）")
     code: Optional[str] = Field(None, max_length=50, description="物料编码（已废弃，保留用于向后兼容，建议使用部门编码）")
     name: str = Field(..., max_length=200, description="物料名称")
-    material_type: str = Field("RAW", max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
+    material_type: Optional[str] = Field(None, max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     group_id: Optional[int] = Field(None, description="物料分组ID")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: str = Field(..., max_length=20, description="基础单位")
@@ -118,6 +118,8 @@ class MaterialBase(BaseModel):
     @validator("material_type")
     def validate_material_type(cls, v):
         """验证物料类型"""
+        if v is None:
+            return None
         valid_types = ["FIN", "SEMI", "RAW", "PACK", "AUX"]
         if v not in valid_types:
             raise ValueError(f"物料类型必须是以下之一: {', '.join(valid_types)}")
@@ -260,12 +262,27 @@ class MaterialGroupTreeResponse(MaterialGroupResponse):
 
 
 class BOMBase(BaseModel):
-    """BOM基础 Schema"""
+    """
+    BOM基础 Schema
     
-    material_id: int = Field(..., description="主物料ID")
-    component_id: int = Field(..., description="子物料ID")
-    quantity: Decimal = Field(..., description="用量")
-    unit: str = Field(..., max_length=20, description="单位")
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    """
+    
+    material_id: int = Field(..., description="主物料ID（父件）")
+    component_id: int = Field(..., description="子物料ID（子件）")
+    quantity: Decimal = Field(..., description="用量（必填，数字）")
+    unit: Optional[str] = Field(None, max_length=20, description="单位（可选，如：个、kg、m等）")
+    
+    # 损耗率和必选标识（根据优化设计规范新增）
+    waste_rate: Decimal = Field(
+        default=Decimal("0.00"),
+        description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
+    )
+    is_required: bool = Field(default=True, description="是否必选（是/否，默认：是）")
+    
+    # 层级信息（用于多层级BOM展开，根据优化设计规范新增）
+    level: int = Field(default=0, description="层级深度（0为顶层，用于多层级BOM展开）")
+    path: Optional[str] = Field(None, max_length=500, description="层级路径（如：1/2/3，用于快速查询和排序）")
     
     # 版本控制
     version: str = Field("1.0", max_length=50, description="BOM版本号")
@@ -334,10 +351,21 @@ class BOMCreate(BOMBase):
 class BOMUpdate(BaseModel):
     """更新BOM Schema"""
     
-    material_id: Optional[int] = Field(None, description="主物料ID")
-    component_id: Optional[int] = Field(None, description="子物料ID")
-    quantity: Optional[Decimal] = Field(None, description="用量")
-    unit: Optional[str] = Field(None, max_length=20, description="单位")
+    material_id: Optional[int] = Field(None, description="主物料ID（父件）")
+    component_id: Optional[int] = Field(None, description="子物料ID（子件）")
+    quantity: Optional[Decimal] = Field(None, description="用量（必填，数字）")
+    unit: Optional[str] = Field(None, max_length=20, description="单位（可选，如：个、kg、m等）")
+    
+    # 损耗率和必选标识（根据优化设计规范新增）
+    waste_rate: Optional[Decimal] = Field(
+        None,
+        description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
+    )
+    is_required: Optional[bool] = Field(None, description="是否必选（是/否，默认：是）")
+    
+    # 层级信息（用于多层级BOM展开，根据优化设计规范新增）
+    level: Optional[int] = Field(None, description="层级深度（0为顶层，用于多层级BOM展开）")
+    path: Optional[str] = Field(None, max_length=500, description="层级路径（如：1/2/3，用于快速查询和排序）")
     
     # 版本控制
     version: Optional[str] = Field(None, max_length=50, description="BOM版本号")
@@ -414,11 +442,23 @@ class BOMResponse(BOMBase):
 
 
 class BOMItemCreate(BaseModel):
-    """BOM子物料项创建 Schema（用于批量创建）"""
+    """
+    BOM子物料项创建 Schema（用于批量创建）
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    """
     
     component_id: int = Field(..., description="子物料ID")
-    quantity: Decimal = Field(..., description="用量")
-    unit: str = Field(..., max_length=20, description="单位")
+    quantity: Decimal = Field(..., description="用量（必填，数字）")
+    unit: Optional[str] = Field(None, max_length=20, description="单位（可选，如：个、kg、m等）")
+    
+    # 损耗率和必选标识（根据优化设计规范新增）
+    waste_rate: Decimal = Field(
+        default=Decimal("0.00"),
+        description="损耗率（百分比，如：5.00表示5%，用于计算实际用料数量）"
+    )
+    is_required: bool = Field(default=True, description="是否必选（是/否，默认：是）")
+    
     is_alternative: bool = Field(False, description="是否为替代料")
     alternative_group_id: Optional[int] = Field(None, description="替代料组ID")
     priority: int = Field(0, description="优先级（数字越小优先级越高）")
@@ -434,10 +474,17 @@ class BOMItemCreate(BaseModel):
     
     @validator("unit")
     def validate_unit(cls, v):
-        """验证单位格式"""
-        if not v or not v.strip():
+        """验证单位格式（单位可选，如果提供则不能为空）"""
+        if v is not None and (not v or not v.strip()):
             raise ValueError("单位不能为空")
-        return v.strip()
+        return v.strip() if v else None
+    
+    @validator("waste_rate")
+    def validate_waste_rate(cls, v):
+        """验证损耗率（必须在0-100之间）"""
+        if v < 0 or v > 100:
+            raise ValueError("损耗率必须在0-100之间")
+        return v
 
 
 class BOMBatchCreate(BaseModel):
@@ -495,6 +542,93 @@ class BOMBatchCreate(BaseModel):
                 raise ValueError("失效日期必须晚于生效日期")
         return v
 
+
+class BOMBatchImportItem(BaseModel):
+    """
+    BOM批量导入项 Schema（用于universheet批量导入）
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    支持使用任意部门编码，系统自动映射到主编码。
+    """
+    
+    parent_code: str = Field(..., description="父件编码（支持任意部门编码：SALE-A001、DES-A001、主编码MAT-FIN-0001）")
+    component_code: str = Field(..., description="子件编码（支持任意部门编码：PROD-A001、主编码MAT-SEMI-0001）")
+    quantity: Decimal = Field(..., description="子件数量（必填，数字）")
+    unit: Optional[str] = Field(None, description="子件单位（可选，如：个、kg、m等）")
+    waste_rate: Optional[Decimal] = Field(None, description="损耗率（可选，百分比，如：5%表示5.00）")
+    is_required: Optional[bool] = Field(True, description="是否必选（可选，是/否，默认：是）")
+    remark: Optional[str] = Field(None, description="备注（可选）")
+    
+    @validator("quantity")
+    def validate_quantity(cls, v):
+        """验证用量"""
+        if v <= 0:
+            raise ValueError("子件数量必须大于0")
+        return v
+    
+    @validator("waste_rate")
+    def validate_waste_rate(cls, v):
+        """验证损耗率（必须在0-100之间）"""
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError("损耗率必须在0-100之间")
+        return v
+
+
+class BOMBatchImport(BaseModel):
+    """
+    BOM批量导入 Schema（用于universheet批量导入）
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    支持使用任意部门编码，系统自动映射到主编码。
+    """
+    
+    items: List[BOMBatchImportItem] = Field(..., min_items=1, description="BOM导入项列表")
+    version: Optional[str] = Field("1.0", max_length=50, description="BOM版本号（可选，默认：1.0）")
+    bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码（可选）")
+    effective_date: Optional[datetime] = Field(None, description="生效日期（可选）")
+    description: Optional[str] = Field(None, description="描述（可选）")
+    
+    @validator("items")
+    def validate_items(cls, v):
+        """验证导入项列表"""
+        if not v or len(v) == 0:
+            raise ValueError("至少需要添加一个BOM导入项")
+        return v
+
+
+class BOMVersionCreate(BaseModel):
+    """
+    BOM版本创建 Schema
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    """
+    
+    version: str = Field(..., max_length=50, description="版本号（如：v1.1）")
+    version_description: Optional[str] = Field(None, description="版本说明")
+    effective_date: Optional[datetime] = Field(None, description="生效日期（可选）")
+    apply_strategy: str = Field(
+        "new_only",
+        description="版本应用策略：new_only（仅新工单使用新版本，推荐）或 all（所有工单使用新版本，谨慎使用）"
+    )
+    
+    @validator("apply_strategy")
+    def validate_apply_strategy(cls, v):
+        """验证版本应用策略"""
+        allowed_strategies = ["new_only", "all"]
+        if v not in allowed_strategies:
+            raise ValueError(f"版本应用策略必须是: {', '.join(allowed_strategies)}")
+        return v
+
+
+class BOMVersionCompare(BaseModel):
+    """
+    BOM版本对比 Schema
+    
+    根据《工艺路线和标准作业流程优化设计规范.md》设计。
+    """
+    
+    version1: str = Field(..., max_length=50, description="版本1（如：v1.0）")
+    version2: str = Field(..., max_length=50, description="版本2（如：v1.1）")
 
 
 # ==================== 物料编码映射 Schema ====================

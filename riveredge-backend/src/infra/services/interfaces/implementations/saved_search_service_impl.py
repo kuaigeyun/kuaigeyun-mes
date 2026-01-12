@@ -66,17 +66,18 @@ class SavedSearchServiceImpl(SavedSearchServiceInterface):
             tenant_id=tenant_id
         )
     
-    async def create_saved_search(self, data: Any) -> Any:
+    async def create_saved_search(self, data: Any, user_id: int = None, tenant_id: Optional[int] = None) -> Any:
         """创建保存的搜索条件"""
         # SavedSearchService.create_saved_search需要user_id和tenant_id参数
-        user_id = getattr(data, 'user_id', None)
-        tenant_id = getattr(data, 'tenant_id', None)
+        # 如果方法参数中没有提供，尝试从data中获取
+        if user_id is None:
+            user_id = getattr(data, 'user_id', None)
+        if tenant_id is None:
+            tenant_id = getattr(data, 'tenant_id', None)
         
         if not user_id:
-            from infra.domain.tenant_context import get_current_tenant_id
-            # 如果data中没有user_id，需要从上下文获取
-            # 这里假设data中有user_id，实际使用时需要从依赖注入获取
-            pass
+            # 如果仍然没有user_id，抛出错误
+            raise ValueError("user_id is required")
         
         return await self._saved_search_service.create_saved_search(
             data=data,
@@ -96,14 +97,20 @@ class SavedSearchServiceImpl(SavedSearchServiceInterface):
     async def update_saved_search(
         self,
         uuid: str,
-        data: Any
+        data: Any,
+        user_id: int = None
     ) -> Optional[Any]:
         """更新保存的搜索条件"""
         # SavedSearchService.update_saved_search需要user_id参数
-        user_id = getattr(data, 'user_id', None)
-        if user_id:
-            return await self._saved_search_service.update_saved_search(uuid, data, user_id)
-        return None
+        # 如果方法参数中没有提供，尝试从data中获取
+        if user_id is None:
+            user_id = getattr(data, 'user_id', None)
+        
+        if not user_id:
+            # 如果仍然没有user_id，抛出错误
+            raise ValueError("user_id is required")
+        
+        return await self._saved_search_service.update_saved_search(uuid, data, user_id)
     
     async def delete_saved_search(self, uuid: str) -> bool:
         """删除保存的搜索条件"""

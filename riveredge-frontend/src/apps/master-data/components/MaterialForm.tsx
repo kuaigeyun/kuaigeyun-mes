@@ -11,10 +11,10 @@
  * Date: 2026-01-08
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert } from 'antd';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit } from '@ant-design/pro-components';
+import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency } from '@ant-design/pro-components';
 import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit } from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
@@ -30,6 +30,7 @@ import { variantAttributeApi } from '../services/variant-attribute';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
 import { testGenerateCode } from '../../../services/codeRule';
 import DictionarySelect from '../../../components/dictionary-select';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
 
 const { Panel } = Collapse;
 
@@ -150,6 +151,67 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   };
 
   /**
+   * 生成编码的辅助函数
+   * 
+   * @param groupId - 物料分组ID
+   * @param materialType - 物料类型
+   * @param name - 物料名称
+   * @param forceUpdate - 是否强制更新编码（即使字段已有值）
+   */
+  const generateCode = useCallback(async (groupId?: number, materialType?: string, name?: string, forceUpdate: boolean = false) => {
+    if (isEdit || !isAutoGenerateEnabled('master-data-material')) {
+      return;
+    }
+
+    const ruleCode = getPageRuleCode('master-data-material');
+    if (!ruleCode) {
+      return;
+    }
+
+    // 构建上下文（用于编码规则）
+    const context: Record<string, any> = {};
+    
+    // 如果提供了物料分组ID，获取分组信息
+    if (groupId) {
+      const group = materialGroups.find(g => g.id === groupId);
+      if (group) {
+        context.group_code = group.code;
+        context.group_name = group.name;
+      }
+    }
+    
+    // 添加物料类型（如果有）
+    if (materialType) {
+      context.material_type = materialType;
+    }
+    
+    // 添加物料名称（如果有）
+    if (name) {
+      context.name = name;
+    }
+    
+    // 使用测试生成API预览编码（不更新序号，但会检测重复并自动递增）
+    try {
+      const codeResponse = await testGenerateCode({
+        rule_code: ruleCode,
+        context: Object.keys(context).length > 0 ? context : undefined,
+        check_duplicate: true, // 启用重复检测
+        entity_type: 'material', // 指定实体类型为物料
+      });
+      
+      // 如果强制更新，或者字段为空，或者包含占位符，则更新编码
+      const currentMainCode = formRef.current?.getFieldValue('mainCode');
+      if (forceUpdate || !currentMainCode || currentMainCode.startsWith('[FIELD:') || currentMainCode === '') {
+        formRef.current?.setFieldsValue({
+          mainCode: codeResponse.code,
+        });
+      }
+    } catch (error) {
+      console.warn('自动生成编码失败:', error);
+    }
+  }, [isEdit, materialGroups]);
+
+  /**
    * 初始化数据
    */
   useEffect(() => {
@@ -159,6 +221,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       loadSuppliers();
       loadWarehouses();
       loadProcessRoutes();
+
+      // 如果是新建模式且启用了自动编码，生成编码
+      if (!isEdit) {
+        generateCode(initialValues?.groupId, initialValues?.materialType, initialValues?.name);
+      }
 
       // 如果是编辑模式，加载物料数据
       if (isEdit && material) {
@@ -256,7 +323,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         setSupplierCodes([]);
       }
     }
-  }, [open, isEdit, material]);
+  }, [open, isEdit, material, generateCode, initialValues]);
   
   /**
    * 当客户列表加载完成后，更新客户编码映射中的名称
@@ -380,25 +447,39 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
       });
       
-      // 组装完整的数据
+      // 组装完整的数据，将驼峰命名转换为蛇形命名
       const { defaults: _defaults, ...restValues } = values;
-      const submitData: MaterialCreate | MaterialUpdate = {
-        ...restValues,
+      const submitData: any = {
+        // 基础字段转换（驼峰 -> 蛇形）
+        main_code: restValues.mainCode,
+        name: restValues.name,
+        group_id: restValues.groupId,
+        material_type: restValues.materialType,
+        specification: restValues.specification,
+        base_unit: restValues.baseUnit, // 关键：转换为 base_unit
+        units: restValues.units,
+        batch_managed: restValues.batchManaged,
+        variant_managed: restValues.variantManaged,
+        variant_attributes: restValues.variantAttributes,
+        description: restValues.description,
+        brand: restValues.brand,
+        model: restValues.model,
+        is_active: restValues.isActive,
         // 部门编码
-        departmentCodes: departmentCodes.length > 0 ? departmentCodes.map(code => ({
+        department_codes: departmentCodes.length > 0 ? departmentCodes.map(code => ({
           code_type: code.code_type,
           code: code.code,
           department: code.department,
           description: code.description,
         })) : undefined,
         // 客户编码
-        customerCodes: customerCodes.length > 0 ? customerCodes.map(code => ({
+        customer_codes: customerCodes.length > 0 ? customerCodes.map(code => ({
           customer_id: code.customerId,
           code: code.code,
           description: code.description,
         })) : undefined,
         // 供应商编码
-        supplierCodes: supplierCodes.length > 0 ? supplierCodes.map(code => ({
+        supplier_codes: supplierCodes.length > 0 ? supplierCodes.map(code => ({
           supplier_id: code.supplierId,
           code: code.code,
           description: code.description,
@@ -406,6 +487,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         // 默认值
         defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
       };
+      
+      // 移除 undefined 值
+      Object.keys(submitData).forEach(key => {
+        if (submitData[key] === undefined) {
+          delete submitData[key];
+        }
+      });
 
       await onFinish(submitData);
     } catch (error: any) {
@@ -505,6 +593,27 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         layout="vertical"
         grid={true}
         rowProps={{ gutter: 16 }}
+        onValuesChange={(changedValues, allValues) => {
+          // 当物料分组、物料类型或名称变化时，重新生成编码
+          if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
+            const groupId = allValues.groupId;
+            const materialType = allValues.materialType;
+            const name = allValues.name;
+            
+            // 如果物料分组变化，强制更新编码
+            if (changedValues.groupId !== undefined) {
+              // 延迟生成编码，避免频繁调用
+              setTimeout(() => {
+                generateCode(groupId, materialType, name, true); // 强制更新
+              }, 300);
+            } else if (changedValues.materialType !== undefined || changedValues.name !== undefined) {
+              // 物料类型或名称变化时，只在编码为空或包含占位符时更新
+              setTimeout(() => {
+                generateCode(groupId, materialType, name, false);
+              }, 300);
+            }
+          }
+        }}
         submitter={{
           searchConfig: {
             submitText: isEdit ? '更新' : '创建',
@@ -605,6 +714,40 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
     inventory?: string;
   }>({});
   const [baseUnit, setBaseUnit] = useState<string>('');
+  const [unitOptions, setUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [loadingUnits, setLoadingUnits] = useState(false);
+  const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
+
+  // 加载数据字典单位选项
+  useEffect(() => {
+    const loadUnitOptions = async () => {
+      try {
+        setLoadingUnits(true);
+        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
+        const items = await getDictionaryItemList(dictionary.uuid, true);
+        const options = items
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(item => ({
+            label: item.label,
+            value: item.value,
+          }));
+        setUnitOptions(options);
+        
+        // 创建value到label的映射
+        const valueToLabelMap: Record<string, string> = {};
+        items.forEach(item => {
+          valueToLabelMap[item.value] = item.label;
+        });
+        setUnitValueToLabel(valueToLabelMap);
+      } catch (error: any) {
+        console.error('加载单位选项失败:', error);
+      } finally {
+        setLoadingUnits(false);
+      }
+    };
+
+    loadUnitOptions();
+  }, []);
 
   // 初始化数据并监听表单变化
   useEffect(() => {
@@ -629,7 +772,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
     const timer = setInterval(updateFromForm, 500);
     
     return () => clearInterval(timer);
-  }, [formRef]);
+  }, [formRef, baseUnit]);
 
   // 添加辅助单位
   const handleAddUnit = () => {
@@ -674,7 +817,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
     });
   };
 
-  // 所有可用单位（基础单位 + 辅助单位）
+  // 所有可用单位（基础单位 + 辅助单位），用于场景单位映射
   const allUnits = baseUnit ? [baseUnit, ...units.map(u => u.unit).filter(Boolean)] : [];
 
   const columns = [
@@ -682,11 +825,18 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
       title: '单位名称',
       dataIndex: 'unit',
       render: (_: any, record: MaterialUnit, index: number) => (
-        <Input
+        <Select
           value={record.unit}
-          placeholder="请输入单位名称"
-          onChange={(e) => handleUnitChange(index, 'unit', e.target.value)}
-          maxLength={20}
+          placeholder="请选择单位"
+          onChange={(value: string) => handleUnitChange(index, 'unit', value)}
+          style={{ width: '100%' }}
+          showSearch
+          allowClear
+          loading={loadingUnits}
+          options={unitOptions}
+          filterOption={(input, option) =>
+            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }
         />
       ),
     },
@@ -730,7 +880,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
                 step={1}
               />
               <span style={{ width: '36%', display: 'inline-block', lineHeight: '32px', textAlign: 'center', background: '#f5f5f5', fontSize: '12px' }}>
-                {baseUnit ? ` = ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${baseUnit}` : ''}
+                {baseUnit ? ` = ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${unitValueToLabel[baseUnit] || baseUnit}` : ''}
               </span>
             </Input.Group>
           </div>
@@ -819,7 +969,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
             fontSize: '12px',
             color: '#1890ff'
           }}>
-            基础单位：<strong>{baseUnit}</strong>
+            基础单位：<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
           </div>
         )}
       </div>
@@ -868,7 +1018,7 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
           description={
             <>
               <div style={{ marginBottom: 4 }}>
-                <strong>基础单位：</strong>{baseUnit}（库存单位）
+                <strong>基础单位：</strong>{unitValueToLabel[baseUnit] || baseUnit}（库存单位）
               </div>
               <div style={{ marginBottom: 4 }}>
                 <strong>辅助单位配置：</strong>
@@ -878,9 +1028,11 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
                 const denominator = unit.denominator || 1;
                 const conversionRate = numerator / denominator;
                 const isInteger = Number.isInteger(conversionRate);
+                const unitLabel = unit.unit ? unitValueToLabel[unit.unit] : unit.unit;
+                const baseUnitLabel = baseUnit ? unitValueToLabel[baseUnit] : baseUnit;
                 return (
                   <div key={index} style={{ marginLeft: 16, marginBottom: 2 }}>
-                    • {unit.unit}：1 {unit.unit} = {isInteger ? conversionRate : `${numerator}/${denominator}`} {baseUnit}
+                    • {unitLabel || unit.unit}：1 {unitLabel || unit.unit} = {isInteger ? conversionRate : `${numerator}/${denominator}`} {baseUnitLabel || baseUnit}
                   </div>
                 );
               })}
@@ -890,15 +1042,15 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
                     <strong>场景单位映射：</strong>
                   </div>
                   {scenarios.purchase && (
-                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 采购单位：{scenarios.purchase}</div>
+                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 采购单位：{unitValueToLabel[scenarios.purchase] || scenarios.purchase}</div>
                   )}
                   {scenarios.sale && (
-                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 销售单位：{scenarios.sale}</div>
+                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 销售单位：{unitValueToLabel[scenarios.sale] || scenarios.sale}</div>
                   )}
                   {scenarios.production && (
-                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 生产单位：{scenarios.production}</div>
+                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 生产单位：{unitValueToLabel[scenarios.production] || scenarios.production}</div>
                   )}
-                  <div style={{ marginLeft: 16 }}>• 库存单位：{baseUnit}（基础单位）</div>
+                  <div style={{ marginLeft: 16 }}>• 库存单位：{unitValueToLabel[baseUnit] || baseUnit}（基础单位）</div>
                 </>
               )}
             </>
@@ -941,7 +1093,12 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
                 placeholder="选择采购单位"
                 allowClear
                 style={{ width: '100%' }}
-                options={allUnits.map(u => ({ label: u, value: u }))}
+                showSearch
+                loading={loadingUnits}
+                options={unitOptions.filter((opt: { label: string; value: string }) => allUnits.includes(opt.value))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
               />
             </Col>
             <Col span={6}>
@@ -952,7 +1109,12 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
                 placeholder="选择销售单位"
                 allowClear
                 style={{ width: '100%' }}
-                options={allUnits.map(u => ({ label: u, value: u }))}
+                showSearch
+                loading={loadingUnits}
+                options={unitOptions.filter((opt: { label: string; value: string }) => allUnits.includes(opt.value))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
               />
             </Col>
             <Col span={6}>
@@ -963,13 +1125,18 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
                 placeholder="选择生产单位"
                 allowClear
                 style={{ width: '100%' }}
-                options={allUnits.map(u => ({ label: u, value: u }))}
+                showSearch
+                loading={loadingUnits}
+                options={unitOptions.filter((opt: { label: string; value: string }) => allUnits.includes(opt.value))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
               />
             </Col>
             <Col span={6}>
               <div style={{ marginBottom: 8 }}>库存单位</div>
               <Input
-                value={baseUnit || ''}
+                value={baseUnit ? (unitValueToLabel[baseUnit] || baseUnit) : ''}
                 disabled
                 placeholder="基础单位"
               />
@@ -1006,16 +1173,16 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         <ProFormText
           name="mainCode"
           label="物料主编码"
-          placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成' : '请输入物料主编码'}
+          placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入物料主编码'}
           rules={[
             { required: true, message: '请输入物料主编码' },
             { max: 50, message: '物料主编码不能超过50个字符' },
           ]}
           fieldProps={{
             style: { textTransform: 'uppercase' },
-            disabled: !isEdit && isAutoGenerateEnabled('master-data-material'),
+            // 允许手动编辑编码
           }}
-          extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成' : undefined}
+          extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成，也可手动编辑。选择物料分组后会自动更新编码。' : undefined}
         />
       </Col>
       {/* 2. 物料名称 */}
@@ -1052,8 +1219,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           dictionaryCode="MATERIAL_TYPE"
           name="materialType"
           label="物料类型"
-          placeholder="请选择物料类型"
-          required
+          placeholder="请选择物料类型（可选）"
           formRef={formRef}
         />
       </Col>
@@ -1077,15 +1243,14 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
       </Col>
       {/* 7. 基础单位 */}
       <Col span={12}>
-        <ProFormText
+        <DictionarySelect
+          dictionaryCode="MATERIAL_UNIT"
           name="baseUnit"
           label="基础单位"
-          placeholder="请输入基础单位（如：个、件、kg等）"
-          rules={[
-            { required: true, message: '请输入基础单位' },
-            { max: 20, message: '基础单位不能超过20个字符' },
-          ]}
-          extra="基础单位作为库存单位，用于库存管理和计量"
+          placeholder="请选择基础单位（如：个、件、kg等）"
+          required
+          formRef={formRef}
+          initialValue="PC"
         />
       </Col>
       {/* 8. 品牌 */}

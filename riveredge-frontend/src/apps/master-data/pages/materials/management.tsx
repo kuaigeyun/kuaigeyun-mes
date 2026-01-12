@@ -28,8 +28,8 @@ import { MaterialForm } from '../../components/MaterialForm';
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material';
 import type { Material, MaterialCreate, MaterialUpdate, MaterialGroup, MaterialGroupCreate, MaterialGroupUpdate } from '../../types/material';
-import { testGenerateCode } from '../../../../services/codeRule';
-import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../utils/codeRulePage';
+import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary';
 
 /**
  * 物料管理合并页面组件
@@ -51,7 +51,6 @@ const MaterialsManagementPage: React.FC = () => {
 
   // 表单引用
   const groupFormRef = useRef<ProFormInstance>();
-  const materialFormRef = useRef<ProFormInstance>();
 
   // Modal 和 Drawer 状态
   const [groupModalVisible, setGroupModalVisible] = useState(false);
@@ -75,6 +74,12 @@ const MaterialsManagementPage: React.FC = () => {
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null);
+
+  // 数据字典选项状态（用于搜索下拉框）
+  const [materialTypeOptions, setMaterialTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [baseUnitOptions, setBaseUnitOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [loadingMaterialTypeOptions, setLoadingMaterialTypeOptions] = useState(false);
+  const [loadingBaseUnitOptions, setLoadingBaseUnitOptions] = useState(false);
 
   /**
    * 将后端树形数据转换为Ant Design Tree组件格式
@@ -145,6 +150,43 @@ const MaterialsManagementPage: React.FC = () => {
   }, [messageApi, convertToTreeData]);
 
   /**
+   * 加载数据字典选项（物料类型和基础单位）
+   */
+  const loadDictionaryOptions = useCallback(async () => {
+    // 加载物料类型选项
+    try {
+      setLoadingMaterialTypeOptions(true);
+      const materialTypeDict = await getDataDictionaryByCode('MATERIAL_TYPE');
+      const materialTypeItems = await getDictionaryItemList(materialTypeDict.uuid, true);
+      setMaterialTypeOptions(
+        materialTypeItems
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(item => ({ label: item.label, value: item.value }))
+      );
+    } catch (error: any) {
+      console.error('加载物料类型选项失败:', error);
+    } finally {
+      setLoadingMaterialTypeOptions(false);
+    }
+
+    // 加载基础单位选项
+    try {
+      setLoadingBaseUnitOptions(true);
+      const baseUnitDict = await getDataDictionaryByCode('MATERIAL_UNIT');
+      const baseUnitItems = await getDictionaryItemList(baseUnitDict.uuid, true);
+      setBaseUnitOptions(
+        baseUnitItems
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(item => ({ label: item.label, value: item.value }))
+      );
+    } catch (error: any) {
+      console.error('加载基础单位选项失败:', error);
+    } finally {
+      setLoadingBaseUnitOptions(false);
+    }
+  }, []);
+
+  /**
    * 处理分组树选择
    */
   const handleGroupSelect: TreeProps['onSelect'] = (selectedKeys) => {
@@ -184,25 +226,71 @@ const MaterialsManagementPage: React.FC = () => {
   };
 
   /**
+   * 递归过滤树数据（支持搜索子分组）
+   * 如果父分组匹配，显示父分组及其所有子分组
+   * 如果子分组匹配，显示父分组和匹配的子分组
+   */
+  const filterTreeData = useCallback((nodes: DataNode[], keyword: string): DataNode[] => {
+    if (!keyword.trim()) {
+      return nodes;
+    }
+    
+    const filtered: DataNode[] = [];
+    const keywordLower = keyword.toLowerCase();
+    
+    nodes.forEach(node => {
+      // 检查当前节点是否匹配（排除"全部物料"节点）
+      const matches = node.key !== 'all' && 
+                     node.title?.toString().toLowerCase().includes(keywordLower);
+      
+      // 递归过滤子节点
+      const filteredChildren = node.children ? filterTreeData(node.children, keyword) : [];
+      
+      // 如果当前节点匹配，或者有子节点匹配，则包含此节点
+      if (matches || filteredChildren.length > 0) {
+        filtered.push({
+          ...node,
+          children: filteredChildren.length > 0 ? filteredChildren : (matches ? node.children : undefined),
+        });
+      }
+    });
+    
+    return filtered;
+  }, []);
+
+  /**
    * 处理分组搜索
    */
   useEffect(() => {
     if (!groupSearchValue.trim()) {
       setFilteredGroupTreeData(groupTreeData);
     } else {
-      const filtered = groupTreeData.filter(node =>
-        node.title?.toString().toLowerCase().includes(groupSearchValue.toLowerCase())
-      );
+      const filtered = filterTreeData(groupTreeData, groupSearchValue);
       setFilteredGroupTreeData(filtered);
+      
+      // 自动展开所有匹配的节点
+      const collectAllKeys = (nodes: DataNode[]): React.Key[] => {
+        let keys: React.Key[] = [];
+        nodes.forEach(node => {
+          keys.push(node.key);
+          if (node.children && node.children.length > 0) {
+            keys = keys.concat(collectAllKeys(node.children));
+          }
+        });
+        return keys;
+      };
+      const allKeys = collectAllKeys(filtered);
+      setExpandedKeys(allKeys);
     }
-  }, [groupTreeData, groupSearchValue]);
+  }, [groupTreeData, groupSearchValue, filterTreeData]);
 
   /**
    * 初始化加载
    */
   useEffect(() => {
     loadMaterialGroups();
-  }, [loadMaterialGroups]);
+    loadDictionaryOptions();
+  }, [loadMaterialGroups, loadDictionaryOptions]);
 
   /**
    * 分组相关操作
@@ -257,61 +345,7 @@ const MaterialsManagementPage: React.FC = () => {
     setMaterialIsEdit(false);
     setCurrentMaterial(null);
     setMaterialModalVisible(true);
-    materialFormRef.current?.resetFields();
-    
-    // 检查是否启用自动编码
-    if (isAutoGenerateEnabled('master-data-material')) {
-      const ruleCode = getPageRuleCode('master-data-material');
-      if (ruleCode) {
-        try {
-          // 获取当前表单值，用于构建上下文（如物料分组编码）
-          const formValues = materialFormRef.current?.getFieldsValue() || {};
-          const context: Record<string, any> = {};
-          
-          // 如果选择了物料分组，获取分组信息
-          if (formValues.groupId) {
-            const group = materialGroups.find(g => g.id === formValues.groupId);
-            if (group) {
-              context.group_code = group.code;
-              context.group_name = group.name;
-            }
-          }
-          
-          // 添加物料类型（如果有）
-          if (formValues.materialType) {
-            context.material_type = formValues.materialType;
-          }
-          
-          // 添加物料名称（如果有）
-          if (formValues.name) {
-            context.name = formValues.name;
-          }
-          
-          // 使用测试生成API预览编码（不更新序号）
-          const codeResponse = await testGenerateCode({ 
-            rule_code: ruleCode,
-            context: Object.keys(context).length > 0 ? context : undefined
-          });
-          materialFormRef.current?.setFieldsValue({
-            mainCode: codeResponse.code,
-            isActive: true,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          materialFormRef.current?.setFieldsValue({
-            isActive: true,
-          });
-        }
-      } else {
-        materialFormRef.current?.setFieldsValue({
-          isActive: true,
-        });
-      }
-    } else {
-      materialFormRef.current?.setFieldsValue({
-        isActive: true,
-      });
-    }
+    // 注意：编码生成逻辑已移至 MaterialForm 组件内部
   };
 
   const handleEditMaterial = async (record: Material) => {
@@ -406,21 +440,56 @@ const MaterialsManagementPage: React.FC = () => {
       title: '物料分组',
       dataIndex: 'groupId',
       width: 150,
-      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: materialGroups.reduce((acc, group) => {
+        acc[group.id] = { text: group.name };
+        return acc;
+      }, {} as Record<number, { text: string }>),
       render: (_, record) => getMaterialGroupName(record.groupId),
+    },
+    {
+      title: '物料类型',
+      dataIndex: 'materialType',
+      width: 120,
+      valueType: 'select',
+      valueEnum: materialTypeOptions.reduce((acc, option) => {
+        acc[option.value] = { text: option.label };
+        return acc;
+      }, {} as Record<string, { text: string }>),
+      fieldProps: {
+        loading: loadingMaterialTypeOptions,
+        showSearch: true,
+        allowClear: true,
+      },
+      render: (_, record) => {
+        const option = materialTypeOptions.find(opt => opt.value === record.materialType);
+        return option ? option.label : record.materialType || '-';
+      },
     },
     {
       title: '规格',
       dataIndex: 'specification',
       width: 150,
       ellipsis: true,
-      hideInSearch: true,
     },
     {
       title: '基础单位',
       dataIndex: 'baseUnit',
       width: 100,
-      hideInSearch: true,
+      valueType: 'select',
+      valueEnum: baseUnitOptions.reduce((acc, option) => {
+        acc[option.value] = { text: option.label };
+        return acc;
+      }, {} as Record<string, { text: string }>),
+      fieldProps: {
+        loading: loadingBaseUnitOptions,
+        showSearch: true,
+        allowClear: true,
+      },
+      render: (_, record) => {
+        const option = baseUnitOptions.find(opt => opt.value === record.baseUnit);
+        return option ? option.label : record.baseUnit || '-';
+      },
     },
     {
       title: '批号管理',
@@ -448,13 +517,11 @@ const MaterialsManagementPage: React.FC = () => {
       title: '品牌',
       dataIndex: 'brand',
       width: 120,
-      hideInSearch: true,
     },
     {
       title: '型号',
       dataIndex: 'model',
       width: 120,
-      hideInSearch: true,
     },
     {
       title: '启用状态',
@@ -632,8 +699,11 @@ const MaterialsManagementPage: React.FC = () => {
                 limit: params.pageSize || 20,
               };
 
-              // 按分组筛选
-              if (selectedGroupId) {
+              // 物料分组筛选（如果搜索表单中有值，覆盖左侧树选择）
+              if (searchFormValues?.groupId !== undefined && searchFormValues.groupId !== null && searchFormValues.groupId !== '') {
+                apiParams.groupId = Number(searchFormValues.groupId);
+              } else if (selectedGroupId) {
+                // 如果没有搜索表单值，使用左侧树选择
                 apiParams.groupId = selectedGroupId;
               }
 
@@ -649,6 +719,31 @@ const MaterialsManagementPage: React.FC = () => {
 
               if (searchFormValues?.name && searchFormValues.name.trim()) {
                 apiParams.name = searchFormValues.name.trim();
+              }
+
+              // 物料类型搜索
+              if (searchFormValues?.materialType !== undefined && searchFormValues.materialType !== null && searchFormValues.materialType !== '') {
+                apiParams.materialType = searchFormValues.materialType;
+              }
+
+              // 规格搜索
+              if (searchFormValues?.specification && searchFormValues.specification.trim()) {
+                apiParams.specification = searchFormValues.specification.trim();
+              }
+
+              // 品牌搜索
+              if (searchFormValues?.brand && searchFormValues.brand.trim()) {
+                apiParams.brand = searchFormValues.brand.trim();
+              }
+
+              // 型号搜索
+              if (searchFormValues?.model && searchFormValues.model.trim()) {
+                apiParams.model = searchFormValues.model.trim();
+              }
+
+              // 基础单位搜索
+              if (searchFormValues?.baseUnit !== undefined && searchFormValues.baseUnit !== null && searchFormValues.baseUnit !== '') {
+                apiParams.baseUnit = searchFormValues.baseUnit;
               }
 
               // 如果有关键词搜索，传递给后端
@@ -821,7 +916,8 @@ const MaterialsManagementPage: React.FC = () => {
                 isActive: true,
                 batchManaged: false,
                 variantManaged: false,
-                materialType: 'RAW',
+                materialType: undefined,
+                baseUnit: 'PC', // 默认值：件
               }
         }
       />

@@ -275,7 +275,9 @@ async def test_generate_code(
         code = await CodeGenerationService.test_generate_code(
             tenant_id=tenant_id,
             rule_code=request.rule_code,
-            context=request.context
+            context=request.context,
+            check_duplicate=request.check_duplicate or False,
+            entity_type=request.entity_type
         )
         
         # 获取规则名称
