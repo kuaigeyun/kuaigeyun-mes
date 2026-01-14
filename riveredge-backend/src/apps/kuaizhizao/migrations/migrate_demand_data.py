@@ -423,3 +423,199 @@ class DemandDataMigration:
             })
         
         return result
+    
+    async def validate_migration(
+        self, 
+        tenant_id: int
+    ) -> Dict[str, Any]:
+        """
+        验证迁移数据的完整性
+        
+        Args:
+            tenant_id: 租户ID
+            
+        Returns:
+            Dict: 验证结果
+        """
+        logger.info(f"开始验证租户 {tenant_id} 的迁移数据")
+        
+        result = {
+            "valid": True,
+            "errors": [],
+            "warnings": []
+        }
+        
+        try:
+            # 验证销售预测数据
+            forecasts = await SalesForecast.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            
+            for forecast in forecasts:
+                demand = await Demand.filter(
+                    tenant_id=tenant_id,
+                    source_id=forecast.id,
+                    source_type="sales_forecast"
+                ).first()
+                
+                if not demand:
+                    result["warnings"].append({
+                        "type": "missing",
+                        "source_type": "sales_forecast",
+                        "source_id": forecast.id,
+                        "source_code": forecast.forecast_code,
+                        "message": "销售预测未迁移"
+                    })
+                    continue
+                
+                # 验证明细数量
+                forecast_items = await SalesForecastItem.filter(
+                    tenant_id=tenant_id,
+                    forecast_id=forecast.id
+                ).count()
+                
+                demand_items = await DemandItem.filter(
+                    tenant_id=tenant_id,
+                    demand_id=demand.id
+                ).count()
+                
+                if forecast_items != demand_items:
+                    result["errors"].append({
+                        "type": "item_count_mismatch",
+                        "source_type": "sales_forecast",
+                        "source_id": forecast.id,
+                        "source_code": forecast.forecast_code,
+                        "demand_id": demand.id,
+                        "expected": forecast_items,
+                        "actual": demand_items
+                    })
+                    result["valid"] = False
+            
+            # 验证销售订单数据
+            orders = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            
+            for order in orders:
+                demand = await Demand.filter(
+                    tenant_id=tenant_id,
+                    source_id=order.id,
+                    source_type="sales_order"
+                ).first()
+                
+                if not demand:
+                    result["warnings"].append({
+                        "type": "missing",
+                        "source_type": "sales_order",
+                        "source_id": order.id,
+                        "source_code": order.order_code,
+                        "message": "销售订单未迁移"
+                    })
+                    continue
+                
+                # 验证明细数量
+                order_items = await SalesOrderItem.filter(
+                    tenant_id=tenant_id,
+                    sales_order_id=order.id
+                ).count()
+                
+                demand_items = await DemandItem.filter(
+                    tenant_id=tenant_id,
+                    demand_id=demand.id
+                ).count()
+                
+                if order_items != demand_items:
+                    result["errors"].append({
+                        "type": "item_count_mismatch",
+                        "source_type": "sales_order",
+                        "source_id": order.id,
+                        "source_code": order.order_code,
+                        "demand_id": demand.id,
+                        "expected": order_items,
+                        "actual": demand_items
+                    })
+                    result["valid"] = False
+            
+        except Exception as e:
+            logger.error(f"验证迁移数据异常: {e}")
+            result["errors"].append({
+                "type": "exception",
+                "message": str(e)
+            })
+            result["valid"] = False
+        
+        return result
+    
+    async def rollback_migration(
+        self, 
+        tenant_id: int,
+        source_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        回滚迁移数据
+        
+        Args:
+            tenant_id: 租户ID
+            source_type: 源类型（sales_forecast 或 sales_order），None表示回滚所有
+            
+        Returns:
+            Dict: 回滚结果
+        """
+        logger.warning(f"开始回滚租户 {tenant_id} 的迁移数据（source_type={source_type}）")
+        
+        result = {
+            "count": 0,
+            "deleted": [],
+            "errors": []
+        }
+        
+        try:
+            # 构建查询条件
+            filters = {
+                "tenant_id": tenant_id
+            }
+            if source_type:
+                filters["source_type"] = source_type
+            
+            # 查询已迁移的需求
+            demands = await Demand.filter(**filters).all()
+            
+            logger.info(f"找到 {len(demands)} 条已迁移的需求数据")
+            
+            for demand in demands:
+                try:
+                    # 删除需求明细
+                    await DemandItem.filter(demand_id=demand.id).delete()
+                    
+                    # 删除需求
+                    await demand.delete()
+                    
+                    result["deleted"].append({
+                        "demand_id": demand.id,
+                        "demand_code": demand.demand_code,
+                        "source_type": demand.source_type,
+                        "source_id": demand.source_id,
+                        "source_code": demand.source_code
+                    })
+                    result["count"] += 1
+                    logger.info(f"已回滚需求 {demand.demand_code}")
+                    
+                except Exception as e:
+                    error_msg = f"回滚需求 {demand.demand_code} 失败: {str(e)}"
+                    logger.error(error_msg)
+                    result["errors"].append({
+                        "demand_id": demand.id,
+                        "demand_code": demand.demand_code,
+                        "error": error_msg
+                    })
+            
+        except Exception as e:
+            logger.error(f"回滚迁移数据异常: {e}")
+            result["errors"].append({
+                "type": "exception",
+                "message": str(e)
+            })
+        
+        return result
