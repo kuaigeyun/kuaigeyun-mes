@@ -288,6 +288,66 @@ const DemandManagementPage: React.FC = () => {
       valueType: 'dateTime',
       width: 160,
     },
+    {
+      title: '操作',
+      width: 200,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleDetail([record.id!])}
+          >
+            详情
+          </Button>
+          {record.status === '草稿' && (
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit([record.id!])}
+              >
+                编辑
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<SendOutlined />}
+                onClick={() => handleSubmitDemand(record.id!)}
+                style={{ color: '#1890ff' }}
+              >
+                提交
+              </Button>
+            </>
+          )}
+          {record.status === '待审核' && (
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleApprove(record.id!)}
+                style={{ color: '#52c41a' }}
+              >
+                审核
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={() => handleReject(record.id!)}
+              >
+                驳回
+              </Button>
+            </>
+          )}
+        </Space>
+      ),
+    },
   ];
 
   return (
