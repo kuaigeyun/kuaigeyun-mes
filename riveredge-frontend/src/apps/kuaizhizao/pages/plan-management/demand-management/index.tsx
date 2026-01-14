@@ -84,7 +84,7 @@ const DemandManagementPage: React.FC = () => {
     if (keys.length === 1) {
       const id = Number(keys[0]);
       try {
-        const data = await getDemand(id, true);
+        const data = await getDemand(id, true, true);  // includeItems=true, includeDuration=true
         setCurrentDemand(data);
         
         // 获取单据关联关系

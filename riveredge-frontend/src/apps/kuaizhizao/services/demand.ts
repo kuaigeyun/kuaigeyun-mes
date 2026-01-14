@@ -127,11 +127,11 @@ export async function listDemands(params: DemandListParams = {}): Promise<Demand
 /**
  * 获取需求详情
  */
-export async function getDemand(id: number, includeItems: boolean = false): Promise<Demand> {
-  return apiRequest<Demand>({
+export async function getDemand(id: number, includeItems: boolean = false, includeDuration: boolean = false): Promise<Demand & { duration_info?: any }> {
+  return apiRequest<Demand & { duration_info?: any }>({
     url: `/apps/kuaizhizao/demands/${id}`,
     method: 'GET',
-    params: { include_items: includeItems },
+    params: { include_items: includeItems, include_duration: includeDuration },
   });
 }
 
