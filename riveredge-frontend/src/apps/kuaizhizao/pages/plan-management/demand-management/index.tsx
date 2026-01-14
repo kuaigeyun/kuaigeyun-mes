@@ -24,6 +24,7 @@ import {
   approveDemand, 
   rejectDemand,
   batchCreateDemands,
+  pushDemandToComputation,
   Demand,
   DemandItem 
 } from '../../../services/demand';
@@ -280,6 +281,28 @@ const DemandManagementPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(`批量导入失败: ${error.message || '未知错误'}`);
     }
+  };
+
+  /**
+   * 处理下推需求到物料需求运算
+   */
+  const handlePushToComputation = async (id: number) => {
+    Modal.confirm({
+      title: '下推到物料需求运算',
+      content: '确定要将此需求下推到物料需求运算吗？下推后将创建需求计算任务。',
+      onOk: async () => {
+        try {
+          const result = await pushDemandToComputation(id);
+          messageApi.success(result.message || '需求下推成功');
+          if (result.computation_code) {
+            messageApi.info(`计算编码：${result.computation_code}`);
+          }
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '下推失败');
+        }
+      },
+    });
   };
 
   /**
@@ -756,6 +779,17 @@ const DemandManagementPage: React.FC = () => {
                     驳回
                   </Button>
                 </>
+              )}
+              {currentDemand.status === '已审核' && 
+               currentDemand.review_status === '通过' && 
+               !currentDemand.pushed_to_computation && (
+                <Button
+                  type="primary"
+                  icon={<ArrowDownOutlined />}
+                  onClick={() => handlePushToComputation(currentDemand.id!)}
+                >
+                  下推到物料需求运算
+                </Button>
               )}
             </Space>
           )

@@ -245,3 +245,24 @@ export async function batchCreateDemands(demands: Partial<Demand>[]): Promise<Ba
     data: demands,
   });
 }
+
+/**
+ * 下推需求到物料需求运算响应
+ */
+export interface PushToComputationResponse {
+  success: boolean;
+  message: string;
+  demand_code: string;
+  computation_code: string;
+  note?: string;
+}
+
+/**
+ * 下推需求到物料需求运算
+ */
+export async function pushDemandToComputation(demandId: number): Promise<PushToComputationResponse> {
+  return apiRequest<PushToComputationResponse>({
+    url: `/apps/kuaizhizao/demands/${demandId}/push-to-computation`,
+    method: 'POST',
+  });
+}
