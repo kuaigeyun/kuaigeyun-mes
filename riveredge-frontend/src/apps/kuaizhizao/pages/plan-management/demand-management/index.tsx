@@ -43,6 +43,7 @@ const DemandManagementPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
   
   // 需求类型选择（销售预测/销售订单）
   const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>('sales_forecast');
