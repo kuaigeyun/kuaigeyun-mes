@@ -492,6 +492,19 @@ const DemandManagementPage: React.FC = () => {
               </Button>
             </>
           )}
+          {record.status === '已审核' && 
+           record.review_status === '通过' && 
+           !record.pushed_to_computation && (
+            <Button
+              type="link"
+              size="small"
+              icon={<ArrowDownOutlined />}
+              onClick={() => handlePushToComputation(record.id!)}
+              style={{ color: '#1890ff' }}
+            >
+              下推
+            </Button>
+          )}
         </Space>
       ),
     },
