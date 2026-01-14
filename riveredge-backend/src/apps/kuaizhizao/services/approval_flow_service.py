@@ -478,3 +478,106 @@ class ApprovalFlowService:
             return len(step_records) >= 1
         
         return False
+    
+    async def get_approval_records(
+        self,
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        获取审核历史记录
+        
+        Args:
+            tenant_id: 租户ID
+            entity_type: 实体类型
+            entity_id: 实体ID
+            
+        Returns:
+            List[Dict]: 审核记录列表
+        """
+        records = await ApprovalRecord.filter(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id
+        ).order_by('approval_time').all()
+        
+        result = []
+        for record in records:
+            result.append({
+                "id": record.id,
+                "uuid": str(record.uuid),
+                "flow_id": record.flow_id,
+                "flow_code": record.flow_code,
+                "step_order": record.step_order,
+                "step_name": record.step_name,
+                "approver_id": record.approver_id,
+                "approver_name": record.approver_name,
+                "approval_result": record.approval_result,
+                "approval_comment": record.approval_comment,
+                "approval_time": record.approval_time.isoformat() if record.approval_time else None,
+                "flow_status": record.flow_status,
+            })
+        
+        return result
+    
+    async def get_approval_status(
+        self,
+        tenant_id: int,
+        entity_type: str,
+        entity_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取审核状态
+        
+        Args:
+            tenant_id: 租户ID
+            entity_type: 实体类型
+            entity_id: 实体ID
+            
+        Returns:
+            Dict: 审核状态信息
+        """
+        records = await ApprovalRecord.filter(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            entity_id=entity_id
+        ).order_by('-approval_time').all()
+        
+        if not records:
+            return {
+                "has_flow": False,
+                "flow_status": None,
+                "current_step": None,
+                "records_count": 0
+            }
+        
+        # 获取流程信息
+        flow_id = records[0].flow_id
+        flow = await ApprovalFlow.get_or_none(id=flow_id)
+        
+        if flow:
+            steps = await ApprovalFlowStep.filter(
+                tenant_id=tenant_id,
+                flow_id=flow_id
+            ).order_by('step_order').all()
+            
+            current_step = self._get_current_step(records, steps)
+        else:
+            current_step = None
+        
+        # 确定流程状态
+        flow_status = records[0].flow_status if records else None
+        
+        return {
+            "has_flow": True,
+            "flow_id": flow_id,
+            "flow_code": flow.flow_code if flow else None,
+            "flow_name": flow.flow_name if flow else None,
+            "flow_status": flow_status,
+            "current_step": current_step.step_order if current_step else None,
+            "current_step_name": current_step.step_name if current_step else None,
+            "records_count": len(records),
+            "is_completed": flow_status == "已完成",
+            "is_rejected": flow_status == "已驳回"
+        }
