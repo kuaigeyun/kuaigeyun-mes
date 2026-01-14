@@ -77,6 +77,12 @@ const ReportingPage: React.FC = () => {
   const [loadingSOP, setLoadingSOP] = useState(false);
   const [currentSOP, setCurrentSOP] = useState<any>(null);
 
+  // 子工艺路线报工状态
+  const [subOperations, setSubOperations] = useState<any[]>([]); // 当前主工序的子工序列表
+  const [currentSubOperation, setCurrentSubOperation] = useState<any>(null); // 当前选中的子工序
+  const [subOperationReportingVisible, setSubOperationReportingVisible] = useState(false); // 子工序报工Modal
+  const subOperationFormRef = useRef<any>(null);
+
   /**
    * 处理扫码报工
    */
@@ -155,6 +161,58 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
+   * 检查工序是否有子工艺路线
+   * 
+   * 注意：这是一个简化的实现，通过检查后续工序的sequence是否连续来判断是否有子工序
+   * 理想情况下应该从后端获取明确的parent_operation_id信息
+   * 
+   * 简化逻辑：
+   * 1. 如果下一个工序的sequence是currentSequence+1，可能是子工序
+   * 2. 如果后续有多个连续的sequence，且下一个主工序的sequence不连续，则这些是子工序
+   * 3. 如果后续所有工序的sequence都连续，且没有明显的主工序，则可能是子工序
+   */
+  const checkSubOperations = (operation: any, allOperations: any[]) => {
+    const currentSequence = operation.sequence;
+    const subOps: any[] = [];
+    
+    // 查找sequence大于当前工序的所有工序
+    const followingOps = allOperations
+      .filter((op: any) => op.sequence > currentSequence)
+      .sort((a: any, b: any) => a.sequence - b.sequence);
+    
+    if (followingOps.length === 0) {
+      return subOps;
+    }
+    
+    // 检查下一个工序的sequence是否连续
+    // 如果下一个工序的sequence是currentSequence+1，可能是子工序
+    const nextOp = followingOps[0];
+    if (nextOp.sequence === currentSequence + 1) {
+      // 查找下一个主工序（sequence不连续，或者sequence间隔较大）
+      // 简化判断：如果后续工序的sequence都连续，且数量>=2，可能是子工序
+      let consecutiveCount = 1;
+      for (let i = 1; i < followingOps.length; i++) {
+        if (followingOps[i].sequence === currentSequence + 1 + i) {
+          consecutiveCount++;
+        } else {
+          break;
+        }
+      }
+      
+      // 如果连续数量>=2，认为是子工序
+      // 或者如果只有一个后续工序，且sequence连续，也可能是子工序
+      if (consecutiveCount >= 1) {
+        // 收集连续的子工序
+        for (let i = 0; i < consecutiveCount && i < followingOps.length; i++) {
+          subOps.push(followingOps[i]);
+        }
+      }
+    }
+    
+    return subOps;
+  };
+
+  /**
    * 处理选择工序
    */
   const handleSelectOperation = async (operationId: number) => {
@@ -162,6 +220,11 @@ const ReportingPage: React.FC = () => {
     if (operation) {
       setCurrentOperation(operation);
       await checkJumpRule(operation, workOrderOperations);
+      
+      // 检查是否有子工艺路线（核心功能，新增）
+      const subOps = checkSubOperations(operation, workOrderOperations);
+      setSubOperations(subOps);
+      setCurrentSubOperation(null);
       
       // 加载SOP参数配置（如果工序关联了SOP）（核心功能，优化）
       setLoadingSOP(true);
@@ -1050,22 +1113,125 @@ const ReportingPage: React.FC = () => {
             )}
 
             {/* 跳转规则提示 */}
-            {jumpRuleError && (
-              <Alert
-                message={jumpRuleError}
-                type="error"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
+            {currentOperation && (
+              <div style={{ marginBottom: 16 }}>
+                {currentOperation.allow_jump ? (
+                  <Alert
+                    message="此工序允许跳转，可随时报工"
+                    type="info"
+                    showIcon
+                    description="允许跳转的工序可以并行进行，不依赖上道工序完成"
+                  />
+                ) : jumpRuleError ? (
+                  <Alert
+                    message={jumpRuleError}
+                    type="warning"
+                    showIcon
+                    description="不允许跳转的工序，必须完成上道工序才能开始此工序"
+                  />
+                ) : (
+                  <Alert
+                    message="此工序不允许跳转"
+                    type="info"
+                    showIcon
+                    description="必须完成上道工序才能开始此工序"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* 子工艺路线进度显示（核心功能，新增） */}
+            {currentOperation && subOperations.length > 0 && (
+              <Card 
+                size="small" 
+                style={{ marginBottom: 16, backgroundColor: '#fafafa' }}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span>子工艺路线进度 - {currentOperation.operation_name}</span>
+                  </div>
+                }
+              >
+                <div style={{ marginBottom: 12 }}>
+                  {subOperations.map((subOp: any, index: number) => {
+                    const isCompleted = subOp.status === 'completed';
+                    const isInProgress = subOp.status === 'in_progress';
+                    const isPending = subOp.status === 'pending';
+                    
+                    return (
+                      <div
+                        key={subOp.operation_id || index}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          marginBottom: 8,
+                          backgroundColor: isCompleted ? '#f6ffed' : isInProgress ? '#e6f7ff' : '#fff',
+                          border: `1px solid ${isCompleted ? '#b7eb8f' : isInProgress ? '#91d5ff' : '#d9d9d9'}`,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            {isCompleted ? (
+                              <CheckCircleOutlined style={{ color: '#52c41a', marginRight: 8 }} />
+                            ) : isInProgress ? (
+                              <ClockCircleOutlined style={{ color: '#1890ff', marginRight: 8 }} />
+                            ) : (
+                              <CloseCircleOutlined style={{ color: '#d9d9d9', marginRight: 8 }} />
+                            )}
+                            <span style={{ fontWeight: isInProgress ? 'bold' : 'normal' }}>
+                              {subOp.operation_name}
+                            </span>
+                            <Tag 
+                              color={isCompleted ? 'success' : isInProgress ? 'processing' : 'default'}
+                              style={{ marginLeft: 8 }}
+                            >
+                              {isCompleted ? '已完成' : isInProgress ? '进行中' : '未开始'}
+                            </Tag>
+                          </div>
+                          {subOp.completed_quantity > 0 && (
+                            <div style={{ marginTop: 4, fontSize: 12, color: '#666' }}>
+                              完成数量：{subOp.completed_quantity} / 合格：{subOp.qualified_quantity}
+                            </div>
+                          )}
+                        </div>
+                          <Button
+                          type="primary"
+                          size="small"
+                          onClick={() => {
+                            setCurrentSubOperation(subOp);
+                            setSubOperationReportingVisible(true);
+                          }}
+                          disabled={isCompleted}
+                        >
+                          {isCompleted ? '已完成' : '报工'}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Alert
+                  message="提示"
+                  description="必须先完成所有子工序，才能完成主工序"
+                  type="info"
+                  showIcon
+                  style={{ marginTop: 12 }}
+                />
+              </Card>
             )}
 
             {/* 报工表单 - 根据报工类型显示不同界面 */}
-            {currentOperation && !jumpRuleError && (
+            {currentOperation && (
               <Card 
                 size="small" 
                 title={
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span>报工 - {currentOperation.operation_name}</span>
+                    {subOperations.length > 0 && (
+                      <Tag color="orange" style={{ marginLeft: 8 }}>
+                        有子工艺路线（{subOperations.filter((op: any) => op.status === 'completed').length}/{subOperations.length}已完成）
+                      </Tag>
+                    )}
                     {currentSOP && (
                       <Tag color="blue" style={{ marginLeft: 8 }}>
                         SOP: {currentSOP.name}
@@ -1146,15 +1312,35 @@ const ReportingPage: React.FC = () => {
                         }
                       }
 
+                      // 刷新工单工序列表（核心功能，新增）
+                      const updatedOperations = await workOrderApi.getOperations(currentWorkOrder.id.toString());
+                      setWorkOrderOperations(updatedOperations || []);
+                      
+                      // 更新当前工序状态
+                      const updatedCurrentOp = updatedOperations?.find((op: any) => op.operation_id === currentOperation.operation_id);
+                      if (updatedCurrentOp) {
+                        setCurrentOperation(updatedCurrentOp);
+                        // 重新检查子工序
+                        const updatedSubOps = checkSubOperations(updatedCurrentOp, updatedOperations || []);
+                        setSubOperations(updatedSubOps);
+                      }
+
                       // 自动切换到下一工序（核心功能，新增）
-                      const remainingOperations = workOrderOperations.filter(
-                        (op: any) => op.sequence > currentOperation.sequence && op.status !== 'completed'
+                      const remainingOperations = (updatedOperations || workOrderOperations).filter(
+                        (op: any) => {
+                          // 排除子工序（如果当前工序有子工序，子工序不算在remainingOperations中）
+                          if (subOperations.length > 0) {
+                            const isSubOp = subOperations.some((subOp: any) => subOp.operation_id === op.operation_id);
+                            if (isSubOp) return false;
+                          }
+                          return op.sequence > currentOperation.sequence && op.status !== 'completed';
+                        }
                       );
                       
                       if (remainingOperations.length > 0) {
                         const nextOperation = remainingOperations[0];
                         setCurrentOperation(nextOperation);
-                        await checkJumpRule(nextOperation, workOrderOperations);
+                        await checkJumpRule(nextOperation, updatedOperations || workOrderOperations);
                         // 自动加载下一工序的SOP（核心功能，优化）
                         await handleSelectOperation(nextOperation.operation_id);
                         scanFormRef.current?.resetFields();
@@ -1168,6 +1354,7 @@ const ReportingPage: React.FC = () => {
                         setScanWorkOrderCode('');
                         setFeedingList([]);
                         setDischargingList([]);
+                        setSubOperations([]);
                         scanFormRef.current?.resetFields();
                         actionRef.current?.reload();
                       }
@@ -1212,30 +1399,49 @@ const ReportingPage: React.FC = () => {
                     <>
                       <ProFormDigit
                         name="reported_quantity"
-                        label="报工数量"
-                        placeholder="报工数量"
-                        rules={[{ required: true, message: '请输入报工数量' }]}
+                        label="完成数量"
+                        placeholder="请输入完成数量"
+                        rules={[{ required: true, message: '请输入完成数量' }]}
                         min={0}
                         fieldProps={{
                           precision: 2,
                           max: currentWorkOrder.quantity - (currentOperation.completed_quantity || 0),
                         }}
+                        extra="完成数量必须大于0"
                       />
                       <ProFormDigit
                         name="qualified_quantity"
                         label="合格数量"
-                        placeholder="合格数量"
-                        rules={[{ required: true, message: '请输入合格数量' }]}
+                        placeholder="请输入合格数量"
+                        rules={[
+                          { required: true, message: '请输入合格数量' },
+                          ({ getFieldValue }) => ({
+                            validator: (_, value) => {
+                              const reportedQuantity = getFieldValue('reported_quantity');
+                              if (reportedQuantity && value > reportedQuantity) {
+                                return Promise.reject(new Error('合格数量不能大于完成数量'));
+                              }
+                              return Promise.resolve();
+                            },
+                          }),
+                        ]}
                         min={0}
                         fieldProps={{ precision: 2 }}
+                        extra="合格数量必须大于等于0，且不能大于完成数量"
                       />
                       <ProFormDigit
                         name="unqualified_quantity"
                         label="不合格数量"
-                        placeholder="不合格数量"
-                        rules={[{ required: true, message: '请输入不合格数量' }]}
-                        min={0}
+                        placeholder="不合格数量（自动计算）"
+                        disabled
                         fieldProps={{ precision: 2 }}
+                        extra="不合格数量 = 完成数量 - 合格数量（自动计算）"
+                        dependencies={['reported_quantity', 'qualified_quantity']}
+                        transform={(value, namePath, allValues) => {
+                          const reportedQuantity = allValues.reported_quantity || 0;
+                          const qualifiedQuantity = allValues.qualified_quantity || 0;
+                          return reportedQuantity - qualifiedQuantity;
+                        }}
                       />
                       <ProFormDigit
                         name="work_hours"
@@ -1346,8 +1552,24 @@ const ReportingPage: React.FC = () => {
                     >
                       取消
                     </Button>
-                    <Button type="primary" htmlType="submit">
+                    <Button 
+                      type="primary" 
+                      htmlType="submit"
+                      disabled={
+                        subOperations.length > 0 && 
+                        !subOperations.every((subOp: any) => subOp.status === 'completed')
+                      }
+                      title={
+                        subOperations.length > 0 && 
+                        !subOperations.every((subOp: any) => subOp.status === 'completed')
+                          ? '必须先完成所有子工序才能完成主工序'
+                          : ''
+                      }
+                    >
                       提交报工
+                      {subOperations.length > 0 && 
+                       !subOperations.every((subOp: any) => subOp.status === 'completed') && 
+                       '（需先完成所有子工序）'}
                     </Button>
                   </div>
                 </Form>
@@ -1590,7 +1812,343 @@ const ReportingPage: React.FC = () => {
           </>
         )}
       </FormModalTemplate>
+
+      {/* 子工序报工Modal（核心功能，新增） */}
+      <Modal
+        title={`报工 - ${currentSubOperation?.operation_name || '子工序'}`}
+        open={subOperationReportingVisible}
+        onCancel={() => {
+          setSubOperationReportingVisible(false);
+          setCurrentSubOperation(null);
+          subOperationFormRef.current?.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        {currentSubOperation && (
+          <SubOperationReportingForm
+            subOperation={currentSubOperation}
+            workOrder={currentWorkOrder}
+            subOperations={subOperations}
+            onSuccess={async () => {
+              // 刷新工单工序列表
+              const updatedOperations = await workOrderApi.getOperations(currentWorkOrder.id.toString());
+              setWorkOrderOperations(updatedOperations || []);
+              
+              // 更新子工序列表
+              if (currentOperation) {
+                const updatedCurrentOp = updatedOperations?.find((op: any) => op.operation_id === currentOperation.operation_id);
+                if (updatedCurrentOp) {
+                  const updatedSubOps = checkSubOperations(updatedCurrentOp, updatedOperations || []);
+                  setSubOperations(updatedSubOps);
+                }
+              }
+
+              // 关闭子工序报工Modal
+              setSubOperationReportingVisible(false);
+              setCurrentSubOperation(null);
+              subOperationFormRef.current?.resetFields();
+              messageApi.success('子工序报工成功');
+            }}
+            onCancel={() => {
+              setSubOperationReportingVisible(false);
+              setCurrentSubOperation(null);
+              subOperationFormRef.current?.resetFields();
+            }}
+            formRef={subOperationFormRef}
+          />
+        )}
+      </Modal>
     </ListPageTemplate>
+  );
+};
+
+/**
+ * 子工序报工表单组件（核心功能，新增）
+ */
+const SubOperationReportingForm: React.FC<{
+  subOperation: any;
+  workOrder: any;
+  subOperations: any[];
+  onSuccess: () => void;
+  onCancel: () => void;
+  formRef: React.RefObject<any>;
+}> = ({ subOperation, workOrder, subOperations, onSuccess, onCancel, formRef }) => {
+  const { message: messageApi } = App.useApp();
+  const [subOpSopConfig, setSubOpSopConfig] = useState<any>(null);
+  const [loadingSubOpSOP, setLoadingSubOpSOP] = useState(false);
+
+  // 加载子工序的SOP配置
+  useEffect(() => {
+    const loadSubOpSOP = async () => {
+      if (!subOperation?.operation_id) return;
+      
+      setLoadingSubOpSOP(true);
+      try {
+        const sops = await sopApi.list({ operationId: subOperation.operation_id, isActive: true });
+        if (sops && sops.length > 0) {
+          const sop = sops[0];
+          if (sop.formConfig && sop.formConfig.properties && Object.keys(sop.formConfig.properties).length > 0) {
+            setSubOpSopConfig(sop.formConfig);
+            const initialParams: Record<string, any> = {};
+            Object.keys(sop.formConfig.properties).forEach((key) => {
+              const field = sop.formConfig.properties[key];
+              if (field.default !== undefined) {
+                initialParams[key] = field.default;
+              }
+            });
+            setTimeout(() => {
+              formRef.current?.setFieldsValue({ sop_params: initialParams });
+            }, 100);
+          } else {
+            setSubOpSopConfig(null);
+          }
+        } else {
+          setSubOpSopConfig(null);
+        }
+      } catch (error: any) {
+        console.error('获取子工序SOP信息失败:', error);
+        setSubOpSopConfig(null);
+      } finally {
+        setLoadingSubOpSOP(false);
+      }
+    };
+    
+    loadSubOpSOP();
+  }, [subOperation?.operation_id, formRef]);
+
+  // 渲染SOP参数收集表单
+  const renderSubOpSOPParameters = () => {
+    if (!subOpSopConfig || !subOpSopConfig.properties) return null;
+    const fields: React.ReactNode[] = [];
+    Object.entries(subOpSopConfig.properties).forEach(([fieldCode, fieldSchema]: [string, any]) => {
+      const fieldName = `sop_params.${fieldCode}`;
+      if (fieldSchema.type === 'number') {
+        fields.push(
+          <ProFormDigit
+            key={fieldCode}
+            name={fieldName}
+            label={fieldSchema.title}
+            placeholder={fieldSchema['x-component-props']?.placeholder || `请输入${fieldSchema.title}`}
+            rules={fieldSchema.required ? [{ required: true, message: `请输入${fieldSchema.title}` }] : []}
+            min={fieldSchema['x-validator']?.[0]?.min}
+            max={fieldSchema['x-validator']?.[0]?.max}
+            fieldProps={{
+              precision: fieldSchema['x-component-props']?.precision,
+              addonAfter: fieldSchema['x-component-props']?.unit,
+            }}
+          />
+        );
+      } else if (fieldSchema.type === 'string') {
+        if (fieldSchema['x-component'] === 'Select' || fieldSchema.enum) {
+          fields.push(
+            <ProFormSelect
+              key={fieldCode}
+              name={fieldName}
+              label={fieldSchema.title}
+              placeholder={fieldSchema['x-component-props']?.placeholder || `请选择${fieldSchema.title}`}
+              rules={fieldSchema.required ? [{ required: true, message: `请选择${fieldSchema.title}` }] : []}
+              options={fieldSchema.enum?.map((opt: any) => ({
+                label: opt.label || opt,
+                value: opt.value !== undefined ? opt.value : opt,
+              }))}
+            />
+          );
+        } else {
+          fields.push(
+            <ProFormText
+              key={fieldCode}
+              name={fieldName}
+              label={fieldSchema.title}
+              placeholder={fieldSchema['x-component-props']?.placeholder || `请输入${fieldSchema.title}`}
+              rules={fieldSchema.required ? [{ required: true, message: `请输入${fieldSchema.title}` }] : []}
+            />
+          );
+        }
+      }
+    });
+    return (
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
+        <div style={{ marginBottom: 8, fontWeight: 'bold', fontSize: 16 }}>SOP参数收集：</div>
+        <Card size="small" style={{ backgroundColor: '#fafafa' }}>
+          {fields}
+        </Card>
+      </div>
+    );
+  };
+
+  return (
+    <Form
+      ref={formRef}
+      layout="vertical"
+      onFinish={async (values) => {
+        try {
+          // 检查跳转规则（如果不允许跳转，且上道子工序未完成，阻止提交）
+          const subOpIndex = subOperations.findIndex((op: any) => op.operation_id === subOperation.operation_id);
+          if (subOpIndex > 0) {
+            const prevSubOp = subOperations[subOpIndex - 1];
+            if (!subOperation.allow_jump && prevSubOp.status !== 'completed') {
+              messageApi.error(`无法报工：必须先完成前序子工序 "${prevSubOp.operation_name}"`);
+              return;
+            }
+          }
+
+          // 验证SOP必填参数
+          if (subOpSopConfig && subOpSopConfig.properties) {
+            const missingParams: string[] = [];
+            Object.entries(subOpSopConfig.properties).forEach(([key, field]: [string, any]) => {
+              if (field.required && (!values.sop_params || !values.sop_params[key])) {
+                missingParams.push(field.title || key);
+              }
+            });
+            if (missingParams.length > 0) {
+              messageApi.error(`请填写SOP必填参数：${missingParams.join('、')}`);
+              return;
+            }
+          }
+
+          // 收集SOP参数数据
+          const sopParams: Record<string, any> = {};
+          if (values.sop_params) {
+            Object.entries(values.sop_params).forEach(([key, value]) => {
+              sopParams[key] = value;
+            });
+          }
+
+          const reportingData = {
+            work_order_id: workOrder.id,
+            work_order_code: workOrder.code,
+            work_order_name: workOrder.name,
+            operation_id: subOperation.operation_id,
+            operation_code: subOperation.operation_code,
+            operation_name: subOperation.operation_name,
+            worker_id: 1, // TODO: 从用户信息获取
+            worker_name: '当前用户', // TODO: 从用户信息获取
+            reported_quantity: subOperation.reporting_type === 'status' 
+              ? (values.completed_status === 'completed' ? 1 : 0)
+              : values.reported_quantity,
+            qualified_quantity: values.qualified_quantity || 0,
+            unqualified_quantity: values.unqualified_quantity || 0,
+            work_hours: values.work_hours || 0,
+            status: 'pending',
+            reported_at: new Date().toISOString(),
+            remarks: values.remarks,
+            sop_parameters: Object.keys(sopParams).length > 0 ? sopParams : undefined,
+          };
+
+          await reportingApi.create(reportingData);
+          onSuccess();
+        } catch (error: any) {
+          messageApi.error(error.message || '子工序报工失败');
+        }
+      }}
+    >
+      {subOperation.reporting_type === 'status' ? (
+        // 按状态报工
+        <>
+          <Form.Item
+            name="completed_status"
+            label="完成状态"
+            rules={[{ required: true, message: '请选择完成状态' }]}
+          >
+            <Radio.Group>
+              <Radio value="completed">完成</Radio>
+              <Radio value="incomplete">未完成</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <ProFormDigit
+            name="work_hours"
+            label="工时(小时)"
+            placeholder="工时"
+            min={0}
+            fieldProps={{ step: 0.1 }}
+          />
+          
+          {/* SOP参数收集表单 */}
+          {loadingSubOpSOP ? <Spin /> : renderSubOpSOPParameters()}
+
+          <ProFormTextArea
+            name="remarks"
+            label="备注"
+            placeholder="请输入备注信息"
+            fieldProps={{ rows: 3 }}
+          />
+        </>
+      ) : (
+        // 按数量报工
+        <>
+          <ProFormDigit
+            name="reported_quantity"
+            label="完成数量"
+            placeholder="请输入完成数量"
+            rules={[{ required: true, message: '请输入完成数量' }]}
+            min={0}
+            fieldProps={{
+              precision: 2,
+              max: workOrder.quantity - (subOperation.completed_quantity || 0),
+            }}
+            extra="完成数量必须大于0"
+          />
+          <ProFormDigit
+            name="qualified_quantity"
+            label="合格数量"
+            placeholder="请输入合格数量"
+            rules={[
+              { required: true, message: '请输入合格数量' },
+              ({ getFieldValue }) => ({
+                validator: (_, value) => {
+                  const reportedQuantity = getFieldValue('reported_quantity');
+                  if (reportedQuantity && value > reportedQuantity) {
+                    return Promise.reject(new Error('合格数量不能大于完成数量'));
+                  }
+                  return Promise.resolve();
+                },
+              }),
+            ]}
+            min={0}
+            fieldProps={{ precision: 2 }}
+            extra="合格数量必须大于等于0，且不能大于完成数量"
+          />
+          <ProFormDigit
+            name="unqualified_quantity"
+            label="不合格数量"
+            placeholder="自动计算"
+            disabled
+            fieldProps={{
+              precision: 2,
+            }}
+            extra="不合格数量 = 完成数量 - 合格数量（自动计算）"
+          />
+          <ProFormDigit
+            name="work_hours"
+            label="工时(小时)"
+            placeholder="工时"
+            min={0}
+            fieldProps={{ step: 0.1 }}
+          />
+          
+          {/* SOP参数收集表单 */}
+          {loadingSubOpSOP ? <Spin /> : renderSubOpSOPParameters()}
+
+          <ProFormTextArea
+            name="remarks"
+            label="备注"
+            placeholder="请输入备注信息"
+            fieldProps={{ rows: 3 }}
+          />
+        </>
+      )}
+      <Form.Item>
+        <Space>
+          <Button type="primary" htmlType="submit">
+            提交报工
+          </Button>
+          <Button onClick={onCancel}>
+            取消
+          </Button>
+        </Space>
+      </Form.Item>
+    </Form>
   );
 };
 

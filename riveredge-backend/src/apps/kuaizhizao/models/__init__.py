@@ -59,8 +59,9 @@ from .sales_order_item import SalesOrderItem
 # 生产计划模块
 from .production_plan import ProductionPlan
 from .production_plan_item import ProductionPlanItem
-from .mrp_result import MRPResult
-from .lrp_result import LRPResult
+# 已废弃：MRPResult和LRPResult已合并为统一的需求计算模型
+# from .mrp_result import MRPResult
+# from .lrp_result import LRPResult
 
 # 设备模具管理模块
 from .equipment import Equipment
@@ -128,8 +129,9 @@ __all__ = [
     # 生产计划模块
     'ProductionPlan',
     'ProductionPlanItem',
-    'MRPResult',
-    'LRPResult',
+    # 已废弃：MRPResult和LRPResult已合并为统一的需求计算模型
+    # 'MRPResult',
+    # 'LRPResult',
 
     # 设备模具管理模块
     'Equipment',

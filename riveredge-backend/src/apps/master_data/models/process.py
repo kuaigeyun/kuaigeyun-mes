@@ -182,6 +182,17 @@ class Operation(BaseModel):
     name = fields.CharField(max_length=200, description="工序名称")
     description = fields.TextField(null=True, description="描述")
     
+    # 工序类型和跳转规则（核心功能，新增）
+    reporting_type = fields.CharField(
+        max_length=20,
+        default="quantity",
+        description="报工类型（quantity:按数量报工, status:按状态报工）"
+    )
+    allow_jump = fields.BooleanField(
+        default=False,
+        description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）"
+    )
+    
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     
@@ -304,8 +315,13 @@ class ProcessRoute(BaseModel):
             ("tenant_id",),
             ("code",),
             ("uuid",),
+            ("version",),  # 版本索引
+            ("code", "version"),  # 编码+版本复合索引，用于查询特定编码的所有版本
+            ("parent_route_id",),  # 父工艺路线索引
+            ("parent_operation_uuid",),  # 父工序UUID索引
+            ("level",),  # 嵌套层级索引
         ]
-        unique_together = [("tenant_id", "code")]
+        unique_together = [("tenant_id", "code", "version")]  # 同一租户下，编码+版本唯一
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
@@ -315,8 +331,24 @@ class ProcessRoute(BaseModel):
     name = fields.CharField(max_length=200, description="工艺路线名称")
     description = fields.TextField(null=True, description="描述")
     
+    # 版本管理（核心功能，新增）
+    version = fields.CharField(max_length=20, default="1.0", description="版本号（如：v1.0、v1.1）")
+    version_description = fields.TextField(null=True, description="版本说明")
+    base_version = fields.CharField(max_length=20, null=True, description="基于版本（从哪个版本创建）")
+    effective_date = fields.DatetimeField(null=True, description="生效日期")
+    
     # 工序序列（JSON格式存储）
-    operation_sequence = fields.JSONField(null=True, description="工序序列（JSON格式，存储工序ID及顺序）")
+    operation_sequence = fields.JSONField(null=True, description="工序序列（JSON格式，存储工序ID及顺序，支持子工艺路线）")
+    
+    # 子工艺路线支持（核心功能，新增）
+    parent_route = fields.ForeignKeyField(
+        "models.ProcessRoute",
+        related_name="sub_routes",
+        null=True,
+        description="父工艺路线（如果此工艺路线是子工艺路线，则指向父工艺路线）"
+    )
+    parent_operation_uuid = fields.CharField(max_length=100, null=True, description="父工序UUID（此子工艺路线所属的父工序）")
+    level = fields.IntField(default=0, description="嵌套层级（0为主工艺路线，1为第一层子工艺路线，最多3层）")
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
@@ -326,7 +358,88 @@ class ProcessRoute(BaseModel):
     
     def __str__(self):
         """字符串表示"""
-        return f"{self.code} - {self.name}"
+        return f"{self.code} - {self.name} (v{self.version})"
+
+
+class ProcessRouteTemplate(BaseModel):
+    """
+    工艺路线模板模型
+    
+    用于保存常用工艺路线作为模板，支持快速创建和复用。
+    
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: 模板编码（组织内唯一）
+        name: 模板名称
+        category: 模板分类（如：注塑类、组装类、包装类等）
+        description: 模板描述
+        scope: 适用范围（all_materials:所有物料, all_groups:所有物料分组, specific_groups:特定物料分组）
+        scope_groups: 适用范围物料分组列表（JSON格式，当scope为specific_groups时使用）
+        process_route_config: 工艺路线配置（JSON格式，包含工序顺序、标准工时、SOP关联、跳转规则等）
+        version: 模板版本号
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_process_route_templates"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+            ("category",),
+            ("version",),
+            ("is_active",),
+        ]
+        unique_together = [("tenant_id", "code", "version")]
+    
+    # 主键
+    id = fields.IntField(pk=True, description="主键ID")
+    
+    # 基本信息
+    code = fields.CharField(max_length=50, description="模板编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="模板名称")
+    category = fields.CharField(max_length=50, null=True, description="模板分类（如：注塑类、组装类、包装类等）")
+    description = fields.TextField(null=True, description="模板描述")
+    
+    # 适用范围
+    scope = fields.CharField(
+        max_length=20,
+        default="all_materials",
+        description="适用范围（all_materials:所有物料, all_groups:所有物料分组, specific_groups:特定物料分组）"
+    )
+    scope_groups = fields.JSONField(
+        null=True,
+        description="适用范围物料分组列表（JSON格式，当scope为specific_groups时使用）"
+    )
+    
+    # 工艺路线配置（完整复制工艺路线的所有配置）
+    process_route_config = fields.JSONField(
+        null=True,
+        description="工艺路线配置（JSON格式，包含工序顺序、标准工时、SOP关联、跳转规则等）"
+    )
+    
+    # 版本管理
+    version = fields.CharField(max_length=20, default="1.0", description="模板版本号")
+    version_description = fields.TextField(null=True, description="版本说明")
+    base_version = fields.CharField(max_length=20, null=True, description="基于版本（从哪个版本创建）")
+    
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name} (v{self.version})"
 
 
 class SOPExecution(BaseModel):

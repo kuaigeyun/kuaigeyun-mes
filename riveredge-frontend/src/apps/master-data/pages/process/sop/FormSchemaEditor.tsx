@@ -55,6 +55,22 @@ interface FormFieldConfig {
    * 选项（用于 select 类型）
    */
   options?: Array<{ label: string; value: any }>;
+  /**
+   * 最小值（用于 number 类型）
+   */
+  min?: number;
+  /**
+   * 最大值（用于 number 类型）
+   */
+  max?: number;
+  /**
+   * 单位（用于 number 类型，如：N·m、℃、kg）
+   */
+  unit?: string;
+  /**
+   * 小数位数（用于 number 类型）
+   */
+  precision?: number;
 }
 
 /**
@@ -87,6 +103,18 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
     if (value && value.properties) {
       const parsedFields: FormFieldConfig[] = [];
       Object.entries(value.properties).forEach(([code, fieldSchema]: [string, any]) => {
+        // 解析验证规则
+        const validators = fieldSchema['x-validator'] || [];
+        let min: number | undefined;
+        let max: number | undefined;
+        
+        validators.forEach((validator: any) => {
+          if (validator.type === 'range') {
+            min = validator.min;
+            max = validator.max;
+          }
+        });
+        
         parsedFields.push({
           code,
           label: fieldSchema.title || code,
@@ -101,6 +129,10 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
             label: fieldSchema.enumNames?.[idx] || val,
             value: val,
           })) : undefined,
+          min,
+          max,
+          unit: fieldSchema['x-component-props']?.unit,
+          precision: fieldSchema['x-component-props']?.precision,
         });
       });
       setFields(parsedFields);
@@ -147,6 +179,11 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
       description: field.description || '',
       component: field.component || 'Input',
       default: field.default,
+      min: field.min,
+      max: field.max,
+      unit: field.unit || '',
+      precision: field.precision,
+      options: field.options ? JSON.stringify(field.options, null, 2) : '',
     });
   };
 
@@ -173,6 +210,10 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
         description: values.description,
         component: values.component || 'Input',
         default: values.default,
+        min: values.min,
+        max: values.max,
+        unit: values.unit,
+        precision: values.precision,
       };
 
       // 如果是 select 类型，需要配置选项
@@ -183,6 +224,11 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
           message.error('选项格式错误，请输入有效的 JSON 数组');
           return;
         }
+      }
+
+      // 如果是数字类型，设置默认组件
+      if (values.type === 'number' && !newField.component) {
+        newField.component = 'InputNumber';
       }
 
       let newFields: FormFieldConfig[];
@@ -245,15 +291,45 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
 
       // 根据类型设置组件属性
       switch (field.type) {
-        case 'textarea':
-          fieldSchema['x-component'] = 'Input.TextArea';
-          fieldSchema['x-component-props'] = {
-            ...fieldSchema['x-component-props'],
-            rows: 4,
-          };
+        case 'string':
+          if (field.component === 'Input.TextArea') {
+            fieldSchema['x-component'] = 'Input.TextArea';
+            fieldSchema['x-component-props'] = {
+              ...fieldSchema['x-component-props'],
+              rows: 4,
+            };
+          }
           break;
         case 'number':
           fieldSchema['x-component'] = 'InputNumber';
+          // 配置数字类型的属性
+          const numberProps: any = {};
+          if (field.unit) {
+            numberProps.unit = field.unit;
+          }
+          if (field.precision !== undefined) {
+            numberProps.precision = field.precision;
+          }
+          if (field.min !== undefined) {
+            numberProps.min = field.min;
+          }
+          if (field.max !== undefined) {
+            numberProps.max = field.max;
+          }
+          fieldSchema['x-component-props'] = {
+            ...fieldSchema['x-component-props'],
+            ...numberProps,
+          };
+          // 添加范围验证规则
+          if (field.min !== undefined || field.max !== undefined) {
+            fieldSchema['x-validator'] = [
+              {
+                type: 'range',
+                min: field.min,
+                max: field.max,
+              },
+            ];
+          }
           break;
         case 'date':
           fieldSchema['x-component'] = 'DatePicker';
@@ -460,6 +536,36 @@ const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) 
                       placeholder='[{"label": "选项1", "value": "value1"}, {"label": "选项2", "value": "value2"}]'
                     />
                   </Form.Item>
+                );
+              }
+              if (type === 'number') {
+                return (
+                  <>
+                    <Form.Item
+                      name="min"
+                      label="最小值"
+                    >
+                      <InputNumber placeholder="最小值（可选）" style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="max"
+                      label="最大值"
+                    >
+                      <InputNumber placeholder="最大值（可选）" style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="unit"
+                      label="单位"
+                    >
+                      <Input placeholder="单位（如：N·m、℃、kg）" />
+                    </Form.Item>
+                    <Form.Item
+                      name="precision"
+                      label="小数位数"
+                    >
+                      <InputNumber min={0} max={10} placeholder="小数位数（0-10）" style={{ width: '100%' }} />
+                    </Form.Item>
+                  </>
                 );
               }
               return null;

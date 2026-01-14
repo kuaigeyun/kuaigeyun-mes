@@ -147,6 +147,147 @@ export const processRouteApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/process/routes/${uuid}`);
   },
+
+  /**
+   * 创建工艺路线新版本
+   */
+  createVersion: async (code: string, data: ProcessRouteVersionCreate): Promise<ProcessRoute> => {
+    return api.post(`/apps/master-data/process/routes/${code}/version`, data);
+  },
+
+  /**
+   * 获取工艺路线所有版本
+   */
+  getVersions: async (code: string): Promise<ProcessRoute[]> => {
+    return api.get(`/apps/master-data/process/routes/${code}/versions`);
+  },
+
+  /**
+   * 对比工艺路线版本
+   */
+  compareVersions: async (code: string, data: ProcessRouteVersionCompare): Promise<ProcessRouteVersionCompareResult> => {
+    return api.post(`/apps/master-data/process/routes/${code}/compare-versions`, data);
+  },
+
+  /**
+   * 回退工艺路线到指定版本
+   */
+  rollbackVersion: async (code: string, targetVersion: string, newVersion?: string): Promise<ProcessRoute> => {
+    const params = new URLSearchParams();
+    params.set('target_version', targetVersion);
+    if (newVersion) {
+      params.set('new_version', newVersion);
+    }
+    return api.post(`/apps/master-data/process/routes/${code}/rollback-version?${params.toString()}`);
+  },
+
+  /**
+   * 绑定工艺路线到物料分组
+   */
+  bindMaterialGroup: async (uuid: string, materialGroupUuid: string): Promise<void> => {
+    return api.post(`/apps/master-data/process/routes/${uuid}/bind-material-group`, null, {
+      params: { material_group_uuid: materialGroupUuid },
+    });
+  },
+
+  /**
+   * 解绑物料分组的工艺路线
+   */
+  unbindMaterialGroup: async (uuid: string, materialGroupUuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/process/routes/${uuid}/unbind-material-group`, {
+      params: { material_group_uuid: materialGroupUuid },
+    });
+  },
+
+  /**
+   * 绑定工艺路线到物料
+   */
+  bindMaterial: async (uuid: string, materialUuid: string): Promise<void> => {
+    return api.post(`/apps/master-data/process/routes/${uuid}/bind-material`, null, {
+      params: { material_uuid: materialUuid },
+    });
+  },
+
+  /**
+   * 解绑物料的工艺路线
+   */
+  unbindMaterial: async (uuid: string, materialUuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/process/routes/${uuid}/unbind-material`, {
+      params: { material_uuid: materialUuid },
+    });
+  },
+
+  /**
+   * 获取工艺路线绑定的物料和物料分组
+   */
+  getBoundMaterials: async (uuid: string): Promise<{
+    materials: Array<{ uuid: string; code: string; name: string }>;
+    material_groups: Array<{ uuid: string; code: string; name: string }>;
+  }> => {
+    return api.get(`/apps/master-data/process/routes/${uuid}/bound-materials`);
+  },
+
+  /**
+   * 获取物料匹配的工艺路线（按优先级）
+   */
+  getProcessRouteForMaterial: async (materialUuid: string): Promise<ProcessRoute | null> => {
+    return api.get(`/apps/master-data/process/materials/${materialUuid}/process-route`);
+  },
+
+  /**
+   * 创建子工艺路线
+   */
+  createSubRoute: async (parentRouteUuid: string, parentOperationUuid: string, data: ProcessRouteCreate): Promise<ProcessRoute> => {
+    return api.post(`/apps/master-data/process/routes/${parentRouteUuid}/sub-routes`, data, {
+      params: { parent_operation_uuid: parentOperationUuid },
+    });
+  },
+
+  /**
+   * 获取子工艺路线列表
+   */
+  getSubRoutes: async (parentRouteUuid: string, parentOperationUuid?: string): Promise<ProcessRoute[]> => {
+    const params: any = {};
+    if (parentOperationUuid) {
+      params.parent_operation_uuid = parentOperationUuid;
+    }
+    return api.get(`/apps/master-data/process/routes/${parentRouteUuid}/sub-routes`, { params });
+  },
+
+  /**
+   * 删除子工艺路线
+   */
+  deleteSubRoute: async (subRouteUuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/process/routes/sub-routes/${subRouteUuid}`);
+  },
+
+  /**
+   * 创建工艺路线模板
+   */
+  createTemplate: async (data: any): Promise<any> => {
+    return api.post('/apps/master-data/process/route-templates', data);
+  },
+
+  /**
+   * 获取工艺路线模板列表
+   */
+  listTemplates: async (params?: any): Promise<any[]> => {
+    return api.get('/apps/master-data/process/route-templates', { params });
+  },
+
+  /**
+   * 获取工艺路线模板详情
+   */
+  getTemplate: async (templateUuid: string): Promise<any> => {
+    return api.get(`/apps/master-data/process/route-templates/${templateUuid}`);
+  },
+
+  /**
+   * 基于模板创建工艺路线
+   */
+  createFromTemplate: async (data: any): Promise<ProcessRoute> => {
+    return api.post('/apps/master-data/process/routes/from-template', data);
+  },
 };
 
 /**

@@ -4,7 +4,7 @@
 提供物料数据的业务逻辑处理（物料分组、物料、BOM），支持多组织隔离。
 """
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from decimal import Decimal
 import json
 
@@ -2171,14 +2171,18 @@ class MaterialService:
             }
         
         # 构建层级结构
-        def build_tree(parent_id: int, level: int = 0, path: str = "") -> List[Dict[str, Any]]:
+        async def build_tree(parent_id: int, level: int = 0, path: str = "") -> List[Dict[str, Any]]:
             """递归构建BOM树"""
             result = []
             
             # 查找所有以parent_id为父件的BOM项
             for bom in bom_items:
                 if bom.material_id == parent_id:
-                    component = await Material.get(id=bom.component_id)
+                    # 使用预加载的component，避免重复查询
+                    component = bom.component
+                    if not component:
+                        # 如果预加载失败，则查询
+                        component = await Material.get(id=bom.component_id)
                     current_path = f"{path}/{bom.component_id}" if path else str(bom.component_id)
                     
                     item_data = {
@@ -2201,10 +2205,10 @@ class MaterialService:
                         version=version or bom.version,
                         deleted_at__isnull=True,
                         is_active=True
-                    ).all()
+                    ).prefetch_related("component").all()
                     
                     if child_items:
-                        item_data["children"] = build_tree(
+                        item_data["children"] = await build_tree(
                             bom.component_id,
                             level + 1,
                             current_path
@@ -2214,7 +2218,7 @@ class MaterialService:
             
             return result
         
-        tree = build_tree(material_id)
+        tree = await build_tree(material_id)
         
         material = await Material.get(id=material_id)
         
