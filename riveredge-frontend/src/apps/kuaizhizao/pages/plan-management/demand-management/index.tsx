@@ -929,6 +929,68 @@ const DemandManagementPage: React.FC = () => {
                 />
               </div>
             )}
+
+            {/* 单据关联 */}
+            {documentRelations && (
+              <div style={{ marginTop: 24 }}>
+                <h4>单据关联</h4>
+                {documentRelations.upstream_count > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                      上游单据 ({documentRelations.upstream_count})
+                    </div>
+                    <Table
+                      size="small"
+                      columns={[
+                        { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                        { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                        { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                        { 
+                          title: '状态', 
+                          dataIndex: 'status', 
+                          width: 100,
+                          render: (status: string) => <Tag>{status}</Tag>
+                        },
+                      ]}
+                      dataSource={documentRelations.upstream_documents}
+                      pagination={false}
+                      rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                      bordered
+                    />
+                  </div>
+                )}
+                {documentRelations.downstream_count > 0 && (
+                  <div>
+                    <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
+                      下游单据 ({documentRelations.downstream_count})
+                    </div>
+                    <Table
+                      size="small"
+                      columns={[
+                        { title: '单据类型', dataIndex: 'document_type', width: 120 },
+                        { title: '单据编号', dataIndex: 'document_code', width: 150 },
+                        { title: '单据名称', dataIndex: 'document_name', width: 150 },
+                        { 
+                          title: '状态', 
+                          dataIndex: 'status', 
+                          width: 100,
+                          render: (status: string) => <Tag>{status}</Tag>
+                        },
+                      ]}
+                      dataSource={documentRelations.downstream_documents}
+                      pagination={false}
+                      rowKey={(record) => `${record.document_type}-${record.document_id}`}
+                      bordered
+                    />
+                  </div>
+                )}
+                {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                    暂无关联单据
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Drawer>

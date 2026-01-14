@@ -201,7 +201,7 @@ export async function getDocumentRelations(
   documentId: number
 ): Promise<DocumentRelation> {
   return apiRequest<DocumentRelation>({
-    url: `/apps/kuaizhizao/documents/${documentType}/${documentId}/relations`,
+    url: `/apps/kuaizhizao/production/documents/${documentType}/${documentId}/relations`,
     method: 'GET',
   });
 }
