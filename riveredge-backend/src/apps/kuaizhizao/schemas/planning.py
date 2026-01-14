@@ -3,8 +3,11 @@
 
 提供生产计划相关的数据验证和序列化。
 
+⚠️ 注意：MRP和LRP分离的Schema已废弃，应使用统一的需求计算Schema。
+
 Author: Luigi Lu
 Date: 2025-12-30
+更新日期: 2025-01-27
 """
 
 from datetime import datetime, date
@@ -112,7 +115,8 @@ class ProductionPlanItemResponse(ProductionPlanItemBase):
         from_attributes = True
 
 
-# === MRP运算结果 ===
+# === MRP运算结果（已废弃） ===
+# ⚠️ 已废弃：根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算模型
 
 class MRPResultBase(BaseSchema):
     """MRP运算结果基础schema"""
@@ -158,7 +162,8 @@ class MRPResultListResponse(MRPResultResponse):
     pass
 
 
-# === LRP运算结果 ===
+# === LRP运算结果（已废弃） ===
+# ⚠️ 已废弃：根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算模型
 
 class LRPResultBase(BaseSchema):
     """LRP运算结果基础schema"""
@@ -206,7 +211,8 @@ class LRPResultListResponse(LRPResultResponse):
     pass
 
 
-# === MRP/LRP运算参数和结果 ===
+# === MRP/LRP运算参数和结果（已废弃） ===
+# ⚠️ 已废弃：根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算模型
 
 class MRPComputationRequest(BaseSchema):
     """MRP运算请求"""

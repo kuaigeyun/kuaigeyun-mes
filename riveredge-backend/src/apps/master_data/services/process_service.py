@@ -6,11 +6,14 @@
 
 from typing import List, Optional, Dict, Any
 
-from apps.master_data.models.process import DefectType, Operation, ProcessRoute, SOP
+from apps.master_data.models.process import DefectType, Operation, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
     DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse,
     OperationCreate, OperationUpdate, OperationResponse,
     ProcessRouteCreate, ProcessRouteUpdate, ProcessRouteResponse,
+    ProcessRouteVersionCreate, ProcessRouteVersionCompare, ProcessRouteVersionCompareResult,
+    ProcessRouteTemplateCreate, ProcessRouteTemplateUpdate, ProcessRouteTemplateResponse,
+    ProcessRouteTemplateVersionCreate, ProcessRouteFromTemplateCreate,
     SOPCreate, SOPUpdate, SOPResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -18,6 +21,50 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 class ProcessService:
     """工艺数据服务"""
+    
+    @staticmethod
+    async def _to_process_route_response(process_route: ProcessRoute) -> ProcessRouteResponse:
+        """
+        将ProcessRoute模型转换为ProcessRouteResponse
+        
+        处理parent_route_uuid的转换（从外键关系获取UUID）
+        
+        Args:
+            process_route: ProcessRoute模型对象
+            
+        Returns:
+            ProcessRouteResponse: 响应对象
+        """
+        response_data = {
+            "id": process_route.id,
+            "uuid": process_route.uuid,
+            "tenant_id": process_route.tenant_id,
+            "code": process_route.code,
+            "name": process_route.name,
+            "description": process_route.description,
+            "version": process_route.version,
+            "version_description": process_route.version_description,
+            "base_version": process_route.base_version,
+            "effective_date": process_route.effective_date,
+            "operation_sequence": process_route.operation_sequence,
+            "parent_route_uuid": None,
+            "parent_operation_uuid": process_route.parent_operation_uuid,
+            "level": process_route.level or 0,
+            "is_active": process_route.is_active,
+            "created_at": process_route.created_at,
+            "updated_at": process_route.updated_at,
+            "deleted_at": process_route.deleted_at,
+        }
+        
+        # 处理parent_route_uuid
+        if process_route.parent_route_id:
+            try:
+                parent_route = await ProcessRoute.get(id=process_route.parent_route_id)
+                response_data["parent_route_uuid"] = parent_route.uuid
+            except:
+                response_data["parent_route_uuid"] = None
+        
+        return ProcessRouteResponse(**response_data)
     
     # ==================== 不良品相关方法 ====================
     
@@ -409,23 +456,48 @@ class ProcessService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
-        # 检查编码是否已存在
+        # 检查编码+版本是否已存在（同一编码可以有多个版本）
+        version = data.version if hasattr(data, 'version') and data.version else "1.0"
         existing = await ProcessRoute.filter(
             tenant_id=tenant_id,
             code=data.code,
+            version=version,
             deleted_at__isnull=True
         ).first()
         
         if existing:
-            raise ValidationError(f"工艺路线编码 {data.code} 已存在")
+            raise ValidationError(f"工艺路线编码 {data.code} 版本 {version} 已存在")
         
         # 创建工艺路线
+        route_data = data.dict(exclude={'parent_route_uuid'})
+        if 'version' not in route_data or not route_data.get('version'):
+            route_data['version'] = "1.0"
+        
+        # 处理父工艺路线关联
+        if hasattr(data, 'parent_route_uuid') and data.parent_route_uuid:
+            parent_route = await ProcessRoute.filter(
+                tenant_id=tenant_id,
+                uuid=data.parent_route_uuid,
+                deleted_at__isnull=True
+            ).first()
+            if not parent_route:
+                raise NotFoundError(f"父工艺路线 {data.parent_route_uuid} 不存在")
+            
+            # 检查嵌套层级
+            parent_level = parent_route.level or 0
+            new_level = data.level if hasattr(data, 'level') and data.level is not None else parent_level + 1
+            if new_level > 3:
+                raise ValidationError("嵌套层级不能超过3层")
+            
+            route_data['parent_route_id'] = parent_route.id
+            route_data['level'] = new_level
+        
         process_route = await ProcessRoute.create(
             tenant_id=tenant_id,
-            **data.dict()
+            **route_data
         )
         
-        return ProcessRouteResponse.model_validate(process_route)
+        return await ProcessService._to_process_route_response(process_route)
     
     @staticmethod
     async def get_process_route_by_uuid(
@@ -454,7 +526,7 @@ class ProcessService:
         if not process_route:
             raise NotFoundError(f"工艺路线 {process_route_uuid} 不存在")
         
-        return ProcessRouteResponse.model_validate(process_route)
+        return await ProcessService._to_process_route_response(process_route)
     
     @staticmethod
     async def list_process_routes(
@@ -485,7 +557,7 @@ class ProcessService:
         
         process_routes = await query.offset(skip).limit(limit).order_by("code").all()
         
-        return [ProcessRouteResponse.model_validate(pr) for pr in process_routes]
+        return [await ProcessService._to_process_route_response(pr) for pr in process_routes]
     
     @staticmethod
     async def update_process_route(
@@ -535,7 +607,7 @@ class ProcessService:
         
         await process_route.save()
         
-        return ProcessRouteResponse.model_validate(process_route)
+        return await ProcessService._to_process_route_response(process_route)
     
     @staticmethod
     async def delete_process_route(
@@ -873,4 +945,885 @@ class ProcessService:
         from tortoise import timezone
         sop.deleted_at = timezone.now()
         await sop.save()
+    
+    # ==================== 工艺路线版本管理相关方法 ====================
+    
+    @staticmethod
+    async def create_process_route_version(
+        tenant_id: int,
+        process_route_code: str,
+        data: ProcessRouteVersionCreate
+    ) -> ProcessRouteResponse:
+        """
+        创建工艺路线新版本
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_code: 工艺路线编码
+            data: 版本创建数据
+            
+        Returns:
+            ProcessRouteResponse: 新创建的工艺路线版本对象
+            
+        Raises:
+            NotFoundError: 当工艺路线不存在时抛出
+            ValidationError: 当版本号已存在时抛出
+        """
+        from datetime import datetime
+        import re
+        
+        # 获取当前最新版本的工艺路线
+        current_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            deleted_at__isnull=True
+        ).order_by("-version").first()
+        
+        if not current_route:
+            raise NotFoundError(f"工艺路线 {process_route_code} 不存在")
+        
+        # 检查新版本号是否已存在
+        existing_version = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            version=data.version,
+            deleted_at__isnull=True
+        ).first()
+        
+        if existing_version:
+            raise ValidationError(f"版本号 '{data.version}' 已存在，请使用其他版本号")
+        
+        # 创建新版本的工艺路线（复制当前版本）
+        new_route = await ProcessRoute.create(
+            tenant_id=tenant_id,
+            code=current_route.code,
+            name=current_route.name,
+            description=current_route.description,
+            version=data.version,
+            version_description=data.version_description,
+            base_version=current_route.version,
+            effective_date=data.effective_date or datetime.now(),
+            operation_sequence=current_route.operation_sequence,
+            is_active=current_route.is_active,
+        )
+        
+        return await ProcessService._to_process_route_response(new_route)
+    
+    @staticmethod
+    async def get_process_route_versions(
+        tenant_id: int,
+        process_route_code: str
+    ) -> List[ProcessRouteResponse]:
+        """
+        获取工艺路线的所有版本
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_code: 工艺路线编码
+            
+        Returns:
+            List[ProcessRouteResponse]: 版本列表（按版本号降序排列）
+        """
+        routes = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            deleted_at__isnull=True
+        ).order_by("-version").all()
+        
+        result = []
+        for r in routes:
+            result.append(await ProcessService._to_process_route_response(r))
+        return result
+    
+    @staticmethod
+    async def compare_process_route_versions(
+        tenant_id: int,
+        process_route_code: str,
+        data: ProcessRouteVersionCompare
+    ) -> ProcessRouteVersionCompareResult:
+        """
+        对比工艺路线版本
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_code: 工艺路线编码
+            data: 版本对比数据
+            
+        Returns:
+            ProcessRouteVersionCompareResult: 版本对比结果
+            
+        Raises:
+            NotFoundError: 当版本不存在时抛出
+        """
+        # 获取两个版本的工艺路线
+        version1_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            version=data.version1,
+            deleted_at__isnull=True
+        ).first()
+        
+        version2_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            version=data.version2,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not version1_route:
+            raise NotFoundError(f"工艺路线 {process_route_code} 版本 {data.version1} 不存在")
+        if not version2_route:
+            raise NotFoundError(f"工艺路线 {process_route_code} 版本 {data.version2} 不存在")
+        
+        # 解析工序序列
+        seq1 = version1_route.operation_sequence or {}
+        seq2 = version2_route.operation_sequence or {}
+        
+        # 提取工序ID列表（保持顺序）
+        ops1 = seq1.get("operations", []) if isinstance(seq1, dict) else []
+        ops2 = seq2.get("operations", []) if isinstance(seq2, dict) else []
+        
+        # 构建工序ID到索引的映射
+        ops1_map = {op.get("uuid") or op.get("id"): idx for idx, op in enumerate(ops1) if op}
+        ops2_map = {op.get("uuid") or op.get("id"): idx for idx, op in enumerate(ops2) if op}
+        
+        # 找出差异
+        added_operations = []
+        removed_operations = []
+        modified_operations = []
+        sequence_changes = []
+        
+        # 检查版本2中新增或修改的工序
+        for idx2, op2 in enumerate(ops2):
+            op_id = op2.get("uuid") or op2.get("id")
+            if op_id not in ops1_map:
+                # 新增工序
+                added_operations.append({
+                    "operation": op2,
+                    "position": idx2 + 1,
+                })
+            else:
+                # 检查是否修改或位置变化
+                idx1 = ops1_map[op_id]
+                op1 = ops1[idx1]
+                
+                # 检查位置是否变化
+                if idx1 != idx2:
+                    sequence_changes.append({
+                        "operation": op2,
+                        "old_position": idx1 + 1,
+                        "new_position": idx2 + 1,
+                    })
+                
+                # 检查工序配置是否变化（如果有其他配置字段）
+                if op1 != op2:
+                    changes = {}
+                    for key in set(list(op1.keys()) + list(op2.keys())):
+                        if op1.get(key) != op2.get(key):
+                            changes[key] = {
+                                "old": op1.get(key),
+                                "new": op2.get(key),
+                            }
+                    if changes:
+                        modified_operations.append({
+                            "operation": op2,
+                            "changes": changes,
+                        })
+        
+        # 检查版本1中删除的工序
+        for idx1, op1 in enumerate(ops1):
+            op_id = op1.get("uuid") or op1.get("id")
+            if op_id not in ops2_map:
+                removed_operations.append({
+                    "operation": op1,
+                    "old_position": idx1 + 1,
+                })
+        
+        return ProcessRouteVersionCompareResult(
+            version1=data.version1,
+            version2=data.version2,
+            added_operations=added_operations,
+            removed_operations=removed_operations,
+            modified_operations=modified_operations,
+            sequence_changes=sequence_changes,
+        )
+    
+    @staticmethod
+    async def rollback_process_route_version(
+        tenant_id: int,
+        process_route_code: str,
+        target_version: str,
+        new_version: Optional[str] = None
+    ) -> ProcessRouteResponse:
+        """
+        回退工艺路线到指定版本
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        回退时创建新版本，内容与目标版本相同，保留历史记录。
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_code: 工艺路线编码
+            target_version: 目标版本（要回退到的版本）
+            new_version: 新版本号（可选，如果不提供则自动生成）
+            
+        Returns:
+            ProcessRouteResponse: 新创建的工艺路线版本对象（内容与目标版本相同）
+            
+        Raises:
+            NotFoundError: 当目标版本不存在时抛出
+            ValidationError: 当新版本号已存在时抛出
+        """
+        from datetime import datetime
+        import re
+        
+        # 获取目标版本的工艺路线
+        target_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            version=target_version,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not target_route:
+            raise NotFoundError(f"工艺路线 {process_route_code} 版本 {target_version} 不存在")
+        
+        # 如果没有提供新版本号，自动生成
+        if not new_version:
+            # 获取当前最新版本
+            current_route = await ProcessRoute.filter(
+                tenant_id=tenant_id,
+                code=process_route_code,
+                deleted_at__isnull=True
+            ).order_by("-version").first()
+            
+            if current_route:
+                current_version = current_route.version or "1.0"
+                version_match = current_version.match(/^v?(\d+)\.(\d+)$/) if isinstance(current_version, str) else None
+                if version_match:
+                    major = int(version_match.group(1))
+                    minor = int(version_match.group(2))
+                    new_version = f"v{major}.{minor + 1}"
+                else:
+                    new_version = f"{current_version}.1"
+            else:
+                new_version = "v1.1"
+        
+        # 检查新版本号是否已存在
+        existing_version = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=process_route_code,
+            version=new_version,
+            deleted_at__isnull=True
+        ).first()
+        
+        if existing_version:
+            raise ValidationError(f"版本号 '{new_version}' 已存在，请使用其他版本号")
+        
+        # 创建新版本的工艺路线（内容与目标版本相同）
+        new_route = await ProcessRoute.create(
+            tenant_id=tenant_id,
+            code=target_route.code,
+            name=target_route.name,
+            description=target_route.description,
+            version=new_version,
+            version_description=f"回退到版本 {target_version}",
+            base_version=target_version,
+            effective_date=datetime.now(),
+            operation_sequence=target_route.operation_sequence,
+            is_active=target_route.is_active,
+        )
+        
+        return await ProcessService._to_process_route_response(new_route)
+    
+    # ==================== 工艺路线绑定管理相关方法 ====================
+    
+    @staticmethod
+    async def bind_material_group(
+        tenant_id: int,
+        process_route_uuid: str,
+        material_group_uuid: str
+    ) -> None:
+        """
+        绑定工艺路线到物料分组
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_uuid: 工艺路线UUID
+            material_group_uuid: 物料分组UUID
+            
+        Raises:
+            NotFoundError: 当工艺路线或物料分组不存在时抛出
+        """
+        from apps.master_data.models.material import MaterialGroup
+        
+        # 获取工艺路线
+        process_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=process_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not process_route:
+            raise NotFoundError(f"工艺路线 {process_route_uuid} 不存在")
+        
+        # 获取物料分组
+        material_group = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            uuid=material_group_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not material_group:
+            raise NotFoundError(f"物料分组 {material_group_uuid} 不存在")
+        
+        # 绑定工艺路线到物料分组
+        material_group.process_route_id = process_route.id
+        await material_group.save()
+    
+    @staticmethod
+    async def unbind_material_group(
+        tenant_id: int,
+        material_group_uuid: str
+    ) -> None:
+        """
+        解绑物料分组的工艺路线
+        
+        Args:
+            tenant_id: 租户ID
+            material_group_uuid: 物料分组UUID
+            
+        Raises:
+            NotFoundError: 当物料分组不存在时抛出
+        """
+        from apps.master_data.models.material import MaterialGroup
+        
+        # 获取物料分组
+        material_group = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            uuid=material_group_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not material_group:
+            raise NotFoundError(f"物料分组 {material_group_uuid} 不存在")
+        
+        # 解绑工艺路线
+        material_group.process_route_id = None
+        await material_group.save()
+    
+    @staticmethod
+    async def bind_material(
+        tenant_id: int,
+        process_route_uuid: str,
+        material_uuid: str
+    ) -> None:
+        """
+        绑定工艺路线到物料
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        物料绑定优先级高于物料分组绑定。
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_uuid: 工艺路线UUID
+            material_uuid: 物料UUID
+            
+        Raises:
+            NotFoundError: 当工艺路线或物料不存在时抛出
+        """
+        from apps.master_data.models.material import Material
+        
+        # 获取工艺路线
+        process_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=process_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not process_route:
+            raise NotFoundError(f"工艺路线 {process_route_uuid} 不存在")
+        
+        # 获取物料
+        material = await Material.filter(
+            tenant_id=tenant_id,
+            uuid=material_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not material:
+            raise NotFoundError(f"物料 {material_uuid} 不存在")
+        
+        # 绑定工艺路线到物料
+        material.process_route_id = process_route.id
+        await material.save()
+    
+    @staticmethod
+    async def unbind_material(
+        tenant_id: int,
+        material_uuid: str
+    ) -> None:
+        """
+        解绑物料的工艺路线
+        
+        Args:
+            tenant_id: 租户ID
+            material_uuid: 物料UUID
+            
+        Raises:
+            NotFoundError: 当物料不存在时抛出
+        """
+        from apps.master_data.models.material import Material
+        
+        # 获取物料
+        material = await Material.filter(
+            tenant_id=tenant_id,
+            uuid=material_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not material:
+            raise NotFoundError(f"物料 {material_uuid} 不存在")
+        
+        # 解绑工艺路线
+        material.process_route_id = None
+        await material.save()
+    
+    @staticmethod
+    async def get_process_route_for_material(
+        tenant_id: int,
+        material_uuid: str
+    ) -> Optional[ProcessRouteResponse]:
+        """
+        获取物料匹配的工艺路线（按优先级）
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        优先级从高到低：
+        1. 物料主数据中的工艺路线关联（最高优先级）
+        2. 物料绑定工艺路线（第二优先级）
+        3. 物料分组绑定工艺路线（第三优先级）
+        4. 默认工艺路线（最低优先级，如果配置了）
+        
+        Args:
+            tenant_id: 租户ID
+            material_uuid: 物料UUID
+            
+        Returns:
+            Optional[ProcessRouteResponse]: 匹配的工艺路线，如果没有则返回None
+        """
+        from apps.master_data.models.material import Material, MaterialGroup
+        
+        # 获取物料
+        material = await Material.filter(
+            tenant_id=tenant_id,
+            uuid=material_uuid,
+            deleted_at__isnull=True
+        ).prefetch_related("process_route", "group").first()
+        
+        if not material:
+            raise NotFoundError(f"物料 {material_uuid} 不存在")
+        
+        # 优先级1：物料主数据中的工艺路线关联（最高优先级）
+        if material.process_route_id:
+            process_route = await ProcessRoute.filter(
+                id=material.process_route_id,
+                deleted_at__isnull=True,
+                is_active=True
+            ).first()
+            if process_route:
+                return await ProcessService._to_process_route_response(process_route)
+        
+        # 优先级2：物料分组绑定工艺路线
+        if material.group_id:
+            material_group = await MaterialGroup.filter(
+                id=material.group_id,
+                deleted_at__isnull=True
+            ).prefetch_related("process_route").first()
+            
+            if material_group and material_group.process_route_id:
+                process_route = await ProcessRoute.filter(
+                    id=material_group.process_route_id,
+                    deleted_at__isnull=True,
+                    is_active=True
+                ).first()
+                if process_route:
+                    return await ProcessService._to_process_route_response(process_route)
+        
+        # 优先级3：默认工艺路线（如果配置了）
+        # TODO: 实现默认工艺路线配置
+        
+        return None
+    
+    @staticmethod
+    async def get_bound_materials(
+        tenant_id: int,
+        process_route_uuid: str
+    ) -> Dict[str, Any]:
+        """
+        获取工艺路线绑定的物料和物料分组
+        
+        Args:
+            tenant_id: 租户ID
+            process_route_uuid: 工艺路线UUID
+            
+        Returns:
+            Dict[str, Any]: 包含绑定的物料列表和物料分组列表
+        """
+        from apps.master_data.models.material import Material, MaterialGroup
+        
+        # 获取工艺路线
+        process_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=process_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not process_route:
+            raise NotFoundError(f"工艺路线 {process_route_uuid} 不存在")
+        
+        # 获取绑定的物料
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            process_route_id=process_route.id,
+            deleted_at__isnull=True
+        ).all()
+        
+        # 获取绑定的物料分组
+        material_groups = await MaterialGroup.filter(
+            tenant_id=tenant_id,
+            process_route_id=process_route.id,
+            deleted_at__isnull=True
+        ).all()
+        
+        return {
+            "materials": [
+                {
+                    "uuid": m.uuid,
+                    "code": m.main_code,
+                    "name": m.name,
+                }
+                for m in materials
+            ],
+            "material_groups": [
+                {
+                    "uuid": mg.uuid,
+                    "code": mg.code,
+                    "name": mg.name,
+                }
+                for mg in material_groups
+            ],
+        }
+    
+    # ==================== 子工艺路线管理相关方法 ====================
+    
+    @staticmethod
+    async def create_sub_route(
+        tenant_id: int,
+        parent_route_uuid: str,
+        parent_operation_uuid: str,
+        data: ProcessRouteCreate
+    ) -> ProcessRouteResponse:
+        """
+        创建子工艺路线
+        
+        根据《工艺路线和标准作业流程优化设计规范.md》设计。
+        
+        Args:
+            tenant_id: 租户ID
+            parent_route_uuid: 父工艺路线UUID
+            parent_operation_uuid: 父工序UUID（此子工艺路线所属的父工序）
+            data: 子工艺路线创建数据
+            
+        Returns:
+            ProcessRouteResponse: 创建的子工艺路线对象
+            
+        Raises:
+            NotFoundError: 当父工艺路线或父工序不存在时抛出
+            ValidationError: 当嵌套层级超过3层时抛出
+        """
+        # 获取父工艺路线
+        parent_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=parent_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not parent_route:
+            raise NotFoundError(f"父工艺路线 {parent_route_uuid} 不存在")
+        
+        # 检查嵌套层级
+        parent_level = parent_route.level or 0
+        if parent_level >= 3:
+            raise ValidationError("嵌套层级不能超过3层（最多支持3层嵌套）")
+        
+        # 验证父工序是否存在（在父工艺路线的工序序列中）
+        if parent_route.operation_sequence:
+            operations = []
+            if isinstance(parent_route.operation_sequence, dict):
+                operations = parent_route.operation_sequence.get("operations", [])
+            elif isinstance(parent_route.operation_sequence, list):
+                operations = parent_route.operation_sequence
+            
+            operation_found = False
+            for op in operations:
+                if isinstance(op, dict):
+                    if op.get("uuid") == parent_operation_uuid or op.get("operation_uuid") == parent_operation_uuid:
+                        operation_found = True
+                        break
+                elif isinstance(op, str) and op == parent_operation_uuid:
+                    operation_found = True
+                    break
+            
+            if not operation_found:
+                raise NotFoundError(f"父工序 {parent_operation_uuid} 在父工艺路线中不存在")
+        
+        # 创建子工艺路线
+        route_data = data.dict(exclude={'parent_route_uuid'})
+        route_data['parent_route_id'] = parent_route.id
+        route_data['parent_operation_uuid'] = parent_operation_uuid
+        route_data['level'] = parent_level + 1
+        
+        if 'version' not in route_data or not route_data.get('version'):
+            route_data['version'] = "1.0"
+        
+        sub_route = await ProcessRoute.create(
+            tenant_id=tenant_id,
+            **route_data
+        )
+        
+        return await ProcessService._to_process_route_response(sub_route)
+    
+    @staticmethod
+    async def get_sub_routes(
+        tenant_id: int,
+        parent_route_uuid: str,
+        parent_operation_uuid: Optional[str] = None
+    ) -> List[ProcessRouteResponse]:
+        """
+        获取子工艺路线列表
+        
+        Args:
+            tenant_id: 租户ID
+            parent_route_uuid: 父工艺路线UUID
+            parent_operation_uuid: 父工序UUID（可选，如果提供则只返回该工序的子工艺路线）
+            
+        Returns:
+            List[ProcessRouteResponse]: 子工艺路线列表
+        """
+        # 获取父工艺路线
+        parent_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=parent_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not parent_route:
+            raise NotFoundError(f"父工艺路线 {parent_route_uuid} 不存在")
+        
+        # 查询子工艺路线
+        query = ProcessRoute.filter(
+            tenant_id=tenant_id,
+            parent_route_id=parent_route.id,
+            deleted_at__isnull=True
+        )
+        
+        if parent_operation_uuid:
+            query = query.filter(parent_operation_uuid=parent_operation_uuid)
+        
+        sub_routes = await query.order_by("code").all()
+        
+        result = []
+        for r in sub_routes:
+            result.append(await ProcessService._to_process_route_response(r))
+        return result
+    
+    @staticmethod
+    async def delete_sub_route(
+        tenant_id: int,
+        sub_route_uuid: str
+    ) -> None:
+        """
+        删除子工艺路线（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            sub_route_uuid: 子工艺路线UUID
+            
+        Raises:
+            NotFoundError: 当子工艺路线不存在时抛出
+        """
+        sub_route = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            uuid=sub_route_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not sub_route:
+            raise NotFoundError(f"子工艺路线 {sub_route_uuid} 不存在")
+        
+        # 检查是否有嵌套子工艺路线
+        nested_sub_routes = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            parent_route_id=sub_route.id,
+            deleted_at__isnull=True
+        ).count()
+        
+        if nested_sub_routes > 0:
+            raise ValidationError(f"无法删除：此子工艺路线下还有 {nested_sub_routes} 个嵌套子工艺路线，请先删除嵌套子工艺路线")
+        
+        # 软删除
+        from tortoise import timezone
+        sub_route.deleted_at = timezone.now()
+        await sub_route.save()
 
+    # ==================== 工艺路线模板管理相关方法 ====================
+
+    async def create_process_route_template(
+        self,
+        tenant_id: int,
+        template_data: ProcessRouteTemplateCreate,
+        created_by: int
+    ) -> ProcessRouteTemplateResponse:
+        """
+        创建工艺路线模板
+        
+        Args:
+            tenant_id: 组织ID
+            template_data: 模板创建数据
+            created_by: 创建人ID
+            
+        Returns:
+            ProcessRouteTemplateResponse: 创建的模板对象
+        """
+        # 检查编码是否已存在
+        existing = await ProcessRouteTemplate.filter(
+            tenant_id=tenant_id,
+            code=template_data.code,
+            version=template_data.version,
+            deleted_at__isnull=True
+        ).first()
+        
+        if existing:
+            raise ValidationError(f"模板编码 {template_data.code} 版本 {template_data.version} 已存在")
+        
+        # 创建模板
+        template = await ProcessRouteTemplate.create(
+            tenant_id=tenant_id,
+            **template_data.dict()
+        )
+        
+        return ProcessRouteTemplateResponse.model_validate(template)
+
+    async def list_process_route_templates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        category: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> List[ProcessRouteTemplateResponse]:
+        """
+        获取工艺路线模板列表
+        
+        Args:
+            tenant_id: 组织ID
+            skip: 跳过数量
+            limit: 限制数量
+            category: 模板分类
+            is_active: 是否启用
+            
+        Returns:
+            List[ProcessRouteTemplateResponse]: 模板列表
+        """
+        query = ProcessRouteTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        
+        if category:
+            query = query.filter(category=category)
+        
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        
+        templates = await query.order_by("-created_at").offset(skip).limit(limit).all()
+        
+        return [ProcessRouteTemplateResponse.model_validate(t) for t in templates]
+
+    async def get_process_route_template(
+        self,
+        tenant_id: int,
+        template_uuid: str
+    ) -> ProcessRouteTemplateResponse:
+        """
+        获取工艺路线模板详情
+        
+        Args:
+            tenant_id: 组织ID
+            template_uuid: 模板UUID
+            
+        Returns:
+            ProcessRouteTemplateResponse: 模板对象
+            
+        Raises:
+            NotFoundError: 当模板不存在时抛出
+        """
+        template = await ProcessRouteTemplate.filter(
+            tenant_id=tenant_id,
+            uuid=template_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not template:
+            raise NotFoundError(f"工艺路线模板 {template_uuid} 不存在")
+        
+        return ProcessRouteTemplateResponse.model_validate(template)
+
+    async def create_process_route_from_template(
+        self,
+        tenant_id: int,
+        route_data: ProcessRouteFromTemplateCreate,
+        created_by: int
+    ) -> ProcessRouteResponse:
+        """
+        基于模板创建工艺路线
+        
+        Args:
+            tenant_id: 组织ID
+            route_data: 工艺路线创建数据（包含template_uuid）
+            created_by: 创建人ID
+            
+        Returns:
+            ProcessRouteResponse: 创建的工艺路线对象
+        """
+        # 获取模板
+        template = await ProcessRouteTemplate.filter(
+            tenant_id=tenant_id,
+            uuid=route_data.template_uuid,
+            deleted_at__isnull=True,
+            is_active=True
+        ).first()
+        
+        if not template:
+            raise NotFoundError(f"工艺路线模板 {route_data.template_uuid} 不存在或已禁用")
+        
+        # 从模板配置创建工艺路线
+        template_config = template.process_route_config or {}
+        
+        route_create_data = ProcessRouteCreate(
+            code=route_data.code,
+            name=route_data.name,
+            description=route_data.description,
+            is_active=route_data.is_active,
+            operation_sequence=template_config.get("operation_sequence"),
+            version="1.0",
+        )
+        
+        # 创建工艺路线
+        return await self.create_process_route(tenant_id, route_create_data, created_by)

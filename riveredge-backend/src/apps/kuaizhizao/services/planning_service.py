@@ -1,10 +1,13 @@
 """
 生产计划服务模块
 
-提供生产计划相关的业务逻辑处理，包括MRP和LRP计算引擎。
+提供生产计划相关的业务逻辑处理。
+
+⚠️ 注意：MRP和LRP分离实现已废弃，应使用统一的需求计算接口。
 
 Author: Luigi Lu
 Date: 2025-12-30
+更新日期: 2025-01-27
 """
 
 from typing import List, Optional, Dict, Any
@@ -16,8 +19,9 @@ from collections import defaultdict
 
 from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
-from apps.kuaizhizao.models.mrp_result import MRPResult
-from apps.kuaizhizao.models.lrp_result import LRPResult
+# 已废弃：MRPResult和LRPResult已合并为统一的需求计算模型
+# from apps.kuaizhizao.models.mrp_result import MRPResult
+# from apps.kuaizhizao.models.lrp_result import LRPResult
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -31,12 +35,13 @@ from apps.kuaizhizao.schemas.planning import (
     # 生产计划
     ProductionPlanCreate, ProductionPlanUpdate, ProductionPlanResponse, ProductionPlanListResponse,
     ProductionPlanItemCreate, ProductionPlanItemUpdate, ProductionPlanItemResponse,
+    # 已废弃：MRP和LRP分离的Schema已废弃，应使用统一的需求计算Schema
     # MRP运算
-    MRPResultCreate, MRPResultResponse, MRPResultListResponse,
-    MRPComputationRequest, MRPComputationResult,
+    # MRPResultCreate, MRPResultResponse, MRPResultListResponse,
+    # MRPComputationRequest, MRPComputationResult,
     # LRP运算
-    LRPResultCreate, LRPResultResponse, LRPResultListResponse,
-    LRPComputationRequest, LRPComputationResult,
+    # LRPResultCreate, LRPResultResponse, LRPResultListResponse,
+    # LRPComputationRequest, LRPComputationResult,
 )
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderItemCreate,
@@ -55,7 +60,9 @@ class ProductionPlanningService(BaseService):
         super().__init__(ProductionPlan)
         self.purchase_service = PurchaseService()
 
-    async def run_mrp_computation(self, tenant_id: int, request: MRPComputationRequest, user_id: int) -> MRPComputationResult:
+    # ⚠️ 已废弃：此方法已废弃，应使用统一的需求计算接口
+    # 根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算
+    async def run_mrp_computation(self, tenant_id: int, request, user_id: int):
         """执行MRP运算"""
         async with in_transaction():
             # 获取销售预测
@@ -166,7 +173,9 @@ class ProductionPlanningService(BaseService):
                 material_results=material_results
             )
 
-    async def run_lrp_computation(self, tenant_id: int, request: LRPComputationRequest, user_id: int) -> LRPComputationResult:
+    # ⚠️ 已废弃：此方法已废弃，应使用统一的需求计算接口
+    # 根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算
+    async def run_lrp_computation(self, tenant_id: int, request, user_id: int):
         """执行LRP运算"""
         async with in_transaction():
             # 获取销售订单

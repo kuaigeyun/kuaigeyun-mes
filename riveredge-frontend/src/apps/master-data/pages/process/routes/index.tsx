@@ -6,15 +6,18 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col, Spin, Empty } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined, BranchesOutlined, HistoryOutlined, DiffOutlined, FileTextOutlined, CopyOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { processRouteApi, operationApi } from '../../../services/process';
-import type { ProcessRoute, ProcessRouteCreate, ProcessRouteUpdate, Operation } from '../../../types/process';
+import { materialApi, materialGroupApi } from '../../../services/material';
+import type { ProcessRoute, ProcessRouteCreate, ProcessRouteUpdate, Operation, ProcessRouteVersionCreate, ProcessRouteVersionCompare, ProcessRouteVersionCompareResult } from '../../../types/process';
+import type { Material, MaterialGroup } from '../../../types/material';
+import { ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 
 /**
@@ -410,6 +413,37 @@ const ProcessRoutesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
+  
+  // 版本管理相关状态
+  const [versionModalVisible, setVersionModalVisible] = useState(false);
+  const [versionHistoryModalVisible, setVersionHistoryModalVisible] = useState(false);
+  const [versionCompareModalVisible, setVersionCompareModalVisible] = useState(false);
+  const [currentProcessRouteCode, setCurrentProcessRouteCode] = useState<string | null>(null);
+  const [versionList, setVersionList] = useState<ProcessRoute[]>([]);
+  const [selectedVersions, setSelectedVersions] = useState<{ version1: string; version2: string } | null>(null);
+  const [versionCompareResult, setVersionCompareResult] = useState<ProcessRouteVersionCompareResult | null>(null);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const versionFormRef = useRef<ProFormInstance>();
+  
+  // 绑定管理相关状态
+  const [bindModalVisible, setBindModalVisible] = useState(false);
+  const [currentBindProcessRouteUuid, setCurrentBindProcessRouteUuid] = useState<string | null>(null);
+  const [boundMaterials, setBoundMaterials] = useState<{
+    materials: Array<{ uuid: string; code: string; name: string }>;
+    material_groups: Array<{ uuid: string; code: string; name: string }>;
+  }>({ materials: [], material_groups: [] });
+  const [allMaterials, setAllMaterials] = useState<Material[]>([]);
+  const [allMaterialGroups, setAllMaterialGroups] = useState<MaterialGroup[]>([]);
+  const [bindLoading, setBindLoading] = useState(false);
+
+  // 模板管理相关状态
+  const [templateModalVisible, setTemplateModalVisible] = useState(false);
+  const [createFromTemplateModalVisible, setCreateFromTemplateModalVisible] = useState(false);
+  const [currentProcessRouteForTemplate, setCurrentProcessRouteForTemplate] = useState<ProcessRoute | null>(null);
+  const [templateList, setTemplateList] = useState<any[]>([]);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const templateFormRef = useRef<ProFormInstance>();
+  const createFromTemplateFormRef = useRef<ProFormInstance>();
 
   // 键盘快捷键支持
   useEffect(() => {
@@ -568,6 +602,342 @@ const ProcessRoutesPage: React.FC = () => {
   };
 
   /**
+   * 处理创建新版本
+   */
+  const handleCreateVersion = async (record: ProcessRoute) => {
+    try {
+      setCurrentProcessRouteCode(record.code);
+      setVersionModalVisible(true);
+      // 获取当前版本号，建议新版本号
+      const currentVersion = record.version || '1.0';
+      const versionMatch = currentVersion.match(/^v?(\d+)\.(\d+)$/);
+      if (versionMatch) {
+        const major = parseInt(versionMatch[1]);
+        const minor = parseInt(versionMatch[2]);
+        const suggestedVersion = `v${major}.${minor + 1}`;
+        versionFormRef.current?.setFieldsValue({
+          version: suggestedVersion,
+          applyStrategy: 'new_only',
+        });
+      } else {
+        versionFormRef.current?.setFieldsValue({
+          version: 'v1.1',
+          applyStrategy: 'new_only',
+        });
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '打开版本创建失败');
+    }
+  };
+
+  /**
+   * 处理版本创建提交
+   */
+  const handleVersionCreateSubmit = async (values: ProcessRouteVersionCreate) => {
+    if (!currentProcessRouteCode) {
+      messageApi.error('工艺路线编码不存在');
+      return;
+    }
+
+    try {
+      setVersionLoading(true);
+      await processRouteApi.createVersion(currentProcessRouteCode, values);
+      messageApi.success('版本创建成功');
+      setVersionModalVisible(false);
+      versionFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '版本创建失败');
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  /**
+   * 处理查看版本历史
+   */
+  const handleViewVersionHistory = async (record: ProcessRoute) => {
+    try {
+      setCurrentProcessRouteCode(record.code);
+      setVersionLoading(true);
+      // 获取该工艺路线的所有版本
+      const versions = await processRouteApi.getVersions(record.code);
+      // 按版本号排序（降序）
+      const sortedVersions = versions.sort((a, b) => {
+        const aMatch = a.version.match(/^v?(\d+)\.(\d+)$/);
+        const bMatch = b.version.match(/^v?(\d+)\.(\d+)$/);
+        if (aMatch && bMatch) {
+          const aMajor = parseInt(aMatch[1]);
+          const aMinor = parseInt(aMatch[2]);
+          const bMajor = parseInt(bMatch[1]);
+          const bMinor = parseInt(bMatch[2]);
+          if (aMajor !== bMajor) {
+            return bMajor - aMajor;
+          }
+          return bMinor - aMinor;
+        }
+        return b.version.localeCompare(a.version);
+      });
+      setVersionList(sortedVersions);
+      setVersionHistoryModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取版本历史失败');
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  /**
+   * 处理版本对比
+   */
+  const handleCompareVersions = async (version1: string, version2: string) => {
+    if (!currentProcessRouteCode) {
+      messageApi.error('工艺路线编码不存在');
+      return;
+    }
+
+    try {
+      setVersionLoading(true);
+      const compareData: ProcessRouteVersionCompare = {
+        version1,
+        version2,
+      };
+      const result = await processRouteApi.compareVersions(currentProcessRouteCode, compareData);
+      setVersionCompareResult(result);
+      setSelectedVersions({ version1, version2 });
+      setVersionCompareModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '版本对比失败');
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  /**
+   * 处理版本回退
+   */
+  const handleRollbackVersion = async (targetVersion: string) => {
+    if (!currentProcessRouteCode) return;
+    
+    try {
+      setVersionLoading(true);
+      
+      // 计算建议的新版本号
+      const currentVersion = versionList[0]?.version || '1.0';
+      const versionMatch = currentVersion.match(/^v?(\d+)\.(\d+)$/);
+      let suggestedVersion = 'v1.1';
+      if (versionMatch) {
+        const major = parseInt(versionMatch[1]);
+        const minor = parseInt(versionMatch[2]);
+        suggestedVersion = `v${major}.${minor + 1}`;
+      }
+      
+      await processRouteApi.rollbackVersion(currentProcessRouteCode, targetVersion, suggestedVersion);
+      messageApi.success('版本回退成功');
+      setVersionHistoryModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '版本回退失败');
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  /**
+   * 处理打开绑定管理
+   */
+  const handleOpenBindModal = async (record: ProcessRoute) => {
+    try {
+      setCurrentBindProcessRouteUuid(record.uuid);
+      setBindLoading(true);
+      
+      // 加载绑定的物料和物料分组
+      const bound = await processRouteApi.getBoundMaterials(record.uuid);
+      setBoundMaterials(bound);
+      
+      // 加载所有物料和物料分组（用于选择）
+      const [materials, materialGroups] = await Promise.all([
+        materialApi.list({ limit: 1000 }),
+        materialGroupApi.list({ limit: 1000 }),
+      ]);
+      setAllMaterials(materials);
+      setAllMaterialGroups(materialGroups);
+      
+      setBindModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载绑定信息失败');
+    } finally {
+      setBindLoading(false);
+    }
+  };
+
+  /**
+   * 处理绑定物料分组
+   */
+  const handleBindMaterialGroup = async (materialGroupUuid: string) => {
+    if (!currentBindProcessRouteUuid) return;
+    
+    try {
+      await processRouteApi.bindMaterialGroup(currentBindProcessRouteUuid, materialGroupUuid);
+      messageApi.success('绑定成功');
+      // 重新加载绑定信息
+      const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+      setBoundMaterials(bound);
+    } catch (error: any) {
+      messageApi.error(error.message || '绑定失败');
+    }
+  };
+
+  /**
+   * 处理解绑物料分组
+   */
+  const handleUnbindMaterialGroup = async (materialGroupUuid: string) => {
+    if (!currentBindProcessRouteUuid) return;
+    
+    try {
+      await processRouteApi.unbindMaterialGroup(currentBindProcessRouteUuid, materialGroupUuid);
+      messageApi.success('解绑成功');
+      // 重新加载绑定信息
+      const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+      setBoundMaterials(bound);
+    } catch (error: any) {
+      messageApi.error(error.message || '解绑失败');
+    }
+  };
+
+  /**
+   * 处理绑定物料
+   */
+  const handleBindMaterial = async (materialUuid: string) => {
+    if (!currentBindProcessRouteUuid) return;
+    
+    try {
+      await processRouteApi.bindMaterial(currentBindProcessRouteUuid, materialUuid);
+      messageApi.success('绑定成功');
+      // 重新加载绑定信息
+      const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+      setBoundMaterials(bound);
+    } catch (error: any) {
+      messageApi.error(error.message || '绑定失败');
+    }
+  };
+
+  /**
+   * 处理解绑物料
+   */
+  const handleUnbindMaterial = async (materialUuid: string) => {
+    if (!currentBindProcessRouteUuid) return;
+    
+    try {
+      await processRouteApi.unbindMaterial(currentBindProcessRouteUuid, materialUuid);
+      messageApi.success('解绑成功');
+      // 重新加载绑定信息
+      const bound = await processRouteApi.getBoundMaterials(currentBindProcessRouteUuid);
+      setBoundMaterials(bound);
+    } catch (error: any) {
+      messageApi.error(error.message || '解绑失败');
+    }
+  };
+
+  /**
+   * 处理保存为模板
+   */
+  const handleSaveAsTemplate = async (record: ProcessRoute) => {
+    try {
+      setCurrentProcessRouteForTemplate(record);
+      // 加载模板列表（用于分类选择）
+      const templates = await processRouteApi.listTemplates();
+      setTemplateList(templates);
+      setTemplateModalVisible(true);
+      templateFormRef.current?.resetFields();
+      templateFormRef.current?.setFieldsValue({
+        code: `${record.code}_TEMPLATE`,
+        name: `${record.name}模板`,
+        category: '',
+        description: `基于工艺路线 ${record.name} 创建的模板`,
+        scope: 'all_materials',
+        version: '1.0',
+        isActive: true,
+      });
+    } catch (error: any) {
+      messageApi.error(error.message || '打开模板创建页面失败');
+    }
+  };
+
+  /**
+   * 处理提交保存模板
+   */
+  const handleTemplateSubmit = async (values: any) => {
+    if (!currentProcessRouteForTemplate) return;
+    
+    try {
+      setTemplateLoading(true);
+      
+      // 获取工艺路线详情（包含完整配置）
+      const routeDetail = await processRouteApi.get(currentProcessRouteForTemplate.uuid);
+      
+      // 构建模板数据
+      const templateData = {
+        ...values,
+        process_route_config: {
+          operation_sequence: routeDetail.operationSequence,
+          // 可以扩展更多配置
+        },
+      };
+      
+      await processRouteApi.createTemplate(templateData);
+      messageApi.success('模板创建成功');
+      setTemplateModalVisible(false);
+      setCurrentProcessRouteForTemplate(null);
+    } catch (error: any) {
+      messageApi.error(error.message || '模板创建失败');
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
+  /**
+   * 处理从模板创建
+   */
+  const handleCreateFromTemplate = async () => {
+    try {
+      // 加载模板列表
+      const templates = await processRouteApi.listTemplates({ isActive: true });
+      setTemplateList(templates);
+      setCreateFromTemplateModalVisible(true);
+      createFromTemplateFormRef.current?.resetFields();
+    } catch (error: any) {
+      messageApi.error(error.message || '加载模板列表失败');
+    }
+  };
+
+  /**
+   * 处理提交从模板创建
+   */
+  const handleCreateFromTemplateSubmit = async (values: any) => {
+    try {
+      setFormLoading(true);
+      
+      const routeData = {
+        templateUuid: values.templateUuid,
+        code: values.code,
+        name: values.name,
+        description: values.description,
+        isActive: values.isActive !== false,
+      };
+      
+      await processRouteApi.createFromTemplate(routeData);
+      messageApi.success('从模板创建工艺路线成功');
+      setCreateFromTemplateModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '从模板创建失败');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
    * 处理打开详情
    */
   const handleOpenDetail = async (record: ProcessRoute) => {
@@ -689,6 +1059,15 @@ const ProcessRoutesPage: React.FC = () => {
       hideInSearch: true,
     },
     {
+      title: '版本号',
+      dataIndex: 'version',
+      width: 100,
+      hideInSearch: true,
+      render: (_, record) => (
+        <Tag color="blue">{record.version || '1.0'}</Tag>
+      ),
+    },
+    {
       title: '启用状态',
       dataIndex: 'is_active',
       width: 100,
@@ -732,6 +1111,38 @@ const ProcessRoutesPage: React.FC = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<BranchesOutlined />}
+            onClick={() => handleCreateVersion(record)}
+          >
+            新版本
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<HistoryOutlined />}
+            onClick={() => handleViewVersionHistory(record)}
+          >
+            版本历史
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<BranchesOutlined />}
+            onClick={() => handleOpenBindModal(record)}
+          >
+            绑定物料
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<FileTextOutlined />}
+            onClick={() => handleSaveAsTemplate(record)}
+          >
+            保存为模板
           </Button>
           <Popconfirm
             title="确定要删除这个工艺路线吗？"
@@ -799,6 +1210,13 @@ const ProcessRoutesPage: React.FC = () => {
             onClick={handleCreate}
           >
             新建工艺路线
+          </Button>,
+          <Button
+            key="createFromTemplate"
+            icon={<CopyOutlined />}
+            onClick={handleCreateFromTemplate}
+          >
+            从模板创建
           </Button>,
         ]}
         rowSelection={{
@@ -1008,6 +1426,566 @@ const ProcessRoutesPage: React.FC = () => {
           unCheckedChildren="禁用"
           colProps={{ span: 24 }}
         />
+      </FormModalTemplate>
+
+      {/* 创建版本 Modal */}
+      <FormModalTemplate
+        title="创建工艺路线新版本"
+        open={versionModalVisible}
+        onClose={() => setVersionModalVisible(false)}
+        onFinish={handleVersionCreateSubmit}
+        isEdit={false}
+        loading={versionLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={versionFormRef}
+      >
+        <ProFormText
+          name="version"
+          label="版本号"
+          placeholder="请输入版本号（如：v1.1）"
+          rules={[
+            { required: true, message: '请输入版本号' },
+            { max: 20, message: '版本号不能超过20个字符' },
+          ]}
+          extra="系统会自动复制当前最新版本创建新版本"
+        />
+        <ProFormTextArea
+          name="versionDescription"
+          label="版本说明"
+          placeholder="请输入版本说明（可选）"
+          fieldProps={{
+            rows: 3,
+            maxLength: 500,
+          }}
+        />
+        <ProFormDateTimePicker
+          name="effectiveDate"
+          label="生效日期"
+          placeholder="请选择生效日期（可选，默认为当前日期）"
+          fieldProps={{
+            showTime: false,
+            format: 'YYYY-MM-DD',
+          }}
+        />
+        <ProFormSelect
+          name="applyStrategy"
+          label="版本应用策略"
+          options={[
+            { label: '仅新工单使用新版本（推荐）', value: 'new_only' },
+            { label: '所有工单使用新版本（谨慎使用）', value: 'all' },
+          ]}
+          rules={[{ required: true, message: '请选择版本应用策略' }]}
+          extra="仅新工单使用新版本：已创建的工单继续使用旧版本，新创建的工单使用新版本。所有工单使用新版本：系统会更新所有在制工单的工艺路线。"
+        />
+      </FormModalTemplate>
+
+      {/* 版本历史 Modal */}
+      <Modal
+        title="版本历史"
+        open={versionHistoryModalVisible}
+        onCancel={() => {
+          setVersionHistoryModalVisible(false);
+          setVersionList([]);
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setVersionHistoryModalVisible(false);
+            setVersionList([]);
+          }}>
+            关闭
+          </Button>,
+        ]}
+        width={800}
+      >
+        <Spin spinning={versionLoading}>
+          <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            {versionList.length === 0 ? (
+              <Empty description="暂无版本历史" />
+            ) : (
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                {versionList.map((version, index) => (
+                  <div
+                    key={version.uuid}
+                    style={{
+                      padding: '16px',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: '6px',
+                      backgroundColor: index === 0 ? '#f6ffed' : '#fff',
+                    }}
+                  >
+                    <Space direction="vertical" style={{ width: '100%' }} size="small">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Space>
+                          <Tag color={index === 0 ? 'success' : 'default'}>
+                            {version.version}
+                            {index === 0 && '（当前版本）'}
+                          </Tag>
+                          <Typography.Text strong>{version.name}</Typography.Text>
+                        </Space>
+                        {index > 0 && (
+                          <Space>
+                            <Button
+                              type="link"
+                              size="small"
+                              icon={<DiffOutlined />}
+                              onClick={() => {
+                                handleCompareVersions(versionList[0].version, version.version);
+                              }}
+                            >
+                              对比
+                            </Button>
+                            <Popconfirm
+                              title={`确认回退到版本 ${version.version}？`}
+                              description="系统将创建新版本，内容与此版本相同。"
+                              onConfirm={() => handleRollbackVersion(version.version)}
+                              okText="确认"
+                              cancelText="取消"
+                            >
+                              <Button
+                                type="link"
+                                size="small"
+                                danger
+                                icon={<BranchesOutlined />}
+                              >
+                                回退到此版本
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        )}
+                      </div>
+                      {version.versionDescription && (
+                        <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+                          {version.versionDescription}
+                        </Typography.Text>
+                      )}
+                      <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#8c8c8c' }}>
+                        <span>创建时间：{new Date(version.created_at).toLocaleString()}</span>
+                        {version.baseVersion && (
+                          <span>基于版本：{version.baseVersion}</span>
+                        )}
+                      </div>
+                    </Space>
+                  </div>
+                ))}
+              </Space>
+            )}
+          </div>
+        </Spin>
+      </Modal>
+
+      {/* 版本对比 Modal */}
+      <Modal
+        title="版本对比"
+        open={versionCompareModalVisible}
+        onCancel={() => {
+          setVersionCompareModalVisible(false);
+          setVersionCompareResult(null);
+          setSelectedVersions(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setVersionCompareModalVisible(false);
+            setVersionCompareResult(null);
+            setSelectedVersions(null);
+          }}>
+            关闭
+          </Button>,
+        ]}
+        width={1000}
+      >
+        <Spin spinning={versionLoading}>
+          {versionCompareResult ? (
+            <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size="large">
+                {/* 版本信息 */}
+                <div>
+                  <Typography.Text strong>对比版本：</Typography.Text>
+                  <Tag color="blue">{versionCompareResult.version1}</Tag>
+                  <span style={{ margin: '0 8px' }}>vs</span>
+                  <Tag color="green">{versionCompareResult.version2}</Tag>
+                </div>
+
+                {/* 新增工序 */}
+                {versionCompareResult.added_operations.length > 0 && (
+                  <div>
+                    <Typography.Title level={5} style={{ color: '#52c41a', marginBottom: '8px' }}>
+                      新增工序（{versionCompareResult.added_operations.length}个）
+                    </Typography.Title>
+                    <div style={{ backgroundColor: '#f6ffed', padding: '12px', borderRadius: '6px' }}>
+                      {versionCompareResult.added_operations.map((item, idx) => (
+                        <div key={idx} style={{ marginBottom: '8px' }}>
+                          <Tag color="success">位置 {item.position}</Tag>
+                          <Typography.Text>
+                            {item.operation.code} - {item.operation.name}
+                          </Typography.Text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 删除工序 */}
+                {versionCompareResult.removed_operations.length > 0 && (
+                  <div>
+                    <Typography.Title level={5} style={{ color: '#ff4d4f', marginBottom: '8px' }}>
+                      删除工序（{versionCompareResult.removed_operations.length}个）
+                    </Typography.Title>
+                    <div style={{ backgroundColor: '#fff2f0', padding: '12px', borderRadius: '6px' }}>
+                      {versionCompareResult.removed_operations.map((item, idx) => (
+                        <div key={idx} style={{ marginBottom: '8px' }}>
+                          <Tag color="error">原位置 {item.old_position}</Tag>
+                          <Typography.Text delete>
+                            {item.operation.code} - {item.operation.name}
+                          </Typography.Text>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 修改工序 */}
+                {versionCompareResult.modified_operations.length > 0 && (
+                  <div>
+                    <Typography.Title level={5} style={{ color: '#1890ff', marginBottom: '8px' }}>
+                      修改工序（{versionCompareResult.modified_operations.length}个）
+                    </Typography.Title>
+                    <div style={{ backgroundColor: '#e6f7ff', padding: '12px', borderRadius: '6px' }}>
+                      {versionCompareResult.modified_operations.map((item, idx) => (
+                        <div key={idx} style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px' }}>
+                          <Typography.Text strong>
+                            {item.operation.code} - {item.operation.name}
+                          </Typography.Text>
+                          <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                            {Object.entries(item.changes).map(([key, change]) => (
+                              <div key={key} style={{ marginBottom: '4px' }}>
+                                <Typography.Text type="secondary">{key}：</Typography.Text>
+                                <Tag color="red">旧：{JSON.stringify(change.old)}</Tag>
+                                <Tag color="green">新：{JSON.stringify(change.new)}</Tag>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 顺序变化 */}
+                {versionCompareResult.sequence_changes.length > 0 && (
+                  <div>
+                    <Typography.Title level={5} style={{ color: '#faad14', marginBottom: '8px' }}>
+                      工序顺序变化（{versionCompareResult.sequence_changes.length}个）
+                    </Typography.Title>
+                    <div style={{ backgroundColor: '#fffbe6', padding: '12px', borderRadius: '6px' }}>
+                      {versionCompareResult.sequence_changes.map((item, idx) => (
+                        <div key={idx} style={{ marginBottom: '8px' }}>
+                          <Typography.Text>
+                            {item.operation.code} - {item.operation.name}
+                          </Typography.Text>
+                          <span style={{ margin: '0 8px', color: '#8c8c8c' }}>：</span>
+                          <Tag color="orange">位置 {item.old_position}</Tag>
+                          <span style={{ margin: '0 4px' }}>→</span>
+                          <Tag color="blue">位置 {item.new_position}</Tag>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 无差异提示 */}
+                {versionCompareResult.added_operations.length === 0 &&
+                 versionCompareResult.removed_operations.length === 0 &&
+                 versionCompareResult.modified_operations.length === 0 &&
+                 versionCompareResult.sequence_changes.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '40px' }}>
+                    <Typography.Text type="secondary">两个版本无差异</Typography.Text>
+                  </div>
+                )}
+              </Space>
+            </div>
+          ) : (
+            <Empty description="暂无对比结果" />
+          )}
+        </Spin>
+      </Modal>
+
+      {/* 绑定管理 Modal */}
+      <Modal
+        title="绑定物料管理"
+        open={bindModalVisible}
+        onCancel={() => {
+          setBindModalVisible(false);
+          setCurrentBindProcessRouteUuid(null);
+          setBoundMaterials({ materials: [], material_groups: [] });
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setBindModalVisible(false);
+            setCurrentBindProcessRouteUuid(null);
+            setBoundMaterials({ materials: [], material_groups: [] });
+          }}>
+            关闭
+          </Button>,
+        ]}
+        width={900}
+      >
+        <Spin spinning={bindLoading}>
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            {/* 绑定物料分组 */}
+            <div>
+              <Typography.Title level={5}>绑定物料分组（批量管理）</Typography.Title>
+              <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '12px' }}>
+                绑定后，该物料分组下的所有物料（如果没有单独绑定工艺路线）将自动使用此工艺路线。
+              </Typography.Text>
+              
+              {/* 已绑定的物料分组 */}
+              {boundMaterials.material_groups.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                    已绑定的物料分组：
+                  </Typography.Text>
+                  <Space wrap>
+                    {boundMaterials.material_groups.map((mg) => (
+                      <Tag
+                        key={mg.uuid}
+                        closable
+                        onClose={() => handleUnbindMaterialGroup(mg.uuid)}
+                        color="blue"
+                      >
+                        {mg.code} - {mg.name}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+              
+              {/* 选择物料分组 */}
+              <Select
+                placeholder="选择物料分组进行绑定"
+                style={{ width: '100%' }}
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={allMaterialGroups
+                  .filter(mg => !boundMaterials.material_groups.some(bm => bm.uuid === mg.uuid))
+                  .map(mg => ({
+                    label: `${mg.code} - ${mg.name}`,
+                    value: mg.uuid,
+                  }))}
+                onSelect={(value) => handleBindMaterialGroup(value)}
+              />
+            </div>
+
+            <Divider />
+
+            {/* 绑定物料 */}
+            <div>
+              <Typography.Title level={5}>绑定物料（精确控制）</Typography.Title>
+              <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '12px' }}>
+                物料绑定优先级高于物料分组绑定。绑定后，该物料将优先使用此工艺路线（即使物料所属分组也绑定了其他工艺路线）。
+              </Typography.Text>
+              
+              {/* 已绑定的物料 */}
+              {boundMaterials.materials.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                    已绑定的物料：
+                  </Typography.Text>
+                  <Space wrap>
+                    {boundMaterials.materials.map((m) => (
+                      <Tag
+                        key={m.uuid}
+                        closable
+                        onClose={() => handleUnbindMaterial(m.uuid)}
+                        color="green"
+                      >
+                        {m.code} - {m.name}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+              
+              {/* 选择物料 */}
+              <Select
+                placeholder="选择物料进行绑定"
+                style={{ width: '100%' }}
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={allMaterials
+                  .filter(m => !boundMaterials.materials.some(bm => bm.uuid === m.uuid))
+                  .map(m => ({
+                    label: `${(m as any).mainCode || (m as any).code || m.uuid} - ${m.name}`,
+                    value: m.uuid,
+                  }))}
+                onSelect={(value) => handleBindMaterial(value)}
+              />
+            </div>
+
+            {/* 优先级说明 */}
+            <div style={{
+              marginTop: '24px',
+              padding: '12px',
+              backgroundColor: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: '6px',
+            }}>
+              <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
+                优先级说明：
+              </Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
+                1. 物料主数据中的工艺路线关联（最高优先级）<br />
+                2. 物料绑定工艺路线（第二优先级）<br />
+                3. 物料分组绑定工艺路线（第三优先级）<br />
+                4. 默认工艺路线（最低优先级，如果配置了）
+              </Typography.Text>
+            </div>
+          </Space>
+        </Spin>
+      </Modal>
+
+      {/* 保存为模板 Modal */}
+      <FormModalTemplate
+        title="保存为模板"
+        open={templateModalVisible}
+        onClose={() => {
+          setTemplateModalVisible(false);
+          setCurrentProcessRouteForTemplate(null);
+        }}
+        onFinish={handleTemplateSubmit}
+        isEdit={false}
+        loading={templateLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={templateFormRef}
+      >
+        <ProFormText
+          name="code"
+          label="模板编码"
+          placeholder="请输入模板编码"
+          rules={[
+            { required: true, message: '请输入模板编码' },
+            { max: 50, message: '模板编码不能超过50个字符' },
+          ]}
+        />
+        <ProFormText
+          name="name"
+          label="模板名称"
+          placeholder="请输入模板名称"
+          rules={[
+            { required: true, message: '请输入模板名称' },
+            { max: 200, message: '模板名称不能超过200个字符' },
+          ]}
+        />
+        <ProFormSelect
+          name="category"
+          label="模板分类"
+          placeholder="请选择模板分类（可选）"
+          options={[
+            { label: '注塑类', value: 'injection' },
+            { label: '组装类', value: 'assembly' },
+            { label: '包装类', value: 'packaging' },
+            { label: '检验类', value: 'inspection' },
+            { label: '其他', value: 'other' },
+          ]}
+        />
+        <ProFormTextArea
+          name="description"
+          label="模板描述"
+          placeholder="请输入模板描述（可选）"
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormSelect
+          name="scope"
+          label="适用范围"
+          options={[
+            { label: '所有物料', value: 'all_materials' },
+            { label: '所有物料分组', value: 'all_groups' },
+            { label: '特定物料分组', value: 'specific_groups' },
+          ]}
+          rules={[{ required: true, message: '请选择适用范围' }]}
+        />
+        <ProFormText
+          name="version"
+          label="版本号"
+          placeholder="请输入版本号（如：v1.0）"
+          rules={[
+            { required: true, message: '请输入版本号' },
+            { max: 20, message: '版本号不能超过20个字符' },
+          ]}
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+        />
+      </FormModalTemplate>
+
+      {/* 从模板创建 Modal */}
+      <FormModalTemplate
+        title="从模板创建工艺路线"
+        open={createFromTemplateModalVisible}
+        onClose={() => {
+          setCreateFromTemplateModalVisible(false);
+        }}
+        onFinish={handleCreateFromTemplateSubmit}
+        isEdit={false}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={createFromTemplateFormRef}
+      >
+        <ProFormSelect
+          name="templateUuid"
+          label="选择模板"
+          placeholder="请选择模板"
+          rules={[{ required: true, message: '请选择模板' }]}
+          options={templateList.map(t => ({
+            label: `${t.name} (${t.category || '未分类'}) - v${t.version}`,
+            value: t.uuid,
+          }))}
+          fieldProps={{
+            showSearch: true,
+            filterOption: (input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+          }}
+        />
+        <ProFormText
+          name="code"
+          label="工艺路线编码"
+          placeholder="请输入工艺路线编码"
+          rules={[
+            { required: true, message: '请输入工艺路线编码' },
+            { max: 50, message: '工艺路线编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            style: { textTransform: 'uppercase' },
+          }}
+        />
+        <ProFormText
+          name="name"
+          label="工艺路线名称"
+          placeholder="请输入工艺路线名称"
+          rules={[
+            { required: true, message: '请输入工艺路线名称' },
+            { max: 200, message: '工艺路线名称不能超过200个字符' },
+          ]}
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入描述（可选）"
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+        />
+        <div style={{ marginTop: 16, padding: 12, background: '#e6f7ff', borderRadius: 4, border: '1px solid #91d5ff' }}>
+          <div style={{ color: '#1890ff', fontSize: 13 }}>
+            <strong>提示：</strong>从模板创建后，系统会自动复制模板的所有配置（工序顺序、标准工时、SOP关联、跳转规则等），您可以根据需要进行调整。
+          </div>
+        </div>
       </FormModalTemplate>
     </ListPageTemplate>
   );

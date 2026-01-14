@@ -7,14 +7,16 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Tabs } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { sopApi, operationApi } from '../../../services/process';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import FormSchemaEditor from './FormSchemaEditor';
+import type { ISchema } from '@formily/core';
 
 /**
  * SOP管理列表页面组件
@@ -36,6 +38,8 @@ const SOPPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [formConfig, setFormConfig] = useState<ISchema | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<string>('basic');
   
   // 工序列表（用于下拉选择）
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -70,6 +74,8 @@ const SOPPage: React.FC = () => {
     formRef.current?.setFieldsValue({
       isActive: true,
     });
+    setFormConfig(undefined);
+    setActiveTab('basic');
   };
 
   /**
@@ -91,6 +97,9 @@ const SOPPage: React.FC = () => {
         content: detail.content,
         isActive: detail.isActive,
       });
+      // 加载form_config配置（SOP参数收集表单配置）
+      setFormConfig(detail.formConfig || undefined);
+      setActiveTab('basic');
       // 注意：attachments 是 JSON 字段，这里暂时不处理，后续可以扩展为文件上传组件
     } catch (error: any) {
       messageApi.error(error.message || '获取SOP详情失败');
@@ -144,18 +153,26 @@ const SOPPage: React.FC = () => {
     try {
       setFormLoading(true);
       
+      // 合并form_config到提交数据
+      const submitData = {
+        ...values,
+        formConfig: formConfig || null,
+      };
+      
       if (isEdit && currentSOPUuid) {
         // 更新SOP
-        await sopApi.update(currentSOPUuid, values as SOPUpdate);
+        await sopApi.update(currentSOPUuid, submitData as SOPUpdate);
         messageApi.success('更新成功');
       } else {
         // 创建SOP
-        await sopApi.create(values as SOPCreate);
+        await sopApi.create(submitData as SOPCreate);
         messageApi.success('创建成功');
       }
       
       setModalVisible(false);
       formRef.current?.resetFields();
+      setFormConfig(undefined);
+      setActiveTab('basic');
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
@@ -170,6 +187,8 @@ const SOPPage: React.FC = () => {
   const handleCloseModal = () => {
     setModalVisible(false);
     formRef.current?.resetFields();
+    setFormConfig(undefined);
+    setActiveTab('basic');
   };
 
   /**
@@ -382,81 +401,127 @@ const SOPPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={1000}
         formRef={formRef}
         initialValues={{ isActive: true }}
+        formProps={{
+          layout: 'vertical',
+        }}
       >
-        <SafeProFormSelect
-          name="operationId"
-          label="关联工序"
-          placeholder="请选择关联工序（可选）"
-          colProps={{ span: 12 }}
-          options={operations.map(o => ({
-            label: `${o.code} - ${o.name}`,
-            value: o.id,
-          }))}
-          fieldProps={{
-            loading: operationsLoading,
-            showSearch: true,
-            allowClear: true,
-            filterOption: (input, option) => {
-              const label = option?.label as string || '';
-              return label.toLowerCase().includes(input.toLowerCase());
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: 'basic',
+              label: '基本信息',
+              children: (
+                <>
+                  <SafeProFormSelect
+                    name="operationId"
+                    label="关联工序"
+                    placeholder="请选择关联工序（可选）"
+                    colProps={{ span: 12 }}
+                    options={operations.map(o => ({
+                      label: `${o.code} - ${o.name}`,
+                      value: o.id,
+                    }))}
+                    fieldProps={{
+                      loading: operationsLoading,
+                      showSearch: true,
+                      allowClear: true,
+                      filterOption: (input, option) => {
+                        const label = option?.label as string || '';
+                        return label.toLowerCase().includes(input.toLowerCase());
+                      },
+                    }}
+                  />
+                  <ProFormText
+                    name="code"
+                    label="SOP编码"
+                    placeholder="请输入SOP编码"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { required: true, message: '请输入SOP编码' },
+                      { max: 50, message: 'SOP编码不能超过50个字符' },
+                    ]}
+                    fieldProps={{
+                      style: { textTransform: 'uppercase' },
+                    }}
+                  />
+                  <ProFormText
+                    name="name"
+                    label="SOP名称"
+                    placeholder="请输入SOP名称"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { required: true, message: '请输入SOP名称' },
+                      { max: 200, message: 'SOP名称不能超过200个字符' },
+                    ]}
+                  />
+                  <ProFormText
+                    name="version"
+                    label="版本号"
+                    placeholder="请输入版本号（如：v1.0）"
+                    colProps={{ span: 12 }}
+                    rules={[
+                      { max: 20, message: '版本号不能超过20个字符' },
+                    ]}
+                  />
+                  <ProFormTextArea
+                    name="content"
+                    label="SOP内容"
+                    placeholder="请输入SOP内容（支持富文本）"
+                    colProps={{ span: 24 }}
+                    fieldProps={{
+                      rows: 8,
+                      maxLength: 5000,
+                    }}
+                  />
+                  <ProFormSwitch
+                    name="isActive"
+                    label="是否启用"
+                    colProps={{ span: 12 }}
+                  />
+                  <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, gridColumn: '1 / -1' }}>
+                    <div style={{ color: '#666', fontSize: 12 }}>
+                      提示：附件（attachments）字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
+                    </div>
+                  </div>
+                </>
+              ),
             },
-          }}
-        />
-        <ProFormText
-          name="code"
-          label="SOP编码"
-          placeholder="请输入SOP编码"
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: '请输入SOP编码' },
-            { max: 50, message: 'SOP编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            style: { textTransform: 'uppercase' },
-          }}
-        />
-        <ProFormText
-          name="name"
-          label="SOP名称"
-          placeholder="请输入SOP名称"
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: '请输入SOP名称' },
-            { max: 200, message: 'SOP名称不能超过200个字符' },
-          ]}
-        />
-        <ProFormText
-          name="version"
-          label="版本号"
-          placeholder="请输入版本号（如：v1.0）"
-          colProps={{ span: 12 }}
-          rules={[
-            { max: 20, message: '版本号不能超过20个字符' },
+            {
+              key: 'formConfig',
+              label: (
+                <span>
+                  <FormOutlined /> 报工参数收集配置
+                </span>
+              ),
+              children: (
+                <div style={{ padding: '16px 0' }}>
+                  <div style={{ marginBottom: 16, padding: 12, background: '#e6f7ff', borderRadius: 4, border: '1px solid #91d5ff' }}>
+                    <div style={{ color: '#1890ff', fontSize: 13, lineHeight: 1.6 }}>
+                      <strong>说明：</strong>
+                      <div style={{ marginTop: 8 }}>
+                        配置报工时需要收集的参数表单。当工序关联了此SOP时，报工界面会自动显示配置的参数收集表单。
+                      </div>
+                      <div style={{ marginTop: 8 }}>
+                        支持的参数类型：数字（带单位、范围验证）、文本（单行/多行）、选择（单选/多选）、日期、布尔值等。
+                      </div>
+                    </div>
+                  </div>
+                  <FormSchemaEditor
+                    value={formConfig}
+                    onChange={(schema) => {
+                      setFormConfig(schema);
+                    }}
+                  />
+                </div>
+              ),
+            },
           ]}
         />
-        <ProFormTextArea
-          name="content"
-          label="SOP内容"
-          placeholder="请输入SOP内容（支持富文本）"
-          colProps={{ span: 24 }}
-          fieldProps={{
-            rows: 8,
-            maxLength: 5000,
-          }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
-          colProps={{ span: 12 }}
-        />
-        <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, gridColumn: '1 / -1' }}>
-          <div style={{ color: '#666', fontSize: 12 }}>
-            提示：附件（attachments）字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
-          </div>
-        </div>
       </FormModalTemplate>
     </ListPageTemplate>
   );

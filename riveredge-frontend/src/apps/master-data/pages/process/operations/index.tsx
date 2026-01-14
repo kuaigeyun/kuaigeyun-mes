@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -62,6 +62,8 @@ const OperationsPage: React.FC = () => {
         code: detail.code,
         name: detail.name,
         description: detail.description,
+        reportingType: detail.reportingType || 'quantity',
+        allowJump: detail.allowJump || false,
         isActive: detail.isActive,
       });
     } catch (error: any) {
@@ -164,6 +166,36 @@ const OperationsPage: React.FC = () => {
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
+    },
+    {
+      title: '报工类型',
+      dataIndex: 'reportingType',
+      width: 120,
+      valueType: 'select',
+      valueEnum: {
+        quantity: { text: '按数量报工', status: 'Processing' },
+        status: { text: '按状态报工', status: 'Success' },
+      },
+      render: (_, record) => (
+        <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
+          {record.reportingType === 'quantity' ? '按数量报工' : '按状态报工'}
+        </Tag>
+      ),
+    },
+    {
+      title: '允许跳转',
+      dataIndex: 'allowJump',
+      width: 100,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: '允许', status: 'Success' },
+        false: { text: '不允许', status: 'Default' },
+      },
+      render: (_, record) => (
+        <Tag color={record.allowJump ? 'success' : 'default'}>
+          {record.allowJump ? '允许' : '不允许'}
+        </Tag>
+      ),
     },
     {
       title: '启用状态',
@@ -319,7 +351,7 @@ const OperationsPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
-        initialValues={{ isActive: true }}
+        initialValues={{ isActive: true, reportingType: 'quantity', allowJump: false }}
       >
         <ProFormText
           name="code"
@@ -353,6 +385,25 @@ const OperationsPage: React.FC = () => {
             rows: 4,
             maxLength: 500,
           }}
+        />
+        <ProFormSelect
+          name="reportingType"
+          label="报工类型"
+          placeholder="请选择报工类型"
+          colProps={{ span: 12 }}
+          options={[
+            { label: '按数量报工', value: 'quantity' },
+            { label: '按状态报工', value: 'status' },
+          ]}
+          rules={[{ required: true, message: '请选择报工类型' }]}
+          initialValue="quantity"
+          extra="按数量报工：需要输入完成数量、合格数量（如：注塑、组装、包装）。按状态报工：只有完成/未完成状态，无数量概念（如：检验、测试、审批）"
+        />
+        <ProFormSwitch
+          name="allowJump"
+          label="是否允许跳转"
+          colProps={{ span: 12 }}
+          extra="允许跳转：可以并行进行，不依赖上道工序完成。不允许跳转：必须完成上道工序才能开始下道工序（默认）"
         />
         <ProFormSwitch
           name="isActive"
