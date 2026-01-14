@@ -287,6 +287,24 @@ class DemandService(AppBaseService[Demand]):
                 updated_by=submitted_by
             )
             
+            # 启动审核流程（如果配置了审核流程）
+            try:
+                from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+                approval_service = ApprovalFlowService()
+                flow = await approval_service.start_approval_flow(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id,
+                    business_mode=demand.business_mode,
+                    demand_type=demand.demand_type
+                )
+                logger.info(f"需求 {demand.demand_code} 已启动审核流程 {flow.flow_code}")
+            except NotFoundError:
+                # 没有配置审核流程，使用简单审核模式
+                logger.info(f"需求 {demand.demand_code} 未配置审核流程，使用简单审核模式")
+            except Exception as e:
+                logger.warning(f"启动审核流程失败: {e}，继续使用简单审核模式")
+            
             return await self.get_demand_by_id(tenant_id, demand_id)
 
     async def approve_demand(
@@ -324,9 +342,51 @@ class DemandService(AppBaseService[Demand]):
             # 获取审核人信息
             approver_name = await self.get_user_name(approved_by)
             
-            # 确定审核结果
-            review_status = "驳回" if rejection_reason else "通过"
-            status = "已驳回" if rejection_reason else "已审核"
+            # 尝试使用审核流程服务执行审核
+            try:
+                from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+                approval_service = ApprovalFlowService()
+                
+                # 检查是否有审核流程
+                approval_status = await approval_service.get_approval_status(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id
+                )
+                
+                if approval_status.get("has_flow"):
+                    # 使用审核流程执行审核
+                    approval_result = "驳回" if rejection_reason else "通过"
+                    result = await approval_service.execute_approval(
+                        tenant_id=tenant_id,
+                        entity_type="demand",
+                        entity_id=demand_id,
+                        approver_id=approved_by,
+                        approver_name=approver_name,
+                        approval_result=approval_result,
+                        approval_comment=rejection_reason
+                    )
+                    
+                    # 根据审核流程结果更新需求状态
+                    if result.get("flow_rejected"):
+                        review_status = "驳回"
+                        status = "已驳回"
+                    elif result.get("flow_completed"):
+                        review_status = "通过"
+                        status = "已审核"
+                    else:
+                        # 流程进行中，保持待审核状态
+                        review_status = "待审核"
+                        status = "待审核"
+                else:
+                    # 没有审核流程，使用简单审核模式
+                    review_status = "驳回" if rejection_reason else "通过"
+                    status = "已驳回" if rejection_reason else "已审核"
+            except Exception as e:
+                logger.warning(f"使用审核流程服务失败: {e}，回退到简单审核模式")
+                # 回退到简单审核模式
+                review_status = "驳回" if rejection_reason else "通过"
+                status = "已驳回" if rejection_reason else "已审核"
             
             # 更新审核信息
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
