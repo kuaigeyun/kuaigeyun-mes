@@ -37,6 +37,9 @@ from .bom import MaterialRequirement, MRPRequirement
 # 生产计划模块
 from .planning import *
 
+# 统一需求管理模块（新设计）
+from .demand import *
+
 __all__ = [
     # 工单相关
     'WorkOrderBase',
@@ -242,6 +245,17 @@ __all__ = [
     'SalesOrderItemCreate',
     'SalesOrderItemUpdate',
     'SalesOrderItemResponse',
+
+    # 统一需求管理相关（新设计）
+    'DemandBase',
+    'DemandCreate',
+    'DemandUpdate',
+    'DemandResponse',
+    'DemandListResponse',
+    'DemandItemBase',
+    'DemandItemCreate',
+    'DemandItemUpdate',
+    'DemandItemResponse',
 
     # BOM物料清单相关
     # BOM管理相关schema已移至master_data APP
