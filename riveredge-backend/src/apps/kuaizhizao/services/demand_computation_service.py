@@ -231,3 +231,106 @@ class DemandComputationService:
             "total": total,
             "success": True
         }
+    
+    async def execute_computation(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> DemandComputationResponse:
+        """
+        执行需求计算
+        
+        Args:
+            tenant_id: 租户ID
+            computation_id: 计算ID
+            
+        Returns:
+            DemandComputationResponse: 计算响应
+        """
+        async with in_transaction():
+            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+            if not computation:
+                raise NotFoundError(f"需求计算不存在: {computation_id}")
+            
+            # 只能执行"进行中"状态的计算
+            if computation.computation_status != "进行中":
+                raise BusinessLogicError(f"只能执行进行中状态的计算，当前状态: {computation.computation_status}")
+            
+            # 更新计算状态为计算中
+            await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
+                computation_status="计算中",
+                computation_start_time=datetime.now()
+            )
+            
+            try:
+                # 根据计算类型执行不同的计算逻辑
+                if computation.computation_type == "MRP":
+                    await self._execute_mrp_computation(tenant_id, computation)
+                elif computation.computation_type == "LRP":
+                    await self._execute_lrp_computation(tenant_id, computation)
+                else:
+                    raise ValidationError(f"不支持的计算类型: {computation.computation_type}")
+                
+                # 更新计算状态为完成
+                await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
+                    computation_status="完成",
+                    computation_end_time=datetime.now()
+                )
+                
+            except Exception as e:
+                logger.error(f"执行需求计算失败: {e}")
+                # 更新计算状态为失败
+                await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
+                    computation_status="失败",
+                    computation_end_time=datetime.now(),
+                    error_message=str(e)
+                )
+                raise
+            
+            return await self.get_computation_by_id(tenant_id, computation_id)
+    
+    async def _execute_mrp_computation(
+        self,
+        tenant_id: int,
+        computation: DemandComputation
+    ) -> None:
+        """
+        执行MRP计算（物料需求计划）
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+        """
+        # TODO: 实现MRP计算逻辑
+        # 1. 获取需求明细
+        # 2. 根据BOM展开物料需求
+        # 3. 考虑库存、安全库存、提前期等参数
+        # 4. 计算净需求和计划订单
+        # 5. 生成计算结果明细
+        
+        logger.info(f"执行MRP计算: {computation.computation_code}")
+        # 占位实现，后续完善
+        pass
+    
+    async def _execute_lrp_computation(
+        self,
+        tenant_id: int,
+        computation: DemandComputation
+    ) -> None:
+        """
+        执行LRP计算（物流需求计划）
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+        """
+        # TODO: 实现LRP计算逻辑
+        # 1. 获取需求明细
+        # 2. 根据BOM和工艺路线计算生产计划
+        # 3. 计算采购计划
+        # 4. 计算时间安排
+        # 5. 生成计算结果明细
+        
+        logger.info(f"执行LRP计算: {computation.computation_code}")
+        # 占位实现，后续完善
+        pass
