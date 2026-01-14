@@ -17,6 +17,7 @@ from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
@@ -36,6 +37,7 @@ class DocumentRelationService:
 
     # 单据类型映射
     DOCUMENT_TYPES = {
+        "demand": {"model": Demand, "code_field": "demand_code", "name_field": "demand_name"},
         "sales_forecast": {"model": SalesForecast, "code_field": "forecast_code", "name_field": "forecast_name"},
         "sales_order": {"model": SalesOrder, "code_field": "order_code", "name_field": "order_name"},
         "mrp_result": {"model": MRPResult, "code_field": None, "name_field": None},
@@ -78,7 +80,12 @@ class DocumentRelationService:
         downstream_documents = []
 
         # 根据单据类型查询关联关系
-        if document_type == "sales_forecast":
+        if document_type == "demand":
+            # 统一需求的下游：需求计算、工单、销售出库单
+            upstream_documents = []
+            downstream_documents = await self._get_demand_downstream(tenant_id, document_id)
+        
+        elif document_type == "sales_forecast":
             # 销售预测的下游：MRP运算结果、工单、销售出库单
             upstream_documents = []
             downstream_documents = await self._get_sales_forecast_downstream(tenant_id, document_id)
@@ -871,6 +878,102 @@ class DocumentRelationService:
                     "created_at": po.created_at.isoformat() if po.created_at else None
                 })
 
+        return downstream
+
+    async def _get_demand_downstream(
+        self,
+        tenant_id: int,
+        demand_id: int
+    ) -> List[Dict[str, Any]]:
+        """获取统一需求的下游单据（需求计算、工单、销售出库单）"""
+        downstream = []
+        
+        # 获取需求
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
+        if not demand:
+            return []
+        
+        # 如果已下推到需求计算，显示计算编码
+        if demand.pushed_to_computation and demand.computation_code:
+            downstream.append({
+                "document_type": "demand_computation",
+                "document_id": demand.computation_id or 0,
+                "document_code": demand.computation_code,
+                "document_name": f"需求计算-{demand.computation_code}",
+                "status": "已下推",
+                "created_at": demand.updated_at.isoformat() if demand.updated_at else None
+            })
+        
+        # 根据需求类型查询下游单据
+        if demand.demand_type == "sales_forecast":
+            # 销售预测的下游：MRP运算结果、工单、销售出库单
+            # TODO: 步骤1.2实现统一需求计算后，这里应该查询需求计算结果
+            # 目前先查询通过需求明细关联的工单
+            from apps.kuaizhizao.models.demand_item import DemandItem
+            demand_items = await DemandItem.filter(
+                tenant_id=tenant_id,
+                demand_id=demand_id
+            ).limit(10)
+            
+            # 通过需求明细的work_order_id查找工单
+            work_order_ids = [item.work_order_id for item in demand_items if item.work_order_id]
+            if work_order_ids:
+                work_orders = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    id__in=work_order_ids
+                ).limit(10)
+                for wo in work_orders:
+                    downstream.append({
+                        "document_type": "work_order",
+                        "document_id": wo.id,
+                        "document_code": wo.code,
+                        "document_name": wo.name,
+                        "status": wo.status,
+                        "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    })
+        
+        elif demand.demand_type == "sales_order":
+            # 销售订单的下游：LRP运算结果、工单、销售出库单
+            # TODO: 步骤1.2实现统一需求计算后，这里应该查询需求计算结果
+            # 目前先查询通过需求明细关联的工单
+            from apps.kuaizhizao.models.demand_item import DemandItem
+            demand_items = await DemandItem.filter(
+                tenant_id=tenant_id,
+                demand_id=demand_id
+            ).limit(10)
+            
+            # 通过需求明细的work_order_id查找工单
+            work_order_ids = [item.work_order_id for item in demand_items if item.work_order_id]
+            if work_order_ids:
+                work_orders = await WorkOrder.filter(
+                    tenant_id=tenant_id,
+                    id__in=work_order_ids
+                ).limit(10)
+                for wo in work_orders:
+                    downstream.append({
+                        "document_type": "work_order",
+                        "document_id": wo.id,
+                        "document_code": wo.code,
+                        "document_name": wo.name,
+                        "status": wo.status,
+                        "created_at": wo.created_at.isoformat() if wo.created_at else None
+                    })
+            
+            # 销售出库单（通过销售订单ID关联）
+            sales_deliveries = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                sales_order_id=demand_id  # TODO: 需要确认SalesDelivery是否有sales_order_id字段
+            ).limit(10)
+            for delivery in sales_deliveries:
+                downstream.append({
+                    "document_type": "sales_delivery",
+                    "document_id": delivery.id,
+                    "document_code": delivery.delivery_code,
+                    "document_name": None,
+                    "status": delivery.status,
+                    "created_at": delivery.created_at.isoformat() if delivery.created_at else None
+                })
+        
         return downstream
 
     async def _get_sales_order_downstream(
