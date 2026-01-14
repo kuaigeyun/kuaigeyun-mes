@@ -558,3 +558,68 @@ class DemandService(AppBaseService[Demand]):
             total_quantity=total_quantity,
             total_amount=total_amount
         )
+
+    async def push_to_computation(
+        self,
+        tenant_id: int,
+        demand_id: int,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        将需求下推到物料需求运算
+        
+        只能下推已审核的需求。下推后会：
+        1. 标记需求为已下推
+        2. 创建需求计算任务（待步骤1.2实现统一需求计算服务后完善）
+        
+        Args:
+            tenant_id: 租户ID
+            demand_id: 需求ID
+            created_by: 操作人ID
+            
+        Returns:
+            Dict: 包含下推结果的信息
+            
+        Raises:
+            NotFoundError: 需求不存在
+            ValidationError: 需求状态不符合下推条件
+        """
+        async with in_transaction():
+            # 获取需求
+            demand = await self.get_demand_by_id(tenant_id, demand_id)
+            
+            # 验证需求状态：只能下推已审核的需求
+            if demand.status != "已审核":
+                raise ValidationError(f"只能下推已审核的需求，当前状态：{demand.status}")
+            
+            if demand.review_status != "通过":
+                raise ValidationError(f"只能下推审核通过的需求，当前审核状态：{demand.review_status}")
+            
+            # 检查是否已经下推过
+            if demand.pushed_to_computation:
+                raise ValidationError("该需求已经下推到需求计算，不能重复下推")
+            
+            # TODO: 步骤1.2实现统一需求计算服务后，在这里创建需求计算任务
+            # 目前先标记为已下推，并生成一个临时的计算编码
+            computation_code = f"COMP-{demand.demand_code}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            
+            # 更新需求状态
+            await Demand.filter(
+                tenant_id=tenant_id,
+                id=demand_id
+            ).update(
+                pushed_to_computation=True,
+                computation_code=computation_code,
+                updated_by=created_by,
+                updated_at=datetime.now()
+            )
+            
+            logger.info(f"需求 {demand.demand_code} 已下推到需求计算，计算编码：{computation_code}")
+            
+            return {
+                "success": True,
+                "message": "需求下推成功",
+                "demand_code": demand.demand_code,
+                "computation_code": computation_code,
+                "note": "需求计算任务将在统一需求计算服务实现后自动创建"
+            }
