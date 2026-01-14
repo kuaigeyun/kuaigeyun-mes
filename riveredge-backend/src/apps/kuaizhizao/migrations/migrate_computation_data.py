@@ -306,3 +306,237 @@ class ComputationDataMigration:
                 },
                 notes=row[15] if row[15] else None,
             )
+    
+    async def migrate_lrp_results(self, tenant_id: int, dry_run: bool = False) -> Dict[str, Any]:
+        """
+        迁移LRP运算结果数据
+        
+        Args:
+            tenant_id: 租户ID
+            dry_run: 是否仅模拟运行
+            
+        Returns:
+            Dict: 迁移结果
+        """
+        logger.info(f"开始迁移LRP数据（tenant_id={tenant_id}, dry_run={dry_run}）")
+        
+        result = {
+            "migrated_count": 0,
+            "migrated_computations": [],
+            "errors": [],
+        }
+        
+        try:
+            from tortoise.connection import connections
+            
+            conn = connections.get("default")
+            
+            # 查询旧的LRP结果数据（按sales_order_id分组）
+            query = """
+                SELECT 
+                    sales_order_id,
+                    COUNT(*) as item_count,
+                    MIN(computation_time) as min_time,
+                    MAX(computation_time) as max_time
+                FROM apps_kuaizhizao_lrp_results
+                WHERE tenant_id = $1 AND deleted_at IS NULL
+                GROUP BY sales_order_id
+            """
+            
+            rows = await conn.execute_query(query, [tenant_id])
+            
+            for row in rows:
+                sales_order_id = row[0]
+                
+                try:
+                    # 查找对应的需求（通过sales_order_id）
+                    demand = await Demand.get_or_none(
+                        tenant_id=tenant_id,
+                        demand_type="sales_order",
+                        # 注意：需要根据实际需求表结构关联sales_order_id
+                    )
+                    
+                    if not demand:
+                        logger.warning(f"未找到对应的需求（sales_order_id={sales_order_id}），跳过")
+                        continue
+                    
+                    # 检查是否已经迁移过
+                    existing = await DemandComputation.get_or_none(
+                        tenant_id=tenant_id,
+                        demand_id=demand.id,
+                        computation_type="LRP"
+                    )
+                    
+                    if existing:
+                        logger.info(f"需求 {demand.id} 的LRP计算已存在，跳过")
+                        continue
+                    
+                    if not dry_run:
+                        # 创建统一需求计算
+                        computation = await self._create_computation_from_lrp(
+                            tenant_id=tenant_id,
+                            demand=demand,
+                            sales_order_id=sales_order_id
+                        )
+                        result["migrated_computations"].append({
+                            "computation_id": computation.id,
+                            "computation_code": computation.computation_code,
+                            "demand_id": demand.id,
+                            "type": "LRP"
+                        })
+                    
+                    result["migrated_count"] += 1
+                    
+                except Exception as e:
+                    logger.error(f"迁移LRP数据失败（sales_order_id={sales_order_id}）: {e}")
+                    result["errors"].append({
+                        "type": "lrp_migration_error",
+                        "sales_order_id": sales_order_id,
+                        "message": str(e)
+                    })
+            
+        except Exception as e:
+            logger.error(f"迁移LRP数据过程中发生错误: {e}")
+            result["errors"].append({
+                "type": "lrp_migration_error",
+                "message": str(e)
+            })
+        
+        logger.info(f"LRP数据迁移完成: {result['migrated_count']} 条")
+        return result
+    
+    async def _create_computation_from_lrp(
+        self,
+        tenant_id: int,
+        demand: Demand,
+        sales_order_id: int
+    ) -> DemandComputation:
+        """
+        从LRP结果创建统一需求计算
+        
+        Args:
+            tenant_id: 租户ID
+            demand: 需求对象
+            sales_order_id: 销售订单ID
+            
+        Returns:
+            DemandComputation: 创建的计算对象
+        """
+        from core.services.business.code_generation_service import CodeGenerationService
+        
+        # 生成计算编码
+        try:
+            computation_code = await CodeGenerationService.generate_code(
+                tenant_id=tenant_id,
+                rule_code="DEMAND_COMPUTATION",
+                context={"computation_type": "LRP"}
+            )
+        except Exception:
+            now = datetime.now()
+            computation_code = f"LRP-{now.strftime('%Y%m%d')}-MIGRATED"
+        
+        # 创建计算对象
+        computation = await DemandComputation.create(
+            tenant_id=tenant_id,
+            computation_code=computation_code,
+            demand_id=demand.id,
+            demand_code=demand.demand_code,
+            demand_type=demand.demand_type,
+            business_mode=demand.business_mode,
+            computation_type="LRP",
+            computation_params={
+                "source": "migration",
+                "original_sales_order_id": sales_order_id,
+            },
+            computation_status="完成",
+            notes="从历史LRP数据迁移",
+            created_by=None,
+        )
+        
+        # 迁移计算结果明细
+        await self._migrate_lrp_items(tenant_id, computation, sales_order_id)
+        
+        return computation
+    
+    async def _migrate_lrp_items(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        sales_order_id: int
+    ) -> None:
+        """
+        迁移LRP计算结果明细
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+            sales_order_id: 销售订单ID
+        """
+        from tortoise.connection import connections
+        from apps.master_data.models.material import Material
+        
+        conn = connections.get("default")
+        
+        # 查询LRP结果明细
+        query = """
+            SELECT 
+                material_id,
+                delivery_date,
+                planning_horizon,
+                required_quantity,
+                available_inventory,
+                net_requirement,
+                planned_production,
+                planned_procurement,
+                production_start_date,
+                production_completion_date,
+                procurement_start_date,
+                procurement_completion_date,
+                bom_id,
+                bom_version,
+                material_breakdown,
+                capacity_requirements,
+                procurement_schedule,
+                notes
+            FROM apps_kuaizhizao_lrp_results
+            WHERE tenant_id = $1 AND sales_order_id = $2 AND deleted_at IS NULL
+        """
+        
+        rows = await conn.execute_query(query, [tenant_id, sales_order_id])
+        
+        for row in rows:
+            material_id = row[0]
+            material = await Material.get_or_none(tenant_id=tenant_id, id=material_id)
+            
+            if not material:
+                logger.warning(f"物料不存在（material_id={material_id}），跳过")
+                continue
+            
+            # 创建计算结果明细
+            await DemandComputationItem.create(
+                tenant_id=tenant_id,
+                computation_id=computation.id,
+                material_id=material_id,
+                material_code=material.code,
+                material_name=material.name,
+                material_spec=material.spec,
+                material_unit=material.unit,
+                required_quantity=Decimal(str(row[3])),  # required_quantity
+                available_inventory=Decimal(str(row[4])),  # available_inventory
+                net_requirement=Decimal(str(row[5])),  # net_requirement
+                delivery_date=row[1] if row[1] else None,  # delivery_date
+                planned_production=Decimal(str(row[6])) if row[6] else None,  # planned_production
+                planned_procurement=Decimal(str(row[7])) if row[7] else None,  # planned_procurement
+                production_start_date=row[8] if row[8] else None,  # production_start_date
+                production_completion_date=row[9] if row[9] else None,  # production_completion_date
+                procurement_start_date=row[10] if row[10] else None,  # procurement_start_date
+                procurement_completion_date=row[11] if row[11] else None,  # procurement_completion_date
+                bom_id=row[12] if row[12] else None,  # bom_id
+                bom_version=row[13] if row[13] else None,  # bom_version
+                detail_results={
+                    "material_breakdown": row[14] if row[14] else {},
+                    "capacity_requirements": row[15] if row[15] else {},
+                    "procurement_schedule": row[16] if row[16] else {},
+                },
+                notes=row[17] if row[17] else None,
+            )
