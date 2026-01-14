@@ -55,6 +55,14 @@ export interface Demand {
   created_at?: string;
   updated_at?: string;
   items?: DemandItem[];
+  duration_info?: {
+    created_at?: string;
+    submit_time?: string;
+    review_time?: string;
+    duration_to_submit?: number | null;
+    duration_to_review?: number | null;
+    duration_submit_to_review?: number | null;
+  };
 }
 
 /**
