@@ -170,3 +170,147 @@ const DemandComputationPage: React.FC = () => {
       ),
     },
   ];
+
+  /**
+   * 渲染页面
+   */
+  return (
+    <ListPageTemplate
+      title="统一需求计算"
+      description="支持MRP和LRP两种计算类型，统一管理需求计算结果"
+    >
+      <UniTable<DemandComputation>
+        actionRef={actionRef}
+        columns={columns}
+        request={async (params) => {
+          const result = await listDemandComputations({
+            skip: (params.current! - 1) * params.pageSize!,
+            limit: params.pageSize!,
+            demand_id: params.demand_id,
+            computation_type: params.computation_type as 'MRP' | 'LRP' | undefined,
+            computation_status: params.computation_status,
+          });
+          return {
+            data: result.data || [],
+            success: result.success,
+            total: result.total || 0,
+          };
+        }}
+        rowKey="id"
+        search={{
+          labelWidth: 'auto',
+        }}
+        toolBarRender={() => [
+          <Button
+            key="create"
+            type="primary"
+            onClick={handleCreate}
+          >
+            新建计算
+          </Button>,
+        ]}
+      />
+
+      {/* 新建计算Modal */}
+      <Modal
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        title="新建需求计算"
+        width={800}
+        onOk={async () => {
+          try {
+            const values = await formRef.current?.validateFields();
+            const selectedDemand = demandList.find(d => d.id === selectedDemandId);
+            if (!selectedDemand) {
+              messageApi.error('请选择需求');
+              return;
+            }
+            
+            // 根据需求类型确定计算类型
+            const computationType = selectedDemand.business_mode === 'MTS' ? 'MRP' : 'LRP';
+            
+            await createDemandComputation({
+              demand_id: selectedDemandId!,
+              computation_type: computationType,
+              computation_params: values.computation_params || {},
+              notes: values.notes,
+            });
+            
+            messageApi.success('创建成功');
+            setModalVisible(false);
+            actionRef.current?.reload();
+          } catch (error: any) {
+            messageApi.error('创建失败');
+          }
+        }}
+      >
+        <ProForm
+          formRef={formRef}
+          submitter={false}
+          layout="vertical"
+        >
+          <ProFormSelect
+            name="demand_id"
+            label="选择需求"
+            options={demandList.map(d => ({
+              label: `${d.demand_code} - ${d.demand_name || ''}`,
+              value: d.id,
+            }))}
+            fieldProps={{
+              onChange: (value) => setSelectedDemandId(value),
+            }}
+            rules={[{ required: true, message: '请选择需求' }]}
+          />
+          <ProFormTextArea
+            name="notes"
+            label="备注"
+            placeholder="请输入备注"
+          />
+        </ProForm>
+      </Modal>
+
+      {/* 详情Drawer */}
+      <Drawer
+        open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        title="计算详情"
+        width={800}
+      >
+        {currentComputation && (
+          <>
+            <ProDescriptions<DemandComputation>
+              dataSource={currentComputation}
+              columns={[
+                { title: '计算编码', dataIndex: 'computation_code' },
+                { title: '需求编码', dataIndex: 'demand_code' },
+                { title: '计算类型', dataIndex: 'computation_type' },
+                { title: '计算状态', dataIndex: 'computation_status' },
+                { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
+                { title: '结束时间', dataIndex: 'computation_end_time', valueType: 'dateTime' },
+              ]}
+            />
+            
+            {currentComputation.items && currentComputation.items.length > 0 && (
+              <Table<DemandComputationItem>
+                dataSource={currentComputation.items}
+                rowKey="id"
+                columns={[
+                  { title: '物料编码', dataIndex: 'material_code' },
+                  { title: '物料名称', dataIndex: 'material_name' },
+                  { title: '需求数量', dataIndex: 'required_quantity' },
+                  { title: '可用库存', dataIndex: 'available_inventory' },
+                  { title: '净需求', dataIndex: 'net_requirement' },
+                  { title: '建议工单数量', dataIndex: 'suggested_work_order_quantity' },
+                  { title: '建议采购数量', dataIndex: 'suggested_purchase_order_quantity' },
+                ]}
+                pagination={false}
+              />
+            )}
+          </>
+        )}
+      </Drawer>
+    </ListPageTemplate>
+  );
+};
+
+export default DemandComputationPage;
