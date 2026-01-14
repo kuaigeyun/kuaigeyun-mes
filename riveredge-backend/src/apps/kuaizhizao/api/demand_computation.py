@@ -158,3 +158,30 @@ async def update_computation(
     except Exception as e:
         logger.error(f"更新需求计算失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求计算失败")
+
+
+@router.post("/{computation_id}/generate-orders", summary="一键生成工单和采购单")
+async def generate_orders(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从需求计算结果一键生成工单和采购单
+    
+    根据计算结果明细中的建议工单数量和采购订单数量，自动生成工单和采购单。
+    """
+    try:
+        result = await computation_service.generate_work_orders_and_purchase_orders(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            created_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"生成工单和采购单失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="生成工单和采购单失败")
