@@ -42,6 +42,9 @@ from .sales_service import (
     SalesOrderService,
 )
 
+# 统一需求管理模块（新设计）
+from .demand_service import DemandService
+
 # BOM管理已移至master_data APP，不再需要BOMService
 
 # 生产计划模块
@@ -78,6 +81,9 @@ __all__ = [
     # 销售管理模块
     'SalesForecastService',
     'SalesOrderService',
+
+    # 统一需求管理模块（新设计）
+    'DemandService',
 
     # BOM管理模块
     # BOMService已移除，BOM管理在master_data APP中
