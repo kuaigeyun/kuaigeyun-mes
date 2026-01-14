@@ -49,6 +49,9 @@ class DemandBase(BaseSchema):
     # 状态（通用）
     status: str = Field("草稿", max_length=20, description="需求状态")
     
+    # 时间节点记录（用于耗时统计）
+    submit_time: Optional[datetime] = Field(None, description="提交时间")
+    
     # 审核信息（通用）
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
@@ -130,6 +133,7 @@ class DemandUpdate(BaseSchema):
     total_quantity: Optional[Decimal] = Field(None, ge=0, description="总数量")
     total_amount: Optional[Decimal] = Field(None, ge=0, description="总金额")
     status: Optional[str] = Field(None, max_length=20, description="需求状态")
+    submit_time: Optional[datetime] = Field(None, description="提交时间")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")
