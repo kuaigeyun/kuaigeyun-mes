@@ -190,3 +190,236 @@ class DemandDataMigration:
             })
         
         return result
+    
+    async def _migrate_forecast_items(
+        self, 
+        tenant_id: int, 
+        forecast_id: int, 
+        demand_id: int
+    ) -> None:
+        """
+        迁移销售预测明细到需求明细
+        
+        Args:
+            tenant_id: 租户ID
+            forecast_id: 销售预测ID
+            demand_id: 需求ID
+        """
+        items = await SalesForecastItem.filter(
+            tenant_id=tenant_id,
+            forecast_id=forecast_id
+        ).all()
+        
+        for item in items:
+            # 计算预测月份（从forecast_date提取）
+            forecast_month = None
+            if item.forecast_date:
+                forecast_month = item.forecast_date.strftime("%Y-%m")
+            
+            await DemandItem.create(
+                tenant_id=tenant_id,
+                demand_id=demand_id,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec,
+                material_unit=item.material_unit,
+                required_quantity=item.forecast_quantity,
+                forecast_date=item.forecast_date,
+                forecast_month=forecast_month,
+                historical_sales=item.historical_sales,
+                historical_period=item.historical_period,
+                confidence_level=item.confidence_level,
+                forecast_method=item.forecast_method,
+                notes=item.notes,
+            )
+    
+    async def _migrate_order_items(
+        self, 
+        tenant_id: int, 
+        order_id: int, 
+        demand_id: int
+    ) -> None:
+        """
+        迁移销售订单明细到需求明细
+        
+        Args:
+            tenant_id: 租户ID
+            order_id: 销售订单ID
+            demand_id: 需求ID
+        """
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=order_id
+        ).all()
+        
+        for item in items:
+            await DemandItem.create(
+                tenant_id=tenant_id,
+                demand_id=demand_id,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec,
+                material_unit=item.material_unit,
+                required_quantity=item.order_quantity,
+                delivery_date=item.delivery_date,
+                delivered_quantity=item.delivered_quantity,
+                remaining_quantity=item.remaining_quantity,
+                unit_price=item.unit_price,
+                item_amount=item.total_amount,
+                delivery_status=item.delivery_status,
+                work_order_id=item.work_order_id,
+                work_order_code=item.work_order_code,
+                notes=item.notes,
+            )
+    
+    async def _update_demand_totals(self, demand_id: int) -> None:
+        """
+        更新需求的总数量和总金额
+        
+        Args:
+            demand_id: 需求ID
+        """
+        items = await DemandItem.filter(demand_id=demand_id).all()
+        
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        
+        for item in items:
+            total_quantity += item.required_quantity or Decimal("0")
+            if item.item_amount:
+                total_amount += item.item_amount
+        
+        await Demand.filter(id=demand_id).update(
+            total_quantity=total_quantity,
+            total_amount=total_amount
+        )
+    
+    async def migrate_sales_orders(
+        self, 
+        tenant_id: int, 
+        dry_run: bool = False
+    ) -> Dict[str, Any]:
+        """
+        迁移销售订单数据到统一需求表
+        
+        Args:
+            tenant_id: 租户ID
+            dry_run: 是否仅模拟运行
+            
+        Returns:
+            Dict: 迁移结果
+        """
+        logger.info(f"开始迁移租户 {tenant_id} 的销售订单数据")
+        
+        result = {
+            "count": 0,
+            "migrated": [],
+            "errors": []
+        }
+        
+        try:
+            # 查询所有未删除的销售订单
+            orders = await SalesOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            
+            logger.info(f"找到 {len(orders)} 条销售订单数据")
+            
+            for order in orders:
+                try:
+                    # 检查是否已经迁移过
+                    existing = await Demand.filter(
+                        tenant_id=tenant_id,
+                        source_id=order.id,
+                        source_type="sales_order"
+                    ).first()
+                    
+                    if existing:
+                        logger.warning(f"销售订单 {order.order_code} 已迁移，跳过")
+                        continue
+                    
+                    if not dry_run:
+                        # 创建统一需求
+                        demand = await Demand.create(
+                            tenant_id=tenant_id,
+                            demand_code=order.order_code,
+                            demand_type="sales_order",
+                            demand_name=order.order_code,  # 销售订单可能没有名称，使用编码
+                            business_mode="MTO",
+                            start_date=order.order_date,
+                            end_date=None,
+                            order_date=order.order_date,
+                            delivery_date=order.delivery_date,
+                            customer_id=order.customer_id,
+                            customer_name=order.customer_name,
+                            customer_contact=order.customer_contact,
+                            customer_phone=order.customer_phone,
+                            total_quantity=order.total_quantity,
+                            total_amount=order.total_amount,
+                            status=order.status,
+                            reviewer_id=order.reviewer_id,
+                            reviewer_name=order.reviewer_name,
+                            review_time=order.review_time,
+                            review_status=order.review_status,
+                            review_remarks=order.review_remarks,
+                            salesman_id=order.salesman_id,
+                            salesman_name=order.salesman_name,
+                            shipping_address=order.shipping_address,
+                            shipping_method=order.shipping_method,
+                            payment_terms=order.payment_terms,
+                            notes=order.notes,
+                            is_active=order.is_active,
+                            created_by=order.created_by,
+                            updated_by=order.updated_by,
+                            source_id=order.id,
+                            source_type="sales_order",
+                            source_code=order.order_code,
+                            created_at=order.created_at,
+                            updated_at=order.updated_at,
+                        )
+                        
+                        # 迁移销售订单明细
+                        await self._migrate_order_items(tenant_id, order.id, demand.id)
+                        
+                        # 计算总数量和总金额
+                        await self._update_demand_totals(demand.id)
+                        
+                        result["migrated"].append({
+                            "source_id": order.id,
+                            "source_code": order.order_code,
+                            "demand_id": demand.id,
+                            "demand_code": demand.demand_code
+                        })
+                        logger.info(f"成功迁移销售订单 {order.order_code} -> 需求 {demand.demand_code}")
+                    else:
+                        result["migrated"].append({
+                            "source_id": order.id,
+                            "source_code": order.order_code,
+                            "demand_id": None,
+                            "demand_code": order.order_code
+                        })
+                        logger.info(f"[模拟] 将迁移销售订单 {order.order_code}")
+                    
+                    result["count"] += 1
+                    
+                except Exception as e:
+                    error_msg = f"迁移销售订单 {order.order_code} 失败: {str(e)}"
+                    logger.error(error_msg)
+                    result["errors"].append({
+                        "source_type": "sales_order",
+                        "source_id": order.id,
+                        "source_code": order.order_code,
+                        "error": error_msg
+                    })
+            
+        except Exception as e:
+            logger.error(f"迁移销售订单数据异常: {e}")
+            result["errors"].append({
+                "source_type": "sales_order",
+                "error": f"批量迁移异常: {str(e)}"
+            })
+        
+        return result
