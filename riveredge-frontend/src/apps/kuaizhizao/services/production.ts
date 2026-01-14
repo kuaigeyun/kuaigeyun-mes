@@ -679,14 +679,18 @@ export const planningApi = {
   // MRP运算
   mrp: {
     compute: async (data: any) => {
-      return apiRequest('/apps/kuaizhizao/mrp-computation', { method: 'POST', data });
+      // TODO: MRP运算已合并为统一需求计算，此接口已废弃
+      // return apiRequest('/apps/kuaizhizao/mrp-computation', { method: 'POST', data });
+      throw new Error('MRP运算已合并为统一需求计算，请使用需求计算接口');
     },
   },
 
   // LRP运算
   lrp: {
     compute: async (data: any) => {
-      return apiRequest('/apps/kuaizhizao/lrp-computation', { method: 'POST', data });
+      // TODO: LRP运算已合并为统一需求计算，此接口已废弃
+      // return apiRequest('/apps/kuaizhizao/lrp-computation', { method: 'POST', data });
+      throw new Error('LRP运算已合并为统一需求计算，请使用需求计算接口');
     },
   },
 

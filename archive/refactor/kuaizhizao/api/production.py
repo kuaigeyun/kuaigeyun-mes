@@ -4415,9 +4415,8 @@ async def batch_delete_sales_orders(
 
 # ============ 生产计划管理 API ============
 
-# TODO: MRP运算已合并为统一需求计算，此路由已废弃
-# @router.post("/mrp-computation", response_model=MRPComputationResult, summary="执行MRP运算")
-async def run_mrp_computation_deprecated(
+@router.post("/mrp-computation", response_model=MRPComputationResult, summary="执行MRP运算")
+async def run_mrp_computation(
     mrp_request: MRPComputationRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -4436,9 +4435,8 @@ async def run_mrp_computation_deprecated(
     )
 
 
-# TODO: LRP运算已合并为统一需求计算，此路由已废弃
-# @router.post("/lrp-computation", response_model=LRPComputationResult, summary="执行LRP运算")
-async def run_lrp_computation_deprecated(
+@router.post("/lrp-computation", response_model=LRPComputationResult, summary="执行LRP运算")
+async def run_lrp_computation(
     lrp_request: LRPComputationRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
