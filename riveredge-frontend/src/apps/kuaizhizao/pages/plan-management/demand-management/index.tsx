@@ -1,91 +1,116 @@
 /**
- * 需求管理页面
+ * 统一需求管理页面
  *
- * 提供销售预测的管理功能，支持MTS/MTO两种模式的需求预测。
+ * 提供销售预测和销售订单的统一管理功能，支持MTS/MTO两种模式。
+ *
+ * 根据《☆ 用户使用全场景推演.md》的设计理念，将销售预测和销售订单统一为需求管理。
+ *
+ * @author Luigi Lu
+ * @date 2025-01-14
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CalculatorOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, message } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { planningApi } from '../../../services/production';
-import { listSalesForecasts, getSalesForecast, createSalesForecast, updateSalesForecast, approveSalesForecast } from '../../../services/sales-forecast';
-
-// 使用后端销售预测接口定义
-interface DemandForecast {
-  id?: number;
-  tenant_id?: number;
-  forecast_code?: string;
-  forecast_name?: string;
-  start_date?: string;
-  end_date?: string;
-  status?: string;
-  reviewer_id?: number;
-  reviewer_name?: string;
-  review_time?: string;
-  review_status?: string;
-  review_remarks?: string;
-  notes?: string;
-  created_at?: string;
-  updated_at?: string;
-  // 预测明细
-  forecast_items?: ForecastItem[];
-}
-
-interface ForecastItem {
-  id?: number;
-  material_id?: number;
-  material_code?: string;
-  material_name?: string;
-  component_type?: string;
-  forecast_date?: string;
-  forecast_quantity?: number;
-}
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { 
+  listDemands, 
+  getDemand, 
+  createDemand, 
+  updateDemand, 
+  submitDemand, 
+  approveDemand, 
+  rejectDemand,
+  Demand,
+  DemandItem 
+} from '../../../../services/demand';
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  // Modal 相关状态（创建/编辑销售预测）
+  const formRef = useRef<any>(null);
+  
+  // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
-  const [currentForecast, setCurrentForecast] = useState<DemandForecast | null>(null);
-  const formRef = useRef<any>(null);
-
+  const [currentId, setCurrentId] = useState<number | null>(null);
+  
   // Drawer 相关状态（详情查看）
-  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
+  
+  // 需求类型选择（销售预测/销售订单）
+  const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>('sales_forecast');
 
   /**
-   * 处理创建销售预测
+   * 处理新建需求
    */
   const handleCreate = () => {
     setIsEdit(false);
-    setCurrentForecast(null);
+    setCurrentId(null);
     setModalVisible(true);
     formRef.current?.resetFields();
   };
 
   /**
-   * 处理编辑销售预测
+   * 处理编辑需求
    */
-  const handleEdit = (record: DemandForecast) => {
-    setIsEdit(true);
-    setCurrentForecast(record);
-    setModalVisible(true);
-    formRef.current?.setFieldsValue(record);
+  const handleEdit = async (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      const id = Number(keys[0]);
+      setIsEdit(true);
+      setCurrentId(id);
+      setModalVisible(true);
+      try {
+        const data = await getDemand(id);
+        formRef.current?.setFieldsValue(data);
+        setDemandType(data.demand_type || 'sales_forecast');
+      } catch (error: any) {
+        messageApi.error('获取需求详情失败');
+      }
+    }
   };
 
-  const handleFormFinish = async (values: any) => {
+  /**
+   * 处理详情查看
+   */
+  const handleDetail = async (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      const id = Number(keys[0]);
+      try {
+        const data = await getDemand(id, true);
+        setCurrentDemand(data);
+        setDrawerVisible(true);
+      } catch (error: any) {
+        messageApi.error('获取需求详情失败');
+      }
+    }
+  };
+
+  /**
+   * 处理删除需求
+   */
+  const handleDelete = async (keys: React.Key[]) => {
+    // TODO: 实现删除功能
+    messageApi.info('删除功能待实现');
+  };
+
+  /**
+   * 处理提交表单
+   */
+  const handleSubmit = async (values: any) => {
     try {
-      if (isEdit && currentForecast?.id) {
-        await updateSalesForecast(currentForecast.id, values);
-        messageApi.success('销售预测更新成功');
+      values.demand_type = demandType;
+      values.business_mode = demandType === 'sales_forecast' ? 'MTS' : 'MTO';
+      
+      if (isEdit && currentId) {
+        await updateDemand(currentId, values);
+        messageApi.success('需求更新成功');
       } else {
-        await createSalesForecast(values);
-        messageApi.success('销售预测创建成功');
+        await createDemand(values);
+        messageApi.success('需求创建成功');
       }
       setModalVisible(false);
       actionRef.current?.reload();
@@ -96,58 +121,69 @@ const DemandManagementPage: React.FC = () => {
   };
 
   /**
-   * 处理查看详情
+   * 处理提交需求
    */
-  const handleDetail = async (record: DemandForecast) => {
-    try {
-      const detail = await getSalesForecast(record.id!);
-      setCurrentForecast(detail);
-      setDetailDrawerVisible(true);
-    } catch (error) {
-      messageApi.error('获取销售预测详情失败');
-    }
-  };
-
-  /**
-   * 处理审核预测
-   */
-  const handleActivate = (record: DemandForecast) => {
+  const handleSubmitDemand = async (id: number) => {
     Modal.confirm({
-      title: '审核销售预测',
-      content: `确定要审核通过销售预测 "${record.forecast_name}" 吗？审核后将可用于MRP运算。`,
+      title: '提交需求',
+      content: '确定要提交此需求吗？提交后将进入审核流程。',
       onOk: async () => {
         try {
-          await approveSalesForecast(record.id!);
-          messageApi.success('销售预测审核成功');
+          await submitDemand(id);
+          messageApi.success('需求提交成功');
           actionRef.current?.reload();
-        } catch (error) {
-          messageApi.error('销售预测审核失败');
+        } catch (error: any) {
+          messageApi.error(error.message || '提交失败');
         }
       },
     });
   };
 
   /**
-   * 处理运行MRP
+   * 处理审核通过
    */
-  const handleRunMRP = async (record: DemandForecast) => {
+  const handleApprove = async (id: number) => {
     Modal.confirm({
-      title: '运行MRP运算',
-      content: `确定要基于销售预测 "${record.forecast_name}" 运行MRP运算吗？`,
+      title: '审核通过',
+      content: '确定要审核通过此需求吗？',
       onOk: async () => {
         try {
-          if (record.id) {
-            await planningApi.mrp.compute({
-              forecast_id: record.id,
-              planning_horizon: 30,
-              time_bucket: '周',
-              include_safety_stock: true,
-              explosion_type: 'single_level',
-            });
-            messageApi.success('MRP运算已启动，请稍后查看结果');
-          }
-        } catch (error) {
-          messageApi.error('MRP运算启动失败');
+          await approveDemand(id);
+          messageApi.success('需求审核通过');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '审核失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理驳回需求
+   */
+  const handleReject = async (id: number) => {
+    Modal.confirm({
+      title: '驳回需求',
+      content: (
+        <Input.TextArea
+          placeholder="请输入驳回原因"
+          rows={4}
+          id="rejection-reason-input"
+        />
+      ),
+      onOk: async () => {
+        const reasonInput = document.getElementById('rejection-reason-input') as HTMLTextAreaElement;
+        const reason = reasonInput?.value?.trim();
+        if (!reason) {
+          messageApi.warning('请输入驳回原因');
+          return;
+        }
+        try {
+          await rejectDemand(id, reason);
+          messageApi.success('需求已驳回');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '驳回失败');
         }
       },
     });
@@ -156,35 +192,84 @@ const DemandManagementPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<DemandForecast>[] = [
+  const columns: ProColumns<Demand>[] = [
     {
-      title: '预测编号',
-      dataIndex: 'forecast_code',
+      title: '需求编码',
+      dataIndex: 'demand_code',
       width: 140,
       ellipsis: true,
       fixed: 'left',
     },
     {
-      title: '预测名称',
-      dataIndex: 'forecast_name',
+      title: '需求类型',
+      dataIndex: 'demand_type',
+      width: 120,
+      valueEnum: {
+        'sales_forecast': { text: '销售预测', status: 'Processing' },
+        'sales_order': { text: '销售订单', status: 'Success' },
+      },
+    },
+    {
+      title: '需求名称',
+      dataIndex: 'demand_name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '预测期间',
-      dataIndex: ['start_date', 'end_date'],
-      width: 200,
-      render: (_, record) => `${record.start_date} ~ ${record.end_date}`,
+      title: '业务模式',
+      dataIndex: 'business_mode',
+      width: 100,
+      valueEnum: {
+        'MTS': { text: 'MTS', status: 'Processing' },
+        'MTO': { text: 'MTO', status: 'Success' },
+      },
+    },
+    {
+      title: '开始日期',
+      dataIndex: 'start_date',
+      valueType: 'date',
+      width: 120,
+    },
+    {
+      title: '结束日期',
+      dataIndex: 'end_date',
+      valueType: 'date',
+      width: 120,
+    },
+    {
+      title: '交货日期',
+      dataIndex: 'delivery_date',
+      valueType: 'date',
+      width: 120,
+    },
+    {
+      title: '客户名称',
+      dataIndex: 'customer_name',
+      width: 150,
+      ellipsis: true,
+    },
+    {
+      title: '总数量',
+      dataIndex: 'total_quantity',
+      width: 100,
+      align: 'right',
+    },
+    {
+      title: '总金额',
+      dataIndex: 'total_amount',
+      width: 120,
+      align: 'right',
+      render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-',
     },
     {
       title: '状态',
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        '草稿': { text: '草稿', status: 'default' },
-        '已审核': { text: '已审核', status: 'processing' },
-        '已完成': { text: '已完成', status: 'success' },
-        '已取消': { text: '已取消', status: 'error' },
+        '草稿': { text: '草稿', status: 'Default' },
+        '待审核': { text: '待审核', status: 'Processing' },
+        '已审核': { text: '已审核', status: 'Success' },
+        '已驳回': { text: '已驳回', status: 'Error' },
       },
     },
     {
@@ -192,9 +277,9 @@ const DemandManagementPage: React.FC = () => {
       dataIndex: 'review_status',
       width: 100,
       valueEnum: {
-        '待审核': { text: '待审核', status: 'default' },
-        '审核通过': { text: '审核通过', status: 'success' },
-        '审核驳回': { text: '审核驳回', status: 'error' },
+        '待审核': { text: '待审核', status: 'Default' },
+        '通过': { text: '通过', status: 'Success' },
+        '驳回': { text: '驳回', status: 'Error' },
       },
     },
     {
@@ -203,241 +288,94 @@ const DemandManagementPage: React.FC = () => {
       valueType: 'dateTime',
       width: 160,
     },
-    {
-      title: '操作',
-      width: 180,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          {record.status === '草稿' && (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleActivate(record)}
-              style={{ color: '#52c41a' }}
-            >
-              审核
-            </Button>
-          )}
-          {record.status === '已审核' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CalculatorOutlined />}
-              onClick={() => handleRunMRP(record)}
-              style={{ color: '#1890ff' }}
-            >
-              运行MRP
-            </Button>
-          )}
-        </Space>
-      ),
-    },
   ];
 
   return (
-    <ListPageTemplate>
-      <UniTable
-        headerTitle="需求管理 - 销售预测"
-        actionRef={actionRef}
-        rowKey="id"
-        columns={columns}
-        showAdvancedSearch={true}
-        request={async (params) => {
-          try {
-            const response = await listSalesForecasts({
-              skip: (params.current! - 1) * params.pageSize!,
-              limit: params.pageSize,
-              ...params,
-            });
-            return {
-              data: response.data || [],
-              success: response.success !== false,
-              total: response.total || 0,
+    <>
+      <ListPageTemplate>
+        <UniTable<Demand>
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            const apiParams: any = {
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
             };
-          } catch (error) {
-            messageApi.error('获取销售预测列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
-          }
-        }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建销售预测
-          </Button>,
-        ]}
-      />
-
-      <FormModalTemplate
-        title={isEdit ? '编辑销售预测' : '新建销售预测'}
+            
+            // 处理搜索参数
+            if (searchFormValues?.demand_type) {
+              apiParams.demand_type = searchFormValues.demand_type;
+            }
+            if (searchFormValues?.status) {
+              apiParams.status = searchFormValues.status;
+            }
+            if (searchFormValues?.business_mode) {
+              apiParams.business_mode = searchFormValues.business_mode;
+            }
+            if (searchFormValues?.review_status) {
+              apiParams.review_status = searchFormValues.review_status;
+            }
+            
+            // 处理排序
+            if (sort) {
+              const sortKeys = Object.keys(sort);
+              if (sortKeys.length > 0) {
+                const key = sortKeys[0];
+                apiParams.order_by = sort[key] === 'ascend' ? key : `-${key}`;
+              }
+            }
+            
+            try {
+              const response = await listDemands(apiParams);
+              return {
+                data: response.data || [],
+                success: response.success !== false,
+                total: response.total || 0,
+              };
+            } catch (error: any) {
+              messageApi.error(error?.message || '获取列表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="id"
+          showAdvancedSearch={true}
+          showCreateButton={true}
+          onCreate={handleCreate}
+          showEditButton={true}
+          onEdit={handleEdit}
+          showDeleteButton={true}
+          onDelete={handleDelete}
+          onDetail={handleDetail}
+        />
+      </ListPageTemplate>
+      
+      {/* 新建/编辑 Modal */}
+      <Modal
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onFinish={handleFormFinish}
-        isEdit={isEdit}
-        initialValues={currentForecast || { productionMode: 'MTS', unit: '个' }}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        grid={true}
+        onCancel={() => setModalVisible(false)}
+        title={isEdit ? '编辑需求' : '新建需求'}
+        width={800}
+        footer={null}
       >
-        <ProFormText
-          name="forecast_name"
-          label="预测名称"
-          placeholder="请输入预测名称"
-          rules={[{ required: true, message: '请输入预测名称' }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="productionMode"
-          label="生产模式"
-          rules={[{ required: true, message: '请选择生产模式' }]}
-          options={[
-            { label: '按库存生产 (MTS)', value: 'MTS' },
-            { label: '按订单生产 (MTO)', value: 'MTO' },
-          ]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="productCode"
-          label="产品"
-          placeholder="选择产品"
-          rules={[{ required: true, message: '请选择产品' }]}
-          options={[
-            { label: '产品A', value: 'FIN001' },
-            { label: '产品B', value: 'FIN002' },
-          ]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="forecastPeriod"
-          label="预测周期"
-          placeholder="例如：2026-01"
-          rules={[{ required: true, message: '请输入预测周期' }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormDigit
-          name="forecastQuantity"
-          label="预测数量"
-          placeholder="请输入预测数量"
-          rules={[{ required: true, message: '请输入预测数量' }]}
-          min={0}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="unit"
-          label="单位"
-          placeholder="例如：个、kg"
-          rules={[{ required: true, message: '请输入单位' }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormTextArea
-          name="notes"
-          label="备注"
-          placeholder="请输入备注信息"
-          fieldProps={{ rows: 3 }}
-          colProps={{ span: 24 }}
-        />
-      </FormModalTemplate>
-
-      <DetailDrawerTemplate
-        title={`销售预测详情 - ${currentForecast?.forecast_code || ''}`}
-        open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        columns={[]}
-        customContent={
-          currentForecast ? (
-            <div style={{ padding: '16px 0' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-                <div><strong>预测编号：</strong>{currentForecast.forecast_code}</div>
-                <div><strong>预测名称：</strong>{currentForecast.forecast_name}</div>
-                <div><strong>预测期间：</strong>{currentForecast.start_date} ~ {currentForecast.end_date}</div>
-                <div><strong>状态：</strong>
-                  <Tag color={
-                    currentForecast.status === '已审核' ? 'processing' :
-                    currentForecast.status === '已完成' ? 'success' :
-                    currentForecast.status === '已取消' ? 'error' : 'default'
-                  }>
-                    {currentForecast.status}
-                  </Tag>
-                </div>
-                <div><strong>审核状态：</strong>
-                  <Tag color={
-                    currentForecast.review_status === '审核通过' ? 'success' :
-                    currentForecast.review_status === '审核驳回' ? 'error' : 'default'
-                  }>
-                    {currentForecast.review_status}
-                  </Tag>
-                </div>
-                <div><strong>审核人：</strong>{currentForecast.reviewer_name}</div>
-                <div><strong>审核时间：</strong>{currentForecast.review_time}</div>
-                <div><strong>创建时间：</strong>{currentForecast.created_at}</div>
-              </div>
-
-              {currentForecast.review_remarks && (
-                <div style={{ marginBottom: '24px' }}>
-                  <strong>审核备注：</strong>{currentForecast.review_remarks}
-                </div>
-              )}
-
-              {currentForecast.notes && (
-                <div style={{ marginBottom: '24px' }}>
-                  <strong>备注：</strong>{currentForecast.notes}
-                </div>
-              )}
-
-              {/* 预测明细表格 */}
-              {currentForecast.forecast_items && currentForecast.forecast_items.length > 0 && (
-                <div>
-                  <h4>预测明细</h4>
-                  <Table
-                    size="small"
-                    columns={[
-                      { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '类型', dataIndex: 'component_type', width: 100 },
-                      { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
-                      { title: '预测数量', dataIndex: 'forecast_quantity', width: 120, align: 'right' },
-                    ]}
-                    dataSource={currentForecast.forecast_items}
-                    pagination={false}
-                    bordered
-                    rowKey="id"
-                  />
-                </div>
-              )}
-            </div>
-          ) : null
-        }
-      />
-    </ListPageTemplate>
+        {/* TODO: 表单内容将在下一步添加 */}
+        <div>表单内容待实现</div>
+      </Modal>
+      
+      {/* 详情 Drawer */}
+      <Drawer
+        open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        title="需求详情"
+        width={800}
+      >
+        {/* TODO: 详情内容将在下一步添加 */}
+        <div>详情内容待实现</div>
+      </Drawer>
+    </>
   );
 };
 
