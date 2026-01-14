@@ -14,6 +14,7 @@ from .production import router as production_router
 from .purchase import router as purchase_router
 from .sales import router as sales_router
 from .demand import router as demand_router
+from .demand_computation import router as demand_computation_router
 from .approval_flow import router as approval_flow_router
 from .state_transition import router as state_transition_router
 from .dashboard import router as dashboard_router
@@ -42,6 +43,7 @@ router.include_router(production_router)
 router.include_router(purchase_router)
 router.include_router(sales_router)
 router.include_router(demand_router)  # 统一需求管理（新设计）
+router.include_router(demand_computation_router)  # 统一需求计算（新设计）
 router.include_router(approval_flow_router)  # 审核流程管理
 router.include_router(state_transition_router)  # 状态流转管理
 router.include_router(dashboard_router)
