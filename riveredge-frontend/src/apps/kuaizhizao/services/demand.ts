@@ -219,3 +219,29 @@ export async function deleteDemandItem(demandId: number, itemId: number): Promis
     method: 'DELETE',
   });
 }
+
+/**
+ * 批量创建需求响应
+ */
+export interface BatchCreateDemandsResponse {
+  success: boolean;
+  success_count: number;
+  failure_count: number;
+  errors: Array<{
+    row: number;
+    error: string;
+    data: any;
+  }>;
+  created_demands: Demand[];
+}
+
+/**
+ * 批量创建需求
+ */
+export async function batchCreateDemands(demands: Partial<Demand>[]): Promise<BatchCreateDemandsResponse> {
+  return apiRequest<BatchCreateDemandsResponse>({
+    url: '/apps/kuaizhizao/demands/batch',
+    method: 'POST',
+    data: demands,
+  });
+}
