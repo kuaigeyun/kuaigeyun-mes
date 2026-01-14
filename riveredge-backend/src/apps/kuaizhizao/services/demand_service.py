@@ -279,6 +279,25 @@ class DemandService(AppBaseService[Demand]):
             if demand.status != "草稿":
                 raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {demand.status}")
             
+            # 使用状态流转服务更新状态
+            try:
+                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
+                state_service = StateTransitionService()
+                submitter_name = await self.get_user_name(submitted_by)
+                
+                await state_service.transition_state(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id,
+                    from_state=demand.status,
+                    to_state="待审核",
+                    operator_id=submitted_by,
+                    operator_name=submitter_name,
+                    transition_reason="提交审核"
+                )
+            except Exception as e:
+                logger.warning(f"状态流转失败: {e}，使用直接更新方式")
+            
             # 更新状态为待审核，记录提交时间
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 status="待审核",
@@ -387,6 +406,25 @@ class DemandService(AppBaseService[Demand]):
                 # 回退到简单审核模式
                 review_status = "驳回" if rejection_reason else "通过"
                 status = "已驳回" if rejection_reason else "已审核"
+            
+            # 使用状态流转服务更新状态
+            try:
+                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
+                state_service = StateTransitionService()
+                
+                await state_service.transition_state(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id,
+                    from_state=demand.status,
+                    to_state=status,
+                    operator_id=approved_by,
+                    operator_name=approver_name,
+                    transition_reason="审核" + ("通过" if not rejection_reason else "驳回"),
+                    transition_comment=rejection_reason
+                )
+            except Exception as e:
+                logger.warning(f"状态流转失败: {e}，使用直接更新方式")
             
             # 更新审核信息
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
