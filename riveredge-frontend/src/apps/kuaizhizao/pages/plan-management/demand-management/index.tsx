@@ -23,6 +23,7 @@ import {
   submitDemand, 
   approveDemand, 
   rejectDemand,
+  batchCreateDemands,
   Demand,
   DemandItem 
 } from '../../../services/demand';
