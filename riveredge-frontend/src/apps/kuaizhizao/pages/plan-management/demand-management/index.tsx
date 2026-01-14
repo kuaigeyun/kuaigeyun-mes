@@ -11,8 +11,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, message } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input } from 'antd';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { 
@@ -25,7 +25,7 @@ import {
   rejectDemand,
   Demand,
   DemandItem 
-} from '../../../../services/demand';
+} from '../../../services/demand';
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -92,7 +92,7 @@ const DemandManagementPage: React.FC = () => {
   /**
    * 处理删除需求
    */
-  const handleDelete = async (keys: React.Key[]) => {
+  const handleDelete = async (_keys: React.Key[]) => {
     // TODO: 实现删除功能
     messageApi.info('删除功能待实现');
   };
@@ -409,7 +409,6 @@ const DemandManagementPage: React.FC = () => {
           onEdit={handleEdit}
           showDeleteButton={true}
           onDelete={handleDelete}
-          onDetail={handleDetail}
         />
       </ListPageTemplate>
       
@@ -427,7 +426,7 @@ const DemandManagementPage: React.FC = () => {
           onFinish={handleSubmit}
           layout="vertical"
           submitter={{
-            render: (_, dom) => (
+            render: () => (
               <div style={{ textAlign: 'right', marginTop: 16 }}>
                 <Space>
                   <Button onClick={() => setModalVisible(false)}>取消</Button>
@@ -448,7 +447,7 @@ const DemandManagementPage: React.FC = () => {
             ]}
             rules={[{ required: true, message: '请选择需求类型' }]}
             fieldProps={{
-              onChange: (value) => setDemandType(value),
+              onChange: (value: 'sales_forecast' | 'sales_order') => setDemandType(value),
             }}
             disabled={isEdit}
           />
@@ -687,17 +686,17 @@ const DemandManagementPage: React.FC = () => {
                     { title: '物料名称', dataIndex: 'material_name', width: 150 },
                     { title: '物料规格', dataIndex: 'material_spec', width: 120 },
                     { title: '单位', dataIndex: 'material_unit', width: 80 },
-                    { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' },
+                    { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
                     ...(currentDemand.demand_type === 'sales_forecast' ? [
                       { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
                       { title: '预测月份', dataIndex: 'forecast_month', width: 100 },
                     ] : [
                       { title: '交货日期', dataIndex: 'delivery_date', width: 120 },
-                      { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' },
-                      { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' },
+                      { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
+                      { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
                     ]),
-                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
-                    { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right', render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                    { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right' as const, render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
                   ]}
                   dataSource={currentDemand.items}
                   pagination={false}
