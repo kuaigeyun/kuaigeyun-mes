@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from .production import router as production_router
 from .purchase import router as purchase_router
 from .sales import router as sales_router
+from .demand import router as demand_router
 from .dashboard import router as dashboard_router
 
 # 导入设备管理路由
@@ -38,6 +39,7 @@ router = APIRouter(tags=["Kuaige Zhizao MES"])
 router.include_router(production_router)
 router.include_router(purchase_router)
 router.include_router(sales_router)
+router.include_router(demand_router)  # 统一需求管理（新设计）
 router.include_router(dashboard_router)
 
 # 注册设备管理路由
