@@ -160,6 +160,129 @@ const DemandManagementPage: React.FC = () => {
   };
 
   /**
+   * 处理批量导入
+   */
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      messageApi.warning('导入数据为空');
+      return;
+    }
+
+    try {
+      // 第一行是表头，从第二行开始是数据
+      const headers = data[0];
+      const rows = data.slice(1);
+
+      // 字段映射（表头名称 -> 字段名）
+      const fieldMap: Record<string, string> = {
+        '需求类型': 'demand_type',
+        '需求名称': 'demand_name',
+        '业务模式': 'business_mode',
+        '开始日期': 'start_date',
+        '结束日期': 'end_date',
+        '预测周期': 'forecast_period',
+        '客户ID': 'customer_id',
+        '客户名称': 'customer_name',
+        '客户联系人': 'customer_contact',
+        '客户电话': 'customer_phone',
+        '订单日期': 'order_date',
+        '交货日期': 'delivery_date',
+        '销售员ID': 'salesman_id',
+        '销售员姓名': 'salesman_name',
+        '收货地址': 'shipping_address',
+        '发货方式': 'shipping_method',
+        '付款条件': 'payment_terms',
+        '备注': 'notes',
+      };
+
+      // 转换数据
+      const demands: Partial<Demand>[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.every(cell => !cell || cell.toString().trim() === '')) {
+          continue; // 跳过空行
+        }
+
+        const demand: any = {
+          status: '草稿',
+          review_status: '待审核',
+        };
+
+        // 映射字段
+        for (let j = 0; j < headers.length && j < row.length; j++) {
+          const header = headers[j]?.toString().trim();
+          const value = row[j]?.toString().trim();
+          
+          if (!header || !value) continue;
+
+          const fieldName = fieldMap[header];
+          if (fieldName) {
+            // 处理日期字段
+            if (fieldName.includes('date') || fieldName.includes('period')) {
+              demand[fieldName] = value;
+            }
+            // 处理数字字段
+            else if (fieldName.includes('_id')) {
+              demand[fieldName] = value ? parseInt(value, 10) : null;
+            }
+            // 处理枚举字段
+            else if (fieldName === 'demand_type') {
+              demand[fieldName] = value === '销售预测' ? 'sales_forecast' : 
+                                 value === '销售订单' ? 'sales_order' : value;
+            }
+            else if (fieldName === 'business_mode') {
+              demand[fieldName] = value.toUpperCase();
+            }
+            // 其他字段直接赋值
+            else {
+              demand[fieldName] = value;
+            }
+          }
+        }
+
+        // 根据需求类型设置业务模式
+        if (demand.demand_type === 'sales_forecast' && !demand.business_mode) {
+          demand.business_mode = 'MTS';
+        } else if (demand.demand_type === 'sales_order' && !demand.business_mode) {
+          demand.business_mode = 'MTO';
+        }
+
+        demands.push(demand);
+      }
+
+      if (demands.length === 0) {
+        messageApi.warning('没有有效的数据行');
+        return;
+      }
+
+      // 调用批量创建API
+      const result = await batchCreateDemands(demands);
+      
+      if (result.failure_count === 0) {
+        messageApi.success(`批量导入成功！成功导入 ${result.success_count} 条需求`);
+        actionRef.current?.reload();
+      } else {
+        messageApi.warning(
+          `批量导入完成，成功 ${result.success_count} 条，失败 ${result.failure_count} 条`
+        );
+        // 显示错误详情
+        if (result.errors && result.errors.length > 0) {
+          const errorMessages = result.errors
+            .slice(0, 10) // 只显示前10个错误
+            .map(err => `第 ${err.row} 行: ${err.error}`)
+            .join('\n');
+          messageApi.error(`部分数据导入失败：\n${errorMessages}`, 10);
+        }
+        if (result.success_count > 0) {
+          actionRef.current?.reload();
+        }
+      }
+    } catch (error: any) {
+      messageApi.error(`批量导入失败: ${error.message || '未知错误'}`);
+    }
+  };
+
+  /**
    * 处理驳回需求
    */
   const handleReject = async (id: number) => {
@@ -410,6 +533,48 @@ const DemandManagementPage: React.FC = () => {
           onEdit={handleEdit}
           showDeleteButton={true}
           onDelete={handleDelete}
+          showImportButton={true}
+          onImport={handleImport}
+          importHeaders={[
+            '需求类型',
+            '需求名称',
+            '业务模式',
+            '开始日期',
+            '结束日期',
+            '预测周期',
+            '客户ID',
+            '客户名称',
+            '客户联系人',
+            '客户电话',
+            '订单日期',
+            '交货日期',
+            '销售员ID',
+            '销售员姓名',
+            '收货地址',
+            '发货方式',
+            '付款条件',
+            '备注',
+          ]}
+          importExampleRow={[
+            '销售预测',
+            '2026年1月销售预测',
+            'MTS',
+            '2026-01-01',
+            '2026-01-31',
+            '2026-01',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '批量导入示例',
+          ]}
         />
       </ListPageTemplate>
       
