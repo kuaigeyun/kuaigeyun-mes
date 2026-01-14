@@ -358,11 +358,130 @@ const DemandManagementPage: React.FC = () => {
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         title={isEdit ? '编辑需求' : '新建需求'}
-        width={800}
+        width={900}
         footer={null}
+        destroyOnClose
       >
-        {/* TODO: 表单内容将在下一步添加 */}
-        <div>表单内容待实现</div>
+        <ProForm
+          formRef={formRef}
+          onFinish={handleSubmit}
+          layout="vertical"
+          submitter={{
+            render: (_, dom) => (
+              <div style={{ textAlign: 'right', marginTop: 16 }}>
+                <Space>
+                  <Button onClick={() => setModalVisible(false)}>取消</Button>
+                  <Button type="primary" onClick={() => formRef.current?.submit()}>
+                    {isEdit ? '更新' : '创建'}
+                  </Button>
+                </Space>
+              </div>
+            ),
+          }}
+        >
+          <ProFormSelect
+            name="demand_type"
+            label="需求类型"
+            options={[
+              { label: '销售预测', value: 'sales_forecast' },
+              { label: '销售订单', value: 'sales_order' },
+            ]}
+            rules={[{ required: true, message: '请选择需求类型' }]}
+            fieldProps={{
+              onChange: (value) => setDemandType(value),
+            }}
+            disabled={isEdit}
+          />
+          <ProFormText
+            name="demand_name"
+            label="需求名称"
+            placeholder="请输入需求名称"
+            rules={[{ required: true, message: '请输入需求名称' }]}
+          />
+          <ProFormDatePicker
+            name="start_date"
+            label="开始日期"
+            rules={[{ required: true, message: '请选择开始日期' }]}
+            width="100%"
+          />
+          <ProFormDatePicker
+            name="end_date"
+            label="结束日期"
+            width="100%"
+          />
+          {/* 销售预测专用字段 */}
+          {demandType === 'sales_forecast' && (
+            <>
+              <ProFormText
+                name="forecast_period"
+                label="预测周期"
+                placeholder="例如：2026-01"
+                rules={[{ required: true, message: '请输入预测周期' }]}
+              />
+            </>
+          )}
+          {/* 销售订单专用字段 */}
+          {demandType === 'sales_order' && (
+            <>
+              <ProFormDigit
+                name="customer_id"
+                label="客户ID"
+                rules={[{ required: true, message: '请输入客户ID' }]}
+              />
+              <ProFormText
+                name="customer_name"
+                label="客户名称"
+                rules={[{ required: true, message: '请输入客户名称' }]}
+              />
+              <ProFormText
+                name="customer_contact"
+                label="客户联系人"
+              />
+              <ProFormText
+                name="customer_phone"
+                label="客户电话"
+              />
+              <ProFormDatePicker
+                name="order_date"
+                label="订单日期"
+                rules={[{ required: true, message: '请选择订单日期' }]}
+                width="100%"
+              />
+              <ProFormDatePicker
+                name="delivery_date"
+                label="交货日期"
+                rules={[{ required: true, message: '请选择交货日期' }]}
+                width="100%"
+              />
+              <ProFormDigit
+                name="salesman_id"
+                label="销售员ID"
+              />
+              <ProFormText
+                name="salesman_name"
+                label="销售员姓名"
+              />
+              <ProFormTextArea
+                name="shipping_address"
+                label="收货地址"
+                fieldProps={{ rows: 2 }}
+              />
+              <ProFormText
+                name="shipping_method"
+                label="发货方式"
+              />
+              <ProFormText
+                name="payment_terms"
+                label="付款条件"
+              />
+            </>
+          )}
+          <ProFormTextArea
+            name="notes"
+            label="备注"
+            fieldProps={{ rows: 3 }}
+          />
+        </ProForm>
       </Modal>
       
       {/* 详情 Drawer */}
