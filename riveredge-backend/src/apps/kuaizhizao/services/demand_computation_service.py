@@ -334,3 +334,48 @@ class DemandComputationService:
         logger.info(f"执行LRP计算: {computation.computation_code}")
         # 占位实现，后续完善
         pass
+    
+    async def update_computation(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        computation_data: DemandComputationUpdate,
+        updated_by: int
+    ) -> DemandComputationResponse:
+        """
+        更新需求计算
+        
+        Args:
+            tenant_id: 租户ID
+            computation_id: 计算ID
+            computation_data: 更新数据
+            updated_by: 更新人ID
+            
+        Returns:
+            DemandComputationResponse: 更新后的计算响应
+        """
+        async with in_transaction():
+            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+            if not computation:
+                raise NotFoundError(f"需求计算不存在: {computation_id}")
+            
+            # 只能更新进行中或失败状态的计算
+            if computation.computation_status not in ["进行中", "失败"]:
+                raise BusinessLogicError(f"只能更新进行中或失败状态的计算，当前状态: {computation.computation_status}")
+            
+            # 准备更新数据
+            update_data = computation_data.model_dump(exclude_unset=True)
+            update_data['updated_by'] = updated_by
+            
+            # 更新计算
+            await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(**update_data)
+            
+            # 返回更新后的计算
+            items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).all()
+            return await self._build_computation_response(
+                await DemandComputation.get(tenant_id=tenant_id, id=computation_id),
+                items
+            )
