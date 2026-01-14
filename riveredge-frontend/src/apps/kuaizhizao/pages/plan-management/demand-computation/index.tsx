@@ -12,7 +12,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, message } from 'antd';
-import { PlayCircleOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, EyeOutlined, ReloadOutlined, FileAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
@@ -20,6 +20,7 @@ import {
   getDemandComputation,
   createDemandComputation,
   executeDemandComputation,
+  generateOrdersFromComputation,
   DemandComputation,
   DemandComputationItem
 } from '../../../services/demand-computation';
@@ -87,6 +88,27 @@ const DemandComputationPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error('计算执行失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理一键生成工单和采购单
+   */
+  const handleGenerateOrders = async (record: DemandComputation) => {
+    Modal.confirm({
+      title: '一键生成工单和采购单',
+      content: `确认要从计算结果 ${record.computation_code} 生成工单和采购单吗？`,
+      onOk: async () => {
+        try {
+          const result = await generateOrdersFromComputation(record.id!);
+          messageApi.success(
+            `生成成功！工单 ${result.work_order_count} 个，采购单 ${result.purchase_order_count} 个`
+          );
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error('生成工单和采购单失败');
         }
       },
     });
@@ -164,6 +186,16 @@ const DemandComputationPage: React.FC = () => {
               onClick={() => handleExecute(record)}
             >
               执行
+            </Button>
+          )}
+          {record.computation_status === '完成' && (
+            <Button
+              type="link"
+              size="small"
+              icon={<FileAddOutlined />}
+              onClick={() => handleGenerateOrders(record)}
+            >
+              生成工单/采购单
             </Button>
           )}
         </Space>
