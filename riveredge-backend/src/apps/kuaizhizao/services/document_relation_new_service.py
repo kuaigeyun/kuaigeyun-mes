@@ -114,3 +114,113 @@ class DocumentRelationNewService:
             upstream=[DocumentRelationResponse.model_validate(r) for r in upstream_relations],
             downstream=[DocumentRelationResponse.model_validate(r) for r in downstream_relations]
         )
+    
+    async def batch_create_relations(
+        self,
+        tenant_id: int,
+        source_type: str,
+        source_id: int,
+        source_code: Optional[str],
+        source_name: Optional[str],
+        target_documents: List[Dict[str, Any]],
+        relation_mode: str = "push",
+        business_mode: Optional[str] = None,
+        demand_id: Optional[int] = None,
+        created_by: int = None
+    ) -> List[DocumentRelationResponse]:
+        """
+        批量创建关联关系
+        
+        Args:
+            tenant_id: 租户ID
+            source_type: 源单据类型
+            source_id: 源单据ID
+            source_code: 源单据编码
+            source_name: 源单据名称
+            target_documents: 目标单据列表（每个元素包含type、id、code、name等）
+            relation_mode: 关联方式
+            business_mode: 业务模式
+            demand_id: 需求ID
+            created_by: 创建人ID
+            
+        Returns:
+            List[DocumentRelationResponse]: 创建的关联关系列表
+        """
+        async with in_transaction():
+            relations = []
+            
+            for target in target_documents:
+                try:
+                    relation = await DocumentRelation.create(
+                        tenant_id=tenant_id,
+                        source_type=source_type,
+                        source_id=source_id,
+                        source_code=source_code,
+                        source_name=source_name,
+                        target_type=target["type"],
+                        target_id=target["id"],
+                        target_code=target.get("code"),
+                        target_name=target.get("name"),
+                        relation_type="source",
+                        relation_mode=relation_mode,
+                        relation_desc=target.get("desc"),
+                        business_mode=business_mode,
+                        demand_id=demand_id,
+                        notes=target.get("notes"),
+                        created_by=created_by,
+                    )
+                    relations.append(DocumentRelationResponse.model_validate(relation))
+                except Exception as e:
+                    logger.warning(f"创建关联关系失败: {e}")
+                    # 继续处理下一个，不中断批量操作
+            
+            return relations
+    
+    async def delete_relation(
+        self,
+        tenant_id: int,
+        relation_id: int
+    ) -> None:
+        """
+        删除关联关系（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            relation_id: 关联关系ID
+        """
+        relation = await DocumentRelation.get_or_none(
+            tenant_id=tenant_id,
+            id=relation_id,
+            deleted_at__isnull=True
+        )
+        
+        if not relation:
+            raise NotFoundError(f"关联关系不存在: {relation_id}")
+        
+        await relation.soft_delete()
+    
+    async def get_relation_by_id(
+        self,
+        tenant_id: int,
+        relation_id: int
+    ) -> DocumentRelationResponse:
+        """
+        根据ID获取关联关系
+        
+        Args:
+            tenant_id: 租户ID
+            relation_id: 关联关系ID
+            
+        Returns:
+            DocumentRelationResponse: 关联关系响应
+        """
+        relation = await DocumentRelation.get_or_none(
+            tenant_id=tenant_id,
+            id=relation_id,
+            deleted_at__isnull=True
+        )
+        
+        if not relation:
+            raise NotFoundError(f"关联关系不存在: {relation_id}")
+        
+        return DocumentRelationResponse.model_validate(relation)
