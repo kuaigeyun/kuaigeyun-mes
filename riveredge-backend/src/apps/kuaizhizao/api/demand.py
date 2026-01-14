@@ -64,6 +64,57 @@ async def create_demand(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求失败")
 
 
+@router.post("/batch", response_model=Dict[str, Any], summary="批量创建需求")
+async def batch_create_demands(
+    demands_data: List[DemandCreate],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量创建统一需求
+    
+    支持批量创建销售预测和销售订单。
+    返回成功和失败的数量及详细信息。
+    """
+    try:
+        success_count = 0
+        failure_count = 0
+        errors = []
+        created_demands = []
+        
+        for index, demand_data in enumerate(demands_data, start=1):
+            try:
+                demand = await demand_service.create_demand(
+                    tenant_id=tenant_id,
+                    demand_data=demand_data,
+                    created_by=current_user.id
+                )
+                created_demands.append(demand)
+                success_count += 1
+            except Exception as e:
+                failure_count += 1
+                errors.append({
+                    "row": index,
+                    "error": str(e),
+                    "data": demand_data.model_dump() if hasattr(demand_data, 'model_dump') else demand_data.dict(),
+                })
+                logger.error(f"批量创建需求失败（第{index}行）: {e}")
+        
+        return {
+            "success": True,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+            "created_demands": [d.model_dump() if hasattr(d, 'model_dump') else d.dict() for d in created_demands],
+        }
+    except Exception as e:
+        logger.error(f"批量创建需求异常: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量创建需求失败: {str(e)}",
+        )
+
+
 @router.get("", summary="获取需求列表")
 async def list_demands(
     skip: int = Query(0, ge=0, description="跳过数量"),
