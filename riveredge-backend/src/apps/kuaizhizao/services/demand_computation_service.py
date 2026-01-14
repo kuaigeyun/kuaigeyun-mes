@@ -117,4 +117,117 @@ class DemandComputationService:
             # 回退到简单编码格式
             now = datetime.now()
             prefix = "MRP" if computation_type == "MRP" else "LRP"
-            return f"{prefix}-{now.strftime('%Y%m%d')}-{computation.id if 'computation' in locals() else 'NEW'}"
+            return f"{prefix}-{now.strftime('%Y%m%d')}-NEW"
+    
+    async def _build_computation_response(
+        self,
+        computation: DemandComputation,
+        items: List[DemandComputationItem]
+    ) -> DemandComputationResponse:
+        """构建计算响应对象"""
+        item_responses = [
+            DemandComputationItemResponse.model_validate(item) for item in items
+        ]
+        
+        return DemandComputationResponse(
+            id=computation.id,
+            uuid=str(computation.uuid),
+            tenant_id=computation.tenant_id,
+            computation_code=computation.computation_code,
+            demand_id=computation.demand_id,
+            demand_code=computation.demand_code,
+            demand_type=computation.demand_type,
+            business_mode=computation.business_mode,
+            computation_type=computation.computation_type,
+            computation_params=computation.computation_params,
+            computation_status=computation.computation_status,
+            computation_start_time=computation.computation_start_time,
+            computation_end_time=computation.computation_end_time,
+            computation_summary=computation.computation_summary,
+            error_message=computation.error_message,
+            notes=computation.notes,
+            created_at=computation.created_at,
+            updated_at=computation.updated_at,
+            created_by=computation.created_by,
+            updated_by=computation.updated_by,
+            items=item_responses
+        )
+    
+    async def get_computation_by_id(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        include_items: bool = True
+    ) -> DemandComputationResponse:
+        """
+        根据ID获取需求计算
+        
+        Args:
+            tenant_id: 租户ID
+            computation_id: 计算ID
+            include_items: 是否包含明细
+            
+        Returns:
+            DemandComputationResponse: 计算响应
+        """
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        
+        items = []
+        if include_items:
+            items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).all()
+        
+        return await self._build_computation_response(computation, items)
+    
+    async def list_computations(
+        self,
+        tenant_id: int,
+        demand_id: Optional[int] = None,
+        computation_type: Optional[str] = None,
+        computation_status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """
+        获取需求计算列表
+        
+        Args:
+            tenant_id: 租户ID
+            demand_id: 需求ID（可选）
+            computation_type: 计算类型（可选）
+            computation_status: 计算状态（可选）
+            skip: 跳过数量
+            limit: 限制数量
+            
+        Returns:
+            Dict: 包含计算列表和总数的字典
+        """
+        query = DemandComputation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        
+        if demand_id:
+            query = query.filter(demand_id=demand_id)
+        if computation_type:
+            query = query.filter(computation_type=computation_type)
+        if computation_status:
+            query = query.filter(computation_status=computation_status)
+        
+        total = await query.count()
+        computations = await query.offset(skip).limit(limit).order_by('-computation_start_time')
+        
+        result = []
+        for computation in computations:
+            items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation.id
+            ).all()
+            result.append(await self._build_computation_response(computation, items))
+        
+        return {
+            "data": [r.model_dump() for r in result],
+            "total": total,
+            "success": True
+        }
