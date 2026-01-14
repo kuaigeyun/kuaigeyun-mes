@@ -158,13 +158,14 @@ async def list_demands(
 async def get_demand(
     demand_id: int = Path(..., description="需求ID"),
     include_items: bool = Query(False, description="是否包含明细"),
+    include_duration: bool = Query(False, description="是否包含耗时统计"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     获取需求详情
     
-    可以指定是否包含需求明细。
+    可以指定是否包含需求明细和耗时统计。
     """
     try:
         result = await demand_service.get_demand_by_id(
@@ -172,6 +173,20 @@ async def get_demand(
             demand_id=demand_id,
             include_items=include_items
         )
+        
+        # 如果需要耗时统计，计算并添加到响应中
+        if include_duration:
+            demand = await demand_service.model.get_or_none(
+                tenant_id=tenant_id,
+                id=demand_id
+            )
+            if demand:
+                duration_info = demand_service.calculate_demand_duration(demand)
+                # 将耗时信息添加到响应中（通过model_dump后添加）
+                result_dict = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+                result_dict['duration_info'] = duration_info
+                return result_dict
+        
         return result
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
