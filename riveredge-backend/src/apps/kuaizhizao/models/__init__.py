@@ -52,6 +52,9 @@ from .sales_forecast import SalesForecast
 from .sales_forecast_item import SalesForecastItem
 from .sales_order import SalesOrder
 from .sales_order_item import SalesOrderItem
+# 统一需求模型（新设计）
+from .demand import Demand
+from .demand_item import DemandItem
 
 # BOM管理模块
 # BOM管理已移至master_data APP，不再需要BillOfMaterials模型
@@ -122,6 +125,10 @@ __all__ = [
     'SalesForecastItem',
     'SalesOrder',
     'SalesOrderItem',
+    
+    # 统一需求管理模块（新设计）
+    'Demand',
+    'DemandItem',
 
     # BOM管理模块
     # BillOfMaterials和BillOfMaterialsItem已移除，BOM管理在master_data APP中
