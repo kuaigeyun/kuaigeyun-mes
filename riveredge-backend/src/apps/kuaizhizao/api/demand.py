@@ -379,3 +379,32 @@ async def delete_demand_item(
     except Exception as e:
         logger.error(f"删除需求明细失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求明细失败")
+
+
+@router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="下推需求到物料需求运算")
+async def push_demand_to_computation(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    将需求下推到物料需求运算（一键下推）
+    
+    只能下推已审核的需求。下推后会：
+    1. 标记需求为已下推
+    2. 创建需求计算任务（待步骤1.2实现统一需求计算服务后完善）
+    """
+    try:
+        result = await demand_service.push_to_computation(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            created_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        logger.error(f"下推需求失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"下推需求失败: {str(e)}")
