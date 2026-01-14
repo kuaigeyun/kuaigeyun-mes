@@ -62,6 +62,9 @@ class Demand(BaseModel):
     # 状态（通用）
     status = fields.CharField(max_length=20, default="草稿", description="需求状态")
     
+    # 时间节点记录（用于耗时统计）
+    submit_time = fields.DatetimeField(null=True, description="提交时间")
+    
     # 审核信息（通用）
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")

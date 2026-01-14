@@ -279,10 +279,11 @@ class DemandService(AppBaseService[Demand]):
             if demand.status != "草稿":
                 raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {demand.status}")
             
-            # 更新状态为待审核
+            # 更新状态为待审核，记录提交时间
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 status="待审核",
                 review_status="待审核",
+                submit_time=datetime.now(),
                 updated_by=submitted_by
             )
             
