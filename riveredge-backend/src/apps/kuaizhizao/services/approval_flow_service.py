@@ -138,3 +138,97 @@ class ApprovalFlowService:
             updated_by=flow.updated_by,
             steps=step_responses
         )
+    
+    async def list_approval_flows(
+        self,
+        tenant_id: int,
+        entity_type: Optional[str] = None,
+        is_active: Optional[bool] = None
+    ) -> List[ApprovalFlowResponse]:
+        """
+        获取审核流程列表
+        
+        Args:
+            tenant_id: 租户ID
+            entity_type: 实体类型（可选）
+            is_active: 是否启用（可选）
+            
+        Returns:
+            List[ApprovalFlowResponse]: 流程列表
+        """
+        query = ApprovalFlow.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        
+        if entity_type:
+            query = query.filter(entity_type=entity_type)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        
+        flows = await query.order_by('-created_at').all()
+        
+        result = []
+        for flow in flows:
+            steps = await ApprovalFlowStep.filter(
+                tenant_id=tenant_id,
+                flow_id=flow.id
+            ).order_by('step_order').all()
+            result.append(await self._build_flow_response(flow, steps))
+        
+        return result
+    
+    async def get_approval_flow_for_entity(
+        self,
+        tenant_id: int,
+        entity_type: str,
+        business_mode: Optional[str] = None,
+        demand_type: Optional[str] = None
+    ) -> Optional[ApprovalFlowResponse]:
+        """
+        根据实体类型获取适用的审核流程
+        
+        Args:
+            tenant_id: 租户ID
+            entity_type: 实体类型
+            business_mode: 业务模式（可选）
+            demand_type: 需求类型（可选）
+            
+        Returns:
+            Optional[ApprovalFlowResponse]: 适用的流程，如果没有则返回None
+        """
+        # 查询启用的流程，按优先级匹配
+        query = ApprovalFlow.filter(
+            tenant_id=tenant_id,
+            entity_type=entity_type,
+            is_active=True,
+            deleted_at__isnull=True
+        )
+        
+        flows = await query.all()
+        
+        # 匹配最精确的流程
+        best_match = None
+        best_score = 0
+        
+        for flow in flows:
+            score = 0
+            # 如果业务模式匹配，加分
+            if business_mode and flow.business_mode == business_mode:
+                score += 2
+            # 如果需求类型匹配，加分
+            if demand_type and flow.demand_type == demand_type:
+                score += 2
+            # 如果都没有指定，也匹配（通用流程）
+            if not flow.business_mode and not flow.demand_type:
+                score = 1
+            
+            if score > best_score:
+                best_score = score
+                best_match = flow
+        
+        if best_match:
+            steps = await ApprovalFlowStep.filter(
+                tenant_id=tenant_id,
+                flow_id=best_match.id
+            ).order_by('step_order').all()
+            return await self._build_flow_response(best_match, steps)
+        
+        return None
