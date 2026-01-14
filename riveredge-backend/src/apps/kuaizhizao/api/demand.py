@@ -27,6 +27,7 @@ from apps.kuaizhizao.schemas.demand import (
     DemandItemUpdate,
     DemandItemResponse,
 )
+from typing import List
 
 # 初始化服务实例
 demand_service = DemandService()
