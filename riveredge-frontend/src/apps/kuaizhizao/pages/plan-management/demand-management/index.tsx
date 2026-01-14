@@ -28,6 +28,7 @@ import {
   Demand,
   DemandItem 
 } from '../../../services/demand';
+import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -84,6 +85,16 @@ const DemandManagementPage: React.FC = () => {
       try {
         const data = await getDemand(id, true);
         setCurrentDemand(data);
+        
+        // 获取单据关联关系
+        try {
+          const relations = await getDocumentRelations('demand', id);
+          setDocumentRelations(relations);
+        } catch (error) {
+          console.error('获取单据关联关系失败:', error);
+          setDocumentRelations(null);
+        }
+        
         setDrawerVisible(true);
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
