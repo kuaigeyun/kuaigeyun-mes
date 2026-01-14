@@ -379,3 +379,223 @@ class DemandComputationService:
                 await DemandComputation.get(tenant_id=tenant_id, id=computation_id),
                 items
             )
+    
+    async def generate_work_orders_and_purchase_orders(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从需求计算结果一键生成工单和采购单
+        
+        Args:
+            tenant_id: 租户ID
+            computation_id: 计算ID
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 包含生成的工单和采购单信息
+        """
+        async with in_transaction():
+            # 获取计算详情
+            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+            if not computation:
+                raise NotFoundError(f"需求计算不存在: {computation_id}")
+            
+            # 只能从已完成的计算生成
+            if computation.computation_status != "完成":
+                raise BusinessLogicError(f"只能从已完成的计算生成工单和采购单，当前状态: {computation.computation_status}")
+            
+            # 获取计算结果明细
+            items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).all()
+            
+            if not items:
+                raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
+            
+            # 生成工单和采购单
+            work_orders = []
+            purchase_orders = []
+            
+            for item in items:
+                # 如果有建议工单数量，生成工单
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    work_order = await self._create_work_order_from_item(
+                        tenant_id=tenant_id,
+                        computation=computation,
+                        item=item,
+                        created_by=created_by
+                    )
+                    work_orders.append(work_order)
+                
+                # 如果有建议采购订单数量，生成采购单
+                if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    purchase_order = await self._create_purchase_order_from_item(
+                        tenant_id=tenant_id,
+                        computation=computation,
+                        item=item,
+                        created_by=created_by
+                    )
+                    purchase_orders.append(purchase_order)
+            
+            return {
+                "computation_id": computation_id,
+                "computation_code": computation.computation_code,
+                "work_orders": work_orders,
+                "purchase_orders": purchase_orders,
+                "work_order_count": len(work_orders),
+                "purchase_order_count": len(purchase_orders),
+            }
+    
+    async def _create_work_order_from_item(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        item: DemandComputationItem,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从计算结果明细创建工单
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+            item: 计算结果明细
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 创建的工单信息
+        """
+        try:
+            from apps.kuaizhizao.services.work_order_service import WorkOrderService
+            from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+            from datetime import datetime, timedelta
+            
+            work_order_service = WorkOrderService()
+            
+            # 确定生产模式
+            production_mode = "MTO" if computation.business_mode == "MTO" else "MTS"
+            
+            # 确定计划时间（如果有LRP的日期信息）
+            planned_start_date = None
+            planned_end_date = None
+            if item.production_start_date:
+                planned_start_date = item.production_start_date
+            if item.production_completion_date:
+                planned_end_date = item.production_completion_date
+            
+            # 创建工单
+            work_order_data = WorkOrderCreate(
+                product_id=item.material_id,
+                quantity=float(item.suggested_work_order_quantity or 0),
+                production_mode=production_mode,
+                sales_order_id=computation.demand_id if production_mode == "MTO" else None,
+                planned_start_date=planned_start_date,
+                planned_end_date=planned_end_date,
+                remarks=f"从需求计算 {computation.computation_code} 自动生成",
+            )
+            
+            work_order = await work_order_service.create_work_order(
+                tenant_id=tenant_id,
+                work_order_data=work_order_data,
+                created_by=created_by
+            )
+            
+            return {
+                "id": work_order.id,
+                "code": work_order.code,
+                "product_code": item.material_code,
+                "product_name": item.material_name,
+                "quantity": float(item.suggested_work_order_quantity or 0),
+            }
+        except Exception as e:
+            logger.error(f"创建工单失败: {e}")
+            raise BusinessLogicError(f"创建工单失败: {str(e)}")
+    
+    async def _create_purchase_order_from_item(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        item: DemandComputationItem,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从计算结果明细创建采购单
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+            item: 计算结果明细
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 创建的采购单信息
+        """
+        try:
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+            from core.services.business.code_generation_service import CodeGenerationService
+            from datetime import datetime, date
+            
+            # 生成采购订单编码
+            try:
+                order_code = await CodeGenerationService.generate_code(
+                    tenant_id=tenant_id,
+                    rule_code="PURCHASE_ORDER",
+                )
+            except Exception:
+                # 回退到简单编码
+                now = datetime.now()
+                order_code = f"PO-{now.strftime('%Y%m%d')}-{computation.id}"
+            
+            # TODO: 需要获取供应商信息（这里简化处理，实际应该从物料主数据获取默认供应商）
+            # 暂时使用占位值
+            supplier_id = 1  # 需要从物料主数据获取
+            supplier_name = "待指定供应商"
+            
+            # 确定交货日期
+            delivery_date = item.procurement_completion_date or item.delivery_date
+            if not delivery_date:
+                delivery_date = date.today() + timedelta(days=7)  # 默认7天后
+            
+            # 创建采购订单
+            purchase_order = await PurchaseOrder.create(
+                tenant_id=tenant_id,
+                order_code=order_code,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                order_date=date.today(),
+                delivery_date=delivery_date,
+                order_type="标准采购",
+                status="草稿",
+                source_type=computation.computation_type,
+                source_id=computation.id,
+                notes=f"从需求计算 {computation.computation_code} 自动生成",
+            )
+            
+            # 创建采购订单行
+            await PurchaseOrderItem.create(
+                tenant_id=tenant_id,
+                order_id=purchase_order.id,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec,
+                material_unit=item.material_unit,
+                quantity=float(item.suggested_purchase_order_quantity or 0),
+                unit_price=0,  # 需要从物料主数据或供应商报价获取
+                amount=0,  # 需要计算
+            )
+            
+            return {
+                "id": purchase_order.id,
+                "order_code": purchase_order.order_code,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "quantity": float(item.suggested_purchase_order_quantity or 0),
+            }
+        except Exception as e:
+            logger.error(f"创建采购单失败: {e}")
+            raise BusinessLogicError(f"创建采购单失败: {str(e)}")
