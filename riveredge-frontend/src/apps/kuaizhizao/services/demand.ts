@@ -37,6 +37,7 @@ export interface Demand {
   review_time?: string;
   review_status?: string;
   review_remarks?: string;
+  submit_time?: string;
   salesman_id?: number;
   salesman_name?: string;
   shipping_address?: string;
