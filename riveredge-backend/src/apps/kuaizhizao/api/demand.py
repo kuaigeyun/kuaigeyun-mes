@@ -9,7 +9,7 @@ Author: Luigi Lu
 Date: 2025-01-14
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
 from loguru import logger
 
