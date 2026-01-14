@@ -176,7 +176,8 @@ async def get_demand(
         
         # 如果需要耗时统计，计算并添加到响应中
         if include_duration:
-            demand = await demand_service.model.get_or_none(
+            from apps.kuaizhizao.models.demand import Demand
+            demand = await Demand.get_or_none(
                 tenant_id=tenant_id,
                 id=demand_id
             )
