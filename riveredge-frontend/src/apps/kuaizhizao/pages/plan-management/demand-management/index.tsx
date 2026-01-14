@@ -10,7 +10,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input, message } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -488,11 +488,166 @@ const DemandManagementPage: React.FC = () => {
       <Drawer
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        title="需求详情"
-        width={800}
+        title={`需求详情 - ${currentDemand?.demand_code || ''}`}
+        width={900}
+        extra={
+          currentDemand && (
+            <Space>
+              {currentDemand.status === '草稿' && (
+                <>
+                  <Button
+                    type="primary"
+                    icon={<SendOutlined />}
+                    onClick={() => handleSubmitDemand(currentDemand.id!)}
+                  >
+                    提交
+                  </Button>
+                  <Button
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setDrawerVisible(false);
+                      handleEdit([currentDemand.id!]);
+                    }}
+                  >
+                    编辑
+                  </Button>
+                </>
+              )}
+              {currentDemand.status === '待审核' && (
+                <>
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => handleApprove(currentDemand.id!)}
+                    style={{ color: '#52c41a', borderColor: '#52c41a' }}
+                  >
+                    审核通过
+                  </Button>
+                  <Button
+                    danger
+                    icon={<CloseCircleOutlined />}
+                    onClick={() => handleReject(currentDemand.id!)}
+                  >
+                    驳回
+                  </Button>
+                </>
+              )}
+            </Space>
+          )
+        }
       >
-        {/* TODO: 详情内容将在下一步添加 */}
-        <div>详情内容待实现</div>
+        {currentDemand && (
+          <div style={{ padding: '16px 0' }}>
+            <ProDescriptions
+              column={2}
+              title="基本信息"
+              dataSource={currentDemand}
+            >
+              <ProDescriptions.Item label="需求编码" dataIndex="demand_code" />
+              <ProDescriptions.Item label="需求类型" dataIndex="demand_type">
+                <Tag color={currentDemand.demand_type === 'sales_forecast' ? 'processing' : 'success'}>
+                  {currentDemand.demand_type === 'sales_forecast' ? '销售预测' : '销售订单'}
+                </Tag>
+              </ProDescriptions.Item>
+              <ProDescriptions.Item label="需求名称" dataIndex="demand_name" />
+              <ProDescriptions.Item label="业务模式" dataIndex="business_mode">
+                <Tag color={currentDemand.business_mode === 'MTS' ? 'processing' : 'success'}>
+                  {currentDemand.business_mode}
+                </Tag>
+              </ProDescriptions.Item>
+              <ProDescriptions.Item label="开始日期" dataIndex="start_date" valueType="date" />
+              <ProDescriptions.Item label="结束日期" dataIndex="end_date" valueType="date" />
+              {currentDemand.demand_type === 'sales_forecast' && (
+                <ProDescriptions.Item label="预测周期" dataIndex="forecast_period" />
+              )}
+              {currentDemand.demand_type === 'sales_order' && (
+                <>
+                  <ProDescriptions.Item label="订单日期" dataIndex="order_date" valueType="date" />
+                  <ProDescriptions.Item label="交货日期" dataIndex="delivery_date" valueType="date" />
+                </>
+              )}
+              <ProDescriptions.Item label="客户名称" dataIndex="customer_name" />
+              {currentDemand.demand_type === 'sales_order' && (
+                <>
+                  <ProDescriptions.Item label="客户联系人" dataIndex="customer_contact" />
+                  <ProDescriptions.Item label="客户电话" dataIndex="customer_phone" />
+                  <ProDescriptions.Item label="销售员" dataIndex="salesman_name" />
+                  <ProDescriptions.Item label="收货地址" dataIndex="shipping_address" span={2} />
+                  <ProDescriptions.Item label="发货方式" dataIndex="shipping_method" />
+                  <ProDescriptions.Item label="付款条件" dataIndex="payment_terms" />
+                </>
+              )}
+              <ProDescriptions.Item label="总数量" dataIndex="total_quantity" />
+              <ProDescriptions.Item label="总金额" dataIndex="total_amount">
+                {currentDemand.total_amount ? `¥${Number(currentDemand.total_amount).toLocaleString()}` : '-'}
+              </ProDescriptions.Item>
+              <ProDescriptions.Item label="状态" dataIndex="status">
+                <Tag
+                  color={
+                    currentDemand.status === '已审核' ? 'success' :
+                    currentDemand.status === '待审核' ? 'processing' :
+                    currentDemand.status === '已驳回' ? 'error' : 'default'
+                  }
+                >
+                  {currentDemand.status}
+                </Tag>
+              </ProDescriptions.Item>
+              <ProDescriptions.Item label="审核状态" dataIndex="review_status">
+                <Tag
+                  color={
+                    currentDemand.review_status === '通过' ? 'success' :
+                    currentDemand.review_status === '驳回' ? 'error' : 'default'
+                  }
+                >
+                  {currentDemand.review_status}
+                </Tag>
+              </ProDescriptions.Item>
+              {currentDemand.reviewer_name && (
+                <>
+                  <ProDescriptions.Item label="审核人" dataIndex="reviewer_name" />
+                  <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
+                </>
+              )}
+              {currentDemand.review_remarks && (
+                <ProDescriptions.Item label="审核备注" dataIndex="review_remarks" span={2} />
+              )}
+              {currentDemand.notes && (
+                <ProDescriptions.Item label="备注" dataIndex="notes" span={2} />
+              )}
+            </ProDescriptions>
+
+            {/* 需求明细表格 */}
+            {currentDemand.items && currentDemand.items.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <h4>需求明细</h4>
+                <Table<DemandItem>
+                  size="small"
+                  columns={[
+                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                    { title: '物料规格', dataIndex: 'material_spec', width: 120 },
+                    { title: '单位', dataIndex: 'material_unit', width: 80 },
+                    { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' },
+                    ...(currentDemand.demand_type === 'sales_forecast' ? [
+                      { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
+                      { title: '预测月份', dataIndex: 'forecast_month', width: 100 },
+                    ] : [
+                      { title: '交货日期', dataIndex: 'delivery_date', width: 120 },
+                      { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' },
+                      { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' },
+                    ]),
+                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                    { title: '金额', dataIndex: 'item_amount', width: 120, align: 'right', render: (text) => text ? `¥${Number(text).toLocaleString()}` : '-' },
+                  ]}
+                  dataSource={currentDemand.items}
+                  pagination={false}
+                  bordered
+                  rowKey="id"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </Drawer>
     </>
   );
