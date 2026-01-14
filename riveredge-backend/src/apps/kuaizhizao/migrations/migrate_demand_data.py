@@ -74,3 +74,119 @@ class DemandDataMigration:
             result["success"] = False
         
         return result
+    
+    async def migrate_sales_forecasts(
+        self, 
+        tenant_id: int, 
+        dry_run: bool = False
+    ) -> Dict[str, Any]:
+        """
+        迁移销售预测数据到统一需求表
+        
+        Args:
+            tenant_id: 租户ID
+            dry_run: 是否仅模拟运行
+            
+        Returns:
+            Dict: 迁移结果
+        """
+        logger.info(f"开始迁移租户 {tenant_id} 的销售预测数据")
+        
+        result = {
+            "count": 0,
+            "migrated": [],
+            "errors": []
+        }
+        
+        try:
+            # 查询所有未删除的销售预测
+            forecasts = await SalesForecast.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).all()
+            
+            logger.info(f"找到 {len(forecasts)} 条销售预测数据")
+            
+            for forecast in forecasts:
+                try:
+                    # 检查是否已经迁移过（通过source_id和source_type判断）
+                    existing = await Demand.filter(
+                        tenant_id=tenant_id,
+                        source_id=forecast.id,
+                        source_type="sales_forecast"
+                    ).first()
+                    
+                    if existing:
+                        logger.warning(f"销售预测 {forecast.forecast_code} 已迁移，跳过")
+                        continue
+                    
+                    if not dry_run:
+                        # 创建统一需求
+                        demand = await Demand.create(
+                            tenant_id=tenant_id,
+                            demand_code=forecast.forecast_code,
+                            demand_type="sales_forecast",
+                            demand_name=forecast.forecast_name,
+                            business_mode="MTS",
+                            start_date=forecast.start_date,
+                            end_date=forecast.end_date,
+                            forecast_period=forecast.forecast_period,
+                            status=forecast.status,
+                            reviewer_id=forecast.reviewer_id,
+                            reviewer_name=forecast.reviewer_name,
+                            review_time=forecast.review_time,
+                            review_status=forecast.review_status,
+                            review_remarks=forecast.review_remarks,
+                            notes=forecast.notes,
+                            is_active=forecast.is_active,
+                            created_by=forecast.created_by,
+                            updated_by=forecast.updated_by,
+                            source_id=forecast.id,
+                            source_type="sales_forecast",
+                            source_code=forecast.forecast_code,
+                            created_at=forecast.created_at,
+                            updated_at=forecast.updated_at,
+                        )
+                        
+                        # 迁移销售预测明细
+                        await self._migrate_forecast_items(tenant_id, forecast.id, demand.id)
+                        
+                        # 计算总数量和总金额
+                        await self._update_demand_totals(demand.id)
+                        
+                        result["migrated"].append({
+                            "source_id": forecast.id,
+                            "source_code": forecast.forecast_code,
+                            "demand_id": demand.id,
+                            "demand_code": demand.demand_code
+                        })
+                        logger.info(f"成功迁移销售预测 {forecast.forecast_code} -> 需求 {demand.demand_code}")
+                    else:
+                        result["migrated"].append({
+                            "source_id": forecast.id,
+                            "source_code": forecast.forecast_code,
+                            "demand_id": None,
+                            "demand_code": forecast.forecast_code
+                        })
+                        logger.info(f"[模拟] 将迁移销售预测 {forecast.forecast_code}")
+                    
+                    result["count"] += 1
+                    
+                except Exception as e:
+                    error_msg = f"迁移销售预测 {forecast.forecast_code} 失败: {str(e)}"
+                    logger.error(error_msg)
+                    result["errors"].append({
+                        "source_type": "sales_forecast",
+                        "source_id": forecast.id,
+                        "source_code": forecast.forecast_code,
+                        "error": error_msg
+                    })
+            
+        except Exception as e:
+            logger.error(f"迁移销售预测数据异常: {e}")
+            result["errors"].append({
+                "source_type": "sales_forecast",
+                "error": f"批量迁移异常: {str(e)}"
+            })
+        
+        return result
