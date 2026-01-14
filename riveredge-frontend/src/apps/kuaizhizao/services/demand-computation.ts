@@ -141,3 +141,37 @@ export async function updateDemandComputation(id: number, data: Partial<DemandCo
     data,
   });
 }
+
+/**
+ * 一键生成工单和采购单响应
+ */
+export interface GenerateOrdersResponse {
+  computation_id: number;
+  computation_code: string;
+  work_orders: Array<{
+    id: number;
+    code: string;
+    product_code: string;
+    product_name: string;
+    quantity: number;
+  }>;
+  purchase_orders: Array<{
+    id: number;
+    order_code: string;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+  }>;
+  work_order_count: number;
+  purchase_order_count: number;
+}
+
+/**
+ * 一键生成工单和采购单
+ */
+export async function generateOrdersFromComputation(id: number): Promise<GenerateOrdersResponse> {
+  return apiRequest<GenerateOrdersResponse>({
+    url: `/apps/kuaizhizao/demand-computations/${id}/generate-orders`,
+    method: 'POST',
+  });
+}
