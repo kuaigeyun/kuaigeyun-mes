@@ -898,7 +898,63 @@ const DemandManagementPage: React.FC = () => {
               {currentDemand.notes && (
                 <ProDescriptions.Item label="备注" dataIndex="notes" span={2} />
               )}
+              {currentDemand.submit_time && (
+                <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
+              )}
             </ProDescriptions>
+
+            {/* 耗时统计 */}
+            {(currentDemand as any).duration_info && (
+              <div style={{ marginTop: 24 }}>
+                <h4>耗时统计</h4>
+                <ProDescriptions
+                  column={2}
+                  dataSource={(currentDemand as any).duration_info}
+                >
+                  <ProDescriptions.Item label="创建时间" dataIndex="created_at" valueType="dateTime" />
+                  {currentDemand.submit_time && (
+                    <>
+                      <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
+                      {(currentDemand as any).duration_info?.duration_to_submit !== null && (
+                        <ProDescriptions.Item 
+                          label="创建到提交耗时" 
+                          dataIndex="duration_to_submit"
+                        >
+                          {(currentDemand as any).duration_info?.duration_to_submit 
+                            ? `${(currentDemand as any).duration_info.duration_to_submit} 小时` 
+                            : '-'}
+                        </ProDescriptions.Item>
+                      )}
+                    </>
+                  )}
+                  {currentDemand.review_time && (
+                    <>
+                      <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
+                      {(currentDemand as any).duration_info?.duration_to_review !== null && (
+                        <ProDescriptions.Item 
+                          label="创建到审核耗时" 
+                          dataIndex="duration_to_review"
+                        >
+                          {(currentDemand as any).duration_info?.duration_to_review 
+                            ? `${(currentDemand as any).duration_info.duration_to_review} 小时` 
+                            : '-'}
+                        </ProDescriptions.Item>
+                      )}
+                      {(currentDemand as any).duration_info?.duration_submit_to_review !== null && (
+                        <ProDescriptions.Item 
+                          label="提交到审核耗时" 
+                          dataIndex="duration_submit_to_review"
+                        >
+                          {(currentDemand as any).duration_info?.duration_submit_to_review 
+                            ? `${(currentDemand as any).duration_info.duration_submit_to_review} 小时` 
+                            : '-'}
+                        </ProDescriptions.Item>
+                      )}
+                    </>
+                  )}
+                </ProDescriptions>
+              </div>
+            )}
 
             {/* 需求明细表格 */}
             {currentDemand.items && currentDemand.items.length > 0 && (
