@@ -3,11 +3,6 @@
  *
  * 提供MRP运算相关的API调用接口
  *
- * @deprecated 此文件已标记为待重构，需要合并为统一需求计算服务（demand-computation）
- * 相关页面已删除，但保留此文件以便参考
- * 
- * TODO: 将在统一需求计算服务中重新实现
- * 
  * @author RiverEdge Team
  * @date 2025-01-15
  */

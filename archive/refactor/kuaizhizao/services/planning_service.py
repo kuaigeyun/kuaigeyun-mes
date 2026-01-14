@@ -62,9 +62,8 @@ class ProductionPlanningService(BaseService):
 
     # ⚠️ 已废弃：此方法已废弃，应使用统一的需求计算接口
     # 根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算
-    # TODO: 将在统一需求计算服务中重新实现，相关API路由已注释
     async def run_mrp_computation(self, tenant_id: int, request, user_id: int):
-        """执行MRP运算（已废弃）"""
+        """执行MRP运算"""
         async with in_transaction():
             # 获取销售预测
             forecast = await SalesForecast.get_or_none(
