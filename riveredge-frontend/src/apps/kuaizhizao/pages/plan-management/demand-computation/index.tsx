@@ -21,6 +21,8 @@ import {
   createDemandComputation,
   executeDemandComputation,
   generateOrdersFromComputation,
+  validateMaterialSources,
+  getMaterialSources,
   DemandComputation,
   DemandComputationItem
 } from '../../../services/demand-computation';
@@ -38,6 +40,10 @@ const DemandComputationPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null);
+  
+  // 物料来源信息状态
+  const [materialSources, setMaterialSources] = useState<any[]>([]);
+  const [validationResults, setValidationResults] = useState<any>(null);
   
   // 需求列表（用于选择需求）
   const [demandList, setDemandList] = useState<Demand[]>([]);
@@ -67,6 +73,25 @@ const DemandComputationPage: React.FC = () => {
       try {
         const data = await getDemandComputation(id, true);
         setCurrentComputation(data);
+        
+        // 获取物料来源信息
+        try {
+          const sources = await getMaterialSources(id);
+          setMaterialSources(sources.material_sources || []);
+        } catch (error) {
+          console.error('获取物料来源信息失败:', error);
+          setMaterialSources([]);
+        }
+        
+        // 获取验证结果
+        try {
+          const validation = await validateMaterialSources(id);
+          setValidationResults(validation);
+        } catch (error) {
+          console.error('获取验证结果失败:', error);
+          setValidationResults(null);
+        }
+        
         setDrawerVisible(true);
       } catch (error: any) {
         messageApi.error('获取计算详情失败');
@@ -94,24 +119,98 @@ const DemandComputationPage: React.FC = () => {
   };
 
   /**
-   * 处理一键生成工单和采购单
+   * 处理一键生成工单和采购单（物料来源控制增强）
    */
   const handleGenerateOrders = async (record: DemandComputation) => {
-    Modal.confirm({
-      title: '一键生成工单和采购单',
-      content: `确认要从计算结果 ${record.computation_code} 生成工单和采购单吗？`,
-      onOk: async () => {
-        try {
-          const result = await generateOrdersFromComputation(record.id!);
-          messageApi.success(
-            `生成成功！工单 ${result.work_order_count} 个，采购单 ${result.purchase_order_count} 个`
-          );
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error('生成工单和采购单失败');
-        }
-      },
-    });
+    // 先验证物料来源配置
+    try {
+      const validation = await validateMaterialSources(record.id!);
+      
+      if (!validation.all_passed) {
+        // 有验证失败，显示详细错误信息
+        const errorMessages = validation.validation_results
+          .filter((r: any) => !r.validation_passed)
+          .map((r: any) => `物料 ${r.material_code} (${r.material_name}): ${r.errors.join(', ')}`)
+          .join('\n');
+        
+        Modal.warning({
+          title: '物料来源验证失败',
+          width: 600,
+          content: (
+            <div>
+              <p>以下物料的来源配置验证失败，无法生成工单和采购单：</p>
+              <pre style={{ 
+                background: '#f5f5f5', 
+                padding: '12px', 
+                borderRadius: '4px',
+                maxHeight: '300px',
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}>
+                {errorMessages}
+              </pre>
+              <p style={{ marginTop: '12px', color: '#ff4d4f' }}>
+                失败数量: {validation.failed_count} / {validation.total_count}
+              </p>
+            </div>
+          ),
+        });
+        return;
+      }
+      
+      // 获取物料来源统计信息
+      const sources = await getMaterialSources(record.id!);
+      const sourceTypeCounts: Record<string, number> = {};
+      sources.material_sources.forEach((s: any) => {
+        const type = s.source_type || '未设置';
+        sourceTypeCounts[type] = (sourceTypeCounts[type] || 0) + 1;
+      });
+      
+      const sourceInfo = Object.entries(sourceTypeCounts)
+        .map(([type, count]) => {
+          const typeNames: Record<string, string> = {
+            'Make': '自制件',
+            'Buy': '采购件',
+            'Phantom': '虚拟件',
+            'Outsource': '委外件',
+            'Configure': '配置件',
+            '未设置': '未设置',
+          };
+          return `${typeNames[type] || type}: ${count}`;
+        })
+        .join(', ');
+      
+      Modal.confirm({
+        title: '一键生成工单和采购单',
+        width: 600,
+        content: (
+          <div>
+            <p>确认要从计算结果 <strong>{record.computation_code}</strong> 生成工单和采购单吗？</p>
+            <div style={{ marginTop: '12px', padding: '12px', background: '#f0f5ff', borderRadius: '4px' }}>
+              <p style={{ margin: 0, fontWeight: 'bold' }}>物料来源统计：</p>
+              <p style={{ margin: '8px 0 0 0' }}>{sourceInfo}</p>
+            </div>
+            <p style={{ marginTop: '12px', fontSize: '12px', color: '#666' }}>
+              系统将根据物料来源类型智能生成：自制件生成生产工单，采购件生成采购订单，虚拟件自动跳过
+            </p>
+          </div>
+        ),
+        onOk: async () => {
+          try {
+            const result = await generateOrdersFromComputation(record.id!);
+            messageApi.success(
+              `生成成功！工单 ${result.work_order_count} 个，采购单 ${result.purchase_order_count} 个`
+            );
+            actionRef.current?.reload();
+          } catch (error: any) {
+            messageApi.error(error?.response?.data?.detail || '生成工单和采购单失败');
+          }
+        },
+      });
+    } catch (error: any) {
+      messageApi.error('验证物料来源配置失败');
+    }
   };
 
   /**
@@ -322,21 +421,100 @@ const DemandComputationPage: React.FC = () => {
               ]}
             />
             
+            {/* 物料来源验证结果 */}
+            {validationResults && (
+              <div style={{ marginTop: 24, marginBottom: 24 }}>
+                <ProDescriptions
+                  title="物料来源验证结果"
+                  size="small"
+                  column={3}
+                  dataSource={{
+                    all_passed: validationResults.all_passed ? '全部通过' : '存在失败',
+                    passed_count: validationResults.passed_count,
+                    failed_count: validationResults.failed_count,
+                    total_count: validationResults.total_count,
+                  }}
+                  columns={[
+                    { 
+                      title: '验证状态', 
+                      dataIndex: 'all_passed',
+                      render: (text: string) => (
+                        <Tag color={text === '全部通过' ? 'success' : 'error'}>{text}</Tag>
+                      )
+                    },
+                    { title: '通过数量', dataIndex: 'passed_count' },
+                    { title: '失败数量', dataIndex: 'failed_count' },
+                    { title: '总数量', dataIndex: 'total_count' },
+                  ]}
+                />
+                
+                {validationResults.failed_count > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <p style={{ fontWeight: 'bold', color: '#ff4d4f' }}>验证失败的物料：</p>
+                    <ul style={{ marginTop: 8 }}>
+                      {validationResults.validation_results
+                        .filter((r: any) => !r.validation_passed)
+                        .map((r: any, index: number) => (
+                          <li key={index} style={{ marginBottom: 4 }}>
+                            <strong>{r.material_code}</strong> ({r.material_name}): {r.errors.join(', ')}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            
             {currentComputation.items && currentComputation.items.length > 0 && (
-              <Table<DemandComputationItem>
-                dataSource={currentComputation.items}
-                rowKey="id"
-                columns={[
-                  { title: '物料编码', dataIndex: 'material_code' },
-                  { title: '物料名称', dataIndex: 'material_name' },
-                  { title: '需求数量', dataIndex: 'required_quantity' },
-                  { title: '可用库存', dataIndex: 'available_inventory' },
-                  { title: '净需求', dataIndex: 'net_requirement' },
-                  { title: '建议工单数量', dataIndex: 'suggested_work_order_quantity' },
-                  { title: '建议采购数量', dataIndex: 'suggested_purchase_order_quantity' },
-                ]}
-                pagination={false}
-              />
+              <>
+                <h3 style={{ marginTop: 24, marginBottom: 16 }}>计算结果明细</h3>
+                <Table<DemandComputationItem>
+                  dataSource={currentComputation.items}
+                  rowKey="id"
+                  columns={[
+                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                    { 
+                      title: '物料来源', 
+                      dataIndex: 'material_source_type',
+                      width: 100,
+                      render: (type: string) => {
+                        const typeMap: Record<string, { label: string; color: string }> = {
+                          'Make': { label: '自制件', color: 'blue' },
+                          'Buy': { label: '采购件', color: 'green' },
+                          'Phantom': { label: '虚拟件', color: 'orange' },
+                          'Outsource': { label: '委外件', color: 'purple' },
+                          'Configure': { label: '配置件', color: 'cyan' },
+                        };
+                        const info = typeMap[type] || { label: type || '未设置', color: 'default' };
+                        return <Tag color={info.color}>{info.label}</Tag>;
+                      }
+                    },
+                    { 
+                      title: '验证状态', 
+                      dataIndex: 'source_validation_passed',
+                      width: 100,
+                      render: (passed: boolean, record: DemandComputationItem) => {
+                        if (record.material_source_type) {
+                          return (
+                            <Tag color={passed ? 'success' : 'error'}>
+                              {passed ? '通过' : '失败'}
+                            </Tag>
+                          );
+                        }
+                        return <span>-</span>;
+                      }
+                    },
+                    { title: '需求数量', dataIndex: 'required_quantity', width: 100 },
+                    { title: '可用库存', dataIndex: 'available_inventory', width: 100 },
+                    { title: '净需求', dataIndex: 'net_requirement', width: 100 },
+                    { title: '建议工单数量', dataIndex: 'suggested_work_order_quantity', width: 120 },
+                    { title: '建议采购数量', dataIndex: 'suggested_purchase_order_quantity', width: 120 },
+                  ]}
+                  pagination={false}
+                  scroll={{ x: 1200 }}
+                />
+              </>
             )}
           </>
         )}

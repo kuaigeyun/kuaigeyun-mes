@@ -267,3 +267,116 @@ async def compare_computations(
     except Exception as e:
         logger.error(f"对比需求计算结果失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="对比需求计算结果失败")
+
+
+@router.get("/{computation_id}/material-sources", summary="获取需求计算的物料来源信息")
+async def get_material_sources(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求计算的物料来源信息
+    
+    返回计算结果中所有物料的来源类型、配置信息和验证结果。
+    """
+    try:
+        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        ).all()
+        
+        material_sources = []
+        for item in items:
+            material_sources.append({
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "source_type": item.material_source_type,
+                "source_config": item.material_source_config,
+                "source_validation_passed": item.source_validation_passed,
+                "source_validation_errors": item.source_validation_errors,
+            })
+        
+        return {
+            "computation_id": computation_id,
+            "computation_code": computation.computation_code,
+            "material_sources": material_sources,
+            "total_count": len(material_sources),
+        }
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"获取物料来源信息失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取物料来源信息失败")
+
+
+@router.post("/{computation_id}/validate-material-sources", summary="验证需求计算的物料来源配置")
+async def validate_material_sources(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    验证需求计算的物料来源配置
+    
+    验证计算结果中所有物料的来源配置完整性，返回验证结果。
+    """
+    try:
+        from apps.kuaizhizao.utils.material_source_helper import validate_material_source_config
+        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        ).all()
+        
+        validation_results = []
+        all_passed = True
+        
+        for item in items:
+            if not item.material_source_type:
+                continue
+            
+            validation_passed, errors = await validate_material_source_config(
+                tenant_id=tenant_id,
+                material_id=item.material_id,
+                source_type=item.material_source_type
+            )
+            
+            validation_results.append({
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "source_type": item.material_source_type,
+                "validation_passed": validation_passed,
+                "errors": errors,
+            })
+            
+            if not validation_passed:
+                all_passed = False
+        
+        return {
+            "computation_id": computation_id,
+            "computation_code": computation.computation_code,
+            "all_passed": all_passed,
+            "validation_results": validation_results,
+            "total_count": len(validation_results),
+            "passed_count": sum(1 for r in validation_results if r["validation_passed"]),
+            "failed_count": sum(1 for r in validation_results if not r["validation_passed"]),
+        }
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"验证物料来源配置失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="验证物料来源配置失败")
