@@ -175,3 +175,88 @@ export async function generateOrdersFromComputation(id: number): Promise<Generat
     method: 'POST',
   });
 }
+
+/**
+ * 查询需求计算历史记录参数
+ */
+export interface ComputationHistoryParams {
+  skip?: number;
+  limit?: number;
+  demand_id?: number;
+  computation_type?: 'MRP' | 'LRP';
+  start_date?: string;
+  end_date?: string;
+}
+
+/**
+ * 查询需求计算历史记录
+ */
+export async function listComputationHistory(params?: ComputationHistoryParams): Promise<DemandComputationListResponse> {
+  return apiRequest<DemandComputationListResponse>({
+    url: '/apps/kuaizhizao/demand-computations/history',
+    method: 'GET',
+    params,
+  });
+}
+
+/**
+ * 对比结果接口定义
+ */
+export interface ComputationCompareResult {
+  computation1: {
+    id: number;
+    computation_code: string;
+    computation_start_time?: string;
+    computation_end_time?: string;
+  };
+  computation2: {
+    id: number;
+    computation_code: string;
+    computation_start_time?: string;
+    computation_end_time?: string;
+  };
+  basic_diff: {
+    computation_type: {
+      value1: string;
+      value2: string;
+      same: boolean;
+    };
+    computation_params: {
+      value1: Record<string, any>;
+      value2: Record<string, any>;
+      same: boolean;
+    };
+    computation_summary: {
+      value1: Record<string, any> | null;
+      value2: Record<string, any> | null;
+      same: boolean;
+    };
+  };
+  items_diff: Array<{
+    material_id: number;
+    material_code: string;
+    material_name: string;
+    exists_in_both: boolean;
+    only_in?: 'computation1' | 'computation2';
+    differences?: Record<string, {
+      value1: number | null;
+      value2: number | null;
+      diff: number | null;
+    }>;
+  }>;
+  total_differences: number;
+}
+
+/**
+ * 对比两个需求计算结果
+ */
+export async function compareComputations(id1: number, id2: number): Promise<ComputationCompareResult> {
+  return apiRequest<ComputationCompareResult>({
+    url: '/apps/kuaizhizao/demand-computations/compare',
+    method: 'GET',
+    params: {
+      computation_id1: id1,
+      computation_id2: id2,
+    },
+  });
+}

@@ -289,6 +289,121 @@ class DemandComputationService:
             
             return await self.get_computation_by_id(tenant_id, computation_id)
     
+    async def compare_computations(
+        self,
+        tenant_id: int,
+        computation_id1: int,
+        computation_id2: int
+    ) -> Dict[str, Any]:
+        """
+        对比两个需求计算结果
+        
+        Args:
+            tenant_id: 租户ID
+            computation_id1: 第一个计算ID
+            computation_id2: 第二个计算ID
+            
+        Returns:
+            Dict: 对比结果，包含差异分析
+        """
+        computation1 = await self.get_computation_by_id(tenant_id, computation_id1, include_items=True)
+        computation2 = await self.get_computation_by_id(tenant_id, computation_id2, include_items=True)
+        
+        # 对比基本信息
+        basic_diff = {
+            "computation_type": {
+                "value1": computation1.computation_type,
+                "value2": computation2.computation_type,
+                "same": computation1.computation_type == computation2.computation_type
+            },
+            "computation_params": {
+                "value1": computation1.computation_params,
+                "value2": computation2.computation_params,
+                "same": computation1.computation_params == computation2.computation_params
+            },
+            "computation_summary": {
+                "value1": computation1.computation_summary,
+                "value2": computation2.computation_summary,
+                "same": computation1.computation_summary == computation2.computation_summary
+            }
+        }
+        
+        # 对比明细项
+        items1 = {item.material_id: item for item in computation1.items or []}
+        items2 = {item.material_id: item for item in computation2.items or []}
+        
+        all_material_ids = set(items1.keys()) | set(items2.keys())
+        
+        items_diff = []
+        for material_id in all_material_ids:
+            item1 = items1.get(material_id)
+            item2 = items2.get(material_id)
+            
+            if item1 and item2:
+                # 两个计算都有该物料，对比差异
+                item_diff = {
+                    "material_id": material_id,
+                    "material_code": item1.material_code,
+                    "material_name": item1.material_name,
+                    "exists_in_both": True,
+                    "differences": {}
+                }
+                
+                # 对比关键字段
+                key_fields = [
+                    "required_quantity", "available_inventory", "net_requirement",
+                    "suggested_work_order_quantity", "suggested_purchase_order_quantity"
+                ]
+                
+                for field in key_fields:
+                    val1 = getattr(item1, field, None)
+                    val2 = getattr(item2, field, None)
+                    if val1 != val2:
+                        item_diff["differences"][field] = {
+                            "value1": float(val1) if val1 else None,
+                            "value2": float(val2) if val2 else None,
+                            "diff": float(val2) - float(val1) if val1 and val2 else None
+                        }
+                
+                if item_diff["differences"]:
+                    items_diff.append(item_diff)
+            elif item1:
+                # 只在第一个计算中存在
+                items_diff.append({
+                    "material_id": material_id,
+                    "material_code": item1.material_code,
+                    "material_name": item1.material_name,
+                    "exists_in_both": False,
+                    "only_in": "computation1"
+                })
+            elif item2:
+                # 只在第二个计算中存在
+                items_diff.append({
+                    "material_id": material_id,
+                    "material_code": item2.material_code,
+                    "material_name": item2.material_name,
+                    "exists_in_both": False,
+                    "only_in": "computation2"
+                })
+        
+        return {
+            "computation1": {
+                "id": computation1.id,
+                "computation_code": computation1.computation_code,
+                "computation_start_time": computation1.computation_start_time,
+                "computation_end_time": computation1.computation_end_time,
+            },
+            "computation2": {
+                "id": computation2.id,
+                "computation_code": computation2.computation_code,
+                "computation_start_time": computation2.computation_start_time,
+                "computation_end_time": computation2.computation_end_time,
+            },
+            "basic_diff": basic_diff,
+            "items_diff": items_diff,
+            "total_differences": len(items_diff)
+        }
+    
     async def _execute_mrp_computation(
         self,
         tenant_id: int,
