@@ -17,6 +17,8 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentRelationCreate,
     DocumentRelationResponse,
     DocumentRelationListResponse,
+    DocumentTraceResponse,
+    DocumentTraceNode,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 

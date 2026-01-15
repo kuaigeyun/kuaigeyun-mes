@@ -86,3 +86,54 @@ export async function getDocumentRelations(
     downstream_count: downstreamDocuments.length,
   };
 }
+
+/**
+ * 追溯节点
+ */
+export interface TraceNode {
+  document_type: string;
+  document_id: number;
+  document_code?: string;
+  document_name?: string;
+  level: number;
+  children: TraceNode[];
+}
+
+/**
+ * 单据追溯数据
+ */
+export interface DocumentTraceData {
+  document_type: string;
+  document_id: number;
+  document_code?: string;
+  document_name?: string;
+  upstream_chain: TraceNode[];
+  downstream_chain: TraceNode[];
+}
+
+/**
+ * 追溯单据关联链
+ *
+ * @param documentType 单据类型
+ * @param documentId 单据ID
+ * @param direction 追溯方向（upstream: 向上追溯, downstream: 向下追溯, both: 双向追溯）
+ * @param maxDepth 最大追溯深度
+ * @returns 追溯链数据
+ */
+export async function traceDocumentChain(
+  documentType: string,
+  documentId: number,
+  direction: 'upstream' | 'downstream' | 'both' = 'both',
+  maxDepth: number = 10
+): Promise<DocumentTraceData> {
+  const response = await apiRequest<DocumentTraceData>({
+    url: `/apps/kuaizhizao/document-relations/${documentType}/${documentId}/trace`,
+    method: 'GET',
+    params: {
+      direction,
+      max_depth: maxDepth,
+    },
+  });
+
+  return response;
+}

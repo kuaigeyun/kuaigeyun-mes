@@ -69,3 +69,23 @@ class DocumentRelationListResponse(BaseModel):
     """单据关联关系列表响应Schema"""
     upstream: List[DocumentRelationResponse] = Field(default_factory=list, description="上游单据列表")
     downstream: List[DocumentRelationResponse] = Field(default_factory=list, description="下游单据列表")
+
+
+class DocumentTraceNode(BaseModel):
+    """单据追溯节点"""
+    document_type: str = Field(..., description="单据类型")
+    document_id: int = Field(..., description="单据ID")
+    document_code: Optional[str] = Field(None, description="单据编码")
+    document_name: Optional[str] = Field(None, description="单据名称")
+    level: int = Field(..., description="层级（从根节点开始的层级）")
+    children: List["DocumentTraceNode"] = Field(default_factory=list, description="子节点（下游或上游）")
+
+
+class DocumentTraceResponse(BaseModel):
+    """单据追溯响应Schema"""
+    document_type: str = Field(..., description="根单据类型")
+    document_id: int = Field(..., description="根单据ID")
+    document_code: Optional[str] = Field(None, description="根单据编码")
+    document_name: Optional[str] = Field(None, description="根单据名称")
+    upstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="上游追溯链")
+    downstream_chain: List[DocumentTraceNode] = Field(default_factory=list, description="下游追溯链")
