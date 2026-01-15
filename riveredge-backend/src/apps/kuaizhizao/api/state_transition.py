@@ -39,12 +39,18 @@ async def transition_state(
     """
     try:
         # 获取当前状态（需要根据实体类型查询）
-        # 这里简化处理，实际应该根据entity_type查询对应的实体
         from apps.kuaizhizao.models.demand import Demand
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        
         if entity_type == "demand":
             entity = await Demand.get_or_none(tenant_id=tenant_id, id=entity_id)
             if not entity:
                 raise NotFoundError(f"需求不存在: {entity_id}")
+            from_state = entity.status
+        elif entity_type == "work_order":
+            entity = await WorkOrder.get_or_none(tenant_id=tenant_id, id=entity_id)
+            if not entity:
+                raise NotFoundError(f"工单不存在: {entity_id}")
             from_state = entity.status
         else:
             raise ValidationError(f"不支持的实体类型: {entity_type}")
@@ -64,6 +70,16 @@ async def transition_state(
         # 更新实体状态
         if entity_type == "demand":
             await Demand.filter(tenant_id=tenant_id, id=entity_id).update(status=to_state)
+        elif entity_type == "work_order":
+            # 工单状态流转时，需要更新相关时间字段
+            update_data = {"status": to_state}
+            if to_state == "in_progress" and not entity.actual_start_date:
+                from datetime import datetime
+                update_data["actual_start_date"] = datetime.now()
+            elif to_state == "completed" and not entity.actual_end_date:
+                from datetime import datetime
+                update_data["actual_end_date"] = datetime.now()
+            await WorkOrder.filter(tenant_id=tenant_id, id=entity_id).update(**update_data)
         
         return {
             "success": True,

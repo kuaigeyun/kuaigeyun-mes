@@ -42,6 +42,25 @@ class StateTransitionService:
         {"from": "待审核", "to": "已取消", "description": "取消"},
     ]
     
+    # 工单状态定义
+    WORK_ORDER_STATES = {
+        "draft": {"order": 1, "name": "草稿", "description": "工单草稿状态"},
+        "released": {"order": 2, "name": "已下达", "description": "工单已下达，等待开始生产"},
+        "in_progress": {"order": 3, "name": "执行中", "description": "工单正在执行中"},
+        "completed": {"order": 4, "name": "已完成", "description": "工单已完成"},
+        "cancelled": {"order": 5, "name": "已取消", "description": "工单已取消"},
+    }
+    
+    # 默认状态流转规则（工单）
+    DEFAULT_WORK_ORDER_TRANSITIONS = [
+        {"from": "draft", "to": "released", "description": "下达工单"},
+        {"from": "released", "to": "in_progress", "description": "开始生产"},
+        {"from": "in_progress", "to": "completed", "description": "完成工单"},
+        {"from": "draft", "to": "cancelled", "description": "取消工单"},
+        {"from": "released", "to": "cancelled", "description": "取消工单"},
+        {"from": "in_progress", "to": "cancelled", "description": "取消工单"},
+    ]
+    
     async def can_transition(
         self,
         tenant_id: int,
@@ -77,9 +96,13 @@ class StateTransitionService:
             # 有规则，检查权限（TODO: 实现权限检查）
             return True
         
-        # 如果没有规则，检查默认规则（仅对需求类型）
+        # 如果没有规则，检查默认规则
         if entity_type == "demand":
             for transition in self.DEFAULT_DEMAND_TRANSITIONS:
+                if transition["from"] == from_state and transition["to"] == to_state:
+                    return True
+        elif entity_type == "work_order":
+            for transition in self.DEFAULT_WORK_ORDER_TRANSITIONS:
                 if transition["from"] == from_state and transition["to"] == to_state:
                     return True
         
@@ -222,15 +245,25 @@ class StateTransitionService:
                 "required_role": rule.required_role,
             })
         
-        # 如果没有规则，使用默认规则（仅对需求类型）
-        if not result and entity_type == "demand":
-            for transition in self.DEFAULT_DEMAND_TRANSITIONS:
-                if transition["from"] == current_state:
-                    result.append({
-                        "to_state": transition["to"],
-                        "description": transition["description"],
-                        "required_permission": None,
-                        "required_role": None,
-                    })
+        # 如果没有规则，使用默认规则
+        if not result:
+            if entity_type == "demand":
+                for transition in self.DEFAULT_DEMAND_TRANSITIONS:
+                    if transition["from"] == current_state:
+                        result.append({
+                            "to_state": transition["to"],
+                            "description": transition["description"],
+                            "required_permission": None,
+                            "required_role": None,
+                        })
+            elif entity_type == "work_order":
+                for transition in self.DEFAULT_WORK_ORDER_TRANSITIONS:
+                    if transition["from"] == current_state:
+                        result.append({
+                            "to_state": transition["to"],
+                            "description": transition["description"],
+                            "required_permission": None,
+                            "required_role": None,
+                        })
         
         return result

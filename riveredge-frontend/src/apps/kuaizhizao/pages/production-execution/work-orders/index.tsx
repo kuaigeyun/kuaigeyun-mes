@@ -11,7 +11,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider, Input, Timeline } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production';
+import { stateTransitionApi, AvailableTransition, StateTransitionLog } from '../../../services/state-transition';
 import { listSalesOrders } from '../../../services/sales';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { operationApi, processRouteApi } from '../../../../master-data/services/process';
@@ -233,6 +234,13 @@ const WorkOrdersPage: React.FC = () => {
   // 批量设置优先级相关状态
   const [batchPriorityModalVisible, setBatchPriorityModalVisible] = useState(false);
   const [batchPriority, setBatchPriority] = useState<string>('normal');
+
+  // 状态流转相关状态
+  const [stateTransitionModalVisible, setStateTransitionModalVisible] = useState(false);
+  const [availableTransitions, setAvailableTransitions] = useState<AvailableTransition[]>([]);
+  const [transitionHistory, setTransitionHistory] = useState<StateTransitionLog[]>([]);
+  const [transitionLoading, setTransitionLoading] = useState(false);
+  const transitionFormRef = useRef<any>(null);
 
   // 合并工单相关状态
   const [mergeModalVisible, setMergeModalVisible] = useState(false);
@@ -583,6 +591,22 @@ const WorkOrdersPage: React.FC = () => {
       } catch (error) {
         console.error('获取工单工序列表失败:', error);
         setWorkOrderOperations([]);
+      }
+
+      // 加载状态流转历史和可用状态流转选项
+      try {
+        if (detail.status) {
+          const [history, transitions] = await Promise.all([
+            stateTransitionApi.getHistory('work_order', record.id!),
+            stateTransitionApi.getAvailableTransitions('work_order', detail.status),
+          ]);
+          setTransitionHistory(history);
+          setAvailableTransitions(transitions);
+        }
+      } catch (error) {
+        console.error('获取状态流转信息失败:', error);
+        setTransitionHistory([]);
+        setAvailableTransitions([]);
       }
       
       setDrawerVisible(true);
@@ -1310,6 +1334,75 @@ const WorkOrdersPage: React.FC = () => {
     }
     setBatchPriority('normal');
     setBatchPriorityModalVisible(true);
+  };
+
+  /**
+   * 处理状态流转
+   */
+  const handleStateTransition = async () => {
+    if (!workOrderDetail?.id) {
+      messageApi.warning('工单信息不存在');
+      return;
+    }
+
+    try {
+      // 重新获取可用状态流转选项
+      const transitions = await stateTransitionApi.getAvailableTransitions(
+        'work_order',
+        workOrderDetail.status || 'draft'
+      );
+      setAvailableTransitions(transitions);
+      setStateTransitionModalVisible(true);
+      transitionFormRef.current?.resetFields();
+    } catch (error: any) {
+      messageApi.error(error.message || '获取状态流转选项失败');
+    }
+  };
+
+  /**
+   * 处理提交状态流转
+   */
+  const handleSubmitStateTransition = async (values: any): Promise<void> => {
+    if (!workOrderDetail?.id) {
+      throw new Error('工单信息不存在');
+    }
+
+    try {
+      setTransitionLoading(true);
+      await stateTransitionApi.transition('work_order', workOrderDetail.id, {
+        to_state: values.to_state,
+        transition_reason: values.transition_reason,
+        transition_comment: values.transition_comment,
+      });
+
+      messageApi.success('状态流转成功');
+      setStateTransitionModalVisible(false);
+      
+      // 刷新工单详情和状态流转历史
+      const [detail, history] = await Promise.all([
+        workOrderApi.get(workOrderDetail.id.toString()),
+        stateTransitionApi.getHistory('work_order', workOrderDetail.id),
+      ]);
+      setWorkOrderDetail(detail);
+      setTransitionHistory(history);
+      
+      // 重新获取可用状态流转选项
+      if (detail.status) {
+        const transitions = await stateTransitionApi.getAvailableTransitions(
+          'work_order',
+          detail.status
+        );
+        setAvailableTransitions(transitions);
+      }
+
+      // 刷新列表
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '状态流转失败');
+      throw error;
+    } finally {
+      setTransitionLoading(false);
+    }
   };
 
   /**
@@ -2177,7 +2270,39 @@ const WorkOrdersPage: React.FC = () => {
           <>
             {/* 操作按钮区域 */}
             <div style={{ padding: '16px 0', borderBottom: '1px solid #f0f0f0', marginBottom: '16px' }}>
-              <Space>
+              <Space wrap>
+                {/* 状态显示和流转 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 16 }}>
+                  <span style={{ fontWeight: 500 }}>状态：</span>
+                  <Tag
+                    color={
+                      workOrderDetail?.status === 'draft' ? 'default' :
+                      workOrderDetail?.status === 'released' ? 'processing' :
+                      workOrderDetail?.status === 'in_progress' ? 'processing' :
+                      workOrderDetail?.status === 'completed' ? 'success' :
+                      workOrderDetail?.status === 'cancelled' ? 'error' :
+                      'default'
+                    }
+                  >
+                    {workOrderDetail?.status === 'draft' ? '草稿' :
+                     workOrderDetail?.status === 'released' ? '已下达' :
+                     workOrderDetail?.status === 'in_progress' ? '执行中' :
+                     workOrderDetail?.status === 'completed' ? '已完成' :
+                     workOrderDetail?.status === 'cancelled' ? '已取消' :
+                     workOrderDetail?.status}
+                  </Tag>
+                  {availableTransitions.length > 0 && (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={handleStateTransition}
+                      disabled={!workOrderDetail}
+                    >
+                      状态流转
+                    </Button>
+                  )}
+                </div>
+                <Divider type="vertical" />
                 <Button
                   type="primary"
                   onClick={() => handleCreateRework(workOrderDetail!)}
@@ -2328,6 +2453,71 @@ const WorkOrdersPage: React.FC = () => {
                     operationFormRef.current?.setFieldsValue(operation);
                   }}
                 />
+              </Card>
+            </div>
+
+            {/* 状态流转历史 */}
+            <div style={{ padding: '16px 0' }}>
+              <Card title="状态流转历史">
+                {transitionHistory.length > 0 ? (
+                  <Timeline>
+                    {transitionHistory.map((log, index) => {
+                      const statusColor = 
+                        log.to_state === 'draft' ? 'default' :
+                        log.to_state === 'released' ? 'processing' :
+                        log.to_state === 'in_progress' ? 'processing' :
+                        log.to_state === 'completed' ? 'success' :
+                        log.to_state === 'cancelled' ? 'error' :
+                        'default';
+                      
+                      const statusText = 
+                        log.to_state === 'draft' ? '草稿' :
+                        log.to_state === 'released' ? '已下达' :
+                        log.to_state === 'in_progress' ? '执行中' :
+                        log.to_state === 'completed' ? '已完成' :
+                        log.to_state === 'cancelled' ? '已取消' :
+                        log.to_state;
+
+                      const fromStatusText = 
+                        log.from_state === 'draft' ? '草稿' :
+                        log.from_state === 'released' ? '已下达' :
+                        log.from_state === 'in_progress' ? '执行中' :
+                        log.from_state === 'completed' ? '已完成' :
+                        log.from_state === 'cancelled' ? '已取消' :
+                        log.from_state;
+
+                      return (
+                        <Timeline.Item key={log.id} color={statusColor}>
+                          <div>
+                            <div style={{ marginBottom: 4 }}>
+                              <Tag color={statusColor}>{statusText}</Tag>
+                              <span style={{ marginLeft: 8, color: '#666' }}>
+                                {fromStatusText} → {statusText}
+                              </span>
+                            </div>
+                            {log.transition_reason && (
+                              <div style={{ marginBottom: 4, color: '#666', fontSize: 12 }}>
+                                原因：{log.transition_reason}
+                              </div>
+                            )}
+                            {log.transition_comment && (
+                              <div style={{ marginBottom: 4, color: '#666', fontSize: 12 }}>
+                                备注：{log.transition_comment}
+                              </div>
+                            )}
+                            <div style={{ color: '#999', fontSize: 12 }}>
+                              {log.operator_name} · {log.transition_time ? dayjs(log.transition_time).format('YYYY-MM-DD HH:mm:ss') : ''}
+                            </div>
+                          </div>
+                        </Timeline.Item>
+                      );
+                    })}
+                  </Timeline>
+                ) : (
+                  <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
+                    暂无状态流转记录
+                  </div>
+                )}
               </Card>
             </div>
           </>
@@ -2959,6 +3149,73 @@ const WorkOrdersPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* 状态流转Modal */}
+      <FormModalTemplate
+        title="状态流转"
+        open={stateTransitionModalVisible}
+        onClose={() => {
+          setStateTransitionModalVisible(false);
+          transitionFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitStateTransition}
+        formRef={transitionFormRef}
+        loading={transitionLoading}
+        {...MODAL_CONFIG}
+      >
+        <div style={{ marginBottom: 16, padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ color: '#666' }}>当前状态：</span>
+            <Tag
+              color={
+                workOrderDetail?.status === 'draft' ? 'default' :
+                workOrderDetail?.status === 'released' ? 'processing' :
+                workOrderDetail?.status === 'in_progress' ? 'processing' :
+                workOrderDetail?.status === 'completed' ? 'success' :
+                workOrderDetail?.status === 'cancelled' ? 'error' :
+                'default'
+              }
+            >
+              {workOrderDetail?.status === 'draft' ? '草稿' :
+               workOrderDetail?.status === 'released' ? '已下达' :
+               workOrderDetail?.status === 'in_progress' ? '执行中' :
+               workOrderDetail?.status === 'completed' ? '已完成' :
+               workOrderDetail?.status === 'cancelled' ? '已取消' :
+               workOrderDetail?.status}
+            </Tag>
+          </div>
+          <div style={{ color: '#666', fontSize: 12 }}>
+            工单编号：{workOrderDetail?.code || ''}
+          </div>
+        </div>
+        <ProFormSelect
+          name="to_state"
+          label="目标状态"
+          placeholder="请选择目标状态"
+          rules={[{ required: true, message: '请选择目标状态' }]}
+          options={availableTransitions.map((transition) => ({
+            label: `${transition.to_state === 'draft' ? '草稿' :
+                     transition.to_state === 'released' ? '已下达' :
+                     transition.to_state === 'in_progress' ? '执行中' :
+                     transition.to_state === 'completed' ? '已完成' :
+                     transition.to_state === 'cancelled' ? '已取消' :
+                     transition.to_state} ${transition.description ? `(${transition.description})` : ''}`,
+            value: transition.to_state,
+          }))}
+        />
+        <ProFormTextArea
+          name="transition_reason"
+          label="流转原因"
+          placeholder="请输入流转原因（可选）"
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormTextArea
+          name="transition_comment"
+          label="流转备注"
+          placeholder="请输入流转备注（可选）"
+          fieldProps={{ rows: 3 }}
+        />
+      </FormModalTemplate>
 
       {/* 合并工单Modal */}
       <FormModalTemplate
