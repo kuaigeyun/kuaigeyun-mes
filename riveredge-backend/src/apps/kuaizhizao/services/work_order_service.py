@@ -1300,9 +1300,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 获取原工单
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
-            # 检查工单状态（只能修改草稿或已下达状态的工单）
-            if work_order.status not in ['draft', 'released']:
-                raise BusinessLogicError(f"只能修改草稿或已下达状态的工单工序，当前状态：{work_order.status}")
+            # 检查工单状态（允许修改草稿、已下达或执行中的工单）
+            # 执行中的工单只能修改未报工的工序
+            if work_order.status not in ['draft', 'released', 'in_progress']:
+                raise BusinessLogicError(f"只能修改草稿、已下达或执行中状态的工单工序，当前状态：{work_order.status}")
 
             # 获取现有工序
             existing_operations = await WorkOrderOperation.filter(
