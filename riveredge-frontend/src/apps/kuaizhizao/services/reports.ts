@@ -40,6 +40,89 @@ export interface InventoryReportData {
   status: 'normal' | 'low' | 'high' | 'out_of_stock';
 }
 
+export interface InventoryAnalysisData {
+  turnover_rate?: {
+    total_turnover_rate?: number;
+    average_turnover_rate?: number;
+    top_materials?: Array<{
+      material_id: number;
+      material_code: string;
+      material_name: string;
+      turnover_rate: number;
+      inventory_value: number;
+    }>;
+  };
+  abc_analysis?: {
+    category_a?: {
+      count: number;
+      percentage: number;
+      value: number;
+      value_percentage: number;
+      materials: Array<{
+        material_id: number;
+        material_code: string;
+        material_name: string;
+        inventory_value: number;
+        percentage: number;
+      }>;
+    };
+    category_b?: {
+      count: number;
+      percentage: number;
+      value: number;
+      value_percentage: number;
+      materials: any[];
+    };
+    category_c?: {
+      count: number;
+      percentage: number;
+      value: number;
+      value_percentage: number;
+      materials: any[];
+    };
+  };
+  slow_moving_analysis?: {
+    total_count: number;
+    total_value: number;
+    materials: Array<{
+      material_id: number;
+      material_code: string;
+      material_name: string;
+      inventory_quantity: number;
+      inventory_value: number;
+      last_outbound_date: string;
+      days_since_last_outbound: number;
+    }>;
+  };
+}
+
+export interface InventoryCostAnalysisData {
+  period?: {
+    start: string;
+    end: string;
+  };
+  summary?: {
+    total_cost: number;
+    average_cost: number;
+    cost_trend: string;
+  };
+  by_category?: Array<{
+    category: string;
+    cost: number;
+    percentage: number;
+  }>;
+  by_warehouse?: Array<{
+    warehouse_id: number;
+    warehouse_name: string;
+    cost: number;
+    percentage: number;
+  }>;
+  trend_data?: Array<{
+    date: string;
+    cost: number;
+  }>;
+}
+
 export interface InventoryReportResponse {
   data: InventoryReportData[];
   summary: {

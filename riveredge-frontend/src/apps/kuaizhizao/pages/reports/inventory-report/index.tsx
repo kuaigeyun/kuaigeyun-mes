@@ -12,8 +12,9 @@ import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Space, Tag } from 'antd';
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { Line, Bar, Pie } from '@ant-design/charts';
+import { Line, Bar, Pie, Column } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
+import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData } from '../../../services/reports';
 
 // 库存报表接口定义
 interface InventoryReportItem {
