@@ -31,3 +31,7 @@ export { default as TechStackModal } from './tech-stack-modal';
 export { default as LongPressVerify } from './long-press-verify';
 export type { LongPressVerifyProps } from './long-press-verify';
 export { default as SafeProFormSelect } from './safe-pro-form-select';
+export { default as DocumentRelationGraph } from './document-relation-graph';
+export type { DocumentRelationGraphProps } from './document-relation-graph';
+export { default as DocumentRelationDisplay } from './document-relation-display';
+export type { DocumentRelationDisplayProps, DocumentRelationData, RelatedDocument } from './document-relation-display';
