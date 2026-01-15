@@ -385,34 +385,110 @@ const ReworkOrdersPage: React.FC = () => {
     }
   };
 
+  /**
+   * 处理表格请求
+   */
+  const handleRequest = async (
+    params: any,
+    sort: Record<string, 'ascend' | 'descend' | null>,
+    filter: Record<string, React.ReactText[] | null>
+  ) => {
+    try {
+      const response = await reworkOrderApi.list({
+        page: params.current || 1,
+        page_size: params.pageSize || 20,
+      });
+      return {
+        data: response || [],
+        success: true,
+        total: response?.length || 0,
+      };
+    } catch (error: any) {
+      messageApi.error('获取返工单列表失败');
+      return {
+        data: [],
+        success: false,
+        total: 0,
+      };
+    }
+  };
+
+  /**
+   * 处理编辑（从选中行）
+   */
+  const handleEditFromSelection = async (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      const id = Number(keys[0]);
+      try {
+        const detail = await reworkOrderApi.get(id.toString());
+        setIsEdit(true);
+        setCurrentReworkOrder(detail);
+        setModalVisible(true);
+        setTimeout(() => {
+          formRef.current?.setFieldsValue({
+            quantity: detail.quantity,
+            rework_reason: detail.rework_reason,
+            rework_type: detail.rework_type,
+            status: detail.status,
+            planned_start_date: detail.planned_start_date,
+            planned_end_date: detail.planned_end_date,
+            completed_quantity: detail.completed_quantity,
+            qualified_quantity: detail.qualified_quantity,
+            unqualified_quantity: detail.unqualified_quantity,
+            remarks: detail.remarks,
+          });
+        }, 100);
+      } catch (error) {
+        messageApi.error('获取返工单详情失败');
+      }
+    } else {
+      messageApi.warning('请选择一条返工单进行编辑');
+    }
+  };
+
+  /**
+   * 处理删除（从选中行）
+   */
+  const handleDeleteFromSelection = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      messageApi.warning('请选择要删除的返工单');
+      return;
+    }
+    
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除选中的 ${keys.length} 个返工单吗？`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          for (const key of keys) {
+            await reworkOrderApi.delete(key.toString());
+          }
+          messageApi.success('删除成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
+        }
+      },
+    });
+  };
+
   return (
-    <ListPageTemplate
-      title="返工单管理"
-      actionRef={actionRef}
-      request={async (params, sorter, filter) => {
-        const response = await reworkOrderApi.list({
-          ...params,
-          page: params.current,
-          page_size: params.pageSize,
-        });
-        return {
-          data: response || [],
-          success: true,
-          total: response?.length || 0,
-        };
-      }}
-      columns={columns}
-      toolBarRender={() => [
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleCreate}
-        >
-          新建返工单
-        </Button>,
-      ]}
-    >
+    <ListPageTemplate>
+      <UniTable<ReworkOrder>
+        actionRef={actionRef}
+        columns={columns}
+        request={handleRequest}
+        rowKey="id"
+        showCreateButton={true}
+        onCreate={handleCreate}
+        showEditButton={true}
+        onEdit={handleEditFromSelection}
+        showDeleteButton={true}
+        onDelete={handleDeleteFromSelection}
+        showAdvancedSearch={true}
+      />
       {/* 表单Modal */}
       <FormModalTemplate
         title={isEdit ? '编辑返工单' : '新建返工单'}
