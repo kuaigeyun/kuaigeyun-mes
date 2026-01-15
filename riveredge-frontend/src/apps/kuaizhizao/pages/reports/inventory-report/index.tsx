@@ -7,13 +7,15 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Space, Tag } from 'antd';
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie, Column } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
+import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData } from '../../../services/reports';
+import dayjs, { Dayjs } from 'dayjs';
 import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData } from '../../../services/reports';
 
 // 库存报表接口定义
@@ -59,7 +61,8 @@ const InventoryReportPage: React.FC = () => {
   const [warehouseId, setWarehouseId] = useState<number | undefined>(undefined);
 
   // 分析数据状态
-  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [analysisData, setAnalysisData] = useState<InventoryAnalysisData | null>(null);
+  const [costAnalysisData, setCostAnalysisData] = useState<InventoryCostAnalysisData | null>(null);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -237,6 +240,39 @@ const InventoryReportPage: React.FC = () => {
   const handleExport = () => {
     messageApi.success('报表导出功能开发中...');
   };
+
+  /**
+   * 加载分析数据
+   */
+  const loadAnalysisData = async () => {
+    try {
+      setLoading(true);
+      const [analysis, costAnalysis] = await Promise.all([
+        inventoryAnalysisApi.getAnalysis({
+          date_start: dateRange[0].format('YYYY-MM-DD'),
+          date_end: dateRange[1].format('YYYY-MM-DD'),
+          warehouse_id: warehouseId,
+        }),
+        inventoryAnalysisApi.getCostAnalysis({
+          date_start: dateRange[0].format('YYYY-MM-DD'),
+          date_end: dateRange[1].format('YYYY-MM-DD'),
+          warehouse_id: warehouseId,
+        }),
+      ]);
+      setAnalysisData(analysis);
+      setCostAnalysisData(costAnalysis);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载分析数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (reportType === 'analysis' || reportType === 'turnover') {
+      loadAnalysisData();
+    }
+  }, [reportType, dateRange, warehouseId]);
 
   // 处理报表类型切换
   const handleReportTypeChange = (type: 'summary' | 'turnover' | 'analysis') => {
@@ -422,31 +458,222 @@ const InventoryReportPage: React.FC = () => {
       )}
 
       {reportType === 'analysis' && (
-        <Row gutter={16}>
-          <Col span={12}>
-            <Card title="库存状态分布">
-              <Pie {...pieConfig} />
+        <div>
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={12}>
+              <Card title="库存状态分布">
+                <Pie {...pieConfig} />
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card title="库存预警分析">
+                <div style={{ padding: '20px' }}>
+                  <div style={{ marginBottom: '16px' }}>
+                    <Tag color="success">正常库存: {stats.normalStockItems}项 ({((stats.normalStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <Tag color="warning">库存不足: {stats.lowStockItems}项 ({((stats.lowStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <Tag color="processing">库存过高: {stats.highStockItems}项 ({((stats.highStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
+                  </div>
+                  <div>
+                    <Tag color="error">缺货项目: {stats.outOfStockItems}项 ({((stats.outOfStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
+                  </div>
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* ABC分析 */}
+          {analysisData?.abc_analysis && (
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={8}>
+                <Card title="A类物料">
+                  <Statistic
+                    title="数量"
+                    value={analysisData.abc_analysis.category_a?.count || 0}
+                    suffix="项"
+                  />
+                  <Statistic
+                    title="价值"
+                    value={analysisData.abc_analysis.category_a?.value || 0}
+                    prefix="¥"
+                    style={{ marginTop: 16 }}
+                  />
+                  <div style={{ marginTop: 16 }}>
+                    <Tag color="red">占比: {analysisData.abc_analysis.category_a?.value_percentage || 0}%</Tag>
+                  </div>
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card title="B类物料">
+                  <Statistic
+                    title="数量"
+                    value={analysisData.abc_analysis.category_b?.count || 0}
+                    suffix="项"
+                  />
+                  <Statistic
+                    title="价值"
+                    value={analysisData.abc_analysis.category_b?.value || 0}
+                    prefix="¥"
+                    style={{ marginTop: 16 }}
+                  />
+                  <div style={{ marginTop: 16 }}>
+                    <Tag color="orange">占比: {analysisData.abc_analysis.category_b?.value_percentage || 0}%</Tag>
+                  </div>
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card title="C类物料">
+                  <Statistic
+                    title="数量"
+                    value={analysisData.abc_analysis.category_c?.count || 0}
+                    suffix="项"
+                  />
+                  <Statistic
+                    title="价值"
+                    value={analysisData.abc_analysis.category_c?.value || 0}
+                    prefix="¥"
+                    style={{ marginTop: 16 }}
+                  />
+                  <div style={{ marginTop: 16 }}>
+                    <Tag color="blue">占比: {analysisData.abc_analysis.category_c?.value_percentage || 0}%</Tag>
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+          )}
+
+          {/* 呆滞料分析 */}
+          {analysisData?.slow_moving_analysis && (
+            <Card title="呆滞料分析">
+              <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Col span={8}>
+                  <Statistic
+                    title="呆滞料总数"
+                    value={analysisData.slow_moving_analysis.total_count || 0}
+                    suffix="项"
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title="呆滞料总价值"
+                    value={analysisData.slow_moving_analysis.total_value || 0}
+                    prefix="¥"
+                  />
+                </Col>
+              </Row>
+              {analysisData.slow_moving_analysis.materials && analysisData.slow_moving_analysis.materials.length > 0 && (
+                <Table
+                  size="small"
+                  columns={[
+                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: '物料名称', dataIndex: 'material_name', width: 150 },
+                    {
+                      title: '库存数量',
+                      dataIndex: 'inventory_quantity',
+                      align: 'right' as const,
+                    },
+                    {
+                      title: '库存价值',
+                      dataIndex: 'inventory_value',
+                      align: 'right' as const,
+                      render: (value: number) => `¥${value.toLocaleString()}`
+                    },
+                    {
+                      title: '最后出库日期',
+                      dataIndex: 'last_outbound_date',
+                      width: 120,
+                    },
+                    {
+                      title: '呆滞天数',
+                      dataIndex: 'days_since_last_outbound',
+                      align: 'right' as const,
+                      render: (days: number) => `${days}天`
+                    },
+                  ]}
+                  dataSource={analysisData.slow_moving_analysis.materials}
+                  pagination={false}
+                />
+              )}
             </Card>
-          </Col>
-          <Col span={12}>
-            <Card title="库存预警分析">
-              <div style={{ padding: '20px' }}>
-                <div style={{ marginBottom: '16px' }}>
-                  <Tag color="success">正常库存: {stats.normalStockItems}项 ({((stats.normalStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <Tag color="warning">库存不足: {stats.lowStockItems}项 ({((stats.lowStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  <Tag color="processing">库存过高: {stats.highStockItems}项 ({((stats.highStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
-                </div>
-                <div>
-                  <Tag color="error">缺货项目: {stats.outOfStockItems}项 ({((stats.outOfStockItems / stats.totalItems) * 100).toFixed(1)}%)</Tag>
-                </div>
-              </div>
+          )}
+
+          {/* 库存成本分析 */}
+          {costAnalysisData && (
+            <Row gutter={16} style={{ marginTop: 16 }}>
+              <Col span={12}>
+                <Card title="库存成本概览">
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Statistic
+                        title="总库存成本"
+                        value={costAnalysisData.summary?.total_cost || 0}
+                        prefix="¥"
+                        valueStyle={{ color: '#1890ff' }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Statistic
+                        title="平均库存成本"
+                        value={costAnalysisData.summary?.average_cost || 0}
+                        prefix="¥"
+                        valueStyle={{ color: '#52c41a' }}
+                      />
+                    </Col>
+                  </Row>
+                  <div style={{ marginTop: 16 }}>
+                    <Tag color={costAnalysisData.summary?.cost_trend === 'increasing' ? 'red' : costAnalysisData.summary?.cost_trend === 'decreasing' ? 'green' : 'default'}>
+                      成本趋势: {costAnalysisData.summary?.cost_trend === 'increasing' ? '上升' : costAnalysisData.summary?.cost_trend === 'decreasing' ? '下降' : '稳定'}
+                    </Tag>
+                  </div>
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card title="按类别成本分布">
+                  {costAnalysisData.by_category && costAnalysisData.by_category.length > 0 && (
+                    <Pie
+                      data={costAnalysisData.by_category.map(item => ({
+                        type: item.category,
+                        value: item.cost,
+                      }))}
+                      angleField="value"
+                      colorField="type"
+                      radius={0.8}
+                      label={{
+                        type: 'outer',
+                        content: '{name} {percentage}',
+                      }}
+                    />
+                  )}
+                </Card>
+              </Col>
+            </Row>
+          )}
+
+          {/* 成本趋势图 */}
+          {costAnalysisData?.trend_data && costAnalysisData.trend_data.length > 0 && (
+            <Card title="库存成本趋势" style={{ marginTop: 16 }}>
+              <Line
+                data={costAnalysisData.trend_data}
+                xField="date"
+                yField="cost"
+                smooth={true}
+                point={{
+                  size: 5,
+                  shape: 'diamond',
+                }}
+                tooltip={{
+                  formatter: (data: any) => ({
+                    name: '库存成本',
+                    value: `¥${data.cost.toLocaleString()}`,
+                  }),
+                }}
+              />
             </Card>
-          </Col>
-        </Row>
+          )}
+        </div>
       )}
     </ListPageTemplate>
   );
