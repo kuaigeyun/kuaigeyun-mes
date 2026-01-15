@@ -262,6 +262,38 @@ const ReportingPage: React.FC = () => {
                 sop_params: initialParams,
               });
             }, 100);
+            
+            // 自动填充报工数据（根据工艺路线）
+            setTimeout(() => {
+              const autoFillValues: any = {};
+              
+              // 自动填充工时（根据标准工时和工单数量计算）
+              if (operation.standard_time && currentWorkOrder) {
+                // 标准工时 * 工单数量 = 预计总工时
+                const estimatedWorkHours = parseFloat(operation.standard_time.toString()) * parseFloat(currentWorkOrder.quantity.toString());
+                autoFillValues.work_hours = estimatedWorkHours;
+              }
+              
+              // 按数量报工时，自动填充完成数量（默认等于工单数量）
+              if (operation.reporting_type === 'quantity' && currentWorkOrder) {
+                const remainingQuantity = parseFloat(currentWorkOrder.quantity.toString()) - (parseFloat(operation.completed_quantity?.toString() || '0'));
+                if (remainingQuantity > 0) {
+                  autoFillValues.reported_quantity = remainingQuantity;
+                  // 默认合格数量等于完成数量
+                  autoFillValues.qualified_quantity = remainingQuantity;
+                  autoFillValues.unqualified_quantity = 0;
+                }
+              }
+              
+              // 按状态报工时，默认选择"完成"
+              if (operation.reporting_type === 'status') {
+                autoFillValues.completed_status = 'completed';
+              }
+              
+              if (Object.keys(autoFillValues).length > 0) {
+                scanFormRef.current?.setFieldsValue(autoFillValues);
+              }
+            }, 200);
           } else {
             setSopFormConfig(null);
             setSopParameters({});
@@ -1996,6 +2028,41 @@ const ReportingPage: React.FC = () => {
           fieldProps={{
             onChange: (value: number) => {
               setQuickReportOperationId(value);
+              // 切换工序时自动填充数据
+              const operation = quickReportOperations.find((op: any) => op.operation_id === value);
+              const workOrder = quickReportWorkOrders.find((wo: any) => wo.id === quickReportWorkOrderId);
+              
+              if (operation && workOrder) {
+                setTimeout(() => {
+                  const autoFillValues: any = {};
+                  
+                  // 自动填充工时（根据标准工时和工单数量计算）
+                  if (operation.standard_time) {
+                    const estimatedWorkHours = parseFloat(operation.standard_time.toString()) * parseFloat(workOrder.quantity.toString());
+                    autoFillValues.work_hours = estimatedWorkHours;
+                  }
+                  
+                  // 按数量报工时，自动填充完成数量（默认等于剩余数量）
+                  if (operation.reporting_type === 'quantity') {
+                    const remainingQuantity = parseFloat(workOrder.quantity.toString()) - (parseFloat(operation.completed_quantity?.toString() || '0'));
+                    if (remainingQuantity > 0) {
+                      autoFillValues.reported_quantity = remainingQuantity;
+                      // 默认合格数量等于完成数量
+                      autoFillValues.qualified_quantity = remainingQuantity;
+                      autoFillValues.unqualified_quantity = 0;
+                    }
+                  }
+                  
+                  // 按状态报工时，默认选择"完成"
+                  if (operation.reporting_type === 'status') {
+                    autoFillValues.completed_status = 'completed';
+                  }
+                  
+                  if (Object.keys(autoFillValues).length > 0) {
+                    quickReportFormRef.current?.setFieldsValue(autoFillValues);
+                  }
+                }, 100);
+              }
             },
             size: 'large',
             style: { fontSize: '16px' },
