@@ -84,6 +84,14 @@ const ReportingPage: React.FC = () => {
   const [subOperationReportingVisible, setSubOperationReportingVisible] = useState(false); // 子工序报工Modal
   const subOperationFormRef = useRef<any>(null);
 
+  // 快速报工状态
+  const [quickReportModalVisible, setQuickReportModalVisible] = useState(false);
+  const [quickReportWorkOrderId, setQuickReportWorkOrderId] = useState<number | null>(null);
+  const [quickReportOperationId, setQuickReportOperationId] = useState<number | null>(null);
+  const [quickReportWorkOrders, setQuickReportWorkOrders] = useState<any[]>([]);
+  const [quickReportOperations, setQuickReportOperations] = useState<any[]>([]);
+  const quickReportFormRef = useRef<any>(null);
+
   /**
    * 处理扫码报工
    */
@@ -950,8 +958,17 @@ const ReportingPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
-            key="scan"
+            key="quick"
             type="primary"
+            size="large"
+            icon={<CheckCircleOutlined />}
+            onClick={handleQuickReporting}
+            style={{ fontSize: '16px', height: '40px', padding: '0 24px' }}
+          >
+            快速报工
+          </Button>,
+          <Button
+            key="scan"
             icon={<ScanOutlined />}
             onClick={handleScanReporting}
           >
@@ -1934,6 +1951,139 @@ const ReportingPage: React.FC = () => {
           />
         )}
       </Modal>
+
+      {/* 快速报工Modal */}
+      <FormModalTemplate
+        title="快速报工"
+        open={quickReportModalVisible}
+        onCancel={() => {
+          setQuickReportModalVisible(false);
+          setQuickReportWorkOrderId(null);
+          setQuickReportOperationId(null);
+          setQuickReportOperations([]);
+          quickReportFormRef.current?.resetFields();
+        }}
+        onFinish={handleQuickReportSubmit}
+        formRef={quickReportFormRef}
+        {...MODAL_CONFIG}
+      >
+        <ProFormSelect
+          name="work_order_id"
+          label="工单"
+          placeholder="请选择工单"
+          rules={[{ required: true, message: '请选择工单' }]}
+          options={quickReportWorkOrders.map((wo: any) => ({
+            label: `${wo.code} - ${wo.name}`,
+            value: wo.id,
+          }))}
+          fieldProps={{
+            onChange: (value: number) => {
+              handleQuickReportWorkOrderChange(value);
+            },
+            size: 'large',
+            style: { fontSize: '16px' },
+          }}
+        />
+        <ProFormSelect
+          name="operation_id"
+          label="工序"
+          placeholder="请选择工序"
+          rules={[{ required: true, message: '请选择工序' }]}
+          options={quickReportOperations.map((op: any) => ({
+            label: `${op.operation_name} (${op.sequence})`,
+            value: op.operation_id,
+          }))}
+          fieldProps={{
+            onChange: (value: number) => {
+              setQuickReportOperationId(value);
+            },
+            size: 'large',
+            style: { fontSize: '16px' },
+            disabled: !quickReportWorkOrderId || quickReportOperations.length === 0,
+          }}
+        />
+        {quickReportOperations.find((op: any) => op.operation_id === quickReportOperationId)?.reporting_type === 'status' ? (
+          // 按状态报工
+          <Form.Item
+            name="completed_status"
+            label="完成状态"
+            rules={[{ required: true, message: '请选择完成状态' }]}
+          >
+            <Radio.Group size="large" style={{ fontSize: '16px' }}>
+              <Radio.Button value="completed" style={{ fontSize: '18px', padding: '12px 24px', height: '50px', lineHeight: '26px' }}>
+                完成
+              </Radio.Button>
+              <Radio.Button value="incomplete" style={{ fontSize: '18px', padding: '12px 24px', height: '50px', lineHeight: '26px' }}>
+                未完成
+              </Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+        ) : (
+          // 按数量报工
+          <>
+            <ProFormDigit
+              name="reported_quantity"
+              label="完成数量"
+              placeholder="请输入完成数量"
+              rules={[{ required: true, message: '请输入完成数量' }]}
+              min={0}
+              fieldProps={{
+                precision: 2,
+                size: 'large',
+                style: { fontSize: '16px', height: '40px' },
+              }}
+            />
+            <ProFormDigit
+              name="qualified_quantity"
+              label="合格数量"
+              placeholder="请输入合格数量（默认等于完成数量）"
+              min={0}
+              fieldProps={{
+                precision: 2,
+                size: 'large',
+                style: { fontSize: '16px', height: '40px' },
+              }}
+            />
+            <ProFormDigit
+              name="unqualified_quantity"
+              label="不合格数量"
+              placeholder="不合格数量（自动计算）"
+              disabled
+              fieldProps={{
+                precision: 2,
+                size: 'large',
+                style: { fontSize: '16px', height: '40px' },
+              }}
+              dependencies={['reported_quantity', 'qualified_quantity']}
+              transform={(value, namePath, allValues) => {
+                const reportedQuantity = allValues.reported_quantity || 0;
+                const qualifiedQuantity = allValues.qualified_quantity || 0;
+                return reportedQuantity - qualifiedQuantity;
+              }}
+            />
+          </>
+        )}
+        <ProFormDigit
+          name="work_hours"
+          label="工时(小时)"
+          placeholder="工时"
+          min={0}
+          fieldProps={{
+            step: 0.1,
+            size: 'large',
+            style: { fontSize: '16px', height: '40px' },
+          }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注（可选）"
+          placeholder="请输入备注"
+          fieldProps={{
+            rows: 3,
+            style: { fontSize: '16px' },
+          }}
+        />
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };
