@@ -2065,6 +2065,250 @@ async def delete_packing_binding(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# ============ 库存预警管理 API ============
+
+@router.post("/inventory-alert-rules", response_model=InventoryAlertRuleResponse, summary="创建库存预警规则")
+async def create_inventory_alert_rule(
+    rule_data: InventoryAlertRuleCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertRuleResponse:
+    """
+    创建库存预警规则
+
+    - **rule_data**: 预警规则创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的预警规则信息。
+    """
+    try:
+        return await inventory_alert_rule_service.create_alert_rule(
+            tenant_id=tenant_id,
+            rule_data=rule_data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/inventory-alert-rules", response_model=List[InventoryAlertRuleListResponse], summary="获取库存预警规则列表")
+async def list_inventory_alert_rules(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    alert_type: Optional[str] = Query(None, description="预警类型"),
+    is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[InventoryAlertRuleListResponse]:
+    """
+    获取库存预警规则列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **alert_type**: 预警类型（可选）
+    - **is_enabled**: 是否启用（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警规则列表。
+    """
+    return await inventory_alert_rule_service.list_alert_rules(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        alert_type=alert_type,
+        is_enabled=is_enabled,
+    )
+
+
+@router.get("/inventory-alert-rules/{rule_id}", response_model=InventoryAlertRuleResponse, summary="获取库存预警规则详情")
+async def get_inventory_alert_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertRuleResponse:
+    """
+    获取库存预警规则详情
+
+    - **rule_id**: 预警规则ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警规则详情。
+    """
+    try:
+        return await inventory_alert_rule_service.get_alert_rule_by_id(
+            tenant_id=tenant_id,
+            rule_id=rule_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/inventory-alert-rules/{rule_id}", response_model=InventoryAlertRuleResponse, summary="更新库存预警规则")
+async def update_inventory_alert_rule(
+    rule_id: int,
+    rule_data: InventoryAlertRuleUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertRuleResponse:
+    """
+    更新库存预警规则
+
+    - **rule_id**: 预警规则ID
+    - **rule_data**: 预警规则更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的预警规则信息。
+    """
+    try:
+        return await inventory_alert_rule_service.update_alert_rule(
+            tenant_id=tenant_id,
+            rule_id=rule_id,
+            rule_data=rule_data,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/inventory-alert-rules/{rule_id}", summary="删除库存预警规则")
+async def delete_inventory_alert_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除库存预警规则（软删除）
+
+    - **rule_id**: 预警规则ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+    """
+    try:
+        await inventory_alert_rule_service.delete_alert_rule(
+            tenant_id=tenant_id,
+            rule_id=rule_id
+        )
+        return JSONResponse(content={"message": "删除成功"})
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/inventory-alerts", response_model=List[InventoryAlertListResponse], summary="获取库存预警记录列表")
+async def list_inventory_alerts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    alert_type: Optional[str] = Query(None, description="预警类型"),
+    status: Optional[str] = Query(None, description="状态"),
+    alert_level: Optional[str] = Query(None, description="预警级别"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[InventoryAlertListResponse]:
+    """
+    获取库存预警记录列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **alert_type**: 预警类型（可选）
+    - **status**: 状态（可选）
+    - **alert_level**: 预警级别（可选）
+    - **material_id**: 物料ID（可选）
+    - **warehouse_id**: 仓库ID（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警记录列表。
+    """
+    return await inventory_alert_service.get_alerts(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        alert_type=alert_type,
+        status=status,
+        alert_level=alert_level,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/inventory-alerts/{alert_id}", response_model=InventoryAlertResponse, summary="获取库存预警记录详情")
+async def get_inventory_alert(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertResponse:
+    """
+    获取库存预警记录详情
+
+    - **alert_id**: 预警记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警记录详情。
+    """
+    try:
+        return await inventory_alert_service.get_alert_by_id(
+            tenant_id=tenant_id,
+            alert_id=alert_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/inventory-alerts/{alert_id}/handle", response_model=InventoryAlertResponse, summary="处理库存预警")
+async def handle_inventory_alert(
+    alert_id: int,
+    handle_data: InventoryAlertHandleRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertResponse:
+    """
+    处理库存预警
+
+    - **alert_id**: 预警记录ID
+    - **handle_data**: 处理数据（状态、处理备注）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的预警记录信息。
+    """
+    try:
+        return await inventory_alert_service.handle_alert(
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            handle_data=handle_data,
+            handled_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/inventory-alerts/statistics", summary="获取库存预警统计信息")
+async def get_inventory_alert_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取库存预警统计信息
+
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警统计信息（按类型、级别、状态统计）。
+    """
+    statistics = await inventory_alert_service.get_alert_statistics(tenant_id=tenant_id)
+    return JSONResponse(content=statistics)
+
+
 @router.delete("/packing-binding/{binding_id}", summary="删除装箱绑定记录（旧接口，保留兼容）")
 async def delete_packing_binding_old(
     binding_id: int,
