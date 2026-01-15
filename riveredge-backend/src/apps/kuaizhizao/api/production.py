@@ -1955,8 +1955,118 @@ async def get_packing_bindings_by_receipt(
     )
 
 
-@router.delete("/packing-binding/{binding_id}", summary="删除装箱绑定记录")
+@router.get("/packing-bindings", response_model=List[PackingBindingListResponse], summary="获取装箱绑定记录列表")
+async def list_packing_bindings(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    receipt_id: Optional[int] = Query(None, description="成品入库单ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    """
+    获取装箱绑定记录列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **receipt_id**: 成品入库单ID（可选）
+    - **product_id**: 产品ID（可选）
+    - **box_no**: 箱号（可选，模糊搜索）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回装箱绑定记录列表。
+    """
+    return await packing_binding_service.list_packing_bindings(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        receipt_id=receipt_id,
+        product_id=product_id,
+        box_no=box_no,
+    )
+
+
+@router.get("/packing-bindings/{binding_id}", response_model=PackingBindingResponse, summary="获取装箱绑定记录详情")
+async def get_packing_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    获取装箱绑定记录详情
+
+    - **binding_id**: 装箱绑定记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回装箱绑定记录详情。
+    """
+    try:
+        return await packing_binding_service.get_packing_binding_by_id(
+            tenant_id=tenant_id,
+            binding_id=binding_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/packing-bindings/{binding_id}", response_model=PackingBindingResponse, summary="更新装箱绑定记录")
+async def update_packing_binding(
+    binding_id: int,
+    binding: PackingBindingUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    更新装箱绑定记录
+
+    - **binding_id**: 装箱绑定记录ID
+    - **binding**: 装箱绑定更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的装箱绑定记录信息。
+    """
+    try:
+        return await packing_binding_service.update_packing_binding(
+            tenant_id=tenant_id,
+            binding_id=binding_id,
+            binding_data=binding,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/packing-bindings/{binding_id}", summary="删除装箱绑定记录")
 async def delete_packing_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除装箱绑定记录（软删除）
+
+    - **binding_id**: 装箱绑定记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+    """
+    try:
+        await packing_binding_service.delete_packing_binding(
+            tenant_id=tenant_id,
+            binding_id=binding_id
+        )
+        return JSONResponse(content={"message": "删除成功"})
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/packing-binding/{binding_id}", summary="删除装箱绑定记录（旧接口，保留兼容）")
+async def delete_packing_binding_old(
     binding_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
