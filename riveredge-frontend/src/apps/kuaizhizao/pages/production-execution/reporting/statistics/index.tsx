@@ -313,8 +313,40 @@ const ReportingStatisticsPage: React.FC = () => {
             </Col>
           </Row>
 
-          {/* 按工序统计 */}
-          <Card title="按工序统计（Top 10）" style={{ marginBottom: 16 }}>
+          {/* 图表展示 */}
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={12}>
+              <Card title="按工序统计（Top 10）">
+                <Bar
+                  data={statistics.operation_stats}
+                  xField="operation_name"
+                  yField="reported_quantity"
+                  height={300}
+                  label={{
+                    position: 'middle',
+                    style: { fill: '#FFFFFF', opacity: 0.6 },
+                  }}
+                />
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card title="按操作工统计（Top 10）">
+                <Bar
+                  data={statistics.worker_stats}
+                  xField="worker_name"
+                  yField="reported_quantity"
+                  height={300}
+                  label={{
+                    position: 'middle',
+                    style: { fill: '#FFFFFF', opacity: 0.6 },
+                  }}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          {/* 按工序统计表格 */}
+          <Card title="按工序统计详情（Top 10）" style={{ marginBottom: 16 }}>
             <Table
               columns={operationColumns}
               dataSource={statistics.operation_stats}
@@ -324,8 +356,8 @@ const ReportingStatisticsPage: React.FC = () => {
             />
           </Card>
 
-          {/* 按操作工统计 */}
-          <Card title="按操作工统计（Top 10）">
+          {/* 按操作工统计表格 */}
+          <Card title="按操作工统计详情（Top 10）">
             <Table
               columns={workerColumns}
               dataSource={statistics.worker_stats}
