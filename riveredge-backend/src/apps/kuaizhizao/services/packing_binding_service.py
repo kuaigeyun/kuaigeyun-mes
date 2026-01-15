@@ -183,3 +183,122 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         binding.deleted_at = datetime.now()
         await binding.save()
 
+    async def list_packing_bindings(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        receipt_id: Optional[int] = None,
+        product_id: Optional[int] = None,
+        box_no: Optional[str] = None,
+    ) -> List[PackingBindingListResponse]:
+        """
+        获取装箱绑定记录列表
+
+        Args:
+            tenant_id: 组织ID
+            skip: 跳过数量
+            limit: 限制数量
+            receipt_id: 成品入库单ID（可选）
+            product_id: 产品ID（可选）
+            box_no: 箱号（可选，模糊搜索）
+
+        Returns:
+            List[PackingBindingListResponse]: 装箱绑定记录列表
+        """
+        query = PackingBinding.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if receipt_id:
+            query = query.filter(finished_goods_receipt_id=receipt_id)
+        if product_id:
+            query = query.filter(product_id=product_id)
+        if box_no:
+            query = query.filter(box_no__icontains=box_no)
+
+        bindings = await query.order_by('-bound_at').offset(skip).limit(limit)
+
+        return [PackingBindingListResponse.model_validate(binding) for binding in bindings]
+
+    async def get_packing_binding_by_id(
+        self,
+        tenant_id: int,
+        binding_id: int
+    ) -> PackingBindingResponse:
+        """
+        根据ID获取装箱绑定记录详情
+
+        Args:
+            tenant_id: 组织ID
+            binding_id: 装箱绑定记录ID
+
+        Returns:
+            PackingBindingResponse: 装箱绑定记录详情
+
+        Raises:
+            NotFoundError: 装箱绑定记录不存在
+        """
+        binding = await PackingBinding.get_or_none(
+            id=binding_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if not binding:
+            raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
+
+        return PackingBindingResponse.model_validate(binding)
+
+    async def update_packing_binding(
+        self,
+        tenant_id: int,
+        binding_id: int,
+        binding_data: PackingBindingUpdate,
+        updated_by: int
+    ) -> PackingBindingResponse:
+        """
+        更新装箱绑定记录
+
+        Args:
+            tenant_id: 组织ID
+            binding_id: 装箱绑定记录ID
+            binding_data: 装箱绑定更新数据
+            updated_by: 更新人ID
+
+        Returns:
+            PackingBindingResponse: 更新后的装箱绑定记录信息
+
+        Raises:
+            NotFoundError: 装箱绑定记录不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取装箱绑定记录
+            binding = await PackingBinding.get_or_none(
+                id=binding_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not binding:
+                raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 更新字段
+            if binding_data.packing_quantity is not None:
+                binding.packing_quantity = binding_data.packing_quantity
+            if binding_data.box_no is not None:
+                binding.box_no = binding_data.box_no
+            if binding_data.remarks is not None:
+                binding.remarks = binding_data.remarks
+
+            binding.updated_by = updated_by
+            binding.updated_by_name = user_info["name"]
+
+            await binding.save()
+
+            return PackingBindingResponse.model_validate(binding)

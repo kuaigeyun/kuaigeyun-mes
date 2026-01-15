@@ -1,89 +1,88 @@
 /**
- * 客户来料登记页面
+ * 客户来料登记管理页面
  *
- * 提供客户来料登记功能，支持扫码登记、手动登记、条码映射等。
+ * 提供客户来料登记的管理功能，包括登记、查看、处理、取消等。
  *
- * @author Luigi Lu
- * @date 2025-01-15
+ * Author: Luigi Lu
+ * Date: 2026-01-15
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDigit, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Modal, message, Card } from 'antd';
-import { EyeOutlined, QrcodeOutlined, PlusOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Popconfirm } from 'antd';
+import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { warehouseApi } from '../../../services/production';
-import { customerApi } from '../../../../master-data/services/supply-chain';
-import { materialApi } from '../../../../master-data/services/material';
-import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
+import dayjs from 'dayjs';
 
-/**
- * 客户来料登记接口定义
- */
 interface CustomerMaterialRegistration {
   id?: number;
+  uuid?: string;
   registration_code?: string;
   customer_id?: number;
   customer_name?: string;
   barcode?: string;
   barcode_type?: string;
-  quantity?: number;
-  registration_date?: string;
-  status?: string;
+  parsed_data?: any;
+  mapped_material_id?: number;
   mapped_material_code?: string;
   mapped_material_name?: string;
+  mapping_rule_id?: number;
+  quantity?: number;
+  registration_date?: string;
+  registered_by?: number;
   registered_by_name?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  status?: string;
+  processed_at?: string;
+  remarks?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
-/**
- * 客户来料登记页面组件
- */
 const CustomerMaterialRegistrationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<any>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Modal 相关状态
-  const [scanModalVisible, setScanModalVisible] = useState(false);
-  const [manualModalVisible, setManualModalVisible] = useState(false);
-  const [formLoading, setFormLoading] = useState(false);
-  const [parsedData, setParsedData] = useState<any>(null);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const formRef = useRef<any>(null);
 
-  // Drawer 相关状态（详情查看）
+  // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
-  const [currentRecord, setCurrentRecord] = useState<CustomerMaterialRegistration | null>(null);
+  const [currentRegistration, setCurrentRegistration] = useState<CustomerMaterialRegistration | null>(null);
+
+  // 扫码解析状态
+  const [scanning, setScanning] = useState(false);
 
   /**
-   * 处理扫码登记
+   * 处理新建登记
    */
-  const handleScan = () => {
-    setScanModalVisible(true);
-    setParsedData(null);
+  const handleCreate = () => {
+    setCreateModalVisible(true);
     formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({
+      registration_date: dayjs(),
+      barcode_type: '1d',
+    });
   };
 
   /**
-   * 处理手动登记
+   * 处理扫码解析
    */
-  const handleManual = () => {
-    setManualModalVisible(true);
-    formRef.current?.resetFields();
-  };
-
-  /**
-   * 处理条码解析
-   */
-  const handleParseBarcode = async (barcode: string, barcodeType: string, customerId?: number) => {
+  const handleScanBarcode = async (barcode: string, customerId?: number) => {
     try {
-      const result = await warehouseApi.customerMaterialRegistration.parseBarcode({
+      setScanning(true);
+      const result = await customerMaterialRegistrationApi.parseBarcode({
         barcode,
-        barcode_type: barcodeType,
-        customer_id: customerId,
+        barcode_type: formRef.current?.getFieldValue('barcode_type') || '1d',
+        customer_id: customerId || formRef.current?.getFieldValue('customer_id'),
       });
-      setParsedData(result);
-      // 自动填充表单
+
+      // 自动填充解析结果
       if (result.mapped_material_id) {
         formRef.current?.setFieldsValue({
           mapped_material_id: result.mapped_material_id,
@@ -91,33 +90,48 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           mapped_material_name: result.mapped_material_name,
         });
       }
+
       messageApi.success('条码解析成功');
     } catch (error: any) {
-      messageApi.error(error.message || '条码解析失败');
+      messageApi.warning(error.message || '条码解析失败，请手动填写物料信息');
+    } finally {
+      setScanning(false);
     }
   };
 
   /**
-   * 处理创建登记
+   * 处理条码输入变化
    */
-  const handleCreateRegistration = async (values: any) => {
+  const handleBarcodeChange = (value: string) => {
+    if (value && value.length > 5) {
+      // 自动触发解析
+      handleScanBarcode(value);
+    }
+  };
+
+  /**
+   * 处理提交新建
+   */
+  const handleCreateSubmit = async (values: any) => {
     try {
-      setFormLoading(true);
-      await warehouseApi.customerMaterialRegistration.create({
-        ...values,
-        registration_date: values.registration_date || new Date().toISOString(),
+      await customerMaterialRegistrationApi.create({
+        customer_id: values.customer_id,
+        customer_name: values.customer_name,
+        barcode: values.barcode,
+        barcode_type: values.barcode_type || '1d',
+        quantity: values.quantity,
+        registration_date: values.registration_date?.format('YYYY-MM-DD HH:mm:ss'),
+        warehouse_id: values.warehouse_id,
+        warehouse_name: values.warehouse_name,
+        remarks: values.remarks,
       });
-      messageApi.success('登记成功');
-      setScanModalVisible(false);
-      setManualModalVisible(false);
+      messageApi.success('客户来料登记成功');
+      setCreateModalVisible(false);
       formRef.current?.resetFields();
-      setParsedData(null);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '登记失败');
+      messageApi.error(error.message || '客户来料登记失败');
       throw error;
-    } finally {
-      setFormLoading(false);
     }
   };
 
@@ -126,13 +140,37 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
    */
   const handleDetail = async (record: CustomerMaterialRegistration) => {
     try {
-      if (record.id) {
-        const detailData = await warehouseApi.customerMaterialRegistration.get(record.id.toString());
-        setCurrentRecord(detailData);
-        setDetailDrawerVisible(true);
-      }
-    } catch (error) {
-      messageApi.error('获取登记详情失败');
+      const detail = await customerMaterialRegistrationApi.get(record.id!.toString());
+      setCurrentRegistration(detail);
+      setDetailDrawerVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取客户来料登记详情失败');
+    }
+  };
+
+  /**
+   * 处理入库
+   */
+  const handleProcess = async (record: CustomerMaterialRegistration) => {
+    try {
+      await customerMaterialRegistrationApi.process(record.id!.toString());
+      messageApi.success('客户来料登记已处理（入库）');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '处理客户来料登记失败');
+    }
+  };
+
+  /**
+   * 处理取消
+   */
+  const handleCancel = async (record: CustomerMaterialRegistration) => {
+    try {
+      await customerMaterialRegistrationApi.cancel(record.id!.toString());
+      messageApi.success('客户来料登记已取消');
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '取消客户来料登记失败');
     }
   };
 
@@ -143,36 +181,26 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     {
       title: '登记编码',
       dataIndex: 'registration_code',
-      width: 140,
-      fixed: 'left',
+      width: 150,
       ellipsis: true,
+      fixed: 'left',
     },
     {
       title: '客户名称',
       dataIndex: 'customer_name',
-      width: 120,
+      width: 150,
       ellipsis: true,
     },
     {
-      title: '客户条码',
+      title: '条码',
       dataIndex: 'barcode',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '条码类型',
-      dataIndex: 'barcode_type',
-      width: 100,
-      render: (_, record) => (
-        <Tag color={record.barcode_type === '2d' ? 'blue' : 'default'}>
-          {record.barcode_type === '2d' ? '二维码' : '一维码'}
-        </Tag>
-      ),
-    },
-    {
       title: '映射物料编码',
       dataIndex: 'mapped_material_code',
-      width: 120,
+      width: 150,
       ellipsis: true,
     },
     {
@@ -188,20 +216,20 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       align: 'right',
     },
     {
+      title: '登记日期',
+      dataIndex: 'registration_date',
+      valueType: 'dateTime',
+      width: 160,
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        pending: { text: '待处理', status: 'default' },
+        pending: { text: '待处理', status: 'warning' },
         processed: { text: '已处理', status: 'success' },
         cancelled: { text: '已取消', status: 'error' },
       },
-    },
-    {
-      title: '登记日期',
-      dataIndex: 'registration_date',
-      valueType: 'date',
-      width: 120,
     },
     {
       title: '登记人',
@@ -210,14 +238,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      valueType: 'dateTime',
-      width: 160,
-    },
-    {
       title: '操作',
-      width: 120,
+      width: 250,
       fixed: 'right',
       render: (_, record) => (
         <Space>
@@ -229,6 +251,39 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           >
             详情
           </Button>
+          {record.status === 'pending' && (
+            <>
+              <Popconfirm
+                title="确定要处理（入库）这个客户来料登记吗？"
+                onConfirm={() => handleProcess(record)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                >
+                  处理
+                </Button>
+              </Popconfirm>
+              <Popconfirm
+                title="确定要取消这个客户来料登记吗？"
+                onConfirm={() => handleCancel(record)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<CloseCircleOutlined />}
+                >
+                  取消
+                </Button>
+              </Popconfirm>
+            </>
+          )}
         </Space>
       ),
     },
@@ -237,15 +292,22 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="客户来料登记"
+        headerTitle="客户来料登记管理"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
+        showAdvancedSearch={true}
+        showCreateButton={true}
+        onCreate={handleCreate}
         request={async (params) => {
           try {
-            const result = await warehouseApi.customerMaterialRegistration.list({
+            const result = await customerMaterialRegistrationApi.list({
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
+              customer_id: params.customer_id,
+              status: params.status,
+              registration_date_start: params.registration_date_start,
+              registration_date_end: params.registration_date_end,
             });
             return {
               data: result || [],
@@ -253,7 +315,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               total: result?.length || 0,
             };
           } catch (error) {
-            messageApi.error('获取登记列表失败');
             return {
               data: [],
               success: false,
@@ -261,346 +322,181 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             };
           }
         }}
-        toolBarRender={() => [
-          <Button
-            key="scan"
-            type="primary"
-            icon={<QrcodeOutlined />}
-            onClick={handleScan}
-          >
-            扫码登记
-          </Button>,
-          <Button
-            key="create"
-            type="default"
-            icon={<PlusOutlined />}
-            onClick={handleManual}
-          >
-            手动登记
-          </Button>,
-        ]}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
       />
 
-      {/* 扫码登记 Modal */}
+      {/* 新建Modal */}
       <FormModalTemplate
-        title="扫码登记"
-        open={scanModalVisible}
-        onClose={() => {
-          setScanModalVisible(false);
-          setParsedData(null);
+        title="客户来料登记"
+        open={createModalVisible}
+        onCancel={() => {
+          setCreateModalVisible(false);
           formRef.current?.resetFields();
         }}
-        onFinish={handleCreateRegistration}
-        isEdit={false}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        onFinish={handleCreateSubmit}
         formRef={formRef}
-        layout="vertical"
-        grid={true}
+        {...MODAL_CONFIG}
       >
-        <ProFormSelect
+        <ProFormText
           name="customer_id"
-          label="客户"
-          placeholder="请选择客户"
-          rules={[{ required: true, message: '请选择客户' }]}
-          request={async () => {
-            try {
-              const customers = await customerApi.list();
-              return customers.map(c => ({ label: c.name, value: c.id }));
-            } catch {
-              return [];
-            }
-          }}
-          fieldProps={{
-            onChange: (value) => {
-              // 客户变更时清空条码解析结果
-              setParsedData(null);
-            },
-          }}
-          colProps={{ span: 12 }}
+          label="客户ID"
+          placeholder="请输入客户ID"
+          rules={[{ required: true, message: '请输入客户ID' }]}
         />
-        <ProFormSelect
-          name="barcode_type"
-          label="条码类型"
-          placeholder="请选择条码类型"
-          rules={[{ required: true, message: '请选择条码类型' }]}
-          options={[
-            { label: '一维码', value: '1d' },
-            { label: '二维码', value: '2d' },
-          ]}
-          colProps={{ span: 12 }}
+        <ProFormText
+          name="customer_name"
+          label="客户名称"
+          placeholder="请输入客户名称"
+          rules={[{ required: true, message: '请输入客户名称' }]}
         />
         <ProFormText
           name="barcode"
           label="客户条码"
-          placeholder="请扫描或输入客户条码"
+          placeholder="请扫描或输入客户条码（一维码或二维码）"
           rules={[{ required: true, message: '请输入客户条码' }]}
           fieldProps={{
-            onPressEnter: async (e) => {
-              const barcode = e.currentTarget.value;
-              const customerId = formRef.current?.getFieldValue('customer_id');
-              const barcodeType = formRef.current?.getFieldValue('barcode_type') || '1d';
-              if (barcode && barcodeType) {
-                await handleParseBarcode(barcode, barcodeType, customerId);
+            onBlur: (e) => {
+              if (e.target.value) {
+                handleBarcodeChange(e.target.value);
               }
             },
+            suffix: scanning ? <ScanOutlined spin /> : null,
           }}
-          colProps={{ span: 24 }}
-        />
-        {parsedData && (
-          <Card size="small" style={{ marginBottom: 16 }}>
-            <p><strong>解析结果：</strong></p>
-            {parsedData.mapped_material_code && (
-              <>
-                <p>映射物料编码：{parsedData.mapped_material_code}</p>
-                <p>映射物料名称：{parsedData.mapped_material_name}</p>
-              </>
-            )}
-            {!parsedData.mapped_material_code && (
-              <p style={{ color: '#ff4d4f' }}>未找到匹配的映射规则，请手动选择物料</p>
-            )}
-          </Card>
-        )}
-        <ProFormSelect
-          name="mapped_material_id"
-          label="物料"
-          placeholder="请选择物料（条码解析后自动填充）"
-          rules={[{ required: true, message: '请选择物料' }]}
-          request={async (params) => {
-            try {
-              const materials = await materialApi.list({
-                skip: 0,
-                limit: 100,
-                isActive: true,
-                keyword: params.keyWords,
-              });
-              return materials.map(m => ({
-                label: `${m.code} - ${m.name}`,
-                value: m.id,
-              }));
-            } catch {
-              return [];
-            }
-          }}
-          fieldProps={{
-            showSearch: true,
-            filterOption: false,
-          }}
-          colProps={{ span: 24 }}
-        />
-        <ProFormDigit
-          name="quantity"
-          label="来料数量"
-          placeholder="请输入来料数量"
-          rules={[{ required: true, message: '请输入来料数量' }]}
-          fieldProps={{ min: 0, precision: 2 }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormDatePicker
-          name="registration_date"
-          label="登记日期"
-          placeholder="请选择登记日期"
-          rules={[{ required: true, message: '请选择登记日期' }]}
-          fieldProps={{ style: { width: '100%' } }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="warehouse_id"
-          label="入库仓库"
-          placeholder="请选择入库仓库（可选）"
-          request={async (params) => {
-            try {
-              const warehouses = await masterDataWarehouseApi.list({
-                skip: 0,
-                limit: 100,
-                isActive: true,
-              });
-              return warehouses.map(w => ({
-                label: `${w.code} - ${w.name}`,
-                value: w.id,
-              }));
-            } catch {
-              return [];
-            }
-          }}
-          fieldProps={{
-            showSearch: true,
-            filterOption: false,
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormTextArea
-          name="remarks"
-          label="备注"
-          placeholder="请输入备注"
-          colProps={{ span: 24 }}
-        />
-      </FormModalTemplate>
-
-      {/* 手动登记 Modal */}
-      <FormModalTemplate
-        title="手动登记"
-        open={manualModalVisible}
-        onClose={() => {
-          setManualModalVisible(false);
-          formRef.current?.resetFields();
-        }}
-        onFinish={handleCreateRegistration}
-        isEdit={false}
-        loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        layout="vertical"
-        grid={true}
-      >
-        <ProFormSelect
-          name="customer_id"
-          label="客户"
-          placeholder="请选择客户"
-          rules={[{ required: true, message: '请选择客户' }]}
-          request={async () => {
-            try {
-              const customers = await customerApi.list();
-              return customers.map(c => ({ label: c.name, value: c.id }));
-            } catch {
-              return [];
-            }
-          }}
-          colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="barcode_type"
           label="条码类型"
-          placeholder="请选择条码类型"
-          rules={[{ required: true, message: '请选择条码类型' }]}
           options={[
             { label: '一维码', value: '1d' },
             { label: '二维码', value: '2d' },
           ]}
-          colProps={{ span: 12 }}
+          rules={[{ required: true, message: '请选择条码类型' }]}
         />
         <ProFormText
-          name="barcode"
-          label="客户条码"
-          placeholder="请输入客户条码"
-          rules={[{ required: true, message: '请输入客户条码' }]}
-          colProps={{ span: 24 }}
+          name="mapped_material_code"
+          label="映射物料编码"
+          placeholder="条码解析后自动填充"
+          disabled
         />
-        <ProFormSelect
-          name="mapped_material_id"
-          label="物料"
-          placeholder="请选择物料"
-          rules={[{ required: true, message: '请选择物料' }]}
-          request={async (params) => {
-            try {
-              const materials = await materialApi.list({
-                skip: 0,
-                limit: 100,
-                isActive: true,
-                keyword: params.keyWords,
-              });
-              return materials.map(m => ({
-                label: `${m.code} - ${m.name}`,
-                value: m.id,
-              }));
-            } catch {
-              return [];
-            }
-          }}
-          fieldProps={{
-            showSearch: true,
-            filterOption: false,
-          }}
-          colProps={{ span: 24 }}
+        <ProFormText
+          name="mapped_material_name"
+          label="映射物料名称"
+          placeholder="条码解析后自动填充"
+          disabled
         />
         <ProFormDigit
           name="quantity"
           label="来料数量"
           placeholder="请输入来料数量"
           rules={[{ required: true, message: '请输入来料数量' }]}
-          fieldProps={{ min: 0, precision: 2 }}
-          colProps={{ span: 12 }}
+          min={0}
+          fieldProps={{ precision: 2 }}
         />
         <ProFormDatePicker
           name="registration_date"
           label="登记日期"
           placeholder="请选择登记日期"
           rules={[{ required: true, message: '请选择登记日期' }]}
-          fieldProps={{ style: { width: '100%' } }}
-          colProps={{ span: 12 }}
+          fieldProps={{ showTime: true }}
         />
-        <ProFormSelect
+        <ProFormText
           name="warehouse_id"
-          label="入库仓库"
-          placeholder="请选择入库仓库（可选）"
-          request={async (params) => {
-            try {
-              const warehouses = await masterDataWarehouseApi.list({
-                skip: 0,
-                limit: 100,
-                isActive: true,
-              });
-              return warehouses.map(w => ({
-                label: `${w.code} - ${w.name}`,
-                value: w.id,
-              }));
-            } catch {
-              return [];
-            }
-          }}
-          fieldProps={{
-            showSearch: true,
-            filterOption: false,
-          }}
-          colProps={{ span: 12 }}
+          label="入库仓库ID"
+          placeholder="请输入入库仓库ID（可选）"
+        />
+        <ProFormText
+          name="warehouse_name"
+          label="入库仓库名称"
+          placeholder="请输入入库仓库名称（可选）"
         />
         <ProFormTextArea
           name="remarks"
           label="备注"
           placeholder="请输入备注"
-          colProps={{ span: 24 }}
+          fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
-      {/* 详情 Drawer */}
+      {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={`登记详情 - ${currentRecord?.registration_code || ''}`}
+        title="客户来料登记详情"
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
-        width={DRAWER_CONFIG.LARGE_WIDTH}
-        columns={[]}
-        customContent={
-          currentRecord ? (
-            <div style={{ padding: '16px 0' }}>
-              <p><strong>登记编码：</strong>{currentRecord.registration_code}</p>
-              <p><strong>客户名称：</strong>{currentRecord.customer_name}</p>
-              <p><strong>客户条码：</strong>{currentRecord.barcode}</p>
-              <p><strong>条码类型：</strong>
-                <Tag color={currentRecord.barcode_type === '2d' ? 'blue' : 'default'}>
-                  {currentRecord.barcode_type === '2d' ? '二维码' : '一维码'}
-                </Tag>
-              </p>
-              <p><strong>映射物料编码：</strong>{currentRecord.mapped_material_code || '-'}</p>
-              <p><strong>映射物料名称：</strong>{currentRecord.mapped_material_name || '-'}</p>
-              <p><strong>来料数量：</strong>{currentRecord.quantity}</p>
-              <p><strong>状态：</strong>
-                <Tag color={
-                  currentRecord.status === 'processed' ? 'success' :
-                  currentRecord.status === 'cancelled' ? 'error' : 'default'
-                }>
-                  {currentRecord.status === 'processed' ? '已处理' :
-                   currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
-                </Tag>
-              </p>
-              <p><strong>登记日期：</strong>{currentRecord.registration_date}</p>
-              <p><strong>登记人：</strong>{currentRecord.registered_by_name}</p>
-            </div>
-          ) : null
-        }
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRegistration(null);
+        }}
+        dataSource={currentRegistration || {}}
+        columns={[
+          {
+            title: '登记编码',
+            dataIndex: 'registration_code',
+          },
+          {
+            title: '客户名称',
+            dataIndex: 'customer_name',
+          },
+          {
+            title: '条码',
+            dataIndex: 'barcode',
+          },
+          {
+            title: '条码类型',
+            dataIndex: 'barcode_type',
+            valueEnum: {
+              '1d': { text: '一维码' },
+              '2d': { text: '二维码' },
+            },
+          },
+          {
+            title: '映射物料编码',
+            dataIndex: 'mapped_material_code',
+          },
+          {
+            title: '映射物料名称',
+            dataIndex: 'mapped_material_name',
+          },
+          {
+            title: '来料数量',
+            dataIndex: 'quantity',
+          },
+          {
+            title: '登记日期',
+            dataIndex: 'registration_date',
+            valueType: 'dateTime',
+          },
+          {
+            title: '入库仓库',
+            dataIndex: 'warehouse_name',
+          },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            valueEnum: {
+              pending: { text: '待处理', status: 'warning' },
+              processed: { text: '已处理', status: 'success' },
+              cancelled: { text: '已取消', status: 'error' },
+            },
+          },
+          {
+            title: '处理时间',
+            dataIndex: 'processed_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: '登记人',
+            dataIndex: 'registered_by_name',
+          },
+          {
+            title: '备注',
+            dataIndex: 'remarks',
+          },
+        ]}
       />
     </ListPageTemplate>
   );
 };
 
 export default CustomerMaterialRegistrationPage;
-
