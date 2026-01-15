@@ -21,6 +21,7 @@ from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
+from apps.kuaizhizao.services.inventory_transfer_service import InventoryTransferService
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
 from apps.kuaizhizao.services.packing_binding_service import PackingBindingService
@@ -38,6 +39,7 @@ scrap_record_service = ScrapRecordService()
 defect_record_service = DefectRecordService()
 material_binding_service = MaterialBindingService()
 stocktaking_service = StocktakingService()
+inventory_transfer_service = InventoryTransferService()
 inventory_analysis_service = InventoryAnalysisService()
 inventory_alert_rule_service = InventoryAlertRuleService()
 inventory_alert_service = InventoryAlertService()
@@ -131,6 +133,16 @@ from apps.kuaizhizao.schemas.stocktaking import (
     StocktakingItemCreate,
     StocktakingItemUpdate,
     StocktakingItemResponse,
+)
+from apps.kuaizhizao.schemas.inventory_transfer import (
+    InventoryTransferCreate,
+    InventoryTransferUpdate,
+    InventoryTransferResponse,
+    InventoryTransferListResponse,
+    InventoryTransferWithItemsResponse,
+    InventoryTransferItemCreate,
+    InventoryTransferItemUpdate,
+    InventoryTransferItemResponse,
 )
 from apps.kuaizhizao.schemas.warehouse import (
     # 生产领料单
@@ -5791,6 +5803,214 @@ async def adjust_stocktaking_differences(
             tenant_id=tenant_id,
             stocktaking_id=stocktaking_id,
             adjusted_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============ 库存调拨 API ============
+
+@router.post("/inventory-transfers", response_model=InventoryTransferResponse, summary="创建库存调拨单")
+async def create_inventory_transfer(
+    transfer: InventoryTransferCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferResponse:
+    """
+    创建库存调拨单
+
+    - **transfer**: 调拨单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的调拨单信息。
+    """
+    try:
+        return await inventory_transfer_service.create_inventory_transfer(
+            tenant_id=tenant_id,
+            transfer_data=transfer,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建调拨单失败: {str(e)}")
+
+
+@router.get("/inventory-transfers", response_model=InventoryTransferListResponse, summary="获取库存调拨单列表")
+async def list_inventory_transfers(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="调拨单号（模糊搜索）"),
+    from_warehouse_id: Optional[int] = Query(None, description="调出仓库ID"),
+    to_warehouse_id: Optional[int] = Query(None, description="调入仓库ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferListResponse:
+    """
+    获取库存调拨单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **code**: 调拨单号（模糊搜索）
+    - **from_warehouse_id**: 调出仓库ID
+    - **to_warehouse_id**: 调入仓库ID
+    - **status**: 状态
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回调拨单列表。
+    """
+    return await inventory_transfer_service.list_inventory_transfers(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        from_warehouse_id=from_warehouse_id,
+        to_warehouse_id=to_warehouse_id,
+        status=status,
+    )
+
+
+@router.get("/inventory-transfers/{transfer_id}", response_model=InventoryTransferWithItemsResponse, summary="获取库存调拨单详情")
+async def get_inventory_transfer(
+    transfer_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferWithItemsResponse:
+    """
+    获取库存调拨单详情（包含明细）
+
+    - **transfer_id**: 调拨单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回调拨单详情（包含明细）。
+    """
+    try:
+        return await inventory_transfer_service.get_inventory_transfer_by_id(
+            tenant_id=tenant_id,
+            transfer_id=transfer_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/inventory-transfers/{transfer_id}", response_model=InventoryTransferResponse, summary="更新库存调拨单")
+async def update_inventory_transfer(
+    transfer_id: int,
+    transfer: InventoryTransferUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferResponse:
+    """
+    更新库存调拨单
+
+    - **transfer_id**: 调拨单ID
+    - **transfer**: 调拨单更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的调拨单信息。
+    """
+    try:
+        return await inventory_transfer_service.update_inventory_transfer(
+            tenant_id=tenant_id,
+            transfer_id=transfer_id,
+            transfer_data=transfer,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/inventory-transfers/{transfer_id}/items", response_model=InventoryTransferItemResponse, summary="添加调拨明细")
+async def create_inventory_transfer_item(
+    transfer_id: int,
+    item: InventoryTransferItemCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferItemResponse:
+    """
+    添加调拨明细
+
+    - **transfer_id**: 调拨单ID
+    - **item**: 调拨明细创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的调拨明细信息。
+    """
+    try:
+        return await inventory_transfer_service.create_inventory_transfer_item(
+            tenant_id=tenant_id,
+            transfer_id=transfer_id,
+            item_data=item,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/inventory-transfers/{transfer_id}/items/{item_id}", response_model=InventoryTransferItemResponse, summary="更新调拨明细")
+async def update_inventory_transfer_item(
+    transfer_id: int,
+    item_id: int,
+    item: InventoryTransferItemUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferItemResponse:
+    """
+    更新调拨明细
+
+    - **transfer_id**: 调拨单ID
+    - **item_id**: 调拨明细ID
+    - **item**: 调拨明细更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的调拨明细信息。
+    """
+    try:
+        return await inventory_transfer_service.update_inventory_transfer_item(
+            tenant_id=tenant_id,
+            item_id=item_id,
+            item_data=item,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/inventory-transfers/{transfer_id}/execute", response_model=InventoryTransferResponse, summary="执行调拨")
+async def execute_inventory_transfer(
+    transfer_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryTransferResponse:
+    """
+    执行调拨（更新库存）
+
+    - **transfer_id**: 调拨单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的调拨单信息。
+    """
+    try:
+        return await inventory_transfer_service.execute_inventory_transfer(
+            tenant_id=tenant_id,
+            transfer_id=transfer_id,
+            executed_by=current_user.id
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
