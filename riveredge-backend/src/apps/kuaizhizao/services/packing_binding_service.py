@@ -19,6 +19,7 @@ from apps.kuaizhizao.models.packing_binding import PackingBinding
 from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingCreateFromReceipt,
+    PackingBindingUpdate,
     PackingBindingResponse,
     PackingBindingListResponse,
 )
@@ -86,6 +87,27 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             # 获取绑定人信息
             user_info = await self.get_user_info(bound_by)
 
+            # 如果未提供箱号，自动生成箱号
+            box_no = binding_data.box_no
+            if not box_no:
+                # 使用编码生成服务生成箱号
+                today = datetime.now().strftime("%Y%m%d")
+                try:
+                    box_no = await self.generate_code(
+                        tenant_id=tenant_id,
+                        code_type="BOX_CODE",
+                        prefix=f"BOX{today}"
+                    )
+                except Exception:
+                    # 如果编码规则不存在，使用简单格式生成
+                    # 获取当前日期和序号
+                    existing_count = await PackingBinding.filter(
+                        tenant_id=tenant_id,
+                        finished_goods_receipt_id=receipt_id,
+                        deleted_at__isnull=True
+                    ).count()
+                    box_no = f"BOX{today}{str(existing_count + 1).zfill(4)}"
+
             # 创建装箱绑定记录
             packing_binding = await PackingBinding.create(
                 tenant_id=tenant_id,
@@ -99,7 +121,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 packing_material_code=packing_material_code,
                 packing_material_name=packing_material_name,
                 packing_quantity=binding_data.packing_quantity,
-                box_no=binding_data.box_no,
+                box_no=box_no,
                 binding_method=binding_data.binding_method,
                 barcode=binding_data.barcode,
                 bound_by=bound_by,
