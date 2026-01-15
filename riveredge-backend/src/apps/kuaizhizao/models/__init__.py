@@ -16,6 +16,7 @@ from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
 from .material_binding import MaterialBinding
 from .stocktaking import Stocktaking, StocktakingItem
+from .inventory_transfer import InventoryTransfer, InventoryTransferItem
 from .inventory_alert import InventoryAlertRule, InventoryAlert
 from .packing_binding import PackingBinding
 from .customer_material_registration import CustomerMaterialRegistration, BarcodeMappingRule
@@ -86,6 +87,8 @@ __all__ = [
     'MaterialBinding',
     'Stocktaking',
     'StocktakingItem',
+    'InventoryTransfer',
+    'InventoryTransferItem',
     'InventoryAlertRule',
     'InventoryAlert',
     'PackingBinding',
