@@ -34,6 +34,7 @@ from apps.kuaizhizao.services.report_service import ReportService
 
 # 初始化服务实例
 reporting_service = ReportingService()
+scrap_record_service = ScrapRecordService()
 material_binding_service = MaterialBindingService()
 stocktaking_service = StocktakingService()
 inventory_analysis_service = InventoryAnalysisService()
@@ -45,6 +46,7 @@ customer_material_registration_service = CustomerMaterialRegistrationService()
 document_timing_service = DocumentTimingService()
 exception_service = ExceptionService()
 report_service = ReportService()
+from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -106,7 +108,8 @@ from apps.kuaizhizao.schemas.reporting_record import (
 )
 from apps.kuaizhizao.schemas.scrap_record import (
     ScrapRecordCreateFromReporting,
-    ScrapRecordResponse
+    ScrapRecordResponse,
+    ScrapRecordListResponse
 )
 from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordCreateFromReporting,
@@ -1212,6 +1215,121 @@ async def create_scrap_record_from_reporting(
         scrap_data=scrap_data,
         created_by=current_user.id
     )
+
+
+@router.post("/scrap/{scrap_id}/approve", response_model=ScrapRecordResponse, summary="审批报废记录")
+async def approve_scrap_record(
+    scrap_id: int = Path(..., description="报废记录ID"),
+    approved: bool = Query(..., description="是否同意（true=同意，false=不同意）"),
+    rejection_reason: Optional[str] = Query(None, description="驳回原因（当approved=false时必填）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ScrapRecordResponse:
+    """
+    审批报废记录
+
+    - **scrap_id**: 报废记录ID
+    - **approved**: 是否同意（true=同意，false=不同意）
+    - **rejection_reason**: 驳回原因（当approved=false时必填）
+    """
+    try:
+        return await scrap_record_service.approve_scrap_record(
+            tenant_id=tenant_id,
+            scrap_id=scrap_id,
+            approved=approved,
+            approved_by=current_user.id,
+            rejection_reason=rejection_reason
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/scrap", response_model=List[ScrapRecordListResponse], summary="查询报废记录列表")
+async def list_scrap_records(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    operation_id: Optional[int] = Query(None, description="工序ID"),
+    status: Optional[str] = Query(None, description="状态（draft/confirmed/cancelled）"),
+    scrap_type: Optional[str] = Query(None, description="报废类型"),
+    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ScrapRecordListResponse]:
+    """
+    查询报废记录列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **work_order_id**: 工单ID（可选）
+    - **operation_id**: 工序ID（可选）
+    - **status**: 状态（可选）
+    - **scrap_type**: 报废类型（可选）
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    """
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+    if date_end:
+        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+
+    return await scrap_record_service.list_scrap_records(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        status=status,
+        scrap_type=scrap_type,
+        date_start=date_start_dt,
+        date_end=date_end_dt
+    )
+
+
+@router.get("/scrap/statistics", summary="获取报废统计分析")
+async def get_scrap_statistics(
+    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    operation_id: Optional[int] = Query(None, description="工序ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    scrap_type: Optional[str] = Query(None, description="报废类型"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取报废统计分析
+
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **work_order_id**: 工单ID（可选）
+    - **operation_id**: 工序ID（可选）
+    - **product_id**: 产品ID（可选）
+    - **scrap_type**: 报废类型（可选）
+    """
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+    if date_end:
+        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+
+    statistics = await scrap_record_service.get_scrap_statistics(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        product_id=product_id,
+        scrap_type=scrap_type
+    )
+
+    return JSONResponse(content=statistics)
 
 
 @router.post("/reporting/{record_id}/defect", response_model=DefectRecordResponse, summary="从报工记录创建不良品记录")
