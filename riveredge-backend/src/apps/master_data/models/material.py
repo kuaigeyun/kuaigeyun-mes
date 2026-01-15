@@ -120,6 +120,7 @@ class Material(BaseModel):
             ("group_id",),
             ("process_route_id",),
             ("material_type",),
+            ("source_type",),  # 物料来源类型索引（核心功能，新增）
         ]
         unique_together = [("tenant_id", "main_code")]
     
@@ -145,6 +146,17 @@ class Material(BaseModel):
     # 变体管理
     variant_managed = fields.BooleanField(default=False, description="是否启用变体管理")
     variant_attributes = fields.JSONField(null=True, description="变体属性（JSON格式，如颜色、尺寸等）")
+    
+    # 物料来源控制（核心功能，新增）
+    source_type = fields.CharField(
+        max_length=20, 
+        null=True, 
+        description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)"
+    )
+    source_config = fields.JSONField(
+        null=True, 
+        description="物料来源相关配置（JSON格式），包含：BOM、工艺路线、供应商、委外供应商、委外工序、变体属性等"
+    )
     
     # 默认值设置（JSON格式存储）
     defaults = fields.JSONField(null=True, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")

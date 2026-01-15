@@ -21,6 +21,12 @@ class DemandComputationItemBase(BaseModel):
     material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
     material_unit: str = Field(..., max_length=20, description="物料单位")
     
+    # 物料来源信息（核心功能，新增）
+    material_source_type: Optional[str] = Field(None, max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
+    material_source_config: Optional[Dict[str, Any]] = Field(None, description="物料来源配置信息（JSON格式）")
+    source_validation_passed: bool = Field(True, description="物料来源验证是否通过")
+    source_validation_errors: Optional[List[str]] = Field(None, description="物料来源验证错误信息列表")
+    
     # 需求信息（通用）
     required_quantity: Decimal = Field(..., ge=0, description="需求数量")
     available_inventory: Decimal = Field(0, ge=0, description="可用库存")

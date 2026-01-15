@@ -25,28 +25,61 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     """
     return """
         -- 添加父工艺路线ID字段（外键）
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN parent_route_id INTEGER;
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'parent_route_id'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN parent_route_id INTEGER;
+                COMMENT ON COLUMN apps_master_data_process_routes.parent_route_id IS '父工艺路线ID（如果此工艺路线是子工艺路线，则指向父工艺路线）';
+            END IF;
+        END $$;
         
         -- 添加父工序UUID字段
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN parent_operation_uuid VARCHAR(100);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'parent_operation_uuid'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN parent_operation_uuid VARCHAR(100);
+                COMMENT ON COLUMN apps_master_data_process_routes.parent_operation_uuid IS '父工序UUID（此子工艺路线所属的父工序）';
+            END IF;
+        END $$;
         
         -- 添加嵌套层级字段（默认值：0）
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN level INTEGER DEFAULT 0 NOT NULL;
-        
-        -- 添加注释
-        COMMENT ON COLUMN apps_master_data_process_routes.parent_route_id IS '父工艺路线ID（如果此工艺路线是子工艺路线，则指向父工艺路线）';
-        COMMENT ON COLUMN apps_master_data_process_routes.parent_operation_uuid IS '父工序UUID（此子工艺路线所属的父工序）';
-        COMMENT ON COLUMN apps_master_data_process_routes.level IS '嵌套层级（0为主工艺路线，1为第一层子工艺路线，最多3层）';
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'level'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN level INTEGER DEFAULT 0 NOT NULL;
+                COMMENT ON COLUMN apps_master_data_process_routes.level IS '嵌套层级（0为主工艺路线，1为第一层子工艺路线，最多3层）';
+            END IF;
+        END $$;
         
         -- 添加外键约束
-        ALTER TABLE apps_master_data_process_routes 
-        ADD CONSTRAINT fk_process_routes_parent_route 
-        FOREIGN KEY (parent_route_id) 
-        REFERENCES apps_master_data_process_routes(id) 
-        ON DELETE SET NULL;
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'fk_process_routes_parent_route'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD CONSTRAINT fk_process_routes_parent_route 
+                FOREIGN KEY (parent_route_id) 
+                REFERENCES apps_master_data_process_routes(id) 
+                ON DELETE SET NULL;
+            END IF;
+        END $$;
         
         -- 添加索引
         CREATE INDEX IF NOT EXISTS idx_process_routes_parent_route_id 

@@ -66,6 +66,11 @@ export interface DemandComputationItem {
   suggested_purchase_order_quantity?: number;
   detail_results?: Record<string, any>;
   notes?: string;
+  // 物料来源信息（核心功能，新增）
+  material_source_type?: 'Make' | 'Buy' | 'Phantom' | 'Outsource' | 'Configure';
+  material_source_config?: Record<string, any>;
+  source_validation_passed?: boolean;
+  source_validation_errors?: string[];
 }
 
 /**
@@ -258,5 +263,73 @@ export async function compareComputations(id1: number, id2: number): Promise<Com
       computation_id1: id1,
       computation_id2: id2,
     },
+  });
+}
+
+/**
+ * 物料来源信息接口定义
+ */
+export interface MaterialSourceInfo {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  source_type?: 'Make' | 'Buy' | 'Phantom' | 'Outsource' | 'Configure';
+  source_config?: Record<string, any>;
+  source_validation_passed: boolean;
+  source_validation_errors?: string[];
+}
+
+/**
+ * 物料来源信息响应接口
+ */
+export interface MaterialSourcesResponse {
+  computation_id: number;
+  computation_code: string;
+  material_sources: MaterialSourceInfo[];
+  total_count: number;
+}
+
+/**
+ * 获取需求计算的物料来源信息
+ */
+export async function getMaterialSources(computationId: number): Promise<MaterialSourcesResponse> {
+  return apiRequest<MaterialSourcesResponse>({
+    url: `/apps/kuaizhizao/demand-computations/${computationId}/material-sources`,
+    method: 'GET',
+  });
+}
+
+/**
+ * 物料来源验证结果接口定义
+ */
+export interface MaterialSourceValidationResult {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  source_type?: string;
+  validation_passed: boolean;
+  errors: string[];
+}
+
+/**
+ * 物料来源验证响应接口
+ */
+export interface MaterialSourceValidationResponse {
+  computation_id: number;
+  computation_code: string;
+  all_passed: boolean;
+  validation_results: MaterialSourceValidationResult[];
+  total_count: number;
+  passed_count: number;
+  failed_count: number;
+}
+
+/**
+ * 验证需求计算的物料来源配置
+ */
+export async function validateMaterialSources(computationId: number): Promise<MaterialSourceValidationResponse> {
+  return apiRequest<MaterialSourceValidationResponse>({
+    url: `/apps/kuaizhizao/demand-computations/${computationId}/validate-material-sources`,
+    method: 'POST',
   });
 }

@@ -28,35 +28,77 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     """
     return """
         -- 添加版本号字段（默认值：1.0）
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN version VARCHAR(20) DEFAULT '1.0' NOT NULL;
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'version'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN version VARCHAR(20) DEFAULT '1.0' NOT NULL;
+                COMMENT ON COLUMN apps_master_data_process_routes.version IS '版本号（如：v1.0、v1.1）';
+            END IF;
+        END $$;
         
         -- 添加版本说明字段
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN version_description TEXT;
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'version_description'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN version_description TEXT;
+                COMMENT ON COLUMN apps_master_data_process_routes.version_description IS '版本说明';
+            END IF;
+        END $$;
         
         -- 添加基于版本字段
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN base_version VARCHAR(20);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'base_version'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN base_version VARCHAR(20);
+                COMMENT ON COLUMN apps_master_data_process_routes.base_version IS '基于版本（从哪个版本创建）';
+            END IF;
+        END $$;
         
         -- 添加生效日期字段
-        ALTER TABLE apps_master_data_process_routes 
-        ADD COLUMN effective_date TIMESTAMP;
-        
-        -- 添加注释
-        COMMENT ON COLUMN apps_master_data_process_routes.version IS '版本号（如：v1.0、v1.1）';
-        COMMENT ON COLUMN apps_master_data_process_routes.version_description IS '版本说明';
-        COMMENT ON COLUMN apps_master_data_process_routes.base_version IS '基于版本（从哪个版本创建）';
-        COMMENT ON COLUMN apps_master_data_process_routes.effective_date IS '生效日期';
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'apps_master_data_process_routes' 
+                AND column_name = 'effective_date'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD COLUMN effective_date TIMESTAMP;
+                COMMENT ON COLUMN apps_master_data_process_routes.effective_date IS '生效日期';
+            END IF;
+        END $$;
         
         -- 删除旧的唯一约束 (tenant_id, code)
         ALTER TABLE apps_master_data_process_routes 
         DROP CONSTRAINT IF EXISTS apps_master_data_process_routes_tenant_id_code_key;
         
         -- 添加新的唯一约束 (tenant_id, code, version)
-        ALTER TABLE apps_master_data_process_routes 
-        ADD CONSTRAINT apps_master_data_process_routes_tenant_id_code_version_key 
-        UNIQUE (tenant_id, code, version);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'apps_master_data_process_routes_tenant_id_code_version_key'
+            ) THEN
+                ALTER TABLE apps_master_data_process_routes 
+                ADD CONSTRAINT apps_master_data_process_routes_tenant_id_code_version_key 
+                UNIQUE (tenant_id, code, version);
+            END IF;
+        END $$;
         
         -- 添加版本索引
         CREATE INDEX IF NOT EXISTS idx_process_routes_version 

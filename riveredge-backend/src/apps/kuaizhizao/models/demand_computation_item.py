@@ -28,6 +28,12 @@ class DemandComputationItem(BaseModel):
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
     material_unit = fields.CharField(max_length=20, description="物料单位")
     
+    # 物料来源信息（核心功能，新增）
+    material_source_type = fields.CharField(max_length=20, null=True, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
+    material_source_config = fields.JSONField(null=True, description="物料来源配置信息（JSON格式）")
+    source_validation_passed = fields.BooleanField(default=True, description="物料来源验证是否通过")
+    source_validation_errors = fields.JSONField(null=True, description="物料来源验证错误信息（JSON格式）")
+    
     # 需求信息（通用）
     required_quantity = fields.DecimalField(max_digits=10, decimal_places=2, description="需求数量")
     available_inventory = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="可用库存")
