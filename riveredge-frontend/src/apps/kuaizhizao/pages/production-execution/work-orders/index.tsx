@@ -11,7 +11,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider } from 'antd';
+import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider, Input } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -225,6 +225,10 @@ const WorkOrdersPage: React.FC = () => {
   const [freezeModalVisible, setFreezeModalVisible] = useState(false);
   const [currentWorkOrderForFreeze, setCurrentWorkOrderForFreeze] = useState<WorkOrder | null>(null);
   const freezeFormRef = useRef<any>(null);
+  
+  // 批量冻结相关状态
+  const [batchFreezeModalVisible, setBatchFreezeModalVisible] = useState(false);
+  const [batchFreezeReason, setBatchFreezeReason] = useState<string>('');
 
   // 批量设置优先级相关状态
   const [batchPriorityModalVisible, setBatchPriorityModalVisible] = useState(false);
@@ -1188,6 +1192,72 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
+   * 处理批量冻结工单
+   */
+  const handleBatchFreeze = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请至少选择一个工单');
+      return;
+    }
+    setBatchFreezeReason('');
+    setBatchFreezeModalVisible(true);
+  };
+
+  /**
+   * 处理提交批量冻结
+   */
+  const handleSubmitBatchFreeze = async (): Promise<void> => {
+    if (!batchFreezeReason.trim()) {
+      messageApi.error('请输入冻结原因');
+      return;
+    }
+    
+    try {
+      await Promise.all(
+        selectedRowKeys.map(key => 
+          workOrderApi.freeze(key.toString(), { freeze_reason: batchFreezeReason })
+        )
+      );
+      messageApi.success(`已批量冻结 ${selectedRowKeys.length} 个工单`);
+      setBatchFreezeModalVisible(false);
+      setBatchFreezeReason('');
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '批量冻结失败');
+    }
+  };
+
+  /**
+   * 处理批量取消工单
+   */
+  const handleBatchCancel = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请至少选择一个工单');
+      return;
+    }
+    
+    Modal.confirm({
+      title: '确认批量取消',
+      content: `确定要取消 ${selectedRowKeys.length} 个工单吗？`,
+      onOk: async () => {
+        try {
+          await Promise.all(
+            selectedRowKeys.map(key => 
+              workOrderApi.update(key.toString(), { status: 'cancelled' })
+            )
+          );
+          messageApi.success(`已批量取消 ${selectedRowKeys.length} 个工单`);
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量取消失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理提交冻结表单
    */
   const handleSubmitFreeze = async (values: any): Promise<void> => {
@@ -1736,6 +1806,21 @@ const WorkOrdersPage: React.FC = () => {
               disabled={selectedRowKeys.length === 0}
             >
               批量下达
+            </Button>,
+            <Button
+              key="batchFreeze"
+              onClick={handleBatchFreeze}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量冻结
+            </Button>,
+            <Button
+              key="batchCancel"
+              danger
+              onClick={handleBatchCancel}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量取消
             </Button>,
             <Button
               key="merge"
@@ -2821,6 +2906,29 @@ const WorkOrdersPage: React.FC = () => {
             )}
           </div>
         </Spin>
+      </Modal>
+
+      {/* 批量冻结Modal */}
+      <Modal
+        title="批量冻结工单"
+        open={batchFreezeModalVisible}
+        onOk={handleSubmitBatchFreeze}
+        onCancel={() => {
+          setBatchFreezeModalVisible(false);
+          setBatchFreezeReason('');
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行冻结
+        </div>
+        <Form.Item label="冻结原因" required>
+          <Input.TextArea
+            rows={4}
+            value={batchFreezeReason}
+            onChange={(e) => setBatchFreezeReason(e.target.value)}
+            placeholder="请输入冻结原因（必填）"
+          />
+        </Form.Item>
       </Modal>
 
       {/* 批量设置优先级Modal */}
