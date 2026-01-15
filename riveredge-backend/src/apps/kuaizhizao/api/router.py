@@ -18,6 +18,7 @@ from .demand_computation import router as demand_computation_router
 from .approval_flow import router as approval_flow_router
 from .state_transition import router as state_transition_router
 from .document_push_pull import router as document_push_pull_router
+from .document_relation import router as document_relation_router
 from .dashboard import router as dashboard_router
 
 # 导入设备管理路由
@@ -48,6 +49,7 @@ router.include_router(demand_computation_router)  # 统一需求计算（新设�
 router.include_router(approval_flow_router)  # 审核流程管理
 router.include_router(state_transition_router)  # 状态流转管理
 router.include_router(document_push_pull_router)  # 单据下推和上拉
+router.include_router(document_relation_router)  # 单据关联关系
 router.include_router(dashboard_router)
 
 # 注册设备管理路由

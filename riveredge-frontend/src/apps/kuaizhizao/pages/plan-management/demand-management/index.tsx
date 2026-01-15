@@ -28,7 +28,9 @@ import {
   Demand,
   DemandItem 
 } from '../../../services/demand';
-import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
+import { getDocumentRelations } from '../../../services/document-relation';
+import { DocumentRelationDisplay } from '../../../../../components/document-relation-display';
+import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -43,7 +45,7 @@ const DemandManagementPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
-  const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+  const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
   
   // 需求类型选择（销售预测/销售订单）
   const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>('sales_forecast');
@@ -988,66 +990,14 @@ const DemandManagementPage: React.FC = () => {
             )}
 
             {/* 单据关联 */}
-            {documentRelations && (
-              <div style={{ marginTop: 24 }}>
-                <h4>单据关联</h4>
-                {documentRelations.upstream_count > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                      上游单据 ({documentRelations.upstream_count})
-                    </div>
-                    <Table
-                      size="small"
-                      columns={[
-                        { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                        { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                        { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                        { 
-                          title: '状态', 
-                          dataIndex: 'status', 
-                          width: 100,
-                          render: (status: string) => <Tag>{status}</Tag>
-                        },
-                      ]}
-                      dataSource={documentRelations.upstream_documents}
-                      pagination={false}
-                      rowKey={(record) => `${record.document_type}-${record.document_id}`}
-                      bordered
-                    />
-                  </div>
-                )}
-                {documentRelations.downstream_count > 0 && (
-                  <div>
-                    <div style={{ marginBottom: 8, fontWeight: 'bold' }}>
-                      下游单据 ({documentRelations.downstream_count})
-                    </div>
-                    <Table
-                      size="small"
-                      columns={[
-                        { title: '单据类型', dataIndex: 'document_type', width: 120 },
-                        { title: '单据编号', dataIndex: 'document_code', width: 150 },
-                        { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                        { 
-                          title: '状态', 
-                          dataIndex: 'status', 
-                          width: 100,
-                          render: (status: string) => <Tag>{status}</Tag>
-                        },
-                      ]}
-                      dataSource={documentRelations.downstream_documents}
-                      pagination={false}
-                      rowKey={(record) => `${record.document_type}-${record.document_id}`}
-                      bordered
-                    />
-                  </div>
-                )}
-                {documentRelations.upstream_count === 0 && documentRelations.downstream_count === 0 && (
-                  <div style={{ color: '#999', textAlign: 'center', padding: '20px' }}>
-                    暂无关联单据
-                  </div>
-                )}
-              </div>
-            )}
+            <DocumentRelationDisplay
+              relations={documentRelations}
+              onDocumentClick={(documentType, documentId) => {
+                // TODO: 根据单据类型跳转到对应的详情页面
+                messageApi.info(`跳转到${documentType}#${documentId}的详情页面`);
+              }}
+              style={{ marginTop: 24 }}
+            />
           </div>
         )}
       </Drawer>
