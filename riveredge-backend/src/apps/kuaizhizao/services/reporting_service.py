@@ -169,6 +169,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 reported_at=reporting_data.reported_at,
                 remarks=reporting_data.remarks,
                 device_info=reporting_data.device_info,
+                sop_parameters=reporting_data.sop_parameters,  # SOP参数数据（核心功能，新增）
             )
 
             # 更新工单工序状态和进度（核心功能，新增）

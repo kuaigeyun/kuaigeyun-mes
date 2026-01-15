@@ -27,6 +27,7 @@ interface ReportingRecord {
   status: 'pending' | 'approved' | 'rejected';
   reportedAt: string;
   remarks?: string;
+  sopParameters?: Record<string, any>; // SOP参数数据（JSON格式）
 }
 
 const ReportingPage: React.FC = () => {
