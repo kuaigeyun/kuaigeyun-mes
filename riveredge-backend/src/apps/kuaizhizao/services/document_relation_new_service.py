@@ -226,3 +226,185 @@ class DocumentRelationNewService:
             raise NotFoundError(f"关联关系不存在: {relation_id}")
         
         return DocumentRelationResponse.model_validate(relation)
+    
+    async def trace_document_chain(
+        self,
+        tenant_id: int,
+        document_type: str,
+        document_id: int,
+        direction: str = "both",
+        max_depth: int = 10
+    ) -> DocumentTraceResponse:
+        """
+        追溯单据关联链（完整追溯）
+        
+        支持向上追溯（查找所有上游单据）和向下追溯（查找所有下游单据），
+        自动避免循环引用。
+        
+        Args:
+            tenant_id: 租户ID
+            document_type: 单据类型
+            document_id: 单据ID
+            direction: 追溯方向（upstream: 向上追溯, downstream: 向下追溯, both: 双向追溯）
+            max_depth: 最大追溯深度（防止无限递归）
+            
+        Returns:
+            DocumentTraceResponse: 完整的追溯链
+        """
+        # 获取根单据信息
+        root_code, root_name = await self._get_document_info(tenant_id, document_type, document_id)
+        
+        # 初始化追溯结果
+        upstream_chain: List[DocumentTraceNode] = []
+        downstream_chain: List[DocumentTraceNode] = []
+        
+        # 用于避免循环引用的集合
+        visited_upstream = set()
+        visited_downstream = set()
+        
+        if direction in ["upstream", "both"]:
+            # 向上追溯
+            upstream_chain = await self._trace_upstream_recursive(
+                tenant_id=tenant_id,
+                document_type=document_type,
+                document_id=document_id,
+                level=0,
+                max_depth=max_depth,
+                visited=visited_upstream
+            )
+        
+        if direction in ["downstream", "both"]:
+            # 向下追溯
+            downstream_chain = await self._trace_downstream_recursive(
+                tenant_id=tenant_id,
+                document_type=document_type,
+                document_id=document_id,
+                level=0,
+                max_depth=max_depth,
+                visited=visited_downstream
+            )
+        
+        return DocumentTraceResponse(
+            document_type=document_type,
+            document_id=document_id,
+            document_code=root_code,
+            document_name=root_name,
+            upstream_chain=upstream_chain,
+            downstream_chain=downstream_chain
+        )
+    
+    async def _trace_upstream_recursive(
+        self,
+        tenant_id: int,
+        document_type: str,
+        document_id: int,
+        level: int,
+        max_depth: int,
+        visited: set
+    ) -> List[DocumentTraceNode]:
+        """递归向上追溯"""
+        if level >= max_depth:
+            return []
+        
+        # 检查是否已访问过（避免循环引用）
+        key = f"{document_type}:{document_id}"
+        if key in visited:
+            return []
+        visited.add(key)
+        
+        # 查询作为目标单据的关联（上游单据是source）
+        upstream_relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type=document_type,
+            target_id=document_id,
+            deleted_at__isnull=True
+        ).all()
+        
+        nodes: List[DocumentTraceNode] = []
+        
+        for relation in upstream_relations:
+            # 递归追溯上游单据的上游
+            children = await self._trace_upstream_recursive(
+                tenant_id=tenant_id,
+                document_type=relation.source_type,
+                document_id=relation.source_id,
+                level=level + 1,
+                max_depth=max_depth,
+                visited=visited
+            )
+            
+            node = DocumentTraceNode(
+                document_type=relation.source_type,
+                document_id=relation.source_id,
+                document_code=relation.source_code,
+                document_name=relation.source_name,
+                level=level + 1,
+                children=children
+            )
+            nodes.append(node)
+        
+        return nodes
+    
+    async def _trace_downstream_recursive(
+        self,
+        tenant_id: int,
+        document_type: str,
+        document_id: int,
+        level: int,
+        max_depth: int,
+        visited: set
+    ) -> List[DocumentTraceNode]:
+        """递归向下追溯"""
+        if level >= max_depth:
+            return []
+        
+        # 检查是否已访问过（避免循环引用）
+        key = f"{document_type}:{document_id}"
+        if key in visited:
+            return []
+        visited.add(key)
+        
+        # 查询作为源单据的关联（下游单据是target）
+        downstream_relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type=document_type,
+            source_id=document_id,
+            deleted_at__isnull=True
+        ).all()
+        
+        nodes: List[DocumentTraceNode] = []
+        
+        for relation in downstream_relations:
+            # 递归追溯下游单据的下游
+            children = await self._trace_downstream_recursive(
+                tenant_id=tenant_id,
+                document_type=relation.target_type,
+                document_id=relation.target_id,
+                level=level + 1,
+                max_depth=max_depth,
+                visited=visited
+            )
+            
+            node = DocumentTraceNode(
+                document_type=relation.target_type,
+                document_id=relation.target_id,
+                document_code=relation.target_code,
+                document_name=relation.target_name,
+                level=level + 1,
+                children=children
+            )
+            nodes.append(node)
+        
+        return nodes
+    
+    async def _get_document_info(
+        self,
+        tenant_id: int,
+        document_type: str,
+        document_id: int
+    ) -> tuple[Optional[str], Optional[str]]:
+        """获取单据基本信息（编码和名称）"""
+        # 这里可以根据不同的单据类型查询对应的模型
+        # 为了简化，暂时返回None，实际使用时可以根据需要实现
+        # 或者从关联关系中获取（如果有的话）
+        return None, None
