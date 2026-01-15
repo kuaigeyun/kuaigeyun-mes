@@ -303,10 +303,13 @@ const ReportingPage: React.FC = () => {
         material_code: values.material_code || '',
         material_name: values.material_name || '',
         batch_no: values.batch_no || '',
-        serial_no: values.serial_no || '',
+        barcode: values.barcode || '',
         quantity: values.quantity,
-        storage_location_id: values.storage_location_id,
-        remarks: values.remarks,
+        warehouse_id: values.warehouse_id || null,
+        location_id: values.location_id || null,
+        location_code: values.location_code || '',
+        binding_method: values.barcode ? 'scan' : 'manual',
+        remarks: values.remarks || '',
       };
 
       if (bindingType === 'feeding') {
@@ -1811,6 +1814,77 @@ const ReportingPage: React.FC = () => {
             />
           </>
         )}
+      </FormModalTemplate>
+
+      {/* 物料绑定Modal */}
+      <FormModalTemplate
+        title={bindingType === 'feeding' ? '添加上料绑定' : '添加下料绑定'}
+        open={materialBindingVisible}
+        onCancel={() => {
+          setMaterialBindingVisible(false);
+          setBindingType(null);
+          materialBindingFormRef.current?.resetFields();
+        }}
+        onFinish={handleSubmitMaterialBinding}
+        formRef={materialBindingFormRef}
+        {...MODAL_CONFIG}
+      >
+        <ProFormSelect
+          name="material_id"
+          label="物料"
+          placeholder="请选择物料"
+          rules={[{ required: true, message: '请选择物料' }]}
+          options={materialList.map((material: any) => ({
+            label: `${material.code} - ${material.name}`,
+            value: material.id,
+            material: material,
+          }))}
+          fieldProps={{
+            onChange: (value: number, option: any) => {
+              if (option?.material) {
+                const material = option.material;
+                materialBindingFormRef.current?.setFieldsValue({
+                  material_code: material.code,
+                  material_name: material.name,
+                });
+              }
+            },
+          }}
+        />
+        <ProFormText
+          name="material_code"
+          label="物料编码"
+          disabled
+        />
+        <ProFormText
+          name="material_name"
+          label="物料名称"
+          disabled
+        />
+        <ProFormDigit
+          name="quantity"
+          label="绑定数量"
+          placeholder="请输入绑定数量"
+          rules={[{ required: true, message: '请输入绑定数量' }]}
+          min={0}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormText
+          name="batch_no"
+          label="批次号（可选）"
+          placeholder="请输入批次号"
+        />
+        <ProFormText
+          name="barcode"
+          label="条码（可选，用于扫码绑定）"
+          placeholder="请输入或扫描条码"
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注（可选）"
+          placeholder="请输入备注"
+          fieldProps={{ rows: 2 }}
+        />
       </FormModalTemplate>
 
       {/* 子工序报工Modal（核心功能，新增） */}

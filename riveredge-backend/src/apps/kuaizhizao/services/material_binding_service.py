@@ -124,9 +124,38 @@ class MaterialBindingService(AppBaseService[MaterialBinding]):
                 remarks=binding_data.remarks,
             )
 
-            # TODO: 更新库存（根据绑定类型进行上料或下料的库存操作）
+            # 更新库存（根据绑定类型进行上料或下料的库存操作）
             # - 上料（feeding）：减少库存
             # - 下料（discharging）：增加库存
+            # TODO: 待库存服务实现后，调用库存服务更新库存
+            # 示例：
+            # from apps.kuaizhizao.services.inventory_service import InventoryService
+            # if binding_data.binding_type == 'feeding':
+            #     await InventoryService.decrease_stock(
+            #         tenant_id=tenant_id,
+            #         material_id=binding_data.material_id,
+            #         warehouse_id=binding_data.warehouse_id,
+            #         quantity=binding_data.quantity,
+            #         source_type='material_binding',
+            #         source_id=material_binding.id
+            #     )
+            # elif binding_data.binding_type == 'discharging':
+            #     await InventoryService.increase_stock(
+            #         tenant_id=tenant_id,
+            #         material_id=binding_data.material_id,
+            #         warehouse_id=binding_data.warehouse_id,
+            #         quantity=binding_data.quantity,
+            #         source_type='material_binding',
+            #         source_id=material_binding.id
+            #     )
+            from loguru import logger
+            logger.info(
+                f"物料绑定记录已创建: {material_binding.id}, "
+                f"类型: {binding_data.binding_type}, "
+                f"物料ID: {binding_data.material_id}, "
+                f"数量: {binding_data.quantity} "
+                f"（库存更新功能待库存服务实现后补充）"
+            )
 
             return MaterialBindingResponse.model_validate(material_binding)
 
