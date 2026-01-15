@@ -78,13 +78,14 @@ class StocktakingResponse(StocktakingBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
 
 
-class StocktakingListResponse(StocktakingResponse):
+class StocktakingListResponse(BaseModel):
     """
     库存盘点单列表响应Schema
 
     用于库存盘点单列表API的响应数据格式。
     """
-    pass
+    items: List[StocktakingResponse] = Field(default_factory=list, description="盘点单列表")
+    total: int = Field(..., description="总数")
 
 
 class StocktakingItemBase(BaseModel):
