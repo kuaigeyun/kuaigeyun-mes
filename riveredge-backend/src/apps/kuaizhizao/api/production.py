@@ -35,6 +35,7 @@ from apps.kuaizhizao.services.report_service import ReportService
 # 初始化服务实例
 reporting_service = ReportingService()
 scrap_record_service = ScrapRecordService()
+defect_record_service = DefectRecordService()
 material_binding_service = MaterialBindingService()
 stocktaking_service = StocktakingService()
 inventory_analysis_service = InventoryAnalysisService()
@@ -46,7 +47,7 @@ customer_material_registration_service = CustomerMaterialRegistrationService()
 document_timing_service = DocumentTimingService()
 exception_service = ExceptionService()
 report_service = ReportService()
-from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
+from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
@@ -113,7 +114,8 @@ from apps.kuaizhizao.schemas.scrap_record import (
 )
 from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordCreateFromReporting,
-    DefectRecordResponse
+    DefectRecordResponse,
+    DefectRecordListResponse
 )
 from apps.kuaizhizao.schemas.material_binding import (
     MaterialBindingCreateFromReporting,
@@ -1354,6 +1356,127 @@ async def create_defect_record_from_reporting(
         defect_data=defect_data,
         created_by=current_user.id
     )
+
+
+@router.post("/defect/{defect_id}/approve-acceptance", response_model=DefectRecordResponse, summary="审批不良品让步接收")
+async def approve_defect_acceptance(
+    defect_id: int = Path(..., description="不良品记录ID"),
+    approved: bool = Query(..., description="是否同意（true=同意，false=不同意）"),
+    rejection_reason: Optional[str] = Query(None, description="驳回原因（当approved=false时必填）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    """
+    审批不良品让步接收
+
+    - **defect_id**: 不良品记录ID
+    - **approved**: 是否同意（true=同意，false=不同意）
+    - **rejection_reason**: 驳回原因（当approved=false时必填）
+    """
+    try:
+        return await defect_record_service.approve_defect_acceptance(
+            tenant_id=tenant_id,
+            defect_id=defect_id,
+            approved=approved,
+            approved_by=current_user.id,
+            rejection_reason=rejection_reason
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/defect", response_model=List[DefectRecordListResponse], summary="查询不良品记录列表")
+async def list_defect_records(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    operation_id: Optional[int] = Query(None, description="工序ID"),
+    status: Optional[str] = Query(None, description="状态（draft/processed/cancelled）"),
+    defect_type: Optional[str] = Query(None, description="不良品类型"),
+    disposition: Optional[str] = Query(None, description="处理方式"),
+    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DefectRecordListResponse]:
+    """
+    查询不良品记录列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **work_order_id**: 工单ID（可选）
+    - **operation_id**: 工序ID（可选）
+    - **status**: 状态（可选）
+    - **defect_type**: 不良品类型（可选）
+    - **disposition**: 处理方式（可选）
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    """
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+    if date_end:
+        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+
+    return await defect_record_service.list_defect_records(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        status=status,
+        defect_type=defect_type,
+        disposition=disposition,
+        date_start=date_start_dt,
+        date_end=date_end_dt
+    )
+
+
+@router.get("/defect/statistics", summary="获取不良品统计分析")
+async def get_defect_statistics(
+    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    operation_id: Optional[int] = Query(None, description="工序ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    defect_type: Optional[str] = Query(None, description="不良品类型"),
+    disposition: Optional[str] = Query(None, description="处理方式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取不良品统计分析
+
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **work_order_id**: 工单ID（可选）
+    - **operation_id**: 工序ID（可选）
+    - **product_id**: 产品ID（可选）
+    - **defect_type**: 不良品类型（可选）
+    - **disposition**: 处理方式（可选）
+    """
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+    if date_end:
+        date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+
+    statistics = await defect_record_service.get_defect_statistics(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        product_id=product_id,
+        defect_type=defect_type,
+        disposition=disposition
+    )
+
+    return JSONResponse(content=statistics)
 
 
 @router.get("/reporting/statistics", summary="获取报工统计信息")
