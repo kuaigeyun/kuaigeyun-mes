@@ -2309,6 +2309,100 @@ async def get_inventory_alert_statistics(
     return JSONResponse(content=statistics)
 
 
+# ============ 库存报表分析 API ============
+
+@router.get("/inventory-analysis", summary="获取库存分析数据")
+async def get_inventory_analysis(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取库存分析数据
+
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **warehouse_id**: 仓库ID（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存分析数据（周转率、ABC分析、呆滞料分析）。
+    """
+    from datetime import datetime
+
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="开始日期格式错误，应为YYYY-MM-DD")
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="结束日期格式错误，应为YYYY-MM-DD")
+
+    analysis_data = await inventory_analysis_service.get_inventory_analysis(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        warehouse_id=warehouse_id,
+    )
+
+    return JSONResponse(content=analysis_data)
+
+
+@router.get("/inventory-analysis/cost", summary="获取库存成本分析")
+async def get_inventory_cost_analysis(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取库存成本分析
+
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **warehouse_id**: 仓库ID（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存成本分析数据（总成本、平均成本、成本趋势、按类别/仓库分组）。
+    """
+    from datetime import datetime
+
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="开始日期格式错误，应为YYYY-MM-DD")
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="结束日期格式错误，应为YYYY-MM-DD")
+
+    cost_analysis = await inventory_analysis_service.get_inventory_cost_analysis(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        warehouse_id=warehouse_id,
+    )
+
+    return JSONResponse(content=cost_analysis)
+
+
 @router.delete("/packing-binding/{binding_id}", summary="删除装箱绑定记录（旧接口，保留兼容）")
 async def delete_packing_binding_old(
     binding_id: int,
