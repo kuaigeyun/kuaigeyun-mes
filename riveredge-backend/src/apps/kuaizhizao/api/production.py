@@ -2173,6 +2173,84 @@ async def list_customer_material_registrations(
     )
 
 
+@router.get("/inventory/customer-material-registration/{registration_id}", response_model=CustomerMaterialRegistrationResponse, summary="获取客户来料登记详情")
+async def get_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    获取客户来料登记详情
+
+    - **registration_id**: 登记记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回客户来料登记详情。
+    """
+    try:
+        return await customer_material_registration_service.get_registration_by_id(
+            tenant_id=tenant_id,
+            registration_id=registration_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/inventory/customer-material-registration/{registration_id}/process", response_model=CustomerMaterialRegistrationResponse, summary="处理客户来料登记（入库）")
+async def process_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    处理客户来料登记（入库）
+
+    - **registration_id**: 登记记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    将客户来料登记状态更新为已处理，并执行入库操作。
+    """
+    try:
+        return await customer_material_registration_service.process_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            processed_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/inventory/customer-material-registration/{registration_id}/cancel", response_model=CustomerMaterialRegistrationResponse, summary="取消客户来料登记")
+async def cancel_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    取消客户来料登记
+
+    - **registration_id**: 登记记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    将客户来料登记状态更新为已取消。
+    """
+    try:
+        return await customer_material_registration_service.cancel_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            cancelled_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/inventory/customer-material-registration/mapping-rules", response_model=BarcodeMappingRuleResponse, summary="创建条码映射规则")
 async def create_barcode_mapping_rule(
     rule_data: BarcodeMappingRuleCreate,
