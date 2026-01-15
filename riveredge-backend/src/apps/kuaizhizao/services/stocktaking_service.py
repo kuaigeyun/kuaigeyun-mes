@@ -136,16 +136,259 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
         return response
 
+    async def update_stocktaking(
+        self,
+        tenant_id: int,
+        stocktaking_id: int,
+        stocktaking_data: StocktakingUpdate,
+        updated_by: int
+    ) -> StocktakingResponse:
+        """
+        更新库存盘点单
+
+        Args:
+            tenant_id: 组织ID
+            stocktaking_id: 盘点单ID
+            stocktaking_data: 盘点单更新数据
+            updated_by: 更新人ID
+
+        Returns:
+            StocktakingResponse: 更新后的盘点单信息
+
+        Raises:
+            NotFoundError: 盘点单不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取盘点单
+            stocktaking = await Stocktaking.get_or_none(
+                id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not stocktaking:
+                raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
+
+            # 检查盘点单状态
+            if stocktaking.status not in ['draft']:
+                raise ValidationError(f"盘点单状态为{stocktaking.status}，不能修改")
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 更新盘点单字段
+            if stocktaking_data.warehouse_id is not None:
+                stocktaking.warehouse_id = stocktaking_data.warehouse_id
+            if stocktaking_data.warehouse_name is not None:
+                stocktaking.warehouse_name = stocktaking_data.warehouse_name
+            if stocktaking_data.stocktaking_date is not None:
+                stocktaking.stocktaking_date = stocktaking_data.stocktaking_date
+            if stocktaking_data.stocktaking_type is not None:
+                stocktaking.stocktaking_type = stocktaking_data.stocktaking_type
+            if stocktaking_data.remarks is not None:
+                stocktaking.remarks = stocktaking_data.remarks
+
+            stocktaking.updated_by = updated_by
+            stocktaking.updated_by_name = user_info["name"]
+
+            await stocktaking.save()
+
+            return StocktakingResponse.model_validate(stocktaking)
+
+    async def start_stocktaking(
+        self,
+        tenant_id: int,
+        stocktaking_id: int,
+        started_by: int
+    ) -> StocktakingResponse:
+        """
+        开始盘点（将状态从draft改为in_progress）
+
+        Args:
+            tenant_id: 组织ID
+            stocktaking_id: 盘点单ID
+            started_by: 开始人ID
+
+        Returns:
+            StocktakingResponse: 更新后的盘点单信息
+
+        Raises:
+            NotFoundError: 盘点单不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取盘点单
+            stocktaking = await Stocktaking.get_or_none(
+                id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not stocktaking:
+                raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
+
+            if stocktaking.status != 'draft':
+                raise ValidationError(f"盘点单状态为{stocktaking.status}，不能开始盘点")
+
+            # 获取开始人信息
+            user_info = await self.get_user_info(started_by)
+
+            # 更新状态
+            stocktaking.status = 'in_progress'
+            stocktaking.updated_by = started_by
+            stocktaking.updated_by_name = user_info["name"]
+
+            await stocktaking.save()
+
+            return StocktakingResponse.model_validate(stocktaking)
+
+    async def create_stocktaking_item(
+        self,
+        tenant_id: int,
+        stocktaking_id: int,
+        item_data: StocktakingItemCreate,
+        created_by: int
+    ) -> StocktakingItemResponse:
+        """
+        创建盘点明细
+
+        Args:
+            tenant_id: 组织ID
+            stocktaking_id: 盘点单ID
+            item_data: 盘点明细创建数据
+            created_by: 创建人ID
+
+        Returns:
+            StocktakingItemResponse: 创建的盘点明细信息
+
+        Raises:
+            NotFoundError: 盘点单不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 检查盘点单是否存在
+            stocktaking = await Stocktaking.get_or_none(
+                id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not stocktaking:
+                raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
+
+            # 检查盘点单状态
+            if stocktaking.status not in ['draft', 'in_progress']:
+                raise ValidationError(f"盘点单状态为{stocktaking.status}，不能添加明细")
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 创建盘点明细
+            item = await StocktakingItem.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                stocktaking_id=stocktaking_id,
+                material_id=item_data.material_id,
+                material_code=item_data.material_code,
+                material_name=item_data.material_name,
+                warehouse_id=item_data.warehouse_id,
+                location_id=item_data.location_id,
+                location_code=item_data.location_code,
+                batch_no=item_data.batch_no,
+                book_quantity=item_data.book_quantity,
+                actual_quantity=item_data.actual_quantity,
+                difference_quantity=Decimal("0"),
+                unit_price=item_data.unit_price,
+                difference_amount=Decimal("0"),
+                status="pending",
+                remarks=item_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            # 更新盘点单的物料总数
+            stocktaking.total_items = await StocktakingItem.filter(
+                stocktaking_id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            ).count()
+
+            await stocktaking.save()
+
+            return StocktakingItemResponse.model_validate(item)
+
+    async def update_stocktaking_item(
+        self,
+        tenant_id: int,
+        item_id: int,
+        item_data: StocktakingItemUpdate,
+        updated_by: int
+    ) -> StocktakingItemResponse:
+        """
+        更新盘点明细（主要用于更新实际数量）
+
+        Args:
+            tenant_id: 组织ID
+            item_id: 盘点明细ID
+            item_data: 盘点明细更新数据
+            updated_by: 更新人ID
+
+        Returns:
+            StocktakingItemResponse: 更新后的盘点明细信息
+
+        Raises:
+            NotFoundError: 盘点明细不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取盘点明细
+            item = await StocktakingItem.get_or_none(
+                id=item_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not item:
+                raise NotFoundError(f"盘点明细不存在: {item_id}")
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 更新字段
+            if item_data.actual_quantity is not None:
+                item.actual_quantity = item_data.actual_quantity
+                # 重新计算差异数量
+                item.difference_quantity = item.actual_quantity - item.book_quantity
+                # 重新计算差异金额
+                item.difference_amount = item.difference_quantity * item.unit_price
+            if item_data.remarks is not None:
+                item.remarks = item_data.remarks
+
+            item.updated_by = updated_by
+            item.updated_by_name = user_info["name"]
+
+            await item.save()
+
+            # 更新盘点单统计信息
+            await self._update_stocktaking_statistics(tenant_id, item.stocktaking_id)
+
+            return StocktakingItemResponse.model_validate(item)
+
     async def list_stocktakings(
         self,
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
+        code: Optional[str] = None,
         warehouse_id: Optional[int] = None,
         status: Optional[str] = None,
+        stocktaking_type: Optional[str] = None,
         stocktaking_date_start: Optional[datetime] = None,
         stocktaking_date_end: Optional[datetime] = None,
-    ) -> List[StocktakingListResponse]:
+    ) -> StocktakingListResponse:
         """
         获取库存盘点单列表
 
@@ -166,18 +409,31 @@ class StocktakingService(AppBaseService[Stocktaking]):
             deleted_at__isnull=True
         )
 
+        if code:
+            query = query.filter(code__icontains=code)
         if warehouse_id:
             query = query.filter(warehouse_id=warehouse_id)
         if status:
             query = query.filter(status=status)
+        if stocktaking_type:
+            query = query.filter(stocktaking_type=stocktaking_type)
         if stocktaking_date_start:
             query = query.filter(stocktaking_date__gte=stocktaking_date_start)
         if stocktaking_date_end:
             query = query.filter(stocktaking_date__lte=stocktaking_date_end)
 
+        # 获取总数
+        total = await query.count()
+
+        # 获取列表
         stocktakings = await query.order_by('-created_at').offset(skip).limit(limit)
 
-        return [StocktakingListResponse.model_validate(st) for st in stocktakings]
+        # 返回分页响应
+        from typing import List
+        return StocktakingListResponse(
+            items=[StocktakingResponse.model_validate(st) for st in stocktakings],
+            total=total
+        )
 
     async def add_stocktaking_items(
         self,

@@ -7,7 +7,7 @@
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
+from fastapi import APIRouter, Depends, Query, status, Path, HTTPException, Body
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
 
@@ -5526,3 +5526,273 @@ async def get_quality_report(
         date_end=date_end_dt,
         material_id=material_id,
     )
+
+
+# ============ 库存盘点 API ============
+
+@router.post("/stocktakings", response_model=StocktakingResponse, summary="创建库存盘点单")
+async def create_stocktaking(
+    stocktaking: StocktakingCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingResponse:
+    """
+    创建库存盘点单
+
+    - **stocktaking**: 盘点单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的盘点单信息。
+    """
+    try:
+        return await stocktaking_service.create_stocktaking(
+            tenant_id=tenant_id,
+            stocktaking_data=stocktaking,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建盘点单失败: {str(e)}")
+
+
+@router.get("/stocktakings", response_model=StocktakingListResponse, summary="获取库存盘点单列表")
+async def list_stocktakings(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="盘点单号（模糊搜索）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    stocktaking_type: Optional[str] = Query(None, description="盘点类型"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingListResponse:
+    """
+    获取库存盘点单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **code**: 盘点单号（模糊搜索）
+    - **warehouse_id**: 仓库ID
+    - **status**: 状态
+    - **stocktaking_type**: 盘点类型
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回盘点单列表。
+    """
+    return await stocktaking_service.list_stocktakings(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        warehouse_id=warehouse_id,
+        status=status,
+        stocktaking_type=stocktaking_type,
+    )
+
+
+@router.get("/stocktakings/{stocktaking_id}", response_model=StocktakingWithItemsResponse, summary="获取库存盘点单详情")
+async def get_stocktaking(
+    stocktaking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingWithItemsResponse:
+    """
+    获取库存盘点单详情（包含明细）
+
+    - **stocktaking_id**: 盘点单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回盘点单详情（包含明细）。
+    """
+    try:
+        return await stocktaking_service.get_stocktaking_by_id(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/stocktakings/{stocktaking_id}", response_model=StocktakingResponse, summary="更新库存盘点单")
+async def update_stocktaking(
+    stocktaking_id: int,
+    stocktaking: StocktakingUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingResponse:
+    """
+    更新库存盘点单
+
+    - **stocktaking_id**: 盘点单ID
+    - **stocktaking**: 盘点单更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的盘点单信息。
+    """
+    try:
+        return await stocktaking_service.update_stocktaking(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            stocktaking_data=stocktaking,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stocktakings/{stocktaking_id}/start", response_model=StocktakingResponse, summary="开始盘点")
+async def start_stocktaking(
+    stocktaking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingResponse:
+    """
+    开始盘点（将状态从draft改为in_progress）
+
+    - **stocktaking_id**: 盘点单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的盘点单信息。
+    """
+    try:
+        return await stocktaking_service.start_stocktaking(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            started_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stocktakings/{stocktaking_id}/items", response_model=StocktakingItemResponse, summary="添加盘点明细")
+async def create_stocktaking_item(
+    stocktaking_id: int,
+    item: StocktakingItemCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingItemResponse:
+    """
+    添加盘点明细
+
+    - **stocktaking_id**: 盘点单ID
+    - **item**: 盘点明细创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的盘点明细信息。
+    """
+    try:
+        return await stocktaking_service.create_stocktaking_item(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            item_data=item,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/stocktakings/{stocktaking_id}/items/{item_id}", response_model=StocktakingItemResponse, summary="更新盘点明细")
+async def update_stocktaking_item(
+    stocktaking_id: int,
+    item_id: int,
+    item: StocktakingItemUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingItemResponse:
+    """
+    更新盘点明细（主要用于更新实际数量）
+
+    - **stocktaking_id**: 盘点单ID
+    - **item_id**: 盘点明细ID
+    - **item**: 盘点明细更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的盘点明细信息。
+    """
+    try:
+        return await stocktaking_service.update_stocktaking_item(
+            tenant_id=tenant_id,
+            item_id=item_id,
+            item_data=item,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stocktakings/{stocktaking_id}/items/{item_id}/execute", response_model=StocktakingItemResponse, summary="执行盘点明细")
+async def execute_stocktaking_item(
+    stocktaking_id: int,
+    item_id: int,
+    actual_quantity: Decimal = Body(..., description="实际数量"),
+    remarks: Optional[str] = Body(None, description="备注"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingItemResponse:
+    """
+    执行盘点明细（记录实际数量）
+
+    - **stocktaking_id**: 盘点单ID
+    - **item_id**: 盘点明细ID
+    - **actual_quantity**: 实际数量
+    - **remarks**: 备注
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的盘点明细信息。
+    """
+    try:
+        return await stocktaking_service.execute_stocktaking_item(
+            tenant_id=tenant_id,
+            item_id=item_id,
+            actual_quantity=actual_quantity,
+            counted_by=current_user.id,
+            remarks=remarks
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/stocktakings/{stocktaking_id}/adjust", response_model=StocktakingResponse, summary="处理盘点差异")
+async def adjust_stocktaking_differences(
+    stocktaking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingResponse:
+    """
+    处理盘点差异（调整库存）
+
+    - **stocktaking_id**: 盘点单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的盘点单信息。
+    """
+    try:
+        return await stocktaking_service.adjust_stocktaking_differences(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            adjusted_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
