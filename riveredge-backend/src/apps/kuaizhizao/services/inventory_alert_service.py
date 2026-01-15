@@ -132,6 +132,123 @@ class InventoryAlertRuleService(AppBaseService[InventoryAlertRule]):
 
         return [InventoryAlertRuleListResponse.model_validate(rule) for rule in rules]
 
+    async def get_alert_rule_by_id(
+        self,
+        tenant_id: int,
+        rule_id: int
+    ) -> InventoryAlertRuleResponse:
+        """
+        根据ID获取库存预警规则详情
+
+        Args:
+            tenant_id: 组织ID
+            rule_id: 预警规则ID
+
+        Returns:
+            InventoryAlertRuleResponse: 预警规则详情
+
+        Raises:
+            NotFoundError: 预警规则不存在
+        """
+        rule = await InventoryAlertRule.get_or_none(
+            id=rule_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if not rule:
+            raise NotFoundError(f"预警规则不存在: {rule_id}")
+
+        return InventoryAlertRuleResponse.model_validate(rule)
+
+    async def update_alert_rule(
+        self,
+        tenant_id: int,
+        rule_id: int,
+        rule_data: InventoryAlertRuleUpdate,
+        updated_by: int
+    ) -> InventoryAlertRuleResponse:
+        """
+        更新库存预警规则
+
+        Args:
+            tenant_id: 组织ID
+            rule_id: 预警规则ID
+            rule_data: 预警规则更新数据
+            updated_by: 更新人ID
+
+        Returns:
+            InventoryAlertRuleResponse: 更新后的预警规则信息
+
+        Raises:
+            NotFoundError: 预警规则不存在
+            ValidationError: 数据验证失败
+        """
+        async with in_transaction():
+            # 获取预警规则
+            rule = await InventoryAlertRule.get_or_none(
+                id=rule_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not rule:
+                raise NotFoundError(f"预警规则不存在: {rule_id}")
+
+            # 获取更新人信息
+            user_info = await self.get_user_info(updated_by)
+
+            # 更新字段
+            if rule_data.name is not None:
+                rule.name = rule_data.name
+            if rule_data.threshold_type is not None:
+                rule.threshold_type = rule_data.threshold_type
+            if rule_data.threshold_value is not None:
+                rule.threshold_value = rule_data.threshold_value
+            if rule_data.is_enabled is not None:
+                rule.is_enabled = rule_data.is_enabled
+            if rule_data.notify_users is not None:
+                rule.notify_users = rule_data.notify_users
+            if rule_data.notify_roles is not None:
+                rule.notify_roles = rule_data.notify_roles
+            if rule_data.remarks is not None:
+                rule.remarks = rule_data.remarks
+
+            rule.updated_by = updated_by
+            rule.updated_by_name = user_info["name"]
+
+            await rule.save()
+
+            return InventoryAlertRuleResponse.model_validate(rule)
+
+    async def delete_alert_rule(
+        self,
+        tenant_id: int,
+        rule_id: int
+    ) -> None:
+        """
+        删除库存预警规则（软删除）
+
+        Args:
+            tenant_id: 组织ID
+            rule_id: 预警规则ID
+
+        Raises:
+            NotFoundError: 预警规则不存在
+        """
+        rule = await InventoryAlertRule.get_or_none(
+            id=rule_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if not rule:
+            raise NotFoundError(f"预警规则不存在: {rule_id}")
+
+        # 软删除
+        rule.deleted_at = datetime.now()
+        await rule.save()
+
 
 class InventoryAlertService(AppBaseService[InventoryAlert]):
     """
@@ -189,6 +306,113 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         alerts = await query.order_by('-triggered_at').offset(skip).limit(limit)
 
         return [InventoryAlertListResponse.model_validate(alert) for alert in alerts]
+
+    async def get_alert_by_id(
+        self,
+        tenant_id: int,
+        alert_id: int
+    ) -> InventoryAlertResponse:
+        """
+        根据ID获取库存预警记录详情
+
+        Args:
+            tenant_id: 组织ID
+            alert_id: 预警记录ID
+
+        Returns:
+            InventoryAlertResponse: 预警记录详情
+
+        Raises:
+            NotFoundError: 预警记录不存在
+        """
+        alert = await InventoryAlert.get_or_none(
+            id=alert_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if not alert:
+            raise NotFoundError(f"预警记录不存在: {alert_id}")
+
+        return InventoryAlertResponse.model_validate(alert)
+
+    async def get_alert_statistics(
+        self,
+        tenant_id: int
+    ) -> Dict[str, Any]:
+        """
+        获取库存预警统计信息
+
+        Args:
+            tenant_id: 组织ID
+
+        Returns:
+            Dict[str, Any]: 预警统计信息（按类型、级别、状态统计）
+        """
+        # 统计待处理预警数量
+        pending_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        # 统计按类型分组的预警数量
+        low_stock_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            alert_type="low_stock",
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        high_stock_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            alert_type="high_stock",
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        expired_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            alert_type="expired",
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        # 统计按级别分组的预警数量
+        critical_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            alert_level="critical",
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        warning_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            alert_level="warning",
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        info_count = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            alert_level="info",
+            status="pending",
+            deleted_at__isnull=True
+        ).count()
+
+        return {
+            "pending_count": pending_count,
+            "by_type": {
+                "low_stock": low_stock_count,
+                "high_stock": high_stock_count,
+                "expired": expired_count,
+            },
+            "by_level": {
+                "critical": critical_count,
+                "warning": warning_count,
+                "info": info_count,
+            },
+        }
 
     async def handle_alert(
         self,
