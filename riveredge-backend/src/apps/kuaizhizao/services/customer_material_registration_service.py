@@ -357,3 +357,118 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
 
         return [CustomerMaterialRegistrationListResponse.model_validate(reg) for reg in registrations]
 
+    async def get_registration_by_id(
+        self,
+        tenant_id: int,
+        registration_id: int
+    ) -> CustomerMaterialRegistrationResponse:
+        """
+        根据ID获取客户来料登记详情
+
+        Args:
+            tenant_id: 组织ID
+            registration_id: 登记记录ID
+
+        Returns:
+            CustomerMaterialRegistrationResponse: 登记记录详情
+
+        Raises:
+            NotFoundError: 登记记录不存在
+        """
+        registration = await CustomerMaterialRegistration.get_or_none(
+            id=registration_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+
+        if not registration:
+            raise NotFoundError(f"客户来料登记记录不存在: {registration_id}")
+
+        return CustomerMaterialRegistrationResponse.model_validate(registration)
+
+    async def process_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        processed_by: int
+    ) -> CustomerMaterialRegistrationResponse:
+        """
+        处理客户来料登记（入库）
+
+        Args:
+            tenant_id: 组织ID
+            registration_id: 登记记录ID
+            processed_by: 处理人ID
+
+        Returns:
+            CustomerMaterialRegistrationResponse: 处理后的登记记录信息
+
+        Raises:
+            NotFoundError: 登记记录不存在
+            BusinessLogicError: 登记记录状态不允许处理
+        """
+        async with in_transaction():
+            # 获取登记记录
+            registration = await CustomerMaterialRegistration.get_or_none(
+                id=registration_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not registration:
+                raise NotFoundError(f"客户来料登记记录不存在: {registration_id}")
+
+            if registration.status != "pending":
+                raise BusinessLogicError(f"登记记录状态不允许处理: {registration.status}")
+
+            # 更新状态
+            registration.status = "processed"
+            registration.processed_at = datetime.now()
+
+            await registration.save()
+
+            # TODO: 调用库存服务更新库存（待库存服务实现后补充）
+
+            return CustomerMaterialRegistrationResponse.model_validate(registration)
+
+    async def cancel_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        cancelled_by: int
+    ) -> CustomerMaterialRegistrationResponse:
+        """
+        取消客户来料登记
+
+        Args:
+            tenant_id: 组织ID
+            registration_id: 登记记录ID
+            cancelled_by: 取消人ID
+
+        Returns:
+            CustomerMaterialRegistrationResponse: 取消后的登记记录信息
+
+        Raises:
+            NotFoundError: 登记记录不存在
+            BusinessLogicError: 登记记录状态不允许取消
+        """
+        async with in_transaction():
+            # 获取登记记录
+            registration = await CustomerMaterialRegistration.get_or_none(
+                id=registration_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not registration:
+                raise NotFoundError(f"客户来料登记记录不存在: {registration_id}")
+
+            if registration.status != "pending":
+                raise BusinessLogicError(f"登记记录状态不允许取消: {registration.status}")
+
+            # 更新状态
+            registration.status = "cancelled"
+
+            await registration.save()
+
+            return CustomerMaterialRegistrationResponse.model_validate(registration)

@@ -216,3 +216,80 @@ class InventoryAnalysisService:
             ],
         }
 
+    async def get_inventory_cost_analysis(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        warehouse_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        获取库存成本分析
+
+        Args:
+            tenant_id: 组织ID
+            date_start: 开始日期（可选）
+            date_end: 结束日期（可选）
+            warehouse_id: 仓库ID（可选）
+
+        Returns:
+            Dict[str, Any]: 库存成本分析数据
+        """
+        # TODO: 从库存服务获取库存成本数据
+        # 计算总库存成本、平均库存成本、成本趋势等
+
+        # 简化处理，返回示例数据
+        if not date_start:
+            date_start = datetime.now() - timedelta(days=30)
+        if not date_end:
+            date_end = datetime.now()
+
+        return {
+            'period': {
+                'start': date_start.isoformat(),
+                'end': date_end.isoformat(),
+            },
+            'summary': {
+                'total_cost': 1000000.00,  # 总库存成本
+                'average_cost': 50000.00,  # 平均库存成本
+                'cost_trend': 'increasing',  # 成本趋势（increasing/decreasing/stable）
+            },
+            'by_category': [
+                {
+                    'category': '原材料',
+                    'cost': 600000.00,
+                    'percentage': 60.0,
+                },
+                {
+                    'category': '半成品',
+                    'cost': 300000.00,
+                    'percentage': 30.0,
+                },
+                {
+                    'category': '成品',
+                    'cost': 100000.00,
+                    'percentage': 10.0,
+                },
+            ],
+            'by_warehouse': [
+                {
+                    'warehouse_id': 1,
+                    'warehouse_name': '主仓库',
+                    'cost': 800000.00,
+                    'percentage': 80.0,
+                },
+                {
+                    'warehouse_id': 2,
+                    'warehouse_name': '辅仓库',
+                    'cost': 200000.00,
+                    'percentage': 20.0,
+                },
+            ],
+            'trend_data': [
+                {
+                    'date': (date_start + timedelta(days=i)).strftime('%Y-%m-%d'),
+                    'cost': 950000.00 + i * 1000,
+                }
+                for i in range((date_end - date_start).days + 1)
+            ],
+        }
