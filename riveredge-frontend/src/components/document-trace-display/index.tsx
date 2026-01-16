@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Tree, Button, Space, Tag, Empty, Spin } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
-import { traceDocumentChain, type DocumentTraceData, type TraceNode } from '../../../apps/kuaizhizao/services/document-relation';
+import { traceDocumentChain, type DocumentTraceData, type TraceNode } from '../../apps/kuaizhizao/services/document-relation';
 
 /**
  * 单据类型显示名称映射

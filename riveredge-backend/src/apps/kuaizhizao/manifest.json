@@ -47,22 +47,10 @@
                         "sort_order": 1
                     },
                     {
-                        "title": "MRP运算",
-                        "path": "/apps/kuaizhizao/plan-management/mrp-computation",
-                        "permission": "kuaizhizao:mrp:compute",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "LRP运算",
-                        "path": "/apps/kuaizhizao/plan-management/lrp-computation",
-                        "permission": "kuaizhizao:lrp:compute",
-                        "sort_order": 2.5
-                    },
-                    {
                         "title": "生产计划",
                         "path": "/apps/kuaizhizao/plan-management/production-plans",
                         "permission": "kuaizhizao:production-plan:view",
-                        "sort_order": 3
+                        "sort_order": 2
                     },
                     {
                         "title": "排程管理",
