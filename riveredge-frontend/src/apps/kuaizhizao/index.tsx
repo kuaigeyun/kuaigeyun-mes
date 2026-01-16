@@ -40,6 +40,13 @@ import FinishedGoodsInspectionPage from './pages/quality-management/finished-goo
 // 成本管理页面
 import CostRulesPage from './pages/cost-management/cost-rules';
 import CostCalculationsPage from './pages/cost-management/cost-calculations';
+import ProductionCostPage from './pages/cost-management/production-cost';
+import OutsourceCostPage from './pages/cost-management/outsource-cost';
+import PurchaseCostPage from './pages/cost-management/purchase-cost';
+import QualityCostPage from './pages/cost-management/quality-cost';
+import CostComparisonPage from './pages/cost-management/cost-comparison';
+import CostOptimizationPage from './pages/cost-management/cost-optimization';
+import CostReportPage from './pages/cost-management/cost-report';
 
 // 设备管理页面
 import EquipmentPage from './pages/equipment-management/equipment';
@@ -118,6 +125,13 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
       <Route path="cost-management/cost-calculations" element={<CostCalculationsPage />} />
+      <Route path="cost-management/production-cost" element={<ProductionCostPage />} />
+      <Route path="cost-management/outsource-cost" element={<OutsourceCostPage />} />
+      <Route path="cost-management/purchase-cost" element={<PurchaseCostPage />} />
+      <Route path="cost-management/quality-cost" element={<QualityCostPage />} />
+      <Route path="cost-management/cost-comparison" element={<CostComparisonPage />} />
+      <Route path="cost-management/cost-optimization" element={<CostOptimizationPage />} />
+      <Route path="cost-management/cost-report" element={<CostReportPage />} />
 
       {/* 设备管理路由 */}
       <Route path="equipment-management/equipment" element={<EquipmentPage />} />

@@ -75,3 +75,75 @@ export const costCalculationApi = {
   },
 };
 
+// 生产成本核算相关接口
+export const productionCostApi = {
+  // 核算生产成本
+  calculate: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/production-cost/calculate', { method: 'POST', data });
+  },
+};
+
+// 委外成本核算相关接口
+export const outsourceCostApi = {
+  // 核算委外成本
+  calculate: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-cost/calculate', { method: 'POST', data });
+  },
+};
+
+// 采购成本核算相关接口
+export const purchaseCostApi = {
+  // 核算采购成本
+  calculate: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/purchase-cost/calculate', { method: 'POST', data });
+  },
+};
+
+// 质量成本核算相关接口
+export const qualityCostApi = {
+  // 核算质量成本
+  calculate: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/quality-cost/calculate', { method: 'POST', data });
+  },
+};
+
+// 成本对比相关接口
+export const costComparisonApi = {
+  // 对比标准成本和实际成本
+  compare: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-comparison/compare', { method: 'POST', data });
+  },
+  // 按物料来源类型对比成本
+  compareBySourceType: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-comparison/compare-by-source-type', { method: 'POST', data });
+  },
+};
+
+// 成本优化建议相关接口
+export const costOptimizationApi = {
+  // 生成单个物料的成本优化建议
+  getSuggestions: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-optimization/suggestions', { method: 'POST', data });
+  },
+  // 批量生成成本优化建议
+  getBatchSuggestions: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-optimization/suggestions/batch', { method: 'POST', data });
+  },
+};
+
+// 成本报表分析相关接口
+export const costReportApi = {
+  // 分析成本趋势
+  analyzeTrend: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-report/trend', { method: 'POST', data });
+  },
+  // 分析成本结构
+  analyzeStructure: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-report/structure', { method: 'POST', data });
+  },
+  // 生成成本报表
+  generate: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/cost-report/generate', { method: 'POST', data });
+  },
+};
+

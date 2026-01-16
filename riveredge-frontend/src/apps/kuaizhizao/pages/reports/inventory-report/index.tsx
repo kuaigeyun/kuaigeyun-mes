@@ -16,7 +16,6 @@ import { Line, Bar, Pie, Column } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
 import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData } from '../../../services/reports';
 import dayjs, { Dayjs } from 'dayjs';
-import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData } from '../../../services/reports';
 
 // 库存报表接口定义
 interface InventoryReportItem {

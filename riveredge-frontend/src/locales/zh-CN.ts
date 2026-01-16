@@ -218,8 +218,6 @@ export default {
   // 快格轻制造应用菜单翻译
   'app.kuaizhizao.menu.plan-management': '计划管理',
   'app.kuaizhizao.menu.plan-management.demand-management': '需求管理',
-  'app.kuaizhizao.menu.plan-management.mrp-computation': 'MRP运算',
-  'app.kuaizhizao.menu.plan-management.lrp-computation': 'LRP运算',
   'app.kuaizhizao.menu.plan-management.production-plans': '生产计划',
   'app.kuaizhizao.menu.plan-management.scheduling': '计划排程',
   'app.kuaizhizao.menu.production-execution': '生产执行',

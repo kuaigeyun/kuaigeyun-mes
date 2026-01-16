@@ -14,7 +14,7 @@ import { FlowView, FlowStoreProvider, useNodesState, useEdgesState } from '@ant-
 import type { Node, Edge, NodeProps } from '@ant-design/pro-flow';
 import { ReactFlowProvider, Handle, Position } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { traceDocumentChain, type DocumentTraceData, type TraceNode } from '../../../apps/kuaizhizao/services/document-relation';
+import { traceDocumentChain, type DocumentTraceData, type TraceNode } from '../../apps/kuaizhizao/services/document-relation';
 
 /**
  * 单据类型显示名称映射

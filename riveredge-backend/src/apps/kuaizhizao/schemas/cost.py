@@ -287,3 +287,333 @@ class CostOptimizationResponse(BaseModel):
     potential_savings: Decimal = Field(..., description="潜在节省金额")
     priority: str = Field(..., description="优先级（高、中、低）")
 
+
+# ========== 生产成本核算 Schema ==========
+
+class ProductionCostCalculationRequest(BaseModel):
+    """
+    生产成本核算请求Schema
+    
+    用于请求核算生产成本的请求数据。
+    """
+    material_id: int = Field(..., description="物料ID")
+    quantity: Decimal = Field(..., gt=0, description="数量")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="变体属性（配置件时必须提供）")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class ProductionCostCalculationResponse(BaseModel):
+    """
+    生产成本核算响应Schema
+    
+    用于返回生产成本核算结果。
+    """
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    source_type: str = Field(..., description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
+    variant_attributes: Optional[Dict[str, Any]] = Field(None, description="变体属性（配置件时提供）")
+    quantity: Decimal = Field(..., description="数量")
+    material_cost: Decimal = Field(..., description="材料成本")
+    labor_cost: Decimal = Field(..., description="加工成本（工序成本）")
+    manufacturing_cost: Decimal = Field(..., description="制造费用")
+    total_cost: Decimal = Field(..., description="总成本")
+    unit_cost: Decimal = Field(..., description="单位成本")
+    cost_details: Dict[str, Any] = Field(..., description="成本明细（JSON格式）")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+# ========== 委外成本核算 Schema ==========
+
+class OutsourceCostCalculationRequest(BaseModel):
+    """
+    委外成本核算请求Schema
+    
+    用于请求核算委外成本的请求数据。
+    """
+    material_id: Optional[int] = Field(None, description="物料ID（委外件物料ID，用于计算标准成本）")
+    outsource_work_order_id: Optional[int] = Field(None, description="委外工单ID（用于计算实际成本）")
+    quantity: Optional[Decimal] = Field(None, gt=0, description="数量（计算标准成本时必须提供）")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class OutsourceCostCalculationResponse(BaseModel):
+    """
+    委外成本核算响应Schema
+    
+    用于返回委外成本核算结果。
+    """
+    outsource_work_order_id: Optional[int] = Field(None, description="委外工单ID（实际成本时提供）")
+    outsource_work_order_code: Optional[str] = Field(None, description="委外工单编码（实际成本时提供）")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    supplier_id: Optional[int] = Field(None, description="供应商ID（实际成本时提供）")
+    supplier_code: Optional[str] = Field(None, description="供应商编码（实际成本时提供）")
+    supplier_name: Optional[str] = Field(None, description="供应商名称（实际成本时提供）")
+    source_type: str = Field("Outsource", description="物料来源类型（Outsource）")
+    quantity: Decimal = Field(..., description="数量")
+    material_cost: Decimal = Field(..., description="材料成本（提供给委外供应商的原材料）")
+    processing_cost: Decimal = Field(..., description="委外加工费用（委外数量 × 委外单价）")
+    total_cost: Decimal = Field(..., description="总成本")
+    unit_cost: Decimal = Field(..., description="单位成本")
+    cost_details: Dict[str, Any] = Field(..., description="成本明细（JSON格式）")
+    calculation_type: str = Field(..., description="核算类型（标准成本/实际成本）")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+# ========== 采购成本核算 Schema ==========
+
+class PurchaseCostCalculationRequest(BaseModel):
+    """
+    采购成本核算请求Schema
+    
+    用于请求核算采购成本的请求数据。
+    """
+    material_id: Optional[int] = Field(None, description="物料ID（采购件物料ID，用于计算标准成本）")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID（用于计算实际成本，整单）")
+    purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID（用于计算实际成本，单个明细）")
+    quantity: Optional[Decimal] = Field(None, gt=0, description="数量（计算标准成本时必须提供）")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class PurchaseCostCalculationResponse(BaseModel):
+    """
+    采购成本核算响应Schema
+    
+    用于返回采购成本核算结果。
+    """
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID（实际成本时提供）")
+    purchase_order_code: Optional[str] = Field(None, description="采购订单编码（实际成本时提供）")
+    purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID（实际成本时提供）")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    supplier_id: Optional[int] = Field(None, description="供应商ID（实际成本时提供）")
+    supplier_name: Optional[str] = Field(None, description="供应商名称（实际成本时提供）")
+    source_type: str = Field("Buy", description="物料来源类型（Buy）")
+    quantity: Decimal = Field(..., description="数量")
+    purchase_price: Decimal = Field(..., description="采购价格")
+    purchase_fee: Decimal = Field(..., description="采购费用（税费、运输费等）")
+    total_cost: Decimal = Field(..., description="总成本")
+    unit_cost: Decimal = Field(..., description="单位成本")
+    cost_details: Dict[str, Any] = Field(..., description="成本明细（JSON格式）")
+    calculation_type: str = Field(..., description="核算类型（标准成本/实际成本/实际成本（整单））")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+# ========== 质量成本核算 Schema ==========
+
+class QualityCostCalculationRequest(BaseModel):
+    """
+    质量成本核算请求Schema
+    
+    用于请求核算质量成本的请求数据。
+    """
+    start_date: Optional[date] = Field(None, description="开始日期（可选，用于统计时间范围）")
+    end_date: Optional[date] = Field(None, description="结束日期（可选，用于统计时间范围）")
+    material_id: Optional[int] = Field(None, description="物料ID（可选，用于核算特定物料的质量成本）")
+    work_order_id: Optional[int] = Field(None, description="工单ID（可选，用于核算特定工单的质量成本）")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class QualityCostCalculationResponse(BaseModel):
+    """
+    质量成本核算响应Schema
+    
+    用于返回质量成本核算结果。
+    """
+    prevention_cost: Decimal = Field(..., description="预防成本")
+    appraisal_cost: Decimal = Field(..., description="鉴定成本")
+    internal_failure_cost: Decimal = Field(..., description="内部损失成本")
+    external_failure_cost: Decimal = Field(..., description="外部损失成本")
+    total_quality_cost: Decimal = Field(..., description="总质量成本")
+    cost_details: Dict[str, Any] = Field(..., description="成本明细（JSON格式）")
+    calculation_type: str = Field("质量成本", description="核算类型")
+    calculation_date: date = Field(..., description="核算日期")
+    start_date: Optional[date] = Field(None, description="开始日期")
+    end_date: Optional[date] = Field(None, description="结束日期")
+    material_id: Optional[int] = Field(None, description="物料ID")
+    work_order_id: Optional[int] = Field(None, description="工单ID")
+
+
+# ========== 成本对比 Schema ==========
+
+class CostComparisonRequest(BaseModel):
+    """
+    成本对比请求Schema
+    
+    用于请求对比标准成本和实际成本的请求数据。
+    """
+    material_id: int = Field(..., description="物料ID（必须提供，用于确定物料来源类型和计算标准成本）")
+    work_order_id: Optional[int] = Field(None, description="工单ID（自制件实际成本时提供）")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID（采购件实际成本时提供，整单）")
+    purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID（采购件实际成本时提供，单个明细）")
+    outsource_work_order_id: Optional[int] = Field(None, description="委外工单ID（委外件实际成本时提供）")
+    quantity: Decimal = Field(..., gt=0, description="数量（计算标准成本时必须提供）")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class CostComparisonResponse(BaseModel):
+    """
+    成本对比响应Schema
+    
+    用于返回标准成本和实际成本对比结果。
+    """
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    source_type: str = Field(..., description="物料来源类型（Make/Buy/Outsource/Phantom/Configure）")
+    quantity: Decimal = Field(..., description="数量")
+    standard_cost: Dict[str, Any] = Field(..., description="标准成本")
+    actual_cost: Dict[str, Any] = Field(..., description="实际成本")
+    cost_variance: Dict[str, Any] = Field(..., description="成本差异")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+class CostComparisonBySourceTypeRequest(BaseModel):
+    """
+    按物料来源类型对比成本请求Schema
+    
+    用于请求批量对比多个物料的标准成本和实际成本，按物料来源类型分组统计。
+    """
+    material_ids: List[int] = Field(..., min_items=1, description="物料ID列表")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class CostComparisonBySourceTypeResponse(BaseModel):
+    """
+    按物料来源类型对比成本响应Schema
+    
+    用于返回按物料来源类型分组的成本对比结果。
+    """
+    comparisons_by_source: Dict[str, List[Dict[str, Any]]] = Field(..., description="按物料来源类型分组的成本对比")
+    source_type_summary: Dict[str, Dict[str, Any]] = Field(..., description="按物料来源类型的汇总统计")
+    total_summary: Dict[str, Any] = Field(..., description="总汇总统计")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+# ========== 成本优化建议 Schema ==========
+
+class CostOptimizationRequest(BaseModel):
+    """
+    成本优化建议请求Schema
+    
+    用于请求生成成本优化建议的请求数据。
+    """
+    material_id: Optional[int] = Field(None, description="物料ID（单个物料分析）")
+    material_ids: Optional[List[int]] = Field(None, min_items=1, description="物料ID列表（批量分析）")
+    quantity: Decimal = Field(Decimal(1), gt=0, description="数量（用于计算成本，默认1）")
+    calculation_date: Optional[date] = Field(None, description="核算日期（可选，默认为当前日期）")
+
+
+class CostOptimizationResponse(BaseModel):
+    """
+    成本优化建议响应Schema
+    
+    用于返回成本优化建议结果。
+    """
+    material_id: Optional[int] = Field(None, description="物料ID（单个物料分析时提供）")
+    material_code: Optional[str] = Field(None, description="物料编码（单个物料分析时提供）")
+    material_name: Optional[str] = Field(None, description="物料名称（单个物料分析时提供）")
+    current_source_type: Optional[str] = Field(None, description="当前来源类型（单个物料分析时提供）")
+    current_cost: Optional[Dict[str, Any]] = Field(None, description="当前成本（单个物料分析时提供）")
+    alternative_costs: Optional[Dict[str, Dict[str, Any]]] = Field(None, description="其他来源类型的成本（单个物料分析时提供）")
+    suggestions: List[Dict[str, Any]] = Field(..., description="优化建议列表")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+class CostOptimizationBatchResponse(BaseModel):
+    """
+    批量成本优化建议响应Schema
+    
+    用于返回批量物料的成本优化建议结果。
+    """
+    materials_count: int = Field(..., description="物料数量")
+    suggestions: List[CostOptimizationResponse] = Field(..., description="各物料的优化建议列表")
+    total_potential_savings: Decimal = Field(..., description="总潜在节约成本")
+    calculation_date: date = Field(..., description="核算日期")
+
+
+# ========== 成本报表分析 Schema ==========
+
+class CostTrendAnalysisRequest(BaseModel):
+    """
+    成本趋势分析请求Schema
+    
+    用于请求成本趋势分析的请求数据。
+    """
+    start_date: date = Field(..., description="开始日期")
+    end_date: date = Field(..., description="结束日期")
+    material_id: Optional[int] = Field(None, description="物料ID（可选，用于分析特定物料）")
+    source_type: Optional[str] = Field(None, description="物料来源类型（可选，用于按来源类型筛选）")
+    group_by: str = Field("month", description="分组方式（month/week/day，默认month）")
+
+
+class CostTrendAnalysisResponse(BaseModel):
+    """
+    成本趋势分析响应Schema
+    
+    用于返回成本趋势分析结果。
+    """
+    start_date: date = Field(..., description="开始日期")
+    end_date: date = Field(..., description="结束日期")
+    group_by: str = Field(..., description="分组方式")
+    trend_data: List[Dict[str, Any]] = Field(..., description="趋势数据列表")
+    summary: Dict[str, Any] = Field(..., description="汇总统计")
+
+
+class CostStructureAnalysisRequest(BaseModel):
+    """
+    成本结构分析请求Schema
+    
+    用于请求成本结构分析的请求数据。
+    """
+    start_date: Optional[date] = Field(None, description="开始日期（可选）")
+    end_date: Optional[date] = Field(None, description="结束日期（可选）")
+    material_id: Optional[int] = Field(None, description="物料ID（可选，用于分析特定物料）")
+    source_type: Optional[str] = Field(None, description="物料来源类型（可选，用于按来源类型筛选）")
+
+
+class CostStructureAnalysisResponse(BaseModel):
+    """
+    成本结构分析响应Schema
+    
+    用于返回成本结构分析结果。
+    """
+    total_cost: float = Field(..., description="总成本")
+    cost_composition: Dict[str, float] = Field(..., description="成本构成（材料成本、人工成本、制造费用）")
+    cost_rates: Dict[str, float] = Field(..., description="成本占比（材料成本率、人工成本率、制造费用率）")
+    by_source_type: Dict[str, Dict[str, Any]] = Field(..., description="按物料来源类型的成本结构")
+    summary: Dict[str, Any] = Field(..., description="汇总统计")
+
+
+class CostReportRequest(BaseModel):
+    """
+    成本报表请求Schema
+    
+    用于请求生成成本报表的请求数据。
+    """
+    report_type: str = Field(..., description="报表类型（trend/structure/comprehensive）")
+    start_date: Optional[date] = Field(None, description="开始日期（可选，默认最近30天）")
+    end_date: Optional[date] = Field(None, description="结束日期（可选，默认今天）")
+    material_id: Optional[int] = Field(None, description="物料ID（可选）")
+    source_type: Optional[str] = Field(None, description="物料来源类型（可选）")
+    group_by: str = Field("month", description="分组方式（month/week/day，默认month）")
+
+
+class CostReportResponse(BaseModel):
+    """
+    成本报表响应Schema
+    
+    用于返回成本报表数据。
+    """
+    report_type: str = Field(..., description="报表类型")
+    start_date: date = Field(..., description="开始日期")
+    end_date: date = Field(..., description="结束日期")
+    material_id: Optional[int] = Field(None, description="物料ID")
+    source_type: Optional[str] = Field(None, description="物料来源类型")
+    generated_at: str = Field(..., description="生成时间")
+    trend_analysis: Optional[CostTrendAnalysisResponse] = Field(None, description="成本趋势分析（trend或comprehensive时提供）")
+    structure_analysis: Optional[CostStructureAnalysisResponse] = Field(None, description="成本结构分析（structure或comprehensive时提供）")
+

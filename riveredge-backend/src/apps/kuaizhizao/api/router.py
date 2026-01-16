@@ -33,6 +33,13 @@ from .maintenance_reminders.maintenance_reminders import router as maintenance_r
 # 导入成本核算路由
 from .cost.cost_rules import router as cost_rules_router
 from .cost.cost_calculations import router as cost_calculations_router
+from .cost.production_cost import router as production_cost_router
+from .cost.outsource_cost import router as outsource_cost_router
+from .cost.purchase_cost import router as purchase_cost_router
+from .cost.quality_cost import router as quality_cost_router
+from .cost.cost_comparison import router as cost_comparison_router
+from .cost.cost_optimization import router as cost_optimization_router
+from .cost.cost_report import router as cost_report_router
 
 # 导入期初数据导入路由
 from .initial_data import router as initial_data_router
@@ -67,6 +74,13 @@ router.include_router(maintenance_reminders_router)
 # 注册成本核算路由
 router.include_router(cost_rules_router)
 router.include_router(cost_calculations_router)
+router.include_router(production_cost_router)
+router.include_router(outsource_cost_router)
+router.include_router(purchase_cost_router)
+router.include_router(quality_cost_router)
+router.include_router(cost_comparison_router)
+router.include_router(cost_optimization_router)
+router.include_router(cost_report_router)
 
 # 注册期初数据导入路由
 router.include_router(initial_data_router)

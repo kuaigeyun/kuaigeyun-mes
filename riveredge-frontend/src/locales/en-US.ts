@@ -218,8 +218,6 @@ export default {
   // Fast Light Manufacturing application menu translations
   'app.kuaizhizao.menu.plan-management': 'Plan Management',
   'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Management',
-  'app.kuaizhizao.menu.plan-management.mrp-computation': 'MRP Computation',
-  'app.kuaizhizao.menu.plan-management.lrp-computation': 'LRP Computation',
   'app.kuaizhizao.menu.plan-management.production-plans': 'Production Plans',
   'app.kuaizhizao.menu.plan-management.scheduling': 'Scheduling',
   'app.kuaizhizao.menu.production-execution': 'Production Execution',
