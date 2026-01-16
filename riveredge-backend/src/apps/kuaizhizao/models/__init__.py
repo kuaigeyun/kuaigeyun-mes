@@ -11,6 +11,7 @@ from .rework_order import ReworkOrder
 from .cost_rule import CostRule
 from .cost_calculation import CostCalculation
 from .outsource_order import OutsourceOrder
+from .outsource_work_order import OutsourceWorkOrder, OutsourceMaterialIssue, OutsourceMaterialReceipt
 from .work_order_operation import WorkOrderOperation
 from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
@@ -24,6 +25,7 @@ from .document_node_timing import DocumentNodeTiming
 from .material_shortage_exception import MaterialShortageException
 from .delivery_delay_exception import DeliveryDelayException
 from .quality_exception import QualityException
+from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHistory
 
 # 仓储管理模块
 from .production_picking import ProductionPicking
@@ -72,6 +74,8 @@ from .equipment import Equipment
 from .maintenance_plan import MaintenancePlan, MaintenanceExecution
 from .equipment_fault import EquipmentFault, EquipmentRepair
 from .mold import Mold, MoldUsage
+from .equipment_status_monitor import EquipmentStatusMonitor, EquipmentStatusHistory
+from .maintenance_reminder import MaintenanceReminder
 
 __all__ = [
     # 生产执行模块
@@ -81,6 +85,9 @@ __all__ = [
     'CostRule',
     'CostCalculation',
     'OutsourceOrder',
+    'OutsourceWorkOrder',
+    'OutsourceMaterialIssue',
+    'OutsourceMaterialReceipt',
     'WorkOrderOperation',
     'ScrapRecord',
     'DefectRecord',
@@ -98,6 +105,8 @@ __all__ = [
     'MaterialShortageException',
     'DeliveryDelayException',
     'QualityException',
+    'ExceptionProcessRecord',
+    'ExceptionProcessHistory',
 
     # 仓储管理模块
     'ProductionPicking',
@@ -151,4 +160,7 @@ __all__ = [
     'EquipmentRepair',
     'Mold',
     'MoldUsage',
+    'EquipmentStatusMonitor',
+    'EquipmentStatusHistory',
+    'MaintenanceReminder',
 ]

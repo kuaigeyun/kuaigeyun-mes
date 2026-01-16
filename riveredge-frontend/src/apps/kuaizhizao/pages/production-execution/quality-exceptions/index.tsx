@@ -7,13 +7,14 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, message } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
+import { App, Tag, Button, Space, message, Divider } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
+import dayjs from 'dayjs';
 
 /**
  * 质量异常接口定义
@@ -51,6 +52,10 @@ const QualityExceptionsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<QualityException | null>(null);
+  const [handleModalVisible, setHandleModalVisible] = useState(false);
+  const [currentAction, setCurrentAction] = useState<string>('');
+  const [userList, setUserList] = useState<any[]>([]);
+  const handleFormRef = useRef<any>(null);
 
   /**
    * 处理查看详情
@@ -60,19 +65,84 @@ const QualityExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
+  // 加载用户列表（用于选择责任人）
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const users = await apiRequest('/core/users', { method: 'GET', params: { is_active: true } });
+        setUserList(Array.isArray(users) ? users : (users?.data || users?.items || []));
+      } catch (error) {
+        console.error('获取用户列表失败:', error);
+      }
+    };
+    loadUsers();
+  }, []);
+
+  /**
+   * 打开处理异常Modal
+   */
+  const openHandleModal = (record: QualityException, action: string) => {
+    setCurrentRecord(record);
+    setCurrentAction(action);
+    setHandleModalVisible(true);
+    setTimeout(() => {
+      handleFormRef.current?.resetFields();
+    }, 100);
+  };
+
   /**
    * 处理质量异常
    */
-  const handleException = async (record: QualityException, action: string) => {
+  const handleException = async (values: any) => {
     try {
-      await apiRequest(`/apps/kuaizhizao/exceptions/quality/${record.id}/handle`, {
+      if (!currentRecord?.id) {
+        throw new Error('异常记录不存在');
+      }
+
+      const params: any = {
+        action: currentAction,
+      };
+
+      // 根据不同的操作，传递不同的参数
+      if (currentAction === 'investigate' && values.rootCause) {
+        params.root_cause = values.rootCause;
+      } else if (currentAction === 'correct') {
+        if (values.correctiveAction) {
+          params.corrective_action = values.correctiveAction;
+        }
+        if (values.preventiveAction) {
+          params.preventive_action = values.preventiveAction;
+        }
+        if (values.responsiblePersonId) {
+          params.responsible_person_id = values.responsiblePersonId;
+          const selectedUser = userList.find(u => u.id === values.responsiblePersonId);
+          if (selectedUser) {
+            params.responsible_person_name = selectedUser.name || selectedUser.username;
+          }
+        }
+        if (values.plannedCompletionDate) {
+          params.planned_completion_date = values.plannedCompletionDate.format('YYYY-MM-DD HH:mm:ss');
+        }
+      } else if (currentAction === 'close' && values.verificationResult) {
+        params.verification_result = values.verificationResult;
+      }
+
+      if (values.remarks) {
+        params.remarks = values.remarks;
+      }
+
+      await apiRequest(`/apps/kuaizhizao/exceptions/quality/${currentRecord.id}/handle`, {
         method: 'POST',
-        params: { action },
+        params,
       });
       messageApi.success('处理成功');
+      setHandleModalVisible(false);
+      setCurrentRecord(null);
+      setCurrentAction('');
       actionRef.current?.reload();
-    } catch (error) {
-      messageApi.error('处理失败');
+    } catch (error: any) {
+      messageApi.error(error.message || '处理失败');
+      throw error;
     }
   };
 
@@ -169,7 +239,7 @@ const QualityExceptionsPage: React.FC = () => {
               type="link"
               size="small"
               icon={<SearchOutlined />}
-              onClick={() => handleException(record, 'investigate')}
+              onClick={() => openHandleModal(record, 'investigate')}
             >
               调查
             </Button>
@@ -179,7 +249,7 @@ const QualityExceptionsPage: React.FC = () => {
               type="link"
               size="small"
               icon={<ToolOutlined />}
-              onClick={() => handleException(record, 'correct')}
+              onClick={() => openHandleModal(record, 'correct')}
             >
               纠正
             </Button>
@@ -189,9 +259,20 @@ const QualityExceptionsPage: React.FC = () => {
               type="link"
               size="small"
               icon={<CheckCircleOutlined />}
-              onClick={() => handleException(record, 'close')}
+              onClick={() => openHandleModal(record, 'close')}
             >
               关闭
+            </Button>
+          )}
+          {(record.status === 'pending' || record.status === 'investigating' || record.status === 'correcting') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<CloseCircleOutlined />}
+              onClick={() => openHandleModal(record, 'cancel')}
+              danger
+            >
+              取消
             </Button>
           )}
         </Space>
@@ -239,7 +320,10 @@ const QualityExceptionsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`质量异常详情 - ${currentRecord?.work_order_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRecord(null);
+        }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={[]}
         customContent={
@@ -312,6 +396,118 @@ const QualityExceptionsPage: React.FC = () => {
           ) : null
         }
       />
+
+      {/* 处理异常 Modal */}
+      <FormModalTemplate
+        title={
+          currentAction === 'investigate' ? '处理质量异常 - 调查' :
+          currentAction === 'correct' ? '处理质量异常 - 纠正' :
+          currentAction === 'close' ? '处理质量异常 - 关闭' :
+          currentAction === 'cancel' ? '处理质量异常 - 取消' :
+          '处理质量异常'
+        }
+        open={handleModalVisible}
+        onClose={() => {
+          setHandleModalVisible(false);
+          setCurrentRecord(null);
+          setCurrentAction('');
+          handleFormRef.current?.resetFields();
+        }}
+        onFinish={handleException}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={handleFormRef}
+      >
+        {currentRecord && (
+          <>
+            <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+              <p><strong>异常类型：</strong>
+                {currentRecord.exception_type === 'inspection_failure' ? '检验不合格' :
+                 currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
+                 currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
+              </p>
+              <p><strong>工单编码：</strong>{currentRecord.work_order_code || '-'}</p>
+              <p><strong>物料名称：</strong>{currentRecord.material_name || '-'}</p>
+              <p><strong>问题描述：</strong>{currentRecord.problem_description}</p>
+            </div>
+            {currentAction === 'investigate' && (
+              <>
+                <Divider>调查信息</Divider>
+                <ProFormTextArea
+                  name="rootCause"
+                  label="根本原因"
+                  placeholder="请输入根本原因（可选）"
+                  fieldProps={{
+                    rows: 4,
+                  }}
+                />
+              </>
+            )}
+            {currentAction === 'correct' && (
+              <>
+                <Divider>纠正措施</Divider>
+                <ProFormTextArea
+                  name="correctiveAction"
+                  label="纠正措施"
+                  placeholder="请输入纠正措施（可选）"
+                  fieldProps={{
+                    rows: 4,
+                  }}
+                />
+                <ProFormTextArea
+                  name="preventiveAction"
+                  label="预防措施"
+                  placeholder="请输入预防措施（可选）"
+                  fieldProps={{
+                    rows: 4,
+                  }}
+                />
+                <ProFormSelect
+                  name="responsiblePersonId"
+                  label="责任人"
+                  placeholder="请选择责任人（可选）"
+                  options={userList.map(user => ({
+                    label: `${user.name || user.username} (${user.email || ''})`,
+                    value: user.id,
+                  }))}
+                  fieldProps={{
+                    showSearch: true,
+                    filterOption: (input: string, option: any) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                  }}
+                />
+                <ProFormDatePicker
+                  name="plannedCompletionDate"
+                  label="计划完成日期"
+                  placeholder="请选择计划完成日期（可选）"
+                  width="md"
+                />
+              </>
+            )}
+            {currentAction === 'close' && (
+              <>
+                <Divider>验证信息</Divider>
+                <ProFormTextArea
+                  name="verificationResult"
+                  label="验证结果"
+                  placeholder="请输入验证结果（可选）"
+                  fieldProps={{
+                    rows: 4,
+                  }}
+                />
+              </>
+            )}
+            <Divider>备注</Divider>
+            <ProFormTextArea
+              name="remarks"
+              label="备注"
+              placeholder="请输入备注（可选）"
+              fieldProps={{
+                rows: 4,
+              }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

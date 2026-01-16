@@ -19,6 +19,9 @@ from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
+from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
+from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
+from apps.kuaizhizao.services.outsource_material_receipt_service import OutsourceMaterialReceiptService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 from apps.kuaizhizao.services.inventory_transfer_service import InventoryTransferService
@@ -31,10 +34,15 @@ from apps.kuaizhizao.services.customer_material_registration_service import (
 )
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.kuaizhizao.services.exception_service import ExceptionService
+from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
 from apps.kuaizhizao.services.report_service import ReportService
 
 # 初始化服务实例
+work_order_service = WorkOrderService()
 reporting_service = ReportingService()
+outsource_work_order_service = OutsourceWorkOrderService()
+outsource_material_issue_service = OutsourceMaterialIssueService()
+outsource_material_receipt_service = OutsourceMaterialReceiptService()
 scrap_record_service = ScrapRecordService()
 defect_record_service = DefectRecordService()
 material_binding_service = MaterialBindingService()
@@ -48,6 +56,7 @@ barcode_mapping_rule_service = BarcodeMappingRuleService()
 customer_material_registration_service = CustomerMaterialRegistrationService()
 document_timing_service = DocumentTimingService()
 exception_service = ExceptionService()
+exception_process_service = ExceptionProcessService()
 report_service = ReportService()
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.warehouse_service import (
@@ -95,6 +104,18 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderResponse,
     ReworkOrderListResponse,
     ReworkOrderFromWorkOrderRequest,
+)
+from apps.kuaizhizao.schemas.outsource_work_order import (
+    OutsourceWorkOrderCreate,
+    OutsourceWorkOrderUpdate,
+    OutsourceWorkOrderResponse,
+    OutsourceWorkOrderListResponse,
+    OutsourceMaterialIssueCreate,
+    OutsourceMaterialIssueUpdate,
+    OutsourceMaterialIssueResponse,
+    OutsourceMaterialReceiptCreate,
+    OutsourceMaterialReceiptUpdate,
+    OutsourceMaterialReceiptResponse,
 )
 from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderCreate,
@@ -205,6 +226,16 @@ from apps.kuaizhizao.schemas.delivery_delay_exception import (
 from apps.kuaizhizao.schemas.quality_exception import (
     QualityExceptionResponse,
     QualityExceptionListResponse,
+)
+from apps.kuaizhizao.schemas.exception_process_record import (
+    ExceptionProcessRecordCreate,
+    ExceptionProcessRecordUpdate,
+    ExceptionProcessRecordResponse,
+    ExceptionProcessRecordListResponse,
+    ExceptionProcessRecordDetailResponse,
+    ExceptionProcessStepTransitionRequest,
+    ExceptionProcessAssignRequest,
+    ExceptionProcessResolveRequest,
 )
 from apps.kuaizhizao.schemas.quality import (
     # 来料检验单
@@ -5922,6 +5953,242 @@ async def get_exception_statistics(
     )
 
 
+@router.post("/exceptions/detect", summary="手动触发异常检测")
+async def trigger_exception_detection(
+    work_order_id: Optional[int] = Query(None, description="工单ID（可选，如果指定则只检测该工单）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    手动触发异常检测
+
+    检测缺料异常和延期异常，并创建异常记录。
+    支持检测指定工单或所有工单。
+    
+    - **work_order_id**: 工单ID（可选，如果指定则只检测该工单）
+    """
+    try:
+        from core.inngest.client import inngest_client
+        from inngest import Event
+        
+        # 发送异常检测事件
+        await inngest_client.send_event(
+            event=Event(
+                name="exception/detect",
+                data={
+                    "tenant_id": tenant_id,
+                    "work_order_id": work_order_id,
+                }
+            )
+        )
+        
+        return {
+            "success": True,
+            "message": "异常检测已触发",
+            "work_order_id": work_order_id,
+        }
+    except Exception as e:
+        logger.error(f"触发异常检测失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"触发异常检测失败: {str(e)}"
+        )
+
+
+# ============ 异常处理流程 API ============
+
+@router.post("/exceptions/process/start", response_model=ExceptionProcessRecordResponse, summary="启动异常处理流程")
+async def start_exception_process(
+    data: ExceptionProcessRecordCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ExceptionProcessRecordResponse:
+    """
+    启动异常处理流程
+
+    - **exception_type**: 异常类型（material_shortage/delivery_delay/quality）
+    - **exception_id**: 异常记录ID
+    - **assigned_to**: 分配给（用户ID，可选）
+    - **process_config**: 流程配置（JSON格式，可选）
+    - **remarks**: 备注（可选）
+    """
+    try:
+        return await exception_process_service.start_process(
+            tenant_id=tenant_id,
+            data=data,
+            current_user_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/exceptions/process", response_model=List[ExceptionProcessRecordListResponse], summary="获取异常处理流程列表")
+async def list_exception_processes(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    exception_type: Optional[str] = Query(None, description="异常类型筛选"),
+    exception_id: Optional[int] = Query(None, description="异常记录ID筛选"),
+    process_status: Optional[str] = Query(None, description="处理状态筛选"),
+    assigned_to: Optional[int] = Query(None, description="分配给筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ExceptionProcessRecordListResponse]:
+    """
+    获取异常处理流程列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **exception_type**: 异常类型筛选
+    - **exception_id**: 异常记录ID筛选
+    - **process_status**: 处理状态筛选
+    - **assigned_to**: 分配给筛选
+    """
+    try:
+        return await exception_process_service.list_process_records(
+            tenant_id=tenant_id,
+            exception_type=exception_type,
+            exception_id=exception_id,
+            process_status=process_status,
+            assigned_to=assigned_to,
+            skip=skip,
+            limit=limit,
+        )
+    except Exception as e:
+        logger.error(f"获取异常处理流程列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/exceptions/process/{process_record_id}", response_model=ExceptionProcessRecordDetailResponse, summary="获取异常处理流程详情")
+async def get_exception_process(
+    process_record_id: int = Path(..., description="处理记录ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ExceptionProcessRecordDetailResponse:
+    """
+    获取异常处理流程详情
+
+    - **process_record_id**: 处理记录ID
+
+    返回异常处理流程详情，包含处理历史记录。
+    """
+    try:
+        return await exception_process_service.get_process_record(
+            tenant_id=tenant_id,
+            process_record_id=process_record_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/exceptions/process/{process_record_id}/assign", response_model=ExceptionProcessRecordResponse, summary="分配异常处理流程")
+async def assign_exception_process(
+    process_record_id: int = Path(..., description="处理记录ID"),
+    data: ExceptionProcessAssignRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ExceptionProcessRecordResponse:
+    """
+    分配异常处理流程
+
+    - **process_record_id**: 处理记录ID
+    - **assigned_to**: 分配给（用户ID）
+    - **comment**: 操作说明（可选）
+    """
+    try:
+        return await exception_process_service.assign_process(
+            tenant_id=tenant_id,
+            process_record_id=process_record_id,
+            data=data,
+            current_user_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/exceptions/process/{process_record_id}/step-transition", response_model=ExceptionProcessRecordResponse, summary="异常处理步骤流转")
+async def transition_exception_process_step(
+    process_record_id: int = Path(..., description="处理记录ID"),
+    data: ExceptionProcessStepTransitionRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ExceptionProcessRecordResponse:
+    """
+    异常处理步骤流转
+
+    - **process_record_id**: 处理记录ID
+    - **to_step**: 目标步骤
+    - **comment**: 操作说明（可选）
+    """
+    try:
+        return await exception_process_service.transition_step(
+            tenant_id=tenant_id,
+            process_record_id=process_record_id,
+            data=data,
+            current_user_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/exceptions/process/{process_record_id}/resolve", response_model=ExceptionProcessRecordResponse, summary="解决异常处理流程")
+async def resolve_exception_process(
+    process_record_id: int = Path(..., description="处理记录ID"),
+    data: ExceptionProcessResolveRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ExceptionProcessRecordResponse:
+    """
+    解决异常处理流程
+
+    - **process_record_id**: 处理记录ID
+    - **comment**: 操作说明（可选）
+    - **verification_result**: 验证结果（可选）
+    """
+    try:
+        return await exception_process_service.resolve_process(
+            tenant_id=tenant_id,
+            process_record_id=process_record_id,
+            data=data,
+            current_user_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/exceptions/process/{process_record_id}/cancel", response_model=ExceptionProcessRecordResponse, summary="取消异常处理流程")
+async def cancel_exception_process(
+    process_record_id: int = Path(..., description="处理记录ID"),
+    comment: Optional[str] = Body(None, description="取消说明"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ExceptionProcessRecordResponse:
+    """
+    取消异常处理流程
+
+    - **process_record_id**: 处理记录ID
+    - **comment**: 取消说明（可选）
+    """
+    try:
+        return await exception_process_service.cancel_process(
+            tenant_id=tenant_id,
+            process_record_id=process_record_id,
+            current_user_id=current_user.id,
+            comment=comment,
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 # ============ 报表 API ============
 
 @router.get("/reports/inventory", summary="获取库存报表")
@@ -6541,4 +6808,389 @@ async def execute_inventory_transfer(
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==================== 委外工单管理 API ====================
+
+@router.post("/outsource-work-orders", response_model=OutsourceWorkOrderResponse, summary="创建委外工单")
+async def create_outsource_work_order(
+    data: OutsourceWorkOrderCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderResponse:
+    """
+    创建委外工单
+
+    - **data**: 委外工单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的委外工单信息。
+    """
+    try:
+        return await outsource_work_order_service.create_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_data=data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/outsource-work-orders", response_model=OutsourceWorkOrderListResponse, summary="获取委外工单列表")
+async def list_outsource_work_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID筛选"),
+    product_id: Optional[int] = Query(None, description="产品ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderListResponse:
+    """
+    获取委外工单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **status**: 状态筛选
+    - **supplier_id**: 供应商ID筛选
+    - **product_id**: 产品ID筛选
+    - **keyword**: 关键词搜索（编码、名称）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回委外工单列表。
+    """
+    try:
+        return await outsource_work_order_service.list_outsource_work_orders(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            status=status,
+            supplier_id=supplier_id,
+            product_id=product_id,
+            keyword=keyword,
+        )
+    except Exception as e:
+        logger.error(f"获取委外工单列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="获取委外工单详情")
+async def get_outsource_work_order(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderResponse:
+    """
+    获取委外工单详情
+
+    - **work_order_id**: 委外工单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回委外工单详情。
+    """
+    try:
+        return await outsource_work_order_service.get_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="更新委外工单")
+async def update_outsource_work_order(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    data: OutsourceWorkOrderUpdate = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceWorkOrderResponse:
+    """
+    更新委外工单
+
+    - **work_order_id**: 委外工单ID
+    - **data**: 委外工单更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的委外工单信息。
+    """
+    try:
+        return await outsource_work_order_service.update_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            work_order_data=data,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/outsource-work-orders/{work_order_id}", summary="删除委外工单")
+async def delete_outsource_work_order(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除委外工单（软删除）
+
+    - **work_order_id**: 委外工单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回删除结果。
+    """
+    try:
+        await outsource_work_order_service.delete_outsource_work_order(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_by=current_user.id
+        )
+        return JSONResponse(content={"success": True, "message": "委外工单删除成功"})
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==================== 委外发料 API ====================
+
+@router.post("/outsource-material-issues", response_model=OutsourceMaterialIssueResponse, summary="创建委外发料单")
+async def create_outsource_material_issue(
+    data: OutsourceMaterialIssueCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialIssueResponse:
+    """
+    创建委外发料单
+
+    - **data**: 委外发料创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的委外发料单信息。
+    """
+    try:
+        return await outsource_material_issue_service.create_material_issue(
+            tenant_id=tenant_id,
+            issue_data=data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/outsource-material-issues", response_model=List[OutsourceMaterialIssueResponse], summary="获取委外发料单列表")
+async def list_outsource_material_issues(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    outsource_work_order_id: Optional[int] = Query(None, description="委外工单ID筛选"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceMaterialIssueResponse]:
+    """
+    获取委外发料单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **outsource_work_order_id**: 委外工单ID筛选
+    - **status**: 状态筛选
+    - **keyword**: 关键词搜索
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回委外发料单列表。
+    """
+    try:
+        return await outsource_material_issue_service.list_material_issues(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            outsource_work_order_id=outsource_work_order_id,
+            status=status,
+            keyword=keyword,
+        )
+    except Exception as e:
+        logger.error(f"获取委外发料单列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/outsource-material-issues/{issue_id}", response_model=OutsourceMaterialIssueResponse, summary="获取委外发料单详情")
+async def get_outsource_material_issue(
+    issue_id: int = Path(..., description="委外发料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialIssueResponse:
+    """
+    获取委外发料单详情
+
+    - **issue_id**: 委外发料单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回委外发料单详情。
+    """
+    try:
+        return await outsource_material_issue_service.get_material_issue(
+            tenant_id=tenant_id,
+            issue_id=issue_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/outsource-material-issues/{issue_id}/complete", response_model=OutsourceMaterialIssueResponse, summary="完成委外发料")
+async def complete_outsource_material_issue(
+    issue_id: int = Path(..., description="委外发料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialIssueResponse:
+    """
+    完成委外发料（更新状态为completed，记录发料时间和发料人）
+
+    - **issue_id**: 委外发料单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的委外发料单信息。
+    """
+    try:
+        return await outsource_material_issue_service.complete_material_issue(
+            tenant_id=tenant_id,
+            issue_id=issue_id,
+            completed_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==================== 委外收货 API ====================
+
+@router.post("/outsource-material-receipts", response_model=OutsourceMaterialReceiptResponse, summary="创建委外收货单")
+async def create_outsource_material_receipt(
+    data: OutsourceMaterialReceiptCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReceiptResponse:
+    """
+    创建委外收货单
+
+    - **data**: 委外收货创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的委外收货单信息。
+    """
+    try:
+        return await outsource_material_receipt_service.create_material_receipt(
+            tenant_id=tenant_id,
+            receipt_data=data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/outsource-material-receipts", response_model=List[OutsourceMaterialReceiptResponse], summary="获取委外收货单列表")
+async def list_outsource_material_receipts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    outsource_work_order_id: Optional[int] = Query(None, description="委外工单ID筛选"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceMaterialReceiptResponse]:
+    """
+    获取委外收货单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **outsource_work_order_id**: 委外工单ID筛选
+    - **status**: 状态筛选
+    - **keyword**: 关键词搜索
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回委外收货单列表。
+    """
+    try:
+        return await outsource_material_receipt_service.list_material_receipts(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            outsource_work_order_id=outsource_work_order_id,
+            status=status,
+            keyword=keyword,
+        )
+    except Exception as e:
+        logger.error(f"获取委外收货单列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/outsource-material-receipts/{receipt_id}", response_model=OutsourceMaterialReceiptResponse, summary="获取委外收货单详情")
+async def get_outsource_material_receipt(
+    receipt_id: int = Path(..., description="委外收货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReceiptResponse:
+    """
+    获取委外收货单详情
+
+    - **receipt_id**: 委外收货单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回委外收货单详情。
+    """
+    try:
+        return await outsource_material_receipt_service.get_material_receipt(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/outsource-material-receipts/{receipt_id}/complete", response_model=OutsourceMaterialReceiptResponse, summary="完成委外收货")
+async def complete_outsource_material_receipt(
+    receipt_id: int = Path(..., description="委外收货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReceiptResponse:
+    """
+    完成委外收货（更新状态为completed，记录收货时间和收货人）
+
+    - **receipt_id**: 委外收货单ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的委外收货单信息。
+    """
+    try:
+        return await outsource_material_receipt_service.complete_material_receipt(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id,
+            completed_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -7,13 +7,14 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Modal, message } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, ShoppingOutlined } from '@ant-design/icons';
+import React, { useRef, useState, useEffect } from 'react';
+import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Tag, Button, Space, Modal, message, Form } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, ShoppingOutlined, SwapOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
+import { materialApi } from '../../../../master-data/services/material';
 
 /**
  * 缺料异常接口定义
@@ -47,6 +48,10 @@ const MaterialShortageExceptionsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<MaterialShortageException | null>(null);
+  const [handleModalVisible, setHandleModalVisible] = useState(false);
+  const [currentAction, setCurrentAction] = useState<string>('');
+  const [materialList, setMaterialList] = useState<any[]>([]);
+  const handleFormRef = useRef<any>(null);
 
   /**
    * 处理查看详情
@@ -56,19 +61,64 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
+  // 加载物料列表
+  useEffect(() => {
+    const loadMaterials = async () => {
+      try {
+        const materials = await materialApi.list({ isActive: true });
+        setMaterialList(materials);
+      } catch (error) {
+        console.error('获取物料列表失败:', error);
+      }
+    };
+    loadMaterials();
+  }, []);
+
+  /**
+   * 打开处理异常Modal
+   */
+  const openHandleModal = (record: MaterialShortageException, action: string) => {
+    setCurrentRecord(record);
+    setCurrentAction(action);
+    setHandleModalVisible(true);
+    setTimeout(() => {
+      handleFormRef.current?.resetFields();
+    }, 100);
+  };
+
   /**
    * 处理缺料异常
    */
-  const handleException = async (record: MaterialShortageException, action: string) => {
+  const handleException = async (values: any) => {
     try {
-      await apiRequest(`/apps/kuaizhizao/exceptions/material-shortage/${record.id}/handle`, {
+      if (!currentRecord?.id) {
+        throw new Error('异常记录不存在');
+      }
+
+      const params: any = {
+        action: currentAction,
+      };
+
+      if (currentAction === 'substitute' && values.alternativeMaterialId) {
+        params.alternative_material_id = values.alternativeMaterialId;
+      }
+
+      if (values.remarks) {
+        params.remarks = values.remarks;
+      }
+
+      await apiRequest(`/apps/kuaizhizao/exceptions/material-shortage/${currentRecord.id}/handle`, {
         method: 'POST',
-        params: { action },
+        params,
       });
       messageApi.success('处理成功');
+      setHandleModalVisible(false);
+      setCurrentRecord(null);
+      setCurrentAction('');
       actionRef.current?.reload();
-    } catch (error) {
-      messageApi.error('处理失败');
+    } catch (error: any) {
+      messageApi.error(error.message || '处理失败');
+      throw error;
     }
   };
 
@@ -174,17 +224,34 @@ const MaterialShortageExceptionsPage: React.FC = () => {
                 type="link"
                 size="small"
                 icon={<ShoppingOutlined />}
-                onClick={() => handleException(record, 'purchase')}
+                onClick={() => openHandleModal(record, 'purchase')}
               >
                 采购
               </Button>
               <Button
                 type="link"
                 size="small"
+                icon={<SwapOutlined />}
+                onClick={() => openHandleModal(record, 'substitute')}
+              >
+                替代
+              </Button>
+              <Button
+                type="link"
+                size="small"
                 icon={<CheckCircleOutlined />}
-                onClick={() => handleException(record, 'resolve')}
+                onClick={() => openHandleModal(record, 'resolve')}
               >
                 已解决
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CloseCircleOutlined />}
+                onClick={() => openHandleModal(record, 'cancel')}
+                danger
+              >
+                取消
               </Button>
             </>
           )}
@@ -232,7 +299,10 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`缺料异常详情 - ${currentRecord?.work_order_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRecord(null);
+        }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={[]}
         customContent={
@@ -284,6 +354,68 @@ const MaterialShortageExceptionsPage: React.FC = () => {
           ) : null
         }
       />
+
+      {/* 处理异常 Modal */}
+      <FormModalTemplate
+        title={
+          currentAction === 'purchase' ? '处理缺料异常 - 采购' :
+          currentAction === 'substitute' ? '处理缺料异常 - 替代物料' :
+          currentAction === 'resolve' ? '处理缺料异常 - 已解决' :
+          currentAction === 'cancel' ? '处理缺料异常 - 取消' :
+          '处理缺料异常'
+        }
+        open={handleModalVisible}
+        onClose={() => {
+          setHandleModalVisible(false);
+          setCurrentRecord(null);
+          setCurrentAction('');
+          handleFormRef.current?.resetFields();
+        }}
+        onFinish={handleException}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={handleFormRef}
+      >
+        {currentRecord && (
+          <>
+            <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+              <p><strong>工单编码：</strong>{currentRecord.work_order_code}</p>
+              <p><strong>物料名称：</strong>{currentRecord.material_name}</p>
+              <p><strong>缺料数量：</strong>
+                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                  {currentRecord.shortage_quantity}
+                </span>
+              </p>
+            </div>
+            {currentAction === 'substitute' && (
+              <ProFormSelect
+                name="alternativeMaterialId"
+                label="替代物料"
+                placeholder="请选择替代物料"
+                options={materialList
+                  .filter(m => m.id !== currentRecord.material_id)
+                  .map(material => ({
+                    label: `${material.code || material.mainCode} - ${material.name}`,
+                    value: material.id,
+                  }))}
+                rules={[{ required: true, message: '请选择替代物料' }]}
+                fieldProps={{
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            )}
+            <ProFormTextArea
+              name="remarks"
+              label="备注"
+              placeholder="请输入处理备注（可选）"
+              fieldProps={{
+                rows: 4,
+              }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

@@ -8,11 +8,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, message } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, CloseCircleOutlined, UserAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
 
 /**
@@ -43,6 +43,9 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<DeliveryDelayException | null>(null);
+  const [handleModalVisible, setHandleModalVisible] = useState(false);
+  const [currentAction, setCurrentAction] = useState<string>('');
+  const handleFormRef = useRef<any>(null);
 
   /**
    * 处理查看详情
@@ -53,18 +56,46 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
   };
 
   /**
+   * 打开处理异常Modal
+   */
+  const openHandleModal = (record: DeliveryDelayException, action: string) => {
+    setCurrentRecord(record);
+    setCurrentAction(action);
+    setHandleModalVisible(true);
+    setTimeout(() => {
+      handleFormRef.current?.resetFields();
+    }, 100);
+  };
+
+  /**
    * 处理延期异常
    */
-  const handleException = async (record: DeliveryDelayException, action: string) => {
+  const handleException = async (values: any) => {
     try {
-      await apiRequest(`/apps/kuaizhizao/exceptions/delivery-delay/${record.id}/handle`, {
+      if (!currentRecord?.id) {
+        throw new Error('异常记录不存在');
+      }
+
+      const params: any = {
+        action: currentAction,
+      };
+
+      if (values.remarks) {
+        params.remarks = values.remarks;
+      }
+
+      await apiRequest(`/apps/kuaizhizao/exceptions/delivery-delay/${currentRecord.id}/handle`, {
         method: 'POST',
-        params: { action },
+        params,
       });
       messageApi.success('处理成功');
+      setHandleModalVisible(false);
+      setCurrentRecord(null);
+      setCurrentAction('');
       actionRef.current?.reload();
-    } catch (error) {
-      messageApi.error('处理失败');
+    } catch (error: any) {
+      messageApi.error(error.message || '处理失败');
+      throw error;
     }
   };
 
@@ -159,15 +190,23 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 type="link"
                 size="small"
                 icon={<ToolOutlined />}
-                onClick={() => handleException(record, 'adjust_plan')}
+                onClick={() => openHandleModal(record, 'adjust_plan')}
               >
                 调整计划
               </Button>
               <Button
                 type="link"
                 size="small"
+                icon={<UserAddOutlined />}
+                onClick={() => openHandleModal(record, 'increase_resources')}
+              >
+                增加资源
+              </Button>
+              <Button
+                type="link"
+                size="small"
                 icon={<ClockCircleOutlined />}
-                onClick={() => handleException(record, 'expedite')}
+                onClick={() => openHandleModal(record, 'expedite')}
               >
                 加急
               </Button>
@@ -175,9 +214,18 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 type="link"
                 size="small"
                 icon={<CheckCircleOutlined />}
-                onClick={() => handleException(record, 'resolve')}
+                onClick={() => openHandleModal(record, 'resolve')}
               >
                 已解决
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CloseCircleOutlined />}
+                onClick={() => openHandleModal(record, 'cancel')}
+                danger
+              >
+                取消
               </Button>
             </>
           )}
@@ -225,7 +273,10 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`延期异常详情 - ${currentRecord?.work_order_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRecord(null);
+        }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={[]}
         customContent={
@@ -282,6 +333,51 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           ) : null
         }
       />
+
+      {/* 处理异常 Modal */}
+      <FormModalTemplate
+        title={
+          currentAction === 'adjust_plan' ? '处理延期异常 - 调整计划' :
+          currentAction === 'increase_resources' ? '处理延期异常 - 增加资源' :
+          currentAction === 'expedite' ? '处理延期异常 - 加急处理' :
+          currentAction === 'resolve' ? '处理延期异常 - 已解决' :
+          currentAction === 'cancel' ? '处理延期异常 - 取消' :
+          '处理延期异常'
+        }
+        open={handleModalVisible}
+        onClose={() => {
+          setHandleModalVisible(false);
+          setCurrentRecord(null);
+          setCurrentAction('');
+          handleFormRef.current?.resetFields();
+        }}
+        onFinish={handleException}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={handleFormRef}
+      >
+        {currentRecord && (
+          <>
+            <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+              <p><strong>工单编码：</strong>{currentRecord.work_order_code}</p>
+              <p><strong>计划结束日期：</strong>{currentRecord.planned_end_date}</p>
+              <p><strong>延期天数：</strong>
+                <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                  {currentRecord.delay_days} 天
+                </span>
+              </p>
+              <p><strong>延期原因：</strong>{currentRecord.delay_reason || '-'}</p>
+            </div>
+            <ProFormTextArea
+              name="remarks"
+              label="备注"
+              placeholder="请输入处理备注（可选）"
+              fieldProps={{
+                rows: 4,
+              }}
+            />
+          </>
+        )}
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

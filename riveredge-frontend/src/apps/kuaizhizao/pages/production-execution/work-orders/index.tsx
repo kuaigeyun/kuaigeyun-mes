@@ -88,6 +88,13 @@ const WorkOrdersPage: React.FC = () => {
   const [processRouteList, setProcessRouteList] = useState<any[]>([]);
   // 选中的工序列表（用于创建工单时）
   const [selectedOperations, setSelectedOperations] = useState<any[]>([]);
+  // 当前选中产品的物料来源信息
+  const [selectedMaterialSourceInfo, setSelectedMaterialSourceInfo] = useState<{
+    sourceType?: string;
+    sourceTypeName?: string;
+    validationErrors?: string[];
+    canCreateWorkOrder?: boolean;
+  } | null>(null);
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false);
@@ -261,6 +268,7 @@ const WorkOrdersPage: React.FC = () => {
     setCurrentWorkOrder(null);
     setProductionMode('MTS'); // 重置为MTS模式
     setSelectedOperations([]); // 清空选中的工序
+    setSelectedMaterialSourceInfo(null); // 清空物料来源信息
     setModalVisible(true);
     formRef.current?.resetFields();
     
@@ -640,6 +648,14 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      // 物料来源验证（核心功能，新增）
+      if (values.product_id && selectedMaterialSourceInfo) {
+        if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
+          messageApi.error('该物料来源类型不允许创建生产工单，请选择其他物料或使用相应的功能模块');
+          throw new Error('物料来源类型不允许创建工单');
+        }
+      }
+      
       // 移除显示字段（后端不需要）
       delete values.code_rule_display;
       
@@ -1939,6 +1955,7 @@ const WorkOrdersPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentWorkOrder(null);
+          setSelectedMaterialSourceInfo(null); // 清空物料来源信息
           formRef.current?.resetFields();
         }}
         onFinish={handleSubmit}
@@ -2031,7 +2048,7 @@ const WorkOrdersPage: React.FC = () => {
           label="产品选择"
           placeholder="请选择产品"
           options={productList.map(product => ({
-            label: `${product.code} - ${product.name}`,
+            label: `${product.code || product.mainCode} - ${product.name}`,
             value: product.id,
           }))}
           rules={[{ required: true, message: '请选择产品' }]}
@@ -2039,10 +2056,96 @@ const WorkOrdersPage: React.FC = () => {
           fieldProps={{
             showSearch: true,
             filterOption: (input: string, option: any) =>
-              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+            onChange: async (value: number | undefined) => {
+              if (value) {
+                // 查找选中的物料
+                const selectedMaterial = productList.find(p => p.id === value);
+                if (selectedMaterial) {
+                  // 获取物料详情（包含source_type和source_config）
+                  try {
+                    const materialDetail = await materialApi.get(selectedMaterial.uuid);
+                    const sourceType = materialDetail.sourceType || materialDetail.source_type;
+                    
+                    // 物料来源类型名称映射
+                    const sourceTypeNames: Record<string, string> = {
+                      'Make': '自制件',
+                      'Buy': '采购件',
+                      'Phantom': '虚拟件',
+                      'Outsource': '委外件',
+                      'Configure': '配置件',
+                    };
+                    
+                    // 判断是否可以创建工单
+                    let canCreateWorkOrder = true;
+                    const validationErrors: string[] = [];
+                    
+                    if (sourceType === 'Buy') {
+                      canCreateWorkOrder = false;
+                      validationErrors.push('采购件不应创建生产工单，请使用采购订单功能');
+                    } else if (sourceType === 'Phantom') {
+                      canCreateWorkOrder = false;
+                      validationErrors.push('虚拟件不应创建工单，虚拟件会自动展开到下层物料');
+                    } else if (sourceType === 'Make') {
+                      // 自制件需要验证BOM和工艺路线（后端会验证，这里只显示提示）
+                      validationErrors.push('自制件需要配置BOM和工艺路线');
+                    } else if (sourceType === 'Outsource') {
+                      // 委外件需要验证委外供应商和委外工序（后端会验证，这里只显示提示）
+                      validationErrors.push('委外件需要配置委外供应商和委外工序');
+                    }
+                    
+                    setSelectedMaterialSourceInfo({
+                      sourceType,
+                      sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
+                      validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+                      canCreateWorkOrder,
+                    });
+                  } catch (error) {
+                    console.error('获取物料详情失败:', error);
+                    setSelectedMaterialSourceInfo(null);
+                  }
+                } else {
+                  setSelectedMaterialSourceInfo(null);
+                }
+              } else {
+                setSelectedMaterialSourceInfo(null);
+              }
+            }
           }}
           colProps={{ span: 12 }}
         />
+        {/* 物料来源信息显示 */}
+        {selectedMaterialSourceInfo && (
+          <div style={{ marginTop: -16, marginBottom: 16, padding: '12px', background: '#f5f5f5', borderRadius: 4, gridColumn: 'span 24' }}>
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ fontWeight: 'bold' }}>物料来源类型：</span>
+              <Tag color={
+                selectedMaterialSourceInfo.sourceType === 'Make' ? 'blue' :
+                selectedMaterialSourceInfo.sourceType === 'Buy' ? 'orange' :
+                selectedMaterialSourceInfo.sourceType === 'Phantom' ? 'purple' :
+                selectedMaterialSourceInfo.sourceType === 'Outsource' ? 'cyan' :
+                selectedMaterialSourceInfo.sourceType === 'Configure' ? 'green' :
+                'default'
+              }>
+                {selectedMaterialSourceInfo.sourceTypeName || selectedMaterialSourceInfo.sourceType || '未配置'}
+              </Tag>
+            </div>
+            {selectedMaterialSourceInfo.validationErrors && selectedMaterialSourceInfo.validationErrors.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                {selectedMaterialSourceInfo.validationErrors.map((error, index) => (
+                  <div key={index} style={{ color: selectedMaterialSourceInfo.canCreateWorkOrder === false ? '#ff4d4f' : '#faad14', marginBottom: 4 }}>
+                    {selectedMaterialSourceInfo.canCreateWorkOrder === false ? '❌' : '⚠️'} {error}
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
+              <div style={{ marginTop: 8, color: '#ff4d4f', fontWeight: 'bold' }}>
+                该物料来源类型不允许创建生产工单，请选择其他物料或使用相应的功能模块
+              </div>
+            )}
+          </div>
+        )}
         <ProFormDigit
           name="quantity"
           label="计划数量"

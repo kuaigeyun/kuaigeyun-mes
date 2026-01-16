@@ -12,34 +12,35 @@
         "title": "快格轻制造",
         "icon": "production",
         "path": "/apps/kuaizhizao",
-        "children": [            {
+        "children": [{
                 "title": "销售管理",
                 "icon": "chartLine",
                 "sort_order": 1,
                 "children": [{
-                    "title": "销售预测",
-                    "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-                    "permission": "kuaizhizao:sales-forecast:view",
-                    "sort_order": 1
-                },
-                {
-                    "title": "销售订单",
-                    "path": "/apps/kuaizhizao/sales-management/sales-orders",
-                    "permission": "kuaizhizao:sales-order:view",
-                    "sort_order": 2
-                },
-                {
-                    "title": "销售出库",
-                    "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
-                    "permission": "kuaizhizao:sales-delivery:view",
-                    "sort_order": 3
-                }]
+                        "title": "销售预测",
+                        "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
+                        "permission": "kuaizhizao:sales-forecast:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "销售订单",
+                        "path": "/apps/kuaizhizao/sales-management/sales-orders",
+                        "permission": "kuaizhizao:sales-order:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "销售出库",
+                        "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
+                        "permission": "kuaizhizao:sales-delivery:view",
+                        "sort_order": 3
+                    }
+                ]
             },
             {
                 "title": "计划管理",
                 "icon": "planning",
                 "sort_order": 2,
-                "children": [                    {
+                "children": [{
                         "title": "需求管理",
                         "path": "/apps/kuaizhizao/plan-management/demand-management",
                         "permission": "kuaizhizao:demand:view",
@@ -76,17 +77,18 @@
                 "icon": "shopping",
                 "sort_order": 3,
                 "children": [{
-                    "title": "采购订单",
-                    "path": "/apps/kuaizhizao/purchase-management/purchase-orders",
-                    "permission": "kuaizhizao:purchase-order:view",
-                    "sort_order": 1
-                },
-                {
-                    "title": "采购入库",
-                    "path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
-                    "permission": "kuaizhizao:purchase-receipt:view",
-                    "sort_order": 2
-                }]
+                        "title": "采购订单",
+                        "path": "/apps/kuaizhizao/purchase-management/purchase-orders",
+                        "permission": "kuaizhizao:purchase-order:view",
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "采购入库",
+                        "path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
+                        "permission": "kuaizhizao:purchase-receipt:view",
+                        "sort_order": 2
+                    }
+                ]
             },
             {
                 "title": "仓储管理",
@@ -211,6 +213,12 @@
                         "path": "/apps/kuaizhizao/production-execution/outsource-orders",
                         "permission": "kuaizhizao:outsource-order:view",
                         "sort_order": 5
+                    },
+                    {
+                        "title": "委外工单",
+                        "path": "/apps/kuaizhizao/production-execution/outsource-work-orders",
+                        "permission": "kuaizhizao:outsource-work-order:view",
+                        "sort_order": 5.5
                     },
                     {
                         "title": "缺料异常",

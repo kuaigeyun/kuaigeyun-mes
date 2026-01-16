@@ -67,6 +67,35 @@ if INNGEST_AVAILABLE:
         )
     except ImportError:
         material_ai_suggestion_workflow = None
+    
+    try:
+        from apps.kuaizhizao.inngest.functions.exception_detection_workflow import (
+            exception_detection_scheduler_function,
+            exception_detection_worker_function,
+            exception_detection_by_tenant_function
+        )
+    except ImportError:
+        exception_detection_scheduler_function = None
+        exception_detection_worker_function = None
+        exception_detection_by_tenant_function = None
+    
+    try:
+        from apps.kuaizhizao.inngest.functions.exception_process_workflow import (
+            exception_process_workflow_function,
+            exception_process_step_transition_workflow_function
+        )
+    except ImportError:
+        exception_process_workflow_function = None
+        exception_process_step_transition_workflow_function = None
+    
+    try:
+        from apps.kuaizhizao.inngest.functions.maintenance_reminder_workflow import (
+            maintenance_reminder_scheduler_function,
+            maintenance_reminder_checker_function
+        )
+    except ImportError:
+        maintenance_reminder_scheduler_function = None
+        maintenance_reminder_checker_function = None
 
 __all__ = [
     "test_integration_function",
@@ -78,5 +107,12 @@ __all__ = [
     "sop_execution_workflow_function",
     "sop_node_complete_workflow_function",
     "material_ai_suggestion_workflow",
+    "exception_detection_scheduler_function",
+    "exception_detection_worker_function",
+    "exception_detection_by_tenant_function",
+    "exception_process_workflow_function",
+    "exception_process_step_transition_workflow_function",
+    "maintenance_reminder_scheduler_function",
+    "maintenance_reminder_checker_function",
 ]
 

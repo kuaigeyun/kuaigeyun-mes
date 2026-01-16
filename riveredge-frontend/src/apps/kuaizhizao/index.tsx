@@ -20,6 +20,7 @@ import ReportingPage from './pages/production-execution/reporting';
 import ReportingStatisticsPage from './pages/production-execution/reporting/statistics';
 import ReworkOrdersPage from './pages/production-execution/rework-orders';
 import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
+import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work-orders';
 
 // 采购管理页面
 import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
@@ -45,6 +46,8 @@ import EquipmentPage from './pages/equipment-management/equipment';
 import EquipmentFaultsPage from './pages/equipment-management/equipment-faults';
 import MaintenancePlansPage from './pages/equipment-management/maintenance-plans';
 import MoldsPage from './pages/equipment-management/molds';
+import EquipmentStatusPage from './pages/equipment-management/equipment-status';
+import MaintenanceRemindersPage from './pages/equipment-management/maintenance-reminders';
 
 // 财务管理页面
 import AccountsPayablePage from './pages/finance-management/accounts-payable';
@@ -70,6 +73,7 @@ import MaterialShortageExceptionsPage from './pages/production-execution/materia
 import DeliveryDelayExceptionsPage from './pages/production-execution/delivery-delay-exceptions';
 import QualityExceptionsPage from './pages/production-execution/quality-exceptions';
 import ExceptionStatisticsPage from './pages/production-execution/exception-statistics';
+import ExceptionProcessPage from './pages/production-execution/exception-process';
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -93,10 +97,12 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/reporting/statistics" element={<ReportingStatisticsPage />} />
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
       <Route path="production-execution/outsource-orders" element={<OutsourceOrdersPage />} />
+      <Route path="production-execution/outsource-work-orders" element={<OutsourceWorkOrdersPage />} />
       <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
       <Route path="production-execution/delivery-delay-exceptions" element={<DeliveryDelayExceptionsPage />} />
       <Route path="production-execution/quality-exceptions" element={<QualityExceptionsPage />} />
       <Route path="production-execution/exception-statistics" element={<ExceptionStatisticsPage />} />
+      <Route path="production-execution/exception-process" element={<ExceptionProcessPage />} />
 
       {/* 销售管理路由 */}
       {/* TODO: 销售预测和销售订单路由已移除，已合并为统一需求管理 */}
@@ -118,6 +124,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/equipment-faults" element={<EquipmentFaultsPage />} />
       <Route path="equipment-management/maintenance-plans" element={<MaintenancePlansPage />} />
       <Route path="equipment-management/molds" element={<MoldsPage />} />
+      <Route path="equipment-management/equipment-status" element={<EquipmentStatusPage />} />
+      <Route path="equipment-management/maintenance-reminders" element={<MaintenanceRemindersPage />} />
 
       {/* 财务管理路由 */}
       <Route path="finance-management/accounts-payable" element={<AccountsPayablePage />} />

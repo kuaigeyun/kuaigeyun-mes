@@ -45,6 +45,15 @@ from apps.kuaizhizao.services.document_timing_service import DocumentTimingServi
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import ProcessRoute, Operation
 from core.services.business.code_generation_service import CodeGenerationService
+from apps.kuaizhizao.utils.material_source_helper import (
+    get_material_source_type,
+    validate_material_source_config,
+    get_material_source_config,
+    SOURCE_TYPE_MAKE,
+    SOURCE_TYPE_OUTSOURCE,
+    SOURCE_TYPE_BUY,
+    SOURCE_TYPE_PHANTOM,
+)
 from loguru import logger
 
 
@@ -382,6 +391,47 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     product_name = material.name
             else:
                 raise ValidationError("必须提供 product_id 或 product_code")
+
+            # 物料来源验证（核心功能，新增）
+            # 1. 获取物料来源类型
+            source_type = await get_material_source_type(tenant_id, product_id)
+            
+            # 2. 验证物料来源配置完整性
+            if source_type:
+                validation_passed, validation_errors = await validate_material_source_config(
+                    tenant_id=tenant_id,
+                    material_id=product_id,
+                    source_type=source_type
+                )
+                
+                # 3. 根据物料来源类型验证是否可以创建工单
+                if source_type == SOURCE_TYPE_MAKE:
+                    # 自制件：必须有BOM和工艺路线
+                    if not validation_passed:
+                        error_msg = f"自制件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
+                        logger.warning(f"工单创建失败 - {error_msg}")
+                        raise ValidationError(error_msg)
+                elif source_type == SOURCE_TYPE_OUTSOURCE:
+                    # 委外件：必须有委外供应商和委外工序（验证失败时不允许创建工单）
+                    if not validation_passed:
+                        error_msg = f"委外件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
+                        logger.warning(f"工单创建失败 - {error_msg}")
+                        raise ValidationError(error_msg)
+                elif source_type == SOURCE_TYPE_BUY:
+                    # 采购件：不生成生产工单（应该生成采购订单）
+                    error_msg = f"采购件不应创建生产工单，物料: {product_code} ({product_name})，请使用采购订单功能"
+                    logger.warning(f"工单创建失败 - {error_msg}")
+                    raise ValidationError(error_msg)
+                elif source_type == SOURCE_TYPE_PHANTOM:
+                    # 虚拟件：不生成工单（直接展开到下层物料）
+                    error_msg = f"虚拟件不应创建工单，物料: {product_code} ({product_name})，虚拟件会自动展开到下层物料"
+                    logger.warning(f"工单创建失败 - {error_msg}")
+                    raise ValidationError(error_msg)
+                
+                logger.info(f"物料来源验证通过，物料: {product_code} ({product_name}), 来源类型: {source_type}")
+            else:
+                # 如果没有物料来源类型，默认按自制件处理（向后兼容）
+                logger.warning(f"物料 {product_code} 未配置物料来源类型，默认按自制件处理")
 
             # 创建工单
             work_order = await WorkOrder.create(

@@ -193,6 +193,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.production_plan_item",  # 生产计划明细模型
                 "apps.kuaizhizao.models.mrp_result",  # MRP结果模型
                 "apps.kuaizhizao.models.lrp_result",  # LRP结果模型
+                "apps.kuaizhizao.models.outsource_work_order",  # 委外工单模型（OutsourceWorkOrder、OutsourceMaterialIssue、OutsourceMaterialReceipt）
             ],
             "default_connection": "default",
         },
