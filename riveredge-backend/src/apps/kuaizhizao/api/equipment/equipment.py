@@ -8,6 +8,7 @@ Date: 2026-01-05
 """
 
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from apps.kuaizhizao.models.equipment import Equipment
@@ -19,7 +20,13 @@ from apps.kuaizhizao.schemas.equipment import (
     EquipmentResponse,
     EquipmentListResponse,
 )
+from apps.kuaizhizao.schemas.equipment_oee import (
+    EquipmentOEResponse,
+    EquipmentOEEListResponse,
+    EquipmentOEETrendResponse,
+)
 from apps.kuaizhizao.services.equipment_service import EquipmentService
+from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -344,4 +351,133 @@ async def get_equipment_trace(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+# ========== 设备OEE统计相关端点 ==========
+
+@router.get("/{uuid}/oee", response_model=EquipmentOEResponse)
+async def get_equipment_oee(
+    uuid: str,
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备OEE统计
+    
+    根据设备UUID获取设备OEE统计数据。
+    """
+    try:
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        
+        date_start_dt = None
+        date_end_dt = None
+        if date_start:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        if date_end:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        
+        oee_service = EquipmentOEEService()
+        oee_data = await oee_service.calculate_equipment_oee(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+        )
+        
+        return EquipmentOEResponse(**oee_data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"计算OEE失败: {str(e)}")
+
+
+@router.get("/oee/list", response_model=EquipmentOEEListResponse)
+async def list_equipment_oee(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    equipment_ids: Optional[str] = Query(None, description="设备ID列表（逗号分隔）"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备OEE统计列表
+    
+    获取当前组织的设备OEE统计列表。
+    """
+    try:
+        date_start_dt = None
+        date_end_dt = None
+        if date_start:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        if date_end:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        
+        equipment_id_list = None
+        if equipment_ids:
+            equipment_id_list = [int(id.strip()) for id in equipment_ids.split(',') if id.strip()]
+        
+        oee_service = EquipmentOEEService()
+        oee_list = await oee_service.list_equipment_oee(
+            tenant_id=tenant_id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+            equipment_ids=equipment_id_list,
+            skip=skip,
+            limit=limit,
+        )
+        
+        items = [EquipmentOEResponse(**data) for data in oee_list]
+        
+        return EquipmentOEEListResponse(items=items, total=len(items))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取OEE统计列表失败: {str(e)}")
+
+
+@router.get("/{uuid}/oee/trend", response_model=EquipmentOEETrendResponse)
+async def get_equipment_oee_trend(
+    uuid: str,
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    period: str = Query("day", description="统计周期（day/week/month）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备OEE趋势数据
+    
+    根据设备UUID获取设备OEE趋势数据。
+    """
+    try:
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        
+        date_start_dt = None
+        date_end_dt = None
+        if date_start:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        if date_end:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        
+        if period not in ["day", "week", "month"]:
+            raise ValidationError("统计周期必须是 day、week 或 month 之一")
+        
+        oee_service = EquipmentOEEService()
+        trend_data = await oee_service.get_equipment_oee_trend(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+            period=period,
+        )
+        
+        return EquipmentOEETrendResponse(**trend_data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取OEE趋势数据失败: {str(e)}")
 

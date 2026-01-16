@@ -27,6 +27,8 @@ from .equipment.equipment import router as equipment_router
 from .maintenance_plans.maintenance_plans import router as maintenance_plans_router
 from .equipment_faults.equipment_faults import router as equipment_faults_router
 from .molds.molds import router as molds_router
+from .equipment_status.equipment_status import router as equipment_status_router
+from .maintenance_reminders.maintenance_reminders import router as maintenance_reminders_router
 
 # 导入成本核算路由
 from .cost.cost_rules import router as cost_rules_router
@@ -59,6 +61,8 @@ router.include_router(equipment_router)
 router.include_router(maintenance_plans_router)
 router.include_router(equipment_faults_router)
 router.include_router(molds_router)
+router.include_router(equipment_status_router)
+router.include_router(maintenance_reminders_router)
 
 # 注册成本核算路由
 router.include_router(cost_rules_router)

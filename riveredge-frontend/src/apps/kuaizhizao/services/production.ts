@@ -125,7 +125,81 @@ export const reworkOrderApi = {
   },
 };
 
-// 委外单相关接口
+// 委外工单相关接口
+export const outsourceWorkOrderApi = {
+  // 获取委外工单列表
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-work-orders', { method: 'GET', params });
+  },
+
+  // 创建委外工单
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-work-orders', { method: 'POST', data });
+  },
+
+  // 更新委外工单
+  update: async (id: string, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}`, { method: 'PUT', data });
+  },
+
+  // 删除委外工单
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}`, { method: 'DELETE' });
+  },
+
+  // 获取委外工单详情
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-work-orders/${id}`, { method: 'GET' });
+  },
+};
+
+// 委外发料相关接口
+export const outsourceMaterialIssueApi = {
+  // 获取委外发料单列表
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-issues', { method: 'GET', params });
+  },
+
+  // 创建委外发料单
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-issues', { method: 'POST', data });
+  },
+
+  // 获取委外发料单详情
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-material-issues/${id}`, { method: 'GET' });
+  },
+
+  // 完成委外发料
+  complete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-material-issues/${id}/complete`, { method: 'POST' });
+  },
+};
+
+// 委外收货相关接口
+export const outsourceMaterialReceiptApi = {
+  // 获取委外收货单列表
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-receipts', { method: 'GET', params });
+  },
+
+  // 创建委外收货单
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-receipts', { method: 'POST', data });
+  },
+
+  // 获取委外收货单详情
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-material-receipts/${id}`, { method: 'GET' });
+  },
+
+  // 完成委外收货
+  complete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-material-receipts/${id}/complete`, { method: 'POST' });
+  },
+};
+
+// 委外单相关接口（工序委外，保留用于向后兼容）
 export const outsourceOrderApi = {
   // 获取委外单列表
   list: async (params?: any) => {
@@ -776,6 +850,44 @@ export const exceptionApi = {
   // 异常统计
   statistics: async (params?: { date_start?: string; date_end?: string }) => {
     return apiRequest('/apps/kuaizhizao/exceptions/statistics', { method: 'GET', params });
+  },
+
+  // 异常处理流程
+  process: {
+    // 启动异常处理流程
+    start: async (data: {
+      exception_type: string;
+      exception_id: number;
+      assigned_to?: number;
+      process_config?: any;
+      remarks?: string;
+    }) => {
+      return apiRequest('/apps/kuaizhizao/exceptions/process/start', { method: 'POST', data });
+    },
+    // 获取异常处理流程列表
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/exceptions/process', { method: 'GET', params });
+    },
+    // 获取异常处理流程详情
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/process/${id}`, { method: 'GET' });
+    },
+    // 分配异常处理流程
+    assign: async (id: string, data: { assigned_to: number; comment?: string }) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/process/${id}/assign`, { method: 'POST', data });
+    },
+    // 步骤流转
+    stepTransition: async (id: string, data: { to_step: string; comment?: string }) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/process/${id}/step-transition`, { method: 'POST', data });
+    },
+    // 解决异常处理流程
+    resolve: async (id: string, data?: { comment?: string; verification_result?: string }) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/process/${id}/resolve`, { method: 'POST', data });
+    },
+    // 取消异常处理流程
+    cancel: async (id: string, comment?: string) => {
+      return apiRequest(`/apps/kuaizhizao/exceptions/process/${id}/cancel`, { method: 'POST', data: { comment } });
+    },
   },
 };
 

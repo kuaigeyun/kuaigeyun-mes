@@ -115,6 +115,10 @@ class MaterialBase(BaseModel):
     # 默认值设置（用于创建时输入）
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式），包含财务、采购、销售、库存、生产的默认值")
     
+    # 物料来源控制（核心功能，新增）
+    source_type: Optional[str] = Field(None, max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)")
+    source_config: Optional[Dict[str, Any]] = Field(None, description="物料来源相关配置（JSON格式），包含：BOM、工艺路线、供应商、委外供应商、委外工序、变体属性等")
+    
     @validator("material_type")
     def validate_material_type(cls, v):
         """验证物料类型"""

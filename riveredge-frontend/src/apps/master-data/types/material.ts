@@ -97,6 +97,10 @@ export interface Material {
   isActive: boolean;
   defaults?: MaterialDefaults; // 默认值设置
   codeAliases?: MaterialCodeAlias[]; // 编码别名列表
+  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource/Configure）
+  source_type?: string; // 物料来源类型（向后兼容）
+  sourceConfig?: Record<string, any>; // 物料来源相关配置
+  source_config?: Record<string, any>; // 物料来源相关配置（向后兼容）
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;

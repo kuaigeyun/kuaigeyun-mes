@@ -146,3 +146,64 @@ export const moldApi = {
   },
 };
 
+// 设备状态监控相关接口
+export const equipmentStatusApi = {
+  // 获取设备实时状态列表
+  getRealtimeStatus: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/equipment-status/realtime', { method: 'GET', params });
+  },
+
+  // 获取设备状态监控记录列表
+  listMonitors: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/equipment-status/monitors', { method: 'GET', params });
+  },
+
+  // 创建设备状态监控记录
+  createMonitor: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/equipment-status/monitors', { method: 'POST', data });
+  },
+
+  // 获取设备最新状态
+  getLatestStatus: async (equipmentUuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-status/equipment/${equipmentUuid}/latest`, { method: 'GET' });
+  },
+
+  // 更新设备状态
+  updateStatus: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/equipment-status/update', { method: 'POST', data });
+  },
+
+  // 获取设备状态历史
+  getStatusHistory: async (equipmentUuid: string, params?: any) => {
+    return apiRequest(`/apps/kuaizhizao/equipment-status/equipment/${equipmentUuid}/history`, { method: 'GET', params });
+  },
+};
+
+// 设备维护提醒相关接口
+export const maintenanceReminderApi = {
+  // 获取维护提醒列表
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/maintenance-reminders', { method: 'GET', params });
+  },
+
+  // 获取未读提醒数量
+  getUnreadCount: async () => {
+    return apiRequest('/apps/kuaizhizao/maintenance-reminders/unread-count', { method: 'GET' });
+  },
+
+  // 标记提醒为已读
+  markAsRead: async (data: { reminder_uuids: string[] }) => {
+    return apiRequest('/apps/kuaizhizao/maintenance-reminders/mark-read', { method: 'POST', data });
+  },
+
+  // 标记提醒为已处理
+  markAsHandled: async (data: { reminder_uuid: string; remark?: string }) => {
+    return apiRequest('/apps/kuaizhizao/maintenance-reminders/mark-handled', { method: 'POST', data });
+  },
+
+  // 手动检查维护计划
+  checkMaintenancePlans: async (params?: { advance_days?: number }) => {
+    return apiRequest('/apps/kuaizhizao/maintenance-reminders/check', { method: 'POST', params });
+  },
+};
+
