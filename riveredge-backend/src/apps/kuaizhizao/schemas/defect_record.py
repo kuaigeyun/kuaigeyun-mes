@@ -23,11 +23,18 @@ class DefectRecordBase(BaseModel):
 
     code: Optional[str] = Field(None, description="不良品记录编码（可选，创建时自动生成）")
     reporting_record_id: Optional[int] = Field(None, description="报工记录ID（关联ReportingRecord）")
-    work_order_id: int = Field(..., description="工单ID")
-    work_order_code: str = Field(..., description="工单编码")
-    operation_id: int = Field(..., description="工序ID")
-    operation_code: str = Field(..., description="工序编码")
-    operation_name: str = Field(..., description="工序名称")
+    # 关联检验单（支持从不合格检验单创建不合格品记录）
+    incoming_inspection_id: Optional[int] = Field(None, description="来料检验单ID（关联IncomingInspection）")
+    incoming_inspection_code: Optional[str] = Field(None, description="来料检验单编码")
+    process_inspection_id: Optional[int] = Field(None, description="过程检验单ID（关联ProcessInspection）")
+    process_inspection_code: Optional[str] = Field(None, description="过程检验单编码")
+    finished_goods_inspection_id: Optional[int] = Field(None, description="成品检验单ID（关联FinishedGoodsInspection）")
+    finished_goods_inspection_code: Optional[str] = Field(None, description="成品检验单编码")
+    work_order_id: Optional[int] = Field(None, description="工单ID（可选，从检验单获取）")
+    work_order_code: Optional[str] = Field(None, description="工单编码")
+    operation_id: Optional[int] = Field(None, description="工序ID（可选，从过程检验单获取）")
+    operation_code: Optional[str] = Field(None, description="工序编码")
+    operation_name: Optional[str] = Field(None, description="工序名称")
     product_id: int = Field(..., description="产品ID")
     product_code: str = Field(..., description="产品编码")
     product_name: str = Field(..., description="产品名称")
@@ -62,6 +69,19 @@ class DefectRecordCreateFromReporting(BaseModel):
     defect_reason: str = Field(..., description="不良品原因")
     disposition: str = Field("quarantine", description="处理方式（quarantine/rework/scrap/accept/other）")
     quarantine_location: Optional[str] = Field(None, description="隔离位置（当处理方式为隔离时使用）")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class DefectRecordCreateFromInspection(BaseModel):
+    """
+    从检验单创建不合格品记录请求Schema
+
+    用于从不合格检验单创建不合格品记录的简化请求。
+    """
+    defect_quantity: Decimal = Field(..., description="不合格品数量")
+    defect_type: str = Field("other", description="不合格品类型（dimension/appearance/function/material/other）")
+    defect_reason: str = Field(..., description="不合格原因")
+    disposition: str = Field("quarantine", description="处理方式（return/rework/scrap/accept/other）")
     remarks: Optional[str] = Field(None, description="备注")
 
 

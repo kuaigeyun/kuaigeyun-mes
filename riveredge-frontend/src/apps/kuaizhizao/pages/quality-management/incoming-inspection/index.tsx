@@ -146,6 +146,42 @@ const IncomingInspectionPage: React.FC = () => {
     }
   };
 
+  // 处理创建不合格品记录
+  const handleCreateDefect = (record: IncomingInspection) => {
+    setCurrentDefectInspection(record);
+    setCreateDefectModalVisible(true);
+    defectFormRef.current?.setFieldsValue({
+      defect_quantity: record.unqualified_quantity || 0,
+      defect_type: 'other',
+      defect_reason: '',
+      disposition: 'return', // 来料检验不合格默认退货
+      remarks: '',
+    });
+  };
+
+  // 处理创建不合格品记录提交
+  const handleCreateDefectSubmit = async (values: any) => {
+    try {
+      if (currentDefectInspection?.id) {
+        await qualityApi.incomingInspection.createDefect(currentDefectInspection.id.toString(), {
+          defect_quantity: values.defect_quantity,
+          defect_type: values.defect_type,
+          defect_reason: values.defect_reason,
+          disposition: values.disposition,
+          remarks: values.remarks,
+        });
+      }
+
+      messageApi.success('不合格品记录创建成功');
+      setCreateDefectModalVisible(false);
+      defectFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建不合格品记录失败');
+      throw error;
+    }
+  };
+
   // 批量导入
   const handleImport = async (data: any[][]) => {
     try {
@@ -282,14 +318,26 @@ const IncomingInspectionPage: React.FC = () => {
               检验
             </Button>
           ) : (
-            <Button
-              size="small"
-              type="link"
-              icon={<EyeOutlined />}
-              onClick={() => handleDetail(record)}
-            >
-              详情
-            </Button>
+            <>
+              <Button
+                size="small"
+                type="link"
+                icon={<EyeOutlined />}
+                onClick={() => handleDetail(record)}
+              >
+                详情
+              </Button>
+              {record.quality_status === '不合格' && record.unqualified_quantity > 0 && (
+                <Button
+                  size="small"
+                  type="link"
+                  danger
+                  onClick={() => handleCreateDefect(record)}
+                >
+                  创建不合格品记录
+                </Button>
+              )}
+            </>
           )}
         </Space>
       ),
@@ -659,6 +707,94 @@ const IncomingInspectionPage: React.FC = () => {
           { title: '备注', dataIndex: 'notes' },
         ]}
       />
+
+      {/* 创建不合格品记录Modal */}
+      <FormModalTemplate
+        title="创建不合格品记录"
+        open={createDefectModalVisible}
+        onClose={() => {
+          setCreateDefectModalVisible(false);
+          defectFormRef.current?.resetFields();
+        }}
+        onFinish={handleCreateDefectSubmit}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={defectFormRef}
+      >
+        {currentDefectInspection && (
+          <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <strong>检验单号：</strong>{currentDefectInspection.inspection_code}
+              </Col>
+              <Col span={12}>
+                <strong>物料名称：</strong>{currentDefectInspection.material_name}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <strong>不合格数量：</strong>{currentDefectInspection.unqualified_quantity}
+              </Col>
+            </Row>
+          </Card>
+        )}
+        <ProFormDigit
+          name="defect_quantity"
+          label="不合格品数量"
+          placeholder="请输入不合格品数量"
+          rules={[
+            { required: true, message: '请输入不合格品数量' },
+            { type: 'number', min: 0, message: '不合格品数量不能小于0' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!currentDefectInspection) return Promise.resolve();
+                if (value > (currentDefectInspection.unqualified_quantity || 0)) {
+                  return Promise.reject('不合格品数量不能超过检验单的不合格数量');
+                }
+                return Promise.resolve();
+              },
+            }),
+          ]}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormSelect
+          name="defect_type"
+          label="不合格品类型"
+          placeholder="请选择不合格品类型"
+          rules={[{ required: true, message: '请选择不合格品类型' }]}
+          options={[
+            { label: '尺寸偏差', value: 'dimension' },
+            { label: '外观缺陷', value: 'appearance' },
+            { label: '功能异常', value: 'function' },
+            { label: '材质问题', value: 'material' },
+            { label: '其他', value: 'other' },
+          ]}
+        />
+        <ProFormTextArea
+          name="defect_reason"
+          label="不合格原因"
+          placeholder="请输入不合格原因"
+          rules={[{ required: true, message: '请输入不合格原因' }]}
+          fieldProps={{ rows: 3 }}
+        />
+        <ProFormSelect
+          name="disposition"
+          label="处理方式"
+          placeholder="请选择处理方式"
+          rules={[{ required: true, message: '请选择处理方式' }]}
+          options={[
+            { label: '退货', value: 'return' },
+            { label: '让步接收', value: 'accept' },
+            { label: '隔离', value: 'quarantine' },
+            { label: '其他', value: 'other' },
+          ]}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label="备注"
+          placeholder="请输入备注"
+          fieldProps={{ rows: 2 }}
+        />
+      </FormModalTemplate>
     </ListPageTemplate>
   );
 };

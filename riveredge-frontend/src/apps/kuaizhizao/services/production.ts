@@ -424,6 +424,63 @@ export const warehouseApi = {
         params: templateUuid ? { template_uuid: templateUuid } : undefined,
       });
     },
+    pullFromSalesOrder: async (data: { sales_order_id: number; delivery_quantities?: Record<number, number>; warehouse_id: number; warehouse_name?: string }) => {
+      return apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-order', { method: 'POST', data });
+    },
+    pullFromSalesForecast: async (data: { sales_forecast_id: number; delivery_quantities?: Record<number, number>; warehouse_id: number; warehouse_name?: string }) => {
+      return apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-forecast', { method: 'POST', data });
+    },
+  },
+
+  // 销售退货单
+  salesReturn: {
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/sales-returns', { method: 'GET', params });
+    },
+    create: async (data: any) => {
+      return apiRequest('/apps/kuaizhizao/sales-returns', { method: 'POST', data });
+    },
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/sales-returns/${id}`, { method: 'GET' });
+    },
+    confirm: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/sales-returns/${id}/confirm`, { method: 'POST' });
+    },
+  },
+
+  // 采购退货单
+  purchaseReturn: {
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'GET', params });
+    },
+    create: async (data: any) => {
+      return apiRequest('/apps/kuaizhizao/purchase-returns', { method: 'POST', data });
+    },
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'GET' });
+    },
+    confirm: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/confirm`, { method: 'POST' });
+    },
+  },
+
+  // 补货建议
+  replenishmentSuggestion: {
+    list: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/replenishment-suggestions', { method: 'GET', params });
+    },
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/replenishment-suggestions/${id}`, { method: 'GET' });
+    },
+    generateFromAlerts: async (data?: { alert_ids?: number[] }) => {
+      return apiRequest('/apps/kuaizhizao/replenishment-suggestions/generate-from-alerts', { method: 'POST', data: data || {} });
+    },
+    process: async (id: string, data: { status: string; processing_notes?: string }) => {
+      return apiRequest(`/apps/kuaizhizao/replenishment-suggestions/${id}/process`, { method: 'POST', data });
+    },
+    statistics: async () => {
+      return apiRequest('/apps/kuaizhizao/replenishment-suggestions/statistics', { method: 'GET' });
+    },
   },
 
   // 采购入库单
@@ -572,6 +629,9 @@ export const qualityApi = {
     createFromPurchaseReceipt: async (purchaseReceiptId: string) => {
       return apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' });
     },
+    createDefect: async (inspectionId: string, data: any) => {
+      return apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect`, { method: 'POST', data });
+    },
     import: async (data: any[][]) => {
       return apiRequest<{ success: boolean; message: string; data?: any }>({
         url: '/apps/kuaizhizao/incoming-inspections/import',
@@ -614,6 +674,9 @@ export const qualityApi = {
     },
     createFromWorkOrder: async (workOrderId: string, operationId: string) => {
       return apiRequest(`/apps/kuaizhizao/process-inspections/from-work-order?work_order_id=${workOrderId}&operation_id=${operationId}`, { method: 'POST' });
+    },
+    createDefect: async (inspectionId: string, data: any) => {
+      return apiRequest(`/apps/kuaizhizao/process-inspections/${inspectionId}/create-defect`, { method: 'POST', data });
     },
     import: async (data: any[][]) => {
       return apiRequest<{ success: boolean; message: string; data?: any }>({
@@ -660,6 +723,9 @@ export const qualityApi = {
     },
     createFromWorkOrder: async (workOrderId: string) => {
       return apiRequest(`/apps/kuaizhizao/finished-goods-inspections/from-work-order?work_order_id=${workOrderId}`, { method: 'POST' });
+    },
+    createDefect: async (inspectionId: string, data: any) => {
+      return apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${inspectionId}/create-defect`, { method: 'POST', data });
     },
     import: async (data: any[][]) => {
       return apiRequest<{ success: boolean; message: string; data?: any }>({
@@ -722,6 +788,19 @@ export const financeApi = {
     },
     approve: async (id: string, data: any) => {
       return apiRequest(`/apps/kuaizhizao/purchase-invoices/${id}/approve`, { method: 'POST', data });
+    },
+  },
+
+  // 质量统计和报表
+  qualityStatistics: {
+    getStatistics: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/quality/statistics', { method: 'GET', params });
+    },
+    getAnomalies: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/quality/anomalies', { method: 'GET', params });
+    },
+    getReport: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/reports/quality', { method: 'GET', params });
     },
   },
 

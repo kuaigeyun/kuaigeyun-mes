@@ -5,12 +5,19 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import List, Optional, Annotated
+from typing import List, Optional, Annotated, Dict, Any
 
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.master_data.services.material_service import MaterialService
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
+from apps.master_data.services.material_batch_service import MaterialBatchService
+from apps.master_data.services.material_serial_service import MaterialSerialService
+from apps.master_data.services.material_source_service import (
+    MaterialSourceValidationService,
+    MaterialSourceChangeService,
+    MaterialSourceSuggestionService,
+)
 from apps.master_data.schemas.material_schemas import (
     MaterialGroupCreate, MaterialGroupUpdate, MaterialGroupResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
@@ -18,7 +25,9 @@ from apps.master_data.schemas.material_schemas import (
     BOMBatchImport, BOMVersionCreate, BOMVersionCompare,
     MaterialGroupTreeResponse,
     MaterialCodeMappingCreate, MaterialCodeMappingUpdate, MaterialCodeMappingResponse,
-    MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse
+    MaterialCodeMappingListResponse, MaterialCodeConvertRequest, MaterialCodeConvertResponse,
+    MaterialBatchCreate, MaterialBatchUpdate, MaterialBatchResponse, MaterialBatchListResponse,
+    MaterialSerialCreate, MaterialSerialUpdate, MaterialSerialResponse, MaterialSerialListResponse
 )
 from apps.master_data.services.ai.material_ai_service import MaterialAIService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -963,5 +972,463 @@ async def get_material_ai_suggestions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"生成 AI 建议失败: {str(e)}"
+        )
+
+
+# ==================== 物料批号相关接口 ====================
+
+@router.post("/batches", response_model=MaterialBatchResponse, summary="创建物料批号")
+async def create_material_batch(
+    data: MaterialBatchCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建物料批号
+    
+    - **material_uuid**: 物料UUID（必填）
+    - **batch_no**: 批号（必填，同一物料下唯一）
+    - **production_date**: 生产日期（可选）
+    - **expiry_date**: 有效期（可选，用于有保质期的物料）
+    - **supplier_batch_no**: 供应商批号（可选）
+    - **quantity**: 批号数量（默认：0）
+    - **status**: 批号状态（默认：in_stock）
+    - **remark**: 备注（可选）
+    """
+    try:
+        return await MaterialBatchService.create_batch(tenant_id, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/batches", response_model=MaterialBatchListResponse, summary="获取物料批号列表")
+async def list_material_batches(
+    material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
+    batch_no: Optional[str] = Query(None, description="批号（模糊搜索）"),
+    status: Optional[str] = Query(None, description="状态（筛选条件）"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+):
+    """
+    获取物料批号列表
+    
+    支持按物料、批号、状态筛选和搜索。
+    """
+    try:
+        return await MaterialBatchService.list_batches(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid,
+            batch_no=batch_no,
+            status=status,
+            page=page,
+            page_size=page_size
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取批号列表失败: {str(e)}"
+        )
+
+
+@router.get("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="获取物料批号详情")
+async def get_material_batch(
+    batch_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取物料批号详情
+    """
+    try:
+        return await MaterialBatchService.get_batch_by_uuid(tenant_id, batch_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/batches/{batch_uuid}", response_model=MaterialBatchResponse, summary="更新物料批号")
+async def update_material_batch(
+    batch_uuid: str,
+    data: MaterialBatchUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新物料批号
+    """
+    try:
+        return await MaterialBatchService.update_batch(tenant_id, batch_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/batches/{batch_uuid}", summary="删除物料批号")
+async def delete_material_batch(
+    batch_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除物料批号（软删除）
+    """
+    try:
+        await MaterialBatchService.delete_batch(tenant_id, batch_uuid)
+        return {"message": "删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/batches/generate", summary="生成批号")
+async def generate_batch_no(
+    material_uuid: str = Query(..., description="物料UUID"),
+    rule: Optional[str] = Query(None, description="批号生成规则（可选）"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+):
+    """
+    生成批号
+    
+    支持多种批号生成规则：
+    - {YYYYMMDD}-{序号}：20260115-001
+    - {物料编码}-{YYYYMMDD}-{序号}：MAT-RAW-0001-20260115-001
+    """
+    try:
+        batch_no = await MaterialBatchService.generate_batch_no(tenant_id, material_uuid, rule)
+        return {"batch_no": batch_no}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/batches/{batch_uuid}/trace", summary="批号追溯")
+async def trace_batch(
+    batch_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批号追溯
+    
+    查询批号的完整流转历史（入库→出库→生产→销售）
+    """
+    try:
+        return await MaterialBatchService.trace_batch(tenant_id, batch_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 物料序列号相关接口 ====================
+
+@router.post("/serials", response_model=MaterialSerialResponse, summary="创建物料序列号")
+async def create_material_serial(
+    data: MaterialSerialCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建物料序列号
+    
+    - **material_uuid**: 物料UUID（必填）
+    - **serial_no**: 序列号（必填，全局唯一）
+    - **production_date**: 生产日期（可选）
+    - **factory_date**: 出厂日期（可选）
+    - **supplier_serial_no**: 供应商序列号（可选）
+    - **status**: 序列号状态（默认：in_stock）
+    - **remark**: 备注（可选）
+    """
+    try:
+        return await MaterialSerialService.create_serial(tenant_id, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/serials", response_model=MaterialSerialListResponse, summary="获取物料序列号列表")
+async def list_material_serials(
+    material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
+    serial_no: Optional[str] = Query(None, description="序列号（模糊搜索）"),
+    status: Optional[str] = Query(None, description="状态（筛选条件）"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+):
+    """
+    获取物料序列号列表
+    
+    支持按物料、序列号、状态筛选和搜索。
+    """
+    try:
+        return await MaterialSerialService.list_serials(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid,
+            serial_no=serial_no,
+            status=status,
+            page=page,
+            page_size=page_size
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取序列号列表失败: {str(e)}"
+        )
+
+
+@router.get("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="获取物料序列号详情")
+async def get_material_serial(
+    serial_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取物料序列号详情
+    """
+    try:
+        return await MaterialSerialService.get_serial_by_uuid(tenant_id, serial_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/serials/{serial_uuid}", response_model=MaterialSerialResponse, summary="更新物料序列号")
+async def update_material_serial(
+    serial_uuid: str,
+    data: MaterialSerialUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新物料序列号
+    """
+    try:
+        return await MaterialSerialService.update_serial(tenant_id, serial_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/serials/{serial_uuid}", summary="删除物料序列号")
+async def delete_material_serial(
+    serial_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除物料序列号（软删除）
+    """
+    try:
+        await MaterialSerialService.delete_serial(tenant_id, serial_uuid)
+        return {"message": "删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/serials/generate", summary="生成序列号（批量）")
+async def generate_serial_nos(
+    material_uuid: str = Query(..., description="物料UUID"),
+    count: int = Query(1, ge=1, le=1000, description="生成数量"),
+    rule: Optional[str] = Query(None, description="序列号生成规则（可选）"),
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    tenant_id: Annotated[int, Depends(get_current_tenant)] = None
+):
+    """
+    生成序列号（批量生成）
+    
+    支持多种序列号生成规则：
+    - {物料编码}-{YYYYMMDD}-{6位序号}：MAT-FIN-0001-20260115-000001
+    - {物料编码}-{YYYY}-{6位序号}：MAT-FIN-0001-2026-000001
+    """
+    try:
+        serial_nos = await MaterialSerialService.generate_serial_no(tenant_id, material_uuid, count, rule)
+        return {"serial_nos": serial_nos, "count": len(serial_nos)}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/serials/{serial_uuid}/trace", summary="序列号追溯")
+async def trace_serial(
+    serial_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    序列号追溯
+    
+    查询序列号的完整生命周期（生产→入库→出库→销售→售后）
+    """
+    try:
+        return await MaterialSerialService.trace_serial(tenant_id, serial_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+# ==================== 物料来源控制相关接口 ====================
+
+@router.get("/{material_uuid}/source/validate", summary="验证物料来源配置")
+async def validate_material_source(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    验证物料来源配置
+    
+    验证物料来源类型和相关配置的完整性，返回验证结果（通过/警告/错误）。
+    """
+    try:
+        return await MaterialSourceValidationService.validate_material_source(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"验证失败: {str(e)}"
+        )
+
+
+@router.post("/{material_uuid}/source/validate-batch", summary="批量验证物料来源配置")
+async def validate_batch_material_sources(
+    material_uuids: List[str],
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量验证物料来源配置
+    
+    批量验证多个物料的来源配置完整性。
+    """
+    try:
+        return await MaterialSourceValidationService.validate_batch_materials(
+            tenant_id=tenant_id,
+            material_uuids=material_uuids
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量验证失败: {str(e)}"
+        )
+
+
+@router.get("/{material_uuid}/source/change-impact", summary="检查物料来源类型变更影响")
+async def check_source_change_impact(
+    material_uuid: str,
+    new_source_type: str = Query(..., description="新的来源类型"),
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    检查物料来源类型变更的影响
+    
+    检查变更物料来源类型对在制工单、采购订单等的影响。
+    """
+    try:
+        return await MaterialSourceChangeService.check_change_impact(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid,
+            new_source_type=new_source_type
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"检查变更影响失败: {str(e)}"
+        )
+
+
+@router.put("/{material_uuid}/source/change", response_model=MaterialResponse, summary="变更物料来源类型")
+async def change_material_source(
+    material_uuid: str,
+    new_source_type: str = Query(..., description="新的来源类型"),
+    new_source_config: Optional[Dict[str, Any]] = Query(None, description="新的来源配置（可选）"),
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    变更物料来源类型
+    
+    变更物料的来源类型和相关配置，系统会自动检查变更影响并处理。
+    """
+    try:
+        material = await MaterialSourceChangeService.apply_source_change(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid,
+            new_source_type=new_source_type,
+            new_source_config=new_source_config,
+            updated_by=current_user.id
+        )
+        return await MaterialService.get_material_by_uuid(tenant_id, material.uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"变更失败: {str(e)}"
+        )
+
+
+@router.get("/{material_uuid}/source/suggest", summary="建议物料来源类型")
+async def suggest_material_source(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    建议物料来源类型
+    
+    基于物料类型、BOM结构、历史数据等智能建议物料来源类型。
+    """
+    try:
+        return await MaterialSourceSuggestionService.suggest_source_type(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"建议失败: {str(e)}"
+        )
+
+
+@router.get("/{material_uuid}/source/check-completeness", summary="检查物料来源配置完整性")
+async def check_source_config_completeness(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    检查物料来源配置完整性
+    
+    检查物料来源配置是否完整，返回缺失的配置项。
+    """
+    try:
+        return await MaterialSourceSuggestionService.check_config_completeness(
+            tenant_id=tenant_id,
+            material_uuid=material_uuid
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"检查失败: {str(e)}"
         )
 

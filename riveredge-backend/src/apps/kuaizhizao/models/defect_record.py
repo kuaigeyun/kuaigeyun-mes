@@ -61,6 +61,9 @@ class DefectRecord(BaseModel):
             ("tenant_id",),
             ("code",),
             ("reporting_record_id",),
+            ("incoming_inspection_id",),
+            ("process_inspection_id",),
+            ("finished_goods_inspection_id",),
             ("work_order_id",),
             ("operation_id",),
             ("defect_type",),
@@ -78,11 +81,18 @@ class DefectRecord(BaseModel):
 
     # 关联信息
     reporting_record_id = fields.IntField(null=True, description="报工记录ID（关联ReportingRecord）")
-    work_order_id = fields.IntField(description="工单ID")
-    work_order_code = fields.CharField(max_length=50, description="工单编码")
-    operation_id = fields.IntField(description="工序ID")
-    operation_code = fields.CharField(max_length=50, description="工序编码")
-    operation_name = fields.CharField(max_length=200, description="工序名称")
+    # 关联检验单（支持从不合格检验单创建不合格品记录）
+    incoming_inspection_id = fields.IntField(null=True, description="来料检验单ID（关联IncomingInspection）")
+    incoming_inspection_code = fields.CharField(max_length=50, null=True, description="来料检验单编码")
+    process_inspection_id = fields.IntField(null=True, description="过程检验单ID（关联ProcessInspection）")
+    process_inspection_code = fields.CharField(max_length=50, null=True, description="过程检验单编码")
+    finished_goods_inspection_id = fields.IntField(null=True, description="成品检验单ID（关联FinishedGoodsInspection）")
+    finished_goods_inspection_code = fields.CharField(max_length=50, null=True, description="成品检验单编码")
+    work_order_id = fields.IntField(null=True, description="工单ID（可选，从检验单获取）")
+    work_order_code = fields.CharField(max_length=50, null=True, description="工单编码")
+    operation_id = fields.IntField(null=True, description="工序ID（可选，从过程检验单获取）")
+    operation_code = fields.CharField(max_length=50, null=True, description="工序编码")
+    operation_name = fields.CharField(max_length=200, null=True, description="工序名称")
     product_id = fields.IntField(description="产品ID")
     product_code = fields.CharField(max_length=50, description="产品编码")
     product_name = fields.CharField(max_length=200, description="产品名称")

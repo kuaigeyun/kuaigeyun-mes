@@ -34,8 +34,13 @@ from .finished_goods_receipt import FinishedGoodsReceipt
 from .finished_goods_receipt_item import FinishedGoodsReceiptItem
 from .sales_delivery import SalesDelivery
 from .sales_delivery_item import SalesDeliveryItem
+from .sales_return import SalesReturn
+from .sales_return_item import SalesReturnItem
 from .purchase_receipt import PurchaseReceipt
 from .purchase_receipt_item import PurchaseReceiptItem
+from .purchase_return import PurchaseReturn
+from .purchase_return_item import PurchaseReturnItem
+from .replenishment_suggestion import ReplenishmentSuggestion
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem
@@ -44,6 +49,7 @@ from .purchase_order import PurchaseOrder, PurchaseOrderItem
 from .incoming_inspection import IncomingInspection
 from .process_inspection import ProcessInspection
 from .finished_goods_inspection import FinishedGoodsInspection
+from .quality_standard import QualityStandard
 
 # 财务协同模块
 from .payable import Payable
@@ -115,8 +121,13 @@ __all__ = [
     'FinishedGoodsReceiptItem',
     'SalesDelivery',
     'SalesDeliveryItem',
+    'SalesReturn',
+    'SalesReturnItem',
     'PurchaseReceipt',
     'PurchaseReceiptItem',
+    'PurchaseReturn',
+    'PurchaseReturnItem',
+    'ReplenishmentSuggestion',
 
     # 采购管理模块
     'PurchaseOrder',
@@ -126,6 +137,7 @@ __all__ = [
     'IncomingInspection',
     'ProcessInspection',
     'FinishedGoodsInspection',
+    'QualityStandard',
 
     # 财务协同模块
     'Payable',

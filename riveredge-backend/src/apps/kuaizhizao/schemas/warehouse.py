@@ -200,8 +200,20 @@ class FinishedGoodsReceiptItemResponse(FinishedGoodsReceiptItemBase):
 class SalesDeliveryBase(BaseSchema):
     """销售出库单基础schema"""
     delivery_code: Optional[str] = Field(None, max_length=50, description="出库单编码（可选，如果不提供则自动生成）")
-    sales_order_id: Optional[int] = Field(None, description="销售订单ID（MTO模式，MTS模式可为空）")
-    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码（MTO模式，MTS模式可为空）")
+    
+    # 销售订单信息（MTO模式，MTS模式可为空）
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID（MTO模式）")
+    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码（MTO模式）")
+    
+    # 销售预测信息（MTS模式，MTO模式可为空）
+    sales_forecast_id: Optional[int] = Field(None, description="销售预测ID（MTS模式）")
+    sales_forecast_code: Optional[str] = Field(None, max_length=50, description="销售预测编码（MTS模式）")
+    
+    # 统一需求关联（销售出库与需求关联功能增强）
+    demand_id: Optional[int] = Field(None, description="需求ID（关联统一需求表，MTS关联销售预测，MTO关联销售订单）")
+    demand_code: Optional[str] = Field(None, max_length=50, description="需求编码")
+    demand_type: Optional[str] = Field(None, max_length=20, description="需求类型（sales_forecast/sales_order）")
+    
     customer_id: int = Field(..., description="客户ID")
     customer_name: str = Field(..., max_length=200, description="客户名称")
     warehouse_id: int = Field(..., description="出库仓库ID")
@@ -258,8 +270,18 @@ class SalesDeliveryItemBase(BaseSchema):
     total_amount: float = Field(..., ge=0, description="金额")
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    
+    # 批次信息（批号和序列号选择功能增强）
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    
+    # 序列号信息（批号和序列号选择功能增强）
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（存储多个序列号）")
+    
+    # 需求关联（销售出库与需求关联功能增强）
+    demand_id: Optional[int] = Field(None, description="需求ID（关联统一需求表）")
+    demand_item_id: Optional[int] = Field(None, description="需求明细ID")
+    
     status: str = Field("待出库", max_length=20, description="出库状态")
     delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
     notes: Optional[str] = Field(None, description="备注")
@@ -378,6 +400,232 @@ class PurchaseReceiptResponse(PurchaseReceiptBase):
     """采购入库单响应schema"""
     id: int = Field(..., description="入库单ID")
     tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+# === 销售退货单 ===
+
+class SalesReturnBase(BaseSchema):
+    """销售退货单基础schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="退货单编码（可选，如果不提供则自动生成）")
+    
+    # 销售出库单信息（关联原出库单）
+    sales_delivery_id: Optional[int] = Field(None, description="销售出库单ID")
+    sales_delivery_code: Optional[str] = Field(None, max_length=50, description="销售出库单编码")
+    
+    # 销售订单信息（用于追溯）
+    sales_order_id: Optional[int] = Field(None, description="销售订单ID")
+    sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
+    
+    customer_id: int = Field(..., description="客户ID")
+    customer_name: str = Field(..., max_length=200, description="客户名称")
+    warehouse_id: int = Field(..., description="退货入库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="退货入库仓库名称")
+    return_time: Optional[datetime] = Field(None, description="实际退货时间")
+    returner_id: Optional[int] = Field(None, description="退货人ID")
+    returner_name: Optional[str] = Field(None, max_length=100, description="退货人姓名")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    
+    # 退货原因
+    return_reason: Optional[str] = Field(None, max_length=200, description="退货原因")
+    return_type: str = Field("质量问题", max_length=20, description="退货类型（质量问题/客户取消/其他）")
+    
+    status: str = Field("待退货", max_length=20, description="退货状态")
+    total_quantity: float = Field(0, ge=0, description="总退货数量")
+    total_amount: float = Field(0, ge=0, description="总金额")
+    shipping_method: Optional[str] = Field(None, max_length=50, description="退货方式")
+    tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
+    shipping_address: Optional[str] = Field(None, description="退货地址")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class SalesReturnCreate(SalesReturnBase):
+    """销售退货单创建schema"""
+    items: Optional[List["SalesReturnItemCreate"]] = Field(None, description="退货明细列表")
+
+
+class SalesReturnUpdate(SalesReturnBase):
+    """销售退货单更新schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="退货单编码")
+
+
+class SalesReturnResponse(SalesReturnBase):
+    """销售退货单响应schema"""
+    id: int = Field(..., description="退货单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+# === 销售退货单明细 ===
+
+class SalesReturnItemBase(BaseSchema):
+    """销售退货单明细基础schema"""
+    # 关联原销售出库单明细
+    sales_delivery_item_id: Optional[int] = Field(None, description="销售出库单明细ID")
+    
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    return_quantity: float = Field(..., gt=0, description="退货数量")
+    unit_price: float = Field(..., ge=0, description="单价")
+    total_amount: float = Field(..., ge=0, description="金额")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    
+    # 批次信息（批号和序列号选择功能增强）
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    
+    # 序列号信息（批号和序列号选择功能增强）
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（存储多个序列号）")
+    
+    status: str = Field("待退货", max_length=20, description="退货状态")
+    return_time: Optional[datetime] = Field(None, description="实际退货时间")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class SalesReturnItemCreate(SalesReturnItemBase):
+    """销售退货单明细创建schema"""
+    pass
+
+
+class SalesReturnItemUpdate(SalesReturnItemBase):
+    """销售退货单明细更新schema"""
+    pass
+
+
+class SalesReturnItemResponse(SalesReturnItemBase):
+    """销售退货单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    return_id: int = Field(..., description="退货单ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+# === 采购退货单 ===
+
+class PurchaseReturnBase(BaseSchema):
+    """采购退货单基础schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="退货单编码（可选，如果不提供则自动生成）")
+    
+    # 采购入库单信息（关联原入库单）
+    purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
+    purchase_receipt_code: Optional[str] = Field(None, max_length=50, description="采购入库单编码")
+    
+    # 采购订单信息（用于追溯）
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID")
+    purchase_order_code: Optional[str] = Field(None, max_length=50, description="采购订单编码")
+    
+    supplier_id: int = Field(..., description="供应商ID")
+    supplier_name: str = Field(..., max_length=200, description="供应商名称")
+    warehouse_id: int = Field(..., description="退货出库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="退货出库仓库名称")
+    return_time: Optional[datetime] = Field(None, description="实际退货时间")
+    returner_id: Optional[int] = Field(None, description="退货人ID")
+    returner_name: Optional[str] = Field(None, max_length=100, description="退货人姓名")
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    
+    # 退货原因
+    return_reason: Optional[str] = Field(None, max_length=200, description="退货原因")
+    return_type: str = Field("质量问题", max_length=20, description="退货类型（质量问题/供应商取消/其他）")
+    
+    status: str = Field("待退货", max_length=20, description="退货状态")
+    total_quantity: float = Field(0, ge=0, description="总退货数量")
+    total_amount: float = Field(0, ge=0, description="总金额")
+    shipping_method: Optional[str] = Field(None, max_length=50, description="退货方式")
+    tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
+    shipping_address: Optional[str] = Field(None, description="退货地址")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class PurchaseReturnCreate(PurchaseReturnBase):
+    """采购退货单创建schema"""
+    items: Optional[List["PurchaseReturnItemCreate"]] = Field(None, description="退货明细列表")
+
+
+class PurchaseReturnUpdate(PurchaseReturnBase):
+    """采购退货单更新schema"""
+    return_code: Optional[str] = Field(None, max_length=50, description="退货单编码")
+
+
+class PurchaseReturnResponse(PurchaseReturnBase):
+    """采购退货单响应schema"""
+    id: int = Field(..., description="退货单ID")
+    tenant_id: int = Field(..., description="租户ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+# === 采购退货单明细 ===
+
+class PurchaseReturnItemBase(BaseSchema):
+    """采购退货单明细基础schema"""
+    # 关联原采购入库单明细
+    purchase_receipt_item_id: Optional[int] = Field(None, description="采购入库单明细ID")
+    
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    return_quantity: float = Field(..., gt=0, description="退货数量")
+    unit_price: float = Field(..., ge=0, description="单价")
+    total_amount: float = Field(..., ge=0, description="金额")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    
+    # 批次信息（批号和序列号选择功能增强）
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    
+    # 序列号信息（批号和序列号选择功能增强）
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（存储多个序列号）")
+    
+    status: str = Field("待退货", max_length=20, description="退货状态")
+    return_time: Optional[datetime] = Field(None, description="实际退货时间")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class PurchaseReturnItemCreate(PurchaseReturnItemBase):
+    """采购退货单明细创建schema"""
+    pass
+
+
+class PurchaseReturnItemUpdate(PurchaseReturnItemBase):
+    """采购退货单明细更新schema"""
+    pass
+
+
+class PurchaseReturnItemResponse(PurchaseReturnItemBase):
+    """采购退货单明细响应schema"""
+    id: int = Field(..., description="明细ID")
+    tenant_id: int = Field(..., description="租户ID")
+    return_id: int = Field(..., description="退货单ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

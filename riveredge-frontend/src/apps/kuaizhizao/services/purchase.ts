@@ -141,11 +141,22 @@ export async function deletePurchaseOrder(id: number): Promise<void> {
 /**
  * 审核采购订单
  */
-export async function approvePurchaseOrder(id: number, rejection_reason?: string): Promise<PurchaseOrder> {
+/**
+ * 审核采购订单请求接口
+ */
+export interface PurchaseOrderApproveRequest {
+  approved: boolean;
+  review_remarks?: string;
+}
+
+/**
+ * 审核采购订单
+ */
+export async function approvePurchaseOrder(id: number, data: PurchaseOrderApproveRequest): Promise<PurchaseOrder> {
   return apiRequest<PurchaseOrder>({
     url: `/apps/kuaizhizao/purchase-orders/${id}/approve`,
     method: 'POST',
-    data: { rejection_reason },
+    data,
   });
 }
 
@@ -177,6 +188,60 @@ export async function pushPurchaseOrderToReceipt(id: number, receiptQuantities?:
     url: `/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`,
     method: 'POST',
     data: receiptQuantities || {},
+  });
+}
+
+/**
+ * 审批流程状态接口定义
+ */
+export interface ApprovalStatus {
+  has_flow: boolean;
+  flow_id?: number;
+  flow_code?: string;
+  flow_name?: string;
+  flow_status?: string;
+  current_step?: number;
+  current_step_name?: string;
+  records_count: number;
+  is_completed?: boolean;
+  is_rejected?: boolean;
+}
+
+/**
+ * 审批记录接口定义
+ */
+export interface ApprovalRecord {
+  id: number;
+  uuid: string;
+  flow_id?: number;
+  flow_code?: string;
+  step_order?: number;
+  step_name?: string;
+  approver_id: number;
+  approver_name: string;
+  approval_result: string;
+  approval_comment?: string;
+  approval_time?: string;
+  flow_status?: string;
+}
+
+/**
+ * 获取采购订单审批流程状态
+ */
+export async function getPurchaseOrderApprovalStatus(orderId: number): Promise<ApprovalStatus> {
+  return apiRequest<ApprovalStatus>({
+    url: `/apps/kuaizhizao/purchase-orders/${orderId}/approval-status`,
+    method: 'GET',
+  });
+}
+
+/**
+ * 获取采购订单审批记录列表
+ */
+export async function getPurchaseOrderApprovalRecords(orderId: number): Promise<{ data: ApprovalRecord[]; total: number }> {
+  return apiRequest<{ data: ApprovalRecord[]; total: number }>({
+    url: `/apps/kuaizhizao/purchase-orders/${orderId}/approval-records`,
+    method: 'GET',
   });
 }
 

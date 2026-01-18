@@ -25,12 +25,14 @@ import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work
 // 采购管理页面
 import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
 import PurchaseReceiptsPage from './pages/purchase-management/purchase-receipts';
+import PurchaseReturnsPage from './pages/purchase-management/purchase-returns';
 
 // 销售管理页面
 // TODO: 销售预测和销售订单已合并为统一需求管理，相关页面已删除
 // import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 // import SalesOrdersPage from './pages/sales-management/sales-orders';
 import SalesDeliveriesPage from './pages/sales-management/sales-deliveries';
+import SalesReturnsPage from './pages/sales-management/sales-returns';
 
 // 质量管理页面
 import IncomingInspectionPage from './pages/quality-management/incoming-inspection';
@@ -81,6 +83,7 @@ import DeliveryDelayExceptionsPage from './pages/production-execution/delivery-d
 import QualityExceptionsPage from './pages/production-execution/quality-exceptions';
 import ExceptionStatisticsPage from './pages/production-execution/exception-statistics';
 import ExceptionProcessPage from './pages/production-execution/exception-process';
+import ReplenishmentSuggestionsPage from './pages/warehouse-management/replenishment-suggestions';
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -96,6 +99,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 采购管理路由 */}
       <Route path="purchase-management/purchase-orders" element={<PurchaseOrdersPage />} />
       <Route path="purchase-management/purchase-receipts" element={<PurchaseReceiptsPage />} />
+      <Route path="purchase-management/purchase-returns" element={<PurchaseReturnsPage />} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
@@ -116,6 +120,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} /> */}
       {/* <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} /> */}
       <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
+      <Route path="sales-management/sales-returns" element={<SalesReturnsPage />} />
 
       {/* 质量管理路由 */}
       <Route path="quality-management/incoming-inspection" element={<IncomingInspectionPage />} />
@@ -161,6 +166,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/document-timing" element={<DocumentTimingPage />} />
       <Route path="warehouse-management/document-efficiency" element={<DocumentEfficiencyPage />} />
       <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
+      <Route path="warehouse-management/replenishment-suggestions" element={<ReplenishmentSuggestionsPage />} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={

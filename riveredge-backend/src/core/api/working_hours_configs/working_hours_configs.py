@@ -8,6 +8,7 @@ Date: 2025-01-15
 """
 
 from typing import Optional, List
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from loguru import logger
 
@@ -137,3 +138,45 @@ async def delete_working_hours_config(
         raise NotFoundError("工作时间段配置不存在")
     await working_hours_config_service.delete(config_id)
 
+
+@router.post("/calculate", summary="计算工作时间")
+async def calculate_working_hours(
+    start_time: datetime = Query(..., description="开始时间"),
+    end_time: datetime = Query(..., description="结束时间"),
+    scope_type: Optional[str] = Query(None, description="适用范围类型（可选）"),
+    scope_id: Optional[int] = Query(None, description="适用范围ID（可选）"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    计算两个时间点之间的工作时间（小时）
+
+    根据配置的工作时间段，排除非工作时间，计算实际工作时间。
+
+    - **start_time**: 开始时间
+    - **end_time**: 结束时间
+    - **scope_type**: 适用范围类型（可选）
+    - **scope_id**: 适用范围ID（可选）
+
+    返回计算的工作时间（小时）。
+    """
+    try:
+        working_hours = await working_hours_config_service.calculate_working_hours(
+            tenant_id=tenant_id,
+            start_time=start_time,
+            end_time=end_time,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        return {
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "working_hours": float(working_hours),
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+        }
+    except Exception as e:
+        logger.error(f"计算工作时间失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"计算工作时间失败: {str(e)}"
+        )

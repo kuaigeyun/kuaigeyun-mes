@@ -261,12 +261,17 @@ const AccountsPayablePage: React.FC = () => {
               const response = await financeApi.payable.list({
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                ...params,
+                status: params.status,
+                supplier_id: params.supplier_id,
+                due_date_start: params.due_date_start,
+                due_date_end: params.due_date_end,
               });
+              // API返回的是数组，需要转换为表格格式
+              const data = Array.isArray(response) ? response : (response.data || []);
               return {
-                data: response.data,
-                success: response.success,
-                total: response.total,
+                data: data,
+                success: true,
+                total: data.length,
               };
             } catch (error) {
               messageApi.error('获取应付单列表失败');

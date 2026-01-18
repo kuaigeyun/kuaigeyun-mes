@@ -7,13 +7,15 @@
  * @date 2025-12-29
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Space, Tag, Progress } from 'antd';
+import { App, Button, Card, Row, Col, Statistic, Table, Select, DatePicker, Space, Tag, Progress, Spin } from 'antd';
 import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
+import { qualityApi } from '../../../services/production';
+import dayjs from 'dayjs';
 
 // 质量报表接口定义
 interface QualityReportItem {
@@ -49,38 +51,179 @@ const QualityReportPage: React.FC = () => {
 
   // 报表参数状态
   const [reportType, setReportType] = useState<'summary' | 'trend' | 'analysis'>('summary');
-  const [dateRange, setDateRange] = useState<[string, string]>(['2025-01-01', '2025-12-31']);
+  const [dateRange, setDateRange] = useState<[string, string]>([
+    dayjs().subtract(30, 'day').format('YYYY-MM-DD'),
+    dayjs().format('YYYY-MM-DD')
+  ]);
   const [inspectionType, setInspectionType] = useState<string>('all');
+  const [loading, setLoading] = useState(false);
 
   // 统计数据状态
   const [stats, setStats] = useState({
-    totalInspections: 1250,
-    qualifiedInspections: 1180,
-    unqualifiedInspections: 70,
-    overallQualifiedRate: 94.4,
-    incomingQualifiedRate: 96.2,
-    processQualifiedRate: 93.8,
-    finishedQualifiedRate: 95.1,
+    totalInspections: 0,
+    qualifiedInspections: 0,
+    unqualifiedInspections: 0,
+    overallQualifiedRate: 0,
+    incomingQualifiedRate: 0,
+    processQualifiedRate: 0,
+    finishedQualifiedRate: 0,
   });
 
   // 图表数据状态
-  const [trendData, setTrendData] = useState<QualityTrendData[]>([
-    { month: '01月', incomingQualified: 95.5, processQualified: 92.1, finishedQualified: 94.8, overallQualified: 94.1 },
-    { month: '02月', incomingQualified: 96.8, processQualified: 94.5, finishedQualified: 95.2, overallQualified: 95.5 },
-    { month: '03月', incomingQualified: 95.2, processQualified: 93.2, finishedQualified: 94.9, overallQualified: 94.4 },
-    { month: '04月', incomingQualified: 97.1, processQualified: 95.8, finishedQualified: 96.3, overallQualified: 96.4 },
-    { month: '05月', incomingQualified: 96.5, processQualified: 94.9, finishedQualified: 95.8, overallQualified: 95.7 },
-    { month: '06月', incomingQualified: 97.8, processQualified: 96.2, finishedQualified: 96.9, overallQualified: 97.0 },
-  ]);
+  const [trendData, setTrendData] = useState<QualityTrendData[]>([]);
 
   // 质量问题分布
   const [defectDistribution, setDefectDistribution] = useState([
-    { type: '尺寸偏差', count: 25, percentage: 35.7 },
-    { type: '表面缺陷', count: 18, percentage: 25.7 },
-    { type: '功能异常', count: 12, percentage: 17.1 },
-    { type: '材质问题', count: 10, percentage: 14.3 },
-    { type: '其他', count: 5, percentage: 7.1 },
+    { type: '尺寸偏差', count: 0, percentage: 0 },
+    { type: '表面缺陷', count: 0, percentage: 0 },
+    { type: '功能异常', count: 0, percentage: 0 },
+    { type: '材质问题', count: 0, percentage: 0 },
+    { type: '其他', count: 0, percentage: 0 },
   ]);
+
+  // 报表数据
+  const [reportData, setReportData] = useState<QualityReportItem[]>([]);
+
+  // 加载统计数据
+  const loadStatistics = async () => {
+    try {
+      setLoading(true);
+      const params: any = {};
+      if (inspectionType !== 'all') {
+        params.inspection_type = inspectionType;
+      }
+      if (dateRange[0]) {
+        params.start_date = dateRange[0];
+      }
+      if (dateRange[1]) {
+        params.end_date = dateRange[1];
+      }
+
+      const response = await qualityApi.qualityStatistics.getStatistics(params);
+      const data = response || {};
+
+      // 更新统计数据
+      const totalInspections = data.total_inspections || 0;
+      const qualifiedQuantity = data.qualified_quantity || 0;
+      const unqualifiedQuantity = data.unqualified_quantity || 0;
+      const qualifiedRate = data.qualified_rate || 0;
+
+      setStats({
+        totalInspections,
+        qualifiedInspections: Math.round(qualifiedQuantity * (qualifiedRate / 100)),
+        unqualifiedInspections: Math.round(unqualifiedQuantity),
+        overallQualifiedRate: Number(qualifiedRate.toFixed(2)),
+        incomingQualifiedRate: data.by_type?.incoming?.qualified_rate 
+          ? Number(data.by_type.incoming.qualified_rate.toFixed(2)) 
+          : 0,
+        processQualifiedRate: data.by_type?.process?.qualified_rate 
+          ? Number(data.by_type.process.qualified_rate.toFixed(2)) 
+          : 0,
+        finishedQualifiedRate: data.by_type?.finished?.qualified_rate 
+          ? Number(data.by_type.finished.qualified_rate.toFixed(2)) 
+          : 0,
+      });
+    } catch (error: any) {
+      messageApi.error(error.message || '加载统计数据失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 加载质量异常数据
+  const loadAnomalies = async () => {
+    try {
+      const params: any = {};
+      if (inspectionType !== 'all') {
+        params.inspection_type = inspectionType;
+      }
+      if (dateRange[0]) {
+        params.start_date = dateRange[0];
+      }
+      if (dateRange[1]) {
+        params.end_date = dateRange[1];
+      }
+
+      const response = await qualityApi.qualityStatistics.getAnomalies(params);
+      const anomalies = response?.anomalies || [];
+
+      // 转换为报表数据格式
+      const items: QualityReportItem[] = anomalies.map((item: any) => ({
+        id: item.inspection_id,
+        inspectionType: item.inspection_type,
+        inspectionCode: item.inspection_code,
+        productCode: item.material_code,
+        productName: item.material_name,
+        batchNo: item.batch_no || '-',
+        totalQuantity: item.inspection_quantity,
+        qualifiedQuantity: item.qualified_quantity,
+        unqualifiedQuantity: item.unqualified_quantity,
+        qualifiedRate: item.inspection_quantity > 0
+          ? Number((item.qualified_quantity / item.inspection_quantity * 100).toFixed(2))
+          : 0,
+        inspectorName: item.inspector_name || '-',
+        inspectionDate: item.inspection_time ? dayjs(item.inspection_time).format('YYYY-MM-DD HH:mm') : '-',
+        status: item.quality_status === '合格' ? 'qualified' : 'unqualified',
+        defectTypes: item.nonconformance_reason ? [item.nonconformance_reason] : [],
+        remarks: item.remarks,
+      }));
+
+      setReportData(items);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载质量异常数据失败');
+    }
+  };
+
+  // 加载质量报表数据
+  const loadQualityReport = async () => {
+    try {
+      const params: any = {
+        report_type: reportType === 'summary' ? 'analysis' : reportType === 'trend' ? 'trend' : 'analysis',
+      };
+      if (dateRange[0]) {
+        params.date_start = dateRange[0];
+      }
+      if (dateRange[1]) {
+        params.date_end = dateRange[1];
+      }
+
+      const response = await qualityApi.qualityStatistics.getReport(params);
+      
+      // 处理趋势数据
+      if (response.trend_data) {
+        const trendItems: QualityTrendData[] = response.trend_data.map((item: any) => ({
+          month: item.month || item.period,
+          incomingQualified: item.incoming_qualified_rate || 0,
+          processQualified: item.process_qualified_rate || 0,
+          finishedQualified: item.finished_qualified_rate || 0,
+          overallQualified: item.overall_qualified_rate || 0,
+        }));
+        setTrendData(trendItems);
+      }
+
+      // 处理缺陷分布数据
+      if (response.defect_distribution) {
+        const total = response.defect_distribution.reduce((sum: number, item: any) => sum + (item.count || 0), 0);
+        const distribution = response.defect_distribution.map((item: any) => ({
+          type: item.type || item.defect_type,
+          count: item.count || 0,
+          percentage: total > 0 ? Number((item.count / total * 100).toFixed(1)) : 0,
+        }));
+        setDefectDistribution(distribution);
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || '加载质量报表数据失败');
+    }
+  };
+
+  // 初始化加载数据
+  useEffect(() => {
+    loadStatistics();
+    loadAnomalies();
+    if (reportType === 'trend' || reportType === 'analysis') {
+      loadQualityReport();
+    }
+  }, [dateRange, inspectionType, reportType]);
 
   // 表格列定义
   const columns: ProColumns<QualityReportItem>[] = [
@@ -249,6 +392,18 @@ const QualityReportPage: React.FC = () => {
   // 处理报表类型切换
   const handleReportTypeChange = (type: 'summary' | 'trend' | 'analysis') => {
     setReportType(type);
+    if (type === 'trend' || type === 'analysis') {
+      loadQualityReport();
+    }
+  };
+
+  // 处理刷新
+  const handleRefresh = () => {
+    loadStatistics();
+    loadAnomalies();
+    if (reportType === 'trend' || reportType === 'analysis') {
+      loadQualityReport();
+    }
   };
 
   // 统计卡片数据
@@ -320,7 +475,7 @@ const QualityReportPage: React.FC = () => {
 
           <span>时间范围：</span>
           <DatePicker.RangePicker
-            value={dateRange.map(date => date ? new Date(date) : null) as any}
+            value={dateRange.map(date => date ? dayjs(date) : null) as any}
             onChange={(dates) => {
               if (dates) {
                 setDateRange([
@@ -331,6 +486,9 @@ const QualityReportPage: React.FC = () => {
             }}
           />
 
+          <Button onClick={handleRefresh} loading={loading}>
+            刷新
+          </Button>
           <Button type="primary" icon={<DownloadOutlined />} onClick={handleExport}>
             导出报表
           </Button>
@@ -338,73 +496,20 @@ const QualityReportPage: React.FC = () => {
       </Card>
 
       {/* 报表内容 */}
-      {reportType === 'summary' && (
-        <UniTable<QualityReportItem>
+      <Spin spinning={loading}>
+        {reportType === 'summary' && (
+          <UniTable<QualityReportItem>
           headerTitle="质量检验汇总报表"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据
-            const mockData: QualityReportItem[] = [
-              {
-                id: 1,
-                inspectionType: 'incoming',
-                inspectionCode: 'IQ20251229001',
-                productCode: 'RAW001',
-                productName: '螺丝A',
-                batchNo: 'BATCH001',
-                totalQuantity: 1000,
-                qualifiedQuantity: 985,
-                unqualifiedQuantity: 15,
-                qualifiedRate: 98.5,
-                inspectorName: '张三',
-                inspectionDate: '2025-12-29',
-                status: 'qualified',
-                defectTypes: ['尺寸偏差', '表面缺陷'],
-                remarks: '个别产品尺寸超出公差范围',
-              },
-              {
-                id: 2,
-                inspectionType: 'process',
-                inspectionCode: 'PQ20251229001',
-                productCode: 'FIN001',
-                productName: '产品A',
-                batchNo: 'BATCH001',
-                totalQuantity: 100,
-                qualifiedQuantity: 95,
-                unqualifiedQuantity: 5,
-                qualifiedRate: 95.0,
-                inspectorName: '李四',
-                inspectionDate: '2025-12-29',
-                status: 'qualified',
-                defectTypes: ['功能异常'],
-                remarks: '部分产品功能测试未通过',
-              },
-              {
-                id: 3,
-                inspectionType: 'finished',
-                inspectionCode: 'FQ20251229001',
-                productCode: 'FIN001',
-                productName: '产品A',
-                batchNo: 'BATCH001',
-                totalQuantity: 98,
-                qualifiedQuantity: 96,
-                unqualifiedQuantity: 2,
-                qualifiedRate: 98.0,
-                inspectorName: '王五',
-                inspectionDate: '2025-12-29',
-                status: 'qualified',
-                defectTypes: ['表面缺陷'],
-                remarks: '包装外观有瑕疵',
-              },
-            ];
-
+            // 使用真实数据
             return {
-              data: mockData,
+              data: reportData,
               success: true,
-              total: mockData.length,
+              total: reportData.length,
             };
           }}
           rowSelection={{

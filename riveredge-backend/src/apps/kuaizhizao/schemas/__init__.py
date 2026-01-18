@@ -162,7 +162,35 @@ __all__ = [
     'SalesDeliveryItemUpdate',
     'SalesDeliveryItemResponse',
 
+    # 销售退货单相关
+    'SalesReturnBase',
+    'SalesReturnCreate',
+    'SalesReturnUpdate',
+    'SalesReturnResponse',
+    'SalesReturnItemBase',
+    'SalesReturnItemCreate',
+    'SalesReturnItemUpdate',
+    'SalesReturnItemResponse',
+
     # 采购入库单相关
+    'PurchaseReceiptBase',
+    'PurchaseReceiptCreate',
+    'PurchaseReceiptUpdate',
+    'PurchaseReceiptResponse',
+    'PurchaseReceiptItemBase',
+    'PurchaseReceiptItemCreate',
+    'PurchaseReceiptItemUpdate',
+    'PurchaseReceiptItemResponse',
+
+    # 采购退货单相关
+    'PurchaseReturnBase',
+    'PurchaseReturnCreate',
+    'PurchaseReturnUpdate',
+    'PurchaseReturnResponse',
+    'PurchaseReturnItemBase',
+    'PurchaseReturnItemCreate',
+    'PurchaseReturnItemUpdate',
+    'PurchaseReturnItemResponse',
     'PurchaseReceiptBase',
     'PurchaseReceiptCreate',
     'PurchaseReceiptUpdate',

@@ -994,6 +994,9 @@ class DemandComputationService:
             purchase_orders = []
             validation_errors = []
             
+            # 按供应商分组采购件（物料来源控制增强）
+            purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
+            
             for item in items:
                 source_type = item.material_source_type
                 
@@ -1028,15 +1031,22 @@ class DemandComputationService:
                         work_orders.append(work_order)
                         
                 elif source_type == SOURCE_TYPE_BUY:
-                    # 采购件：生成采购订单
+                    # 采购件：按供应商分组（物料来源控制增强）
                     if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                        purchase_order = await self._create_purchase_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=item,
-                            created_by=created_by
-                        )
-                        purchase_orders.append(purchase_order)
+                        # 获取供应商ID
+                        supplier_id = None
+                        if item.material_source_config:
+                            source_config = item.material_source_config.get("source_config", {})
+                            supplier_id = source_config.get("default_supplier_id")
+                        
+                        # 如果没有供应商ID，使用默认值1（后续需要手动指定）
+                        if not supplier_id:
+                            supplier_id = 1
+                        
+                        # 按供应商分组
+                        if supplier_id not in purchase_items_by_supplier:
+                            purchase_items_by_supplier[supplier_id] = []
+                        purchase_items_by_supplier[supplier_id].append(item)
                         
                 elif source_type == SOURCE_TYPE_OUTSOURCE:
                     # 委外件：生成委外工单（TODO: 后续实现委外工单，暂时生成普通工单）
@@ -1073,15 +1083,30 @@ class DemandComputationService:
                         )
                         work_orders.append(work_order)
                     
-                    # 如果有建议采购订单数量，生成采购单
+                    # 如果有建议采购订单数量，按供应商分组（物料来源控制增强）
                     if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                        purchase_order = await self._create_purchase_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=item,
-                            created_by=created_by
-                        )
-                        purchase_orders.append(purchase_order)
+                        # 获取供应商ID（从物料主数据获取）
+                        supplier_id = 1  # 默认值，需要手动指定
+                        if item.material_source_config:
+                            source_config = item.material_source_config.get("source_config", {})
+                            supplier_id = source_config.get("default_supplier_id", 1)
+                        
+                        # 按供应商分组
+                        if supplier_id not in purchase_items_by_supplier:
+                            purchase_items_by_supplier[supplier_id] = []
+                        purchase_items_by_supplier[supplier_id].append(item)
+            
+            # 按供应商分组生成采购订单（物料来源控制增强）
+            for supplier_id, items_for_supplier in purchase_items_by_supplier.items():
+                if items_for_supplier:
+                    purchase_order = await self._create_purchase_order_from_items(
+                        tenant_id=tenant_id,
+                        computation=computation,
+                        items=items_for_supplier,
+                        supplier_id=supplier_id,
+                        created_by=created_by
+                    )
+                    purchase_orders.append(purchase_order)
             
             # 如果有验证错误，抛出异常
             if validation_errors:
@@ -1276,6 +1301,151 @@ class DemandComputationService:
                 "supplier_name": supplier_name,
                 "unit_price": float(unit_price),
                 "total_price": total_price,
+            }
+        except Exception as e:
+            logger.error(f"创建采购单失败: {e}")
+            raise BusinessLogicError(f"创建采购单失败: {str(e)}")
+    
+    async def _create_purchase_order_from_items(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        items: List[DemandComputationItem],
+        supplier_id: int,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从多个计算结果明细创建采购单（按供应商分组，物料来源控制增强）
+        
+        根据物料来源类型，自动填充默认供应商和采购价格，支持同一供应商多个物料合并到一个采购单。
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+            items: 计算结果明细列表（同一供应商的多个物料）
+            supplier_id: 供应商ID
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 创建的采购单信息
+        """
+        try:
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+            from apps.master_data.models import Supplier
+            from core.services.business.code_generation_service import CodeGenerationService
+            from datetime import datetime, date, timedelta
+            from decimal import Decimal
+            
+            # 验证供应商
+            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
+            if not supplier:
+                # 如果供应商不存在，尝试从第一个物料的配置中获取供应商名称
+                supplier_name = "待指定供应商"
+                if items and items[0].material_source_config:
+                    source_config = items[0].material_source_config.get("source_config", {})
+                    supplier_name = source_config.get("default_supplier_name", "待指定供应商")
+            else:
+                supplier_name = supplier.name
+            
+            # 生成采购订单编码
+            try:
+                order_code = await CodeGenerationService.generate_code(
+                    tenant_id=tenant_id,
+                    rule_code="PURCHASE_ORDER",
+                )
+            except Exception:
+                # 回退到简单编码
+                now = datetime.now()
+                order_code = f"PO-{now.strftime('%Y%m%d')}-{computation.id}-{supplier_id}"
+            
+            # 确定交货日期（取所有物料中最早的日期）
+            delivery_date = None
+            for item in items:
+                item_delivery_date = item.procurement_completion_date or item.delivery_date
+                if item_delivery_date:
+                    if not delivery_date or item_delivery_date < delivery_date:
+                        delivery_date = item_delivery_date
+            
+            if not delivery_date:
+                # 从物料来源配置获取采购提前期
+                lead_time_days = 7  # 默认7天
+                if items and items[0].material_source_config:
+                    source_config = items[0].material_source_config.get("source_config", {})
+                    lead_time_days = source_config.get("purchase_lead_time", 7)
+                delivery_date = date.today() + timedelta(days=lead_time_days)
+            
+            # 创建采购订单
+            purchase_order = await PurchaseOrder.create(
+                tenant_id=tenant_id,
+                order_code=order_code,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                order_date=date.today(),
+                delivery_date=delivery_date,
+                order_type="标准采购",
+                status="草稿",
+                source_type=computation.computation_type,
+                source_id=computation.id,
+                notes=f"从需求计算 {computation.computation_code} 自动生成（按供应商分组）",
+                created_by=created_by,
+                updated_by=created_by
+            )
+            
+            # 创建采购订单明细并计算总金额
+            total_quantity = Decimal(0)
+            total_amount = Decimal(0)
+            
+            for item in items:
+                # 从物料来源配置获取采购价格（物料来源控制增强）
+                unit_price = Decimal(0)
+                if item.material_source_type == "Buy" and item.material_source_config:
+                    source_config = item.material_source_config.get("source_config", {})
+                    unit_price = Decimal(str(source_config.get("purchase_price", 0)))
+                
+                # 计算数量和总价
+                quantity = Decimal(str(item.suggested_purchase_order_quantity or 0))
+                total_price = unit_price * quantity
+                
+                # 创建采购订单行
+                await PurchaseOrderItem.create(
+                    tenant_id=tenant_id,
+                    order_id=purchase_order.id,
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    ordered_quantity=quantity,
+                    unit=item.material_unit,
+                    unit_price=unit_price,
+                    total_price=total_price,
+                    required_date=delivery_date,
+                    inspection_required=True,
+                    source_type=computation.computation_type,
+                    source_id=computation.id,
+                    created_by=created_by,
+                    updated_by=created_by
+                )
+                
+                total_quantity += quantity
+                total_amount += total_price
+            
+            # 更新订单头金额信息
+            await purchase_order.update_from_dict({
+                'total_quantity': total_quantity,
+                'total_amount': total_amount,
+                'tax_amount': Decimal(0),  # 默认税率为0
+                'net_amount': total_amount,
+                'updated_by': created_by
+            }).save()
+            
+            return {
+                "id": purchase_order.id,
+                "order_code": purchase_order.order_code,
+                "supplier_id": supplier_id,
+                "supplier_name": supplier_name,
+                "items_count": len(items),
+                "total_quantity": float(total_quantity),
+                "total_amount": float(total_amount),
             }
         except Exception as e:
             logger.error(f"创建采购单失败: {e}")

@@ -34,9 +34,16 @@ class SalesDeliveryItem(BaseModel):
     location_id = fields.IntField(null=True, description="库位ID")
     location_code = fields.CharField(max_length=50, null=True, description="库位编码")
 
-    # 批次信息
+    # 批次信息（批号和序列号选择功能增强）
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
     expiry_date = fields.DateField(null=True, description="到期日期")
+    
+    # 序列号信息（批号和序列号选择功能增强）
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON格式，存储多个序列号）")
+    
+    # 需求关联（销售出库与需求关联功能增强）
+    demand_id = fields.IntField(null=True, description="需求ID（关联统一需求表）")
+    demand_item_id = fields.IntField(null=True, description="需求明细ID")
 
     # 状态
     status = fields.CharField(max_length=20, default="待出库", description="出库状态")
@@ -51,4 +58,7 @@ class SalesDeliveryItem(BaseModel):
             ("tenant_id", "delivery_id"),
             ("material_id",),
             ("location_id",),
+            ("demand_id",),  # 需求关联索引（销售出库与需求关联功能增强）
+            ("demand_item_id",),
+            ("batch_number",),  # 批次号索引（批号和序列号选择功能增强）
         ]

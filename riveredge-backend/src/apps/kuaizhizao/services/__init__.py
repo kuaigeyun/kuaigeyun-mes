@@ -16,7 +16,9 @@ from .warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
     SalesDeliveryService,
+    SalesReturnService,
     PurchaseReceiptService,
+    PurchaseReturnService,
 )
 
 # 质量管理模块
@@ -25,6 +27,7 @@ from .quality_service import (
     ProcessInspectionService,
     FinishedGoodsInspectionService,
 )
+from .quality_standard_service import QualityStandardService
 
 # 财务协同模块
 from .finance_service import (
@@ -63,12 +66,15 @@ __all__ = [
     'ProductionPickingService',
     'FinishedGoodsReceiptService',
     'SalesDeliveryService',
+    'SalesReturnService',
     'PurchaseReceiptService',
+    'PurchaseReturnService',
 
     # 质量管理模块
     'IncomingInspectionService',
     'ProcessInspectionService',
     'FinishedGoodsInspectionService',
+    'QualityStandardService',
 
     # 财务协同模块
     'PayableService',

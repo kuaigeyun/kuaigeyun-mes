@@ -21,6 +21,7 @@ from infra.schemas.init_wizard import (
     InitWizardData,
     Step1OrganizationInfo,
     Step2DefaultSettings,
+    Step2_5CodeRules,
     Step3AdminInfo,
     Step4Template,
 )
@@ -49,6 +50,13 @@ class InitWizardService:
             "description": "配置时区、货币、语言等默认设置",
             "order": 2,
             "required": True,
+        },
+        {
+            "step_id": "step2_5",
+            "title": "编码规则配置",
+            "description": "配置各种单据的编码规则（可选，可使用默认规则）",
+            "order": 2.5,
+            "required": False,
         },
         {
             "step_id": "step3",
@@ -177,6 +185,20 @@ class InitWizardService:
             # 更新时区、货币、语言等（如果有对应字段）
             await Tenant.filter(id=tenant_id).update(settings=settings)
             
+        elif step_id == "step2_5":
+            # 步骤2.5：编码规则配置
+            step_data = Step2_5CodeRules(**data)
+            settings = tenant.settings or {}
+            settings["init_step2_5"] = step_data.model_dump()
+            await Tenant.filter(id=tenant_id).update(settings=settings)
+            
+            # 如果使用默认规则，创建默认编码规则
+            if step_data.use_default_rules:
+                from core.services.default.default_values_service import DefaultValuesService
+                default_service = DefaultValuesService()
+                await default_service.create_default_code_rules(tenant_id)
+                logger.info(f"组织 {tenant_id} 在步骤2.5中创建了默认编码规则")
+            
         elif step_id == "step3":
             # 步骤3：管理员信息
             step_data = Step3AdminInfo(**data)
@@ -286,6 +308,16 @@ class InitWizardService:
                 except Exception as e:
                     logger.warning(f"应用行业模板失败（不中断流程）: {e}")
                     # 如果应用失败，不中断流程，只记录警告
+        
+        # 如果还没有创建默认配置，则创建默认编码规则和系统参数
+        if not settings.get("defaults_initialized"):
+            from core.services.default.default_values_service import DefaultValuesService
+            try:
+                await DefaultValuesService.initialize_tenant_defaults(tenant_id)
+                settings["defaults_initialized"] = True
+                logger.info(f"组织 {tenant_id} 默认配置初始化完成")
+            except Exception as e:
+                logger.warning(f"组织 {tenant_id} 默认配置初始化失败（不中断流程）: {e}")
         
         # 标记初始化完成
         settings["init_completed"] = True

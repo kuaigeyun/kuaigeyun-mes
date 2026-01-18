@@ -54,6 +54,13 @@ class Step2DefaultSettings(BaseModel):
     language: str = Field("zh-CN", description="语言")
 
 
+# 步骤2.5：编码规则配置
+class Step2_5CodeRules(BaseModel):
+    """步骤2.5：编码规则配置"""
+    use_default_rules: bool = Field(True, description="是否使用默认编码规则")
+    custom_rules: Optional[Dict[str, Any]] = Field(None, description="自定义编码规则（可选）")
+
+
 # 步骤3：管理员信息
 class Step3AdminInfo(BaseModel):
     """步骤3：管理员信息"""
@@ -72,6 +79,7 @@ class InitWizardData(BaseModel):
     """初始化向导数据"""
     step1_organization_info: Optional[Step1OrganizationInfo] = Field(None, description="步骤1数据")
     step2_default_settings: Optional[Step2DefaultSettings] = Field(None, description="步骤2数据")
+    step2_5_code_rules: Optional[Step2_5CodeRules] = Field(None, description="步骤2.5数据")
     step3_admin_info: Optional[Step3AdminInfo] = Field(None, description="步骤3数据")
     step4_template: Optional[Step4Template] = Field(None, description="步骤4数据")
 

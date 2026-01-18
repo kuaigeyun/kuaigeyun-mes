@@ -41,6 +41,7 @@ from infra.api.init.init_wizard import router as init_wizard_router
 from infra.api.templates.templates import router as industry_template_router
 from infra.api.platform_settings.platform_settings import router as platform_settings_router
 from infra.api.platform_settings.public import router as platform_settings_public_router
+from infra.api.business_config.business_config import router as business_config_router
 
 # 导入所有系统级 API 路由（core）
 import sys
@@ -462,6 +463,7 @@ app.include_router(saved_searches_router, prefix="/api/v1")
 app.include_router(init_wizard_router, prefix="/api/v1/infra")
 app.include_router(industry_template_router, prefix="/api/v1/infra")
 app.include_router(platform_settings_router, prefix="/api/v1/infra")
+app.include_router(business_config_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
 app.include_router(users_router, prefix="/api/v1/core")

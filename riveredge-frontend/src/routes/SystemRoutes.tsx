@@ -35,6 +35,7 @@ import UsersPage from '../pages/system/users/list';
 import UserProfilePage from '../pages/personal/profile';
 import LanguagesPage from '../pages/system/languages/list';
 import SiteSettingsPage from '../pages/system/site-settings';
+import BusinessConfigPage from '../pages/system/business-config';
 import ApplicationCenterPage from '../pages/system/applications/list';
 import PluginManagerPage from '../pages/system/plugin-manager';
 import OperationLogsPage from '../pages/system/operation-logs';
@@ -117,6 +118,7 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/user-profile" element={<UserProfilePage />} />
       <Route path="/system/languages" element={<LanguagesPage />} />
       <Route path="/system/site-settings" element={<SiteSettingsPage />} />
+      <Route path="/system/business-config" element={<BusinessConfigPage />} />
       <Route path="/system/applications" element={<ApplicationCenterPage />} />
       <Route path="/system/plugin-manager" element={<PluginManagerPage />} />
       <Route path="/system/operation-logs" element={<OperationLogsPage />} />
