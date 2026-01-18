@@ -8,7 +8,10 @@ from .factory import Workshop, ProductionLine, Workstation
 from .warehouse import Warehouse, StorageArea, StorageLocation
 from .material import MaterialGroup, Material, BOM
 from .material_code_mapping import MaterialCodeMapping
+from .material_batch import MaterialBatch
+from .material_serial import MaterialSerial
 from .process import DefectType, Operation, ProcessRoute, SOP
+from .process_route_change import ProcessRouteChange
 from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
@@ -25,10 +28,13 @@ __all__ = [
     "Material",
     "BOM",
     "MaterialCodeMapping",
+    "MaterialBatch",
+    "MaterialSerial",
     "DefectType",
     "Operation",
     "ProcessRoute",
     "SOP",
+    "ProcessRouteChange",
     "Customer",
     "Supplier",
     "Holiday",

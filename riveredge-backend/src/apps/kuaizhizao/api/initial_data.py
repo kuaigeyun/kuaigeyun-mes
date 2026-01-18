@@ -236,6 +236,35 @@ async def get_countdown(
     return LaunchCountdownResponse.model_validate(countdown)
 
 
+@router.post("/countdown/complete", response_model=LaunchCountdownResponse, summary="完成上线倒计时")
+async def complete_countdown(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    完成上线倒计时
+    
+    确认所有期初数据导入完成，关闭上线倒计时功能，启用正式业务功能。
+    """
+    try:
+        countdown = await launch_countdown_service.complete_countdown(
+            tenant_id=tenant_id,
+            created_by=current_user.id
+        )
+        return LaunchCountdownResponse.model_validate(countdown)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"完成上线倒计时失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"操作失败: {str(e)}"
+        )
+
+
 @router.post("/compensation", response_model=DataCompensationResponse, summary="计算动态数据补偿")
 async def calculate_compensation(
     data: DataCompensationRequest,

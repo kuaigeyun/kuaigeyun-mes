@@ -352,3 +352,200 @@ export const materialCodeMappingApi = {
   },
 };
 
+/**
+ * 物料批号 API 服务
+ */
+export const materialBatchApi = {
+  /**
+   * 创建物料批号
+   */
+  create: async (data: MaterialBatchCreate): Promise<MaterialBatch> => {
+    return api.post('/apps/master-data/materials/batches', data);
+  },
+
+  /**
+   * 获取物料批号列表
+   */
+  list: async (params?: MaterialBatchListParams): Promise<MaterialBatchListResponse> => {
+    return api.get('/apps/master-data/materials/batches', { params });
+  },
+
+  /**
+   * 获取物料批号详情
+   */
+  get: async (uuid: string): Promise<MaterialBatch> => {
+    return api.get(`/apps/master-data/materials/batches/${uuid}`);
+  },
+
+  /**
+   * 更新物料批号
+   */
+  update: async (uuid: string, data: MaterialBatchUpdate): Promise<MaterialBatch> => {
+    return api.put(`/apps/master-data/materials/batches/${uuid}`, data);
+  },
+
+  /**
+   * 删除物料批号
+   */
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/materials/batches/${uuid}`);
+  },
+
+  /**
+   * 生成批号
+   */
+  generate: async (materialUuid: string, rule?: string): Promise<{ batch_no: string }> => {
+    return api.post('/apps/master-data/materials/batches/generate', null, {
+      params: { material_uuid: materialUuid, rule },
+    });
+  },
+
+  /**
+   * 批号追溯
+   */
+  trace: async (uuid: string): Promise<any> => {
+    return api.get(`/apps/master-data/materials/batches/${uuid}/trace`);
+  },
+};
+
+/**
+ * 物料序列号 API 服务
+ */
+export const materialSerialApi = {
+  /**
+   * 创建物料序列号
+   */
+  create: async (data: MaterialSerialCreate): Promise<MaterialSerial> => {
+    return api.post('/apps/master-data/materials/serials', data);
+  },
+
+  /**
+   * 获取物料序列号列表
+   */
+  list: async (params?: MaterialSerialListParams): Promise<MaterialSerialListResponse> => {
+    return api.get('/apps/master-data/materials/serials', { params });
+  },
+
+  /**
+   * 获取物料序列号详情
+   */
+  get: async (uuid: string): Promise<MaterialSerial> => {
+    return api.get(`/apps/master-data/materials/serials/${uuid}`);
+  },
+
+  /**
+   * 更新物料序列号
+   */
+  update: async (uuid: string, data: MaterialSerialUpdate): Promise<MaterialSerial> => {
+    return api.put(`/apps/master-data/materials/serials/${uuid}`, data);
+  },
+
+  /**
+   * 删除物料序列号
+   */
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/materials/serials/${uuid}`);
+  },
+
+  /**
+   * 生成序列号（批量）
+   */
+  generate: async (materialUuid: string, count: number = 1, rule?: string): Promise<{ serial_nos: string[]; count: number }> => {
+    return api.post('/apps/master-data/materials/serials/generate', null, {
+      params: { material_uuid: materialUuid, count, rule },
+    });
+  },
+
+  /**
+   * 序列号追溯
+   */
+  trace: async (uuid: string): Promise<any> => {
+    return api.get(`/apps/master-data/materials/serials/${uuid}/trace`);
+  },
+};
+
+/**
+ * 物料来源控制 API 服务
+ */
+export const materialSourceApi = {
+  /**
+   * 验证物料来源配置
+   */
+  validate: async (materialUuid: string): Promise<{
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  }> => {
+    return api.get(`/apps/master-data/materials/${materialUuid}/source/validate`);
+  },
+
+  /**
+   * 批量验证物料来源配置
+   */
+  validateBatch: async (materialUuids: string[]): Promise<Record<string, {
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  }>> => {
+    return api.post('/apps/master-data/materials/source/validate-batch', materialUuids);
+  },
+
+  /**
+   * 检查物料来源类型变更影响
+   */
+  checkChangeImpact: async (materialUuid: string, newSourceType: string): Promise<{
+    can_change: boolean;
+    impact: {
+      work_orders: Array<{ uuid: string; code: string; status: string }>;
+      purchase_orders: Array<{ uuid: string; code: string; status: string }>;
+      warnings: string[];
+    };
+  }> => {
+    return api.get(`/apps/master-data/materials/${materialUuid}/source/change-impact`, {
+      params: { new_source_type: newSourceType },
+    });
+  },
+
+  /**
+   * 变更物料来源类型
+   */
+  change: async (
+    materialUuid: string,
+    newSourceType: string,
+    newSourceConfig?: Record<string, any>
+  ): Promise<Material> => {
+    return api.put(`/apps/master-data/materials/${materialUuid}/source/change`, null, {
+      params: {
+        new_source_type: newSourceType,
+        new_source_config: newSourceConfig ? JSON.stringify(newSourceConfig) : undefined,
+      },
+    });
+  },
+
+  /**
+   * 建议物料来源类型
+   */
+  suggest: async (materialUuid: string): Promise<{
+    suggested_type: string | null;
+    confidence: number;
+    reasons: string[];
+    all_suggestions: Array<{
+      source_type: string;
+      confidence: number;
+      reason: string;
+    }>;
+  }> => {
+    return api.get(`/apps/master-data/materials/${materialUuid}/source/suggest`);
+  },
+
+  /**
+   * 检查物料来源配置完整性
+   */
+  checkCompleteness: async (materialUuid: string): Promise<{
+    is_complete: boolean;
+    missing_configs: string[];
+    warnings: string[];
+  }> => {
+    return api.get(`/apps/master-data/materials/${materialUuid}/source/check-completeness`);
+  },
+};

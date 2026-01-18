@@ -7,8 +7,8 @@ Author: Luigi Lu
 Date: 2025-12-30
 """
 
-from datetime import datetime
-from typing import Optional, List
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
 from pydantic import Field
 from core.schemas.base import BaseSchema
 
@@ -239,4 +239,53 @@ class FinishedGoodsInspectionResponse(FinishedGoodsInspectionBase):
 
 class FinishedGoodsInspectionListResponse(FinishedGoodsInspectionResponse):
     """成品检验单列表响应schema（简化版）"""
+    pass
+
+
+# === 质检标准 ===
+
+class QualityStandardBase(BaseSchema):
+    """质检标准基础schema"""
+    standard_code: str = Field(..., max_length=50, description="标准编码")
+    standard_name: str = Field(..., max_length=200, description="标准名称")
+    standard_type: str = Field(..., max_length=50, description="标准类型（incoming/process/finished）")
+    material_id: Optional[int] = Field(None, description="关联物料ID（为空则适用于所有物料）")
+    material_code: Optional[str] = Field(None, max_length=50, description="关联物料编码")
+    material_name: Optional[str] = Field(None, max_length=200, description="关联物料名称")
+    inspection_items: Optional[Dict[str, Any]] = Field(None, description="检验项目列表（JSON格式）")
+    inspection_methods: Optional[Dict[str, Any]] = Field(None, description="检验方法列表（JSON格式）")
+    acceptance_criteria: Optional[Dict[str, Any]] = Field(None, description="合格标准（JSON格式）")
+    version: str = Field("1.0", max_length=20, description="版本号")
+    effective_date: Optional[date] = Field(None, description="生效日期")
+    expiry_date: Optional[date] = Field(None, description="失效日期")
+    is_active: bool = Field(True, description="是否启用")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class QualityStandardCreate(QualityStandardBase):
+    """质检标准创建schema"""
+    standard_code: Optional[str] = Field(None, max_length=50, description="标准编码（可选，如果不提供则自动生成）")
+
+
+class QualityStandardUpdate(QualityStandardBase):
+    """质检标准更新schema"""
+    standard_code: Optional[str] = Field(None, max_length=50, description="标准编码")
+    standard_name: Optional[str] = Field(None, max_length=200, description="标准名称")
+    standard_type: Optional[str] = Field(None, max_length=50, description="标准类型")
+
+
+class QualityStandardResponse(QualityStandardBase):
+    """质检标准响应schema"""
+    id: int = Field(..., description="标准ID")
+    uuid: Optional[str] = Field(None, description="业务ID")
+    tenant_id: Optional[int] = Field(None, description="组织ID")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    class Config:
+        from_attributes = True
+
+
+class QualityStandardListResponse(QualityStandardResponse):
+    """质检标准列表响应schema（简化版）"""
     pass

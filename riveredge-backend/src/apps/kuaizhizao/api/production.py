@@ -63,13 +63,17 @@ from apps.kuaizhizao.services.warehouse_service import (
     ProductionPickingService,
     FinishedGoodsReceiptService,
     SalesDeliveryService,
+    SalesReturnService,
     PurchaseReceiptService,
+    PurchaseReturnService,
 )
+from apps.kuaizhizao.services.replenishment_suggestion_service import ReplenishmentSuggestionService
 from apps.kuaizhizao.services.quality_service import (
     IncomingInspectionService,
     ProcessInspectionService,
     FinishedGoodsInspectionService,
 )
+from apps.kuaizhizao.services.quality_standard_service import QualityStandardService
 from apps.kuaizhizao.services.finance_service import (
     PayableService,
     PurchaseInvoiceService,
@@ -137,6 +141,7 @@ from apps.kuaizhizao.schemas.scrap_record import (
 )
 from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordCreateFromReporting,
+    DefectRecordCreateFromInspection,
     DefectRecordResponse,
     DefectRecordListResponse
 )
@@ -179,10 +184,23 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesDeliveryCreate,
     SalesDeliveryUpdate,
     SalesDeliveryResponse,
+    # 销售退货单
+    SalesReturnCreate,
+    SalesReturnUpdate,
+    SalesReturnResponse,
     # 采购入库单
     PurchaseReceiptCreate,
     PurchaseReceiptUpdate,
     PurchaseReceiptResponse,
+    # 采购退货单
+    PurchaseReturnCreate,
+    PurchaseReturnUpdate,
+    PurchaseReturnResponse,
+)
+from apps.kuaizhizao.schemas.replenishment_suggestion import (
+    ReplenishmentSuggestionResponse,
+    ReplenishmentSuggestionListResponse,
+    ReplenishmentSuggestionProcessRequest,
 )
 from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertRuleCreate,
@@ -253,6 +271,11 @@ from apps.kuaizhizao.schemas.quality import (
     FinishedGoodsInspectionUpdate,
     FinishedGoodsInspectionResponse,
     FinishedGoodsInspectionListResponse,
+    # 质检标准
+    QualityStandardCreate,
+    QualityStandardUpdate,
+    QualityStandardResponse,
+    QualityStandardListResponse,
 )
 from apps.kuaizhizao.schemas.finance import (
     # 应付单
@@ -2743,6 +2766,76 @@ async def confirm_sales_delivery(
     )
 
 
+@router.post("/sales-deliveries/pull-from-sales-order", response_model=SalesDeliveryResponse, summary="从销售订单上拉生成销售出库单")
+async def pull_sales_delivery_from_order(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    """
+    从销售订单上拉生成销售出库单
+    
+    - **sales_order_id**: 销售订单ID（必填）
+    - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）
+    - **warehouse_id**: 出库仓库ID（必填）
+    - **warehouse_name**: 出库仓库名称（可选）
+    """
+    sales_order_id = request.get('sales_order_id')
+    if not sales_order_id:
+        raise ValidationError("必须提供销售订单ID")
+    
+    delivery_quantities = request.get('delivery_quantities')
+    warehouse_id = request.get('warehouse_id')
+    warehouse_name = request.get('warehouse_name')
+    
+    if not warehouse_id:
+        raise ValidationError("必须提供出库仓库ID")
+    
+    return await SalesDeliveryService().pull_from_sales_order(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+        created_by=current_user.id,
+        delivery_quantities=delivery_quantities,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
+@router.post("/sales-deliveries/pull-from-sales-forecast", response_model=SalesDeliveryResponse, summary="从销售预测上拉生成销售出库单")
+async def pull_sales_delivery_from_forecast(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    """
+    从销售预测上拉生成销售出库单（MTS模式）
+    
+    - **sales_forecast_id**: 销售预测ID（必填）
+    - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）
+    - **warehouse_id**: 出库仓库ID（必填）
+    - **warehouse_name**: 出库仓库名称（可选）
+    """
+    sales_forecast_id = request.get('sales_forecast_id')
+    if not sales_forecast_id:
+        raise ValidationError("必须提供销售预测ID")
+    
+    delivery_quantities = request.get('delivery_quantities')
+    warehouse_id = request.get('warehouse_id')
+    warehouse_name = request.get('warehouse_name')
+    
+    if not warehouse_id:
+        raise ValidationError("必须提供出库仓库ID")
+    
+    return await SalesDeliveryService().pull_from_sales_forecast(
+        tenant_id=tenant_id,
+        sales_forecast_id=sales_forecast_id,
+        created_by=current_user.id,
+        delivery_quantities=delivery_quantities,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
 @router.post("/sales-deliveries/import", summary="批量导入销售出库单")
 async def import_sales_deliveries(
     request: Dict[str, Any],
@@ -2943,6 +3036,96 @@ async def print_sales_delivery(
         )
 
 
+# ==================== 销售退货API ====================
+
+@router.post("/sales-returns", response_model=SalesReturnResponse, summary="创建销售退货单")
+async def create_sales_return(
+    return_data: SalesReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """
+    创建销售退货单
+
+    - **return_data**: 销售退货单数据
+    """
+    return await SalesReturnService().create_sales_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/sales-returns", response_model=List[SalesReturnResponse], summary="获取销售退货单列表")
+async def list_sales_returns(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    status: Optional[str] = Query(None, description="退货状态筛选"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID筛选"),
+    customer_id: Optional[int] = Query(None, description="客户ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[SalesReturnResponse]:
+    """
+    获取销售退货单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **status**: 退货状态筛选
+    - **sales_delivery_id**: 销售出库单ID筛选
+    - **customer_id**: 客户ID筛选
+    """
+    filters = {}
+    if status:
+        filters['status'] = status
+    if sales_delivery_id:
+        filters['sales_delivery_id'] = sales_delivery_id
+    if customer_id:
+        filters['customer_id'] = customer_id
+    
+    return await SalesReturnService().list_sales_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        **filters
+    )
+
+
+@router.get("/sales-returns/{return_id}", response_model=SalesReturnResponse, summary="获取销售退货单详情")
+async def get_sales_return(
+    return_id: int = Path(..., description="退货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """
+    获取销售退货单详情
+
+    - **return_id**: 退货单ID
+    """
+    return await SalesReturnService().get_sales_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.post("/sales-returns/{return_id}/confirm", response_model=SalesReturnResponse, summary="确认销售退货")
+async def confirm_sales_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """
+    确认销售退货
+
+    - **return_id**: 退货单ID
+    """
+    return await SalesReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id
+    )
+
+
 # ============ 采购入库管理 API ============
 
 @router.post("/purchase-receipts", response_model=PurchaseReceiptResponse, summary="创建采购入库单")
@@ -3118,6 +3301,204 @@ async def export_purchase_receipts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
+
+
+# ==================== 采购退货API ====================
+
+@router.post("/purchase-returns", response_model=PurchaseReturnResponse, summary="创建采购退货单")
+async def create_purchase_return(
+    return_data: PurchaseReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    """
+    创建采购退货单
+
+    - **return_data**: 采购退货单数据
+    """
+    return await PurchaseReturnService().create_purchase_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/purchase-returns", response_model=List[PurchaseReturnResponse], summary="获取采购退货单列表")
+async def list_purchase_returns(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    status: Optional[str] = Query(None, description="退货状态筛选"),
+    purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID筛选"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PurchaseReturnResponse]:
+    """
+    获取采购退货单列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **status**: 退货状态筛选
+    - **purchase_receipt_id**: 采购入库单ID筛选
+    - **supplier_id**: 供应商ID筛选
+    """
+    filters = {}
+    if status:
+        filters['status'] = status
+    if purchase_receipt_id:
+        filters['purchase_receipt_id'] = purchase_receipt_id
+    if supplier_id:
+        filters['supplier_id'] = supplier_id
+    
+    return await PurchaseReturnService().list_purchase_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        **filters
+    )
+
+
+@router.get("/purchase-returns/{return_id}", response_model=PurchaseReturnResponse, summary="获取采购退货单详情")
+async def get_purchase_return(
+    return_id: int = Path(..., description="退货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    """
+    获取采购退货单详情
+
+    - **return_id**: 退货单ID
+    """
+    return await PurchaseReturnService().get_purchase_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.post("/purchase-returns/{return_id}/confirm", response_model=PurchaseReturnResponse, summary="确认采购退货")
+async def confirm_purchase_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    """
+    确认采购退货
+
+    - **return_id**: 退货单ID
+    """
+    return await PurchaseReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id
+    )
+
+
+# ==================== 补货建议API ====================
+
+@router.post("/replenishment-suggestions/generate-from-alerts", response_model=List[ReplenishmentSuggestionResponse], summary="基于库存预警生成补货建议")
+async def generate_replenishment_suggestions_from_alerts(
+    request: Dict[str, Any] = Body(default={}),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ReplenishmentSuggestionResponse]:
+    """
+    基于库存预警生成补货建议
+
+    - **alert_ids**: 预警ID列表（可选，如果不提供则处理所有待处理的低库存预警）
+    """
+    alert_ids = request.get('alert_ids')
+    return await ReplenishmentSuggestionService().generate_suggestions_from_alerts(
+        tenant_id=tenant_id,
+        alert_ids=alert_ids
+    )
+
+
+@router.get("/replenishment-suggestions", response_model=List[ReplenishmentSuggestionListResponse], summary="获取补货建议列表")
+async def list_replenishment_suggestions(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=200, description="限制数量"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    priority: Optional[str] = Query(None, description="优先级筛选"),
+    suggestion_type: Optional[str] = Query(None, description="建议类型筛选"),
+    material_id: Optional[int] = Query(None, description="物料ID筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ReplenishmentSuggestionListResponse]:
+    """
+    获取补货建议列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **status**: 状态筛选
+    - **priority**: 优先级筛选
+    - **suggestion_type**: 建议类型筛选
+    - **material_id**: 物料ID筛选
+    - **warehouse_id**: 仓库ID筛选
+    """
+    return await ReplenishmentSuggestionService().get_suggestions(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        priority=priority,
+        suggestion_type=suggestion_type,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get("/replenishment-suggestions/{suggestion_id}", response_model=ReplenishmentSuggestionResponse, summary="获取补货建议详情")
+async def get_replenishment_suggestion(
+    suggestion_id: int = Path(..., description="补货建议ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionResponse:
+    """
+    获取补货建议详情
+
+    - **suggestion_id**: 补货建议ID
+    """
+    return await ReplenishmentSuggestionService().get_suggestion_by_id(
+        tenant_id=tenant_id,
+        suggestion_id=suggestion_id
+    )
+
+
+@router.post("/replenishment-suggestions/{suggestion_id}/process", response_model=ReplenishmentSuggestionResponse, summary="处理补货建议")
+async def process_replenishment_suggestion(
+    suggestion_id: int,
+    process_data: ReplenishmentSuggestionProcessRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionResponse:
+    """
+    处理补货建议
+
+    - **suggestion_id**: 补货建议ID
+    - **process_data**: 处理数据（状态、处理备注）
+    """
+    return await ReplenishmentSuggestionService().process_suggestion(
+        tenant_id=tenant_id,
+        suggestion_id=suggestion_id,
+        process_data=process_data,
+        processed_by=current_user.id
+    )
+
+
+@router.get("/replenishment-suggestions/statistics", summary="获取补货建议统计信息")
+async def get_replenishment_suggestion_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    获取补货建议统计信息
+
+    返回按状态、优先级统计的补货建议数量
+    """
+    return await ReplenishmentSuggestionService().get_suggestion_statistics(
+        tenant_id=tenant_id
+    )
 
 
 # ============ 来料检验管理 API ============
@@ -3305,6 +3686,36 @@ async def export_incoming_inspections(
         )
 
 
+@router.post("/incoming-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="从来料检验单创建不合格品记录")
+async def create_defect_from_incoming_inspection(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    defect_data: DefectRecordCreateFromInspection = Body(..., description="不合格品记录创建数据"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    """
+    从来料检验单创建不合格品记录
+
+    从不合格的来料检验单创建不合格品记录，支持退货、让步接收等处理方式。
+
+    - **inspection_id**: 来料检验单ID
+    - **defect_data**: 不合格品记录创建数据（不合格品数量、类型、原因、处理方式等）
+    """
+    try:
+        return await defect_record_service.create_defect_from_incoming_inspection(
+            tenant_id=tenant_id,
+            inspection_id=inspection_id,
+            defect_data=defect_data,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ============ 过程检验管理 API ============
 
 @router.post("/process-inspections", response_model=ProcessInspectionResponse, summary="创建过程检验单")
@@ -3460,6 +3871,36 @@ async def export_process_inspections(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
+
+
+@router.post("/process-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="从过程检验单创建不合格品记录")
+async def create_defect_from_process_inspection(
+    inspection_id: int = Path(..., description="过程检验单ID"),
+    defect_data: DefectRecordCreateFromInspection = Body(..., description="不合格品记录创建数据"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    """
+    从过程检验单创建不合格品记录
+
+    从不合格的过程检验单创建不合格品记录，支持返工、报废、让步接收等处理方式。
+
+    - **inspection_id**: 过程检验单ID
+    - **defect_data**: 不合格品记录创建数据（不合格品数量、类型、原因、处理方式等）
+    """
+    try:
+        return await defect_record_service.create_defect_from_process_inspection(
+            tenant_id=tenant_id,
+            inspection_id=inspection_id,
+            defect_data=defect_data,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ============ 成品检验管理 API ============
@@ -3635,6 +4076,36 @@ async def export_finished_goods_inspections(
         )
 
 
+@router.post("/finished-goods-inspections/{inspection_id}/create-defect", response_model=DefectRecordResponse, summary="从成品检验单创建不合格品记录")
+async def create_defect_from_finished_goods_inspection(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    defect_data: DefectRecordCreateFromInspection = Body(..., description="不合格品记录创建数据"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    """
+    从成品检验单创建不合格品记录
+
+    从不合格的成品检验单创建不合格品记录，支持返工、报废、让步接收等处理方式。
+
+    - **inspection_id**: 成品检验单ID
+    - **defect_data**: 不合格品记录创建数据（不合格品数量、类型、原因、处理方式等）
+    """
+    try:
+        return await defect_record_service.create_defect_from_finished_goods_inspection(
+            tenant_id=tenant_id,
+            inspection_id=inspection_id,
+            defect_data=defect_data,
+            created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/quality/anomalies", summary="查询质量异常记录")
 async def get_quality_anomalies(
     inspection_type: Optional[str] = Query(None, description="检验类型（incoming/process/finished）"),
@@ -3669,6 +4140,164 @@ async def get_quality_anomalies(
         },
         status_code=status.HTTP_200_OK
     )
+
+
+# ============ 质检标准管理 API ============
+
+@router.post("/quality-standards", response_model=QualityStandardResponse, summary="创建质检标准")
+async def create_quality_standard(
+    standard: QualityStandardCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityStandardResponse:
+    """
+    创建质检标准
+
+    - **standard**: 质检标准创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的质检标准信息。
+    """
+    try:
+        return await QualityStandardService().create_quality_standard(
+            tenant_id=tenant_id,
+            standard_data=standard,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/quality-standards", response_model=List[QualityStandardListResponse], summary="获取质检标准列表")
+async def list_quality_standards(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    standard_type: Optional[str] = Query(None, description="标准类型（incoming/process/finished）"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    standard_code: Optional[str] = Query(None, description="标准编码（模糊搜索）"),
+    standard_name: Optional[str] = Query(None, description="标准名称（模糊搜索）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[QualityStandardListResponse]:
+    """
+    获取质检标准列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    try:
+        return await QualityStandardService().list_quality_standards(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            standard_type=standard_type,
+            material_id=material_id,
+            is_active=is_active,
+            standard_code=standard_code,
+            standard_name=standard_name,
+        )
+    except Exception as e:
+        logger.error(f"获取质检标准列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取列表失败: {str(e)}")
+
+
+@router.get("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="获取质检标准详情")
+async def get_quality_standard(
+    standard_id: int = Path(..., description="质检标准ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityStandardResponse:
+    """
+    根据ID获取质检标准详情
+
+    - **standard_id**: 质检标准ID
+    """
+    try:
+        return await QualityStandardService().get_quality_standard_by_id(
+            tenant_id=tenant_id,
+            standard_id=standard_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/quality-standards/{standard_id}", response_model=QualityStandardResponse, summary="更新质检标准")
+async def update_quality_standard(
+    standard_id: int = Path(..., description="质检标准ID"),
+    standard: QualityStandardUpdate = Body(..., description="质检标准更新数据"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QualityStandardResponse:
+    """
+    更新质检标准
+
+    - **standard_id**: 质检标准ID
+    - **standard**: 质检标准更新数据
+    """
+    try:
+        return await QualityStandardService().update_quality_standard(
+            tenant_id=tenant_id,
+            standard_id=standard_id,
+            standard_data=standard,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/quality-standards/{standard_id}", summary="删除质检标准")
+async def delete_quality_standard(
+    standard_id: int = Path(..., description="质检标准ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除质检标准（软删除）
+
+    - **standard_id**: 质检标准ID
+    """
+    try:
+        await QualityStandardService().delete_quality_standard(
+            tenant_id=tenant_id,
+            standard_id=standard_id
+        )
+        return JSONResponse(
+            content={"message": "质检标准删除成功"},
+            status_code=status.HTTP_200_OK
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/quality-standards/by-material/{material_id}", response_model=List[QualityStandardListResponse], summary="根据物料ID获取质检标准")
+async def get_standards_by_material(
+    material_id: int = Path(..., description="物料ID"),
+    standard_type: Optional[str] = Query(None, description="标准类型（incoming/process/finished）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[QualityStandardListResponse]:
+    """
+    根据物料ID获取适用的质检标准
+
+    - **material_id**: 物料ID
+    - **standard_type**: 标准类型（可选，用于过滤）
+    
+    返回适用于该物料的质检标准列表（包括物料特定的标准和通用标准）。
+    """
+    try:
+        return await QualityStandardService().get_standards_by_material(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            standard_type=standard_type
+        )
+    except Exception as e:
+        logger.error(f"根据物料ID获取质检标准失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取标准失败: {str(e)}")
 
 
 @router.get("/quality/statistics", summary="质量统计分析")

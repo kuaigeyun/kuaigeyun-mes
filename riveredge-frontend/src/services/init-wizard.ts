@@ -49,6 +49,14 @@ export interface Step2DefaultSettings {
 }
 
 /**
+ * 步骤2.5：编码规则配置
+ */
+export interface Step2_5CodeRules {
+  use_default_rules: boolean;
+  custom_rules?: Record<string, any>;
+}
+
+/**
  * 步骤3：管理员信息
  */
 export interface Step3AdminInfo {
@@ -69,6 +77,7 @@ export interface Step4Template {
 export interface InitWizardData {
   step1_organization_info?: Step1OrganizationInfo;
   step2_default_settings?: Step2DefaultSettings;
+  step2_5_code_rules?: Step2_5CodeRules;
   step3_admin_info?: Step3AdminInfo;
   step4_template?: Step4Template;
 }

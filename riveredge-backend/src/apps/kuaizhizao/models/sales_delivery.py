@@ -21,8 +21,18 @@ class SalesDelivery(BaseModel):
     delivery_code = fields.CharField(max_length=50, unique=True, description="出库单编码")
 
     # 销售订单信息（MTO模式，MTS模式可为空）
-    sales_order_id = fields.IntField(null=True, description="销售订单ID")
-    sales_order_code = fields.CharField(max_length=50, null=True, description="销售订单编码")
+    sales_order_id = fields.IntField(null=True, description="销售订单ID（MTO模式）")
+    sales_order_code = fields.CharField(max_length=50, null=True, description="销售订单编码（MTO模式）")
+    
+    # 销售预测信息（MTS模式，MTO模式可为空）
+    sales_forecast_id = fields.IntField(null=True, description="销售预测ID（MTS模式）")
+    sales_forecast_code = fields.CharField(max_length=50, null=True, description="销售预测编码（MTS模式）")
+    
+    # 统一需求关联（销售出库与需求关联功能增强）
+    demand_id = fields.IntField(null=True, description="需求ID（关联统一需求表，MTS关联销售预测，MTO关联销售订单）")
+    demand_code = fields.CharField(max_length=50, null=True, description="需求编码")
+    demand_type = fields.CharField(max_length=20, null=True, description="需求类型（sales_forecast/sales_order）")
+    
     customer_id = fields.IntField(description="客户ID")
     customer_name = fields.CharField(max_length=200, description="客户名称")
 
@@ -60,6 +70,16 @@ class SalesDelivery(BaseModel):
     class Meta:
         table = "apps_kuaizhizao_sales_deliveries"
         table_description = "快格轻制造 - 销售出库单"
+        indexes = [
+            ("tenant_id",),
+            ("delivery_code",),
+            ("sales_order_id",),
+            ("sales_forecast_id",),
+            ("demand_id",),  # 需求关联索引（销售出库与需求关联功能增强）
+            ("customer_id",),
+            ("warehouse_id",),
+            ("status",),
+        ]
 
     class PydanticMeta:
         exclude = ["deleted_at"]

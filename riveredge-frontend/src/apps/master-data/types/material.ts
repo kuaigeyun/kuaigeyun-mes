@@ -199,6 +199,9 @@ export interface MaterialCreate {
   supplierCodes?: SupplierCodeMapping[]; // 供应商编码列表
   // 默认值设置
   defaults?: MaterialDefaults;
+  // 物料来源控制
+  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource/Configure）
+  sourceConfig?: Record<string, any>; // 物料来源相关配置
 }
 
 export interface MaterialUpdate {
@@ -222,6 +225,9 @@ export interface MaterialUpdate {
   supplierCodes?: SupplierCodeMapping[]; // 供应商编码列表
   // 默认值设置
   defaults?: MaterialDefaults;
+  // 物料来源控制
+  sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource/Configure）
+  sourceConfig?: Record<string, any>; // 物料来源相关配置
 }
 
 export interface MaterialListParams {
@@ -575,4 +581,109 @@ export interface MaterialCodeMappingBatchImportResult {
     externalSystem: string;
     error: string;
   }>;
+}
+
+// ==================== 物料批号类型定义 ====================
+
+export interface MaterialBatch {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  materialId: number;
+  materialUuid: string;
+  materialName?: string;
+  batchNo: string;
+  productionDate?: string;
+  expiryDate?: string;
+  supplierBatchNo?: string;
+  quantity: number;
+  status: string; // in_stock, out_stock, expired, scrapped
+  remark?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface MaterialBatchCreate {
+  materialUuid: string;
+  batchNo: string;
+  productionDate?: string;
+  expiryDate?: string;
+  supplierBatchNo?: string;
+  quantity?: number;
+  status?: string;
+  remark?: string;
+}
+
+export interface MaterialBatchUpdate {
+  productionDate?: string;
+  expiryDate?: string;
+  supplierBatchNo?: string;
+  quantity?: number;
+  status?: string;
+  remark?: string;
+}
+
+export interface MaterialBatchListParams {
+  materialUuid?: string;
+  batchNo?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MaterialBatchListResponse {
+  items: MaterialBatch[];
+  total: number;
+}
+
+// ==================== 物料序列号类型定义 ====================
+
+export interface MaterialSerial {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  materialId: number;
+  materialUuid: string;
+  materialName?: string;
+  serialNo: string;
+  productionDate?: string;
+  factoryDate?: string;
+  supplierSerialNo?: string;
+  status: string; // in_stock, out_stock, sold, scrapped, returned
+  remark?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface MaterialSerialCreate {
+  materialUuid: string;
+  serialNo: string;
+  productionDate?: string;
+  factoryDate?: string;
+  supplierSerialNo?: string;
+  status?: string;
+  remark?: string;
+}
+
+export interface MaterialSerialUpdate {
+  productionDate?: string;
+  factoryDate?: string;
+  supplierSerialNo?: string;
+  status?: string;
+  remark?: string;
+}
+
+export interface MaterialSerialListParams {
+  materialUuid?: string;
+  serialNo?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MaterialSerialListResponse {
+  items: MaterialSerial[];
+  total: number;
 }

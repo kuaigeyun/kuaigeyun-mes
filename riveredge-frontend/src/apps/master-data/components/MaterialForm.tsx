@@ -23,6 +23,7 @@ import { customerApi } from '../services/supply-chain';
 import { supplierApi } from '../services/supply-chain';
 import { warehouseApi } from '../services/warehouse';
 import { processRouteApi } from '../services/process';
+import { materialSourceApi } from '../services/material';
 import type { Warehouse } from '../types/warehouse';
 import type { ProcessRoute } from '../types/process';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
@@ -316,6 +317,21 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
             });
           }, 100);
         }
+        
+        // 加载物料来源数据（兼容处理：后端可能返回 snake_case 或 camelCase）
+        const materialSourceType = (material as any).source_type || material.sourceType;
+        const materialSourceConfig = (material as any).source_config || material.sourceConfig;
+        
+        if (materialSourceType || materialSourceConfig) {
+          setTimeout(() => {
+            formRef.current?.setFieldsValue({
+              sourceType: materialSourceType,
+              source_type: materialSourceType, // 向后兼容
+              sourceConfig: materialSourceConfig,
+              source_config: materialSourceConfig, // 向后兼容
+            });
+          }, 100);
+        }
       } else {
         // 新建模式，重置数据
         setDepartmentCodes([]);
@@ -386,6 +402,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    */
   const handleSubmit = async (values: any) => {
     try {
+      // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
+      const sourceType = values.sourceType || values.source_type;
+      const sourceConfig = values.sourceConfig || values.source_config;
+      
       // 处理默认值数据转换
       const formDefaults = values.defaults || {};
       const processedDefaults: any = { ...formDefaults };
@@ -486,6 +506,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         })) : undefined,
         // 默认值
         defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
+        // 物料来源控制
+        source_type: sourceType,
+        source_config: sourceConfig,
       };
       
       // 移除 undefined 值
@@ -686,6 +709,20 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   suppliersLoading={suppliersLoading}
                   customersLoading={customersLoading}
                   warehousesLoading={warehousesLoading}
+                  processRoutesLoading={processRoutesLoading}
+                />
+              ),
+            },
+            {
+              key: 'source',
+              label: '物料来源',
+              children: (
+                <MaterialSourceTab
+                  formRef={formRef}
+                  material={material}
+                  suppliers={suppliers}
+                  processRoutes={processRoutes}
+                  suppliersLoading={suppliersLoading}
                   processRoutesLoading={processRoutesLoading}
                 />
               ),
@@ -2174,6 +2211,492 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           </Row>
         </Panel>
       </Collapse>
+  );
+};
+
+/**
+ * 物料来源配置标签页
+ */
+interface MaterialSourceTabProps {
+  formRef: React.RefObject<ProFormInstance>;
+  material?: Material;
+  suppliers: Supplier[];
+  processRoutes: ProcessRoute[];
+  suppliersLoading: boolean;
+  processRoutesLoading: boolean;
+}
+
+const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
+  formRef,
+  material,
+  suppliers,
+  processRoutes,
+  suppliersLoading,
+  processRoutesLoading,
+}) => {
+  const { message: messageApi } = App.useApp();
+  const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
+  const [validationResult, setValidationResult] = useState<{
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
+  const [suggestionResult, setSuggestionResult] = useState<{
+    suggested_type: string | null;
+    confidence: number;
+    reasons: string[];
+  } | null>(null);
+  const [completenessResult, setCompletenessResult] = useState<{
+    is_complete: boolean;
+    missing_configs: string[];
+    warnings: string[];
+  } | null>(null);
+  const [loadingValidation, setLoadingValidation] = useState(false);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+
+  /**
+   * 物料来源类型选项
+   */
+  const sourceTypeOptions = [
+    { label: '自制件 (Make)', value: 'Make' },
+    { label: '采购件 (Buy)', value: 'Buy' },
+    { label: '虚拟件 (Phantom)', value: 'Phantom' },
+    { label: '委外件 (Outsource)', value: 'Outsource' },
+    { label: '配置件 (Configure)', value: 'Configure' },
+  ];
+
+  /**
+   * 处理物料来源类型变化
+   */
+  const handleSourceTypeChange = (value: string) => {
+    setSourceType(value);
+    formRef.current?.setFieldsValue({
+      sourceType: value,
+      source_type: value, // 向后兼容
+    });
+    
+    // 根据来源类型初始化配置
+    const currentConfig = formRef.current?.getFieldValue('sourceConfig') || formRef.current?.getFieldValue('source_config') || {};
+    let newConfig = { ...currentConfig };
+    
+    if (value === 'Make') {
+      // 自制件：保留BOM和工艺路线配置
+      newConfig = {
+        ...newConfig,
+        production_lead_time: newConfig.production_lead_time,
+        min_production_batch: newConfig.min_production_batch,
+        production_waste_rate: newConfig.production_waste_rate,
+      };
+    } else if (value === 'Buy') {
+      // 采购件：初始化采购相关配置
+      newConfig = {
+        ...newConfig,
+        default_supplier_id: newConfig.default_supplier_id,
+        purchase_lead_time: newConfig.purchase_lead_time,
+        min_purchase_batch: newConfig.min_purchase_batch,
+        purchase_price: newConfig.purchase_price,
+      };
+    } else if (value === 'Outsource') {
+      // 委外件：初始化委外相关配置
+      newConfig = {
+        ...newConfig,
+        outsource_supplier_id: newConfig.outsource_supplier_id,
+        outsource_operation: newConfig.outsource_operation,
+        outsource_lead_time: newConfig.outsource_lead_time,
+        outsource_price: newConfig.outsource_price,
+        material_provided_by: newConfig.material_provided_by || 'enterprise',
+      };
+    } else if (value === 'Configure') {
+      // 配置件：保留变体相关配置
+      newConfig = {
+        ...newConfig,
+        bom_variants: newConfig.bom_variants,
+        default_variant: newConfig.default_variant,
+      };
+    }
+    
+    formRef.current?.setFieldsValue({
+      sourceConfig: newConfig,
+      source_config: newConfig, // 向后兼容
+    });
+    
+    // 验证配置
+    if (material?.uuid) {
+      validateSourceConfig();
+    }
+  };
+
+  /**
+   * 验证物料来源配置
+   */
+  const validateSourceConfig = async () => {
+    if (!material?.uuid) return;
+    
+    try {
+      setLoadingValidation(true);
+      const result = await materialSourceApi.validate(material.uuid);
+      setValidationResult(result);
+    } catch (error: any) {
+      messageApi.error(`验证失败: ${error.message || '未知错误'}`);
+    } finally {
+      setLoadingValidation(false);
+    }
+  };
+
+  /**
+   * 获取智能建议
+   */
+  const loadSuggestion = async () => {
+    if (!material?.uuid) return;
+    
+    try {
+      setLoadingSuggestion(true);
+      const result = await materialSourceApi.suggest(material.uuid);
+      setSuggestionResult(result);
+    } catch (error: any) {
+      messageApi.error(`获取建议失败: ${error.message || '未知错误'}`);
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  };
+
+  /**
+   * 检查配置完整性
+   */
+  const checkCompleteness = async () => {
+    if (!material?.uuid) return;
+    
+    try {
+      const result = await materialSourceApi.checkCompleteness(material.uuid);
+      setCompletenessResult(result);
+    } catch (error: any) {
+      messageApi.error(`检查失败: ${error.message || '未知错误'}`);
+    }
+  };
+
+  /**
+   * 初始化时加载建议和验证
+   */
+  useEffect(() => {
+    if (material?.uuid) {
+      loadSuggestion();
+      validateSourceConfig();
+      checkCompleteness();
+    }
+  }, [material?.uuid]);
+
+  /**
+   * 监听来源类型变化，重新验证
+   */
+  useEffect(() => {
+    if (sourceType && material?.uuid) {
+      validateSourceConfig();
+      checkCompleteness();
+    }
+  }, [sourceType]);
+
+  return (
+    <div>
+      {/* 智能建议 */}
+      {suggestionResult && suggestionResult.suggested_type && (
+        <Alert
+          message={`智能建议：${sourceTypeOptions.find(opt => opt.value === suggestionResult.suggested_type)?.label || suggestionResult.suggested_type}`}
+          description={
+            <div>
+              <div>置信度：{(suggestionResult.confidence * 100).toFixed(0)}%</div>
+              <div style={{ marginTop: 8 }}>
+                <strong>建议原因：</strong>
+                <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                  {suggestionResult.reasons.map((reason, index) => (
+                    <li key={index}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                if (suggestionResult.suggested_type) {
+                  handleSourceTypeChange(suggestionResult.suggested_type);
+                }
+              }}
+            >
+              应用建议
+            </Button>
+          }
+        />
+      )}
+
+      {/* 验证结果 */}
+      {validationResult && (
+        <Alert
+          message={validationResult.is_valid ? '验证通过' : '验证失败'}
+          description={
+            <div>
+              {validationResult.errors.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <strong style={{ color: '#ff4d4f' }}>错误：</strong>
+                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                    {validationResult.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {validationResult.warnings.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <strong style={{ color: '#faad14' }}>警告：</strong>
+                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                    {validationResult.warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          }
+          type={validationResult.is_valid ? 'success' : 'error'}
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button
+              size="small"
+              loading={loadingValidation}
+              onClick={validateSourceConfig}
+            >
+              重新验证
+            </Button>
+          }
+        />
+      )}
+
+      {/* 配置完整性检查 */}
+      {completenessResult && !completenessResult.is_complete && (
+        <Alert
+          message="配置不完整"
+          description={
+            <div>
+              <div style={{ marginTop: 8 }}>
+                <strong>缺失配置：</strong>
+                <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                  {completenessResult.missing_configs.map((config, index) => (
+                    <li key={index}>{config}</li>
+                  ))}
+                </ul>
+              </div>
+              {completenessResult.warnings.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <strong>建议：</strong>
+                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                    {completenessResult.warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          }
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {/* 物料来源类型选择 */}
+      <ProFormSelect
+        name="sourceType"
+        label="物料来源类型"
+        placeholder="请选择物料来源类型"
+        options={sourceTypeOptions}
+        fieldProps={{
+          value: sourceType,
+          onChange: handleSourceTypeChange,
+        }}
+        extra="物料来源类型决定了物料的获取方式（自制/采购/委外等）"
+      />
+
+      {/* 根据来源类型动态显示配置项 */}
+      <ProFormDependency name={['sourceType', 'sourceConfig']}>
+        {({ sourceType: currentSourceType, sourceConfig }) => {
+          const config = sourceConfig || {};
+          
+          if (currentSourceType === 'Make') {
+            // 自制件配置
+            return (
+              <div>
+                <ProFormSelect
+                  name="defaults.defaultProcessRouteUuid"
+                  label="默认工艺路线"
+                  placeholder="请选择默认工艺路线"
+                  options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
+                  fieldProps={{
+                    loading: processRoutesLoading,
+                    showSearch: true,
+                    filterOption: (input: string, option: any) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    allowClear: true,
+                  }}
+                />
+                <ProFormDigit
+                  name="sourceConfig.production_lead_time"
+                  label="生产提前期（天）"
+                  placeholder="请输入生产提前期"
+                  min={0}
+                />
+                <ProFormDigit
+                  name="sourceConfig.min_production_batch"
+                  label="最小生产批量"
+                  placeholder="请输入最小生产批量"
+                  min={0}
+                />
+                <ProFormDigit
+                  name="sourceConfig.production_waste_rate"
+                  label="生产损耗率（%）"
+                  placeholder="请输入生产损耗率"
+                  min={0}
+                  max={100}
+                />
+              </div>
+            );
+          } else if (currentSourceType === 'Buy') {
+            // 采购件配置
+            return (
+              <div>
+                <SafeProFormSelect
+                  name="sourceConfig.default_supplier_id"
+                  label="默认供应商"
+                  placeholder="请选择默认供应商（建议配置）"
+                  options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                  fieldProps={{
+                    loading: suppliersLoading,
+                    showSearch: true,
+                    filterOption: (input: string, option: any) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                    allowClear: true,
+                  }}
+                />
+                <ProFormDigit
+                  name="sourceConfig.purchase_lead_time"
+                  label="采购提前期（天）"
+                  placeholder="请输入采购提前期"
+                  min={0}
+                />
+                <ProFormDigit
+                  name="sourceConfig.min_purchase_batch"
+                  label="最小采购批量"
+                  placeholder="请输入最小采购批量"
+                  min={0}
+                />
+                <ProFormDigit
+                  name="sourceConfig.purchase_price"
+                  label="采购价格"
+                  placeholder="请输入采购价格"
+                  min={0}
+                  fieldProps={{
+                    precision: 2,
+                  }}
+                />
+              </div>
+            );
+          } else if (currentSourceType === 'Outsource') {
+            // 委外件配置
+            return (
+              <div>
+                <SafeProFormSelect
+                  name="sourceConfig.outsource_supplier_id"
+                  label="委外供应商"
+                  placeholder="请选择委外供应商"
+                  rules={[{ required: true, message: '请选择委外供应商' }]}
+                  options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                  fieldProps={{
+                    loading: suppliersLoading,
+                    showSearch: true,
+                    filterOption: (input: string, option: any) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                  }}
+                />
+                <ProFormText
+                  name="sourceConfig.outsource_operation"
+                  label="委外工序"
+                  placeholder="请输入委外工序"
+                  rules={[{ required: true, message: '请输入委外工序' }]}
+                />
+                <ProFormDigit
+                  name="sourceConfig.outsource_lead_time"
+                  label="委外提前期（天）"
+                  placeholder="请输入委外提前期"
+                  min={0}
+                />
+                <ProFormDigit
+                  name="sourceConfig.outsource_price"
+                  label="委外价格"
+                  placeholder="请输入委外价格"
+                  min={0}
+                  fieldProps={{
+                    precision: 2,
+                  }}
+                />
+                <ProFormSelect
+                  name="sourceConfig.material_provided_by"
+                  label="物料提供方"
+                  placeholder="请选择物料提供方"
+                  options={[
+                    { label: '企业提供', value: 'enterprise' },
+                    { label: '供应商提供', value: 'supplier' },
+                  ]}
+                  initialValue="enterprise"
+                />
+              </div>
+            );
+          } else if (currentSourceType === 'Configure') {
+            // 配置件配置
+            return (
+              <div>
+                <Alert
+                  message="配置件说明"
+                  description="配置件需要配置变体属性和BOM变体，请在'变体管理'标签页配置变体属性。"
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+                <ProFormTextArea
+                  name="sourceConfig.bom_variants"
+                  label="BOM变体配置（JSON格式）"
+                  placeholder='请输入BOM变体配置，格式：{"variant1": {...}, "variant2": {...}}'
+                  fieldProps={{
+                    rows: 6,
+                  }}
+                />
+                <ProFormText
+                  name="sourceConfig.default_variant"
+                  label="默认变体"
+                  placeholder="请输入默认变体"
+                />
+              </div>
+            );
+          } else if (currentSourceType === 'Phantom') {
+            // 虚拟件配置
+            return (
+              <div>
+                <Alert
+                  message="虚拟件说明"
+                  description="虚拟件不实际存在，仅用于BOM展开。虚拟件必须配置完整的BOM结构，系统会自动跳过虚拟件，直接展开下层物料。"
+                  type="info"
+                  showIcon
+                />
+              </div>
+            );
+          }
+          
+          return null;
+        }}
+      </ProFormDependency>
+    </div>
   );
 };
 

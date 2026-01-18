@@ -6,7 +6,7 @@
 
 from pydantic import BaseModel, Field, validator, ConfigDict
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 
 
@@ -724,3 +724,115 @@ class MaterialCodeConvertResponse(BaseModel):
     material_uuid: str = Field(..., description="物料UUID")
     material_name: str = Field(..., description="物料名称")
     found: bool = Field(..., description="是否找到映射")
+
+
+# ==================== 物料批号 Schema ====================
+
+class MaterialBatchBase(BaseModel):
+    """物料批号基础 Schema"""
+    
+    material_uuid: str = Field(..., description="物料UUID")
+    batch_no: str = Field(..., max_length=100, description="批号（必填，同一物料下唯一）")
+    production_date: Optional[date] = Field(None, description="生产日期（可选）")
+    expiry_date: Optional[date] = Field(None, description="有效期（可选，用于有保质期的物料）")
+    supplier_batch_no: Optional[str] = Field(None, max_length=100, description="供应商批号（可选）")
+    quantity: Decimal = Field(0, description="批号数量（当前库存数量）")
+    status: str = Field("in_stock", description="批号状态（在库、已出库、已过期、已报废等）")
+    remark: Optional[str] = Field(None, description="备注（可选）")
+
+
+class MaterialBatchCreate(MaterialBatchBase):
+    """创建物料批号 Schema"""
+    pass
+
+
+class MaterialBatchUpdate(BaseModel):
+    """更新物料批号 Schema"""
+    
+    production_date: Optional[date] = Field(None, description="生产日期（可选）")
+    expiry_date: Optional[date] = Field(None, description="有效期（可选）")
+    supplier_batch_no: Optional[str] = Field(None, max_length=100, description="供应商批号（可选）")
+    quantity: Optional[Decimal] = Field(None, description="批号数量（当前库存数量）")
+    status: Optional[str] = Field(None, description="批号状态")
+    remark: Optional[str] = Field(None, description="备注（可选）")
+
+
+class MaterialBatchResponse(MaterialBatchBase):
+    """物料批号响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    material_id: int = Field(..., alias="materialId", description="物料ID")
+    material_name: Optional[str] = Field(None, alias="materialName", description="物料名称")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class MaterialBatchListResponse(BaseModel):
+    """物料批号列表响应 Schema"""
+    
+    items: List[MaterialBatchResponse] = Field(..., description="批号列表")
+    total: int = Field(..., description="总数")
+
+
+# ==================== 物料序列号 Schema ====================
+
+class MaterialSerialBase(BaseModel):
+    """物料序列号基础 Schema"""
+    
+    material_uuid: str = Field(..., description="物料UUID")
+    serial_no: str = Field(..., max_length=100, description="序列号（必填，全局唯一）")
+    production_date: Optional[date] = Field(None, description="生产日期（可选）")
+    factory_date: Optional[date] = Field(None, description="出厂日期（可选）")
+    supplier_serial_no: Optional[str] = Field(None, max_length=100, description="供应商序列号（可选）")
+    status: str = Field("in_stock", description="序列号状态（在库、已出库、已销售、已报废、已退货等）")
+    remark: Optional[str] = Field(None, description="备注（可选）")
+
+
+class MaterialSerialCreate(MaterialSerialBase):
+    """创建物料序列号 Schema"""
+    pass
+
+
+class MaterialSerialUpdate(BaseModel):
+    """更新物料序列号 Schema"""
+    
+    production_date: Optional[date] = Field(None, description="生产日期（可选）")
+    factory_date: Optional[date] = Field(None, description="出厂日期（可选）")
+    supplier_serial_no: Optional[str] = Field(None, max_length=100, description="供应商序列号（可选）")
+    status: Optional[str] = Field(None, description="序列号状态")
+    remark: Optional[str] = Field(None, description="备注（可选）")
+
+
+class MaterialSerialResponse(MaterialSerialBase):
+    """物料序列号响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    material_id: int = Field(..., alias="materialId", description="物料ID")
+    material_name: Optional[str] = Field(None, alias="materialName", description="物料名称")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class MaterialSerialListResponse(BaseModel):
+    """物料序列号列表响应 Schema"""
+    
+    items: List[MaterialSerialResponse] = Field(..., description="序列号列表")
+    total: int = Field(..., description="总数")

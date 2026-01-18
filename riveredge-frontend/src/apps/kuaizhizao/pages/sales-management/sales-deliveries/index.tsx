@@ -8,9 +8,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Form, Input, InputNumber } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined, SwapOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -71,6 +71,17 @@ const SalesDeliveriesPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [deliveryDetail, setDeliveryDetail] = useState<SalesDeliveryDetail | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+
+  // Modal 相关状态（创建/编辑）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentDelivery, setCurrentDelivery] = useState<SalesDelivery | null>(null);
+  const formRef = useRef<any>(null);
+
+  // 从订单/预测上拉相关状态
+  const [pullFromOrderVisible, setPullFromOrderVisible] = useState(false);
+  const [pullFromForecastVisible, setPullFromForecastVisible] = useState(false);
+  const pullFormRef = useRef<any>(null);
 
   // 导入导出相关状态
   const [importVisible, setImportVisible] = useState(false);
@@ -170,15 +181,29 @@ const SalesDeliveriesPage: React.FC = () => {
             详情
           </Button>
           {record.status === '待出库' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
-            >
-              确认出库
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setCurrentDelivery(record);
+                  setIsEdit(true);
+                  setModalVisible(true);
+                }}
+              >
+                编辑
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleConfirm(record)}
+                style={{ color: '#52c41a' }}
+              >
+                确认出库
+              </Button>
+            </>
           )}
           <Button
             type="link"
@@ -290,6 +315,55 @@ const SalesDeliveriesPage: React.FC = () => {
       messageApi.success('导出成功');
     } catch (error: any) {
       messageApi.error(error.message || '导出失败');
+    }
+  };
+
+  // 处理创建/编辑表单提交
+  const handleFormSubmit = async (values: any): Promise<void> => {
+    try {
+      if (isEdit && currentDelivery?.id) {
+        await warehouseApi.salesDelivery.update(currentDelivery.id.toString(), values);
+        messageApi.success('销售出库单更新成功');
+      } else {
+        await warehouseApi.salesDelivery.create({
+          ...values,
+          items: [], // TODO: 后续需要实现明细项的编辑功能
+        });
+        messageApi.success('销售出库单创建成功');
+      }
+      setModalVisible(false);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+      throw error;
+    }
+  };
+
+  // 处理从订单上拉
+  const handlePullFromOrder = async (values: any): Promise<void> => {
+    try {
+      await warehouseApi.salesDelivery.pullFromSalesOrder(values);
+      messageApi.success('从销售订单上拉成功');
+      setPullFromOrderVisible(false);
+      pullFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '从销售订单上拉失败');
+      throw error;
+    }
+  };
+
+  // 处理从预测上拉
+  const handlePullFromForecast = async (values: any): Promise<void> => {
+    try {
+      await warehouseApi.salesDelivery.pullFromSalesForecast(values);
+      messageApi.success('从销售预测上拉成功');
+      setPullFromForecastVisible(false);
+      pullFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '从销售预测上拉失败');
+      throw error;
     }
   };
 
@@ -434,6 +508,32 @@ const SalesDeliveriesPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <Button
+              key="create"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setIsEdit(false);
+                setCurrentDelivery(null);
+                setModalVisible(true);
+              }}
+            >
+              新建出库单
+            </Button>,
+            <Button
+              key="pullFromOrder"
+              icon={<PlusOutlined />}
+              onClick={() => setPullFromOrderVisible(true)}
+            >
+              从订单上拉
+            </Button>,
+            <Button
+              key="pullFromForecast"
+              icon={<PlusOutlined />}
+              onClick={() => setPullFromForecastVisible(true)}
+            >
+              从预测上拉
+            </Button>,
+            <Button
               key="import"
               icon={<UploadOutlined />}
               onClick={() => setImportVisible(true)}
@@ -553,6 +653,159 @@ const SalesDeliveriesPage: React.FC = () => {
           ) : null
         }
       />
+
+      {/* 创建/编辑Modal */}
+      <FormModalTemplate
+        title={isEdit ? '编辑销售出库单' : '新建销售出库单'}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setCurrentDelivery(null);
+          formRef.current?.resetFields();
+        }}
+        onFinish={handleFormSubmit}
+        isEdit={isEdit}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        formRef={formRef}
+        grid={true}
+      >
+        <ProFormText
+          name="sales_order_code"
+          label="销售订单编号"
+          placeholder="请输入销售订单编号（可选）"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="customer_name"
+          label="客户名称"
+          placeholder="请输入客户名称"
+          rules={[{ required: true, message: '请输入客户名称' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="warehouse_name"
+          label="仓库名称"
+          placeholder="请输入仓库名称"
+          rules={[{ required: true, message: '请输入仓库名称' }]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="delivery_time"
+          label="出库时间"
+          placeholder="请选择出库时间"
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="shipping_method"
+          label="发货方式"
+          placeholder="请选择发货方式"
+          options={[
+            { label: '快递', value: '快递' },
+            { label: '物流', value: '物流' },
+            { label: '自提', value: '自提' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="tracking_number"
+          label="物流单号"
+          placeholder="请输入物流单号"
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="shipping_address"
+          label="收货地址"
+          placeholder="请输入收货地址"
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormTextArea
+          name="notes"
+          label="备注"
+          placeholder="请输入备注信息"
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+        <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
+          <p style={{ margin: 0, color: '#999' }}>
+            注意：销售出库单明细项功能开发中，当前版本仅支持基本信息的创建和编辑。建议使用"从订单上拉"或"从预测上拉"功能来生成带明细的出库单。
+          </p>
+        </div>
+      </FormModalTemplate>
+
+      {/* 从订单上拉Modal */}
+      <FormModalTemplate
+        title="从销售订单上拉生成销售出库单"
+        open={pullFromOrderVisible}
+        onClose={() => {
+          setPullFromOrderVisible(false);
+          pullFormRef.current?.resetFields();
+        }}
+        onFinish={handlePullFromOrder}
+        isEdit={false}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={pullFormRef}
+      >
+        <ProFormDigit
+          name="sales_order_id"
+          label="销售订单ID"
+          placeholder="请输入销售订单ID"
+          rules={[{ required: true, message: '请输入销售订单ID' }]}
+        />
+        <ProFormDigit
+          name="warehouse_id"
+          label="出库仓库ID"
+          placeholder="请输入出库仓库ID"
+          rules={[{ required: true, message: '请输入出库仓库ID' }]}
+        />
+        <ProFormText
+          name="warehouse_name"
+          label="出库仓库名称"
+          placeholder="请输入出库仓库名称（可选）"
+        />
+        <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
+          <p style={{ margin: 0, color: '#999' }}>
+            说明：系统将根据销售订单自动生成销售出库单，包含订单中的所有明细项。如需自定义出库数量，请在生成后编辑出库单。
+          </p>
+        </div>
+      </FormModalTemplate>
+
+      {/* 从预测上拉Modal */}
+      <FormModalTemplate
+        title="从销售预测上拉生成销售出库单（MTS模式）"
+        open={pullFromForecastVisible}
+        onClose={() => {
+          setPullFromForecastVisible(false);
+          pullFormRef.current?.resetFields();
+        }}
+        onFinish={handlePullFromForecast}
+        isEdit={false}
+        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        formRef={pullFormRef}
+      >
+        <ProFormDigit
+          name="sales_forecast_id"
+          label="销售预测ID"
+          placeholder="请输入销售预测ID"
+          rules={[{ required: true, message: '请输入销售预测ID' }]}
+        />
+        <ProFormDigit
+          name="warehouse_id"
+          label="出库仓库ID"
+          placeholder="请输入出库仓库ID"
+          rules={[{ required: true, message: '请输入出库仓库ID' }]}
+        />
+        <ProFormText
+          name="warehouse_name"
+          label="出库仓库名称"
+          placeholder="请输入出库仓库名称（可选）"
+        />
+        <div style={{ padding: '16px', background: '#f5f5f5', borderRadius: '4px', marginTop: '16px' }}>
+          <p style={{ margin: 0, color: '#999' }}>
+            说明：系统将根据销售预测（MTS模式）自动生成销售出库单，包含预测中的所有明细项。适用于按库存生产（MTS）场景。
+          </p>
+        </div>
+      </FormModalTemplate>
 
       {/* 批量导入弹窗 */}
       <UniImport

@@ -230,6 +230,52 @@ async def push_purchase_order_to_receipt(
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 
 
+@router.get("/purchase-orders/{order_id}/approval-status", summary="获取采购订单审批流程状态（采购审批流程增强）")
+async def get_purchase_order_approval_status(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取采购订单审批流程状态
+    
+    如果启动了审批流程，返回审批流程状态；否则返回空状态。
+    """
+    from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+    
+    approval_service = ApprovalFlowService()
+    status = await approval_service.get_approval_status(
+        tenant_id=tenant_id,
+        entity_type="purchase_order",
+        entity_id=order_id
+    )
+    
+    return JSONResponse(content=status)
+
+
+@router.get("/purchase-orders/{order_id}/approval-records", summary="获取采购订单审批记录（采购审批流程增强）")
+async def get_purchase_order_approval_records(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取采购订单审批记录列表
+    
+    返回所有审批历史记录。
+    """
+    from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+    
+    approval_service = ApprovalFlowService()
+    records = await approval_service.get_approval_records(
+        tenant_id=tenant_id,
+        entity_type="purchase_order",
+        entity_id=order_id
+    )
+    
+    return JSONResponse(content={"data": records, "total": len(records)})
+
+
 @router.get("/purchase-orders/{order_id}/print", summary="打印采购订单")
 async def print_purchase_order(
     order_id: int = Path(..., description="采购订单ID"),

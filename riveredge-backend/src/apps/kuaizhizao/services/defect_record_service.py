@@ -21,7 +21,8 @@ from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordResponse,
     DefectRecordListResponse,
-    DefectRecordUpdate
+    DefectRecordUpdate,
+    DefectRecordCreateFromInspection
 )
 
 from apps.base_service import AppBaseService
@@ -325,3 +326,274 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         defect_records = await DefectRecord.filter(query).order_by('-created_at').offset(skip).limit(limit).all()
 
         return [DefectRecordListResponse.model_validate(record) for record in defect_records]
+
+    async def create_defect_from_incoming_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        defect_data: DefectRecordCreateFromInspection,
+        created_by: int
+    ) -> DefectRecordResponse:
+        """
+        从来料检验单创建不合格品记录
+
+        Args:
+            tenant_id: 组织ID
+            inspection_id: 来料检验单ID
+            defect_data: 不合格品记录创建数据
+            created_by: 创建人ID
+
+        Returns:
+            DefectRecordResponse: 创建的不合格品记录信息
+
+        Raises:
+            NotFoundError: 来料检验单不存在
+            ValidationError: 数据验证失败
+            BusinessLogicError: 业务逻辑错误
+        """
+        import uuid
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+        async with in_transaction():
+            # 获取来料检验单
+            inspection = await IncomingInspection.get_or_none(
+                id=inspection_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not inspection:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+
+            # 验证检验单状态（必须是已检验且不合格）
+            if inspection.status != '已检验':
+                raise BusinessLogicError(f"只有已检验状态的检验单才能创建不合格品记录，当前状态：{inspection.status}")
+
+            if inspection.quality_status != '不合格':
+                raise BusinessLogicError(f"只有不合格的检验单才能创建不合格品记录，当前质量状态：{inspection.quality_status}")
+
+            # 验证不合格数量
+            if defect_data.defect_quantity > inspection.unqualified_quantity:
+                raise ValidationError(
+                    f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
+                )
+
+            # 生成不良品记录编码
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="DEFECT_RECORD_CODE",
+                prefix=f"DF{today}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 创建不良品记录
+            defect_record = await DefectRecord.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                incoming_inspection_id=inspection_id,
+                incoming_inspection_code=inspection.inspection_code,
+                product_id=inspection.material_id,
+                product_code=inspection.material_code,
+                product_name=inspection.material_name,
+                defect_quantity=defect_data.defect_quantity,
+                defect_type=defect_data.defect_type,
+                defect_reason=defect_data.defect_reason,
+                disposition=defect_data.disposition,
+                status="draft",
+                remarks=defect_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            logger.info(f"从来料检验单 {inspection.inspection_code} 创建不合格品记录: {code}")
+
+            return DefectRecordResponse.model_validate(defect_record)
+
+    async def create_defect_from_process_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        defect_data: DefectRecordCreateFromInspection,
+        created_by: int
+    ) -> DefectRecordResponse:
+        """
+        从过程检验单创建不合格品记录
+
+        Args:
+            tenant_id: 组织ID
+            inspection_id: 过程检验单ID
+            defect_data: 不合格品记录创建数据
+            created_by: 创建人ID
+
+        Returns:
+            DefectRecordResponse: 创建的不合格品记录信息
+
+        Raises:
+            NotFoundError: 过程检验单不存在
+            ValidationError: 数据验证失败
+            BusinessLogicError: 业务逻辑错误
+        """
+        import uuid
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+        async with in_transaction():
+            # 获取过程检验单
+            inspection = await ProcessInspection.get_or_none(
+                id=inspection_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not inspection:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+
+            # 验证检验单状态（必须是已检验且不合格）
+            if inspection.status != '已检验':
+                raise BusinessLogicError(f"只有已检验状态的检验单才能创建不合格品记录，当前状态：{inspection.status}")
+
+            if inspection.quality_status != '不合格':
+                raise BusinessLogicError(f"只有不合格的检验单才能创建不合格品记录，当前质量状态：{inspection.quality_status}")
+
+            # 验证不合格数量
+            if defect_data.defect_quantity > inspection.unqualified_quantity:
+                raise ValidationError(
+                    f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
+                )
+
+            # 生成不良品记录编码
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="DEFECT_RECORD_CODE",
+                prefix=f"DF{today}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 创建不良品记录
+            defect_record = await DefectRecord.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                process_inspection_id=inspection_id,
+                process_inspection_code=inspection.inspection_code,
+                work_order_id=inspection.work_order_id,
+                work_order_code=inspection.work_order_code,
+                operation_id=inspection.operation_id,
+                operation_code=inspection.operation_code,
+                operation_name=inspection.operation_name,
+                product_id=inspection.material_id,
+                product_code=inspection.material_code,
+                product_name=inspection.material_name,
+                defect_quantity=defect_data.defect_quantity,
+                defect_type=defect_data.defect_type,
+                defect_reason=defect_data.defect_reason,
+                disposition=defect_data.disposition,
+                status="draft",
+                remarks=defect_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            logger.info(f"从过程检验单 {inspection.inspection_code} 创建不合格品记录: {code}")
+
+            return DefectRecordResponse.model_validate(defect_record)
+
+    async def create_defect_from_finished_goods_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        defect_data: DefectRecordCreateFromInspection,
+        created_by: int
+    ) -> DefectRecordResponse:
+        """
+        从成品检验单创建不合格品记录
+
+        Args:
+            tenant_id: 组织ID
+            inspection_id: 成品检验单ID
+            defect_data: 不合格品记录创建数据
+            created_by: 创建人ID
+
+        Returns:
+            DefectRecordResponse: 创建的不合格品记录信息
+
+        Raises:
+            NotFoundError: 成品检验单不存在
+            ValidationError: 数据验证失败
+            BusinessLogicError: 业务逻辑错误
+        """
+        import uuid
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+        async with in_transaction():
+            # 获取成品检验单
+            inspection = await FinishedGoodsInspection.get_or_none(
+                id=inspection_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if not inspection:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+
+            # 验证检验单状态（必须是已检验且不合格）
+            if inspection.status != '已检验':
+                raise BusinessLogicError(f"只有已检验状态的检验单才能创建不合格品记录，当前状态：{inspection.status}")
+
+            if inspection.quality_status != '不合格':
+                raise BusinessLogicError(f"只有不合格的检验单才能创建不合格品记录，当前质量状态：{inspection.quality_status}")
+
+            # 验证不合格数量
+            if defect_data.defect_quantity > inspection.unqualified_quantity:
+                raise ValidationError(
+                    f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
+                )
+
+            # 生成不良品记录编码
+            today = datetime.now().strftime("%Y%m%d")
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="DEFECT_RECORD_CODE",
+                prefix=f"DF{today}"
+            )
+
+            # 获取创建人信息
+            user_info = await self.get_user_info(created_by)
+
+            # 创建不良品记录
+            defect_record = await DefectRecord.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                finished_goods_inspection_id=inspection_id,
+                finished_goods_inspection_code=inspection.inspection_code,
+                work_order_id=inspection.work_order_id,
+                work_order_code=inspection.work_order_code,
+                product_id=inspection.material_id,
+                product_code=inspection.material_code,
+                product_name=inspection.material_name,
+                defect_quantity=defect_data.defect_quantity,
+                defect_type=defect_data.defect_type,
+                defect_reason=defect_data.defect_reason,
+                disposition=defect_data.disposition,
+                status="draft",
+                remarks=defect_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+
+            logger.info(f"从成品检验单 {inspection.inspection_code} 创建不合格品记录: {code}")
+
+            return DefectRecordResponse.model_validate(defect_record)

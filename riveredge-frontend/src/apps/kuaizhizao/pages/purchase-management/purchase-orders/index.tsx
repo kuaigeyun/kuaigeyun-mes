@@ -7,13 +7,13 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table, Steps, Empty, Timeline, Divider } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, PurchaseOrder } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
 // 采购订单接口定义
@@ -78,6 +78,11 @@ const PurchaseOrdersPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
+  
+  // 审批流程相关状态
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null);
+  const [approvalRecords, setApprovalRecords] = useState<ApprovalRecord[]>([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
 
   // 表格列定义
   const columns: ProColumns<PurchaseOrder>[] = [
@@ -247,9 +252,36 @@ const PurchaseOrdersPage: React.FC = () => {
         setDocumentRelations(null);
       }
       
+      // 获取审批流程状态和记录（采购审批流程增强）
+      await loadApprovalData(record.id!);
+      
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
+    }
+  };
+
+  // 加载审批流程数据
+  const loadApprovalData = async (orderId: number) => {
+    setApprovalLoading(true);
+    try {
+      // 获取审批流程状态
+      const status = await getPurchaseOrderApprovalStatus(orderId);
+      setApprovalStatus(status);
+      
+      // 如果启动了审批流程，获取审批记录
+      if (status.has_flow) {
+        const recordsResult = await getPurchaseOrderApprovalRecords(orderId);
+        setApprovalRecords(recordsResult.data || []);
+      } else {
+        setApprovalRecords([]);
+      }
+    } catch (error) {
+      console.error('获取审批流程数据失败:', error);
+      setApprovalStatus(null);
+      setApprovalRecords([]);
+    } finally {
+      setApprovalLoading(false);
     }
   };
 
@@ -288,15 +320,22 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   // 处理审核
-  const handleApprove = async (record: PurchaseOrder) => {
+  const handleApprove = async (record: PurchaseOrder, approved: boolean = true) => {
     Modal.confirm({
-      title: '审核采购订单',
-      content: `确定要审核通过采购订单 "${record.order_code}" 吗？`,
+      title: approved ? '审核通过采购订单' : '审核驳回采购订单',
+      content: `确定要${approved ? '审核通过' : '审核驳回'}采购订单 "${record.order_code}" 吗？`,
       onOk: async () => {
         try {
-          await approvePurchaseOrder(record.id!);
-          messageApi.success('采购订单审核成功');
+          await approvePurchaseOrder(record.id!, {
+            approved,
+            review_remarks: '',
+          });
+          messageApi.success(`采购订单${approved ? '审核通过' : '审核驳回'}成功`);
           actionRef.current?.reload();
+          // 如果详情页已打开，刷新审批数据
+          if (detailDrawerVisible && orderDetail?.id === record.id) {
+            await loadApprovalData(record.id!);
+          }
         } catch (error: any) {
           messageApi.error(error.message || '采购订单审核失败');
         }
@@ -655,6 +694,8 @@ const PurchaseOrdersPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setOrderDetail(null);
           setDocumentRelations(null);
+          setApprovalStatus(null);
+          setApprovalRecords([]);
         }}
         dataSource={orderDetail || undefined}
         columns={detailColumns}
@@ -733,6 +774,91 @@ const PurchaseOrdersPage: React.FC = () => {
                     bordered
                     scroll={{ x: 1000 }}
                   />
+                </Card>
+              )}
+
+              {/* 审批流程（采购审批流程增强） */}
+              {approvalStatus && approvalStatus.has_flow && (
+                <Card 
+                  title="审批流程" 
+                  style={{ marginBottom: 16 }}
+                  loading={approvalLoading}
+                  extra={
+                    <Tag color={approvalStatus.is_completed ? 'success' : approvalStatus.is_rejected ? 'error' : 'processing'}>
+                      {approvalStatus.flow_status || '进行中'}
+                    </Tag>
+                  }
+                >
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>流程名称：</strong>{approvalStatus.flow_name || '-'}
+                    </div>
+                    <div style={{ marginBottom: 8 }}>
+                      <strong>流程编码：</strong>{approvalStatus.flow_code || '-'}
+                    </div>
+                    {approvalStatus.current_step && (
+                      <div>
+                        <strong>当前步骤：</strong>
+                        <Tag color="blue">
+                          第{approvalStatus.current_step}步 - {approvalStatus.current_step_name || '-'}
+                        </Tag>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 审批记录时间线 */}
+                  {approvalRecords.length > 0 && (
+                    <div>
+                      <Divider orientation="left">审批记录</Divider>
+                      <Timeline
+                        items={approvalRecords.map((record) => {
+                          const isPassed = record.approval_result === '通过';
+                          const isRejected = record.approval_result === '驳回';
+                          
+                          return {
+                            dot: isPassed ? (
+                              <CheckCircleTwoTone twoToneColor="#52c41a" />
+                            ) : isRejected ? (
+                              <CloseCircleTwoTone twoToneColor="#ff4d4f" />
+                            ) : (
+                              <ClockCircleOutlined style={{ color: '#1890ff' }} />
+                            ),
+                            color: isPassed ? 'green' : isRejected ? 'red' : 'blue',
+                            children: (
+                              <div>
+                                <div style={{ marginBottom: 4 }}>
+                                  <strong>{record.step_name || `第${record.step_order}步`}</strong>
+                                  <Tag 
+                                    color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}
+                                    style={{ marginLeft: 8 }}
+                                  >
+                                    {record.approval_result}
+                                  </Tag>
+                                </div>
+                                <div style={{ color: '#666', fontSize: '12px', marginBottom: 4 }}>
+                                  审核人：{record.approver_name}
+                                  {record.approval_time && ` | 审核时间：${record.approval_time}`}
+                                </div>
+                                {record.approval_comment && (
+                                  <div style={{ color: '#999', fontSize: '12px', marginTop: 4 }}>
+                                    审核意见：{record.approval_comment}
+                                  </div>
+                                )}
+                              </div>
+                            ),
+                          };
+                        })}
+                      />
+                    </div>
+                  )}
+                  
+                  {approvalRecords.length === 0 && (
+                    <Empty 
+                      description="暂无审批记录"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      style={{ margin: '20px 0' }}
+                    />
+                  )}
                 </Card>
               )}
 

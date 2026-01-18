@@ -130,6 +130,16 @@ export async function getCountdown(): Promise<LaunchCountdown | null> {
 }
 
 /**
+ * 完成上线倒计时
+ */
+export async function completeCountdown(): Promise<LaunchCountdown> {
+  return apiRequest<LaunchCountdown>({
+    url: '/apps/kuaizhizao/initial-data/countdown/complete',
+    method: 'POST',
+  });
+}
+
+/**
  * 动态数据补偿请求
  */
 export interface DataCompensationRequest {

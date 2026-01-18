@@ -16,6 +16,7 @@ from tortoise.expressions import Q
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from loguru import logger
 
 from apps.kuaizhizao.models import (
     PurchaseOrder, PurchaseOrderItem
@@ -294,6 +295,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
     ) -> PurchaseOrderResponse:
         """
         提交采购订单（非审核，仅改变状态为待审核）
+        
+        如果配置了采购订单审批流程，则自动启动审批流程（采购审批流程增强）。
 
         Args:
             tenant_id: 租户ID
@@ -310,8 +313,41 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if order.status != "草稿":
             raise BusinessLogicError("只能提交草稿状态的订单")
 
+        # 尝试启动审批流程（采购审批流程增强）
+        try:
+            from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+            
+            approval_service = ApprovalFlowService()
+            
+            # 尝试获取适用的审批流程
+            flow = await approval_service.get_approval_flow_for_entity(
+                tenant_id=tenant_id,
+                entity_type="purchase_order",
+                business_mode=None,
+                demand_type=None
+            )
+            
+            if flow:
+                # 启动审批流程
+                await approval_service.start_approval_flow(
+                    tenant_id=tenant_id,
+                    entity_type="purchase_order",
+                    entity_id=order_id,
+                    business_mode=None,
+                    demand_type=None
+                )
+                # 状态设置为待审核（审批流程中）
+                status = "待审核"
+            else:
+                # 没有配置审批流程，使用原有逻辑
+                status = "待审核"
+        except Exception as e:
+            # 如果启动审批流程失败，记录日志但不影响提交
+            logger.warning(f"启动采购订单审批流程失败: {str(e)}，订单ID: {order_id}")
+            status = "待审核"
+
         await order.update_from_dict({
-            'status': "待审核",
+            'status': status,
             'updated_by': submitted_by
         }).save()
 
@@ -325,7 +361,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         approved_by: int
     ) -> PurchaseOrderResponse:
         """
-        审核采购订单
+        审核采购订单（采购审批流程增强）
+        
+        如果启动了审批流程，则通过审批流程系统审核；否则使用原有逻辑。
 
         Args:
             tenant_id: 租户ID
@@ -336,23 +374,84 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         Returns:
             PurchaseOrderResponse: 审核后的订单信息
         """
+        from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+        from infra.models.user import User
+        
         order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
-        if order.review_status != "待审核":
-            raise BusinessLogicError("订单已被审核")
+        # 获取审核人姓名
+        approver = await User.get_or_none(id=approved_by)
+        approver_name = approver.name if approver else f"用户{approved_by}"
 
-        update_dict = {
-            'reviewer_id': approved_by,
-            'review_time': datetime.now(),
-            'review_status': "审核通过" if approve_data.approved else "审核驳回",
-            'review_remarks': approve_data.review_remarks,
-            'updated_by': approved_by
-        }
+        # 检查是否启动了审批流程（采购审批流程增强）
+        approval_service = ApprovalFlowService()
+        approval_status = await approval_service.get_approval_status(
+            tenant_id=tenant_id,
+            entity_type="purchase_order",
+            entity_id=order_id
+        )
 
-        if approve_data.approved:
-            update_dict['status'] = "已审核"
+        if approval_status.get("has_flow"):
+            # 使用审批流程系统审核
+            approval_result = "通过" if approve_data.approved else "驳回"
+            
+            result = await approval_service.execute_approval(
+                tenant_id=tenant_id,
+                entity_type="purchase_order",
+                entity_id=order_id,
+                approver_id=approved_by,
+                approver_name=approver_name,
+                approval_result=approval_result,
+                approval_comment=approve_data.review_remarks
+            )
+
+            # 根据审批流程结果更新订单状态
+            if result.get("flow_rejected"):
+                update_dict = {
+                    'reviewer_id': approved_by,
+                    'review_time': datetime.now(),
+                    'review_status': "审核驳回",
+                    'review_remarks': approve_data.review_remarks,
+                    'status': "已驳回",
+                    'updated_by': approved_by
+                }
+            elif result.get("flow_completed"):
+                update_dict = {
+                    'reviewer_id': approved_by,
+                    'review_time': datetime.now(),
+                    'review_status': "审核通过",
+                    'review_remarks': approve_data.review_remarks,
+                    'status': "已审核",
+                    'updated_by': approved_by
+                }
+            else:
+                # 审批流程进行中
+                update_dict = {
+                    'reviewer_id': approved_by,
+                    'review_time': datetime.now(),
+                    'review_status': "审核中" if approve_data.approved else "审核驳回",
+                    'review_remarks': approve_data.review_remarks,
+                    'updated_by': approved_by
+                }
+                if not approve_data.approved:
+                    update_dict['status'] = "已驳回"
+        else:
+            # 没有启动审批流程，使用原有逻辑
+            if order.review_status != "待审核":
+                raise BusinessLogicError("订单已被审核")
+
+            update_dict = {
+                'reviewer_id': approved_by,
+                'review_time': datetime.now(),
+                'review_status': "审核通过" if approve_data.approved else "审核驳回",
+                'review_remarks': approve_data.review_remarks,
+                'updated_by': approved_by
+            }
+
+            if approve_data.approved:
+                update_dict['status'] = "已审核"
 
         await order.update_from_dict(update_dict).save()
 

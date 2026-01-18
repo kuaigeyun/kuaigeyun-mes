@@ -21,6 +21,10 @@ from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+from apps.kuaizhizao.models.sales_return import SalesReturn
+from apps.kuaizhizao.models.sales_return_item import SalesReturnItem
+from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
@@ -34,6 +38,12 @@ from apps.kuaizhizao.schemas.warehouse import (
     # 销售出库单
     SalesDeliveryCreate, SalesDeliveryUpdate, SalesDeliveryResponse,
     SalesDeliveryItemCreate, SalesDeliveryItemUpdate, SalesDeliveryItemResponse,
+    # 销售退货单
+    SalesReturnCreate, SalesReturnUpdate, SalesReturnResponse,
+    SalesReturnItemCreate, SalesReturnItemUpdate, SalesReturnItemResponse,
+    # 采购退货单
+    PurchaseReturnCreate, PurchaseReturnUpdate, PurchaseReturnResponse,
+    PurchaseReturnItemCreate, PurchaseReturnItemUpdate, PurchaseReturnItemResponse,
     # 采购入库单
     PurchaseReceiptCreate, PurchaseReceiptUpdate, PurchaseReceiptResponse,
     PurchaseReceiptItemCreate, PurchaseReceiptItemUpdate, PurchaseReceiptItemResponse,
@@ -574,9 +584,25 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             total_quantity = sum(item.delivery_quantity for item in items) if items else 0
             total_amount = sum(item.total_amount for item in items) if items else 0
 
-            # MTS模式下，sales_order_id可以为None
+            # MTS模式下，sales_order_id可以为None（销售出库与需求关联功能增强）
             sales_order_id = delivery_data.sales_order_id if delivery_data.sales_order_id and delivery_data.sales_order_id > 0 else None
             sales_order_code = delivery_data.sales_order_code if sales_order_id else None
+            
+            # 销售预测信息（MTS模式）（销售出库与需求关联功能增强）
+            sales_forecast_id = getattr(delivery_data, 'sales_forecast_id', None)
+            sales_forecast_code = getattr(delivery_data, 'sales_forecast_code', None)
+            
+            # 统一需求关联（销售出库与需求关联功能增强）
+            demand_id = getattr(delivery_data, 'demand_id', None)
+            demand_code = getattr(delivery_data, 'demand_code', None)
+            demand_type = getattr(delivery_data, 'demand_type', None)
+            
+            # 如果提供了demand_id但没有demand_type，根据sales_order_id或sales_forecast_id判断
+            if demand_id and not demand_type:
+                if sales_order_id:
+                    demand_type = "sales_order"
+                elif sales_forecast_id:
+                    demand_type = "sales_forecast"
             
             delivery = await SalesDelivery.create(
                 tenant_id=tenant_id,
@@ -584,6 +610,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 delivery_code=code,
                 sales_order_id=sales_order_id,
                 sales_order_code=sales_order_code or "",
+                sales_forecast_id=sales_forecast_id,
+                sales_forecast_code=sales_forecast_code or "",
+                demand_id=demand_id,
+                demand_code=demand_code or "",
+                demand_type=demand_type,
                 customer_id=delivery_data.customer_id,
                 customer_name=delivery_data.customer_name,
                 warehouse_id=delivery_data.warehouse_id,
@@ -610,6 +641,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             # 创建出库单明细
             if items:
                 for item_data in items:
+                    # 序列号信息（批号和序列号选择功能增强）
+                    serial_numbers = getattr(item_data, 'serial_numbers', None)
+                    # 如果serial_numbers是列表，转换为JSON格式存储
+                    if serial_numbers and isinstance(serial_numbers, list):
+                        import json
+                        serial_numbers_json = json.dumps(serial_numbers)
+                    elif serial_numbers:
+                        # 如果已经是字符串格式的JSON，直接使用
+                        serial_numbers_json = serial_numbers if isinstance(serial_numbers, str) else None
+                    else:
+                        serial_numbers_json = None
+                    
+                    # 需求关联（销售出库与需求关联功能增强）
+                    item_demand_id = getattr(item_data, 'demand_id', None) or demand_id
+                    demand_item_id = getattr(item_data, 'demand_item_id', None)
+                    
                     await SalesDeliveryItem.create(
                         tenant_id=tenant_id,
                         delivery_id=delivery.id,
@@ -625,6 +672,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         location_code=getattr(item_data, 'location_code', None),
                         batch_number=getattr(item_data, 'batch_number', None),
                         expiry_date=getattr(item_data, 'expiry_date', None),
+                        serial_numbers=serial_numbers_json,  # 批号和序列号选择功能增强
+                        demand_id=item_demand_id,  # 销售出库与需求关联功能增强
+                        demand_item_id=demand_item_id,  # 销售出库与需求关联功能增强
                         status=getattr(item_data, 'status', '待出库'),
                         delivery_time=getattr(item_data, 'delivery_time', None),
                         notes=getattr(item_data, 'notes', None),
@@ -1396,4 +1446,594 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 ])
         
         return file_path
+
+    async def pull_from_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None
+    ) -> SalesDeliveryResponse:
+        """
+        从销售订单上拉生成销售出库单（销售出库单上拉功能）
+        
+        从销售订单上拉，自动生成销售出库单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+            created_by: 创建人ID
+            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用订单剩余数量
+            warehouse_id: 出库仓库ID（可选）
+            warehouse_name: 出库仓库名称（可选）
+            
+        Returns:
+            SalesDeliveryResponse: 创建的销售出库单信息
+            
+        Raises:
+            NotFoundError: 销售订单不存在
+            BusinessLogicError: 销售订单未审核或已全部出库
+        """
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
+        from decimal import Decimal
+        
+        # 获取销售订单
+        sales_order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=sales_order_id)
+        if not sales_order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        
+        # 检查订单状态（只有已审核或已确认的订单才能上拉生成出库单）
+        if sales_order.status not in ["已审核", "已确认"]:
+            raise BusinessLogicError("只有已审核或已确认的销售订单才能上拉生成销售出库单")
+        
+        # 获取订单明细
+        order_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        ).all()
+        
+        if not order_items:
+            raise BusinessLogicError("销售订单没有明细，无法生成销售出库单")
+        
+        # 如果没有指定仓库，需要从订单或其他地方获取默认仓库
+        if not warehouse_id:
+            # TODO: 从配置或其他地方获取默认仓库
+            raise ValidationError("必须指定出库仓库")
+        
+        # 如果没有指定仓库名称，尝试从仓库服务获取
+        if not warehouse_name:
+            # TODO: 从仓库服务获取仓库名称
+            warehouse_name = f"仓库{warehouse_id}"
+        
+        # 准备出库单明细
+        delivery_items = []
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        
+        for item in order_items:
+            # 计算出库数量
+            if delivery_quantities and item.id in delivery_quantities:
+                delivery_qty = Decimal(str(delivery_quantities[item.id]))
+            else:
+                # 使用剩余数量
+                delivery_qty = item.remaining_quantity or item.order_quantity
+            
+            if delivery_qty <= 0:
+                continue  # 跳过数量为0或负数的情况
+            
+            # 检查是否超出剩余数量
+            if delivery_qty > (item.remaining_quantity or item.order_quantity):
+                raise BusinessLogicError(f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过剩余数量 {item.remaining_quantity}")
+            
+            # 计算金额
+            item_total_amount = delivery_qty * item.unit_price
+            
+            delivery_items.append(
+                SalesDeliveryItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    material_unit=item.material_unit,
+                    delivery_quantity=float(delivery_qty),
+                    unit_price=float(item.unit_price),
+                    total_amount=float(item_total_amount),
+                    demand_id=None,  # 可以后续关联到统一需求表
+                    demand_item_id=None,  # 可以后续关联到需求明细
+                )
+            )
+            
+            total_quantity += delivery_qty
+            total_amount += item_total_amount
+        
+        if not delivery_items:
+            raise BusinessLogicError("没有可出库的物料")
+        
+        # 创建销售出库单
+        delivery_data = SalesDeliveryCreate(
+            sales_order_id=sales_order_id,
+            sales_order_code=sales_order.order_code,
+            demand_type="sales_order",  # 销售出库与需求关联功能增强
+            customer_id=sales_order.customer_id,
+            customer_name=sales_order.customer_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            status="待出库",
+            total_quantity=float(total_quantity),
+            total_amount=float(total_amount),
+            shipping_address=sales_order.shipping_address,
+            shipping_method=sales_order.shipping_method,
+            notes=f"从销售订单 {sales_order.order_code} 上拉生成",
+            items=delivery_items
+        )
+        
+        # 创建出库单
+        delivery = await self.create_sales_delivery(
+            tenant_id=tenant_id,
+            delivery_data=delivery_data,
+            created_by=created_by
+        )
+        
+        # TODO: 更新销售订单明细的已交货数量和剩余数量
+        # 注意：这里暂时不更新，等确认出库后再更新
+        
+        return delivery
+
+    async def pull_from_sales_forecast(
+        self,
+        tenant_id: int,
+        sales_forecast_id: int,
+        created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None,
+        warehouse_id: Optional[int] = None,
+        warehouse_name: Optional[str] = None
+    ) -> SalesDeliveryResponse:
+        """
+        从销售预测上拉生成销售出库单（销售出库单上拉功能）
+        
+        从销售预测上拉，自动生成销售出库单（MTS模式）
+        
+        Args:
+            tenant_id: 租户ID
+            sales_forecast_id: 销售预测ID
+            created_by: 创建人ID
+            delivery_quantities: 出库数量字典 {item_id: quantity}，如果不提供则使用预测数量
+            warehouse_id: 出库仓库ID（可选）
+            warehouse_name: 出库仓库名称（可选）
+            
+        Returns:
+            SalesDeliveryResponse: 创建的销售出库单信息
+            
+        Raises:
+            NotFoundError: 销售预测不存在
+            BusinessLogicError: 销售预测未审核
+        """
+        from apps.kuaizhizao.models.sales_forecast import SalesForecast
+        from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
+        from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
+        from decimal import Decimal
+        
+        # 获取销售预测
+        sales_forecast = await SalesForecast.get_or_none(tenant_id=tenant_id, id=sales_forecast_id)
+        if not sales_forecast:
+            raise NotFoundError(f"销售预测不存在: {sales_forecast_id}")
+        
+        # 检查预测状态（只有已审核的预测才能上拉生成出库单）
+        if sales_forecast.status != "已审核":
+            raise BusinessLogicError("只有已审核的销售预测才能上拉生成销售出库单")
+        
+        # 获取预测明细
+        forecast_items = await SalesForecastItem.filter(
+            tenant_id=tenant_id,
+            forecast_id=sales_forecast_id
+        ).all()
+        
+        if not forecast_items:
+            raise BusinessLogicError("销售预测没有明细，无法生成销售出库单")
+        
+        # 如果没有指定仓库，需要从配置或其他地方获取默认仓库
+        if not warehouse_id:
+            # TODO: 从配置或其他地方获取默认仓库
+            raise ValidationError("必须指定出库仓库")
+        
+        # 如果没有指定仓库名称，尝试从仓库服务获取
+        if not warehouse_name:
+            # TODO: 从仓库服务获取仓库名称
+            warehouse_name = f"仓库{warehouse_id}"
+        
+        # 准备出库单明细
+        delivery_items = []
+        total_quantity = Decimal("0")
+        total_amount = Decimal("0")
+        
+        # MTS模式下，没有客户信息，需要从其他配置获取默认客户或设置为空
+        # 这里暂时使用一个默认客户ID（实际应该从配置获取）
+        default_customer_id = None  # TODO: 从配置获取默认客户
+        default_customer_name = "MTS默认客户"  # TODO: 从配置获取默认客户名称
+        
+        for item in forecast_items:
+            # 计算出库数量
+            if delivery_quantities and item.id in delivery_quantities:
+                delivery_qty = Decimal(str(delivery_quantities[item.id]))
+            else:
+                # 使用预测数量
+                delivery_qty = item.forecast_quantity
+            
+            if delivery_qty <= 0:
+                continue  # 跳过数量为0或负数的情况
+            
+            # MTS模式下，没有单价，需要从物料默认价格获取
+            # TODO: 从物料默认价格获取单价
+            unit_price = Decimal("0")  # 默认价格为0
+            
+            # 计算金额
+            item_total_amount = delivery_qty * unit_price
+            
+            delivery_items.append(
+                SalesDeliveryItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    material_unit=item.material_unit,
+                    delivery_quantity=float(delivery_qty),
+                    unit_price=float(unit_price),
+                    total_amount=float(item_total_amount),
+                    demand_id=None,  # 可以后续关联到统一需求表
+                    demand_item_id=None,  # 可以后续关联到需求明细
+                )
+            )
+            
+            total_quantity += delivery_qty
+            total_amount += item_total_amount
+        
+        if not delivery_items:
+            raise BusinessLogicError("没有可出库的物料")
+        
+        # 创建销售出库单
+        delivery_data = SalesDeliveryCreate(
+            sales_forecast_id=sales_forecast_id,
+            sales_forecast_code=sales_forecast.forecast_code,
+            demand_type="sales_forecast",  # 销售出库与需求关联功能增强
+            customer_id=default_customer_id or 0,
+            customer_name=default_customer_name,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            status="待出库",
+            total_quantity=float(total_quantity),
+            total_amount=float(total_amount),
+            notes=f"从销售预测 {sales_forecast.forecast_code} 上拉生成",
+            items=delivery_items
+        )
+        
+        # 创建出库单
+        delivery = await self.create_sales_delivery(
+            tenant_id=tenant_id,
+            delivery_data=delivery_data,
+            created_by=created_by
+        )
+        
+        return delivery
+
+
+class SalesReturnService(AppBaseService[SalesReturn]):
+    """销售退货单服务"""
+
+    def __init__(self):
+        super().__init__(SalesReturn)
+
+    async def create_sales_return(self, tenant_id: int, return_data: SalesReturnCreate, created_by: int) -> SalesReturnResponse:
+        """创建销售退货单"""
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            # 如果未提供return_code，则自动生成
+            if return_data.return_code:
+                code = return_data.return_code
+            else:
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(tenant_id, "SALES_RETURN_CODE", prefix=f"SR{today}")
+
+            # 从return_data中提取items（如果存在）
+            items = getattr(return_data, 'items', None) or []
+            
+            # 计算总数量和总金额
+            total_quantity = sum(item.return_quantity for item in items) if items else 0
+            total_amount = sum(item.total_amount for item in items) if items else 0
+
+            # 如果关联了销售出库单，获取相关信息
+            sales_delivery_id = return_data.sales_delivery_id
+            sales_delivery_code = return_data.sales_delivery_code
+            sales_order_id = return_data.sales_order_id
+            sales_order_code = return_data.sales_order_code
+            
+            # 如果提供了sales_delivery_id但没有sales_delivery_code，尝试获取
+            if sales_delivery_id and not sales_delivery_code:
+                delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=sales_delivery_id)
+                if delivery:
+                    sales_delivery_code = delivery.delivery_code
+                    if not sales_order_id:
+                        sales_order_id = delivery.sales_order_id
+                        sales_order_code = delivery.sales_order_code
+            
+            return_obj = await SalesReturn.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                return_code=code,
+                sales_delivery_id=sales_delivery_id,
+                sales_delivery_code=sales_delivery_code or "",
+                sales_order_id=sales_order_id,
+                sales_order_code=sales_order_code or "",
+                customer_id=return_data.customer_id,
+                customer_name=return_data.customer_name,
+                warehouse_id=return_data.warehouse_id,
+                warehouse_name=return_data.warehouse_name,
+                return_time=return_data.return_time,
+                returner_id=return_data.returner_id,
+                returner_name=return_data.returner_name,
+                reviewer_id=return_data.reviewer_id,
+                reviewer_name=return_data.reviewer_name,
+                review_time=return_data.review_time,
+                review_status=return_data.review_status,
+                review_remarks=return_data.review_remarks,
+                return_reason=return_data.return_reason,
+                return_type=return_data.return_type,
+                status=return_data.status,
+                total_quantity=total_quantity,
+                total_amount=total_amount,
+                shipping_method=return_data.shipping_method,
+                tracking_number=return_data.tracking_number,
+                shipping_address=getattr(return_data, 'shipping_address', None),
+                notes=return_data.notes,
+                created_by=user_info.get("id"),
+            )
+            
+            # 创建退货单明细
+            if items:
+                for item_data in items:
+                    # 序列号信息（批号和序列号选择功能增强）
+                    serial_numbers = getattr(item_data, 'serial_numbers', None)
+                    # 如果serial_numbers是列表，转换为JSON格式存储
+                    if serial_numbers and isinstance(serial_numbers, list):
+                        import json
+                        serial_numbers_json = json.dumps(serial_numbers)
+                    elif serial_numbers:
+                        # 如果已经是字符串格式的JSON，直接使用
+                        serial_numbers_json = serial_numbers if isinstance(serial_numbers, str) else None
+                    else:
+                        serial_numbers_json = None
+                    
+                    await SalesReturnItem.create(
+                        tenant_id=tenant_id,
+                        return_id=return_obj.id,
+                        sales_delivery_item_id=getattr(item_data, 'sales_delivery_item_id', None),
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, 'material_spec', None),
+                        material_unit=item_data.material_unit,
+                        return_quantity=item_data.return_quantity,
+                        unit_price=item_data.unit_price,
+                        total_amount=item_data.total_amount,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        batch_number=getattr(item_data, 'batch_number', None),
+                        expiry_date=getattr(item_data, 'expiry_date', None),
+                        serial_numbers=serial_numbers_json,  # 批号和序列号选择功能增强
+                        status=getattr(item_data, 'status', '待退货'),
+                        return_time=getattr(item_data, 'return_time', None),
+                        notes=getattr(item_data, 'notes', None),
+                    )
+            
+            return SalesReturnResponse.model_validate(return_obj)
+
+    async def get_sales_return_by_id(self, tenant_id: int, return_id: int) -> SalesReturnResponse:
+        """根据ID获取销售退货单"""
+        return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+        if not return_obj:
+            raise NotFoundError(f"销售退货单不存在: {return_id}")
+        return SalesReturnResponse.model_validate(return_obj)
+
+    async def list_sales_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesReturnResponse]:
+        """获取销售退货单列表"""
+        query = SalesReturn.filter(tenant_id=tenant_id)
+
+        # 应用过滤条件
+        if filters.get('status'):
+            query = query.filter(status=filters['status'])
+        if filters.get('sales_delivery_id'):
+            query = query.filter(sales_delivery_id=filters['sales_delivery_id'])
+        if filters.get('customer_id'):
+            query = query.filter(customer_id=filters['customer_id'])
+
+        returns = await query.offset(skip).limit(limit).order_by('-created_at')
+        return [SalesReturnResponse.model_validate(return_obj) for return_obj in returns]
+
+    async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> SalesReturnResponse:
+        """确认退货"""
+        async with in_transaction():
+            return_obj = await self.get_sales_return_by_id(tenant_id, return_id)
+
+            if return_obj.status != '待退货':
+                raise BusinessLogicError("只有待退货状态的销售退货单才能确认退货")
+
+            returner_name = await self.get_user_name(confirmed_by)
+
+            await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                status='已退货',
+                returner_id=confirmed_by,
+                returner_name=returner_name,
+                return_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+
+            # TODO: 更新库存（增加库存）
+            # TODO: 更新销售出库单状态
+            
+            # TODO: 如果关联了应收单，需要处理应收单调整（减少应收账款或创建红字应收单）
+
+            updated_return = await self.get_sales_return_by_id(tenant_id, return_id)
+            return updated_return
+
+
+class PurchaseReturnService(AppBaseService[PurchaseReturn]):
+    """采购退货单服务"""
+
+    def __init__(self):
+        super().__init__(PurchaseReturn)
+
+    async def create_purchase_return(self, tenant_id: int, return_data: PurchaseReturnCreate, created_by: int) -> PurchaseReturnResponse:
+        """创建采购退货单"""
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+            # 如果未提供return_code，则自动生成
+            if return_data.return_code:
+                code = return_data.return_code
+            else:
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(tenant_id, "PURCHASE_RETURN_CODE", prefix=f"PRT{today}")
+
+            # 从return_data中提取items（如果存在）
+            items = getattr(return_data, 'items', None) or []
+            
+            # 计算总数量和总金额
+            total_quantity = sum(item.return_quantity for item in items) if items else 0
+            total_amount = sum(item.total_amount for item in items) if items else 0
+
+            # 如果关联了采购入库单，获取相关信息
+            purchase_receipt_id = return_data.purchase_receipt_id
+            purchase_receipt_code = return_data.purchase_receipt_code
+            purchase_order_id = return_data.purchase_order_id
+            purchase_order_code = return_data.purchase_order_code
+            
+            # 如果提供了purchase_receipt_id但没有purchase_receipt_code，尝试获取
+            if purchase_receipt_id and not purchase_receipt_code:
+                receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
+                if receipt:
+                    purchase_receipt_code = receipt.receipt_code
+                    if not purchase_order_id:
+                        purchase_order_id = receipt.purchase_order_id
+                        purchase_order_code = receipt.purchase_order_code
+            
+            return_obj = await PurchaseReturn.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                return_code=code,
+                purchase_receipt_id=purchase_receipt_id,
+                purchase_receipt_code=purchase_receipt_code or "",
+                purchase_order_id=purchase_order_id,
+                purchase_order_code=purchase_order_code or "",
+                supplier_id=return_data.supplier_id,
+                supplier_name=return_data.supplier_name,
+                warehouse_id=return_data.warehouse_id,
+                warehouse_name=return_data.warehouse_name,
+                return_time=return_data.return_time,
+                returner_id=return_data.returner_id,
+                returner_name=return_data.returner_name,
+                reviewer_id=return_data.reviewer_id,
+                reviewer_name=return_data.reviewer_name,
+                review_time=return_data.review_time,
+                review_status=return_data.review_status,
+                review_remarks=return_data.review_remarks,
+                return_reason=return_data.return_reason,
+                return_type=return_data.return_type,
+                status=return_data.status,
+                total_quantity=total_quantity,
+                total_amount=total_amount,
+                shipping_method=return_data.shipping_method,
+                tracking_number=return_data.tracking_number,
+                shipping_address=getattr(return_data, 'shipping_address', None),
+                notes=return_data.notes,
+                created_by=user_info.get("id"),
+            )
+            
+            # 创建退货单明细
+            if items:
+                for item_data in items:
+                    # 序列号信息（批号和序列号选择功能增强）
+                    serial_numbers = getattr(item_data, 'serial_numbers', None)
+                    # 如果serial_numbers是列表，转换为JSON格式存储
+                    if serial_numbers and isinstance(serial_numbers, list):
+                        import json
+                        serial_numbers_json = json.dumps(serial_numbers)
+                    elif serial_numbers:
+                        # 如果已经是字符串格式的JSON，直接使用
+                        serial_numbers_json = serial_numbers if isinstance(serial_numbers, str) else None
+                    else:
+                        serial_numbers_json = None
+                    
+                    await PurchaseReturnItem.create(
+                        tenant_id=tenant_id,
+                        return_id=return_obj.id,
+                        purchase_receipt_item_id=getattr(item_data, 'purchase_receipt_item_id', None),
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, 'material_spec', None),
+                        material_unit=item_data.material_unit,
+                        return_quantity=item_data.return_quantity,
+                        unit_price=item_data.unit_price,
+                        total_amount=item_data.total_amount,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        batch_number=getattr(item_data, 'batch_number', None),
+                        expiry_date=getattr(item_data, 'expiry_date', None),
+                        serial_numbers=serial_numbers_json,  # 批号和序列号选择功能增强
+                        status=getattr(item_data, 'status', '待退货'),
+                        return_time=getattr(item_data, 'return_time', None),
+                        notes=getattr(item_data, 'notes', None),
+                    )
+            
+            return PurchaseReturnResponse.model_validate(return_obj)
+
+    async def get_purchase_return_by_id(self, tenant_id: int, return_id: int) -> PurchaseReturnResponse:
+        """根据ID获取采购退货单"""
+        return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+        if not return_obj:
+            raise NotFoundError(f"采购退货单不存在: {return_id}")
+        return PurchaseReturnResponse.model_validate(return_obj)
+
+    async def list_purchase_returns(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseReturnResponse]:
+        """获取采购退货单列表"""
+        query = PurchaseReturn.filter(tenant_id=tenant_id)
+
+        # 应用过滤条件
+        if filters.get('status'):
+            query = query.filter(status=filters['status'])
+        if filters.get('purchase_receipt_id'):
+            query = query.filter(purchase_receipt_id=filters['purchase_receipt_id'])
+        if filters.get('supplier_id'):
+            query = query.filter(supplier_id=filters['supplier_id'])
+
+        returns = await query.offset(skip).limit(limit).order_by('-created_at')
+        return [PurchaseReturnResponse.model_validate(return_obj) for return_obj in returns]
+
+    async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> PurchaseReturnResponse:
+        """确认退货"""
+        async with in_transaction():
+            return_obj = await self.get_purchase_return_by_id(tenant_id, return_id)
+
+            if return_obj.status != '待退货':
+                raise BusinessLogicError("只有待退货状态的采购退货单才能确认退货")
+
+            returner_name = await self.get_user_name(confirmed_by)
+
+            await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
+                status='已退货',
+                returner_id=confirmed_by,
+                returner_name=returner_name,
+                return_time=datetime.now(),
+                updated_by=confirmed_by
+            )
+
+            # TODO: 更新库存（扣减库存）
+            # TODO: 更新采购入库单状态
+            
+            # TODO: 如果关联了应付单，需要处理应付单调整（减少应付账款或创建红字应付单）
+
+            updated_return = await self.get_purchase_return_by_id(tenant_id, return_id)
+            return updated_return
 
