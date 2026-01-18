@@ -17,7 +17,11 @@ import SchedulingPage from './pages/plan-management/scheduling';
 import WorkOrdersPage from './pages/production-execution/work-orders';
 import WorkOrdersKioskPage from './pages/production-execution/work-orders/kiosk';
 import ReportingPage from './pages/production-execution/reporting';
+import ReportingKioskPage from './pages/production-execution/reporting/kiosk';
 import ReportingStatisticsPage from './pages/production-execution/reporting/statistics';
+import SOPViewerKioskPage from './pages/production-execution/sop-viewer/kiosk';
+import DrawingViewerKioskPage from './pages/production-execution/drawing-viewer/kiosk';
+import ProgramViewerKioskPage from './pages/production-execution/program-viewer/kiosk';
 import ReworkOrdersPage from './pages/production-execution/rework-orders';
 import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
 import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work-orders';
@@ -105,7 +109,11 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
       <Route path="production-execution/work-orders/kiosk" element={<WorkOrdersKioskPage />} />
       <Route path="production-execution/reporting" element={<ReportingPage />} />
+      <Route path="production-execution/reporting/kiosk" element={<ReportingKioskPage />} />
       <Route path="production-execution/reporting/statistics" element={<ReportingStatisticsPage />} />
+      <Route path="production-execution/sop-viewer/kiosk" element={<SOPViewerKioskPage />} />
+      <Route path="production-execution/drawing-viewer/kiosk" element={<DrawingViewerKioskPage />} />
+      <Route path="production-execution/program-viewer/kiosk" element={<ProgramViewerKioskPage />} />
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
       <Route path="production-execution/outsource-orders" element={<OutsourceOrdersPage />} />
       <Route path="production-execution/outsource-work-orders" element={<OutsourceWorkOrdersPage />} />

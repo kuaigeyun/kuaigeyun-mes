@@ -40,6 +40,16 @@ export const equipmentApi = {
   getTrace: async (uuid: string) => {
     return apiRequest(`/apps/kuaizhizao/equipment/${uuid}/trace`, { method: 'GET' });
   },
+
+  // 生成设备二维码
+  generateQRCode: async (equipmentUuid: string, equipmentCode: string, equipmentName: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateEquipment({
+      equipment_uuid: equipmentUuid,
+      equipment_code: equipmentCode,
+      equipment_name: equipmentName,
+    });
+  },
 };
 
 // 维护保养计划相关接口

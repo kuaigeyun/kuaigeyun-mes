@@ -293,3 +293,19 @@ export async function batchDeleteUsers(userUuids: string[]): Promise<{
   });
 }
 
+/**
+ * 生成人员二维码
+ *
+ * @param userUuid - 用户 UUID
+ * @param username - 用户名
+ * @param fullName - 姓名
+ * @returns 二维码生成响应
+ */
+export async function generateUserQRCode(userUuid: string, username: string, fullName?: string): Promise<any> {
+  const { qrcodeApi } = await import('./qrcode');
+  return qrcodeApi.generateEmployee({
+    employee_uuid: userUuid,
+    employee_code: username,
+    employee_name: fullName || username,
+  });
+}

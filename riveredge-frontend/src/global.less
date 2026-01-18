@@ -36,6 +36,217 @@ code {
   font-size: 0.9em;
 }
 
+/* 触屏模式全局样式 */
+.touchscreen-mode {
+  /* 触屏模式下的字体大小调整 */
+  font-size: 24px;
+  
+  /* 触屏模式下的按钮样式 */
+  .ant-btn {
+    min-height: 60px;
+    font-size: 24px;
+    padding: 12px 24px;
+    
+    /* 按钮间距 */
+    & + .ant-btn {
+      margin-left: 20px;
+    }
+  }
+  
+  /* 触屏模式下的输入框样式 */
+  .ant-input,
+  .ant-input-number-input,
+  .ant-select-selector {
+    min-height: 60px;
+    font-size: 24px;
+    padding: 12px 16px;
+  }
+  
+  /* 触屏模式下的表单标签样式 */
+  .ant-form-item-label > label {
+    font-size: 24px;
+    height: 60px;
+    line-height: 60px;
+  }
+  
+  /* 触屏模式下的表格样式 */
+  .ant-table {
+    font-size: 24px;
+    
+    .ant-table-thead > tr > th {
+      font-size: 24px;
+      padding: 16px;
+      min-height: 60px;
+    }
+    
+    .ant-table-tbody > tr > td {
+      font-size: 24px;
+      padding: 16px;
+      min-height: 60px;
+    }
+  }
+  
+  /* 触屏模式下的卡片样式 */
+  .ant-card {
+    .ant-card-head-title {
+      font-size: 32px;
+      font-weight: 600;
+    }
+    
+    .ant-card-body {
+      font-size: 24px;
+    }
+  }
+  
+  /* 触屏模式下的间距调整 */
+  .ant-space-item {
+    margin-right: 20px !important;
+    margin-bottom: 20px !important;
+  }
+  
+  /* 触屏模式下的Modal样式 */
+  .ant-modal {
+    .ant-modal-header {
+      .ant-modal-title {
+        font-size: 32px;
+        font-weight: 600;
+      }
+    }
+    
+    .ant-modal-body {
+      font-size: 24px;
+    }
+    
+    .ant-modal-footer {
+      .ant-btn {
+        min-height: 60px;
+        font-size: 24px;
+      }
+    }
+  }
+  
+  /* 触屏模式下的Drawer样式 */
+  .ant-drawer {
+    .ant-drawer-header {
+      .ant-drawer-title {
+        font-size: 32px;
+        font-weight: 600;
+      }
+    }
+    
+    .ant-drawer-body {
+      font-size: 24px;
+    }
+  }
+}
+
+/* 移动端响应式样式 */
+@media (max-width: 768px) {
+  /* 移动端字体大小调整 */
+  body {
+    font-size: 14px;
+  }
+  
+  /* 移动端按钮样式 */
+  .ant-btn {
+    min-height: 44px;
+    font-size: 14px;
+    padding: 8px 16px;
+  }
+  
+  /* 移动端输入框样式 */
+  .ant-input,
+  .ant-input-number-input,
+  .ant-select-selector {
+    min-height: 44px;
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+  
+  /* 移动端表格样式 */
+  .ant-table {
+    font-size: 12px;
+    
+    .ant-table-thead > tr > th {
+      font-size: 12px;
+      padding: 8px;
+    }
+    
+    .ant-table-tbody > tr > td {
+      font-size: 12px;
+      padding: 8px;
+    }
+  }
+  
+  /* 移动端卡片样式 */
+  .ant-card {
+    .ant-card-head-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .ant-card-body {
+      font-size: 14px;
+      padding: 12px;
+    }
+  }
+  
+  /* 移动端Modal样式 */
+  .ant-modal {
+    max-width: 95vw;
+    margin: 10px auto;
+    
+    .ant-modal-header {
+      .ant-modal-title {
+        font-size: 18px;
+        font-weight: 600;
+      }
+    }
+    
+    .ant-modal-body {
+      font-size: 14px;
+      padding: 16px;
+    }
+    
+    .ant-modal-footer {
+      .ant-btn {
+        min-height: 44px;
+        font-size: 14px;
+      }
+    }
+  }
+  
+  /* 移动端Drawer样式 */
+  .ant-drawer {
+    width: 90vw !important;
+    
+    .ant-drawer-header {
+      .ant-drawer-title {
+        font-size: 18px;
+        font-weight: 600;
+      }
+    }
+    
+    .ant-drawer-body {
+      font-size: 14px;
+      padding: 16px;
+    }
+  }
+  
+  /* 移动端表单样式 */
+  .ant-form-item-label > label {
+    font-size: 14px;
+    height: 44px;
+    line-height: 44px;
+  }
+  
+  /* 移动端间距调整 */
+  .ant-space-item {
+    margin-right: 8px !important;
+    margin-bottom: 8px !important;
+  }
+}
+
 /* 全局滚动条设置 - 不显示的滚动条不占用宽度 */
 /* Firefox */
 * {

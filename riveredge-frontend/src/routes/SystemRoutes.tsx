@@ -64,6 +64,12 @@ import ApprovalProcessesPage from '../pages/system/approval-processes/list';
 import ApprovalInstancesPage from '../pages/system/approval-processes/instances';
 import ReportTemplatesPage from '../pages/system/report-templates';
 import ReportDesignPage from '../pages/system/report-templates/design';
+import RoleScenariosPage from '../pages/system/role-scenarios';
+import OnboardingWizardPage from '../pages/system/onboarding-wizard';
+import DataQualityPage from '../pages/system/data-quality';
+import OperationGuidePage from '../pages/system/operation-guide';
+import LaunchProgressPage from '../pages/system/launch-progress';
+import UsageAnalysisPage from '../pages/system/usage-analysis';
 import PersonalProfilePage from '../pages/personal/profile';
 import PersonalPreferencesPage from '../pages/personal/preferences';
 import PersonalMessagesPage from '../pages/personal/messages';
@@ -152,6 +158,12 @@ const SystemRoutes: React.FC = () => {
       <Route path="/system/approval-instances" element={<ApprovalInstancesPage />} />
       <Route path="/system/report-templates" element={<ReportTemplatesPage />} />
       <Route path="/system/report-templates/:id/design" element={<ReportDesignPage />} />
+      <Route path="/system/role-scenarios" element={<RoleScenariosPage />} />
+      <Route path="/system/onboarding-wizard" element={<OnboardingWizardPage />} />
+      <Route path="/system/data-quality" element={<DataQualityPage />} />
+      <Route path="/system/operation-guide" element={<OperationGuidePage />} />
+      <Route path="/system/launch-progress" element={<LaunchProgressPage />} />
+      <Route path="/system/usage-analysis" element={<UsageAnalysisPage />} />
       <Route path="/system/inngest" element={<InngestDashboardPage />} />
 
       {/* 个人相关路由 */}

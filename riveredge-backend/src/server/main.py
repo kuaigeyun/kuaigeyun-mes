@@ -85,6 +85,7 @@ from core.api.print_devices.print_devices import router as print_devices_router
 from core.api.working_hours_configs.working_hours_configs import router as working_hours_configs_router
 from core.api.reports.report_templates import router as report_templates_router
 from core.api.qrcode import router as qrcode_router
+from core.api.websocket import websocket_router
 from core.api.user_profile.user_profile import router as user_profile_router
 from core.api.user_preferences.user_preferences import router as user_preferences_router
 from core.api.user_messages.user_messages import router as user_messages_router
@@ -95,6 +96,12 @@ from core.api.online_users.online_users import router as online_users_router
 from core.api.help_documents.help_documents import router as help_documents_router
 from core.api.ai.suggestions import router as ai_suggestions_router
 from core.api.onboarding.onboarding import router as onboarding_router
+from core.api.data_quality.data_quality import router as data_quality_router
+from core.api.operation_guide.operation_guide import router as operation_guide_router
+from core.api.launch_progress.launch_progress import router as launch_progress_router
+from core.api.launch_checklist.launch_checklist import router as launch_checklist_router
+from core.api.usage_analysis.usage_analysis import router as usage_analysis_router
+from core.api.optimization_suggestion.optimization_suggestion import router as optimization_suggestion_router
 
 # 插件管理器API
 from core.api.plugin_manager.plugin_manager import router as plugin_manager_router
@@ -505,6 +512,7 @@ app.include_router(print_devices_router, prefix="/api/v1/core")
 app.include_router(working_hours_configs_router, prefix="/api/v1/core")
 app.include_router(report_templates_router, prefix="/api/v1/core")
 app.include_router(qrcode_router, prefix="/api/v1/core")
+app.include_router(websocket_router, prefix="/api/v1/core")
 app.include_router(user_profile_router, prefix="/api/v1/personal")
 app.include_router(user_preferences_router, prefix="/api/v1/personal")
 app.include_router(user_messages_router, prefix="/api/v1/personal")
@@ -515,6 +523,12 @@ app.include_router(online_users_router, prefix="/api/v1/core")
 app.include_router(help_documents_router, prefix="/api/v1/core")
 app.include_router(ai_suggestions_router, prefix="/api/v1/core")
 app.include_router(onboarding_router, prefix="/api/v1/core")
+app.include_router(data_quality_router, prefix="/api/v1/core")
+app.include_router(operation_guide_router, prefix="/api/v1/core")
+app.include_router(launch_progress_router, prefix="/api/v1/core")
+app.include_router(launch_checklist_router, prefix="/api/v1/core")
+app.include_router(usage_analysis_router, prefix="/api/v1/core")
+app.include_router(optimization_suggestion_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")

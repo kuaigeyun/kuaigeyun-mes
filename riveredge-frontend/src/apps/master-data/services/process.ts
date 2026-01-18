@@ -107,6 +107,18 @@ export const operationApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/process/operations/${uuid}`);
   },
+
+  /**
+   * 生成工序二维码
+   */
+  generateQRCode: async (operationUuid: string, operationCode: string, operationName: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateOperation({
+      operation_uuid: operationUuid,
+      operation_code: operationCode,
+      operation_name: operationName,
+    });
+  },
 };
 
 /**

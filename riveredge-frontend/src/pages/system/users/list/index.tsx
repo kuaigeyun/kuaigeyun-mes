@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, AutoComplete, Select } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, AutoComplete, Select, Card } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -23,10 +24,13 @@ import {
   resetUserPassword,
   batchUpdateUsersStatus,
   batchDeleteUsers,
+  generateUserQRCode,
   User,
   CreateUserData,
   UpdateUserData,
 } from '../../../../services/user';
+import { QRCodeGenerator } from '../../../../components/qrcode';
+import { qrcodeApi } from '../../../../services/qrcode';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { getPositionList } from '../../../../services/position';
 import { getRoleList } from '../../../../services/role';
@@ -39,6 +43,7 @@ const UserListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -197,6 +202,69 @@ const UserListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<User | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  /**
+   * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
+   */
+  useEffect(() => {
+    const userUuid = searchParams.get('uuid');
+    const action = searchParams.get('action');
+    
+    if (userUuid && action === 'detail') {
+      // 自动打开用户详情
+      handleView({ uuid: userUuid } as User);
+      // 清除URL参数
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, setSearchParams]);
+
+  /**
+   * 处理批量生成二维码
+   */
+  const handleBatchGenerateQRCode = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要生成二维码的用户');
+      return;
+    }
+
+    try {
+      // 通过API获取选中的用户数据
+      const users = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await getUserByUuid(key as string);
+          } catch (error) {
+            console.error(`获取用户失败: ${key}`, error);
+            return null;
+          }
+        })
+      );
+      
+      const validUsers = users.filter((user) => user !== null) as User[];
+
+      if (validUsers.length === 0) {
+        messageApi.error('无法获取选中的用户数据');
+        return;
+      }
+
+      // 生成二维码
+      const qrcodePromises = validUsers.map((user) =>
+        qrcodeApi.generateEmployee({
+          employee_uuid: user.uuid,
+          employee_code: user.username,
+          employee_name: user.full_name || user.username,
+        })
+      );
+
+      const qrcodes = await Promise.all(qrcodePromises);
+      messageApi.success(`成功生成 ${qrcodes.length} 个人员二维码`);
+      
+      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+    } catch (error: any) {
+      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+    }
+  };
 
   /**
    * 加载选项数据
@@ -710,6 +778,16 @@ const UserListPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        toolBarRender={() => [
+          <Button
+            key="batch-qrcode"
+            icon={<QrcodeOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={handleBatchGenerateQRCode}
+          >
+            批量生成二维码
+          </Button>,
+        ]}
         showImportButton={true}
         onImport={handleImport}
         showExportButton={true}
@@ -886,8 +964,32 @@ const UserListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData || {}}
-        columns={detailColumns}
+        customContent={
+          <>
+            <ProDescriptions<User>
+              dataSource={detailData || undefined}
+              column={2}
+              columns={detailColumns}
+            />
+            
+            {/* 人员二维码 */}
+            {detailData && (
+              <div style={{ marginTop: 24 }}>
+                <Card title="人员二维码">
+                  <QRCodeGenerator
+                    qrcodeType="EMP"
+                    data={{
+                      employee_uuid: detailData.uuid,
+                      employee_code: detailData.username,
+                      employee_name: detailData.full_name || detailData.username,
+                    }}
+                    autoGenerate={true}
+                  />
+                </Card>
+              </div>
+            )}
+          </>
+        }
       />
     </>
   );

@@ -256,6 +256,217 @@ ROLE_SCENARIOS: Dict[str, Dict[str, Any]] = {
             ],
         },
     },
+    "technician": {
+        "name": "技术研发人员",
+        "description": "负责产品设计、BOM管理、工艺路线设计、SOP设计等",
+        "scenarios": [
+            {
+                "id": "product_design",
+                "name": "产品设计",
+                "description": "设计和管理产品",
+                "features": ["产品列表", "产品创建", "产品编辑", "产品查询"],
+                "permissions": ["product:list", "product:create", "product:update", "product:view"],
+            },
+            {
+                "id": "bom_management",
+                "name": "BOM管理",
+                "description": "管理物料清单",
+                "features": ["BOM列表", "BOM创建", "BOM编辑", "BOM查询"],
+                "permissions": ["bom:list", "bom:create", "bom:update", "bom:view"],
+            },
+            {
+                "id": "process_route_design",
+                "name": "工艺路线设计",
+                "description": "设计和管理工艺路线",
+                "features": ["工艺路线列表", "工艺路线创建", "工艺路线编辑"],
+                "permissions": ["process_route:list", "process_route:create", "process_route:update"],
+            },
+            {
+                "id": "sop_design",
+                "name": "SOP设计",
+                "description": "设计和管理标准作业程序",
+                "features": ["SOP列表", "SOP创建", "SOP编辑"],
+                "permissions": ["sop:list", "sop:create", "sop:update"],
+            },
+        ],
+        "dashboard": {
+            "widgets": [
+                {"type": "statistics", "title": "待审核BOM", "api": "/apps/master-data/boms?status=pending"},
+                {"type": "statistics", "title": "待审核工艺路线", "api": "/apps/master-data/process-routes?status=pending"},
+                {"type": "list", "title": "待审核BOM列表", "api": "/apps/master-data/boms?status=pending&limit=10"},
+            ],
+        },
+    },
+    "supervisor": {
+        "name": "班组长",
+        "description": "负责工单管理、生产进度跟踪、人员安排等",
+        "scenarios": [
+            {
+                "id": "work_order_management",
+                "name": "工单管理",
+                "description": "查看和管理工单",
+                "features": ["工单列表", "工单查询", "工单详情", "工单下达"],
+                "permissions": ["work_order:list", "work_order:view", "work_order:release"],
+            },
+            {
+                "id": "production_progress",
+                "name": "生产进度跟踪",
+                "description": "跟踪生产进度",
+                "features": ["生产看板", "工单进度", "生产效率"],
+                "permissions": ["production:dashboard", "work_order:view"],
+            },
+            {
+                "id": "personnel_arrangement",
+                "name": "人员安排",
+                "description": "安排生产人员",
+                "features": ["人员列表", "人员分配", "人员查询"],
+                "permissions": ["personnel:list", "personnel:assign"],
+            },
+        ],
+        "dashboard": {
+            "widgets": [
+                {"type": "statistics", "title": "待下达工单", "api": "/apps/kuaizhizao/work-orders?status=draft"},
+                {"type": "statistics", "title": "进行中工单", "api": "/apps/kuaizhizao/work-orders?status=in_progress"},
+                {"type": "list", "title": "待下达工单列表", "api": "/apps/kuaizhizao/work-orders?status=draft&limit=10"},
+            ],
+        },
+    },
+    "operator": {
+        "name": "生产人员",
+        "description": "负责现场报工、SOP查看、图纸查看等",
+        "scenarios": [
+            {
+                "id": "work_reporting",
+                "name": "现场报工",
+                "description": "执行生产报工",
+                "features": ["报工列表", "报工创建", "报工查询"],
+                "permissions": ["reporting:list", "reporting:create", "reporting:view"],
+            },
+            {
+                "id": "sop_viewing",
+                "name": "SOP查看",
+                "description": "查看标准作业程序",
+                "features": ["SOP列表", "SOP查看", "SOP搜索"],
+                "permissions": ["sop:view"],
+            },
+            {
+                "id": "drawing_viewing",
+                "name": "图纸查看",
+                "description": "查看工程图纸",
+                "features": ["图纸列表", "图纸查看", "图纸搜索"],
+                "permissions": ["drawing:view"],
+            },
+        ],
+        "dashboard": {
+            "widgets": [
+                {"type": "statistics", "title": "待报工工单", "api": "/apps/kuaizhizao/work-orders?status=in_progress"},
+                {"type": "statistics", "title": "今日报工", "api": "/apps/kuaizhizao/reporting/today"},
+                {"type": "list", "title": "待报工工单列表", "api": "/apps/kuaizhizao/work-orders?status=in_progress&limit=10"},
+            ],
+        },
+    },
+    "equipment": {
+        "name": "设备组",
+        "description": "负责设备管理、设备维护、设备状态监控等",
+        "scenarios": [
+            {
+                "id": "equipment_management",
+                "name": "设备管理",
+                "description": "管理设备信息",
+                "features": ["设备列表", "设备创建", "设备编辑", "设备查询"],
+                "permissions": ["equipment:list", "equipment:create", "equipment:update", "equipment:view"],
+            },
+            {
+                "id": "equipment_maintenance",
+                "name": "设备维护",
+                "description": "执行设备维护",
+                "features": ["维护计划", "维护执行", "维护记录"],
+                "permissions": ["maintenance:list", "maintenance:create", "maintenance:execute"],
+            },
+            {
+                "id": "equipment_monitoring",
+                "name": "设备状态监控",
+                "description": "监控设备状态",
+                "features": ["设备看板", "设备状态", "设备报警"],
+                "permissions": ["equipment:dashboard", "equipment:monitor"],
+            },
+        ],
+        "dashboard": {
+            "widgets": [
+                {"type": "statistics", "title": "待维护设备", "api": "/system/equipment?status=maintenance"},
+                {"type": "statistics", "title": "设备报警", "api": "/system/equipment/alerts"},
+                {"type": "list", "title": "待维护设备列表", "api": "/system/equipment?status=maintenance&limit=10"},
+            ],
+        },
+    },
+    "finance": {
+        "name": "财务",
+        "description": "负责应收应付管理、成本核算、财务报表等",
+        "scenarios": [
+            {
+                "id": "receivable_payable",
+                "name": "应收应付管理",
+                "description": "管理应收应付账款",
+                "features": ["应收列表", "应付列表", "对账管理"],
+                "permissions": ["receivable:list", "payable:list", "accounting:manage"],
+            },
+            {
+                "id": "cost_accounting",
+                "name": "成本核算",
+                "description": "核算生产成本",
+                "features": ["成本计算", "成本分析", "成本报表"],
+                "permissions": ["cost:calculate", "cost:analyze", "cost:report"],
+            },
+            {
+                "id": "financial_report",
+                "name": "财务报表",
+                "description": "查看财务报表",
+                "features": ["财务报表", "财务分析", "财务导出"],
+                "permissions": ["financial:report", "financial:analyze", "financial:export"],
+            },
+        ],
+        "dashboard": {
+            "widgets": [
+                {"type": "statistics", "title": "应收账款", "api": "/apps/kuaizhizao/receivables/statistics"},
+                {"type": "statistics", "title": "应付账款", "api": "/apps/kuaizhizao/payables/statistics"},
+                {"type": "list", "title": "待处理账款列表", "api": "/apps/kuaizhizao/receivables?status=pending&limit=10"},
+            ],
+        },
+    },
+    "implementer": {
+        "name": "系统实施人员",
+        "description": "负责系统初始化、数据导入、用户培训等",
+        "scenarios": [
+            {
+                "id": "system_initialization",
+                "name": "系统初始化",
+                "description": "初始化系统配置",
+                "features": ["初始化向导", "组织配置", "系统配置"],
+                "permissions": ["system:init", "system:config"],
+            },
+            {
+                "id": "data_import",
+                "name": "数据导入",
+                "description": "导入基础数据",
+                "features": ["数据导入", "批量导入", "导入验证"],
+                "permissions": ["data:import", "data:batch_import"],
+            },
+            {
+                "id": "user_training",
+                "name": "用户培训",
+                "description": "培训用户使用系统",
+                "features": ["培训材料", "培训记录", "培训评估"],
+                "permissions": ["training:manage", "training:record"],
+            },
+        ],
+        "dashboard": {
+            "widgets": [
+                {"type": "statistics", "title": "待初始化组织", "api": "/infra/tenants?status=uninitialized"},
+                {"type": "statistics", "title": "待导入数据", "api": "/infra/data-import/pending"},
+                {"type": "list", "title": "待初始化组织列表", "api": "/infra/tenants?status=uninitialized&limit=10"},
+            ],
+        },
+    },
 }
 
 

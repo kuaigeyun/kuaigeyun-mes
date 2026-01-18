@@ -17,6 +17,7 @@ import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
 import { getSiteSetting } from './services/siteSetting';
+import { useTouchScreen } from './hooks/useTouchScreen';
 // 使用 routes 中的路由配置
 import MainRoutes from './routes';
 import ErrorBoundary from './components/error-boundary';
@@ -563,6 +564,7 @@ export default function App() {
   // 这样可以避免 Ant Design 6.0 的警告："Static function can not consume context like dynamic theme"
   const AppContent: React.FC = () => {
     const { message } = AntdApp.useApp();
+    const touchScreen = useTouchScreen();
     
     // 将 message 实例设置到全局，供工具函数使用
     React.useEffect(() => {
@@ -570,6 +572,16 @@ export default function App() {
         (window as any).__ANTD_MESSAGE__ = message;
       }
     }, [message]);
+
+    // 应用触屏模式样式类
+    React.useEffect(() => {
+      const rootElement = document.documentElement;
+      if (touchScreen.isTouchScreenMode) {
+        rootElement.classList.add('touchscreen-mode');
+      } else {
+        rootElement.classList.remove('touchscreen-mode');
+      }
+    }, [touchScreen.isTouchScreenMode]);
 
   return (
               <ErrorBoundary>

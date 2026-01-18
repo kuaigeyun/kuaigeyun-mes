@@ -15,6 +15,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
 import { qualityApi } from '../../../services/production';
+import { exportReport } from '../../../services/reports';
 import dayjs from 'dayjs';
 
 // 质量报表接口定义
@@ -385,8 +386,23 @@ const QualityReportPage: React.FC = () => {
   };
 
   // 处理导出
-  const handleExport = () => {
-    messageApi.success('报表导出功能开发中...');
+  const handleExport = async () => {
+    try {
+      setLoading(true);
+      await exportReport('quality', {
+        report_type: reportType === 'summary' ? 'analysis' : reportType === 'trend' ? 'trend' : 'analysis',
+        date_start: dateRange[0],
+        date_end: dateRange[1],
+        filters: {
+          inspection_type: inspectionType !== 'all' ? inspectionType : undefined,
+        },
+      });
+      messageApi.success('报表导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '报表导出失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 处理报表类型切换

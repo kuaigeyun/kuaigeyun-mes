@@ -263,38 +263,76 @@ async def get_current_infra_superadmin(
     return admin
 
 
-def require_permissions(*permission_codes: str):
+def require_permissions(*permission_codes: str, require_all: bool = False):
     """
-    权限验证装饰器（占位）
+    权限验证装饰器
     
     用于验证用户是否具有指定的权限。
     带组织过滤：只检查当前组织内的权限。
     
     Args:
         *permission_codes: 权限代码列表（格式：resource:action）
+        require_all: 是否要求所有权限（默认：False，即任意一个权限即可）
         
     Returns:
         Callable: 依赖函数
         
-    Note:
-        此功能将在权限服务实现后完善。
-        
     Example:
         ```python
         @router.post("/users")
-        @require_permissions("user:create")
-        async def create_user(...):
+        async def create_user(
+            current_user: User = Depends(require_permissions("user:create")),
+            tenant_id: int = Depends(get_current_tenant)
+        ):
             ...
         ```
     """
-    # TODO: 实现权限验证逻辑
-    # 1. 从 Token 中获取用户和组织信息
-    # 2. 查询用户的角色和权限（自动过滤组织）
-    # 3. 检查是否具有指定权限
-    # 4. 如果没有权限，抛出 403 错误
+    from core.services.authorization.user_permission_service import UserPermissionService
+    from core.api.deps.deps import get_current_tenant
     
-    def dependency(current_user: User = Depends(get_current_user)):
-        # 占位实现
+    async def dependency(
+        current_user: User = Depends(get_current_user),
+        tenant_id: int = Depends(get_current_tenant)
+    ) -> User:
+        """
+        权限验证依赖函数
+        
+        Args:
+            current_user: 当前用户
+            tenant_id: 当前组织ID
+            
+        Returns:
+            User: 当前用户对象
+            
+        Raises:
+            HTTPException: 当用户不具有权限时抛出403错误
+        """
+        # 如果是组织管理员或平台管理员，默认拥有所有权限
+        if current_user.is_tenant_admin or current_user.is_infra_admin:
+            return current_user
+        
+        # 检查权限
+        if require_all:
+            # 要求所有权限
+            has_perm = await UserPermissionService.has_all_permissions(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+                permission_codes=list(permission_codes)
+            )
+        else:
+            # 要求任意一个权限
+            has_perm = await UserPermissionService.has_any_permission(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+                permission_codes=list(permission_codes)
+            )
+        
+        if not has_perm:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"权限不足，需要以下权限: {', '.join(permission_codes)}"
+            )
+        
         return current_user
     
     return dependency
