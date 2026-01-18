@@ -11,6 +11,23 @@ import './global.less'
 // 这解决了菜单标题显示英文的问题
 import './config/i18n'
 
+// 性能监控和优化
+import { performanceMonitor, ImageLazyLoader } from './utils/performance'
+
+// 初始化性能监控
+if (typeof window !== 'undefined') {
+  // 初始化图片懒加载
+  ImageLazyLoader.init();
+  
+  // 记录首屏加载时间
+  window.addEventListener('load', () => {
+    const metrics = performanceMonitor.getMetrics();
+    if (metrics.firstContentfulPaint) {
+      console.log(`✅ 首屏加载时间: ${metrics.firstContentfulPaint.toFixed(2)}ms`);
+    }
+  });
+}
+
 // Ant Design 6.0 已移除 findDOMNode 兼容逻辑，不再需要抑制警告
 
 // ⚠️ 关键修复：全局错误处理，捕获未处理的错误，避免应用崩溃

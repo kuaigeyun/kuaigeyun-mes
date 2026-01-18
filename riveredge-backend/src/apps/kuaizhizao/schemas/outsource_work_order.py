@@ -9,8 +9,8 @@ Author: Auto (AI Assistant)
 Date: 2026-01-16
 """
 
-from datetime import datetime
-from typing import Optional, List
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -219,3 +219,87 @@ class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+
+
+# ==================== 委外协同 Schema ====================
+
+class OutsourceProgressUpdateRequest(BaseModel):
+    """更新委外进度请求"""
+    completed_quantity: Optional[Decimal] = Field(None, description="已完成数量")
+    progress_percentage: Optional[float] = Field(None, ge=0, le=100, description="完成百分比")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceCompletionRequest(BaseModel):
+    """提交委外完工申请请求"""
+    completed_quantity: Decimal = Field(..., description="完成数量")
+    qualified_quantity: Decimal = Field(..., description="合格数量")
+    unqualified_quantity: Decimal = Field(..., description="不合格数量")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+# ==================== 委外结算 Schema ====================
+
+class OutsourceCostCalculationResponse(BaseModel):
+    """委外费用计算结果"""
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    qualified_quantity: float = Field(..., description="合格数量")
+    unit_price: float = Field(..., description="委外单价")
+    processing_cost: float = Field(..., description="委外加工费用")
+    material_cost: float = Field(..., description="材料成本")
+    total_cost: float = Field(..., description="总费用")
+    calculated_at: str = Field(..., description="计算时间")
+
+
+class SettlementStatementItem(BaseModel):
+    """结算单明细"""
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    qualified_quantity: float = Field(..., description="合格数量")
+    unit_price: float = Field(..., description="委外单价")
+    processing_cost: float = Field(..., description="委外加工费用")
+    material_cost: float = Field(..., description="材料成本")
+    total_cost: float = Field(..., description="总费用")
+
+
+class CreateSettlementStatementRequest(BaseModel):
+    """创建委外结算单请求"""
+    supplier_id: int = Field(..., description="供应商ID")
+    start_date: Optional[date] = Field(None, description="开始日期")
+    end_date: Optional[date] = Field(None, description="结束日期")
+    outsource_work_order_ids: Optional[List[int]] = Field(None, description="委外工单ID列表")
+
+
+class SettlementStatementResponse(BaseModel):
+    """委外结算单响应"""
+    settlement_code: str = Field(..., description="结算单编码")
+    supplier_id: int = Field(..., description="供应商ID")
+    supplier_code: str = Field(..., description="供应商编码")
+    supplier_name: str = Field(..., description="供应商名称")
+    start_date: Optional[str] = Field(None, description="开始日期")
+    end_date: Optional[str] = Field(None, description="结束日期")
+    total_amount: float = Field(..., description="总金额")
+    item_count: int = Field(..., description="明细数量")
+    items: List[SettlementStatementItem] = Field(..., description="结算明细")
+    created_at: str = Field(..., description="创建时间")
+
+
+class ReconciliationRequest(BaseModel):
+    """委外对账请求"""
+    supplier_id: int = Field(..., description="供应商ID")
+    outsource_work_order_ids: List[int] = Field(..., description="委外工单ID列表")
+    confirmed_amount: Decimal = Field(..., description="确认金额")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class ReconciliationResponse(BaseModel):
+    """委外对账响应"""
+    supplier_id: int = Field(..., description="供应商ID")
+    supplier_name: str = Field(..., description="供应商名称")
+    calculated_amount: float = Field(..., description="计算金额")
+    confirmed_amount: float = Field(..., description="确认金额")
+    amount_difference: float = Field(..., description="金额差异")
+    reconciled_at: str = Field(..., description="对账时间")

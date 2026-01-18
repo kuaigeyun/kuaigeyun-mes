@@ -149,8 +149,92 @@ export default defineConfig({
   },
   // 构建配置 - 优化性能
   build: {
-    sourcemap: false, // 开发模式下关闭sourcemap，提高性能
-    minify: false, // 开发模式下不压缩，提高构建速度
+    // 生产环境配置
+    sourcemap: process.env.NODE_ENV === 'production' ? false : true, // 生产环境关闭sourcemap，减小体积
+    minify: process.env.NODE_ENV === 'production' ? 'esbuild' : false, // 生产环境使用esbuild压缩，速度更快
+    // 代码分割配置（按依赖类型分割，不按路由分割，避免菜单加载慢）
+    rollupOptions: {
+      output: {
+        // 手动代码分割策略
+        manualChunks: (id) => {
+          // node_modules 中的依赖单独打包
+          if (id.includes('node_modules')) {
+            // React 相关库单独打包
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'vendor-react';
+            }
+            // Ant Design 相关库单独打包
+            if (id.includes('antd') || id.includes('@ant-design')) {
+              return 'vendor-antd';
+            }
+            // Pro Components 单独打包
+            if (id.includes('@ant-design/pro-components')) {
+              return 'vendor-pro-components';
+            }
+            // 图表库单独打包
+            if (id.includes('@ant-design/charts') || id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            // UniverJS 表格库单独打包（体积较大，按需加载）
+            if (id.includes('@univerjs')) {
+              return 'vendor-univerjs';
+            }
+            // 其他第三方库
+            return 'vendor-other';
+          }
+          // 应用代码按模块分割（应用级页面可以懒加载）
+          if (id.includes('/apps/')) {
+            // 提取应用名称
+            const appMatch = id.match(/\/apps\/([^/]+)/);
+            if (appMatch) {
+              return `app-${appMatch[1]}`;
+            }
+          }
+          // 系统级页面单独打包（核心页面立即加载，不懒加载）
+          if (id.includes('/pages/system/')) {
+            return 'pages-system';
+          }
+          // 平台级页面单独打包
+          if (id.includes('/pages/infra/')) {
+            return 'pages-infra';
+          }
+        },
+        // 文件命名规则
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          // 图片资源
+          if (assetInfo.name && /\.(png|jpe?g|svg|gif|webp)$/.test(assetInfo.name)) {
+            return 'assets/images/[name]-[hash][extname]';
+          }
+          // 字体资源
+          if (assetInfo.name && /\.(woff2?|eot|ttf|otf)$/.test(assetInfo.name)) {
+            return 'assets/fonts/[name]-[hash][extname]';
+          }
+          // CSS 资源
+          if (assetInfo.name && /\.css$/.test(assetInfo.name)) {
+            return 'assets/css/[name]-[hash][extname]';
+          }
+          // 其他资源
+          return 'assets/[name]-[hash][extname]';
+        },
+      },
+    },
+    // 构建目标
+    target: 'es2015',
+    // CSS 代码分割
+    cssCodeSplit: true,
+    // 资源内联阈值（小于4KB的资源内联为base64）
+    assetsInlineLimit: 4096,
+    // 压缩配置
+    terserOptions: process.env.NODE_ENV === 'production' ? {
+      compress: {
+        drop_console: true, // 移除console
+        drop_debugger: true, // 移除debugger
+      },
+    } : undefined,
+    // 块大小警告阈值（500KB）
+    chunkSizeWarningLimit: 500,
   },
   plugins: [
     // React 插件 - 优化 Fast Refresh 和 HMR
@@ -186,15 +270,23 @@ export default defineConfig({
     include: [
       'react',
       'react-dom',
+      'react-router-dom',
       'antd',
+      '@ant-design/icons',
       '@ant-design/pro-components',
       '@tanstack/react-query',
       'zustand',
+      'dayjs',
+      'lodash-es',
     ],
     // ⚠️ 关键修复：强制重新构建依赖，避免缓存问题
     force: false, // 开发环境不强制重建，提高启动速度
     // ⚠️ 关键修复：排除可能导致问题的依赖
-    exclude: [],
+    exclude: ['@univerjs'], // UniverJS 体积较大，按需加载
+    // 优化预构建配置
+    esbuildOptions: {
+      target: 'es2015',
+    },
   },
   // ⚠️ 优化：适当的日志级别
   logLevel: 'info', // 显示必要信息，方便调试

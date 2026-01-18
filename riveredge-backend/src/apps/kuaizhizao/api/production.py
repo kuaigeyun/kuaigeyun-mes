@@ -22,6 +22,10 @@ from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
 from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
 from apps.kuaizhizao.services.outsource_material_receipt_service import OutsourceMaterialReceiptService
+from apps.kuaizhizao.services.outsource_collaboration_service import OutsourceCollaborationService
+from apps.kuaizhizao.services.outsource_settlement_service import OutsourceSettlementService
+from apps.kuaizhizao.services.supplier_collaboration_service import SupplierCollaborationService
+from apps.kuaizhizao.services.customer_collaboration_service import CustomerCollaborationService
 from apps.kuaizhizao.services.material_binding_service import MaterialBindingService
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 from apps.kuaizhizao.services.inventory_transfer_service import InventoryTransferService
@@ -85,6 +89,7 @@ from apps.kuaizhizao.services.sales_service import (
 )
 # BOM管理已移至master_data APP，不再需要BOMService
 from apps.kuaizhizao.services.planning_service import ProductionPlanningService
+from apps.kuaizhizao.services.advanced_scheduling_service import AdvancedSchedulingService
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -120,6 +125,21 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptCreate,
     OutsourceMaterialReceiptUpdate,
     OutsourceMaterialReceiptResponse,
+    # 委外协同
+    OutsourceProgressUpdateRequest,
+    OutsourceCompletionRequest,
+    # 委外结算
+    OutsourceCostCalculationResponse,
+    CreateSettlementStatementRequest,
+    SettlementStatementResponse,
+    ReconciliationRequest,
+    ReconciliationResponse,
+)
+from apps.kuaizhizao.schemas.collaboration import (
+    PurchaseOrderProgressUpdateRequest,
+    DeliveryNoticeRequest,
+    SalesOrderProductionProgressResponse,
+    CustomerOrderSummaryResponse,
 )
 from apps.kuaizhizao.schemas.outsource_order import (
     OutsourceOrderCreate,
@@ -339,6 +359,11 @@ from apps.kuaizhizao.schemas.planning import (
     LRPComputationResult,
     LRPResultResponse,
     LRPResultListResponse,
+    # 高级排产
+    IntelligentSchedulingRequest,
+    IntelligentSchedulingResponse,
+    OptimizeScheduleRequest,
+    OptimizeScheduleResponse,
 )
 
 # 创建路由
@@ -6262,6 +6287,62 @@ async def execute_production_plan(
     )
 
 
+# ============ 高级排产 API ============
+
+@router.post("/scheduling/intelligent", response_model=IntelligentSchedulingResponse, summary="智能排产")
+async def intelligent_scheduling(
+    request: IntelligentSchedulingRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> IntelligentSchedulingResponse:
+    """
+    智能排产
+    
+    根据多个约束条件（优先级、交期、工作中心能力、设备可用性等）进行智能排产。
+    
+    - **work_order_ids**: 工单ID列表（可选，如果不提供则对所有待排产工单进行排产）
+    - **constraints**: 约束条件
+        - priority_weight: 优先级权重（0-1）
+        - due_date_weight: 交期权重（0-1）
+        - capacity_weight: 产能权重（0-1）
+        - setup_time_weight: 换线时间权重（0-1）
+        - optimize_objective: 优化目标（min_makespan/min_total_time/min_setup_time）
+    """
+    service = AdvancedSchedulingService()
+    result = await service.intelligent_scheduling(
+        tenant_id=tenant_id,
+        work_order_ids=request.work_order_ids,
+        constraints=request.constraints.model_dump() if request.constraints else None
+    )
+    return IntelligentSchedulingResponse(**result)
+
+
+@router.post("/scheduling/optimize", response_model=OptimizeScheduleResponse, summary="优化排产计划")
+async def optimize_schedule(
+    request: OptimizeScheduleRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OptimizeScheduleResponse:
+    """
+    优化排产计划
+    
+    对已有的排产计划进行优化，调整工单排产时间以优化目标函数。
+    
+    - **schedule_id**: 排产计划ID（可选）
+    - **optimization_params**: 优化参数
+        - max_iterations: 最大迭代次数
+        - convergence_threshold: 收敛阈值
+        - optimization_objective: 优化目标
+    """
+    service = AdvancedSchedulingService()
+    result = await service.optimize_schedule(
+        tenant_id=tenant_id,
+        schedule_id=request.schedule_id,
+        optimization_params=request.optimization_params.model_dump() if request.optimization_params else None
+    )
+    return OptimizeScheduleResponse(**result)
+
+
 # ============ 采购订单管理 API ============
 # 注意：采购订单API已移至 purchase.py，此处不再重复实现
 # 请使用 /purchase-orders 路径访问采购订单API
@@ -7823,3 +7904,196 @@ async def complete_outsource_material_receipt(
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==================== 供应商协同 API ====================
+
+@router.post("/purchase-orders/{purchase_order_id}/send-to-supplier", summary="下发采购订单到供应商协同平台")
+async def send_purchase_order_to_supplier(
+    purchase_order_id: int = Path(..., description="采购订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    下发采购订单到供应商协同平台
+    
+    将采购订单发送给供应商，供应商可以在协同平台查看和操作。
+    
+    - **purchase_order_id**: 采购订单ID
+    """
+    try:
+        service = SupplierCollaborationService()
+        result = await service.send_purchase_order_to_supplier(
+            tenant_id=tenant_id,
+            purchase_order_id=purchase_order_id,
+            send_by=current_user.id
+        )
+        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/purchase-orders/{purchase_order_id}/update-progress", summary="更新采购订单进度")
+async def update_purchase_order_progress(
+    purchase_order_id: int = Path(..., description="采购订单ID"),
+    progress_data: PurchaseOrderProgressUpdateRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新采购订单进度
+    
+    供应商可以更新采购订单的生产进度。
+    
+    - **purchase_order_id**: 采购订单ID
+    - **progress_data**: 进度数据
+    """
+    try:
+        service = SupplierCollaborationService()
+        result = await service.update_purchase_order_progress(
+            tenant_id=tenant_id,
+            purchase_order_id=purchase_order_id,
+            progress_data=progress_data.model_dump(),
+            updated_by=current_user.id
+        )
+        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/purchase-orders/{purchase_order_id}/submit-delivery-notice", summary="提交发货通知")
+async def submit_delivery_notice(
+    purchase_order_id: int = Path(..., description="采购订单ID"),
+    delivery_data: DeliveryNoticeRequest = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    提交发货通知
+    
+    供应商提交发货通知，通知采购方准备收货。
+    
+    - **purchase_order_id**: 采购订单ID
+    - **delivery_data**: 发货数据
+    """
+    try:
+        service = SupplierCollaborationService()
+        result = await service.submit_delivery_notice(
+            tenant_id=tenant_id,
+            purchase_order_id=purchase_order_id,
+            delivery_data=delivery_data.model_dump(),
+            submitted_by=current_user.id
+        )
+        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/suppliers/{supplier_id}/purchase-orders", summary="获取供应商的采购订单列表")
+async def get_supplier_purchase_orders(
+    supplier_id: int = Path(..., description="供应商ID"),
+    status: Optional[str] = Query(None, description="订单状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取供应商的采购订单列表
+    
+    供应商可以查看自己的采购订单。
+    
+    - **supplier_id**: 供应商ID
+    - **status**: 订单状态（可选）
+    """
+    try:
+        service = SupplierCollaborationService()
+        result = await service.get_supplier_purchase_orders(
+            tenant_id=tenant_id,
+            supplier_id=supplier_id,
+            status=status
+        )
+        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ==================== 客户协同 API ====================
+
+@router.get("/customers/{customer_id}/sales-orders", summary="获取客户的销售订单列表")
+async def get_customer_sales_orders(
+    customer_id: int = Path(..., description="客户ID"),
+    status: Optional[str] = Query(None, description="订单状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取客户的销售订单列表
+    
+    客户可以查看自己的销售订单。
+    
+    - **customer_id**: 客户ID
+    - **status**: 订单状态（可选）
+    """
+    try:
+        service = CustomerCollaborationService()
+        result = await service.get_customer_sales_orders(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            status=status
+        )
+        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/sales-orders/{sales_order_id}/production-progress", response_model=SalesOrderProductionProgressResponse, summary="获取销售订单生产进度")
+async def get_sales_order_production_progress(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesOrderProductionProgressResponse:
+    """
+    获取销售订单的生产进度
+    
+    客户可以查看订单关联的生产进度。
+    
+    - **sales_order_id**: 销售订单ID
+    """
+    try:
+        service = CustomerCollaborationService()
+        result = await service.get_sales_order_production_progress(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        )
+        return SalesOrderProductionProgressResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/customers/{customer_id}/order-summary", response_model=CustomerOrderSummaryResponse, summary="获取客户订单汇总")
+async def get_customer_order_summary(
+    customer_id: int = Path(..., description="客户ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerOrderSummaryResponse:
+    """
+    获取客户订单汇总
+    
+    客户可以查看订单汇总信息。
+    
+    - **customer_id**: 客户ID
+    """
+    try:
+        service = CustomerCollaborationService()
+        result = await service.get_customer_order_summary(
+            tenant_id=tenant_id,
+            customer_id=customer_id
+        )
+        return CustomerOrderSummaryResponse(**result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
