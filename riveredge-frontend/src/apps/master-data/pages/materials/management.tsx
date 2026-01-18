@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { App, Button, Space, Modal, Drawer, Popconfirm, Tag, Input, theme, Tree, Menu, message, Spin, Empty } from 'antd';
 import {
   EditOutlined,
@@ -14,6 +15,7 @@ import {
   SearchOutlined,
   FolderOutlined,
   ReloadOutlined,
+  QrcodeOutlined,
 } from '@ant-design/icons';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
 import type { DataNode, TreeProps } from 'antd/es/tree';
@@ -24,6 +26,8 @@ import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { UniTable } from '../../../../components/uni-table';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { MaterialForm } from '../../components/MaterialForm';
+import { QRCodeGenerator } from '../../../../components/qrcode';
+import { qrcodeApi } from '../../../../services/qrcode';
 
 // 导入服务和类型
 import { materialApi, materialGroupApi } from '../../services/material';
@@ -259,6 +263,22 @@ const MaterialsManagementPage: React.FC = () => {
   }, []);
 
   /**
+   * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
+   */
+  useEffect(() => {
+    const materialUuid = searchParams.get('materialUuid');
+    const action = searchParams.get('action');
+    
+    if (materialUuid && action === 'detail') {
+      // 自动打开物料详情
+      handleViewMaterial({ uuid: materialUuid } as Material);
+      // 清除URL参数
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, setSearchParams]);
+
+  /**
    * 处理分组搜索
    */
   useEffect(() => {
@@ -371,6 +391,53 @@ const MaterialsManagementPage: React.FC = () => {
       messageApi.error(error.message || '获取物料详情失败');
     } finally {
       setMaterialDetailLoading(false);
+    }
+  };
+
+  /**
+   * 处理批量生成二维码
+   */
+  const handleBatchGenerateQRCode = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要生成二维码的物料');
+      return;
+    }
+
+    try {
+      // 通过API获取选中的物料数据
+      const materials = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await materialApi.get(key as string);
+          } catch (error) {
+            console.error(`获取物料失败: ${key}`, error);
+            return null;
+          }
+        })
+      );
+      
+      const validMaterials = materials.filter((m) => m !== null) as Material[];
+
+      if (validMaterials.length === 0) {
+        messageApi.error('无法获取选中的物料数据');
+        return;
+      }
+
+      // 生成二维码
+      const qrcodePromises = validMaterials.map((material) =>
+        qrcodeApi.generateMaterial({
+          material_uuid: material.uuid,
+          material_code: material.mainCode || material.code || '',
+          material_name: material.name,
+        })
+      );
+
+      const qrcodes = await Promise.all(qrcodePromises);
+      messageApi.success(`成功生成 ${qrcodes.length} 个物料二维码`);
+      
+      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+    } catch (error: any) {
+      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
     }
   };
 
@@ -677,6 +744,13 @@ const MaterialsManagementPage: React.FC = () => {
                   onClick={handleCreateMaterial}
                 >
                   新建物料
+                </Button>
+                <Button
+                  icon={<QrcodeOutlined />}
+                  disabled={selectedRowKeys.length === 0}
+                  onClick={handleBatchGenerateQRCode}
+                >
+                  批量生成二维码
                 </Button>
                 <Button
                   danger
@@ -1008,6 +1082,21 @@ const MaterialsManagementPage: React.FC = () => {
               },
             ]}
           />
+          
+          {/* 物料二维码 */}
+          {currentMaterial && (
+            <div style={{ marginTop: 24 }}>
+              <QRCodeGenerator
+                qrcodeType="MAT"
+                data={{
+                  material_uuid: currentMaterial.uuid,
+                  material_code: currentMaterial.mainCode || currentMaterial.code || '',
+                  material_name: currentMaterial.name,
+                }}
+                autoGenerate={true}
+              />
+            </div>
+          )}
         )}
       </Drawer>
 

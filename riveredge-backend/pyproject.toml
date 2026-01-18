@@ -32,6 +32,8 @@ dependencies = [
     "openpyxl>=3.1.0",  # Excel文件生成（MIT许可证，商业友好）
     "weasyprint>=60.0",  # PDF文件生成（BSD许可证，商业友好）
     "openai>=1.0.0",  # OpenAI SDK（大语言模型支持）
+    "qrcode[pil]>=7.4.0",  # 二维码生成库（支持PIL图片生成）
+    "pyzbar>=0.1.9",  # 二维码解析库（可选，用于从图片解析二维码）
 ]
 
 [project.optional-dependencies]
