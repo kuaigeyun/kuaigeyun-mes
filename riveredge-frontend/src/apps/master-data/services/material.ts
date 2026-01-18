@@ -120,6 +120,18 @@ export const materialApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/materials/${uuid}`);
   },
+
+  /**
+   * 生成物料二维码
+   */
+  generateQRCode: async (materialUuid: string, materialCode: string, materialName: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateMaterial({
+      material_uuid: materialUuid,
+      material_code: materialCode,
+      material_name: materialName,
+    });
+  },
 };
 
 /**

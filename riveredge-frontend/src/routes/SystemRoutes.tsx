@@ -17,6 +17,7 @@ import InfraLoginPage from '../pages/infra/login';
 import LockScreenPage from '../pages/lock-screen';
 import InitWizardPage from '../pages/init/wizard';
 import TemplateSelectPage from '../pages/init/template-select';
+import QRCodeScanPage from '../pages/qrcode/scan';
 
 // 系统级页面（直接导入，移除懒加载）
 import DashboardPage from '../pages/system/dashboard';
@@ -95,6 +96,9 @@ const SystemRoutes: React.FC = () => {
       {/* 初始化向导页面（不需要布局） */}
       <Route path="/init/wizard" element={<InitWizardPage />} />
       <Route path="/init/template-select" element={<TemplateSelectPage />} />
+      
+      {/* 二维码扫描页面（不需要布局） */}
+      <Route path="/qrcode/scan" element={<QRCodeScanPage />} />
 
       {/* 系统级路由（需要 BasicLayout，在 MainRoutes 中已包裹） */}
       {/* 仪表盘重定向到工作台 */}
