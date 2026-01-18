@@ -1030,3 +1030,32 @@ export const stocktakingApi = {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/adjust`, { method: 'POST' });
   },
 };
+
+// 高级排产相关接口
+export const advancedSchedulingApi = {
+  // 智能排产
+  intelligentScheduling: async (data: {
+    work_order_ids?: number[];
+    constraints?: {
+      priority_weight?: number;
+      due_date_weight?: number;
+      capacity_weight?: number;
+      setup_time_weight?: number;
+      optimize_objective?: 'min_makespan' | 'min_total_time' | 'min_setup_time';
+    };
+  }) => {
+    return apiRequest('/apps/kuaizhizao/scheduling/intelligent', { method: 'POST', data });
+  },
+
+  // 优化排产计划
+  optimizeSchedule: async (data: {
+    schedule_id?: number;
+    optimization_params?: {
+      max_iterations?: number;
+      convergence_threshold?: number;
+      optimization_objective?: string;
+    };
+  }) => {
+    return apiRequest('/apps/kuaizhizao/scheduling/optimize', { method: 'POST', data });
+  },
+};

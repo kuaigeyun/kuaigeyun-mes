@@ -11,7 +11,7 @@ Date: 2025-12-30
 """
 
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 # 导入BaseSchema用于兼容性
@@ -251,3 +251,71 @@ class LRPComputationResult(BaseSchema):
     production_schedule: List[dict] = Field(..., description="生产时间表")
     procurement_schedule: List[dict] = Field(..., description="采购时间表")
     capacity_utilization: dict = Field(..., description="产能利用率")
+
+
+# === 高级排产 ===
+
+class SchedulingConstraints(BaseSchema):
+    """排产约束条件"""
+    priority_weight: float = Field(0.3, ge=0, le=1, description="优先级权重（0-1）")
+    due_date_weight: float = Field(0.3, ge=0, le=1, description="交期权重（0-1）")
+    capacity_weight: float = Field(0.2, ge=0, le=1, description="产能权重（0-1）")
+    setup_time_weight: float = Field(0.2, ge=0, le=1, description="换线时间权重（0-1）")
+    optimize_objective: str = Field("min_makespan", description="优化目标（min_makespan/min_total_time/min_setup_time）")
+
+
+class IntelligentSchedulingRequest(BaseSchema):
+    """智能排产请求"""
+    work_order_ids: Optional[List[int]] = Field(None, description="工单ID列表（可选，如果不提供则对所有待排产工单进行排产）")
+    constraints: Optional[SchedulingConstraints] = Field(None, description="约束条件")
+
+
+class ScheduledOrder(BaseSchema):
+    """已排产工单"""
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
+
+
+class UnscheduledOrder(BaseSchema):
+    """无法排产工单"""
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    reason: str = Field(..., description="无法排产的原因")
+
+
+class SchedulingStatistics(BaseSchema):
+    """排产统计信息"""
+    total_orders: int = Field(..., description="总工单数")
+    scheduled_count: int = Field(..., description="已排产工单数")
+    unscheduled_count: int = Field(..., description="无法排产工单数")
+    scheduling_rate: float = Field(..., ge=0, le=1, description="排产成功率")
+
+
+class IntelligentSchedulingResponse(BaseSchema):
+    """智能排产响应"""
+    scheduled_orders: List[ScheduledOrder] = Field(..., description="已排产的工单列表")
+    unscheduled_orders: List[UnscheduledOrder] = Field(..., description="无法排产的工单列表")
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list, description="冲突列表")
+    statistics: SchedulingStatistics = Field(..., description="统计信息")
+
+
+class OptimizationParams(BaseSchema):
+    """优化参数"""
+    max_iterations: int = Field(100, gt=0, description="最大迭代次数")
+    convergence_threshold: float = Field(0.01, gt=0, description="收敛阈值")
+    optimization_objective: str = Field("min_makespan", description="优化目标")
+
+
+class OptimizeScheduleRequest(BaseSchema):
+    """优化排产计划请求"""
+    schedule_id: Optional[int] = Field(None, description="排产计划ID（可选）")
+    optimization_params: Optional[OptimizationParams] = Field(None, description="优化参数")
+
+
+class OptimizeScheduleResponse(BaseSchema):
+    """优化排产计划响应"""
+    optimized: bool = Field(..., description="是否优化成功")
+    improvement: float = Field(..., description="改进程度（百分比）")
+    iterations: int = Field(..., description="迭代次数")

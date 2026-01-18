@@ -102,6 +102,7 @@ from core.api.launch_progress.launch_progress import router as launch_progress_r
 from core.api.launch_checklist.launch_checklist import router as launch_checklist_router
 from core.api.usage_analysis.usage_analysis import router as usage_analysis_router
 from core.api.optimization_suggestion.optimization_suggestion import router as optimization_suggestion_router
+from core.api.performance.performance import router as performance_router
 
 # 插件管理器API
 from core.api.plugin_manager.plugin_manager import router as plugin_manager_router
@@ -215,6 +216,10 @@ app.add_middleware(
 # 注册统一异常处理中间件（应该在其他中间件之前注册）
 from core.middleware.exception_handler_middleware import ExceptionHandlerMiddleware
 app.add_middleware(ExceptionHandlerMiddleware)
+
+# 注册性能监控中间件（在操作日志中间件之前，以便记录性能指标）
+from core.middleware.performance_middleware import PerformanceMiddleware
+app.add_middleware(PerformanceMiddleware)
 
 # 注册操作日志中间件
 from core.middleware.operation_log_middleware import OperationLogMiddleware
@@ -529,6 +534,7 @@ app.include_router(launch_progress_router, prefix="/api/v1/core")
 app.include_router(launch_checklist_router, prefix="/api/v1/core")
 app.include_router(usage_analysis_router, prefix="/api/v1/core")
 app.include_router(optimization_suggestion_router, prefix="/api/v1/core")
+app.include_router(performance_router, prefix="/api/v1/core")
 
 # 插件管理器路由 (Plugin Manager APIs)
 app.include_router(plugin_manager_router, prefix="/api/v1/core")

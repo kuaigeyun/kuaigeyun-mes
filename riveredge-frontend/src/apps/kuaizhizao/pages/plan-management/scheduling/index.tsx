@@ -89,15 +89,56 @@ const SchedulingPage: React.FC = () => {
   };
 
   /**
-   * 处理自动排程
+   * 处理自动排程（使用高级排产）
    */
-  const handleAutoSchedule = () => {
+  const handleAutoSchedule = async () => {
     Modal.confirm({
-      title: '自动排程',
-      content: '确定要执行自动排程吗？系统将根据工作中心能力和优先级自动安排生产计划。',
+      title: '智能排产',
+      content: '确定要执行智能排产吗？系统将根据工作中心能力、优先级、交期等多约束条件自动安排生产计划。',
       onOk: async () => {
-        messageApi.success('自动排程执行完成');
-        actionRef.current?.reload();
+        try {
+          const { advancedSchedulingApi } = await import('../../../services/production');
+          const result = await advancedSchedulingApi.intelligentScheduling({
+            constraints: {
+              priority_weight: 0.3,
+              due_date_weight: 0.3,
+              capacity_weight: 0.2,
+              setup_time_weight: 0.2,
+              optimize_objective: 'min_makespan',
+            },
+          });
+          
+          if (result.statistics.scheduled_count > 0) {
+            messageApi.success(`智能排产完成：成功排产 ${result.statistics.scheduled_count} 个工单，排产成功率 ${(result.statistics.scheduling_rate * 100).toFixed(1)}%`);
+          } else {
+            messageApi.warning('智能排产完成，但没有工单可以排产');
+          }
+          
+          if (result.unscheduled_orders.length > 0) {
+            Modal.warning({
+              title: '部分工单无法排产',
+              content: (
+                <div>
+                  <p>以下工单无法排产：</p>
+                  <ul>
+                    {result.unscheduled_orders.slice(0, 5).map((order: any) => (
+                      <li key={order.work_order_id}>
+                        {order.work_order_code}: {order.reason}
+                      </li>
+                    ))}
+                    {result.unscheduled_orders.length > 5 && (
+                      <li>... 还有 {result.unscheduled_orders.length - 5} 个工单</li>
+                    )}
+                  </ul>
+                </div>
+              ),
+            });
+          }
+          
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '智能排产失败');
+        }
       },
     });
   };
