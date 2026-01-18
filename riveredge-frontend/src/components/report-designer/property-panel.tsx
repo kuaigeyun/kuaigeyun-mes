@@ -10,7 +10,16 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Form, Input, InputNumber, Select, ColorPicker, Switch, Button } from 'antd';
 import { ReportComponent } from './index';
-import { getDataSourceList, DataSource } from '../../services/dataSource';
+import { getDataSourceList } from '../../services/dataSource';
+
+/**
+ * 数据源接口
+ */
+interface DataSource {
+  uuid: string;
+  code: string;
+  name: string;
+}
 
 /**
  * 属性配置面板Props

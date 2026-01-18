@@ -14,7 +14,7 @@ import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Pie, Column } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
-import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData } from '../../../services/reports';
+import { inventoryAnalysisApi, InventoryAnalysisData, InventoryCostAnalysisData, getInventoryReport, exportReport } from '../../../services/reports';
 import dayjs, { Dayjs } from 'dayjs';
 
 // 库存报表接口定义
@@ -236,8 +236,23 @@ const InventoryReportPage: React.FC = () => {
   };
 
   // 处理导出
-  const handleExport = () => {
-    messageApi.success('报表导出功能开发中...');
+  const handleExport = async () => {
+    try {
+      setLoading(true);
+      await exportReport('inventory', {
+        report_type: reportType,
+        date_start: dateRange[0]?.format('YYYY-MM-DD'),
+        date_end: dateRange[1]?.format('YYYY-MM-DD'),
+        filters: {
+          warehouse_id: warehouseId,
+        },
+      });
+      messageApi.success('报表导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '报表导出失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   /**
@@ -347,75 +362,63 @@ const InventoryReportPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据
-            const mockData: InventoryReportItem[] = [
-              {
-                id: 1,
-                materialCode: 'RAW001',
-                materialName: '螺丝A',
-                category: '原材料',
-                warehouseName: '原材料仓库',
-                currentStock: 1500,
-                availableStock: 1400,
-                reservedStock: 100,
-                minStock: 200,
-                maxStock: 3000,
-                unit: '个',
-                unitPrice: 2.5,
-                totalValue: 3750,
-                turnoverRate: 4.2,
-                turnoverDays: 25,
-                lastInboundDate: '2025-12-20',
-                lastOutboundDate: '2025-12-28',
-                status: 'normal',
-              },
-              {
-                id: 2,
-                materialCode: 'RAW002',
-                materialName: '螺母B',
-                category: '原材料',
-                warehouseName: '原材料仓库',
-                currentStock: 50,
-                availableStock: 50,
-                reservedStock: 0,
-                minStock: 100,
-                maxStock: 2000,
-                unit: '个',
-                unitPrice: 1.8,
-                totalValue: 90,
-                turnoverRate: 2.1,
-                turnoverDays: 48,
-                lastInboundDate: '2025-12-15',
-                lastOutboundDate: '2025-12-25',
-                status: 'low',
-              },
-              {
-                id: 3,
-                materialCode: 'FIN001',
-                materialName: '产品A',
-                category: '成品',
-                warehouseName: '成品仓库',
-                currentStock: 0,
-                availableStock: 0,
-                reservedStock: 0,
-                minStock: 10,
-                maxStock: 500,
-                unit: '个',
-                unitPrice: 150,
-                totalValue: 0,
-                turnoverRate: 0,
-                turnoverDays: 0,
-                lastInboundDate: '2025-12-10',
-                lastOutboundDate: '2025-12-28',
-                status: 'out_of_stock',
-              },
-            ];
+            try {
+              setLoading(true);
+              const response = await getInventoryReport({
+                report_type: 'summary',
+                date_start: dateRange[0]?.format('YYYY-MM-DD'),
+                date_end: dateRange[1]?.format('YYYY-MM-DD'),
+                filters: {
+                  warehouse_id: warehouseId,
+                },
+                ...params,
+              });
 
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+              // 更新统计数据
+              if (response.summary) {
+                setStats({
+                  totalItems: response.summary.totalItems || 0,
+                  totalValue: response.summary.totalValue || 0,
+                  lowStockItems: response.summary.lowStockItems || 0,
+                  outOfStockItems: response.summary.outOfStockItems || 0,
+                  highStockItems: response.summary.highStockItems || 0,
+                  normalStockItems: response.summary.normalStockItems || 0,
+                });
+              }
+
+              // 转换数据格式
+              const data = (response.data || []).map((item, index) => ({
+                id: index + 1,
+                ...item,
+                material_code: item.materialCode,
+                material_name: item.materialName,
+                warehouse_name: item.warehouseName,
+                current_stock: item.currentStock,
+                available_stock: item.availableStock,
+                reserved_stock: item.reservedStock,
+                min_stock: item.minStock,
+                max_stock: item.maxStock,
+                unit_price: item.unitPrice,
+                total_value: item.totalValue,
+                turnover_rate: item.turnoverRate,
+                turnover_days: item.turnoverDays,
+              }));
+
+              return {
+                data,
+                success: true,
+                total: response.summary?.totalItems || data.length,
+              };
+            } catch (error: any) {
+              messageApi.error(error.message || '加载库存报表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            } finally {
+              setLoading(false);
+            }
           }}
           rowSelection={{
             selectedRowKeys,

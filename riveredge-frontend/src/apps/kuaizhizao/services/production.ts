@@ -90,6 +90,16 @@ export const workOrderApi = {
   merge: async (data: { work_order_ids: number[]; remarks?: string }) => {
     return apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data });
   },
+
+  // 生成工单二维码
+  generateQRCode: async (workOrderId: string, workOrderCode: string, workOrderName: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateWorkOrder({
+      work_order_uuid: workOrderId,
+      work_order_code: workOrderCode,
+      work_order_name: workOrderName,
+    });
+  },
 };
 
 // 返工单相关接口

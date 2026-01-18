@@ -335,9 +335,14 @@ export default function DashboardPage() {
   // 处理待办事项
   const handleTodoMutation = useMutation({
     mutationFn: ({ todoId, action }: { todoId: string; action: string }) => handleTodo(todoId, action),
-    onSuccess: () => {
-      message.success('处理成功');
-      refetchTodos();
+    onSuccess: (data: any) => {
+      message.success(data.message || '处理成功');
+      // 如果有跳转链接，自动跳转
+      if (data.redirect) {
+        navigate(data.redirect);
+      } else {
+        refetchTodos();
+      }
     },
     onError: (error: any) => {
       message.error(`处理失败: ${error.message || '未知错误'}`);
@@ -486,7 +491,8 @@ export default function DashboardPage() {
                 type="link"
                 size="small"
                 onClick={() => {
-                  message.info('待办事项功能开发中');
+                  // 跳转到待办事项列表页面（如果存在）或工单列表页面
+                  navigate('/apps/kuaizhizao/production-execution/work-orders');
                 }}
               >
                 查看全部 <RightOutlined />
@@ -568,7 +574,8 @@ export default function DashboardPage() {
           <Card
             title="生产统计"
             loading={statisticsLoading}
-            style={{ height: '100%' }}
+            style={{ height: '100%', cursor: 'pointer' }}
+            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {statistics?.production && (
               <div>
@@ -633,7 +640,8 @@ export default function DashboardPage() {
           <Card
             title="库存统计"
             loading={statisticsLoading}
-            style={{ height: '100%' }}
+            style={{ height: '100%', cursor: 'pointer' }}
+            onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
           >
             {statistics?.inventory && (
               <div>
@@ -671,7 +679,8 @@ export default function DashboardPage() {
           <Card
             title="质量统计"
             loading={statisticsLoading}
-            style={{ height: '100%' }}
+            style={{ height: '100%', cursor: 'pointer' }}
+            onClick={() => navigate('/apps/kuaizhizao/quality-management')}
           >
             {statistics?.quality && (
               <div>

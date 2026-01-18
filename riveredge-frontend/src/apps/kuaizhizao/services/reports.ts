@@ -298,6 +298,32 @@ export async function getReportCharts(params: ReportParams = {}): Promise<TrendC
   });
 }
 
+// 库存分析API
+export const inventoryAnalysisApi = {
+  getAnalysis: async (params: {
+    date_start?: string;
+    date_end?: string;
+    warehouse_id?: number;
+  }): Promise<InventoryAnalysisData> => {
+    return apiRequest<InventoryAnalysisData>({
+      url: '/apps/kuaizhizao/inventory-analysis',
+      method: 'GET',
+      params,
+    });
+  },
+  getCostAnalysis: async (params: {
+    date_start?: string;
+    date_end?: string;
+    warehouse_id?: number;
+  }): Promise<InventoryCostAnalysisData> => {
+    return apiRequest<InventoryCostAnalysisData>({
+      url: '/apps/kuaizhizao/inventory-analysis/cost',
+      method: 'GET',
+      params,
+    });
+  },
+};
+
 /**
  * 通用报表导出功能
  */

@@ -8,13 +8,17 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Modal, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Modal, Input, Card } from 'antd';
+import { ProDescriptions } from '@ant-design/pro-components';
+import { EditOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { materialBatchApi, materialApi } from '../../../services/material';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
+import { qrcodeApi } from '../../../../../services/qrcode';
 import type { 
   MaterialBatch, 
   MaterialBatchCreate, 
@@ -40,6 +44,7 @@ const MaterialBatchPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -115,6 +120,75 @@ const MaterialBatchPage: React.FC = () => {
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取批号详情失败');
+    }
+  };
+
+  /**
+   * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
+   */
+  useEffect(() => {
+    const traceUuid = searchParams.get('uuid');
+    const action = searchParams.get('action');
+    
+    if (traceUuid && action === 'detail') {
+      // 通过traceUuid查找对应的批号记录
+      materialBatchApi.get(traceUuid)
+        .then((detail) => {
+          setCurrentBatch(detail);
+          setDrawerVisible(true);
+          setSearchParams({}, { replace: true });
+        })
+        .catch((error) => {
+          messageApi.error('获取批号记录失败');
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, setSearchParams]);
+
+  /**
+   * 处理批量生成二维码
+   */
+  const handleBatchGenerateQRCode = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要生成二维码的批号记录');
+      return;
+    }
+
+    try {
+      // 通过API获取选中的批号记录数据
+      const batches = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await materialBatchApi.get(key.toString());
+          } catch (error) {
+            console.error(`获取批号记录失败: ${key}`, error);
+            return null;
+          }
+        })
+      );
+      
+      const validBatches = batches.filter((batch) => batch !== null) as MaterialBatch[];
+
+      if (validBatches.length === 0) {
+        messageApi.error('无法获取选中的批号记录数据');
+        return;
+      }
+
+      // 生成二维码
+      const qrcodePromises = validBatches.map((batch) =>
+        materialBatchApi.generateTraceQRCode(
+          batch.uuid,
+          batch.batchNo,
+          batch.materialName
+        )
+      );
+
+      const qrcodes = await Promise.all(qrcodePromises);
+      messageApi.success(`成功生成 ${qrcodes.length} 个追溯二维码`);
+      
+      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+    } catch (error: any) {
+      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
     }
   };
 
@@ -407,6 +481,14 @@ const MaterialBatchPage: React.FC = () => {
             >
               新建批号
             </Button>,
+            <Button
+              key="batch-qrcode"
+              icon={<QrcodeOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchGenerateQRCode}
+            >
+              批量生成二维码
+            </Button>,
           ]}
           search={{
             labelWidth: 'auto',
@@ -520,8 +602,33 @@ const MaterialBatchPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
-        columns={detailColumns}
-        dataSource={currentBatch}
+        customContent={
+          <>
+            <ProDescriptions<MaterialBatch>
+              dataSource={currentBatch || undefined}
+              column={2}
+              columns={detailColumns}
+            />
+            
+            {/* 追溯二维码 */}
+            {currentBatch && (
+              <div style={{ marginTop: 24 }}>
+                <Card title="追溯二维码">
+                  <QRCodeGenerator
+                    qrcodeType="TRACE"
+                    data={{
+                      trace_uuid: currentBatch.uuid,
+                      trace_type: 'batch',
+                      trace_code: currentBatch.batchNo,
+                      trace_name: currentBatch.materialName || currentBatch.batchNo,
+                    }}
+                    autoGenerate={true}
+                  />
+                </Card>
+              </div>
+            )}
+          </>
+        }
         width={DRAWER_CONFIG.width}
       />
     </>

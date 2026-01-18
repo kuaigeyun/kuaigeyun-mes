@@ -4,13 +4,16 @@
  * 提供工序信息的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Card } from 'antd';
+import { useSearchParams } from 'react-router-dom';
+import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
 import { operationApi } from '../../../services/process';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
+import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, OperationCreate, OperationUpdate } from '../../../types/process';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 
@@ -22,6 +25,7 @@ const OperationsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -33,6 +37,22 @@ const OperationsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+
+  /**
+   * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
+   */
+  useEffect(() => {
+    const operationUuid = searchParams.get('operationUuid');
+    const action = searchParams.get('action');
+    
+    if (operationUuid && action === 'detail') {
+      // 自动打开工序详情
+      handleOpenDetail({ uuid: operationUuid } as Operation);
+      // 清除URL参数
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, setSearchParams]);
 
   /**
    * 处理新建工序
@@ -99,6 +119,53 @@ const OperationsPage: React.FC = () => {
       messageApi.error(error.message || '获取工序详情失败');
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  /**
+   * 处理批量生成二维码
+   */
+  const handleBatchGenerateQRCode = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要生成二维码的工序');
+      return;
+    }
+
+    try {
+      // 通过API获取选中的工序数据
+      const operations = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await operationApi.get(key as string);
+          } catch (error) {
+            console.error(`获取工序失败: ${key}`, error);
+            return null;
+          }
+        })
+      );
+      
+      const validOperations = operations.filter((op) => op !== null) as Operation[];
+
+      if (validOperations.length === 0) {
+        messageApi.error('无法获取选中的工序数据');
+        return;
+      }
+
+      // 生成二维码
+      const qrcodePromises = validOperations.map((operation) =>
+        qrcodeApi.generateOperation({
+          operation_uuid: operation.uuid,
+          operation_code: operation.code || '',
+          operation_name: operation.name || '',
+        })
+      );
+
+      const qrcodes = await Promise.all(qrcodePromises);
+      messageApi.success(`成功生成 ${qrcodes.length} 个工序二维码`);
+      
+      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+    } catch (error: any) {
+      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
     }
   };
 
@@ -303,6 +370,14 @@ const OperationsPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="batch-qrcode"
+            icon={<QrcodeOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={handleBatchGenerateQRCode}
+          >
+            批量生成二维码
+          </Button>,
+          <Button
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -324,22 +399,47 @@ const OperationsPage: React.FC = () => {
         dataSource={operationDetail || undefined}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        columns={[
-          { title: '工序编码', dataIndex: 'code' },
-          { title: '工序名称', dataIndex: 'name' },
-          { title: '描述', dataIndex: 'description', span: 2 },
-          {
-            title: '启用状态',
-            dataIndex: 'isActive',
-            render: (_, record) => (
-              <Tag color={record.isActive ? 'success' : 'default'}>
-                {record.isActive ? '启用' : '禁用'}
-              </Tag>
-            ),
-          },
-          { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-          { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
-        ]}
+        customContent={
+          <>
+            <ProDescriptions<Operation>
+              dataSource={operationDetail || undefined}
+              column={2}
+              columns={[
+                { title: '工序编码', dataIndex: 'code' },
+                { title: '工序名称', dataIndex: 'name' },
+                { title: '描述', dataIndex: 'description', span: 2 },
+                {
+                  title: '启用状态',
+                  dataIndex: 'isActive',
+                  render: (_, record) => (
+                    <Tag color={record.isActive ? 'success' : 'default'}>
+                      {record.isActive ? '启用' : '禁用'}
+                    </Tag>
+                  ),
+                },
+                { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
+                { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+              ]}
+            />
+            
+            {/* 工序二维码 */}
+            {operationDetail && (
+              <div style={{ marginTop: 24 }}>
+                <Card title="工序二维码">
+                  <QRCodeGenerator
+                    qrcodeType="OP"
+                    data={{
+                      operation_uuid: operationDetail.uuid,
+                      operation_code: operationDetail.code || '',
+                      operation_name: operationDetail.name || '',
+                    }}
+                    autoGenerate={true}
+                  />
+                </Card>
+              </div>
+            )}
+          </>
+        }
       />
 
       <FormModalTemplate

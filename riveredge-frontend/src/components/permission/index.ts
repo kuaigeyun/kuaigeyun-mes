@@ -1,0 +1,6 @@
+/**
+ * 权限组件导出
+ */
+
+export { PermissionGuard } from './PermissionGuard';
+export type { PermissionGuardProps } from './PermissionGuard';

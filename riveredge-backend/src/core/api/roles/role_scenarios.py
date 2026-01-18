@@ -175,3 +175,33 @@ async def get_role_scenarios_by_code(
             detail=f"获取角色场景失败: {str(e)}"
         )
 
+
+@router.get("/scenarios")
+async def get_all_role_scenarios(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取所有角色使用场景
+    
+    Args:
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        Dict[str, Any]: 所有角色使用场景信息
+    """
+    try:
+        scenarios = await RoleScenarioService.get_role_scenarios(
+            tenant_id=tenant_id
+        )
+        return {
+            "success": True,
+            "data": scenarios,
+        }
+    except Exception as e:
+        logger.error(f"获取所有角色场景失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取所有角色场景失败: {str(e)}"
+        )

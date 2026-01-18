@@ -225,6 +225,191 @@ ROLE_ONBOARDING_GUIDES: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "technician": {
+        "name": "技术研发人员",
+        "checklist": [
+            {
+                "id": "data_preparation",
+                "name": "数据准备",
+                "items": [
+                    {"id": "product_data", "name": "导入产品数据", "required": True, "description": "导入产品基本信息、规格等"},
+                    {"id": "bom_data", "name": "创建BOM数据", "required": True, "description": "创建物料清单（BOM）"},
+                    {"id": "routing_data", "name": "创建工艺路线", "required": True, "description": "创建工艺路线数据"},
+                    {"id": "sop_data", "name": "创建SOP", "required": False, "description": "创建标准作业程序（SOP）"},
+                ],
+            },
+            {
+                "id": "permission_config",
+                "name": "权限配置",
+                "items": [
+                    {"id": "role_assignment", "name": "分配技术角色", "required": True, "description": "为用户分配技术研发角色"},
+                    {"id": "permission_review", "name": "检查权限设置", "required": True, "description": "确认技术相关权限已正确配置"},
+                ],
+            },
+            {
+                "id": "training",
+                "name": "操作培训",
+                "items": [
+                    {"id": "bom_training", "name": "BOM管理培训", "required": True, "description": "学习如何创建和管理BOM"},
+                    {"id": "routing_training", "name": "工艺路线设计培训", "required": True, "description": "学习如何设计工艺路线"},
+                    {"id": "sop_training", "name": "SOP设计培训", "required": False, "description": "学习如何设计SOP"},
+                ],
+            },
+        ],
+    },
+    "supervisor": {
+        "name": "班组长",
+        "checklist": [
+            {
+                "id": "data_preparation",
+                "name": "数据准备",
+                "items": [
+                    {"id": "workstation_data", "name": "确认工作中心/工位", "required": True, "description": "确认工作中心、工位数据已完整"},
+                    {"id": "work_order_data", "name": "查看工单数据", "required": True, "description": "查看待下达的工单"},
+                ],
+            },
+            {
+                "id": "permission_config",
+                "name": "权限配置",
+                "items": [
+                    {"id": "role_assignment", "name": "分配班组长角色", "required": True, "description": "为用户分配班组长角色"},
+                    {"id": "permission_review", "name": "检查权限设置", "required": True, "description": "确认班组长相关权限已正确配置"},
+                ],
+            },
+            {
+                "id": "training",
+                "name": "操作培训",
+                "items": [
+                    {"id": "work_order_training", "name": "工单管理培训", "required": True, "description": "学习如何管理工单、下达工单"},
+                    {"id": "progress_tracking_training", "name": "生产进度跟踪培训", "required": True, "description": "学习如何跟踪生产进度"},
+                    {"id": "personnel_training", "name": "人员安排培训", "required": True, "description": "学习如何安排生产人员"},
+                ],
+            },
+        ],
+    },
+    "operator": {
+        "name": "生产人员",
+        "checklist": [
+            {
+                "id": "data_preparation",
+                "name": "数据准备",
+                "items": [
+                    {"id": "work_order_data", "name": "查看工单信息", "required": True, "description": "查看待报工的工单"},
+                    {"id": "sop_data", "name": "查看SOP", "required": False, "description": "查看标准作业程序"},
+                ],
+            },
+            {
+                "id": "permission_config",
+                "name": "权限配置",
+                "items": [
+                    {"id": "role_assignment", "name": "分配生产角色", "required": True, "description": "为用户分配生产人员角色"},
+                    {"id": "permission_review", "name": "检查权限设置", "required": True, "description": "确认生产相关权限已正确配置"},
+                ],
+            },
+            {
+                "id": "training",
+                "name": "操作培训",
+                "items": [
+                    {"id": "reporting_training", "name": "报工操作培训", "required": True, "description": "学习如何执行报工操作"},
+                    {"id": "sop_viewing_training", "name": "SOP查看培训", "required": False, "description": "学习如何查看SOP"},
+                    {"id": "drawing_viewing_training", "name": "图纸查看培训", "required": False, "description": "学习如何查看图纸"},
+                ],
+            },
+        ],
+    },
+    "equipment": {
+        "name": "设备组",
+        "checklist": [
+            {
+                "id": "data_preparation",
+                "name": "数据准备",
+                "items": [
+                    {"id": "equipment_data", "name": "导入设备数据", "required": True, "description": "导入设备基本信息、规格等"},
+                    {"id": "maintenance_plan", "name": "配置维护计划", "required": True, "description": "配置设备维护计划"},
+                ],
+            },
+            {
+                "id": "permission_config",
+                "name": "权限配置",
+                "items": [
+                    {"id": "role_assignment", "name": "分配设备角色", "required": True, "description": "为用户分配设备组角色"},
+                    {"id": "permission_review", "name": "检查权限设置", "required": True, "description": "确认设备相关权限已正确配置"},
+                ],
+            },
+            {
+                "id": "training",
+                "name": "操作培训",
+                "items": [
+                    {"id": "equipment_management_training", "name": "设备管理培训", "required": True, "description": "学习如何管理设备信息"},
+                    {"id": "maintenance_training", "name": "设备维护培训", "required": True, "description": "学习如何执行设备维护"},
+                    {"id": "monitoring_training", "name": "设备监控培训", "required": True, "description": "学习如何监控设备状态"},
+                ],
+            },
+        ],
+    },
+    "finance": {
+        "name": "财务",
+        "checklist": [
+            {
+                "id": "data_preparation",
+                "name": "数据准备",
+                "items": [
+                    {"id": "account_data", "name": "配置会计科目", "required": True, "description": "配置会计科目体系"},
+                    {"id": "cost_center_data", "name": "配置成本中心", "required": True, "description": "配置成本中心"},
+                    {"id": "receivable_payable_data", "name": "导入应收应付数据", "required": False, "description": "导入期初应收应付数据"},
+                ],
+            },
+            {
+                "id": "permission_config",
+                "name": "权限配置",
+                "items": [
+                    {"id": "role_assignment", "name": "分配财务角色", "required": True, "description": "为用户分配财务角色"},
+                    {"id": "permission_review", "name": "检查权限设置", "required": True, "description": "确认财务相关权限已正确配置"},
+                ],
+            },
+            {
+                "id": "training",
+                "name": "操作培训",
+                "items": [
+                    {"id": "receivable_payable_training", "name": "应收应付管理培训", "required": True, "description": "学习如何管理应收应付账款"},
+                    {"id": "cost_accounting_training", "name": "成本核算培训", "required": True, "description": "学习如何核算生产成本"},
+                    {"id": "financial_report_training", "name": "财务报表培训", "required": True, "description": "学习如何查看财务报表"},
+                ],
+            },
+        ],
+    },
+    "implementer": {
+        "name": "系统实施人员",
+        "checklist": [
+            {
+                "id": "data_preparation",
+                "name": "数据准备",
+                "items": [
+                    {"id": "system_initialization", "name": "系统初始化", "required": True, "description": "执行系统初始化向导"},
+                    {"id": "organization_data", "name": "完善组织信息", "required": True, "description": "完善组织基本信息、设置等"},
+                    {"id": "base_data_import", "name": "导入基础数据", "required": True, "description": "导入物料、BOM、客户、供应商等基础数据"},
+                ],
+            },
+            {
+                "id": "permission_config",
+                "name": "权限配置",
+                "items": [
+                    {"id": "user_creation", "name": "创建用户账号", "required": True, "description": "为各角色创建用户账号"},
+                    {"id": "role_assignment", "name": "分配角色", "required": True, "description": "为用户分配相应角色"},
+                    {"id": "permission_review", "name": "检查权限设置", "required": True, "description": "确认各角色权限已正确配置"},
+                ],
+            },
+            {
+                "id": "training",
+                "name": "操作培训",
+                "items": [
+                    {"id": "system_training", "name": "系统使用培训", "required": True, "description": "学习系统基本功能和使用方法"},
+                    {"id": "data_import_training", "name": "数据导入培训", "required": True, "description": "学习如何导入基础数据"},
+                    {"id": "user_training", "name": "用户培训", "required": True, "description": "学习如何培训最终用户"},
+                ],
+            },
+        ],
+    },
 }
 
 

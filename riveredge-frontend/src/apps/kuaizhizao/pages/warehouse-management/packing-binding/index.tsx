@@ -7,14 +7,18 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Popconfirm } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, message, Popconfirm, Card } from 'antd';
+import { ProDescriptions } from '@ant-design/pro-components';
+import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { packingBindingApi } from '../../../services/packing-binding';
 import { materialApi } from '../../../../master-data/services/material';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
+import { qrcodeApi } from '../../../../../services/qrcode';
 import dayjs from 'dayjs';
 
 interface PackingBinding {
@@ -44,6 +48,7 @@ const PackingBindingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Modal 相关状态
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -55,6 +60,81 @@ const PackingBindingPage: React.FC = () => {
 
   // 当前编辑的绑定记录ID
   const [currentBindingId, setCurrentBindingId] = useState<number | null>(null);
+
+  /**
+   * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
+   */
+  useEffect(() => {
+    const boxUuid = searchParams.get('uuid');
+    const action = searchParams.get('action');
+    
+    if (boxUuid && action === 'detail') {
+      // 通过boxUuid查找对应的装箱绑定记录
+      // 注意：这里需要根据实际情况调整，因为boxUuid可能对应box_no字段或uuid字段
+      packingBindingApi.list({ box_no: boxUuid })
+        .then((list) => {
+          if (list && list.length > 0) {
+            handleDetail(list[0]);
+            setSearchParams({}, { replace: true });
+          } else {
+            // 如果通过box_no找不到，尝试通过uuid查找
+            // 这里需要根据实际API调整
+            messageApi.warning('未找到对应的装箱记录');
+          }
+        })
+        .catch((error) => {
+          messageApi.error('获取装箱记录失败');
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, setSearchParams]);
+
+  /**
+   * 处理批量生成二维码
+   */
+  const handleBatchGenerateQRCode = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要生成二维码的装箱记录');
+      return;
+    }
+
+    try {
+      // 通过API获取选中的装箱记录数据
+      const bindings = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await packingBindingApi.get(key.toString());
+          } catch (error) {
+            console.error(`获取装箱记录失败: ${key}`, error);
+            return null;
+          }
+        })
+      );
+      
+      const validBindings = bindings.filter((binding) => binding !== null) as PackingBinding[];
+
+      if (validBindings.length === 0) {
+        messageApi.error('无法获取选中的装箱记录数据');
+        return;
+      }
+
+      // 生成二维码
+      const qrcodePromises = validBindings.map((binding) =>
+        qrcodeApi.generateBox({
+          box_uuid: binding.box_no || binding.uuid || '',
+          box_no: binding.box_no || '',
+          box_name: binding.product_name || binding.box_no || '',
+        })
+      );
+
+      const qrcodes = await Promise.all(qrcodePromises);
+      messageApi.success(`成功生成 ${qrcodes.length} 个装箱二维码`);
+      
+      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+    } catch (error: any) {
+      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+    }
+  };
 
   /**
    * 处理查看详情
@@ -265,6 +345,16 @@ const PackingBindingPage: React.FC = () => {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        toolBarRender={() => [
+          <Button
+            key="batch-qrcode"
+            icon={<QrcodeOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={handleBatchGenerateQRCode}
+          >
+            批量生成二维码
+          </Button>,
+        ]}
       />
 
       {/* 编辑Modal */}
@@ -309,62 +399,87 @@ const PackingBindingPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentBinding(null);
         }}
-        dataSource={currentBinding || {}}
-        columns={[
-          {
-            title: '箱号',
-            dataIndex: 'box_no',
-          },
-          {
-            title: '产品编码',
-            dataIndex: 'product_code',
-          },
-          {
-            title: '产品名称',
-            dataIndex: 'product_name',
-          },
-          {
-            title: '产品序列号',
-            dataIndex: 'product_serial_no',
-          },
-          {
-            title: '装箱数量',
-            dataIndex: 'packing_quantity',
-          },
-          {
-            title: '包装物料编码',
-            dataIndex: 'packing_material_code',
-          },
-          {
-            title: '包装物料名称',
-            dataIndex: 'packing_material_name',
-          },
-          {
-            title: '绑定方式',
-            dataIndex: 'binding_method',
-            valueEnum: {
-              scan: { text: '扫码', status: 'success' },
-              manual: { text: '手动', status: 'default' },
-            },
-          },
-          {
-            title: '条码',
-            dataIndex: 'barcode',
-          },
-          {
-            title: '绑定人',
-            dataIndex: 'bound_by_name',
-          },
-          {
-            title: '绑定时间',
-            dataIndex: 'bound_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '备注',
-            dataIndex: 'remarks',
-          },
-        ]}
+        customContent={
+          <>
+            <ProDescriptions<PackingBinding>
+              dataSource={currentBinding || undefined}
+              column={2}
+              columns={[
+                {
+                  title: '箱号',
+                  dataIndex: 'box_no',
+                },
+                {
+                  title: '产品编码',
+                  dataIndex: 'product_code',
+                },
+                {
+                  title: '产品名称',
+                  dataIndex: 'product_name',
+                },
+                {
+                  title: '产品序列号',
+                  dataIndex: 'product_serial_no',
+                },
+                {
+                  title: '装箱数量',
+                  dataIndex: 'packing_quantity',
+                },
+                {
+                  title: '包装物料编码',
+                  dataIndex: 'packing_material_code',
+                },
+                {
+                  title: '包装物料名称',
+                  dataIndex: 'packing_material_name',
+                },
+                {
+                  title: '绑定方式',
+                  dataIndex: 'binding_method',
+                  valueEnum: {
+                    scan: { text: '扫码', status: 'success' },
+                    manual: { text: '手动', status: 'default' },
+                  },
+                },
+                {
+                  title: '条码',
+                  dataIndex: 'barcode',
+                },
+                {
+                  title: '绑定人',
+                  dataIndex: 'bound_by_name',
+                },
+                {
+                  title: '绑定时间',
+                  dataIndex: 'bound_at',
+                  valueType: 'dateTime',
+                },
+                {
+                  title: '备注',
+                  dataIndex: 'remarks',
+                  span: 2,
+                },
+              ]}
+            />
+            
+            {/* 装箱二维码 */}
+            {currentBinding && (
+              <div style={{ marginTop: 24 }}>
+                <Card title="装箱二维码">
+                  <QRCodeGenerator
+                    qrcodeType="BOX"
+                    data={{
+                      box_uuid: currentBinding.box_no || currentBinding.uuid || '',
+                      box_no: currentBinding.box_no || '',
+                      box_name: currentBinding.product_name || currentBinding.box_no || '',
+                    }}
+                    autoGenerate={true}
+                  />
+                </Card>
+              </div>
+            )}
+          </>
+        }
       />
     </ListPageTemplate>
   );

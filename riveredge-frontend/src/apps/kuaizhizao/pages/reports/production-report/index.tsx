@@ -14,6 +14,8 @@ import { DownloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined
 import { UniTable } from '../../../../../components/uni-table';
 import { Line, Bar, Column } from '@ant-design/charts';
 import { ListPageTemplate, StatCard } from '../../../../../components/layout-templates/ListPageTemplate';
+import { getProductionReport, exportReport } from '../../../services/reports';
+import dayjs from 'dayjs';
 
 // 生产报表接口定义
 interface ProductionReportItem {
@@ -50,7 +52,11 @@ const ProductionReportPage: React.FC = () => {
 
   // 报表参数状态
   const [reportType, setReportType] = useState<'performance' | 'efficiency' | 'analysis'>('performance');
-  const [dateRange, setDateRange] = useState<[string, string]>(['2025-01-01', '2025-12-31']);
+  const [dateRange, setDateRange] = useState<[string, string]>([
+    dayjs().subtract(30, 'day').format('YYYY-MM-DD'),
+    dayjs().format('YYYY-MM-DD')
+  ]);
+  const [loading, setLoading] = useState(false);
 
   // 统计数据状态
   const [stats, setStats] = useState({
@@ -238,8 +244,20 @@ const ProductionReportPage: React.FC = () => {
   };
 
   // 处理导出
-  const handleExport = () => {
-    messageApi.success('报表导出功能开发中...');
+  const handleExport = async () => {
+    try {
+      setLoading(true);
+      await exportReport('production', {
+        report_type: reportType === 'performance' ? 'completion' : reportType === 'efficiency' ? 'efficiency' : 'reporting',
+        date_start: dateRange[0],
+        date_end: dateRange[1],
+      });
+      messageApi.success('报表导出成功');
+    } catch (error: any) {
+      messageApi.error(error.message || '报表导出失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 处理报表类型切换
@@ -302,7 +320,7 @@ const ProductionReportPage: React.FC = () => {
 
           <span>时间范围：</span>
           <DatePicker.RangePicker
-            value={dateRange.map(date => date ? new Date(date) : null) as any}
+            value={dateRange.map(date => date ? dayjs(date) : null) as any}
             onChange={(dates) => {
               if (dates) {
                 setDateRange([
@@ -328,75 +346,64 @@ const ProductionReportPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           request={async (params) => {
-            // 模拟数据
-            const mockData: ProductionReportItem[] = [
-              {
-                id: 1,
-                workOrderCode: 'WO20241201001',
-                productName: '产品A',
-                plannedQuantity: 100,
-                actualQuantity: 98,
-                qualifiedQuantity: 96,
-                defectiveQuantity: 2,
-                completionRate: 98,
-                qualifiedRate: 98.0,
-                plannedStartDate: '2025-12-01',
-                actualStartDate: '2025-12-01',
-                plannedEndDate: '2025-12-03',
-                actualEndDate: '2025-12-03',
-                plannedDuration: 24,
-                actualDuration: 26,
-                efficiency: 92.3,
-                status: 'completed',
-                delayDays: 0,
-              },
-              {
-                id: 2,
-                workOrderCode: 'WO20241201002',
-                productName: '产品B',
-                plannedQuantity: 50,
-                actualQuantity: 52,
-                qualifiedQuantity: 51,
-                defectiveQuantity: 1,
-                completionRate: 104,
-                qualifiedRate: 98.1,
-                plannedStartDate: '2025-12-02',
-                actualStartDate: '2025-12-02',
-                plannedEndDate: '2025-12-04',
-                actualEndDate: '2025-12-05',
-                plannedDuration: 16,
-                actualDuration: 18,
-                efficiency: 95.8,
-                status: 'completed',
-                delayDays: 1,
-              },
-              {
-                id: 3,
-                workOrderCode: 'WO20241201003',
-                productName: '产品C',
-                plannedQuantity: 80,
-                actualQuantity: 45,
-                qualifiedQuantity: 43,
-                defectiveQuantity: 2,
-                completionRate: 56.3,
-                qualifiedRate: 95.6,
-                plannedStartDate: '2025-12-03',
-                actualStartDate: '2025-12-03',
-                plannedEndDate: '2025-12-05',
-                actualEndDate: undefined,
-                plannedDuration: 20,
-                actualDuration: 15,
-                efficiency: 88.9,
-                status: 'in_progress',
-                delayDays: 0,
-              },
-            ];
+            try {
+              setLoading(true);
+              const response = await getProductionReport({
+                report_type: 'completion',
+                date_start: dateRange[0],
+                date_end: dateRange[1],
+                ...params,
+              });
 
-            return {
-              data: mockData,
-              success: true,
-              total: mockData.length,
-            };
+              // 更新统计数据
+              if (response.summary) {
+                setStats({
+                  totalWorkOrders: response.summary.totalWorkOrders || 0,
+                  completedWorkOrders: response.summary.completedWorkOrders || 0,
+                  onTimeCompletion: response.summary.onTimeCompletion || 0,
+                  averageEfficiency: response.summary.averageEfficiency || 0,
+                  averageQualifiedRate: response.summary.averageQualifiedRate || 0,
+                  totalDelayDays: response.summary.totalDelayDays || 0,
+                });
+              }
+
+              // 转换数据格式
+              const data = (response.data || []).map((item, index) => ({
+                id: index + 1,
+                ...item,
+                work_order_code: item.workOrderCode,
+                product_name: item.productName,
+                planned_quantity: item.plannedQuantity,
+                actual_quantity: item.actualQuantity,
+                qualified_quantity: item.qualifiedQuantity,
+                defective_quantity: item.defectiveQuantity,
+                completion_rate: item.completionRate,
+                qualified_rate: item.qualifiedRate,
+                planned_start_date: item.plannedStartDate,
+                actual_start_date: item.actualStartDate,
+                planned_end_date: item.plannedEndDate,
+                actual_end_date: item.actualEndDate,
+                planned_duration: item.plannedDuration,
+                actual_duration: item.actualDuration,
+                efficiency: item.efficiency,
+                delay_days: item.delayDays,
+              }));
+
+              return {
+                data,
+                success: true,
+                total: response.summary?.totalWorkOrders || data.length,
+              };
+            } catch (error: any) {
+              messageApi.error(error.message || '加载生产报表失败');
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            } finally {
+              setLoading(false);
+            }
           }}
           rowSelection={{
             selectedRowKeys,

@@ -39,4 +39,14 @@ export const packingBindingApi = {
       method: 'GET',
     });
   },
+
+  // 生成装箱二维码
+  generateQRCode: async (boxUuid: string, boxNo: string, productName?: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateBox({
+      box_uuid: boxUuid,
+      box_no: boxNo,
+      box_name: productName || boxNo,
+    });
+  },
 };

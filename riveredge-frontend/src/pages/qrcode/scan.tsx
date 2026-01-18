@@ -56,7 +56,7 @@ const QRCodeScanPage: React.FC = () => {
           // 工序码：跳转到工序详情
           const operationUuid = data.operation_uuid;
           if (operationUuid) {
-            navigate(`/apps/kuaizhizao/production-execution/work-orders?operationUuid=${operationUuid}&action=detail`);
+            navigate(`/apps/master-data/process/operations?operationUuid=${operationUuid}&action=detail`);
             messageApi.success('正在跳转到工序详情...');
           } else {
             messageApi.error('工序二维码数据不完整');

@@ -418,6 +418,19 @@ export const materialBatchApi = {
   trace: async (uuid: string): Promise<any> => {
     return api.get(`/apps/master-data/materials/batches/${uuid}/trace`);
   },
+
+  /**
+   * 生成批号追溯二维码
+   */
+  generateTraceQRCode: async (batchUuid: string, batchNo: string, materialName?: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateTrace({
+      trace_uuid: batchUuid,
+      trace_type: 'batch',
+      trace_code: batchNo,
+      trace_name: materialName || batchNo,
+    });
+  },
 };
 
 /**
@@ -473,6 +486,19 @@ export const materialSerialApi = {
    */
   trace: async (uuid: string): Promise<any> => {
     return api.get(`/apps/master-data/materials/serials/${uuid}/trace`);
+  },
+
+  /**
+   * 生成序列号追溯二维码
+   */
+  generateTraceQRCode: async (serialUuid: string, serialNo: string, materialName?: string): Promise<any> => {
+    const { qrcodeApi } = await import('../../../services/qrcode');
+    return qrcodeApi.generateTrace({
+      trace_uuid: serialUuid,
+      trace_type: 'serial',
+      trace_code: serialNo,
+      trace_name: materialName || serialNo,
+    });
   },
 };
 

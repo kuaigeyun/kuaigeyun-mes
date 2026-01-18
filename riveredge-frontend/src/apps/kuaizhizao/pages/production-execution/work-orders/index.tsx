@@ -12,12 +12,14 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider, Input, Timeline } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
+import { qrcodeApi } from '../../../../../services/qrcode';
 import { workOrderApi, reworkOrderApi, outsourceOrderApi } from '../../../services/production';
 import { stateTransitionApi, AvailableTransition, StateTransitionLog } from '../../../services/state-transition';
 import { listSalesOrders } from '../../../services/sales';
@@ -572,6 +574,53 @@ const WorkOrdersPage: React.FC = () => {
         </div>
       </div>
     );
+  };
+
+  /**
+   * 处理批量生成二维码
+   */
+  const handleBatchGenerateQRCode = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要生成二维码的工单');
+      return;
+    }
+
+    try {
+      // 通过API获取选中的工单数据
+      const workOrders = await Promise.all(
+        selectedRowKeys.map(async (key) => {
+          try {
+            return await workOrderApi.get(key.toString());
+          } catch (error) {
+            console.error(`获取工单失败: ${key}`, error);
+            return null;
+          }
+        })
+      );
+      
+      const validWorkOrders = workOrders.filter((wo) => wo !== null) as WorkOrder[];
+
+      if (validWorkOrders.length === 0) {
+        messageApi.error('无法获取选中的工单数据');
+        return;
+      }
+
+      // 生成二维码
+      const qrcodePromises = validWorkOrders.map((workOrder) =>
+        qrcodeApi.generateWorkOrder({
+          work_order_uuid: workOrder.id?.toString() || '',
+          work_order_code: workOrder.code || '',
+          work_order_name: workOrder.name || '',
+        })
+      );
+
+      const qrcodes = await Promise.all(qrcodePromises);
+      messageApi.success(`成功生成 ${qrcodes.length} 个工单二维码`);
+      
+      // TODO: 可以打开一个Modal显示所有二维码，或者提供下载功能
+    } catch (error: any) {
+      messageApi.error(`批量生成二维码失败: ${error.message || '未知错误'}`);
+    }
   };
 
   /**
@@ -1894,6 +1943,14 @@ const WorkOrdersPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <Button
+              key="batch-qrcode"
+              icon={<QrcodeOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchGenerateQRCode}
+            >
+              批量生成二维码
+            </Button>,
+            <Button
               key="create"
               type="primary"
               icon={<PlusOutlined />}
@@ -2558,6 +2615,23 @@ const WorkOrdersPage: React.FC = () => {
                 />
               </Card>
             </div>
+
+            {/* 工单二维码 */}
+            {workOrderDetail && (
+              <div style={{ padding: '16px 0' }}>
+                <Card title="工单二维码">
+                  <QRCodeGenerator
+                    qrcodeType="WO"
+                    data={{
+                      work_order_uuid: workOrderDetail.id?.toString() || '',
+                      work_order_code: workOrderDetail.code || '',
+                      work_order_name: workOrderDetail.name || '',
+                    }}
+                    autoGenerate={true}
+                  />
+                </Card>
+              </div>
+            )}
 
             {/* 状态流转历史 */}
             <div style={{ padding: '16px 0' }}>

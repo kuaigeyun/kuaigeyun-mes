@@ -6,6 +6,7 @@
  */
 
 import { CurrentUser } from './types/api';
+import { hasPermission, hasAnyPermission, hasAllPermissions } from './utils/permission';
 
 /**
  * 权限定义
@@ -43,6 +44,30 @@ export default function access(initialState: { currentUser?: CurrentUser } | und
      * 是否拥有角色管理权限
      */
     canManageRoles: currentUser?.is_infra_admin === true || currentUser?.is_tenant_admin === true,
+    
+    /**
+     * 检查用户是否具有指定权限
+     * 
+     * @param permissionCode - 权限代码（格式：resource:action）
+     * @returns 是否具有权限
+     */
+    hasPermission: (permissionCode: string) => hasPermission(currentUser, permissionCode),
+    
+    /**
+     * 检查用户是否具有任意一个权限
+     * 
+     * @param permissionCodes - 权限代码列表
+     * @returns 是否具有任意一个权限
+     */
+    hasAnyPermission: (permissionCodes: string[]) => hasAnyPermission(currentUser, permissionCodes),
+    
+    /**
+     * 检查用户是否具有所有权限
+     * 
+     * @param permissionCodes - 权限代码列表
+     * @returns 是否具有所有权限
+     */
+    hasAllPermissions: (permissionCodes: string[]) => hasAllPermissions(currentUser, permissionCodes),
   };
 }
 

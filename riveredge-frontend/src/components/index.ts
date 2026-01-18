@@ -12,6 +12,10 @@ export { UniTable, default as UniTableDefault, generateImportConfigFromColumns }
 export type { UniTableProps } from './uni-table';
 export { default as UniImport } from './uni-import';
 export type { UniImportProps } from './uni-import';
+export { default as UniExport } from './uni-export';
+export type { UniExportProps } from './uni-export';
+export { default as Print } from './print';
+export type { PrintProps } from './print';
 export { default as UniTabs } from './uni-tabs';
 export type { TabItem } from './uni-tabs';
 export { default as FileUploadComponent } from './file-upload';
