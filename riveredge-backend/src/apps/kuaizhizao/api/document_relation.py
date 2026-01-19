@@ -10,7 +10,7 @@ Date: 2025-01-14
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any
 
-from core.dependencies import get_current_user, get_current_tenant
+from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from apps.kuaizhizao.schemas.document_relation import DocumentRelationListResponse, DocumentTraceResponse

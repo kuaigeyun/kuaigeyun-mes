@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
 from loguru import logger
 
-from core.dependencies import get_current_user, get_current_tenant
+from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.kuaizhizao.services.computation_config_service import ComputationConfigService
 from apps.kuaizhizao.schemas.computation_config import (
