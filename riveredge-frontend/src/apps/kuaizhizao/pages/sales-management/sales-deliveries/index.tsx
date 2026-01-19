@@ -14,6 +14,7 @@ import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOut
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { downloadFile } from '../../../services/common';
@@ -669,6 +670,14 @@ const SalesDeliveriesPage: React.FC = () => {
         formRef={formRef}
         grid={true}
       >
+        <CodeField
+          pageCode="kuaizhizao-sales-delivery"
+          name="delivery_code"
+          label="销售发货单编码"
+          required={true}
+          autoGenerateOnCreate={!isEdit}
+          context={{}}
+        />
         <ProFormText
           name="sales_order_code"
           label="销售订单编号"

@@ -14,6 +14,7 @@ import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { reworkOrderApi } from '../../../services/production';
 
 interface ReworkOrder {
@@ -498,6 +499,14 @@ const ReworkOrdersPage: React.FC = () => {
         formRef={formRef}
         {...MODAL_CONFIG}
       >
+        <CodeField
+          pageCode="kuaizhizao-production-rework-order"
+          name="code"
+          label="返工单编码"
+          required={true}
+          autoGenerateOnCreate={!isEdit}
+          context={{}}
+        />
         <ProFormText
           name="original_work_order_uuid"
           label="原工单UUID"

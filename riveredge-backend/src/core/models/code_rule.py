@@ -54,6 +54,7 @@ class CodeRule(BaseModel):
     
     is_system = fields.BooleanField(default=False, description="是否系统规则（系统规则不可删除）")
     is_active = fields.BooleanField(default=True, description="是否启用")
+    allow_manual_edit = fields.BooleanField(default=True, description="允许手动填写（如果为True，用户可以手动修改自动生成的编码）")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

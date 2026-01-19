@@ -21,6 +21,7 @@ export interface CodeRule {
   seq_reset_rule?: 'never' | 'daily' | 'monthly' | 'yearly';
   is_system: boolean;
   is_active: boolean;
+  allow_manual_edit?: boolean;
   tenant_id: number;
   created_at: string;
   updated_at: string;
@@ -230,6 +231,7 @@ export interface CodeRulePageConfigResponse {
   module_icon?: string;
   auto_generate?: boolean;
   rule_code?: string;
+  allow_manual_edit?: boolean;
   available_fields?: Array<{
     field_name: string;
     field_label: string;
@@ -251,6 +253,7 @@ export interface CodeRulePageConfig {
   moduleIcon?: string;
   autoGenerate?: boolean;
   ruleCode?: string;
+  allowManualEdit?: boolean;
   availableFields?: Array<{
     fieldName: string;
     fieldLabel: string;
@@ -279,6 +282,7 @@ export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
     moduleIcon: page.module_icon,
     autoGenerate: page.auto_generate ?? false,
     ruleCode: page.rule_code,
+    allowManualEdit: page.allow_manual_edit ?? true,
     availableFields: page.available_fields?.map(field => ({
       fieldName: field.field_name,
       fieldLabel: field.field_label,
@@ -288,3 +292,38 @@ export async function getCodeRulePages(): Promise<CodeRulePageConfig[]> {
   }));
 }
 
+/**
+ * 获取指定页面的编码规则配置
+ * 
+ * 根据页面代码获取编码规则配置，包括是否自动生成、是否允许手动填写等。
+ * 
+ * @param pageCode - 页面代码（如：kuaizhizao-sales-order）
+ * @returns 页面编码规则配置（已转换为camelCase格式）
+ */
+export async function getCodeRulePageConfig(pageCode: string): Promise<CodeRulePageConfig | null> {
+  try {
+    const page = await apiRequest<CodeRulePageConfigResponse>(`/core/code-rules/pages/${pageCode}`);
+    // 转换字段名从 snake_case 到 camelCase
+    return {
+      pageCode: page.page_code,
+      pageName: page.page_name,
+      pagePath: page.page_path,
+      codeField: page.code_field,
+      codeFieldLabel: page.code_field_label,
+      module: page.module,
+      moduleIcon: page.module_icon,
+      autoGenerate: page.auto_generate ?? false,
+      ruleCode: page.rule_code,
+      allowManualEdit: page.allow_manual_edit ?? true,
+      availableFields: page.available_fields?.map(field => ({
+        fieldName: field.field_name,
+        fieldLabel: field.field_label,
+        fieldType: field.field_type,
+        description: field.description,
+      })),
+    };
+  } catch (error) {
+    console.error('获取页面编码规则配置失败:', error);
+    return null;
+  }
+}

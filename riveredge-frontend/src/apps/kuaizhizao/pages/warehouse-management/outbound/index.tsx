@@ -10,6 +10,7 @@ import { App, Button, Tag, Space, Modal, message, Card } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 
 // 统一的出库单接口（结合生产领料和销售出库）
@@ -57,6 +58,7 @@ const OutboundPage: React.FC = () => {
   // Modal 相关状态（创建出库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+  const [outboundType, setOutboundType] = useState<string>('production');
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -66,6 +68,7 @@ const OutboundPage: React.FC = () => {
    * 处理创建出库单
    */
   const handleCreate = () => {
+    setOutboundType('production'); // 重置为默认类型
     setCreateModalVisible(true);
   };
 
@@ -323,7 +326,31 @@ const OutboundPage: React.FC = () => {
             { label: '销售出库', value: 'sales' },
             { label: '退货出库', value: 'return' },
           ]}
+          fieldProps={{
+            onChange: (value: string) => setOutboundType(value),
+          }}
         />
+        {/* 根据出库类型显示不同的编码字段 */}
+        {outboundType === 'production' && (
+          <CodeField
+            pageCode="kuaizhizao-warehouse-inbound"
+            name="picking_code"
+            label="生产领料单编码"
+            required={true}
+            autoGenerateOnCreate={true}
+            context={{}}
+          />
+        )}
+        {outboundType === 'sales' && (
+          <CodeField
+            pageCode="kuaizhizao-warehouse-sales-outbound"
+            name="delivery_code"
+            label="销售出库单编码"
+            required={true}
+            autoGenerateOnCreate={true}
+            context={{}}
+          />
+        )}
         <ProFormSelect
           name="warehouse"
           label="出库仓库"

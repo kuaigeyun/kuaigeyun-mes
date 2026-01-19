@@ -10,6 +10,7 @@ import { App, Button, Tag, Space, Modal, message, Form, Card } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { warehouseApi } from '../../../services/production';
 
 // 统一的入库单接口（结合采购入库和成品入库）
@@ -55,6 +56,7 @@ const InboundPage: React.FC = () => {
   // Modal 相关状态（创建入库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+  const [inboundType, setInboundType] = useState<string>('purchase');
 
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -64,6 +66,7 @@ const InboundPage: React.FC = () => {
    * 处理创建入库单
    */
   const handleCreate = () => {
+    setInboundType('purchase'); // 重置为默认类型
     setCreateModalVisible(true);
   };
 
@@ -321,7 +324,31 @@ const InboundPage: React.FC = () => {
             { label: '退货入库', value: 'return' },
             { label: '初始入库', value: 'initial' },
           ]}
+          fieldProps={{
+            onChange: (value: string) => setInboundType(value),
+          }}
         />
+        {/* 根据入库类型显示不同的编码字段 */}
+        {inboundType === 'purchase' && (
+          <CodeField
+            pageCode="kuaizhizao-purchase-receipt"
+            name="receipt_code"
+            label="采购入库单编码"
+            required={true}
+            autoGenerateOnCreate={true}
+            context={{}}
+          />
+        )}
+        {(inboundType === 'production' || inboundType === 'initial') && (
+          <CodeField
+            pageCode="kuaizhizao-warehouse-finished-goods-inbound"
+            name="receipt_code"
+            label="成品入库单编码"
+            required={true}
+            autoGenerateOnCreate={true}
+            context={{}}
+          />
+        )}
         <ProFormSelect
           name="warehouse"
           label="入库仓库"
