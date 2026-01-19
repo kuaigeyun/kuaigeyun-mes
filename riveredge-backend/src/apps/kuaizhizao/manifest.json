@@ -17,22 +17,16 @@
                 "icon": "chartLine",
                 "sort_order": 1,
                 "children": [{
-                        "title": "销售预测",
-                        "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
-                        "permission": "kuaizhizao:sales-forecast:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "销售订单",
-                        "path": "/apps/kuaizhizao/sales-management/sales-orders",
-                        "permission": "kuaizhizao:sales-order:view",
-                        "sort_order": 2
-                    },
-                    {
                         "title": "销售出库",
                         "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
                         "permission": "kuaizhizao:sales-delivery:view",
-                        "sort_order": 3
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "销售退货",
+                        "path": "/apps/kuaizhizao/sales-management/sales-returns",
+                        "permission": "kuaizhizao:sales-return:view",
+                        "sort_order": 2
                     }
                 ]
             },
@@ -47,10 +41,16 @@
                         "sort_order": 1
                     },
                     {
+                        "title": "需求计算",
+                        "path": "/apps/kuaizhizao/plan-management/demand-computation",
+                        "permission": "kuaizhizao:demand-computation:view",
+                        "sort_order": 2
+                    },
+                    {
                         "title": "生产计划",
                         "path": "/apps/kuaizhizao/plan-management/production-plans",
                         "permission": "kuaizhizao:production-plan:view",
-                        "sort_order": 2
+                        "sort_order": 3
                     },
                     {
                         "title": "排程管理",
@@ -75,6 +75,12 @@
                         "path": "/apps/kuaizhizao/purchase-management/purchase-receipts",
                         "permission": "kuaizhizao:purchase-receipt:view",
                         "sort_order": 2
+                    },
+                    {
+                        "title": "采购退货",
+                        "path": "/apps/kuaizhizao/purchase-management/purchase-returns",
+                        "permission": "kuaizhizao:purchase-return:view",
+                        "sort_order": 3
                     }
                 ]
             },
@@ -141,6 +147,12 @@
                         "path": "/apps/kuaizhizao/warehouse-management/document-efficiency",
                         "permission": "kuaizhizao:document-efficiency:view",
                         "sort_order": 10
+                    },
+                    {
+                        "title": "补货建议",
+                        "path": "/apps/kuaizhizao/warehouse-management/replenishment-suggestions",
+                        "permission": "kuaizhizao:replenishment-suggestion:view",
+                        "sort_order": 11
                     }
                 ]
             },
@@ -231,6 +243,12 @@
                         "path": "/apps/kuaizhizao/production-execution/exception-statistics",
                         "permission": "kuaizhizao:exception-statistics:view",
                         "sort_order": 9
+                    },
+                    {
+                        "title": "异常处理",
+                        "path": "/apps/kuaizhizao/production-execution/exception-process",
+                        "permission": "kuaizhizao:exception-process:view",
+                        "sort_order": 10
                     }
                 ]
             },
@@ -249,6 +267,48 @@
                         "path": "/apps/kuaizhizao/cost-management/cost-calculations",
                         "permission": "kuaizhizao:cost-calculation:view",
                         "sort_order": 2
+                    },
+                    {
+                        "title": "生产成本",
+                        "path": "/apps/kuaizhizao/cost-management/production-cost",
+                        "permission": "kuaizhizao:production-cost:view",
+                        "sort_order": 3
+                    },
+                    {
+                        "title": "委外成本",
+                        "path": "/apps/kuaizhizao/cost-management/outsource-cost",
+                        "permission": "kuaizhizao:outsource-cost:view",
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "采购成本",
+                        "path": "/apps/kuaizhizao/cost-management/purchase-cost",
+                        "permission": "kuaizhizao:purchase-cost:view",
+                        "sort_order": 5
+                    },
+                    {
+                        "title": "质量成本",
+                        "path": "/apps/kuaizhizao/cost-management/quality-cost",
+                        "permission": "kuaizhizao:quality-cost:view",
+                        "sort_order": 6
+                    },
+                    {
+                        "title": "成本对比",
+                        "path": "/apps/kuaizhizao/cost-management/cost-comparison",
+                        "permission": "kuaizhizao:cost-comparison:view",
+                        "sort_order": 7
+                    },
+                    {
+                        "title": "成本优化",
+                        "path": "/apps/kuaizhizao/cost-management/cost-optimization",
+                        "permission": "kuaizhizao:cost-optimization:view",
+                        "sort_order": 8
+                    },
+                    {
+                        "title": "成本报表",
+                        "path": "/apps/kuaizhizao/cost-management/cost-report",
+                        "permission": "kuaizhizao:cost-report:view",
+                        "sort_order": 9
                     }
                 ]
             },
@@ -279,6 +339,18 @@
                         "path": "/apps/kuaizhizao/equipment-management/molds",
                         "permission": "kuaizhizao:mold:view",
                         "sort_order": 4
+                    },
+                    {
+                        "title": "设备状态",
+                        "path": "/apps/kuaizhizao/equipment-management/equipment-status",
+                        "permission": "kuaizhizao:equipment-status:view",
+                        "sort_order": 5
+                    },
+                    {
+                        "title": "维护提醒",
+                        "path": "/apps/kuaizhizao/equipment-management/maintenance-reminders",
+                        "permission": "kuaizhizao:maintenance-reminder:view",
+                        "sort_order": 6
                     }
                 ]
             },

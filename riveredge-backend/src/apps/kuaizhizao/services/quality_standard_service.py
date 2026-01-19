@@ -24,7 +24,7 @@ from apps.kuaizhizao.schemas.quality import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.infrastructure.code_rule.code_rule_service import CodeRuleService
+from core.services.business.code_rule_service import CodeRuleService
 
 
 class QualityStandardService(AppBaseService[QualityStandard]):

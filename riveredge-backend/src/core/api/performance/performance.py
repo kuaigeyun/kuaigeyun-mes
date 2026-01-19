@@ -13,7 +13,8 @@ from loguru import logger
 
 from core.middleware.performance_middleware import PerformanceMiddleware
 from infra.infrastructure.cache.cache_manager import cache_manager
-from infra.api.deps.deps import get_current_user, get_current_tenant
+from infra.api.deps.deps import get_current_user
+from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 
 # 创建路由

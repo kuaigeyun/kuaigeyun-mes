@@ -7,6 +7,7 @@ import { Routes, Route } from 'react-router-dom';
 
 // 计划管理页面
 import DemandManagementPage from './pages/plan-management/demand-management';
+import DemandComputationPage from './pages/plan-management/demand-computation';
 // TODO: MRP和LRP已合并为统一需求计算，相关页面已删除
 // import MRPComputationPage from './pages/plan-management/mrp-computation';
 // import LRPComputationPage from './pages/plan-management/lrp-computation';
@@ -94,6 +95,7 @@ const KuaizhizaoApp: React.FC = () => {
     <Routes>
       {/* 计划管理路由 */}
       <Route path="plan-management/demand-management" element={<DemandManagementPage />} />
+      <Route path="plan-management/demand-computation" element={<DemandComputationPage />} />
       {/* TODO: MRP和LRP路由已移除，已合并为统一需求计算 */}
       {/* <Route path="plan-management/mrp-computation" element={<MRPComputationPage />} /> */}
       {/* <Route path="plan-management/lrp-computation" element={<LRPComputationPage />} /> */}

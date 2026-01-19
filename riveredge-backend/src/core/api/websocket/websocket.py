@@ -10,7 +10,6 @@ Date: 2026-01-27
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Cookie
 from typing import Optional
 from loguru import logger
-import jwt
 from datetime import datetime
 
 from core.services.websocket.websocket_service import WebSocketService

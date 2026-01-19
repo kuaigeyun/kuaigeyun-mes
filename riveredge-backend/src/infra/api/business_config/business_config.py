@@ -20,7 +20,8 @@ from infra.schemas.business_config import (
     ConfigTemplateApplyRequest,
 )
 from infra.services.business_config_service import BusinessConfigService
-from infra.api.deps.deps import get_current_user, get_current_tenant
+from infra.api.deps.deps import get_current_user
+from core.api.deps.deps import get_current_tenant
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 

@@ -81,10 +81,28 @@
                         "sort_order": 2
                     },
                     {
+                        "title": "编码映射",
+                        "path": "/apps/master-data/materials/code-mapping",
+                        "permission": "master-data:material:code-mapping:view",
+                        "sort_order": 3
+                    },
+                    {
                         "title": "变体属性",
                         "path": "/apps/master-data/materials/variant-attributes",
                         "permission": "master-data:material:variant-attribute:view",
-                        "sort_order": 3
+                        "sort_order": 4
+                    },
+                    {
+                        "title": "批号管理",
+                        "path": "/apps/master-data/materials/batches",
+                        "permission": "master-data:material:batch:view",
+                        "sort_order": 5
+                    },
+                    {
+                        "title": "序列号管理",
+                        "path": "/apps/master-data/materials/serials",
+                        "permission": "master-data:material:serial:view",
+                        "sort_order": 6
                     }
                 ]
             },
