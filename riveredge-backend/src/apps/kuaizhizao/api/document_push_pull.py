@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from core.dependencies import get_current_user, get_current_tenant
+from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError

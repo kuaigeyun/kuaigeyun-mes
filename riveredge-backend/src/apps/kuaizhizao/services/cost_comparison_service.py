@@ -107,12 +107,12 @@ class CostComparisonService:
             tenant_id=tenant_id,
             material=material,
             source_type=source_type,
+            calculation_date=calculation_date or date.today(),
             work_order_id=work_order_id,
             purchase_order_id=purchase_order_id,
             purchase_order_item_id=purchase_order_item_id,
             outsource_work_order_id=outsource_work_order_id,
             quantity=quantity,
-            calculation_date=calculation_date or date.today(),
             created_by=created_by
         )
         
@@ -239,12 +239,12 @@ class CostComparisonService:
         tenant_id: int,
         material: Material,
         source_type: str,
+        calculation_date: date,
         work_order_id: Optional[int] = None,
         purchase_order_id: Optional[int] = None,
         purchase_order_item_id: Optional[int] = None,
         outsource_work_order_id: Optional[int] = None,
         quantity: Optional[Decimal] = None,
-        calculation_date: date,
         created_by: Optional[int] = None
     ) -> Dict[str, Any]:
         """
