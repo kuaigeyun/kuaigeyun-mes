@@ -26,6 +26,7 @@ class CodeRuleBase(BaseModel):
     seq_reset_rule: Optional[str] = Field(None, description="序号重置规则：never、daily、monthly、yearly")
     is_system: bool = Field(default=False, description="是否系统规则")
     is_active: bool = Field(default=True, description="是否启用")
+    allow_manual_edit: bool = Field(default=True, description="允许手动填写（如果为True，用户可以手动修改自动生成的编码）")
     
     @field_validator("seq_reset_rule")
     @classmethod
@@ -69,6 +70,7 @@ class CodeRuleUpdate(BaseModel):
     seq_step: Optional[int] = Field(None, ge=1, description="序号步长")
     seq_reset_rule: Optional[str] = Field(None, description="序号重置规则：never、daily、monthly、yearly")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    allow_manual_edit: Optional[bool] = Field(None, description="允许手动填写")
     
     @field_validator("seq_reset_rule")
     @classmethod
@@ -151,5 +153,6 @@ class CodeRulePageConfigResponse(BaseModel):
     module_icon: Optional[str] = Field(None, description="模块图标")
     auto_generate: bool = Field(default=False, description="是否启用自动编码")
     rule_code: Optional[str] = Field(None, description="关联的编码规则代码")
+    allow_manual_edit: bool = Field(default=True, description="允许手动填写（如果为True，用户可以手动修改自动生成的编码）")
     available_fields: Optional[list[CodeRulePageFieldConfig]] = Field(None, description="可用字段列表（用于字段引用）")
 

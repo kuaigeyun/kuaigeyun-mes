@@ -100,6 +100,54 @@ async def list_code_rule_pages():
     return [CodeRulePageConfigResponse(**page) for page in CODE_RULE_PAGES]
 
 
+@router.get("/pages/{page_code}", response_model=CodeRulePageConfigResponse)
+async def get_page_config(
+    page_code: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取指定页面的编码规则配置
+    
+    根据页面代码获取编码规则配置，包括是否自动生成、是否允许手动填写等。
+    
+    Args:
+        page_code: 页面代码（如：kuaizhizao-sales-order）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        CodeRulePageConfigResponse: 页面编码规则配置
+        
+    Raises:
+        HTTPException: 当页面不存在时抛出
+    """
+    # 查找页面配置
+    page_config = None
+    for page in CODE_RULE_PAGES:
+        if page.get("page_code") == page_code:
+            page_config = page.copy()
+            break
+    
+    if not page_config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"页面配置不存在: {page_code}"
+        )
+    
+    # 如果配置了编码规则，获取规则详情（包括 allow_manual_edit）
+    if page_config.get("rule_code"):
+        try:
+            rule = await CodeRuleService.get_rule_by_code(tenant_id, page_config["rule_code"])
+            if rule:
+                # 使用规则中的 allow_manual_edit 覆盖页面配置
+                page_config["allow_manual_edit"] = rule.allow_manual_edit
+                page_config["auto_generate"] = rule.is_active  # 规则启用时自动生成
+        except Exception:
+            # 如果规则不存在，使用页面配置的默认值
+            pass
+    
+    return CodeRulePageConfigResponse(**page_config)
+
+
 @router.get("/{uuid}", response_model=CodeRuleResponse)
 async def get_rule(
     uuid: str,

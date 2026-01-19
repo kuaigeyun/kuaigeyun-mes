@@ -13,6 +13,7 @@ import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table, Steps, 
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
@@ -605,6 +606,14 @@ const PurchaseOrdersPage: React.FC = () => {
         formRef={formRef}
         grid={true}
       >
+        <CodeField
+          pageCode="kuaizhizao-purchase-order"
+          name="order_code"
+          label="采购订单编码"
+          required={true}
+          autoGenerateOnCreate={!isEdit}
+          context={{}}
+        />
         <ProFormText
           name="supplier_name"
           label="供应商名称"

@@ -28,10 +28,9 @@ import { operationApi, processRouteApi } from '../../../../master-data/services/
 import { workshopApi } from '../../../../master-data/services/factory';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
-import { getCodeRuleList, generateCode } from '../../../../../services/codeRule';
-import { getCodeRulePageConfig } from '../../../../../config/codeRulePages';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import CodeField from '../../../../../components/code-field';
 
 interface WorkOrder {
   id?: number;
@@ -78,8 +77,6 @@ const WorkOrdersPage: React.FC = () => {
 
   // 产品列表状态
   const [productList, setProductList] = useState<any[]>([]);
-  // 编码规则列表状态
-  const [codeRuleList, setCodeRuleList] = useState<any[]>([]);
   // 销售订单列表状态（MTO模式）
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
   // 生产模式状态（用于控制MTO相关字段显示）
@@ -104,64 +101,13 @@ const WorkOrdersPage: React.FC = () => {
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null);
   const formRef = useRef<any>(null);
 
-  // 初始化产品列表和编码规则列表
+  // 初始化产品列表
   useEffect(() => {
     const loadData = async () => {
       try {
         // 加载产品列表
         const products = await materialApi.list({ isActive: true });
         setProductList(products);
-        
-        // 加载编码规则列表（通过页面配置获取）
-        try {
-          // 1. 获取工单管理页面的配置（从静态配置获取）
-          const workOrderPageConfig = getCodeRulePageConfig('kuaizhizao-production-work-order');
-          console.log('工单管理页面配置:', workOrderPageConfig);
-          
-          // 2. 检查 localStorage 中是否有保存的配置（编码规则管理页面可能更新了配置）
-          let ruleCode = workOrderPageConfig?.ruleCode;
-          try {
-            const savedConfigs = localStorage.getItem('codeRulePageConfigs');
-            if (savedConfigs) {
-              const parsed = JSON.parse(savedConfigs) as any[];
-              const savedConfig = parsed.find((p: any) => p.pageCode === 'kuaizhizao-production-work-order');
-              if (savedConfig?.ruleCode) {
-                ruleCode = savedConfig.ruleCode;
-                console.log('从 localStorage 读取的 ruleCode:', ruleCode);
-              }
-            }
-          } catch (error) {
-            console.error('读取 localStorage 配置失败:', error);
-          }
-          
-          console.log('最终使用的 ruleCode:', ruleCode);
-          
-          if (ruleCode) {
-            // 3. 根据 ruleCode 查找编码规则
-            const codeRulesResponse = await getCodeRuleList({ page: 1, page_size: 1000, is_active: true });
-            const rules = Array.isArray(codeRulesResponse) ? codeRulesResponse : (codeRulesResponse?.items || []);
-            console.log('所有编码规则列表:', rules);
-            console.log('查找 ruleCode:', ruleCode);
-            
-            // 4. 查找匹配的编码规则
-            const workOrderRule = rules.find((rule: any) => rule.code === ruleCode);
-            
-            if (workOrderRule) {
-              setCodeRuleList([workOrderRule]);
-              console.log('✓ 成功加载工单编码规则:', workOrderRule);
-            } else {
-              console.warn(`✗ 未找到编码规则: ${ruleCode}`);
-              console.warn('可用的编码规则代码:', rules.map((r: any) => r.code));
-              setCodeRuleList([]);
-            }
-          } else {
-            console.warn('✗ 工单管理页面未配置编码规则代码');
-            setCodeRuleList([]);
-          }
-        } catch (error) {
-          console.error('获取编码规则列表失败:', error);
-          setCodeRuleList([]);
-        }
 
         // 加载工序列表
         try {
@@ -183,7 +129,6 @@ const WorkOrdersPage: React.FC = () => {
       } catch (error) {
         console.error('获取数据失败:', error);
         setProductList([]);
-        setCodeRuleList([]);
       }
     };
     loadData();
@@ -273,32 +218,6 @@ const WorkOrdersPage: React.FC = () => {
     setSelectedMaterialSourceInfo(null); // 清空物料来源信息
     setModalVisible(true);
     formRef.current?.resetFields();
-    
-    // 自动生成编码（如果有编码规则）
-    setTimeout(async () => {
-      if (codeRuleList.length > 0) {
-        try {
-          // 使用第一条编码规则生成编码
-          const rule = codeRuleList[0];
-          const context = {
-            prefix: `WO${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-          };
-          const result = await generateCode({
-            rule_code: rule.code,
-            context,
-          });
-          // 自动填充生成的编码
-          formRef.current?.setFieldsValue({
-            code_rule: rule.code,
-            code: result.code,
-          });
-        } catch (error) {
-          console.error('生成编码失败:', error);
-          messageApi.warning('自动生成编码失败，请手动填写');
-        }
-      }
-      // 如果没有编码规则，允许手工填写编码
-    }, 100);
   };
 
   /**
@@ -705,45 +624,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
       
-      // 移除显示字段（后端不需要）
-      delete values.code_rule_display;
-      
-      // 自动处理编码规则逻辑：
-      // 1. 工单编码是必填的
-      // 2. 如果有编码规则，必须使用编码规则生成的编码（不能手工填写）
-      // 3. 如果没有编码规则，必须手工填写编码
-      if (codeRuleList.length > 0) {
-        // 有编码规则，必须使用编码规则生成的编码
-        if (!values.code_rule) {
-          // 如果没有 code_rule，使用第一条规则
-          values.code_rule = codeRuleList[0].code;
-        }
-        if (!values.code) {
-          // 如果没有编码，尝试生成
-          try {
-            const rule = codeRuleList.find(r => r.code === values.code_rule) || codeRuleList[0];
-            const context = {
-              prefix: `WO${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-            };
-            const result = await generateCode({
-              rule_code: rule.code,
-              context,
-            });
-            values.code = result.code;
-          } catch (error) {
-            messageApi.error('生成编码失败，请重试');
-            throw new Error('生成编码失败');
-          }
-        }
-      } else {
-        // 没有编码规则，必须手工填写编码
-        if (!values.code) {
-          messageApi.error('请填写工单编码');
-          throw new Error('请填写工单编码');
-        }
-        // 手工填写编码时，删除 code_rule
-        delete values.code_rule;
-      }
+      // 工单编码由CodeField组件自动处理，无需额外逻辑
       
       // 确保生产模式：如果选择了销售订单，自动设置为MTO，否则为MTS
       if (values.sales_order_id) {
@@ -2022,33 +1903,14 @@ const WorkOrdersPage: React.FC = () => {
       >
         {/* 编码信息组 */}
         <Divider style={{ marginTop: 0 }}>编码信息</Divider>
-        {codeRuleList.length > 0 ? (
-          // 有编码规则，自动生成编码并填充（只读显示）
-          <>
-            {/* 隐藏字段，用于提交实际的 code_rule 值 */}
-            <ProFormText name="code_rule" initialValue={codeRuleList[0].code} hidden />
-            <ProFormText
-              name="code"
-              label="工单编码"
-              placeholder="编码将根据编码规则自动生成"
-              disabled={true}
-              rules={[{ required: true, message: '工单编码为必填项' }]}
-              extra="编码已根据编码规则自动生成"
-              colProps={{ span: 12 }}
-            />
-          </>
-        ) : (
-          // 没有编码规则，工单编码留空让用户填写
-          <ProFormText
-            name="code"
-            label="工单编码"
-            placeholder="请手工填写工单编码"
-            disabled={isEdit}
-            rules={[{ required: true, message: '请输入工单编码' }]}
-            extra="未配置编码规则，请手工填写工单编码"
-            colProps={{ span: 12 }}
-          />
-        )}
+        <CodeField
+          pageCode="kuaizhizao-production-work-order"
+          name="code"
+          label="工单编码"
+          required={true}
+          autoGenerateOnCreate={!isEdit}
+          context={{}}
+        />
 
         {/* 基本信息组 */}
         <Divider>基本信息</Divider>

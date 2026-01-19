@@ -14,6 +14,7 @@ import { App, Button, Tag, Space, Modal, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi } from '../../../services/production';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import dayjs from 'dayjs';
@@ -470,6 +471,15 @@ const OutsourceOrdersPage: React.FC = () => {
           formRef={formRef}
           {...MODAL_CONFIG}
         >
+          <CodeField
+            pageCode="kuaizhizao-production-outsource-order"
+            name="code"
+            label="委外单编码"
+            required={true}
+            autoGenerateOnCreate={!isEdit}
+            context={{}}
+            disabled={isEdit}
+          />
           <ProFormSelect
             name="supplier_id"
             label="供应商"
