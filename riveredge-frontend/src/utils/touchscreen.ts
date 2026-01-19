@@ -59,7 +59,6 @@ export function getTouchScreenMode(): TouchScreenMode {
     if (stored === 'enabled' || stored === 'disabled' || stored === 'auto') {
       return stored as TouchScreenMode;
     }
-  }
   } catch (error) {
     console.error('获取触屏模式设置失败:', error);
   }

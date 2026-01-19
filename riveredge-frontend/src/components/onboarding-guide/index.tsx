@@ -166,5 +166,7 @@ const OnboardingGuide: React.FC<OnboardingGuideProps> = ({
   );
 };
 
+// 同时提供命名导出和默认导出
+export { OnboardingGuide };
 export default OnboardingGuide;
 

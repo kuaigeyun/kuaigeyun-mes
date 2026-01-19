@@ -21,6 +21,8 @@ import BOMPage from './pages/materials/bom';
 import BOMDesignerPage from './pages/materials/bom/designer';
 import MaterialCodeMappingPage from './pages/materials/code-mapping';
 import VariantAttributesPage from './pages/materials/variant-attributes';
+import MaterialBatchesPage from './pages/materials/batches';
+import MaterialSerialsPage from './pages/materials/serials';
 
 // 工艺管理页面
 import DefectTypesPage from './pages/process/defect-types';
@@ -57,6 +59,8 @@ const MasterDataApp: React.FC = () => {
       <Route path="materials/bom/designer" element={<BOMDesignerPage />} />
       <Route path="materials/code-mapping" element={<MaterialCodeMappingPage />} />
       <Route path="materials/variant-attributes" element={<VariantAttributesPage />} />
+      <Route path="materials/batches" element={<MaterialBatchesPage />} />
+      <Route path="materials/serials" element={<MaterialSerialsPage />} />
 
       {/* 工艺管理路由 */}
       <Route path="process/defect-types" element={<DefectTypesPage />} />

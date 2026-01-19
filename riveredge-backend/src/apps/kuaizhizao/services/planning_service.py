@@ -20,8 +20,9 @@ from collections import defaultdict
 from apps.kuaizhizao.models.production_plan import ProductionPlan
 from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
 # 已废弃：MRPResult和LRPResult已合并为统一的需求计算模型
-# from apps.kuaizhizao.models.mrp_result import MRPResult
-# from apps.kuaizhizao.models.lrp_result import LRPResult
+# 但为了保持向后兼容性，暂时保留这些导入
+from apps.kuaizhizao.models.mrp_result import MRPResult
+from apps.kuaizhizao.models.lrp_result import LRPResult
 from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
 from apps.kuaizhizao.models.sales_order import SalesOrder
@@ -36,12 +37,13 @@ from apps.kuaizhizao.schemas.planning import (
     ProductionPlanCreate, ProductionPlanUpdate, ProductionPlanResponse, ProductionPlanListResponse,
     ProductionPlanItemCreate, ProductionPlanItemUpdate, ProductionPlanItemResponse,
     # 已废弃：MRP和LRP分离的Schema已废弃，应使用统一的需求计算Schema
+    # 但为了保持向后兼容性，暂时保留这些导入
     # MRP运算
-    # MRPResultCreate, MRPResultResponse, MRPResultListResponse,
-    # MRPComputationRequest, MRPComputationResult,
+    MRPResultCreate, MRPResultResponse, MRPResultListResponse,
+    MRPComputationRequest, MRPComputationResult,
     # LRP运算
-    # LRPResultCreate, LRPResultResponse, LRPResultListResponse,
-    # LRPComputationRequest, LRPComputationResult,
+    LRPResultCreate, LRPResultResponse, LRPResultListResponse,
+    LRPComputationRequest, LRPComputationResult,
 )
 from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderCreate, PurchaseOrderItemCreate,
