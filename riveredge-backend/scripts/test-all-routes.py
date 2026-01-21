@@ -14,19 +14,10 @@ from typing import List, Dict, Any
 from datetime import datetime
 import json
 
-# 添加src目录到Python路径
-backend_path = Path(__file__).parent / "riveredge-backend"
-if not backend_path.exists():
-    backend_path = Path(__file__).parent.parent / "riveredge-backend"
-
+# 添加src目录到Python路径（从backend目录运行）
+backend_path = Path(__file__).parent.parent  # scripts的父目录就是backend
 src_path = backend_path / "src"
-if src_path.exists():
-    sys.path.insert(0, str(src_path))
-else:
-    # 如果从backend目录运行，直接使用当前目录
-    backend_path = Path(__file__).parent
-    src_path = backend_path / "src"
-    sys.path.insert(0, str(src_path))
+sys.path.insert(0, str(src_path))
 
 from fastapi import FastAPI
 from httpx import AsyncClient
