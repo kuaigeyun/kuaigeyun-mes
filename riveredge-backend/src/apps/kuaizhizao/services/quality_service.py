@@ -1421,5 +1421,14 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         stats["qualified_quantity"] = float(stats["qualified_quantity"])
         stats["unqualified_quantity"] = float(stats["unqualified_quantity"])
 
+        # 转换 by_type 中的 Decimal 值为 float
+        for inspection_type_key, type_stats in stats["by_type"].items():
+            if "total_quantity" in type_stats:
+                type_stats["total_quantity"] = float(type_stats["total_quantity"])
+            if "qualified_quantity" in type_stats:
+                type_stats["qualified_quantity"] = float(type_stats["qualified_quantity"])
+            if "unqualified_quantity" in type_stats:
+                type_stats["unqualified_quantity"] = float(type_stats["unqualified_quantity"])
+
         return stats
 

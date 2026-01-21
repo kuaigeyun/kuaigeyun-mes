@@ -4,7 +4,7 @@
 提供物料数据的 RESTful API 接口（物料分组、物料、BOM），支持多组织隔离。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, status
 from typing import List, Optional, Annotated, Dict, Any
 
 from core.api.deps.deps import get_current_user, get_current_tenant
@@ -60,12 +60,12 @@ async def create_material_group(
 
 @router.get("/groups", response_model=List[MaterialGroupResponse], summary="获取物料分组列表")
 async def list_material_groups(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     parent_id: Optional[int] = Query(None, description="父分组ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
 ):
     """
     获取物料分组列表
@@ -80,9 +80,9 @@ async def list_material_groups(
 
 @router.get("/groups/tree", response_model=List[MaterialGroupTreeResponse], response_model_by_alias=True, summary="获取物料分组树形结构")
 async def get_material_group_tree(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）")
+    is_active: Optional[bool] = Query(None, description="是否只查询启用的数据（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
 ):
     """
     获取物料分组树形结构（物料分组→物料）
@@ -219,12 +219,12 @@ async def create_bom(
 
 @router.get("/bom", response_model=List[BOMResponse], summary="获取BOM列表")
 async def list_bom(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     material_id: Optional[int] = Query(None, description="主物料ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
 ):
     """
     获取BOM列表
@@ -447,9 +447,9 @@ async def batch_import_bom(
 @router.get("/bom/material/{material_id}/hierarchy", summary="生成BOM层级结构")
 async def get_bom_hierarchy(
     material_id: int,
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    current_user: Annotated[User, Depends(get_current_user)],
-    version: Optional[str] = Query(None, description="BOM版本（可选，如果不提供则使用最新版本）")
+    version: Optional[str] = Query(None, description="BOM版本（可选，如果不提供则使用最新版本）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
 ):
     """
     生成BOM层级结构
@@ -472,9 +472,9 @@ async def get_bom_hierarchy(
 @router.get("/bom/material/{material_id}/quantity", summary="计算BOM用量（考虑损耗率）")
 async def calculate_bom_quantity(
     material_id: int,
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    current_user: Annotated[User, Depends(get_current_user)],
     parent_quantity: float = Query(1.0, ge=0, description="父物料数量（默认1.0）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     version: Optional[str] = Query(None, description="BOM版本（可选，如果不提供则使用最新版本）")
 ):
     """
@@ -577,150 +577,8 @@ async def detect_bom_cycle(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# ==================== 物料相关接口 ====================
-# 注意：物料详情路由必须在 BOM 路由之后，避免 /bom 被 /{material_uuid} 匹配
-
-@router.post("", response_model=MaterialResponse, summary="创建物料")
-async def create_material(
-    data: MaterialCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    创建物料
-    
-    - **code**: 物料编码（必填，组织内唯一）
-    - **name**: 物料名称（必填）
-    - **group_id**: 物料分组ID（可选）
-    - **specification**: 规格（可选）
-    - **base_unit**: 基础单位（必填）
-    - **units**: 多单位管理（可选，JSON格式）
-    - **batch_managed**: 是否启用批号管理（默认：false）
-    - **variant_managed**: 是否启用变体管理（默认：false）
-    - **variant_attributes**: 变体属性（可选，JSON格式）
-    - **description**: 描述（可选）
-    - **brand**: 品牌（可选）
-    - **model**: 型号（可选）
-    - **is_active**: 是否启用（默认：true）
-    """
-    try:
-        return await MaterialService.create_material(tenant_id, data)
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.get("", response_model=List[MaterialResponse], summary="获取物料列表")
-async def list_materials(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    group_id: Optional[int] = Query(None, alias="groupId", description="物料分组ID（过滤）"),
-    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
-    keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),
-    code: Optional[str] = Query(None, description="物料编码（精确匹配）"),
-    name: Optional[str] = Query(None, description="物料名称（模糊匹配）"),
-    material_type: Optional[str] = Query(None, alias="materialType", description="物料类型（过滤）"),
-    specification: Optional[str] = Query(None, description="规格（模糊匹配）"),
-    brand: Optional[str] = Query(None, description="品牌（模糊匹配）"),
-    model: Optional[str] = Query(None, description="型号（模糊匹配）"),
-    base_unit: Optional[str] = Query(None, alias="baseUnit", description="基础单位（精确匹配）")
-):
-    """
-    获取物料列表
-
-    - **skip**: 跳过数量（默认：0）
-    - **limit**: 限制数量（默认：100，最大：1000）
-    - **group_id**: 物料分组ID（可选，用于过滤）
-    - **is_active**: 是否启用（可选）
-    - **keyword**: 搜索关键词（物料编码或名称）
-    - **code**: 物料编码（精确匹配）
-    - **name**: 物料名称（模糊匹配）
-    - **material_type**: 物料类型（可选，用于过滤）
-    - **specification**: 规格（可选，模糊匹配）
-    - **brand**: 品牌（可选，模糊匹配）
-    - **model**: 型号（可选，模糊匹配）
-    - **base_unit**: 基础单位（可选，精确匹配）
-    """
-    return await MaterialService.list_materials(
-        tenant_id, skip, limit, group_id, is_active, keyword, code, name,
-        material_type, specification, brand, model, base_unit
-    )
-
-
-@router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")
-async def get_material(
-    material_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    根据UUID获取物料详情
-    
-    - **material_uuid**: 物料UUID
-    """
-    try:
-        return await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
-@router.put("/{material_uuid}", response_model=MaterialResponse, summary="更新物料")
-async def update_material(
-    material_uuid: str,
-    data: MaterialUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    更新物料
-    
-    - **material_uuid**: 物料UUID
-    - **code**: 物料编码（可选）
-    - **name**: 物料名称（可选）
-    - **group_id**: 物料分组ID（可选）
-    - **specification**: 规格（可选）
-    - **base_unit**: 基础单位（可选）
-    - **units**: 多单位管理（可选，JSON格式）
-    - **batch_managed**: 是否启用批号管理（可选）
-    - **variant_managed**: 是否启用变体管理（可选）
-    - **variant_attributes**: 变体属性（可选，JSON格式）
-    - **description**: 描述（可选）
-    - **brand**: 品牌（可选）
-    - **model**: 型号（可选）
-    - **is_active**: 是否启用（可选）
-    """
-    try:
-        return await MaterialService.update_material(tenant_id, material_uuid, data)
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.delete("/{material_uuid}", summary="删除物料")
-async def delete_material(
-    material_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    删除物料（软删除）
-    
-    - **material_uuid**: 物料UUID
-    
-    注意：删除物料前需要检查是否被BOM使用
-    """
-    try:
-        await MaterialService.delete_material(tenant_id, material_uuid)
-        return {"message": "物料删除成功"}
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
 # ==================== 物料编码映射相关接口 ====================
+# 注意：映射路由必须在物料详情路由之前，避免 /mapping 被 /{material_uuid} 匹配
 
 @router.post("/mapping", response_model=MaterialCodeMappingResponse, summary="创建物料编码映射")
 async def create_material_code_mapping(
@@ -890,92 +748,8 @@ async def batch_import_material_code_mappings(
     return await MaterialCodeMappingService.batch_create_mappings(tenant_id, mappings_data)
 
 
-# ==================== AI 建议相关接口 ====================
-
-@router.get("/ai-suggestions/preview", summary="预览 AI 建议（创建前）")
-async def preview_ai_suggestions(
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    material_name: str = Query(..., description="物料名称"),
-    specification: Optional[str] = Query(None, description="规格"),
-    base_unit: Optional[str] = Query(None, description="基础单位"),
-    material_type: Optional[str] = Query(None, description="物料类型")
-):
-    """
-    预览 AI 建议（创建前）
-    
-    在创建物料前，基于输入信息生成 AI 建议，主要用于：
-    - 识别重复物料
-    - 配置建议
-    
-    - **material_name**: 物料名称（必填）
-    - **specification**: 规格（可选）
-    - **base_unit**: 基础单位（可选）
-    - **material_type**: 物料类型（可选）
-    """
-    try:
-        suggestions = await MaterialAIService.generate_suggestions(
-            tenant_id=tenant_id,
-            material_id=None,  # 创建前，material_id 为 None
-            material_name=material_name,
-            specification=specification,
-            base_unit=base_unit,
-            material_type=material_type,
-        )
-        return {
-            "suggestions": suggestions,
-            "count": len(suggestions)
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"生成 AI 建议失败: {str(e)}"
-        )
-
-
-@router.get("/{material_uuid}/ai-suggestions", summary="获取物料 AI 建议（创建后）")
-async def get_material_ai_suggestions(
-    material_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    获取物料 AI 建议（创建后）
-    
-    在物料创建后，基于已创建的物料生成 AI 建议，主要用于：
-    - 识别重复物料
-    - 配置建议
-    - 数据完整性检查
-    
-    - **material_uuid**: 物料UUID
-    """
-    try:
-        # 先获取物料信息
-        material = await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
-        
-        suggestions = await MaterialAIService.generate_suggestions(
-            tenant_id=tenant_id,
-            material_id=material.id,
-            material_name=material.name,
-            specification=material.specification,
-            base_unit=material.base_unit,
-            material_type=material.material_type,
-        )
-        return {
-            "material_uuid": material_uuid,
-            "suggestions": suggestions,
-            "count": len(suggestions)
-        }
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"生成 AI 建议失败: {str(e)}"
-        )
-
-
 # ==================== 物料批号相关接口 ====================
+# 注意：批号路由必须在物料详情路由之前，避免 /batches 被 /{material_uuid} 匹配
 
 @router.post("/batches", response_model=MaterialBatchResponse, summary="创建物料批号")
 async def create_material_batch(
@@ -1007,7 +781,7 @@ async def create_material_batch(
 async def list_material_batches(
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
     batch_no: Optional[str] = Query(None, description="批号（模糊搜索）"),
-    status: Optional[str] = Query(None, description="状态（筛选条件）"),
+    batch_status: Optional[str] = Query(None, alias="status", description="状态（筛选条件）"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1023,7 +797,7 @@ async def list_material_batches(
             tenant_id=tenant_id,
             material_uuid=material_uuid,
             batch_no=batch_no,
-            status=status,
+            status=batch_status,
             page=page,
             page_size=page_size
         )
@@ -1124,6 +898,7 @@ async def trace_batch(
 
 
 # ==================== 物料序列号相关接口 ====================
+# 注意：序列号路由必须在物料详情路由之前，避免 /serials 被 /{material_uuid} 匹配
 
 @router.post("/serials", response_model=MaterialSerialResponse, summary="创建物料序列号")
 async def create_material_serial(
@@ -1154,7 +929,7 @@ async def create_material_serial(
 async def list_material_serials(
     material_uuid: Optional[str] = Query(None, description="物料UUID（筛选条件）"),
     serial_no: Optional[str] = Query(None, description="序列号（模糊搜索）"),
-    status: Optional[str] = Query(None, description="状态（筛选条件）"),
+    serial_status: Optional[str] = Query(None, alias="status", description="状态（筛选条件）"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     current_user: Annotated[User, Depends(get_current_user)] = None,
@@ -1170,7 +945,7 @@ async def list_material_serials(
             tenant_id=tenant_id,
             material_uuid=material_uuid,
             serial_no=serial_no,
-            status=status,
+            status=serial_status,
             page=page,
             page_size=page_size
         )
@@ -1271,6 +1046,237 @@ async def trace_serial(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+# ==================== 物料相关接口 ====================
+# 注意：物料详情路由必须在 BOM 路由之后，避免 /bom 被 /{material_uuid} 匹配
+# 注意：物料详情路由必须在映射路由之后，避免 /mapping 被 /{material_uuid} 匹配
+# 注意：物料详情路由必须在批号路由之后，避免 /batches 被 /{material_uuid} 匹配
+# 注意：物料详情路由必须在序列号路由之后，避免 /serials 被 /{material_uuid} 匹配
+
+@router.post("", response_model=MaterialResponse, summary="创建物料")
+async def create_material(
+    data: MaterialCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建物料
+    
+    - **code**: 物料编码（必填，组织内唯一）
+    - **name**: 物料名称（必填）
+    - **group_id**: 物料分组ID（可选）
+    - **specification**: 规格（可选）
+    - **base_unit**: 基础单位（必填）
+    - **units**: 多单位管理（可选，JSON格式）
+    - **batch_managed**: 是否启用批号管理（默认：false）
+    - **variant_managed**: 是否启用变体管理（默认：false）
+    - **variant_attributes**: 变体属性（可选，JSON格式）
+    - **description**: 描述（可选）
+    - **brand**: 品牌（可选）
+    - **model**: 型号（可选）
+    - **is_active**: 是否启用（默认：true）
+    """
+    try:
+        return await MaterialService.create_material(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("", response_model=List[MaterialResponse], summary="获取物料列表")
+async def list_materials(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    group_id: Optional[int] = Query(None, alias="groupId", description="物料分组ID（过滤）"),
+    is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（物料编码或名称）"),
+    code: Optional[str] = Query(None, description="物料编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="物料名称（模糊匹配）"),
+    material_type: Optional[str] = Query(None, alias="materialType", description="物料类型（过滤）"),
+    specification: Optional[str] = Query(None, description="规格（模糊匹配）"),
+    brand: Optional[str] = Query(None, description="品牌（模糊匹配）"),
+    model: Optional[str] = Query(None, description="型号（模糊匹配）"),
+    base_unit: Optional[str] = Query(None, alias="baseUnit", description="基础单位（精确匹配）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    获取物料列表
+
+    - **skip**: 跳过数量（默认：0）
+    - **limit**: 限制数量（默认：100，最大：1000）
+    - **group_id**: 物料分组ID（可选，用于过滤）
+    - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（物料编码或名称）
+    - **code**: 物料编码（精确匹配）
+    - **name**: 物料名称（模糊匹配）
+    - **material_type**: 物料类型（可选，用于过滤）
+    - **specification**: 规格（可选，模糊匹配）
+    - **brand**: 品牌（可选，模糊匹配）
+    - **model**: 型号（可选，模糊匹配）
+    - **base_unit**: 基础单位（可选，精确匹配）
+    """
+    return await MaterialService.list_materials(
+        tenant_id, skip, limit, group_id, is_active, keyword, code, name,
+        material_type, specification, brand, model, base_unit
+    )
+
+
+@router.get("/{material_uuid}", response_model=MaterialResponse, summary="获取物料详情")
+async def get_material(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据UUID获取物料详情
+    
+    - **material_uuid**: 物料UUID
+    """
+    try:
+        return await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/{material_uuid}", response_model=MaterialResponse, summary="更新物料")
+async def update_material(
+    material_uuid: str,
+    data: MaterialUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新物料
+    
+    - **material_uuid**: 物料UUID
+    - **code**: 物料编码（可选）
+    - **name**: 物料名称（可选）
+    - **group_id**: 物料分组ID（可选）
+    - **specification**: 规格（可选）
+    - **base_unit**: 基础单位（可选）
+    - **units**: 多单位管理（可选，JSON格式）
+    - **batch_managed**: 是否启用批号管理（可选）
+    - **variant_managed**: 是否启用变体管理（可选）
+    - **variant_attributes**: 变体属性（可选，JSON格式）
+    - **description**: 描述（可选）
+    - **brand**: 品牌（可选）
+    - **model**: 型号（可选）
+    - **is_active**: 是否启用（可选）
+    """
+    try:
+        return await MaterialService.update_material(tenant_id, material_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{material_uuid}", summary="删除物料")
+async def delete_material(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除物料（软删除）
+    
+    - **material_uuid**: 物料UUID
+    
+    注意：删除物料前需要检查是否被BOM使用
+    """
+    try:
+        await MaterialService.delete_material(tenant_id, material_uuid)
+        return {"message": "物料删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ==================== AI 建议相关接口 ====================
+
+@router.get("/ai-suggestions/preview", summary="预览 AI 建议（创建前）")
+async def preview_ai_suggestions(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    material_name: str = Query(..., description="物料名称"),
+    specification: Optional[str] = Query(None, description="规格"),
+    base_unit: Optional[str] = Query(None, description="基础单位"),
+    material_type: Optional[str] = Query(None, description="物料类型")
+):
+    """
+    预览 AI 建议（创建前）
+    
+    在创建物料前，基于输入信息生成 AI 建议，主要用于：
+    - 识别重复物料
+    - 配置建议
+    
+    - **material_name**: 物料名称（必填）
+    - **specification**: 规格（可选）
+    - **base_unit**: 基础单位（可选）
+    - **material_type**: 物料类型（可选）
+    """
+    try:
+        suggestions = await MaterialAIService.generate_suggestions(
+            tenant_id=tenant_id,
+            material_id=None,  # 创建前，material_id 为 None
+            material_name=material_name,
+            specification=specification,
+            base_unit=base_unit,
+            material_type=material_type,
+        )
+        return {
+            "suggestions": suggestions,
+            "count": len(suggestions)
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成 AI 建议失败: {str(e)}"
+        )
+
+
+@router.get("/{material_uuid}/ai-suggestions", summary="获取物料 AI 建议（创建后）")
+async def get_material_ai_suggestions(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    获取物料 AI 建议（创建后）
+    
+    在物料创建后，基于已创建的物料生成 AI 建议，主要用于：
+    - 识别重复物料
+    - 配置建议
+    - 数据完整性检查
+    
+    - **material_uuid**: 物料UUID
+    """
+    try:
+        # 先获取物料信息
+        material = await MaterialService.get_material_by_uuid(tenant_id, material_uuid)
+        
+        suggestions = await MaterialAIService.generate_suggestions(
+            tenant_id=tenant_id,
+            material_id=material.id,
+            material_name=material.name,
+            specification=material.specification,
+            base_unit=material.base_unit,
+            material_type=material.material_type,
+        )
+        return {
+            "material_uuid": material_uuid,
+            "suggestions": suggestions,
+            "count": len(suggestions)
+        }
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成 AI 建议失败: {str(e)}"
+        )
+
+
 # ==================== 物料来源控制相关接口 ====================
 
 @router.get("/{material_uuid}/source/validate", summary="验证物料来源配置")
@@ -1323,10 +1329,10 @@ async def validate_batch_material_sources(
 
 @router.get("/{material_uuid}/source/change-impact", summary="检查物料来源类型变更影响")
 async def check_source_change_impact(
-    material_uuid: str,
+    material_uuid: str = Path(..., description="物料UUID"),
     new_source_type: str = Query(..., description="新的来源类型"),
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
 ):
     """
     检查物料来源类型变更的影响
@@ -1352,11 +1358,11 @@ async def check_source_change_impact(
 
 @router.put("/{material_uuid}/source/change", response_model=MaterialResponse, summary="变更物料来源类型")
 async def change_material_source(
-    material_uuid: str,
-    new_source_type: str = Query(..., description="新的来源类型"),
-    new_source_config: Optional[Dict[str, Any]] = Query(None, description="新的来源配置（可选）"),
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
+    material_uuid: str = Path(..., description="物料UUID"),
+    new_source_type: str = Body(..., description="新的来源类型"),
+    new_source_config: Optional[Dict[str, Any]] = Body(None, description="新的来源配置（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
 ):
     """
     变更物料来源类型

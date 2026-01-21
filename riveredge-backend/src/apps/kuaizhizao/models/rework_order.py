@@ -126,6 +126,9 @@ class ReworkOrder(BaseModel):
     updated_by = fields.IntField(null=True, description="更新人ID")
     updated_by_name = fields.CharField(max_length=100, null=True, description="更新人姓名")
 
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.product_name}"

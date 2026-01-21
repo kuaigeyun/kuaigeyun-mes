@@ -17,16 +17,22 @@
                 "icon": "chartLine",
                 "sort_order": 1,
                 "children": [{
+                        "title": "销售订单",
+                        "path": "/apps/kuaizhizao/sales-management/sales-orders",
+                        "permission": "kuaizhizao:sales-order:view",
+                        "sort_order": 1
+                    },
+                    {
                         "title": "销售出库",
                         "path": "/apps/kuaizhizao/sales-management/sales-deliveries",
                         "permission": "kuaizhizao:sales-delivery:view",
-                        "sort_order": 1
+                        "sort_order": 2
                     },
                     {
                         "title": "销售退货",
                         "path": "/apps/kuaizhizao/sales-management/sales-returns",
                         "permission": "kuaizhizao:sales-return:view",
-                        "sort_order": 2
+                        "sort_order": 3
                     }
                 ]
             },
@@ -209,13 +215,13 @@
                         "sort_order": 4
                     },
                     {
-                        "title": "委外单",
+                        "title": "工序委外",
                         "path": "/apps/kuaizhizao/production-execution/outsource-orders",
                         "permission": "kuaizhizao:outsource-order:view",
                         "sort_order": 5
                     },
                     {
-                        "title": "委外工单",
+                        "title": "工单委外",
                         "path": "/apps/kuaizhizao/production-execution/outsource-work-orders",
                         "permission": "kuaizhizao:outsource-work-order:view",
                         "sort_order": 5.5

@@ -15,6 +15,7 @@ from core.schemas.application import (
 )
 from core.services.application.application_service import ApplicationService
 from core.services.application.application_registry_service import ApplicationRegistryService
+from core.services.application.application_route_manager import get_route_manager
 import json
 from pathlib import Path
 from core.api.deps.deps import get_current_tenant
@@ -560,4 +561,52 @@ async def sync_application_manifest(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"同步失败: {str(e)}"
+        )
+
+
+@router.post("/{app_code}/reload-routes", summary="重新加载应用路由")
+async def reload_app_routes(
+    app_code: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    重新加载应用路由（无需重启服务）
+    
+    当应用代码修改后，可以通过此接口重新加载应用路由，无需重启整个后端服务。
+    这对于开发环境特别有用。
+    
+    Args:
+        app_code: 应用代码
+        tenant_id: 当前组织ID（依赖注入）
+    
+    Returns:
+        dict: 重新加载结果
+    
+    Raises:
+        HTTPException: 当应用不存在或重新加载失败时抛出
+    """
+    try:
+        logger.info(f"🔄 开始重新加载应用 {app_code} 的路由...")
+        
+        # 重新注册应用路由（使用 register_single_app 方法）
+        success = await ApplicationRegistryService.register_single_app(app_code)
+        
+        if success:
+            logger.info(f"✅ 应用 {app_code} 路由重新加载成功")
+            return {
+                "success": True,
+                "message": f"应用 {app_code} 路由重新加载成功",
+                "app_code": app_code
+            }
+        else:
+            logger.error(f"❌ 应用 {app_code} 路由重新加载失败")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"应用 {app_code} 路由重新加载失败，请查看后端日志"
+            )
+    except Exception as e:
+        logger.error(f"重新加载应用 {app_code} 路由失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"重新加载失败: {str(e)}"
         )

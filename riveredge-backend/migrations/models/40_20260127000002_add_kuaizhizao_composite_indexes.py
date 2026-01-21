@@ -140,15 +140,15 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
                 ON "apps_kuaizhizao_reporting_records" ("tenant_id", "operation_id", "created_at" DESC);
             END IF;
             
-            -- tenant_id + reporter_id + created_at (按组织+报工人+时间查询)
+            -- tenant_id + worker_id + created_at (按组织+报工人+时间查询)
             IF NOT EXISTS (
                 SELECT 1 FROM pg_indexes 
                 WHERE schemaname = 'public' 
                 AND tablename = 'apps_kuaizhizao_reporting_records' 
-                AND indexname = 'idx_apps_kuaizhizao_reporting_records_tenant_id_reporter_id_created_at'
+                AND indexname = 'idx_apps_kuaizhizao_reporting_records_tenant_id_worker_id_created_at'
             ) THEN
-                CREATE INDEX "idx_apps_kuaizhizao_reporting_records_tenant_id_reporter_id_created_at" 
-                ON "apps_kuaizhizao_reporting_records" ("tenant_id", "reporter_id", "created_at" DESC);
+                CREATE INDEX "idx_apps_kuaizhizao_reporting_records_tenant_id_worker_id_created_at" 
+                ON "apps_kuaizhizao_reporting_records" ("tenant_id", "worker_id", "created_at" DESC);
             END IF;
         END $$;
         
@@ -263,26 +263,33 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         -- ============================================
         DO $$
         BEGIN
-            -- tenant_id + material_id + transaction_type + created_at (按组织+物料+类型+时间查询)
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_indexes 
-                WHERE schemaname = 'public' 
-                AND tablename = 'apps_kuaizhizao_inventory_transactions' 
-                AND indexname = 'idx_apps_kuaizhizao_inventory_transactions_tenant_id_material_id_type_created_at'
+            -- 检查表是否存在
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'apps_kuaizhizao_inventory_transactions'
             ) THEN
-                CREATE INDEX "idx_apps_kuaizhizao_inventory_transactions_tenant_id_material_id_type_created_at" 
-                ON "apps_kuaizhizao_inventory_transactions" ("tenant_id", "material_id", "transaction_type", "created_at" DESC);
-            END IF;
-            
-            -- tenant_id + warehouse_id + material_id (按组织+仓库+物料查询)
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_indexes 
-                WHERE schemaname = 'public' 
-                AND tablename = 'apps_kuaizhizao_inventory_transactions' 
-                AND indexname = 'idx_apps_kuaizhizao_inventory_transactions_tenant_id_warehouse_id_material_id'
-            ) THEN
-                CREATE INDEX "idx_apps_kuaizhizao_inventory_transactions_tenant_id_warehouse_id_material_id" 
-                ON "apps_kuaizhizao_inventory_transactions" ("tenant_id", "warehouse_id", "material_id");
+                -- tenant_id + material_id + transaction_type + created_at (按组织+物料+类型+时间查询)
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_indexes 
+                    WHERE schemaname = 'public' 
+                    AND tablename = 'apps_kuaizhizao_inventory_transactions' 
+                    AND indexname = 'idx_apps_kuaizhizao_inventory_transactions_tenant_id_material_id_type_created_at'
+                ) THEN
+                    CREATE INDEX "idx_apps_kuaizhizao_inventory_transactions_tenant_id_material_id_type_created_at" 
+                    ON "apps_kuaizhizao_inventory_transactions" ("tenant_id", "material_id", "transaction_type", "created_at" DESC);
+                END IF;
+                
+                -- tenant_id + warehouse_id + material_id (按组织+仓库+物料查询)
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_indexes 
+                    WHERE schemaname = 'public' 
+                    AND tablename = 'apps_kuaizhizao_inventory_transactions' 
+                    AND indexname = 'idx_apps_kuaizhizao_inventory_transactions_tenant_id_warehouse_id_material_id'
+                ) THEN
+                    CREATE INDEX "idx_apps_kuaizhizao_inventory_transactions_tenant_id_warehouse_id_material_id" 
+                    ON "apps_kuaizhizao_inventory_transactions" ("tenant_id", "warehouse_id", "material_id");
+                END IF;
             END IF;
         END $$;
         
@@ -291,26 +298,33 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         -- ============================================
         DO $$
         BEGIN
-            -- tenant_id + work_order_id + inspection_type + created_at (按组织+工单+类型+时间查询)
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_indexes 
-                WHERE schemaname = 'public' 
-                AND tablename = 'apps_kuaizhizao_quality_inspections' 
-                AND indexname = 'idx_apps_kuaizhizao_quality_inspections_tenant_id_work_order_id_type_created_at'
+            -- 检查表是否存在
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'apps_kuaizhizao_quality_inspections'
             ) THEN
-                CREATE INDEX "idx_apps_kuaizhizao_quality_inspections_tenant_id_work_order_id_type_created_at" 
-                ON "apps_kuaizhizao_quality_inspections" ("tenant_id", "work_order_id", "inspection_type", "created_at" DESC);
-            END IF;
-            
-            -- tenant_id + status + inspection_result (按组织+状态+结果查询)
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_indexes 
-                WHERE schemaname = 'public' 
-                AND tablename = 'apps_kuaizhizao_quality_inspections' 
-                AND indexname = 'idx_apps_kuaizhizao_quality_inspections_tenant_id_status_result'
-            ) THEN
-                CREATE INDEX "idx_apps_kuaizhizao_quality_inspections_tenant_id_status_result" 
-                ON "apps_kuaizhizao_quality_inspections" ("tenant_id", "status", "inspection_result");
+                -- tenant_id + work_order_id + inspection_type + created_at (按组织+工单+类型+时间查询)
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_indexes 
+                    WHERE schemaname = 'public' 
+                    AND tablename = 'apps_kuaizhizao_quality_inspections' 
+                    AND indexname = 'idx_apps_kuaizhizao_quality_inspections_tenant_id_work_order_id_type_created_at'
+                ) THEN
+                    CREATE INDEX "idx_apps_kuaizhizao_quality_inspections_tenant_id_work_order_id_type_created_at" 
+                    ON "apps_kuaizhizao_quality_inspections" ("tenant_id", "work_order_id", "inspection_type", "created_at" DESC);
+                END IF;
+                
+                -- tenant_id + status + inspection_result (按组织+状态+结果查询)
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_indexes 
+                    WHERE schemaname = 'public' 
+                    AND tablename = 'apps_kuaizhizao_quality_inspections' 
+                    AND indexname = 'idx_apps_kuaizhizao_quality_inspections_tenant_id_status_result'
+                ) THEN
+                    CREATE INDEX "idx_apps_kuaizhizao_quality_inspections_tenant_id_status_result" 
+                    ON "apps_kuaizhizao_quality_inspections" ("tenant_id", "status", "inspection_result");
+                END IF;
             END IF;
         END $$;
     """
@@ -335,7 +349,7 @@ async def downgrade(db: BaseDBAsyncClient) -> str:
         -- 删除 apps_kuaizhizao_reporting_records 表的复合索引
         DROP INDEX IF EXISTS "idx_apps_kuaizhizao_reporting_records_tenant_id_work_order_id_status";
         DROP INDEX IF EXISTS "idx_apps_kuaizhizao_reporting_records_tenant_id_operation_id_created_at";
-        DROP INDEX IF EXISTS "idx_apps_kuaizhizao_reporting_records_tenant_id_reporter_id_created_at";
+        DROP INDEX IF EXISTS "idx_apps_kuaizhizao_reporting_records_tenant_id_worker_id_created_at";
         
         -- 删除 apps_kuaizhizao_sales_orders 表的复合索引
         DROP INDEX IF EXISTS "idx_apps_kuaizhizao_sales_orders_tenant_id_customer_id_status";

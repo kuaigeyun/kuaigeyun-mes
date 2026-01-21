@@ -336,12 +336,18 @@ const InventoryReportPage: React.FC = () => {
 
           <span>时间范围：</span>
           <DatePicker.RangePicker
-            value={dateRange.map(date => date ? new Date(date) : null) as any}
+            value={dateRange}
             onChange={(dates) => {
-              if (dates) {
+              if (dates && dates[0] && dates[1]) {
                 setDateRange([
-                  dates[0]?.format('YYYY-MM-DD') || '',
-                  dates[1]?.format('YYYY-MM-DD') || ''
+                  dayjs(dates[0]),
+                  dayjs(dates[1])
+                ]);
+              } else if (dates === null) {
+                // 清空时重置为默认值
+                setDateRange([
+                  dayjs().subtract(30, 'day'),
+                  dayjs(),
                 ]);
               }
             }}

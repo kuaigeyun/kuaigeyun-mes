@@ -111,6 +111,12 @@ export async function apiRequest<T = any>(
     [key: string]: any;
   }
 ): Promise<T> {
+  // ⚠️ 关键修复：确保 url 是字符串类型
+  if (typeof url !== 'string') {
+    console.error('❌ apiRequest: url 必须是字符串类型，当前类型:', typeof url, '值:', url);
+    throw new Error(`apiRequest: url 必须是字符串类型，当前类型: ${typeof url}`);
+  }
+  
   // 使用相对路径，确保代理生效
   // 相对路径会被 Vite 的 proxy 配置自动代理到后端服务器
   let requestUrl = `${API_BASE_URL}${url}`;
@@ -192,13 +198,7 @@ export async function apiRequest<T = any>(
     }
   }
   
-  // 3. 判断是否需要组织上下文
-  const needsTenantContext = url.startsWith('/core/') || 
-    url.startsWith('/api/v1/core/') || 
-    url.startsWith('/personal/') || 
-    url.startsWith('/api/v1/personal/');
-  
-  // 4. 构建请求头
+  // 3. 构建请求头
   const headers: Record<string, string> = {};
   
   // Content-Type（FormData 时不设置，让浏览器自动设置）
@@ -219,9 +219,16 @@ export async function apiRequest<T = any>(
     });
   }
   
-  // X-Tenant-ID（需要组织上下文时添加）
-  if (needsTenantContext && tenantId) {
+  // X-Tenant-ID（所有非公开接口都需要添加，因为后端所有需要租户上下文的API都需要这个请求头）
+  if (!isPublicEndpoint && tenantId) {
     headers['X-Tenant-ID'] = tenantId;
+    console.log('✅ apiRequest: 添加 X-Tenant-ID 头:', tenantId);
+  } else if (!isPublicEndpoint && !tenantId) {
+    console.warn('⚠️ apiRequest: 租户ID缺失，可能影响请求', {
+      url,
+      isPublicEndpoint,
+      tenantId: tenantId ? 'exists' : 'null',
+    });
   }
   
   // 5. 验证必需信息（需要认证的接口必须有 Token）

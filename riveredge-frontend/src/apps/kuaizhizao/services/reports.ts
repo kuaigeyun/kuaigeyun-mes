@@ -219,8 +219,7 @@ export interface TrendChartData {
 
 // 库存报表API
 export async function getInventoryReport(params: ReportParams & { report_type?: string } = {}): Promise<InventoryReportResponse> {
-  return apiRequest<InventoryReportResponse>({
-    url: '/apps/kuaizhizao/reports/inventory',
+  return apiRequest<InventoryReportResponse>('/apps/kuaizhizao/reports/inventory', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'summary',
@@ -233,8 +232,7 @@ export async function getInventoryReport(params: ReportParams & { report_type?: 
 }
 
 export async function exportInventoryReport(params: ReportParams = {}): Promise<Blob> {
-  return apiRequest<Blob>({
-    url: '/apps/kuaizhizao/reports/inventory-report/export',
+  return apiRequest<Blob>('/apps/kuaizhizao/reports/inventory-report/export', {
     method: 'GET',
     params,
     responseType: 'blob',
@@ -243,8 +241,7 @@ export async function exportInventoryReport(params: ReportParams = {}): Promise<
 
 // 生产报表API
 export async function getProductionReport(params: ReportParams & { report_type?: string } = {}): Promise<ProductionReportResponse> {
-  return apiRequest<ProductionReportResponse>({
-    url: '/apps/kuaizhizao/reports/production',
+  return apiRequest<ProductionReportResponse>('/apps/kuaizhizao/reports/production', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'efficiency',
@@ -257,8 +254,7 @@ export async function getProductionReport(params: ReportParams & { report_type?:
 }
 
 export async function exportProductionReport(params: ReportParams = {}): Promise<Blob> {
-  return apiRequest<Blob>({
-    url: '/apps/kuaizhizao/reports/production-report/export',
+  return apiRequest<Blob>('/apps/kuaizhizao/reports/production-report/export', {
     method: 'GET',
     params,
     responseType: 'blob',
@@ -267,8 +263,7 @@ export async function exportProductionReport(params: ReportParams = {}): Promise
 
 // 质量报表API
 export async function getQualityReport(params: ReportParams & { report_type?: string } = {}): Promise<QualityReportResponse> {
-  return apiRequest<QualityReportResponse>({
-    url: '/apps/kuaizhizao/reports/quality',
+  return apiRequest<QualityReportResponse>('/apps/kuaizhizao/reports/quality', {
     method: 'GET',
     params: {
       report_type: params.report_type || 'analysis',
@@ -281,8 +276,7 @@ export async function getQualityReport(params: ReportParams & { report_type?: st
 }
 
 export async function exportQualityReport(params: ReportParams = {}): Promise<Blob> {
-  return apiRequest<Blob>({
-    url: '/apps/kuaizhizao/reports/quality-report/export',
+  return apiRequest<Blob>('/apps/kuaizhizao/reports/quality-report/export', {
     method: 'GET',
     params,
     responseType: 'blob',
@@ -291,8 +285,7 @@ export async function exportQualityReport(params: ReportParams = {}): Promise<Bl
 
 // 图表数据API
 export async function getReportCharts(params: ReportParams = {}): Promise<TrendChartData> {
-  return apiRequest<TrendChartData>({
-    url: '/apps/kuaizhizao/reports/charts',
+  return apiRequest<TrendChartData>('/apps/kuaizhizao/reports/charts', {
     method: 'GET',
     params,
   });
@@ -305,8 +298,7 @@ export const inventoryAnalysisApi = {
     date_end?: string;
     warehouse_id?: number;
   }): Promise<InventoryAnalysisData> => {
-    return apiRequest<InventoryAnalysisData>({
-      url: '/apps/kuaizhizao/inventory-analysis',
+    return apiRequest<InventoryAnalysisData>('/apps/kuaizhizao/inventory-analysis', {
       method: 'GET',
       params,
     });
@@ -316,8 +308,7 @@ export const inventoryAnalysisApi = {
     date_end?: string;
     warehouse_id?: number;
   }): Promise<InventoryCostAnalysisData> => {
-    return apiRequest<InventoryCostAnalysisData>({
-      url: '/apps/kuaizhizao/inventory-analysis/cost',
+    return apiRequest<InventoryCostAnalysisData>('/apps/kuaizhizao/inventory-analysis/cost', {
       method: 'GET',
       params,
     });

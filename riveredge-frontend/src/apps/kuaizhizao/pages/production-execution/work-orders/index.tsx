@@ -10,8 +10,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Form, Popconfirm, Select, Progress, Tooltip, Spin, Divider, Input, Timeline } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormRadio, ProFormSwitch, ProForm } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, message, Card, Row, Col, Table, Radio, InputNumber, Popconfirm, Select, Progress, Tooltip, Spin, Divider, Input, Timeline } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HolderOutlined, RightOutlined, PlayCircleOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -170,7 +170,7 @@ const WorkOrdersPage: React.FC = () => {
   const [currentWorkOrderForRework, setCurrentWorkOrderForRework] = useState<WorkOrder | null>(null);
   const reworkFormRef = useRef<any>(null);
 
-  // 创建委外单相关状态
+  // 创建工序委外相关状态
   const [outsourceModalVisible, setOutsourceModalVisible] = useState(false);
   const [currentWorkOrderForOutsource, setCurrentWorkOrderForOutsource] = useState<WorkOrder | null>(null);
   const outsourceFormRef = useRef<any>(null);
@@ -1058,7 +1058,7 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理创建委外单
+   * 处理创建工序委外
    */
   const handleCreateOutsource = async (record: WorkOrder) => {
     try {
@@ -1094,7 +1094,7 @@ const WorkOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理提交委外单表单
+   * 处理提交工序委外表单
    */
   const handleSubmitOutsource = async (values: any): Promise<void> => {
     try {
@@ -1113,12 +1113,12 @@ const WorkOrdersPage: React.FC = () => {
       };
 
       await outsourceOrderApi.createFromWorkOrder(currentWorkOrderForOutsource.id.toString(), submitData);
-      messageApi.success('委外单创建成功');
+      messageApi.success('工序委外创建成功');
       setOutsourceModalVisible(false);
       setCurrentWorkOrderForOutsource(null);
       outsourceFormRef.current?.resetFields();
     } catch (error: any) {
-      messageApi.error(error.message || '创建委外单失败');
+      messageApi.error(error.message || '创建工序委外失败');
       throw error;
     }
   };
@@ -2337,7 +2337,7 @@ const WorkOrdersPage: React.FC = () => {
                   onClick={() => handleCreateOutsource(workOrderDetail!)}
                   disabled={!workOrderDetail || workOrderDetail.status === 'cancelled' || !workOrderOperations || workOrderOperations.length === 0}
                 >
-                  创建委外单
+                  创建工序委外
                 </Button>
                 <Button
                   type="default"
@@ -2637,9 +2637,9 @@ const WorkOrdersPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 创建委外单Modal */}
-      <FormModalTemplate
-        title="创建委外单"
+      {/* 创建工序委外Modal */}
+        <FormModalTemplate
+        title="创建工序委外"
         open={outsourceModalVisible}
         onCancel={() => {
           setOutsourceModalVisible(false);
@@ -2753,81 +2753,93 @@ const WorkOrdersPage: React.FC = () => {
               <div><strong>原工单数量：</strong>{currentWorkOrderForSplit.quantity}</div>
             </div>
             
-            <Form layout="vertical">
-              <Form.Item label="拆分方式">
-                <Radio.Group
-                  value={splitType}
-                  onChange={(e) => {
-                    setSplitType(e.target.value);
-                    if (e.target.value === 'count') {
-                      setSplitQuantities([]);
-                    } else {
-                      setSplitCount(2);
-                    }
-                  }}
-                >
-                  <Radio value="count">等量拆分</Radio>
-                  <Radio value="quantity">指定数量拆分</Radio>
-                </Radio.Group>
-              </Form.Item>
+            <ProForm
+              submitter={false}
+              initialValues={{
+                splitType: splitType,
+                splitCount: splitCount,
+              }}
+              onValuesChange={(changedValues) => {
+                if (changedValues.splitType !== undefined) {
+                  setSplitType(changedValues.splitType);
+                  if (changedValues.splitType === 'count') {
+                    setSplitQuantities([]);
+                  } else {
+                    setSplitCount(2);
+                  }
+                }
+                if (changedValues.splitCount !== undefined) {
+                  setSplitCount(changedValues.splitCount);
+                }
+              }}
+            >
+              <ProFormRadio.Group
+                name="splitType"
+                label="拆分方式"
+                options={[
+                  { label: '等量拆分', value: 'count' },
+                  { label: '指定数量拆分', value: 'quantity' },
+                ]}
+              />
 
               {splitType === 'count' ? (
-                <Form.Item label="拆分成几个工单">
-                  <InputNumber
-                    min={2}
-                    max={100}
-                    value={splitCount}
-                    onChange={(value) => setSplitCount(value || 2)}
-                    style={{ width: '100%' }}
-                    placeholder="请输入拆分数（2-100）"
-                  />
-                  <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                    每个工单数量：{currentWorkOrderForSplit.quantity ? (Number(currentWorkOrderForSplit.quantity) / splitCount).toFixed(2) : 0}
-                    {currentWorkOrderForSplit.quantity && Number(currentWorkOrderForSplit.quantity) % splitCount !== 0 && (
-                      <span style={{ color: '#ff4d4f' }}>（不能整除，请使用指定数量拆分）</span>
-                    )}
-                  </div>
-                </Form.Item>
-              ) : (
-                <Form.Item label="每个拆分工单的数量">
-                  <div>
-                    {splitQuantities.map((quantity, index) => (
-                      <div key={index} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <InputNumber
-                          min={0}
-                          value={quantity}
-                          onChange={(value) => handleUpdateSplitQuantity(index, value)}
-                          style={{ flex: 1 }}
-                          placeholder={`工单${index + 1}数量`}
-                          precision={2}
-                        />
-                        <Button
-                          type="link"
-                          danger
-                          onClick={() => handleRemoveSplitQuantity(index)}
-                          disabled={splitQuantities.length <= 1}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      type="dashed"
-                      onClick={handleAddSplitQuantity}
-                      style={{ width: '100%', marginTop: 8 }}
-                    >
-                      + 添加工单
-                    </Button>
+                <ProFormDigit
+                  name="splitCount"
+                  label="拆分成几个工单"
+                  min={2}
+                  max={100}
+                  placeholder="请输入拆分数（2-100）"
+                  fieldProps={{
+                    onChange: (value) => setSplitCount(value || 2),
+                  }}
+                  extra={
                     <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                      总数量：{splitQuantities.reduce((sum, q) => sum + q, 0).toFixed(2)} / {currentWorkOrderForSplit.quantity}
-                      {splitQuantities.reduce((sum, q) => sum + q, 0) !== Number(currentWorkOrderForSplit.quantity) && (
-                        <span style={{ color: '#ff4d4f' }}>（数量总和必须等于原工单数量）</span>
+                      每个工单数量：{currentWorkOrderForSplit.quantity ? (Number(currentWorkOrderForSplit.quantity) / splitCount).toFixed(2) : 0}
+                      {currentWorkOrderForSplit.quantity && Number(currentWorkOrderForSplit.quantity) % splitCount !== 0 && (
+                        <span style={{ color: '#ff4d4f' }}>（不能整除，请使用指定数量拆分）</span>
                       )}
                     </div>
+                  }
+                />
+              ) : (
+                <div>
+                  <div style={{ marginBottom: 8, fontWeight: 'bold' }}>每个拆分工单的数量</div>
+                  {splitQuantities.map((quantity, index) => (
+                    <div key={index} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <InputNumber
+                        min={0}
+                        value={quantity}
+                        onChange={(value) => handleUpdateSplitQuantity(index, value)}
+                        style={{ flex: 1 }}
+                        placeholder={`工单${index + 1}数量`}
+                        precision={2}
+                      />
+                      <Button
+                        type="link"
+                        danger
+                        onClick={() => handleRemoveSplitQuantity(index)}
+                        disabled={splitQuantities.length <= 1}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="dashed"
+                    onClick={handleAddSplitQuantity}
+                    style={{ width: '100%', marginTop: 8 }}
+                  >
+                    + 添加工单
+                  </Button>
+                  <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
+                    总数量：{splitQuantities.reduce((sum, q) => sum + q, 0).toFixed(2)} / {currentWorkOrderForSplit.quantity}
+                    {splitQuantities.reduce((sum, q) => sum + q, 0) !== Number(currentWorkOrderForSplit.quantity) && (
+                      <span style={{ color: '#ff4d4f' }}>（数量总和必须等于原工单数量）</span>
+                    )}
                   </div>
-                </Form.Item>
+                </div>
               )}
-            </Form>
+            </ProForm>
           </div>
         )}
       </Modal>
@@ -3150,14 +3162,17 @@ const WorkOrdersPage: React.FC = () => {
         <div style={{ marginBottom: 16 }}>
           已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行冻结
         </div>
-        <Form.Item label="冻结原因" required>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>
+            冻结原因 <span style={{ color: '#ff4d4f' }}>*</span>
+          </div>
           <Input.TextArea
             rows={4}
             value={batchFreezeReason}
             onChange={(e) => setBatchFreezeReason(e.target.value)}
             placeholder="请输入冻结原因（必填）"
           />
-        </Form.Item>
+        </div>
       </Modal>
 
       {/* 批量设置优先级Modal */}

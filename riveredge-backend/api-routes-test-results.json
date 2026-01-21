@@ -1,0 +1,4463 @@
+{
+  "test_time": "2026-01-19T16:19:27.079286",
+  "summary": {
+    "total": 369,
+    "accessible": 298,
+    "not_found": 62,
+    "errors": 0,
+    "skipped": 9
+  },
+  "app_stats": {
+    "other": {
+      "total": 44,
+      "accessible": 36,
+      "not_found": 0,
+      "errors": 0,
+      "skipped": 8
+    },
+    "infra": {
+      "total": 46,
+      "accessible": 46,
+      "not_found": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "core": {
+      "total": 279,
+      "accessible": 216,
+      "not_found": 62,
+      "errors": 0,
+      "skipped": 1
+    }
+  },
+  "results": [
+    {
+      "path": "/openapi.json",
+      "test_path": "/openapi.json",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/redoc",
+      "test_path": "/redoc",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/inngest",
+      "test_path": "/api/inngest",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/inngest",
+      "test_path": "/api/inngest",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/inngest",
+      "test_path": "/api/inngest",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/health",
+      "test_path": "/health",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/debug/reload-apps",
+      "test_path": "/debug/reload-apps",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/debug/init-apps",
+      "test_path": "/debug/init-apps",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/debug/test-route-registration",
+      "test_path": "/debug/test-route-registration",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/debug/route-manager-status",
+      "test_path": "/debug/route-manager-status",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/debug/fastapi-routes",
+      "test_path": "/debug/fastapi-routes",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/debug/db-apps",
+      "test_path": "/debug/db-apps",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/debug/registered-routes",
+      "test_path": "/debug/registered-routes",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/health/services",
+      "test_path": "/health/services",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/docs",
+      "test_path": "/docs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/login",
+      "test_path": "/api/v1/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/register",
+      "test_path": "/api/v1/auth/register",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/refresh",
+      "test_path": "/api/v1/auth/refresh",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/guest-login",
+      "test_path": "/api/v1/auth/guest-login",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/me",
+      "test_path": "/api/v1/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/logout",
+      "test_path": "/api/v1/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/register/personal",
+      "test_path": "/api/v1/auth/register/personal",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/register/organization",
+      "test_path": "/api/v1/auth/register/organization",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/auth/send-verification-code",
+      "test_path": "/api/v1/auth/send-verification-code",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 400,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/tenants/search",
+      "test_path": "/api/v1/tenants/search",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/tenants/check-domain/{domain}",
+      "test_path": "/api/v1/tenants/check-domain/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/platform-settings/public",
+      "test_path": "/api/v1/infra/platform-settings/public",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/{uuid}/preview/public",
+      "test_path": "/api/v1/core/files/test-uuid/preview/public",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages/config",
+      "test_path": "/api/v1/infra/packages/config",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages/config",
+      "test_path": "/api/v1/infra/packages/config",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages/{plan}/config",
+      "test_path": "/api/v1/infra/packages/1/config",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages",
+      "test_path": "/api/v1/infra/packages",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages/{package_id}",
+      "test_path": "/api/v1/infra/packages/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages",
+      "test_path": "/api/v1/infra/packages",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages/{package_id}",
+      "test_path": "/api/v1/infra/packages/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/packages/{package_id}",
+      "test_path": "/api/v1/infra/packages/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/monitoring/system/info",
+      "test_path": "/api/v1/infra/monitoring/system/info",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/monitoring/tenants/statistics",
+      "test_path": "/api/v1/infra/monitoring/tenants/statistics",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants",
+      "test_path": "/api/v1/infra/tenants",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}",
+      "test_path": "/api/v1/infra/tenants/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}/approve",
+      "test_path": "/api/v1/infra/tenants/1/approve",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}/reject",
+      "test_path": "/api/v1/infra/tenants/1/reject",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}/activate",
+      "test_path": "/api/v1/infra/tenants/1/activate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}/deactivate",
+      "test_path": "/api/v1/infra/tenants/1/deactivate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants",
+      "test_path": "/api/v1/infra/tenants",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}",
+      "test_path": "/api/v1/infra/tenants/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/tenants/{tenant_id}",
+      "test_path": "/api/v1/infra/tenants/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/auth/login",
+      "test_path": "/api/v1/infra/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/auth/me",
+      "test_path": "/api/v1/infra/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/admin",
+      "test_path": "/api/v1/infra/admin",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/admin",
+      "test_path": "/api/v1/infra/admin",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/admin",
+      "test_path": "/api/v1/infra/admin",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/saved-searches",
+      "test_path": "/api/v1/saved-searches",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/saved-searches",
+      "test_path": "/api/v1/saved-searches",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/saved-searches/{search_uuid}",
+      "test_path": "/api/v1/saved-searches/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/saved-searches/{search_uuid}",
+      "test_path": "/api/v1/saved-searches/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/saved-searches/{search_uuid}",
+      "test_path": "/api/v1/saved-searches/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/init/steps",
+      "test_path": "/api/v1/infra/init/steps",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/init/steps/{step_id}/complete",
+      "test_path": "/api/v1/infra/init/steps/1/complete",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/init/tenants/{tenant_id}/init",
+      "test_path": "/api/v1/infra/init/tenants/1/init",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/templates",
+      "test_path": "/api/v1/infra/templates",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/templates/{template_id}",
+      "test_path": "/api/v1/infra/templates/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/templates/{template_id}/apply",
+      "test_path": "/api/v1/infra/templates/1/apply",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/platform-settings",
+      "test_path": "/api/v1/infra/platform-settings",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/platform-settings",
+      "test_path": "/api/v1/infra/platform-settings",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/platform-settings",
+      "test_path": "/api/v1/infra/platform-settings",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/platform-settings",
+      "test_path": "/api/v1/infra/platform-settings",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config",
+      "test_path": "/api/v1/infra/business-config",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/running-mode/switch",
+      "test_path": "/api/v1/infra/business-config/running-mode/switch",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/modules/switch",
+      "test_path": "/api/v1/infra/business-config/modules/switch",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/parameters/update",
+      "test_path": "/api/v1/infra/business-config/parameters/update",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/parameters/batch-update",
+      "test_path": "/api/v1/infra/business-config/parameters/batch-update",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/pro-features/check",
+      "test_path": "/api/v1/infra/business-config/pro-features/check",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/pro-features/list",
+      "test_path": "/api/v1/infra/business-config/pro-features/list",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/templates/save",
+      "test_path": "/api/v1/infra/business-config/templates/save",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/templates",
+      "test_path": "/api/v1/infra/business-config/templates",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/templates/apply",
+      "test_path": "/api/v1/infra/business-config/templates/apply",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/infra/business-config/templates/{template_id}",
+      "test_path": "/api/v1/infra/business-config/templates/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users",
+      "test_path": "/api/v1/core/users",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users",
+      "test_path": "/api/v1/core/users",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users/{user_uuid}",
+      "test_path": "/api/v1/core/users/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users/{user_uuid}",
+      "test_path": "/api/v1/core/users/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users/{user_uuid}",
+      "test_path": "/api/v1/core/users/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users/import",
+      "test_path": "/api/v1/core/users/import",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/users/export",
+      "test_path": "/api/v1/core/users/export",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles",
+      "test_path": "/api/v1/core/roles",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles",
+      "test_path": "/api/v1/core/roles",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_uuid}",
+      "test_path": "/api/v1/core/roles/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_uuid}",
+      "test_path": "/api/v1/core/roles/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_uuid}",
+      "test_path": "/api/v1/core/roles/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_uuid}/permissions",
+      "test_path": "/api/v1/core/roles/1/permissions",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_uuid}/permissions",
+      "test_path": "/api/v1/core/roles/1/permissions",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_id}/scenarios",
+      "test_path": "/api/v1/core/roles/1/scenarios",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_id}/dashboard",
+      "test_path": "/api/v1/core/roles/1/dashboard",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/{role_id}/permissions",
+      "test_path": "/api/v1/core/roles/1/permissions",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/by-code/{role_code}/scenarios",
+      "test_path": "/api/v1/core/roles/by-code/1/scenarios",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/roles/scenarios",
+      "test_path": "/api/v1/core/roles/scenarios",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/permissions",
+      "test_path": "/api/v1/core/permissions",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/permissions/{permission_uuid}",
+      "test_path": "/api/v1/core/permissions/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments",
+      "test_path": "/api/v1/core/departments",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments/tree",
+      "test_path": "/api/v1/core/departments/tree",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments/{department_uuid}",
+      "test_path": "/api/v1/core/departments/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments/{department_uuid}",
+      "test_path": "/api/v1/core/departments/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments/{department_uuid}",
+      "test_path": "/api/v1/core/departments/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments/sort",
+      "test_path": "/api/v1/core/departments/sort",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/departments/batch-import",
+      "test_path": "/api/v1/core/departments/batch-import",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/positions",
+      "test_path": "/api/v1/core/positions",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/positions",
+      "test_path": "/api/v1/core/positions",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/positions/{position_uuid}",
+      "test_path": "/api/v1/core/positions/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/positions/{position_uuid}",
+      "test_path": "/api/v1/core/positions/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/positions/{position_uuid}",
+      "test_path": "/api/v1/core/positions/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/initialize-system",
+      "test_path": "/api/v1/core/data-dictionaries/initialize-system",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries",
+      "test_path": "/api/v1/core/data-dictionaries",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries",
+      "test_path": "/api/v1/core/data-dictionaries",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/{uuid}",
+      "test_path": "/api/v1/core/data-dictionaries/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/code/{code}",
+      "test_path": "/api/v1/core/data-dictionaries/code/TEST",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/{uuid}",
+      "test_path": "/api/v1/core/data-dictionaries/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/{uuid}",
+      "test_path": "/api/v1/core/data-dictionaries/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/{dictionary_uuid}/items",
+      "test_path": "/api/v1/core/data-dictionaries/1/items",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/{dictionary_uuid}/items",
+      "test_path": "/api/v1/core/data-dictionaries/1/items",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/items/{uuid}",
+      "test_path": "/api/v1/core/data-dictionaries/items/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-dictionaries/items/{uuid}",
+      "test_path": "/api/v1/core/data-dictionaries/items/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters",
+      "test_path": "/api/v1/core/system-parameters",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters",
+      "test_path": "/api/v1/core/system-parameters",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters/{uuid}",
+      "test_path": "/api/v1/core/system-parameters/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters/key/{key}",
+      "test_path": "/api/v1/core/system-parameters/key/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters/{uuid}",
+      "test_path": "/api/v1/core/system-parameters/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters/{uuid}",
+      "test_path": "/api/v1/core/system-parameters/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/system-parameters/batch-update",
+      "test_path": "/api/v1/core/system-parameters/batch-update",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules",
+      "test_path": "/api/v1/core/code-rules",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules",
+      "test_path": "/api/v1/core/code-rules",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules/pages",
+      "test_path": "/api/v1/core/code-rules/pages",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules/{uuid}",
+      "test_path": "/api/v1/core/code-rules/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules/{uuid}",
+      "test_path": "/api/v1/core/code-rules/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules/{uuid}",
+      "test_path": "/api/v1/core/code-rules/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules/generate",
+      "test_path": "/api/v1/core/code-rules/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/code-rules/test-generate",
+      "test_path": "/api/v1/core/code-rules/test-generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/main/active",
+      "test_path": "/api/v1/core/material-code-rules/main/active",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/main",
+      "test_path": "/api/v1/core/material-code-rules/main",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/main/{rule_id}",
+      "test_path": "/api/v1/core/material-code-rules/main/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/main/{rule_id}/activate",
+      "test_path": "/api/v1/core/material-code-rules/main/1/activate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/alias/{code_type}",
+      "test_path": "/api/v1/core/material-code-rules/alias/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/alias",
+      "test_path": "/api/v1/core/material-code-rules/alias",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/material-code-rules/preview",
+      "test_path": "/api/v1/core/material-code-rules/preview",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes",
+      "test_path": "/api/v1/core/variant-attributes",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes",
+      "test_path": "/api/v1/core/variant-attributes",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes/{uuid}",
+      "test_path": "/api/v1/core/variant-attributes/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes/{uuid}",
+      "test_path": "/api/v1/core/variant-attributes/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes/{uuid}",
+      "test_path": "/api/v1/core/variant-attributes/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes/{uuid}/history",
+      "test_path": "/api/v1/core/variant-attributes/test-uuid/history",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/variant-attributes/validate",
+      "test_path": "/api/v1/core/variant-attributes/validate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields",
+      "test_path": "/api/v1/core/custom-fields",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields",
+      "test_path": "/api/v1/core/custom-fields",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields/by-table/{table_name}",
+      "test_path": "/api/v1/core/custom-fields/by-table/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields/{uuid}",
+      "test_path": "/api/v1/core/custom-fields/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields/{uuid}",
+      "test_path": "/api/v1/core/custom-fields/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields/{uuid}",
+      "test_path": "/api/v1/core/custom-fields/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields/values",
+      "test_path": "/api/v1/core/custom-fields/values",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/custom-fields/values/{record_table}/{record_id}",
+      "test_path": "/api/v1/core/custom-fields/values/1/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/site-settings",
+      "test_path": "/api/v1/core/site-settings",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/site-settings",
+      "test_path": "/api/v1/core/site-settings",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes",
+      "test_path": "/api/v1/core/invitation-codes",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 201,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes",
+      "test_path": "/api/v1/core/invitation-codes",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes/{uuid}",
+      "test_path": "/api/v1/core/invitation-codes/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes/{uuid}",
+      "test_path": "/api/v1/core/invitation-codes/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes/{uuid}",
+      "test_path": "/api/v1/core/invitation-codes/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes/verify",
+      "test_path": "/api/v1/core/invitation-codes/verify",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/invitation-codes/use",
+      "test_path": "/api/v1/core/invitation-codes/use",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages",
+      "test_path": "/api/v1/core/languages",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages",
+      "test_path": "/api/v1/core/languages",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages/{uuid}",
+      "test_path": "/api/v1/core/languages/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages/{uuid}",
+      "test_path": "/api/v1/core/languages/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages/{uuid}",
+      "test_path": "/api/v1/core/languages/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages/code/{code}/translations",
+      "test_path": "/api/v1/core/languages/code/TEST/translations",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/languages/{uuid}/translations",
+      "test_path": "/api/v1/core/languages/test-uuid/translations",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications",
+      "test_path": "/api/v1/core/applications",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications",
+      "test_path": "/api/v1/core/applications",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/installed",
+      "test_path": "/api/v1/core/applications/installed",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/{uuid}",
+      "test_path": "/api/v1/core/applications/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/{uuid}",
+      "test_path": "/api/v1/core/applications/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/{uuid}",
+      "test_path": "/api/v1/core/applications/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/{uuid}/enable",
+      "test_path": "/api/v1/core/applications/test-uuid/enable",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/{uuid}/disable",
+      "test_path": "/api/v1/core/applications/test-uuid/disable",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/scan",
+      "test_path": "/api/v1/core/applications/scan",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/test-sync",
+      "test_path": "/api/v1/core/applications/test-sync",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/sync-manifest/{app_code}",
+      "test_path": "/api/v1/core/applications/sync-manifest/1",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/applications/{app_code}/reload-routes",
+      "test_path": "/api/v1/core/applications/1/reload-routes",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus",
+      "test_path": "/api/v1/core/menus",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus",
+      "test_path": "/api/v1/core/menus",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus/tree",
+      "test_path": "/api/v1/core/menus/tree",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus/{uuid}",
+      "test_path": "/api/v1/core/menus/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus/{uuid}",
+      "test_path": "/api/v1/core/menus/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus/{uuid}",
+      "test_path": "/api/v1/core/menus/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/menus/update-order",
+      "test_path": "/api/v1/core/menus/update-order",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/integration-configs",
+      "test_path": "/api/v1/core/integration-configs",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/integration-configs",
+      "test_path": "/api/v1/core/integration-configs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/integration-configs/{uuid}",
+      "test_path": "/api/v1/core/integration-configs/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/integration-configs/{uuid}",
+      "test_path": "/api/v1/core/integration-configs/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/integration-configs/{uuid}",
+      "test_path": "/api/v1/core/integration-configs/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/integration-configs/{uuid}/test",
+      "test_path": "/api/v1/core/integration-configs/test-uuid/test",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/upload",
+      "test_path": "/api/v1/core/files/upload",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/upload/multiple",
+      "test_path": "/api/v1/core/files/upload/multiple",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files",
+      "test_path": "/api/v1/core/files",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/{uuid}",
+      "test_path": "/api/v1/core/files/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/{uuid}/download",
+      "test_path": "/api/v1/core/files/test-uuid/download",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/{uuid}/preview",
+      "test_path": "/api/v1/core/files/test-uuid/preview",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/{uuid}",
+      "test_path": "/api/v1/core/files/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/{uuid}",
+      "test_path": "/api/v1/core/files/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/batch-delete",
+      "test_path": "/api/v1/core/files/batch-delete",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/files/kkfileview/health",
+      "test_path": "/api/v1/core/files/kkfileview/health",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "skipped",
+      "status_code": null,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/apis",
+      "test_path": "/api/v1/core/apis",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/apis",
+      "test_path": "/api/v1/core/apis",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/apis/{api_uuid}",
+      "test_path": "/api/v1/core/apis/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/apis/{api_uuid}",
+      "test_path": "/api/v1/core/apis/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/apis/{api_uuid}",
+      "test_path": "/api/v1/core/apis/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/apis/{api_uuid}/test",
+      "test_path": "/api/v1/core/apis/1/test",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-sources",
+      "test_path": "/api/v1/core/data-sources",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-sources",
+      "test_path": "/api/v1/core/data-sources",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-sources/{data_source_uuid}",
+      "test_path": "/api/v1/core/data-sources/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-sources/{data_source_uuid}",
+      "test_path": "/api/v1/core/data-sources/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-sources/{data_source_uuid}",
+      "test_path": "/api/v1/core/data-sources/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-sources/{data_source_uuid}/test",
+      "test_path": "/api/v1/core/data-sources/1/test",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets",
+      "test_path": "/api/v1/core/datasets",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets",
+      "test_path": "/api/v1/core/datasets",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/{dataset_uuid}",
+      "test_path": "/api/v1/core/datasets/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/{dataset_uuid}",
+      "test_path": "/api/v1/core/datasets/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/{dataset_uuid}",
+      "test_path": "/api/v1/core/datasets/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/{dataset_uuid}/execute",
+      "test_path": "/api/v1/core/datasets/1/execute",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/{dataset_uuid}/test-api",
+      "test_path": "/api/v1/core/datasets/1/test-api",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/{dataset_uuid}/test-data-source",
+      "test_path": "/api/v1/core/datasets/1/test-data-source",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/datasets/code/{dataset_code}/query",
+      "test_path": "/api/v1/core/datasets/code/1/query",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-configs",
+      "test_path": "/api/v1/core/message-configs",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-configs",
+      "test_path": "/api/v1/core/message-configs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-configs/{uuid}",
+      "test_path": "/api/v1/core/message-configs/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-configs/{uuid}",
+      "test_path": "/api/v1/core/message-configs/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-configs/{uuid}",
+      "test_path": "/api/v1/core/message-configs/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-templates",
+      "test_path": "/api/v1/core/message-templates",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-templates",
+      "test_path": "/api/v1/core/message-templates",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-templates/{uuid}",
+      "test_path": "/api/v1/core/message-templates/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-templates/{uuid}",
+      "test_path": "/api/v1/core/message-templates/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/message-templates/{uuid}",
+      "test_path": "/api/v1/core/message-templates/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/messages/send",
+      "test_path": "/api/v1/core/messages/send",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/messages/logs",
+      "test_path": "/api/v1/core/messages/logs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks",
+      "test_path": "/api/v1/core/scheduled-tasks",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks",
+      "test_path": "/api/v1/core/scheduled-tasks",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}/start",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid/start",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}/stop",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid/stop",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}/mark-running",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid/mark-running",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scheduled-tasks/{uuid}/execution-result",
+      "test_path": "/api/v1/core/scheduled-tasks/test-uuid/execution-result",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-processes",
+      "test_path": "/api/v1/core/approval-processes",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-processes",
+      "test_path": "/api/v1/core/approval-processes",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-processes/{uuid}",
+      "test_path": "/api/v1/core/approval-processes/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-processes/{uuid}",
+      "test_path": "/api/v1/core/approval-processes/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-processes/{uuid}",
+      "test_path": "/api/v1/core/approval-processes/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances",
+      "test_path": "/api/v1/core/approval-instances",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances",
+      "test_path": "/api/v1/core/approval-instances",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances/{uuid}",
+      "test_path": "/api/v1/core/approval-instances/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances/{uuid}",
+      "test_path": "/api/v1/core/approval-instances/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances/{uuid}",
+      "test_path": "/api/v1/core/approval-instances/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances/{uuid}/action",
+      "test_path": "/api/v1/core/approval-instances/test-uuid/action",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances/approval-histories",
+      "test_path": "/api/v1/core/approval-instances/approval-histories",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/approval-instances/approval-histories/{uuid}",
+      "test_path": "/api/v1/core/approval-instances/approval-histories/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scripts",
+      "test_path": "/api/v1/core/scripts",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scripts",
+      "test_path": "/api/v1/core/scripts",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scripts/{uuid}",
+      "test_path": "/api/v1/core/scripts/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scripts/{uuid}",
+      "test_path": "/api/v1/core/scripts/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scripts/{uuid}",
+      "test_path": "/api/v1/core/scripts/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/scripts/{uuid}/execute",
+      "test_path": "/api/v1/core/scripts/test-uuid/execute",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-templates",
+      "test_path": "/api/v1/core/print-templates",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-templates",
+      "test_path": "/api/v1/core/print-templates",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-templates/{uuid}",
+      "test_path": "/api/v1/core/print-templates/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-templates/{uuid}",
+      "test_path": "/api/v1/core/print-templates/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-templates/{uuid}",
+      "test_path": "/api/v1/core/print-templates/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-templates/{uuid}/render",
+      "test_path": "/api/v1/core/print-templates/test-uuid/render",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices",
+      "test_path": "/api/v1/core/print-devices",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices",
+      "test_path": "/api/v1/core/print-devices",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices/{uuid}",
+      "test_path": "/api/v1/core/print-devices/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices/{uuid}",
+      "test_path": "/api/v1/core/print-devices/test-uuid",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices/{uuid}",
+      "test_path": "/api/v1/core/print-devices/test-uuid",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices/{uuid}/test",
+      "test_path": "/api/v1/core/print-devices/test-uuid/test",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/print-devices/{uuid}/print",
+      "test_path": "/api/v1/core/print-devices/test-uuid/print",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/working-hours-configs",
+      "test_path": "/api/v1/core/working-hours-configs",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/working-hours-configs",
+      "test_path": "/api/v1/core/working-hours-configs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/working-hours-configs/{config_id}",
+      "test_path": "/api/v1/core/working-hours-configs/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/working-hours-configs/{config_id}",
+      "test_path": "/api/v1/core/working-hours-configs/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/working-hours-configs/{config_id}",
+      "test_path": "/api/v1/core/working-hours-configs/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 500,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/working-hours-configs/calculate",
+      "test_path": "/api/v1/core/working-hours-configs/calculate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 422,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/reports/templates",
+      "test_path": "/api/v1/core/reports/templates",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/reports/templates",
+      "test_path": "/api/v1/core/reports/templates",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/reports/templates/{template_id}",
+      "test_path": "/api/v1/core/reports/templates/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/reports/templates/{template_id}",
+      "test_path": "/api/v1/core/reports/templates/1",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/reports/templates/{template_id}",
+      "test_path": "/api/v1/core/reports/templates/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/reports/templates/{template_id}/generate",
+      "test_path": "/api/v1/core/reports/templates/1/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/generate",
+      "test_path": "/api/v1/core/qrcode/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/parse",
+      "test_path": "/api/v1/core/qrcode/parse",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/material/generate",
+      "test_path": "/api/v1/core/qrcode/material/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/work-order/generate",
+      "test_path": "/api/v1/core/qrcode/work-order/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/operation/generate",
+      "test_path": "/api/v1/core/qrcode/operation/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/equipment/generate",
+      "test_path": "/api/v1/core/qrcode/equipment/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/employee/generate",
+      "test_path": "/api/v1/core/qrcode/employee/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/box/generate",
+      "test_path": "/api/v1/core/qrcode/box/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/qrcode/trace/generate",
+      "test_path": "/api/v1/core/qrcode/trace/generate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-profile",
+      "test_path": "/api/v1/personal/user-profile",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-profile",
+      "test_path": "/api/v1/personal/user-profile",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-profile/change-password",
+      "test_path": "/api/v1/personal/user-profile/change-password",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-preferences",
+      "test_path": "/api/v1/personal/user-preferences",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-preferences",
+      "test_path": "/api/v1/personal/user-preferences",
+      "methods": [
+        "PUT"
+      ],
+      "test_method": "PUT",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-messages",
+      "test_path": "/api/v1/personal/user-messages",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-messages/stats",
+      "test_path": "/api/v1/personal/user-messages/stats",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-messages/{message_uuid}",
+      "test_path": "/api/v1/personal/user-messages/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-messages/mark-read",
+      "test_path": "/api/v1/personal/user-messages/mark-read",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-tasks",
+      "test_path": "/api/v1/personal/user-tasks",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-tasks/stats",
+      "test_path": "/api/v1/personal/user-tasks/stats",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-tasks/{task_uuid}",
+      "test_path": "/api/v1/personal/user-tasks/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/personal/user-tasks/{task_uuid}/process",
+      "test_path": "/api/v1/personal/user-tasks/1/process",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/operation-logs",
+      "test_path": "/api/v1/core/operation-logs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/operation-logs/statistics",
+      "test_path": "/api/v1/core/operation-logs/statistics",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/operation-logs/{uuid}",
+      "test_path": "/api/v1/core/operation-logs/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/login-logs",
+      "test_path": "/api/v1/core/login-logs",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/login-logs/statistics",
+      "test_path": "/api/v1/core/login-logs/statistics",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/login-logs/{uuid}",
+      "test_path": "/api/v1/core/login-logs/test-uuid",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/online-users",
+      "test_path": "/api/v1/core/online-users",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/online-users/statistics",
+      "test_path": "/api/v1/core/online-users/statistics",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/online-users/{user_id}",
+      "test_path": "/api/v1/core/online-users/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/online-users/{user_id}",
+      "test_path": "/api/v1/core/online-users/1",
+      "methods": [
+        "DELETE"
+      ],
+      "test_method": "DELETE",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/online-users/debug/test-write",
+      "test_path": "/api/v1/core/online-users/debug/test-write",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/online-users/debug/redis-status",
+      "test_path": "/api/v1/core/online-users/debug/redis-status",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/help-documents/{document_key}",
+      "test_path": "/api/v1/core/help-documents/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/help-documents",
+      "test_path": "/api/v1/core/help-documents",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/ai/suggestions/{scene}",
+      "test_path": "/api/v1/core/ai/suggestions/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/ai/suggestions/work-order/{work_order_id}",
+      "test_path": "/api/v1/core/ai/suggestions/work-order/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/ai/suggestions/reporting/{reporting_id}",
+      "test_path": "/api/v1/core/ai/suggestions/reporting/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/ai/suggestions/inventory/all",
+      "test_path": "/api/v1/core/ai/suggestions/inventory/all",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/ai/suggestions/production/all",
+      "test_path": "/api/v1/core/ai/suggestions/production/all",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/onboarding/roles/{role_id}/guide",
+      "test_path": "/api/v1/core/onboarding/roles/1/guide",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/onboarding/roles/{role_id}/scenarios",
+      "test_path": "/api/v1/core/onboarding/roles/1/scenarios",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/onboarding/roles/by-code/{role_code}/guide",
+      "test_path": "/api/v1/core/onboarding/roles/by-code/1/guide",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/onboarding/roles/by-code/{role_code}/scenarios",
+      "test_path": "/api/v1/core/onboarding/roles/by-code/1/scenarios",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/onboarding/quick-start",
+      "test_path": "/api/v1/core/onboarding/quick-start",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/onboarding/guides",
+      "test_path": "/api/v1/core/onboarding/guides",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-quality/validate",
+      "test_path": "/api/v1/core/data-quality/validate",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-quality/detect-issues",
+      "test_path": "/api/v1/core/data-quality/detect-issues",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/data-quality/quality-report",
+      "test_path": "/api/v1/core/data-quality/quality-report",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/operation-guide/{page_key}",
+      "test_path": "/api/v1/core/operation-guide/1",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/operation-guide",
+      "test_path": "/api/v1/core/operation-guide",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/operation-guide",
+      "test_path": "/api/v1/core/operation-guide",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/launch-progress/tracking",
+      "test_path": "/api/v1/core/launch-progress/tracking",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/launch-progress/report",
+      "test_path": "/api/v1/core/launch-progress/report",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/launch-checklist/checklist",
+      "test_path": "/api/v1/core/launch-checklist/checklist",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/launch-checklist/check",
+      "test_path": "/api/v1/core/launch-checklist/check",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/launch-checklist/report",
+      "test_path": "/api/v1/core/launch-checklist/report",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/usage-analysis/function-usage",
+      "test_path": "/api/v1/core/usage-analysis/function-usage",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/usage-analysis/data-quality",
+      "test_path": "/api/v1/core/usage-analysis/data-quality",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/usage-analysis/performance",
+      "test_path": "/api/v1/core/usage-analysis/performance",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/usage-analysis/report",
+      "test_path": "/api/v1/core/usage-analysis/report",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/optimization-suggestion/suggestions",
+      "test_path": "/api/v1/core/optimization-suggestion/suggestions",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/optimization-suggestion/suggestions/by-category",
+      "test_path": "/api/v1/core/optimization-suggestion/suggestions/by-category",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/optimization-suggestion/suggestions/by-priority",
+      "test_path": "/api/v1/core/optimization-suggestion/suggestions/by-priority",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/performance/stats",
+      "test_path": "/api/v1/core/performance/stats",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/performance/slow-apis",
+      "test_path": "/api/v1/core/performance/slow-apis",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/performance/reset-stats",
+      "test_path": "/api/v1/core/performance/reset-stats",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 401,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/plugin-manager/discover",
+      "test_path": "/api/v1/core/plugin-manager/discover",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/plugin-manager/plugins",
+      "test_path": "/api/v1/core/plugin-manager/plugins",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/plugin-manager/plugins/{plugin_code}/enable",
+      "test_path": "/api/v1/core/plugin-manager/plugins/1/enable",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/plugin-manager/plugins/{plugin_code}/disable",
+      "test_path": "/api/v1/core/plugin-manager/plugins/1/disable",
+      "methods": [
+        "POST"
+      ],
+      "test_method": "POST",
+      "status": "not_found",
+      "status_code": 404,
+      "is_accessible": false,
+      "error": null
+    },
+    {
+      "path": "/api/v1/core/plugin-manager/enabled-plugins",
+      "test_path": "/api/v1/core/plugin-manager/enabled-plugins",
+      "methods": [
+        "GET"
+      ],
+      "test_method": "GET",
+      "status": "success",
+      "status_code": 200,
+      "is_accessible": true,
+      "error": null
+    }
+  ]
+}

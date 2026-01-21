@@ -419,8 +419,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             dict: 统计信息
         """
         query = ReportingRecord.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
+            tenant_id=tenant_id
         )
 
         if date_start:

@@ -1,0 +1,84 @@
+{
+  "test_time": "2026-01-19T17:11:06.055952",
+  "page": "销售订单页面",
+  "summary": {
+    "total": 8,
+    "accessible": 8,
+    "not_found": 0,
+    "errors": 0
+  },
+  "results": [
+    {
+      "name": "获取销售订单列表",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders",
+      "method": "GET",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "创建销售订单",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders",
+      "method": "POST",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "获取销售订单详情",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders/1",
+      "method": "GET",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "更新销售订单",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders/1",
+      "method": "PUT",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "提交销售订单",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders/1/submit",
+      "method": "POST",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "审核通过销售订单",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders/1/approve",
+      "method": "POST",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "驳回销售订单",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders/1/reject",
+      "method": "POST",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    },
+    {
+      "name": "下推到需求计算",
+      "path": "/api/v1/apps/kuaizhizao/sales-orders/1/push-to-computation",
+      "method": "POST",
+      "status_code": 401,
+      "is_accessible": true,
+      "status": "success",
+      "response_preview": "{\"detail\":\"Token缺失\"}"
+    }
+  ]
+}

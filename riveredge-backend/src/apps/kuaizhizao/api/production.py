@@ -40,6 +40,8 @@ from apps.kuaizhizao.services.document_timing_service import DocumentTimingServi
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
 from apps.kuaizhizao.services.report_service import ReportService
+from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
+from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 
 # 初始化服务实例
 work_order_service = WorkOrderService()
@@ -229,6 +231,7 @@ from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertRuleListResponse,
     InventoryAlertResponse,
     InventoryAlertListResponse,
+    InventoryAlertHandleRequest,
 )
 from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingCreate,
@@ -830,7 +833,7 @@ async def delete_rework_order(
     )
 
 
-@router.post("/work-orders/{work_order_id}/outsource", response_model=OutsourceOrderResponse, summary="从工单创建委外单")
+@router.post("/work-orders/{work_order_id}/outsource", response_model=OutsourceOrderResponse, summary="从工单创建工序委外")
 async def create_outsource_order_from_work_order(
     work_order_id: int,
     outsource_data: OutsourceOrderCreateFromWorkOrder,
@@ -838,12 +841,12 @@ async def create_outsource_order_from_work_order(
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceOrderResponse:
     """
-    从工单工序创建委外单
+    从工单工序创建工序委外
 
-    根据工单工序信息创建委外单，自动关联工单和工序。
+    根据工单工序信息创建工序委外单，自动关联工单和工序。
 
     - **work_order_id**: 工单ID
-    - **outsource_data**: 委外单创建数据（工单工序ID、供应商ID、委外数量等）
+    - **outsource_data**: 工序委外单创建数据（工单工序ID、供应商ID、委外数量等）
     """
     return await OutsourceService().create_outsource_order_from_work_order(
         tenant_id=tenant_id,
@@ -859,18 +862,18 @@ async def create_outsource_order_from_work_order(
     )
 
 
-# ============ 委外单管理 API ============
+# ============ 工序委外管理 API ============
 
-@router.post("/outsource-orders", response_model=OutsourceOrderResponse, summary="创建委外单")
+@router.post("/outsource-orders", response_model=OutsourceOrderResponse, summary="创建工序委外")
 async def create_outsource_order(
     outsource_order: OutsourceOrderCreate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceOrderResponse:
     """
-    创建委外单
+    创建工序委外
 
-    - **outsource_order**: 委外单创建数据
+    - **outsource_order**: 工序委外单创建数据
     """
     return await OutsourceService().create_outsource_order(
         tenant_id=tenant_id,
@@ -879,19 +882,19 @@ async def create_outsource_order(
     )
 
 
-@router.get("/outsource-orders", response_model=List[OutsourceOrderListResponse], summary="获取委外单列表")
+@router.get("/outsource-orders", response_model=List[OutsourceOrderListResponse], summary="获取工序委外列表")
 async def list_outsource_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     supplier_id: Optional[int] = Query(None, description="供应商ID"),
-    status: Optional[str] = Query(None, description="委外单状态"),
-    code: Optional[str] = Query(None, description="委外单编码（模糊搜索）"),
+    status: Optional[str] = Query(None, description="工序委外状态"),
+    code: Optional[str] = Query(None, description="工序委外单编码（模糊搜索）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[OutsourceOrderListResponse]:
     """
-    获取委外单列表
+    获取工序委外列表
 
     支持多种筛选条件的高级搜索。
     """
@@ -906,16 +909,16 @@ async def list_outsource_orders(
     )
 
 
-@router.get("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="获取委外单详情")
+@router.get("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="获取工序委外详情")
 async def get_outsource_order(
     outsource_order_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceOrderResponse:
     """
-    根据ID获取委外单详情
+    根据ID获取工序委外详情
 
-    - **outsource_order_id**: 委外单ID
+    - **outsource_order_id**: 工序委外单ID
     """
     return await OutsourceService().get_outsource_order_by_id(
         tenant_id=tenant_id,
@@ -923,7 +926,7 @@ async def get_outsource_order(
     )
 
 
-@router.put("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="更新委外单")
+@router.put("/outsource-orders/{outsource_order_id}", response_model=OutsourceOrderResponse, summary="更新工序委外")
 async def update_outsource_order(
     outsource_order_id: int,
     outsource_order: OutsourceOrderUpdate,
@@ -931,10 +934,10 @@ async def update_outsource_order(
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceOrderResponse:
     """
-    更新委外单信息
+    更新工序委外信息
 
-    - **outsource_order_id**: 委外单ID
-    - **outsource_order**: 委外单更新数据
+    - **outsource_order_id**: 工序委外单ID
+    - **outsource_order**: 工序委外单更新数据
     """
     return await OutsourceService().update_outsource_order(
         tenant_id=tenant_id,
@@ -944,16 +947,16 @@ async def update_outsource_order(
     )
 
 
-@router.delete("/outsource-orders/{outsource_order_id}", summary="删除委外单")
+@router.delete("/outsource-orders/{outsource_order_id}", summary="删除工序委外")
 async def delete_outsource_order(
     outsource_order_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> JSONResponse:
     """
-    删除委外单（软删除）
+    删除工序委外（软删除）
 
-    - **outsource_order_id**: 委外单ID
+    - **outsource_order_id**: 工序委外单ID
     """
     await OutsourceService().delete_outsource_order(
         tenant_id=tenant_id,
@@ -962,7 +965,7 @@ async def delete_outsource_order(
     )
 
     return JSONResponse(
-        content={"message": "委外单删除成功"},
+        content={"message": "工序委外删除成功"},
         status_code=status.HTTP_200_OK
     )
 
@@ -975,9 +978,9 @@ async def link_purchase_receipt_to_outsource_order(
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceOrderResponse:
     """
-    关联采购入库单（委外入库）
+    关联采购入库单（工序委外入库）
 
-    - **outsource_order_id**: 委外单ID
+    - **outsource_order_id**: 工序委外单ID
     - **purchase_receipt_id**: 采购入库单ID
     """
     return await OutsourceService().link_purchase_receipt(
@@ -1198,6 +1201,48 @@ async def list_reporting_records(
         status=status,
         reported_at_start=reported_at_start_dt,
         reported_at_end=reported_at_end_dt,
+    )
+
+
+@router.get("/reporting/statistics", summary="获取报工统计信息")
+async def get_reporting_statistics(
+    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
+    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取报工统计信息
+
+    返回报工数量、合格率等统计数据。
+    """
+    from datetime import datetime
+
+    # 转换时间参数
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    if date_end:
+        try:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    statistics = await reporting_service.get_reporting_statistics(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+    )
+
+    return JSONResponse(
+        content=statistics,
+        status_code=status.HTTP_200_OK
     )
 
 
@@ -1568,48 +1613,6 @@ async def get_defect_statistics(
     )
 
     return JSONResponse(content=statistics)
-
-
-@router.get("/reporting/statistics", summary="获取报工统计信息")
-async def get_reporting_statistics(
-    date_start: Optional[str] = Query(None, description="开始日期（ISO格式）"),
-    date_end: Optional[str] = Query(None, description="结束日期（ISO格式）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> JSONResponse:
-    """
-    获取报工统计信息
-
-    返回报工数量、合格率等统计数据。
-    """
-    from datetime import datetime
-
-    # 转换时间参数
-    date_start_dt = None
-    date_end_dt = None
-
-    if date_start:
-        try:
-            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
-        except ValueError:
-            pass
-
-    if date_end:
-        try:
-            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
-        except ValueError:
-            pass
-
-    statistics = await reporting_service.get_reporting_statistics(
-        tenant_id=tenant_id,
-        date_start=date_start_dt,
-        date_end=date_end_dt,
-    )
-
-    return JSONResponse(
-        content=statistics,
-        status_code=status.HTTP_200_OK
-    )
 
 
 @router.post("/reporting/{record_id}/material-binding/feeding", response_model=MaterialBindingResponse, summary="从报工记录创建上料绑定")
@@ -2590,6 +2593,50 @@ async def list_customer_material_registrations(
     )
 
 
+# ============ 条码映射规则管理 API ============
+# 注意：这些路由必须在 /{registration_id} 路由之前，避免路由冲突
+
+@router.post("/inventory/customer-material-registration/mapping-rules", response_model=BarcodeMappingRuleResponse, summary="创建条码映射规则")
+async def create_barcode_mapping_rule(
+    rule_data: BarcodeMappingRuleCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BarcodeMappingRuleResponse:
+    """
+    创建条码映射规则
+
+    - **rule_data**: 映射规则创建数据（条码模式、映射物料、解析规则等）
+    """
+    return await barcode_mapping_rule_service.create_mapping_rule(
+        tenant_id=tenant_id,
+        rule_data=rule_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/inventory/customer-material-registration/mapping-rules", response_model=List[BarcodeMappingRuleListResponse], summary="获取条码映射规则列表")
+async def list_barcode_mapping_rules(
+    skip: int = Query(0, description="跳过数量"),
+    limit: int = Query(100, description="限制数量"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[BarcodeMappingRuleListResponse]:
+    """
+    获取条码映射规则列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    return await barcode_mapping_rule_service.list_mapping_rules(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        customer_id=customer_id,
+        is_enabled=is_enabled,
+    )
+
+
 @router.get("/inventory/customer-material-registration/{registration_id}", response_model=CustomerMaterialRegistrationResponse, summary="获取客户来料登记详情")
 async def get_customer_material_registration(
     registration_id: int,
@@ -2666,47 +2713,6 @@ async def cancel_customer_material_registration(
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/inventory/customer-material-registration/mapping-rules", response_model=BarcodeMappingRuleResponse, summary="创建条码映射规则")
-async def create_barcode_mapping_rule(
-    rule_data: BarcodeMappingRuleCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> BarcodeMappingRuleResponse:
-    """
-    创建条码映射规则
-
-    - **rule_data**: 映射规则创建数据（条码模式、映射物料、解析规则等）
-    """
-    return await barcode_mapping_rule_service.create_mapping_rule(
-        tenant_id=tenant_id,
-        rule_data=rule_data,
-        created_by=current_user.id
-    )
-
-
-@router.get("/inventory/customer-material-registration/mapping-rules", response_model=List[BarcodeMappingRuleListResponse], summary="获取条码映射规则列表")
-async def list_barcode_mapping_rules(
-    skip: int = Query(0, description="跳过数量"),
-    limit: int = Query(100, description="限制数量"),
-    customer_id: Optional[int] = Query(None, description="客户ID"),
-    is_enabled: Optional[bool] = Query(None, description="是否启用"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[BarcodeMappingRuleListResponse]:
-    """
-    获取条码映射规则列表
-
-    支持多种筛选条件的高级搜索。
-    """
-    return await barcode_mapping_rule_service.list_mapping_rules(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        customer_id=customer_id,
-        is_enabled=is_enabled,
-    )
 
 
 # ============ 销售出库管理 API ============
@@ -3168,7 +3174,7 @@ async def create_purchase_receipt(
 
     返回创建的采购入库单信息。
     """
-    return await PurchaseReceiptService.create_purchase_receipt(
+    return await PurchaseReceiptService().create_purchase_receipt(
         tenant_id=tenant_id,
         receipt_data=receipt,
         created_by=current_user.id
@@ -3189,7 +3195,7 @@ async def list_purchase_receipts(
 
     支持状态和采购订单筛选。
     """
-    return await PurchaseReceiptService.list_purchase_receipts(
+    return await PurchaseReceiptService().list_purchase_receipts(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -3209,7 +3215,7 @@ async def get_purchase_receipt(
 
     - **receipt_id**: 入库单ID
     """
-    return await PurchaseReceiptService.get_purchase_receipt_by_id(
+    return await PurchaseReceiptService().get_purchase_receipt_by_id(
         tenant_id=tenant_id,
         receipt_id=receipt_id
     )
@@ -3543,14 +3549,15 @@ async def create_incoming_inspection(
 
     返回创建的来料检验单信息。
     """
-    return await IncomingInspectionService.create_incoming_inspection(
+    service = IncomingInspectionService()
+    return await service.create_incoming_inspection(
         tenant_id=tenant_id,
         inspection_data=inspection,
         created_by=current_user.id
     )
 
 
-@router.get("/incoming-inspections", response_model=List[IncomingInspectionListResponse], summary="获取来料检验单列表")
+@router.get("/incoming-inspections", summary="获取来料检验单列表")
 async def list_incoming_inspections(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -3560,13 +3567,14 @@ async def list_incoming_inspections(
     material_id: Optional[int] = Query(None, description="物料ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[IncomingInspectionListResponse]:
+) -> Dict[str, Any]:
     """
     获取来料检验单列表
 
     支持多种筛选条件的高级搜索。
     """
-    return await IncomingInspectionService.list_incoming_inspections(
+    service = IncomingInspectionService()
+    return await service.list_incoming_inspections(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -3588,7 +3596,8 @@ async def get_incoming_inspection(
 
     - **inspection_id**: 检验单ID
     """
-    return await IncomingInspectionService.get_incoming_inspection_by_id(
+    service = IncomingInspectionService()
+    return await service.get_incoming_inspection_by_id(
         tenant_id=tenant_id,
         inspection_id=inspection_id
     )
@@ -3607,7 +3616,8 @@ async def conduct_incoming_inspection(
     - **inspection_id**: 检验单ID
     - **inspection_data**: 检验数据
     """
-    return await IncomingInspectionService.conduct_inspection(
+    service = IncomingInspectionService()
+    return await service.conduct_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
         inspection_data=inspection_data,
@@ -3628,7 +3638,8 @@ async def approve_incoming_inspection(
     - **inspection_id**: 检验单ID
     - **rejection_reason**: 驳回原因（可选，不填则通过）
     """
-    return await IncomingInspectionService.approve_inspection(
+    service = IncomingInspectionService()
+    return await service.approve_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
         approved_by=current_user.id,
@@ -3945,7 +3956,8 @@ async def create_finished_goods_inspection(
 
     返回创建的成品检验单信息。
     """
-    return await FinishedGoodsInspectionService.create_finished_goods_inspection(
+    service = FinishedGoodsInspectionService()
+    return await service.create_finished_goods_inspection(
         tenant_id=tenant_id,
         inspection_data=inspection,
         created_by=current_user.id
@@ -3968,7 +3980,8 @@ async def list_finished_goods_inspections(
 
     支持多种筛选条件的高级搜索。
     """
-    return await FinishedGoodsInspectionService.list_finished_goods_inspections(
+    service = FinishedGoodsInspectionService()
+    return await service.list_finished_goods_inspections(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -3990,7 +4003,8 @@ async def get_finished_goods_inspection(
 
     - **inspection_id**: 检验单ID
     """
-    return await FinishedGoodsInspectionService.get_finished_goods_inspection_by_id(
+    service = FinishedGoodsInspectionService()
+    return await service.get_finished_goods_inspection_by_id(
         tenant_id=tenant_id,
         inspection_id=inspection_id
     )
@@ -4009,7 +4023,8 @@ async def conduct_finished_goods_inspection(
     - **inspection_id**: 检验单ID
     - **inspection_data**: 检验数据
     """
-    return await FinishedGoodsInspectionService.conduct_inspection(
+    service = FinishedGoodsInspectionService()
+    return await service.conduct_inspection(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
         inspection_data=inspection_data,
@@ -7521,22 +7536,22 @@ async def execute_inventory_transfer(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# ==================== 委外工单管理 API ====================
+# ==================== 工单委外管理 API ====================
 
-@router.post("/outsource-work-orders", response_model=OutsourceWorkOrderResponse, summary="创建委外工单")
+@router.post("/outsource-work-orders", response_model=OutsourceWorkOrderResponse, summary="创建工单委外")
 async def create_outsource_work_order(
     data: OutsourceWorkOrderCreate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceWorkOrderResponse:
     """
-    创建委外工单
+    创建工单委外
 
-    - **data**: 委外工单创建数据
+    - **data**: 工单委外创建数据
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
-    返回创建的委外工单信息。
+    返回创建的工单委外信息。
     """
     try:
         return await outsource_work_order_service.create_outsource_work_order(
@@ -7550,7 +7565,7 @@ async def create_outsource_work_order(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/outsource-work-orders", response_model=OutsourceWorkOrderListResponse, summary="获取委外工单列表")
+@router.get("/outsource-work-orders", response_model=OutsourceWorkOrderListResponse, summary="获取工单委外列表")
 async def list_outsource_work_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -7562,7 +7577,7 @@ async def list_outsource_work_orders(
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceWorkOrderListResponse:
     """
-    获取委外工单列表
+    获取工单委外列表
 
     - **skip**: 跳过数量
     - **limit**: 限制数量
@@ -7573,7 +7588,7 @@ async def list_outsource_work_orders(
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
-    返回委外工单列表。
+    返回工单委外列表。
     """
     try:
         return await outsource_work_order_service.list_outsource_work_orders(
@@ -7586,24 +7601,24 @@ async def list_outsource_work_orders(
             keyword=keyword,
         )
     except Exception as e:
-        logger.error(f"获取委外工单列表失败: {e}")
+        logger.error(f"获取工单委外列表失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="获取委外工单详情")
+@router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="获取工单委外详情")
 async def get_outsource_work_order(
-    work_order_id: int = Path(..., description="委外工单ID"),
+    work_order_id: int = Path(..., description="工单委外ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceWorkOrderResponse:
     """
-    获取委外工单详情
+    获取工单委外详情
 
-    - **work_order_id**: 委外工单ID
+    - **work_order_id**: 工单委外ID
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
-    返回委外工单详情。
+    返回工单委外详情。
     """
     try:
         return await outsource_work_order_service.get_outsource_work_order(
@@ -7614,22 +7629,22 @@ async def get_outsource_work_order(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.put("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="更新委外工单")
+@router.put("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="更新工单委外")
 async def update_outsource_work_order(
-    work_order_id: int = Path(..., description="委外工单ID"),
+    work_order_id: int = Path(..., description="工单委外ID"),
     data: OutsourceWorkOrderUpdate = Body(...),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceWorkOrderResponse:
     """
-    更新委外工单
+    更新工单委外
 
-    - **work_order_id**: 委外工单ID
-    - **data**: 委外工单更新数据
+    - **work_order_id**: 工单委外ID
+    - **data**: 工单委外更新数据
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
-    返回更新后的委外工单信息。
+    返回更新后的工单委外信息。
     """
     try:
         return await outsource_work_order_service.update_outsource_work_order(
@@ -7644,16 +7659,16 @@ async def update_outsource_work_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/outsource-work-orders/{work_order_id}", summary="删除委外工单")
+@router.delete("/outsource-work-orders/{work_order_id}", summary="删除工单委外")
 async def delete_outsource_work_order(
-    work_order_id: int = Path(..., description="委外工单ID"),
+    work_order_id: int = Path(..., description="工单委外ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> JSONResponse:
     """
-    删除委外工单（软删除）
+    删除工单委外（软删除）
 
-    - **work_order_id**: 委外工单ID
+    - **work_order_id**: 工单委外ID
     - **current_user**: 当前用户
     - **tenant_id**: 当前组织ID
 
@@ -7665,7 +7680,7 @@ async def delete_outsource_work_order(
             work_order_id=work_order_id,
             deleted_by=current_user.id
         )
-        return JSONResponse(content={"success": True, "message": "委外工单删除成功"})
+        return JSONResponse(content={"success": True, "message": "工单委外删除成功"})
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -7705,7 +7720,7 @@ async def create_outsource_material_issue(
 async def list_outsource_material_issues(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    outsource_work_order_id: Optional[int] = Query(None, description="委外工单ID筛选"),
+    outsource_work_order_id: Optional[int] = Query(None, description="工单委外ID筛选"),
     status: Optional[str] = Query(None, description="状态筛选"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
     current_user: User = Depends(get_current_user),
@@ -7716,7 +7731,7 @@ async def list_outsource_material_issues(
 
     - **skip**: 跳过数量
     - **limit**: 限制数量
-    - **outsource_work_order_id**: 委外工单ID筛选
+    - **outsource_work_order_id**: 工单委外ID筛选
     - **status**: 状态筛选
     - **keyword**: 关键词搜索
     - **current_user**: 当前用户
@@ -7822,7 +7837,7 @@ async def create_outsource_material_receipt(
 async def list_outsource_material_receipts(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    outsource_work_order_id: Optional[int] = Query(None, description="委外工单ID筛选"),
+    outsource_work_order_id: Optional[int] = Query(None, description="工单委外ID筛选"),
     status: Optional[str] = Query(None, description="状态筛选"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
     current_user: User = Depends(get_current_user),
@@ -7833,7 +7848,7 @@ async def list_outsource_material_receipts(
 
     - **skip**: 跳过数量
     - **limit**: 限制数量
-    - **outsource_work_order_id**: 委外工单ID筛选
+    - **outsource_work_order_id**: 工单委外ID筛选
     - **status**: 状态筛选
     - **keyword**: 关键词搜索
     - **current_user**: 当前用户

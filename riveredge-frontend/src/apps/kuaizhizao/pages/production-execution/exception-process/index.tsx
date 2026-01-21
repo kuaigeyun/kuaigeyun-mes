@@ -9,7 +9,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Modal, message, Steps, Timeline, Card, Divider, Descriptions } from 'antd';
+import { App, Tag, Button, Space, Modal, message, Steps, Timeline, Card, Divider } from 'antd';
+import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, PlayCircleOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -494,7 +495,7 @@ const ExceptionProcessPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentRecord(null);
         }}
-        width={DRAWER_CONFIG.large.width}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
         extra={
           currentRecord && ['pending', 'processing'].includes(currentRecord.process_status || '') ? (
             <Space>
@@ -522,25 +523,32 @@ const ExceptionProcessPage: React.FC = () => {
       >
         {currentRecord && (
           <div>
-            <Descriptions column={2} bordered>
-              <Descriptions.Item label="异常类型">{getExceptionTypeTag(currentRecord.exception_type)}</Descriptions.Item>
-              <Descriptions.Item label="异常ID">{currentRecord.exception_id}</Descriptions.Item>
-              <Descriptions.Item label="处理状态">{getStatusTag(currentRecord.process_status)}</Descriptions.Item>
-              <Descriptions.Item label="当前步骤">{getStepTag(currentRecord.current_step)}</Descriptions.Item>
-              <Descriptions.Item label="分配给">{currentRecord.assigned_to_name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="分配时间">
-                {currentRecord.assigned_at ? dayjs(currentRecord.assigned_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="开始时间">
-                {currentRecord.started_at ? dayjs(currentRecord.started_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="完成时间">
-                {currentRecord.completed_at ? dayjs(currentRecord.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="备注" span={2}>
-                {currentRecord.remarks || '-'}
-              </Descriptions.Item>
-            </Descriptions>
+            <ProDescriptions
+              column={2}
+              bordered
+              dataSource={{
+                exception_type: getExceptionTypeTag(currentRecord.exception_type),
+                exception_id: currentRecord.exception_id,
+                process_status: getStatusTag(currentRecord.process_status),
+                current_step: getStepTag(currentRecord.current_step),
+                assigned_to_name: currentRecord.assigned_to_name || '-',
+                assigned_at: currentRecord.assigned_at ? dayjs(currentRecord.assigned_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+                started_at: currentRecord.started_at ? dayjs(currentRecord.started_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+                completed_at: currentRecord.completed_at ? dayjs(currentRecord.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-',
+                remarks: currentRecord.remarks || '-',
+              }}
+              columns={[
+                { title: '异常类型', dataIndex: 'exception_type' },
+                { title: '异常ID', dataIndex: 'exception_id' },
+                { title: '处理状态', dataIndex: 'process_status' },
+                { title: '当前步骤', dataIndex: 'current_step' },
+                { title: '分配给', dataIndex: 'assigned_to_name' },
+                { title: '分配时间', dataIndex: 'assigned_at' },
+                { title: '开始时间', dataIndex: 'started_at' },
+                { title: '完成时间', dataIndex: 'completed_at' },
+                { title: '备注', dataIndex: 'remarks', span: 2 },
+              ]}
+            />
 
             <Divider />
 
@@ -589,7 +597,7 @@ const ExceptionProcessPage: React.FC = () => {
           setCurrentRecord(null);
         }}
         onSubmit={handleStart}
-        width={MODAL_CONFIG.medium.width}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
             name: 'exception_type',
@@ -659,7 +667,7 @@ const ExceptionProcessPage: React.FC = () => {
           setAssignModalVisible(false);
         }}
         onSubmit={handleAssign}
-        width={MODAL_CONFIG.medium.width}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
             name: 'assigned_to',
@@ -692,7 +700,7 @@ const ExceptionProcessPage: React.FC = () => {
           setStepTransitionModalVisible(false);
         }}
         onSubmit={handleStepTransition}
-        width={MODAL_CONFIG.medium.width}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
             name: 'to_step',
@@ -727,7 +735,7 @@ const ExceptionProcessPage: React.FC = () => {
           setResolveModalVisible(false);
         }}
         onSubmit={handleResolve}
-        width={MODAL_CONFIG.medium.width}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formItems={[
           {
             name: 'comment',

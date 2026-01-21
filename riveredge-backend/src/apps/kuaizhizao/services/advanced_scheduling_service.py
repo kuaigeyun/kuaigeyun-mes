@@ -14,8 +14,8 @@ from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-from apps.master_data.models.equipment import Equipment
-from apps.master_data.models.workshop import Workshop
+from apps.kuaizhizao.models.equipment import Equipment
+from apps.master_data.models.factory import Workshop
 from core.services.base import BaseService
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError
 

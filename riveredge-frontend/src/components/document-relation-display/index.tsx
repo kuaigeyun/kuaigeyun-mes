@@ -194,4 +194,6 @@ const DocumentRelationDisplay: React.FC<DocumentRelationDisplayProps> = ({
   );
 };
 
+// 同时提供命名导出和默认导出，以兼容不同的导入方式
+export { DocumentRelationDisplay };
 export default DocumentRelationDisplay;

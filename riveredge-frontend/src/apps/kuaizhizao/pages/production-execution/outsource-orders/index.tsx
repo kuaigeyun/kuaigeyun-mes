@@ -1,11 +1,12 @@
 /**
- * 委外单管理页面
+ * 工序委外管理页面
  *
- * 提供委外单的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
- * 支持从工单工序创建委外单。
+ * 提供工序委外的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ * 支持从工单工序创建工序委外单。
  *
  * Author: Luigi Lu
  * Date: 2025-01-04
+ * Updated: 2026-01-20（重命名为工序委外）
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -95,7 +96,7 @@ const OutsourceOrdersPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemType<OutsourceOrder>[] = [
     {
-      title: '委外单编码',
+      title: '工序委外单编码',
       dataIndex: 'code',
     },
     {
@@ -195,7 +196,7 @@ const OutsourceOrdersPage: React.FC = () => {
    */
   const columns: ProColumns<OutsourceOrder>[] = [
     {
-      title: '委外单编码',
+      title: '工序委外单编码',
       dataIndex: 'code',
       width: 180,
       fixed: 'left',
@@ -220,7 +221,7 @@ const OutsourceOrdersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '委外数量',
+      title: '工序委外数量',
       dataIndex: 'outsource_quantity',
       width: 100,
       valueType: 'digit',
@@ -304,7 +305,7 @@ const OutsourceOrdersPage: React.FC = () => {
           type="link"
           size="small"
           icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
+          onClick={() => handleEditFromRecord(record)}
           disabled={record.status === 'completed' || record.status === 'cancelled'}
         >
           编辑
@@ -315,7 +316,7 @@ const OutsourceOrdersPage: React.FC = () => {
           size="small"
           danger
           icon={<DeleteOutlined />}
-          onClick={() => handleDelete(record)}
+          onClick={() => handleDeleteFromRecord(record)}
           disabled={record.status === 'completed' || record.status === 'in_progress'}
         >
           删除
@@ -333,14 +334,74 @@ const OutsourceOrdersPage: React.FC = () => {
       setOutsourceOrderDetail(detail);
       setDetailDrawerVisible(true);
     } catch (error) {
-      messageApi.error('获取委外单详情失败');
+      messageApi.error('获取工序委外单详情失败');
     }
   };
 
   /**
-   * 处理编辑
+   * 处理编辑（从选中行）
    */
-  const handleEdit = async (record: OutsourceOrder) => {
+  const handleEdit = async (keys: React.Key[]) => {
+    if (keys.length === 1) {
+      const id = Number(keys[0]);
+      try {
+        const detail = await outsourceOrderApi.get(id.toString());
+        setIsEdit(true);
+        setCurrentOutsourceOrder(detail);
+        setModalVisible(true);
+        setTimeout(() => {
+          formRef.current?.setFieldsValue({
+            supplier_id: detail.supplier_id,
+            outsource_quantity: detail.outsource_quantity,
+            unit_price: detail.unit_price,
+            status: detail.status,
+            planned_start_date: detail.planned_start_date ? dayjs(detail.planned_start_date) : undefined,
+            planned_end_date: detail.planned_end_date ? dayjs(detail.planned_end_date) : undefined,
+            received_quantity: detail.received_quantity,
+            qualified_quantity: detail.qualified_quantity,
+            unqualified_quantity: detail.unqualified_quantity,
+            remarks: detail.remarks,
+          });
+        }, 100);
+      } catch (error) {
+        messageApi.error('获取工序委外单详情失败');
+      }
+    } else {
+      messageApi.warning('请选择一条工序委外进行编辑');
+    }
+  };
+
+  /**
+   * 处理删除（从选中行）
+   */
+  const handleDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      messageApi.warning('请选择要删除的工序委外');
+      return;
+    }
+
+    const ids = keys.map(k => Number(k));
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除选中的 ${ids.length} 条工序委外吗？`,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await Promise.all(ids.map(id => outsourceOrderApi.delete(id.toString())));
+          messageApi.success('删除成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理编辑（从记录）
+   */
+  const handleEditFromRecord = async (record: OutsourceOrder) => {
     try {
       const detail = await outsourceOrderApi.get(record.id!.toString());
       setIsEdit(true);
@@ -361,17 +422,17 @@ const OutsourceOrdersPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取委外单详情失败');
+      messageApi.error('获取工序委外单详情失败');
     }
   };
 
   /**
-   * 处理删除
+   * 处理删除（从记录）
    */
-  const handleDelete = async (record: OutsourceOrder) => {
+  const handleDeleteFromRecord = async (record: OutsourceOrder) => {
     Modal.confirm({
       title: '确认删除',
-      content: `确定要删除委外单 "${record.code}" 吗？`,
+      content: `确定要删除工序委外单 "${record.code}" 吗？`,
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
@@ -409,11 +470,11 @@ const OutsourceOrdersPage: React.FC = () => {
 
       if (isEdit && currentOutsourceOrder?.id) {
         await outsourceOrderApi.update(currentOutsourceOrder.id.toString(), submitData);
-        messageApi.success('委外单更新成功');
+        messageApi.success('工序委外单更新成功');
       } else {
         // 新建委外单需要更多字段，这里需要从工单创建，所以这里暂时不支持直接创建
-        messageApi.warning('请从工单详情页创建委外单');
-        throw new Error('请从工单详情页创建委外单');
+        messageApi.warning('请从工单详情页创建工序委外单');
+        throw new Error('请从工单详情页创建工序委外单');
       }
       setModalVisible(false);
       actionRef.current?.reload();
@@ -423,48 +484,61 @@ const OutsourceOrdersPage: React.FC = () => {
     }
   };
 
+  /**
+   * 处理请求
+   */
+  const handleRequest = async (params: any, sorter: any, filter: any) => {
+    try {
+      const response = await outsourceOrderApi.list({
+        skip: (params.current! - 1) * params.pageSize!,
+        limit: params.pageSize,
+        ...params,
+      });
+      return {
+        data: response || [],
+        success: true,
+        total: response?.length || 0,
+      };
+    } catch (error) {
+      messageApi.error('获取工序委外单列表失败');
+      return {
+        data: [],
+        success: false,
+        total: 0,
+      };
+    }
+  };
+
   return (
-    <ListPageTemplate
-      title="委外单管理"
-      actionRef={actionRef}
-      request={async (params, sorter, filter) => {
-        try {
-          const response = await outsourceOrderApi.list({
-            skip: (params.current! - 1) * params.pageSize!,
-            limit: params.pageSize,
-            ...params,
-          });
-          return {
-            data: response || [],
-            success: true,
-            total: response?.length || 0,
-          };
-        } catch (error) {
-          messageApi.error('获取委外单列表失败');
-          return {
-            data: [],
-            success: false,
-            total: 0,
-          };
-        }
-      }}
-      columns={columns}
-      toolBarRender={() => [
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleCreate}
-          disabled={true}
-        >
-          新建委外单
-        </Button>,
-      ]}
-    >
+    <ListPageTemplate>
+      <UniTable<OutsourceOrder>
+        actionRef={actionRef}
+        columns={columns}
+        request={handleRequest}
+        rowKey="id"
+        showCreateButton={false}
+        onCreate={handleCreate}
+        showEditButton={true}
+        onEdit={handleEdit}
+        showDeleteButton={true}
+        onDelete={handleDelete}
+        showAdvancedSearch={true}
+        toolBarRender={() => [
+          <Button
+            key="create-outsource-order"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+            disabled={true}
+          >
+            新建工序委外
+          </Button>,
+        ]}
+      />
       {/* 表单Modal（主要用于编辑） */}
       {isEdit && (
         <FormModalTemplate
-          title="编辑委外单"
+          title="编辑工序委外"
           open={modalVisible}
           onCancel={() => setModalVisible(false)}
           onFinish={handleSubmitForm}
@@ -474,7 +548,7 @@ const OutsourceOrdersPage: React.FC = () => {
           <CodeField
             pageCode="kuaizhizao-production-outsource-order"
             name="code"
-            label="委外单编码"
+            label="工序委外单编码"
             required={true}
             autoGenerateOnCreate={!isEdit}
             context={{}}
@@ -497,9 +571,9 @@ const OutsourceOrdersPage: React.FC = () => {
           />
           <ProFormDigit
             name="outsource_quantity"
-            label="委外数量"
-            placeholder="请输入委外数量"
-            rules={[{ required: true, message: '请输入委外数量' }]}
+            label="工序委外数量"
+            placeholder="请输入工序委外数量"
+            rules={[{ required: true, message: '请输入工序委外数量' }]}
             min={0}
             fieldProps={{ precision: 2 }}
           />
@@ -569,7 +643,7 @@ const OutsourceOrdersPage: React.FC = () => {
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title="委外单详情"
+        title="工序委外详情"
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
         dataSource={outsourceOrderDetail}

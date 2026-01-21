@@ -158,6 +158,9 @@ TORTOISE_ORM = {
                 "apps.master_data.models.warehouse",  # 仓库数据模型（仓库、库区、库位）
                 "apps.master_data.models.material",  # 物料数据模型（物料分组、物料、BOM）
                 "apps.master_data.models.material_code_alias",  # 物料编码别名模型（主编码和部门编码映射）
+                "apps.master_data.models.material_code_mapping",  # 物料编码映射模型（外部编码映射到内部编码）
+                "apps.master_data.models.material_batch",  # 物料批号模型
+                "apps.master_data.models.material_serial",  # 物料序列号模型
                 "apps.master_data.models.process",  # 工艺数据模型（不良品、工序、工艺路线、SOP）
                 "apps.master_data.models.customer",  # 供应链数据模型（客户）
                 "apps.master_data.models.supplier",  # 供应链数据模型（供应商）
@@ -167,14 +170,23 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.work_order",  # 工单模型
                 "apps.kuaizhizao.models.work_order_operation",  # 工单工序模型
                 "apps.kuaizhizao.models.reporting_record",  # 报工记录模型
+                "apps.kuaizhizao.models.rework_order",  # 返工单模型
+                "apps.kuaizhizao.models.outsource_order",  # 委外单模型
+                "apps.kuaizhizao.models.scrap_record",  # 报废记录模型
+                "apps.kuaizhizao.models.defect_record",  # 不良品记录模型
+                "apps.kuaizhizao.models.material_binding",  # 物料绑定模型
                 "apps.kuaizhizao.models.production_picking",  # 生产领料模型
                 "apps.kuaizhizao.models.production_picking_item",  # 生产领料明细模型
                 "apps.kuaizhizao.models.finished_goods_receipt",  # 成品入库模型
                 "apps.kuaizhizao.models.finished_goods_receipt_item",  # 成品入库明细模型
                 "apps.kuaizhizao.models.sales_delivery",  # 销售发货模型
                 "apps.kuaizhizao.models.sales_delivery_item",  # 销售发货明细模型
+                "apps.kuaizhizao.models.sales_return",  # 销售退货模型
+                "apps.kuaizhizao.models.sales_return_item",  # 销售退货明细模型
                 "apps.kuaizhizao.models.purchase_receipt",  # 采购收货模型
                 "apps.kuaizhizao.models.purchase_receipt_item",  # 采购收货明细模型
+                "apps.kuaizhizao.models.purchase_return",  # 采购退货模型
+                "apps.kuaizhizao.models.purchase_return_item",  # 采购退货明细模型
                 "apps.kuaizhizao.models.purchase_order",  # 采购订单模型
                 "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
                 "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
@@ -186,6 +198,11 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.sales_forecast_item",  # 销售预测明细模型
                 "apps.kuaizhizao.models.sales_order",  # 销售订单模型
                 "apps.kuaizhizao.models.sales_order_item",  # 销售订单明细模型
+                # 统一需求管理模型（第一阶段重构）
+                "apps.kuaizhizao.models.demand",  # 统一需求模型
+                "apps.kuaizhizao.models.demand_item",  # 统一需求明细模型
+                "apps.kuaizhizao.models.demand_computation",  # 需求计算模型
+                "apps.kuaizhizao.models.demand_computation_item",  # 需求计算明细模型
                 # BOM管理已移至master_data APP，不再需要bill_of_materials模型
                 # "apps.kuaizhizao.models.bill_of_materials",  # BOM模型
                 # "apps.kuaizhizao.models.bill_of_materials_item",  # BOM明细模型

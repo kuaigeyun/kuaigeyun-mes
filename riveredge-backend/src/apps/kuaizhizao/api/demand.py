@@ -120,7 +120,7 @@ async def list_demands(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
     demand_type: Optional[str] = Query(None, description="需求类型（sales_forecast 或 sales_order）"),
-    status: Optional[str] = Query(None, description="需求状态"),
+    demand_status: Optional[str] = Query(None, description="需求状态", alias="status"),
     business_mode: Optional[str] = Query(None, description="业务模式（MTS 或 MTO）"),
     review_status: Optional[str] = Query(None, description="审核状态"),
     current_user: User = Depends(get_current_user),
@@ -135,8 +135,8 @@ async def list_demands(
         filters = {}
         if demand_type:
             filters['demand_type'] = demand_type
-        if status:
-            filters['status'] = status
+        if demand_status:
+            filters['status'] = demand_status
         if business_mode:
             filters['business_mode'] = business_mode
         if review_status:

@@ -9,7 +9,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, ProForm, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Col, Descriptions } from 'antd';
+import { App, Button, Tag, Space, message, Modal, Tabs, Card, Statistic, Row, Col } from 'antd';
+import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined, CalculatorOutlined, BarChartOutlined, LineChartOutlined, BulbOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
@@ -640,17 +641,21 @@ const CostCalculationPage: React.FC = () => {
                 />
               </Col>
             </Row>
-            <Descriptions title="成本明细差异" bordered style={{ marginTop: 16 }}>
-              <Descriptions.Item label="材料成本差异">
-                ¥{compareData.material_cost_difference?.toFixed(2) || '0.00'}
-              </Descriptions.Item>
-              <Descriptions.Item label="人工成本差异">
-                ¥{compareData.labor_cost_difference?.toFixed(2) || '0.00'}
-              </Descriptions.Item>
-              <Descriptions.Item label="制造费用差异">
-                ¥{compareData.manufacturing_cost_difference?.toFixed(2) || '0.00'}
-              </Descriptions.Item>
-            </Descriptions>
+            <ProDescriptions
+              title="成本明细差异"
+              bordered
+              style={{ marginTop: 16 }}
+              dataSource={{
+                material_cost_difference: `¥${compareData.material_cost_difference?.toFixed(2) || '0.00'}`,
+                labor_cost_difference: `¥${compareData.labor_cost_difference?.toFixed(2) || '0.00'}`,
+                manufacturing_cost_difference: `¥${compareData.manufacturing_cost_difference?.toFixed(2) || '0.00'}`,
+              }}
+              columns={[
+                { title: '材料成本差异', dataIndex: 'material_cost_difference' },
+                { title: '人工成本差异', dataIndex: 'labor_cost_difference' },
+                { title: '制造费用差异', dataIndex: 'manufacturing_cost_difference' },
+              ]}
+            />
             {compareData.difference_analysis && (
               <div style={{ marginTop: 16 }}>
                 <strong>差异原因分析：</strong>

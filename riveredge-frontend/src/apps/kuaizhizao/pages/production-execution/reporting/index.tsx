@@ -561,6 +561,96 @@ const ReportingPage: React.FC = () => {
   };
 
   /**
+   * 处理快速报工
+   */
+  const handleQuickReporting = async () => {
+    try {
+      // 加载进行中的工单列表
+      const workOrders = await workOrderApi.list({ status: 'in_progress', limit: 100 });
+      setQuickReportWorkOrders(workOrders || []);
+      setQuickReportModalVisible(true);
+      setQuickReportWorkOrderId(null);
+      setQuickReportOperationId(null);
+      setQuickReportOperations([]);
+      quickReportFormRef.current?.resetFields();
+    } catch (error: any) {
+      messageApi.error(error.message || '加载工单列表失败');
+    }
+  };
+
+  /**
+   * 处理快速报工工单变更
+   */
+  const handleQuickReportWorkOrderChange = async (workOrderId: number) => {
+    setQuickReportWorkOrderId(workOrderId);
+    setQuickReportOperationId(null);
+    setQuickReportOperations([]);
+    quickReportFormRef.current?.setFieldsValue({ operation_id: undefined });
+    
+    try {
+      // 加载工单的工序列表
+      const operations = await workOrderApi.getOperations(workOrderId.toString());
+      setQuickReportOperations(operations || []);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载工序列表失败');
+    }
+  };
+
+  /**
+   * 处理快速报工提交
+   */
+  const handleQuickReportSubmit = async (values: any) => {
+    try {
+      const workOrder = quickReportWorkOrders.find((wo: any) => wo.id === values.work_order_id);
+      const operation = quickReportOperations.find((op: any) => op.operation_id === values.operation_id);
+      
+      if (!workOrder || !operation) {
+        messageApi.error('工单或工序信息不存在');
+        return;
+      }
+
+      const reportingData: any = {
+        work_order_id: workOrder.id,
+        work_order_code: workOrder.code,
+        work_order_name: workOrder.name,
+        operation_id: operation.operation_id,
+        operation_code: operation.operation_code,
+        operation_name: operation.operation_name,
+        worker_id: 1, // TODO: 从用户信息获取
+        worker_name: '当前用户', // TODO: 从用户信息获取
+        status: 'pending',
+        reported_at: new Date().toISOString(),
+        remarks: values.remarks,
+      };
+
+      // 根据报工类型设置数量
+      if (operation.reporting_type === 'status') {
+        reportingData.reported_quantity = values.completed_status === 'completed' ? 1 : 0;
+        reportingData.qualified_quantity = values.completed_status === 'completed' ? 1 : 0;
+        reportingData.unqualified_quantity = 0;
+      } else {
+        reportingData.reported_quantity = values.reported_quantity || 0;
+        reportingData.qualified_quantity = values.qualified_quantity || values.reported_quantity || 0;
+        reportingData.unqualified_quantity = (values.reported_quantity || 0) - (values.qualified_quantity || values.reported_quantity || 0);
+      }
+
+      reportingData.work_hours = values.work_hours || 0;
+
+      await reportingApi.create(reportingData);
+      messageApi.success('快速报工成功');
+      setQuickReportModalVisible(false);
+      setQuickReportWorkOrderId(null);
+      setQuickReportOperationId(null);
+      setQuickReportOperations([]);
+      quickReportFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '快速报工失败');
+      throw error;
+    }
+  };
+
+  /**
    * 处理报工提交
    */
   const handleReportingSubmit = async (values: any) => {

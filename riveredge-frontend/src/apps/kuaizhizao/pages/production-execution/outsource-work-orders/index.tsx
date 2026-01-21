@@ -1,13 +1,14 @@
 /**
- * 委外工单管理页面
+ * 工单委外管理页面
  *
- * 提供委外工单的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ * 提供工单委外的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  * 支持委外发料、委外收货等功能。
  *
- * 根据功能点2.1.10：委外工单管理（核心功能，新增）
+ * 根据功能点2.1.10：工单委外管理（核心功能，新增）
  *
  * Author: Auto (AI Assistant)
  * Date: 2026-01-16
+ * Updated: 2026-01-20（重命名为工单委外）
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -68,7 +69,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   // 仓库列表状态
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
 
-  // Modal 相关状态（创建/编辑委外工单）
+  // Modal 相关状态（创建/编辑工单委外）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentWorkOrder, setCurrentWorkOrder] = useState<OutsourceWorkOrder | null>(null);
@@ -129,7 +130,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   }, []);
 
   /**
-   * 处理新建委外工单
+   * 处理新建工单委外
    */
   const handleCreate = () => {
     setIsEdit(false);
@@ -140,7 +141,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理编辑委外工单
+   * 处理编辑工单委外
    */
   const handleEdit = async (record: OutsourceWorkOrder) => {
     try {
@@ -163,17 +164,17 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取委外工单详情失败');
+      messageApi.error('获取工单委外详情失败');
     }
   };
 
   /**
-   * 处理删除委外工单
+   * 处理删除工单委外
    */
   const handleDelete = async (record: OutsourceWorkOrder) => {
     try {
       await outsourceWorkOrderApi.delete(record.id!.toString());
-      messageApi.success('委外工单删除成功');
+      messageApi.success('工单委外删除成功');
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
@@ -189,7 +190,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
       setWorkOrderDetail(detail);
       setDrawerVisible(true);
     } catch (error) {
-      messageApi.error('获取委外工单详情失败');
+      messageApi.error('获取工单委外详情失败');
     }
   };
 
@@ -201,8 +202,8 @@ const OutsourceWorkOrdersPage: React.FC = () => {
       // 物料来源验证
       if (values.productId && selectedMaterialSourceInfo) {
         if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
-          messageApi.error('该物料来源类型不允许创建委外工单，请选择其他物料');
-          throw new Error('物料来源类型不允许创建委外工单');
+          messageApi.error('该物料来源类型不允许创建工单委外，请选择其他物料');
+          throw new Error('物料来源类型不允许创建工单委外');
         }
       }
 
@@ -270,10 +271,10 @@ const OutsourceWorkOrdersPage: React.FC = () => {
 
       if (isEdit && currentWorkOrder?.id) {
         await outsourceWorkOrderApi.update(currentWorkOrder.id.toString(), values);
-        messageApi.success('委外工单更新成功');
+        messageApi.success('工单委外更新成功');
       } else {
         await outsourceWorkOrderApi.create(values);
-        messageApi.success('委外工单创建成功');
+        messageApi.success('工单委外创建成功');
       }
       setModalVisible(false);
       setSelectedMaterialSourceInfo(null);
@@ -296,7 +297,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         issueFormRef.current?.resetFields();
       }, 100);
     } catch (error) {
-      messageApi.error('获取委外工单详情失败');
+      messageApi.error('获取工单委外详情失败');
     }
   };
 
@@ -306,7 +307,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   const handleSubmitIssue = async (values: any): Promise<void> => {
     try {
       if (!currentWorkOrderForIssue?.id) {
-        throw new Error('委外工单信息不存在');
+        throw new Error('工单委外信息不存在');
       }
 
       const submitData = {
@@ -353,7 +354,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取委外工单详情失败');
+      messageApi.error('获取工单委外详情失败');
     }
   };
 
@@ -363,7 +364,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   const handleSubmitReceipt = async (values: any): Promise<void> => {
     try {
       if (!currentWorkOrderForReceipt?.id) {
-        throw new Error('委外工单信息不存在');
+        throw new Error('工单委外信息不存在');
       }
 
       const submitData = {
@@ -396,13 +397,13 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   // 定义表格列
   const columns: ProColumns<OutsourceWorkOrder>[] = [
     {
-      title: '委外工单编码',
+      title: '工单委外编码',
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
     },
     {
-      title: '委外工单名称',
+      title: '工单委外名称',
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
@@ -582,11 +583,11 @@ const OutsourceWorkOrdersPage: React.FC = () => {
   // 定义详情列
   const detailColumns: ProDescriptionsItemType<OutsourceWorkOrder>[] = [
     {
-      title: '委外工单编码',
+      title: '工单委外编码',
       dataIndex: 'code',
     },
     {
-      title: '委外工单名称',
+      title: '工单委外名称',
       dataIndex: 'name',
     },
     {
@@ -734,7 +735,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<OutsourceWorkOrder>
-          headerTitle="委外工单管理"
+          headerTitle="工单委外管理"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -767,8 +768,8 @@ const OutsourceWorkOrdersPage: React.FC = () => {
                 total: 0,
               };
             } catch (error) {
-              console.error('获取委外工单列表失败:', error);
-              messageApi.error('获取委外工单列表失败');
+              console.error('获取工单委外列表失败:', error);
+              messageApi.error('获取工单委外列表失败');
               return {
                 data: [],
                 success: false,
@@ -783,16 +784,16 @@ const OutsourceWorkOrdersPage: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleCreate}
             >
-              新建委外工单
+              新建工单委外
             </Button>,
           ]}
           onDelete={handleDelete}
         />
       </ListPageTemplate>
 
-      {/* 创建/编辑委外工单 Modal */}
-      <FormModalTemplate
-        title={isEdit ? '编辑委外工单' : '新建委外工单'}
+      {/* 创建/编辑工单委外 Modal */}
+        <FormModalTemplate
+        title={isEdit ? '编辑工单委外' : '新建工单委外'}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -809,8 +810,8 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         <Divider>基本信息</Divider>
         <ProFormText
           name="name"
-          label="委外工单名称"
-          placeholder="请输入委外工单名称（可选）"
+          label="工单委外名称"
+          placeholder="请输入工单委外名称（可选）"
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
@@ -914,12 +915,12 @@ const OutsourceWorkOrdersPage: React.FC = () => {
             )}
             {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
               <div style={{ marginTop: 8, color: '#ff4d4f', fontWeight: 'bold' }}>
-                该物料来源类型不允许创建委外工单，请选择委外件物料
+                该物料来源类型不允许创建工单委外，请选择委外件物料
               </div>
             )}
             {selectedMaterialSourceInfo.canCreateWorkOrder && (
               <div style={{ marginTop: 8, color: '#52c41a' }}>
-                ✓ 物料来源验证通过，可以创建委外工单
+                ✓ 物料来源验证通过，可以创建工单委外
                 {selectedMaterialSourceInfo.supplierName && (
                   <span style={{ marginLeft: 16 }}>
                     默认供应商：{selectedMaterialSourceInfo.supplierName}
@@ -1057,9 +1058,9 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 委外工单详情 Drawer */}
+      {/* 工单委外详情 Drawer */}
       <DetailDrawerTemplate<OutsourceWorkOrder>
-        title={`委外工单详情 - ${workOrderDetail?.code || ''}`}
+        title={`工单委外详情 - ${workOrderDetail?.code || ''}`}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -1085,9 +1086,9 @@ const OutsourceWorkOrdersPage: React.FC = () => {
       >
         {currentWorkOrderForIssue && (
           <>
-            <Divider>委外工单信息</Divider>
+            <Divider>工单委外信息</Divider>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>委外工单编码：</strong>{currentWorkOrderForIssue.code}</div>
+              <div><strong>工单委外编码：</strong>{currentWorkOrderForIssue.code}</div>
               <div><strong>产品名称：</strong>{currentWorkOrderForIssue.productName || currentWorkOrderForIssue.product_name}</div>
               <div><strong>委外数量：</strong>{currentWorkOrderForIssue.quantity?.toFixed(2)}</div>
               <div><strong>已发料数量：</strong>{(currentWorkOrderForIssue.issuedQuantity || currentWorkOrderForIssue.issued_quantity || 0).toFixed(2)}</div>
@@ -1221,9 +1222,9 @@ const OutsourceWorkOrdersPage: React.FC = () => {
       >
         {currentWorkOrderForReceipt && (
           <>
-            <Divider>委外工单信息</Divider>
+            <Divider>工单委外信息</Divider>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <div><strong>委外工单编码：</strong>{currentWorkOrderForReceipt.code}</div>
+              <div><strong>工单委外编码：</strong>{currentWorkOrderForReceipt.code}</div>
               <div><strong>产品名称：</strong>{currentWorkOrderForReceipt.productName || currentWorkOrderForReceipt.product_name}</div>
               <div><strong>委外数量：</strong>{currentWorkOrderForReceipt.quantity?.toFixed(2)}</div>
               <div><strong>已收货数量：</strong>{(currentWorkOrderForReceipt.receivedQuantity || currentWorkOrderForReceipt.received_quantity || 0).toFixed(2)}</div>

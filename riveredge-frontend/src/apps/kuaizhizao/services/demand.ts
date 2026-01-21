@@ -126,8 +126,7 @@ export interface DemandListResponse {
  * 获取需求列表
  */
 export async function listDemands(params: DemandListParams = {}): Promise<DemandListResponse> {
-  return apiRequest<DemandListResponse>({
-    url: '/apps/kuaizhizao/demands',
+  return apiRequest<DemandListResponse>('/apps/kuaizhizao/demands', {
     method: 'GET',
     params,
   });
@@ -137,8 +136,7 @@ export async function listDemands(params: DemandListParams = {}): Promise<Demand
  * 获取需求详情
  */
 export async function getDemand(id: number, includeItems: boolean = false, includeDuration: boolean = false): Promise<Demand & { duration_info?: any }> {
-  return apiRequest<Demand & { duration_info?: any }>({
-    url: `/apps/kuaizhizao/demands/${id}`,
+  return apiRequest<Demand & { duration_info?: any }>(`/apps/kuaizhizao/demands/${id}`, {
     method: 'GET',
     params: { include_items: includeItems, include_duration: includeDuration },
   });
@@ -148,8 +146,7 @@ export async function getDemand(id: number, includeItems: boolean = false, inclu
  * 创建需求
  */
 export async function createDemand(data: Partial<Demand>): Promise<Demand> {
-  return apiRequest<Demand>({
-    url: '/apps/kuaizhizao/demands',
+  return apiRequest<Demand>('/apps/kuaizhizao/demands', {
     method: 'POST',
     data,
   });
@@ -159,8 +156,7 @@ export async function createDemand(data: Partial<Demand>): Promise<Demand> {
  * 更新需求
  */
 export async function updateDemand(id: number, data: Partial<Demand>): Promise<Demand> {
-  return apiRequest<Demand>({
-    url: `/apps/kuaizhizao/demands/${id}`,
+  return apiRequest<Demand>(`/apps/kuaizhizao/demands/${id}`, {
     method: 'PUT',
     data,
   });
@@ -170,8 +166,7 @@ export async function updateDemand(id: number, data: Partial<Demand>): Promise<D
  * 提交需求
  */
 export async function submitDemand(id: number): Promise<Demand> {
-  return apiRequest<Demand>({
-    url: `/apps/kuaizhizao/demands/${id}/submit`,
+  return apiRequest<Demand>(`/apps/kuaizhizao/demands/${id}/submit`, {
     method: 'POST',
   });
 }
@@ -180,8 +175,7 @@ export async function submitDemand(id: number): Promise<Demand> {
  * 审核通过需求
  */
 export async function approveDemand(id: number): Promise<Demand> {
-  return apiRequest<Demand>({
-    url: `/apps/kuaizhizao/demands/${id}/approve`,
+  return apiRequest<Demand>(`/apps/kuaizhizao/demands/${id}/approve`, {
     method: 'POST',
   });
 }
@@ -190,8 +184,7 @@ export async function approveDemand(id: number): Promise<Demand> {
  * 驳回需求
  */
 export async function rejectDemand(id: number, rejectionReason: string): Promise<Demand> {
-  return apiRequest<Demand>({
-    url: `/apps/kuaizhizao/demands/${id}/reject`,
+  return apiRequest<Demand>(`/apps/kuaizhizao/demands/${id}/reject`, {
     method: 'POST',
     params: { rejection_reason: rejectionReason },
   });
@@ -201,8 +194,7 @@ export async function rejectDemand(id: number, rejectionReason: string): Promise
  * 添加需求明细
  */
 export async function addDemandItem(demandId: number, data: Partial<DemandItem>): Promise<DemandItem> {
-  return apiRequest<DemandItem>({
-    url: `/apps/kuaizhizao/demands/${demandId}/items`,
+  return apiRequest<DemandItem>(`/apps/kuaizhizao/demands/${demandId}/items`, {
     method: 'POST',
     data,
   });
@@ -212,8 +204,7 @@ export async function addDemandItem(demandId: number, data: Partial<DemandItem>)
  * 更新需求明细
  */
 export async function updateDemandItem(demandId: number, itemId: number, data: Partial<DemandItem>): Promise<DemandItem> {
-  return apiRequest<DemandItem>({
-    url: `/apps/kuaizhizao/demands/${demandId}/items/${itemId}`,
+  return apiRequest<DemandItem>(`/apps/kuaizhizao/demands/${demandId}/items/${itemId}`, {
     method: 'PUT',
     data,
   });
@@ -223,8 +214,7 @@ export async function updateDemandItem(demandId: number, itemId: number, data: P
  * 删除需求明细
  */
 export async function deleteDemandItem(demandId: number, itemId: number): Promise<void> {
-  return apiRequest<void>({
-    url: `/apps/kuaizhizao/demands/${demandId}/items/${itemId}`,
+  return apiRequest<void>(`/apps/kuaizhizao/demands/${demandId}/items/${itemId}`, {
     method: 'DELETE',
   });
 }
@@ -248,8 +238,7 @@ export interface BatchCreateDemandsResponse {
  * 批量创建需求
  */
 export async function batchCreateDemands(demands: Partial<Demand>[]): Promise<BatchCreateDemandsResponse> {
-  return apiRequest<BatchCreateDemandsResponse>({
-    url: '/apps/kuaizhizao/demands/batch',
+  return apiRequest<BatchCreateDemandsResponse>('/apps/kuaizhizao/demands/batch', {
     method: 'POST',
     data: demands,
   });
@@ -270,8 +259,7 @@ export interface PushToComputationResponse {
  * 下推需求到物料需求运算
  */
 export async function pushDemandToComputation(demandId: number): Promise<PushToComputationResponse> {
-  return apiRequest<PushToComputationResponse>({
-    url: `/apps/kuaizhizao/demands/${demandId}/push-to-computation`,
+  return apiRequest<PushToComputationResponse>(`/apps/kuaizhizao/demands/${demandId}/push-to-computation`, {
     method: 'POST',
   });
 }
