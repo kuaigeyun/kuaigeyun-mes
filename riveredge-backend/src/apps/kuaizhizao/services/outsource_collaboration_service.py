@@ -13,7 +13,7 @@ from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
-from apps.master_data.models.supply_chain import Supplier
+from apps.master_data.models.supplier import Supplier
 from core.services.base import BaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 

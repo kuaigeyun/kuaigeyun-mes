@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Tag, message, Modal, Divider } from 'antd';
+import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Card, Tag, message, Modal, Divider } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import { outsourceCostApi } from '../../../services/cost';
@@ -126,38 +126,42 @@ const OutsourceCostPage: React.FC = () => {
       {/* 核算结果展示 */}
       {result && (
         <Card title="核算结果" style={{ marginBottom: 16 }}>
-          <Descriptions bordered column={2}>
-            {result.material_code && (
-              <>
-                <Descriptions.Item label="物料编码">{result.material_code}</Descriptions.Item>
-                <Descriptions.Item label="物料名称">{result.material_name}</Descriptions.Item>
-              </>
-            )}
-            {result.outsource_work_order_code && (
-              <>
-                <Descriptions.Item label="委外工单编码">{result.outsource_work_order_code}</Descriptions.Item>
-                {result.supplier_name && (
-                  <Descriptions.Item label="供应商">{result.supplier_name}</Descriptions.Item>
-                )}
-              </>
-            )}
-            <Descriptions.Item label="物料来源类型">
-              <Tag color="orange">委外件</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="数量">{result.quantity}</Descriptions.Item>
-            <Descriptions.Item label="材料成本">¥{result.material_cost?.toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="委外加工费用">¥{result.processing_cost?.toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="总成本">
-              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-                ¥{result.total_cost?.toFixed(2)}
-              </span>
-            </Descriptions.Item>
-            <Descriptions.Item label="单位成本">¥{result.unit_cost?.toFixed(2)}</Descriptions.Item>
-            <Descriptions.Item label="核算类型">{result.calculation_type}</Descriptions.Item>
-            <Descriptions.Item label="核算日期">
-              {result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-'}
-            </Descriptions.Item>
-          </Descriptions>
+          <ProDescriptions
+            bordered
+            column={2}
+            dataSource={{
+              material_code: result.material_code,
+              material_name: result.material_name,
+              outsource_work_order_code: result.outsource_work_order_code,
+              supplier_name: result.supplier_name,
+              source_type: <Tag color="orange">委外件</Tag>,
+              quantity: result.quantity,
+              material_cost: `¥${result.material_cost?.toFixed(2)}`,
+              processing_cost: `¥${result.processing_cost?.toFixed(2)}`,
+              total_cost: (
+                <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
+                  ¥{result.total_cost?.toFixed(2)}
+                </span>
+              ),
+              unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
+              calculation_type: result.calculation_type,
+              calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
+            }}
+            columns={[
+              { title: '物料编码', dataIndex: 'material_code', hide: !result.material_code },
+              { title: '物料名称', dataIndex: 'material_name', hide: !result.material_name },
+              { title: '委外工单编码', dataIndex: 'outsource_work_order_code', hide: !result.outsource_work_order_code },
+              { title: '供应商', dataIndex: 'supplier_name', hide: !result.supplier_name },
+              { title: '物料来源类型', dataIndex: 'source_type' },
+              { title: '数量', dataIndex: 'quantity' },
+              { title: '材料成本', dataIndex: 'material_cost' },
+              { title: '委外加工费用', dataIndex: 'processing_cost' },
+              { title: '总成本', dataIndex: 'total_cost' },
+              { title: '单位成本', dataIndex: 'unit_cost' },
+              { title: '核算类型', dataIndex: 'calculation_type' },
+              { title: '核算日期', dataIndex: 'calculation_date' },
+            ]}
+          />
 
           {result.cost_details && (
             <>

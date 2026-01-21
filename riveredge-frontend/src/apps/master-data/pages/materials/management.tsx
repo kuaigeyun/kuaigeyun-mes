@@ -41,6 +41,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../serv
 const MaterialsManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // 左侧分组树状态
   const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([]);
@@ -1005,86 +1006,86 @@ const MaterialsManagementPage: React.FC = () => {
         loading={materialDetailLoading}
       >
         {currentMaterial && (
-          <ProDescriptions<Material>
-            dataSource={currentMaterial}
-            column={2}
-            columns={[
-              {
-                title: '物料编码',
-                dataIndex: 'code',
-              },
-              {
-                title: '物料名称',
-                dataIndex: 'name',
-              },
-              {
-                title: '物料分组',
-                dataIndex: 'groupId',
-                render: (_, record) => getMaterialGroupName(record.groupId),
-              },
-              {
-                title: '规格',
-                dataIndex: 'specification',
-              },
-              {
-                title: '基础单位',
-                dataIndex: 'baseUnit',
-              },
-              {
-                title: '品牌',
-                dataIndex: 'brand',
-              },
-              {
-                title: '型号',
-                dataIndex: 'model',
-              },
-              {
-                title: '批号管理',
-                dataIndex: 'batchManaged',
-                render: (_, record) => (
-                  <Tag color={record.batchManaged ? 'blue' : 'default'}>
-                    {record.batchManaged ? '是' : '否'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '变体管理',
-                dataIndex: 'variantManaged',
-                render: (_, record) => (
-                  <Tag color={record.variantManaged ? 'purple' : 'default'}>
-                    {record.variantManaged ? '是' : '否'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '描述',
-                dataIndex: 'description',
-                span: 2,
-              },
-              {
-                title: '启用状态',
-                dataIndex: 'isActive',
-                render: (_, record) => (
-                  <Tag color={record.isActive ? 'success' : 'default'}>
-                    {record.isActive ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '创建时间',
-                dataIndex: 'createdAt',
-                valueType: 'dateTime',
-              },
-              {
-                title: '更新时间',
-                dataIndex: 'updatedAt',
-                valueType: 'dateTime',
-              },
-            ]}
-          />
-          
-          {/* 物料二维码 */}
-          {currentMaterial && (
+          <>
+            <ProDescriptions<Material>
+              dataSource={currentMaterial}
+              column={2}
+              columns={[
+                {
+                  title: '物料编码',
+                  dataIndex: 'code',
+                },
+                {
+                  title: '物料名称',
+                  dataIndex: 'name',
+                },
+                {
+                  title: '物料分组',
+                  dataIndex: 'groupId',
+                  render: (_, record) => getMaterialGroupName(record.groupId),
+                },
+                {
+                  title: '规格',
+                  dataIndex: 'specification',
+                },
+                {
+                  title: '基础单位',
+                  dataIndex: 'baseUnit',
+                },
+                {
+                  title: '品牌',
+                  dataIndex: 'brand',
+                },
+                {
+                  title: '型号',
+                  dataIndex: 'model',
+                },
+                {
+                  title: '批号管理',
+                  dataIndex: 'batchManaged',
+                  render: (_, record) => (
+                    <Tag color={record.batchManaged ? 'blue' : 'default'}>
+                      {record.batchManaged ? '是' : '否'}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: '变体管理',
+                  dataIndex: 'variantManaged',
+                  render: (_, record) => (
+                    <Tag color={record.variantManaged ? 'purple' : 'default'}>
+                      {record.variantManaged ? '是' : '否'}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: '描述',
+                  dataIndex: 'description',
+                  span: 2,
+                },
+                {
+                  title: '启用状态',
+                  dataIndex: 'isActive',
+                  render: (_, record) => (
+                    <Tag color={record.isActive ? 'success' : 'default'}>
+                      {record.isActive ? '启用' : '禁用'}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: '创建时间',
+                  dataIndex: 'createdAt',
+                  valueType: 'dateTime',
+                },
+                {
+                  title: '更新时间',
+                  dataIndex: 'updatedAt',
+                  valueType: 'dateTime',
+                },
+              ]}
+            />
+            
+            {/* 物料二维码 */}
             <div style={{ marginTop: 24 }}>
               <QRCodeGenerator
                 qrcodeType="MAT"
@@ -1096,7 +1097,7 @@ const MaterialsManagementPage: React.FC = () => {
                 autoGenerate={true}
               />
             </div>
-          )}
+          </>
         )}
       </Drawer>
 

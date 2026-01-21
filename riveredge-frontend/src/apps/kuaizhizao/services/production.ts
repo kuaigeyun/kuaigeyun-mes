@@ -753,6 +753,19 @@ export const qualityApi = {
       });
     },
   },
+
+  // 质量统计和报表
+  qualityStatistics: {
+    getStatistics: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/quality/statistics', { method: 'GET', params });
+    },
+    getAnomalies: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/quality/anomalies', { method: 'GET', params });
+    },
+    getReport: async (params?: any) => {
+      return apiRequest('/apps/kuaizhizao/reports/quality', { method: 'GET', params });
+    },
+  },
 };
 
 // 财务协同相关接口
@@ -798,19 +811,6 @@ export const financeApi = {
     },
     approve: async (id: string, data: any) => {
       return apiRequest(`/apps/kuaizhizao/purchase-invoices/${id}/approve`, { method: 'POST', data });
-    },
-  },
-
-  // 质量统计和报表
-  qualityStatistics: {
-    getStatistics: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/quality/statistics', { method: 'GET', params });
-    },
-    getAnomalies: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/quality/anomalies', { method: 'GET', params });
-    },
-    getReport: async (params?: any) => {
-      return apiRequest('/apps/kuaizhizao/reports/quality', { method: 'GET', params });
     },
   },
 

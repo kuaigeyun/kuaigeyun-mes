@@ -1,10 +1,11 @@
 """
-委外单数据模型模块
+工序委外数据模型模块
 
-定义委外单数据模型，用于管理工序委外业务，支持多组织隔离。
+定义工序委外数据模型，用于管理工序委外业务，支持多组织隔离。
 
 Author: Luigi Lu
 Date: 2025-01-04
+Updated: 2026-01-20（重命名为工序委外）
 """
 
 from tortoise import fields
@@ -13,7 +14,7 @@ from core.models.base import BaseModel
 
 class OutsourceOrder(BaseModel):
     """
-    委外单模型
+    工序委外模型
 
     用于管理工序委外业务，关联工单和工序，支持委外入库关联。
 
@@ -21,7 +22,7 @@ class OutsourceOrder(BaseModel):
         id: 主键ID（自增ID，内部使用）
         uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
         tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
-        code: 委外单编码（组织内唯一）
+        code: 工序委外单编码（组织内唯一）
         work_order_id: 工单ID（关联WorkOrder）
         work_order_code: 工单编码
         work_order_operation_id: 工单工序ID（关联WorkOrderOperation）

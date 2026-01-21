@@ -629,6 +629,7 @@ const QualityReportPage: React.FC = () => {
           </Col>
         </Row>
       )}
+      </Spin>
     </ListPageTemplate>
   );
 };

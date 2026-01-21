@@ -9,7 +9,8 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, Input } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined } from '@ant-design/icons';
@@ -29,13 +30,14 @@ import {
   DemandItem 
 } from '../../../services/demand';
 import { getDocumentRelations } from '../../../services/document-relation';
-import { DocumentRelationDisplay } from '../../../../../components/document-relation-display';
+import DocumentRelationDisplay from '../../../../../components/document-relation-display';
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 
 const DemandManagementPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  const [searchParams] = useSearchParams();
   
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -47,8 +49,18 @@ const DemandManagementPage: React.FC = () => {
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
   
-  // 需求类型选择（销售预测/销售订单）
-  const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>('sales_forecast');
+  // 需求类型选择（销售预测/销售订单），支持从 URL 参数读取
+  const urlDemandType = searchParams.get('demand_type') as 'sales_forecast' | 'sales_order' | null;
+  const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>(
+    urlDemandType || 'sales_forecast'
+  );
+
+  // 当 URL 参数变化时，更新需求类型
+  useEffect(() => {
+    if (urlDemandType && (urlDemandType === 'sales_forecast' || urlDemandType === 'sales_order')) {
+      setDemandType(urlDemandType);
+    }
+  }, [urlDemandType]);
 
   /**
    * 处理新建需求
@@ -536,9 +548,11 @@ const DemandManagementPage: React.FC = () => {
               limit: params.pageSize || 20,
             };
             
-            // 处理搜索参数
+            // 处理搜索参数，优先使用搜索表单的值，如果没有则使用 URL 参数的值
             if (searchFormValues?.demand_type) {
               apiParams.demand_type = searchFormValues.demand_type;
+            } else if (urlDemandType) {
+              apiParams.demand_type = urlDemandType;
             }
             if (searchFormValues?.status) {
               apiParams.status = searchFormValues.status;

@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Tag, message, Modal, Divider, List, Badge, Alert } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Card, Tag, message, Modal, Divider, List, Badge, Alert } from 'antd';
 import { BulbOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import { costOptimizationApi } from '../../../services/cost';
@@ -166,16 +166,23 @@ const CostOptimizationPage: React.FC = () => {
       {result && (
         <Card title="优化建议结果" style={{ marginBottom: 16 }}>
           {mode === 'single' && result.material_code && (
-            <Descriptions bordered column={2} style={{ marginBottom: 24 }}>
-              <Descriptions.Item label="物料编码">{result.material_code}</Descriptions.Item>
-              <Descriptions.Item label="物料名称">{result.material_name}</Descriptions.Item>
-              <Descriptions.Item label="当前来源类型">
-                {getSourceTypeTag(result.current_source_type)}
-              </Descriptions.Item>
-              <Descriptions.Item label="当前成本">
-                ¥{result.current_cost?.total_cost?.toFixed(2)}
-              </Descriptions.Item>
-            </Descriptions>
+            <ProDescriptions
+              bordered
+              column={2}
+              style={{ marginBottom: 24 }}
+              dataSource={{
+                material_code: result.material_code,
+                material_name: result.material_name,
+                current_source_type: getSourceTypeTag(result.current_source_type),
+                current_cost: `¥${result.current_cost?.total_cost?.toFixed(2)}`,
+              }}
+              columns={[
+                { title: '物料编码', dataIndex: 'material_code' },
+                { title: '物料名称', dataIndex: 'material_name' },
+                { title: '当前来源类型', dataIndex: 'current_source_type' },
+                { title: '当前成本', dataIndex: 'current_cost' },
+              ]}
+            />
           )}
 
           {result.suggestions && result.suggestions.length > 0 ? (
@@ -198,14 +205,26 @@ const CostOptimizationPage: React.FC = () => {
                       </span>
                     }
                   >
-                    <Descriptions column={2} size="small">
-                      <Descriptions.Item label="从">{getSourceTypeTag(item.from_source_type)}</Descriptions.Item>
-                      <Descriptions.Item label="转为">{getSourceTypeTag(item.to_source_type)}</Descriptions.Item>
-                      <Descriptions.Item label="当前成本">¥{item.current_cost.toFixed(2)}</Descriptions.Item>
-                      <Descriptions.Item label="替代方案成本">¥{item.alternative_cost.toFixed(2)}</Descriptions.Item>
-                      <Descriptions.Item label="潜在节约成本">¥{item.potential_savings.toFixed(2)}</Descriptions.Item>
-                      <Descriptions.Item label="节约率">{item.savings_rate.toFixed(2)}%</Descriptions.Item>
-                    </Descriptions>
+                    <ProDescriptions
+                      column={2}
+                      size="small"
+                      dataSource={{
+                        from: getSourceTypeTag(item.from_source_type),
+                        to: getSourceTypeTag(item.to_source_type),
+                        current_cost: `¥${item.current_cost.toFixed(2)}`,
+                        alternative_cost: `¥${item.alternative_cost.toFixed(2)}`,
+                        potential_savings: `¥${item.potential_savings.toFixed(2)}`,
+                        savings_rate: `${item.savings_rate.toFixed(2)}%`,
+                      }}
+                      columns={[
+                        { title: '从', dataIndex: 'from' },
+                        { title: '转为', dataIndex: 'to' },
+                        { title: '当前成本', dataIndex: 'current_cost' },
+                        { title: '替代方案成本', dataIndex: 'alternative_cost' },
+                        { title: '潜在节约成本', dataIndex: 'potential_savings' },
+                        { title: '节约率', dataIndex: 'savings_rate' },
+                      ]}
+                    />
                     <Alert
                       message={item.description}
                       type="info"

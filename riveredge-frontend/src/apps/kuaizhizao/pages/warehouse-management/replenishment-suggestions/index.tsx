@@ -9,7 +9,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Form, Input } from 'antd';
+import { App, Button, Tag, Space, Modal, Card, Table, Input } from 'antd';
+import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -425,34 +426,38 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         okText="确认"
         cancelText="取消"
       >
-        <Form layout="vertical">
-          <Form.Item label="处理状态">
-            <Space>
-              <Button
-                type={processStatus === 'processed' ? 'primary' : 'default'}
-                icon={<CheckCircleOutlined />}
-                onClick={() => setProcessStatus('processed')}
-              >
-                已处理
-              </Button>
-              <Button
-                type={processStatus === 'ignored' ? 'primary' : 'default'}
-                icon={<CloseCircleOutlined />}
-                onClick={() => setProcessStatus('ignored')}
-              >
-                忽略
-              </Button>
-            </Space>
-          </Form.Item>
-          <Form.Item label="处理备注">
-            <Input.TextArea
-              rows={4}
-              value={processNotes}
-              onChange={(e) => setProcessNotes(e.target.value)}
-              placeholder="请输入处理备注（可选）"
-            />
-          </Form.Item>
-        </Form>
+        <ProForm
+          submitter={false}
+          initialValues={{
+            status: processStatus,
+            notes: processNotes,
+          }}
+          onValuesChange={(changedValues) => {
+            if (changedValues.status !== undefined) {
+              setProcessStatus(changedValues.status);
+            }
+            if (changedValues.notes !== undefined) {
+              setProcessNotes(changedValues.notes);
+            }
+          }}
+        >
+          <ProFormRadio.Group
+            name="status"
+            label="处理状态"
+            options={[
+              { label: '已处理', value: 'processed' },
+              { label: '忽略', value: 'ignored' },
+            ]}
+          />
+          <ProFormTextArea
+            name="notes"
+            label="处理备注"
+            placeholder="请输入处理备注（可选）"
+            fieldProps={{
+              rows: 4,
+            }}
+          />
+        </ProForm>
       </Modal>
     </>
   );

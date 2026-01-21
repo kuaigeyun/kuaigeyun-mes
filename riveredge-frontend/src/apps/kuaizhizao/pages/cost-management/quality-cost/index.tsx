@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Tag, message, Modal, Divider, Row, Col, Statistic } from 'antd';
+import { ActionType, ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import { qualityCostApi } from '../../../services/cost';
@@ -152,27 +152,28 @@ const QualityCostPage: React.FC = () => {
             </Col>
           </Row>
 
-          <Descriptions bordered column={2}>
-            <Descriptions.Item label="总质量成本">
-              <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
-                ¥{result.total_quality_cost?.toFixed(2)}
-              </span>
-            </Descriptions.Item>
-            <Descriptions.Item label="核算类型">{result.calculation_type}</Descriptions.Item>
-            {result.start_date && (
-              <Descriptions.Item label="开始日期">
-                {dayjs(result.start_date).format('YYYY-MM-DD')}
-              </Descriptions.Item>
-            )}
-            {result.end_date && (
-              <Descriptions.Item label="结束日期">
-                {dayjs(result.end_date).format('YYYY-MM-DD')}
-              </Descriptions.Item>
-            )}
-            <Descriptions.Item label="核算日期">
-              {result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-'}
-            </Descriptions.Item>
-          </Descriptions>
+          <ProDescriptions
+            bordered
+            column={2}
+            dataSource={{
+              total_quality_cost: (
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
+                  ¥{result.total_quality_cost?.toFixed(2)}
+                </span>
+              ),
+              calculation_type: result.calculation_type,
+              start_date: result.start_date ? dayjs(result.start_date).format('YYYY-MM-DD') : undefined,
+              end_date: result.end_date ? dayjs(result.end_date).format('YYYY-MM-DD') : undefined,
+              calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
+            }}
+            columns={[
+              { title: '总质量成本', dataIndex: 'total_quality_cost' },
+              { title: '核算类型', dataIndex: 'calculation_type' },
+              { title: '开始日期', dataIndex: 'start_date', hide: !result.start_date },
+              { title: '结束日期', dataIndex: 'end_date', hide: !result.end_date },
+              { title: '核算日期', dataIndex: 'calculation_date' },
+            ]}
+          />
 
           {result.cost_details && (
             <>

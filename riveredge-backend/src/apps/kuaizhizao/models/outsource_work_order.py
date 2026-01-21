@@ -1,12 +1,13 @@
 """
-委外工单数据模型模块
+工单委外数据模型模块
 
-定义委外工单数据模型，用于管理委外加工业务，支持多组织隔离。
+定义工单委外数据模型，用于管理工单委外业务，支持多组织隔离。
 
 根据功能点2.1.10：委外工单管理（核心功能，新增）
 
 Author: Auto (AI Assistant)
 Date: 2026-01-16
+Updated: 2026-01-20（重命名为工单委外）
 """
 
 from tortoise import fields
@@ -15,16 +16,16 @@ from core.models.base import BaseModel
 
 class OutsourceWorkOrder(BaseModel):
     """
-    委外工单模型
+    工单委外模型
 
-    用于管理委外加工业务，基于物料来源类型为"委外件"的物料创建。
+    用于管理工单委外业务，基于物料来源类型为"委外件"的物料创建。
     支持委外发料、委外收货、委外费用管理。
 
     Attributes:
         id: 主键ID（自增ID，内部使用）
         uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
         tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
-        code: 委外工单编码（组织内唯一）
+        code: 工单委外编码（组织内唯一）
         name: 委外工单名称
         product_id: 产品ID（关联物料，物料来源类型必须为Outsource）
         product_code: 产品编码

@@ -64,6 +64,14 @@ export const Print: React.FC<PrintProps> = ({
     try {
       setLoading(true);
       
+      // ⚠️ 关键修复：确保 url 是字符串类型
+      if (typeof url !== 'string') {
+        console.error('❌ Print组件: url 必须是字符串类型，当前类型:', typeof url, '值:', url);
+        message.error('打印失败: URL 参数类型错误');
+        onError?.(new Error('URL 参数类型错误'));
+        return;
+      }
+      
       // 调用打印API
       const response = await apiRequest(url, {
         method: 'GET',

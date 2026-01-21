@@ -73,6 +73,11 @@ const IncomingInspectionPage: React.FC = () => {
   // 批量导入状态
   const [importVisible, setImportVisible] = useState(false);
 
+  // 创建不合格品记录Modal状态
+  const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
+  const [currentDefectInspection, setCurrentDefectInspection] = useState<IncomingInspection | null>(null);
+  const defectFormRef = useRef<any>(null);
+
   // 统计数据状态
   const [stats, setStats] = useState({
     pendingCount: 12,

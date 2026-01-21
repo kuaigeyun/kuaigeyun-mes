@@ -5,6 +5,7 @@
 """
 
 from typing import List, Optional, Dict, Any
+import re
 
 from apps.master_data.models.process import DefectType, Operation, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
@@ -1203,7 +1204,7 @@ class ProcessService:
             
             if current_route:
                 current_version = current_route.version or "1.0"
-                version_match = current_version.match(/^v?(\d+)\.(\d+)$/) if isinstance(current_version, str) else None
+                version_match = re.match(r'^v?(\d+)\.(\d+)$', current_version) if isinstance(current_version, str) else None
                 if version_match:
                     major = int(version_match.group(1))
                     minor = int(version_match.group(2))

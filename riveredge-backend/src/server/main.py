@@ -368,6 +368,143 @@ async def debug_reload_apps():
             "message": f"应用路由重新加载失败: {str(e)}",
         }
 
+# 初始化应用数据（临时调试用）
+@app.post("/debug/init-apps")
+async def debug_init_apps():
+    """
+    初始化应用数据（调试用）
+
+    扫描插件目录并注册应用到数据库。
+    """
+    from core.services.application.application_service import ApplicationService
+
+    try:
+        # 使用租户ID 1
+        tenant_id = 1
+        apps = await ApplicationService.scan_and_register_plugins(tenant_id)
+
+        # 重新加载应用路由
+        from core.services.application.application_registry_service import ApplicationRegistryService
+        await ApplicationRegistryService.reload_apps()
+
+        return {
+            "status": "success",
+            "message": f"应用初始化完成，共注册了 {len(apps)} 个应用",
+            "apps": [{"code": app["code"], "name": app["name"]} for app in apps]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"应用初始化失败: {str(e)}",
+        }
+
+# 测试路由注册（调试用）
+@app.post("/debug/test-route-registration")
+async def debug_test_route_registration():
+    """
+    测试路由注册功能（调试用）
+    """
+    from core.services.application.application_registry_service import ApplicationRegistryService
+    from core.services.application.application_route_manager import get_route_manager
+
+    try:
+        # 手动注册master-data应用
+        success = await ApplicationRegistryService.register_single_app("master-data")
+        route_manager = get_route_manager()
+
+        return {
+            "status": "success",
+            "message": f"master-data注册结果: {success}",
+            "route_manager": route_manager is not None,
+            "registered_apps": list(ApplicationRegistryService._registered_apps.keys()),
+            "registered_routes": list(ApplicationRegistryService._registered_routes.keys()),
+            "route_manager_registered_routes": list(route_manager._registered_routes.keys()) if route_manager else [],
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"路由注册测试失败: {str(e)}",
+        }
+
+# 检查路由管理器状态（调试用）
+@app.get("/debug/route-manager-status")
+async def debug_route_manager_status():
+    """
+    检查路由管理器状态（调试用）
+    """
+    from core.services.application.application_route_manager import get_route_manager
+
+    route_manager = get_route_manager()
+    if not route_manager:
+        return {"status": "error", "message": "路由管理器未初始化"}
+
+    return {
+        "status": "success",
+        "route_manager_id": id(route_manager),
+        "app_id": id(route_manager.app),
+        "registered_routes_count": {app_code: len(routers) for app_code, routers in route_manager._registered_routes.items()},
+        "total_fastapi_routes": len(route_manager.app.routes),
+    }
+
+# 查看FastAPI路由表（调试用）
+@app.get("/debug/fastapi-routes")
+async def debug_fastapi_routes():
+    """
+    查看FastAPI路由表（调试用）
+    """
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path'):
+            routes.append({
+                "path": route.path,
+                "methods": getattr(route, 'methods', []),
+                "name": getattr(route, 'name', ''),
+            })
+
+    # 过滤出应用路由
+    app_routes = [r for r in routes if '/apps/' in r['path']]
+
+    return {
+        "total_routes": len(routes),
+        "app_routes": len(app_routes),
+        "sample_app_routes": app_routes[:10] if app_routes else [],
+        "all_app_route_paths": [r['path'] for r in app_routes]
+    }
+
+# 检查数据库中的应用（调试用）
+@app.get("/debug/db-apps")
+async def debug_db_apps():
+    """
+    检查数据库中的应用记录（调试用）
+    """
+    from infra.infrastructure.database.database import get_db_connection
+    import json
+
+    try:
+        conn = await get_db_connection()
+        rows = await conn.fetch("""
+            SELECT code, name, is_active, is_installed
+            FROM core_applications
+            WHERE tenant_id = 1 AND deleted_at IS NULL
+            ORDER BY code
+        """)
+        await conn.close()
+
+        apps = []
+        for row in rows:
+            apps.append(dict(row))
+
+        return {
+            "status": "success",
+            "apps": apps,
+            "count": len(apps)
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"数据库查询失败: {str(e)}",
+        }
+
 # 查看已注册的应用和路由（调试用，简化输出）
 @app.get("/debug/registered-routes")
 async def debug_registered_routes():

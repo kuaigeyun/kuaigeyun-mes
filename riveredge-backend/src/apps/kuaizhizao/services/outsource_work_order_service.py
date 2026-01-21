@@ -38,7 +38,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptResponse,
 )
 from apps.master_data.models.material import Material
-from apps.master_data.models.supply_chain import Supplier
+from apps.master_data.models.supplier import Supplier
 from apps.kuaizhizao.utils.material_source_helper import (
     get_material_source_type,
     validate_material_source_config,

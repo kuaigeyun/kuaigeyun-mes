@@ -8,7 +8,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Badge, Button, Space, message, Modal, Descriptions, Timeline, Tag, Row, Col, Select, Input, App } from 'antd';
+import { Card, Badge, Button, Space, message, Modal, Timeline, Tag, Row, Col, Select, Input, App } from 'antd';
+import { ProDescriptions } from '@ant-design/pro-components';
 import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentStatusApi, equipmentApi } from '../../../services/equipment';
@@ -417,56 +418,46 @@ const EquipmentStatusPage: React.FC = () => {
       >
         {currentEquipment && (
           <>
-            <Descriptions title="设备基本信息" bordered column={2}>
-              <Descriptions.Item label="设备编码">{currentEquipment.equipment.code}</Descriptions.Item>
-              <Descriptions.Item label="设备名称">{currentEquipment.equipment.name}</Descriptions.Item>
-              <Descriptions.Item label="设备类型">{currentEquipment.equipment.type || '-'}</Descriptions.Item>
-              <Descriptions.Item label="设备分类">{currentEquipment.equipment.category || '-'}</Descriptions.Item>
-              <Descriptions.Item label="当前状态">
-                {getStatusTag(currentEquipment.status)}
-              </Descriptions.Item>
-              <Descriptions.Item label="在线状态">
-                <Badge
-                  status={currentEquipment.is_online ? 'success' : 'error'}
-                  text={currentEquipment.is_online ? '在线' : '离线'}
-                />
-              </Descriptions.Item>
-              {currentEquipment.runtime_hours !== undefined && (
-                <Descriptions.Item label="运行时长">
-                  {currentEquipment.runtime_hours.toFixed(2)} 小时
-                </Descriptions.Item>
-              )}
-              {currentEquipment.temperature !== undefined && (
-                <Descriptions.Item label="温度">
-                  {currentEquipment.temperature.toFixed(1)}°C
-                </Descriptions.Item>
-              )}
-              {currentEquipment.pressure !== undefined && (
-                <Descriptions.Item label="压力">
-                  {currentEquipment.pressure.toFixed(2)}
-                </Descriptions.Item>
-              )}
-              {currentEquipment.vibration !== undefined && (
-                <Descriptions.Item label="振动值">
-                  {currentEquipment.vibration.toFixed(2)}
-                </Descriptions.Item>
-              )}
-              {currentEquipment.last_maintenance_date && (
-                <Descriptions.Item label="上次维护日期">
-                  {dayjs(currentEquipment.last_maintenance_date).format('YYYY-MM-DD')}
-                </Descriptions.Item>
-              )}
-              {currentEquipment.next_maintenance_date && (
-                <Descriptions.Item label="下次维护日期">
-                  {dayjs(currentEquipment.next_maintenance_date).format('YYYY-MM-DD')}
-                </Descriptions.Item>
-              )}
-              {currentEquipment.monitored_at && (
-                <Descriptions.Item label="最后更新时间">
-                  {dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss')}
-                </Descriptions.Item>
-              )}
-            </Descriptions>
+            <ProDescriptions
+              title="设备基本信息"
+              bordered
+              column={2}
+              dataSource={{
+                code: currentEquipment.equipment.code,
+                name: currentEquipment.equipment.name,
+                type: currentEquipment.equipment.type || '-',
+                category: currentEquipment.equipment.category || '-',
+                status: getStatusTag(currentEquipment.status),
+                is_online: (
+                  <Badge
+                    status={currentEquipment.is_online ? 'success' : 'error'}
+                    text={currentEquipment.is_online ? '在线' : '离线'}
+                  />
+                ),
+                runtime_hours: currentEquipment.runtime_hours !== undefined ? `${currentEquipment.runtime_hours.toFixed(2)} 小时` : undefined,
+                temperature: currentEquipment.temperature !== undefined ? `${currentEquipment.temperature.toFixed(1)}°C` : undefined,
+                pressure: currentEquipment.pressure !== undefined ? currentEquipment.pressure.toFixed(2) : undefined,
+                vibration: currentEquipment.vibration !== undefined ? currentEquipment.vibration.toFixed(2) : undefined,
+                last_maintenance_date: currentEquipment.last_maintenance_date ? dayjs(currentEquipment.last_maintenance_date).format('YYYY-MM-DD') : undefined,
+                next_maintenance_date: currentEquipment.next_maintenance_date ? dayjs(currentEquipment.next_maintenance_date).format('YYYY-MM-DD') : undefined,
+                monitored_at: currentEquipment.monitored_at ? dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss') : undefined,
+              }}
+              columns={[
+                { title: '设备编码', dataIndex: 'code' },
+                { title: '设备名称', dataIndex: 'name' },
+                { title: '设备类型', dataIndex: 'type' },
+                { title: '设备分类', dataIndex: 'category' },
+                { title: '当前状态', dataIndex: 'status' },
+                { title: '在线状态', dataIndex: 'is_online' },
+                { title: '运行时长', dataIndex: 'runtime_hours', hide: currentEquipment.runtime_hours === undefined },
+                { title: '温度', dataIndex: 'temperature', hide: currentEquipment.temperature === undefined },
+                { title: '压力', dataIndex: 'pressure', hide: currentEquipment.pressure === undefined },
+                { title: '振动值', dataIndex: 'vibration', hide: currentEquipment.vibration === undefined },
+                { title: '上次维护日期', dataIndex: 'last_maintenance_date', hide: !currentEquipment.last_maintenance_date },
+                { title: '下次维护日期', dataIndex: 'next_maintenance_date', hide: !currentEquipment.next_maintenance_date },
+                { title: '最后更新时间', dataIndex: 'monitored_at', hide: !currentEquipment.monitored_at },
+              ]}
+            />
 
             <div style={{ marginTop: 24 }}>
               <h3>状态变更历史</h3>

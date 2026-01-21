@@ -13,7 +13,7 @@ from loguru import logger
 
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.work_order import WorkOrder
-from apps.master_data.models.supply_chain import Customer
+from apps.master_data.models.customer import Customer
 from core.services.base import BaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 

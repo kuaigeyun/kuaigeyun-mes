@@ -8,8 +8,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProFormSelect, ProFormDatePicker, ProFormRadio, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Card, Descriptions, Tag, message, Modal, Divider, Row, Col, Statistic, Tabs } from 'antd';
+import { ActionType, ProFormSelect, ProFormDatePicker, ProFormRadio, PageContainer, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Card, Tag, message, Modal, Divider, Row, Col, Statistic, Tabs } from 'antd';
 import { BarChartOutlined, LineChartOutlined, FileTextOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import { costReportApi } from '../../../services/cost';
@@ -167,18 +167,23 @@ const CostReportPage: React.FC = () => {
       {/* 报表结果展示 */}
       {result && (
         <Card title="成本报表" style={{ marginBottom: 16 }}>
-          <Descriptions bordered column={2} style={{ marginBottom: 24 }}>
-            <Descriptions.Item label="报表类型">{result.report_type}</Descriptions.Item>
-            <Descriptions.Item label="生成时间">
-              {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}
-            </Descriptions.Item>
-            <Descriptions.Item label="开始日期">
-              {dayjs(result.start_date).format('YYYY-MM-DD')}
-            </Descriptions.Item>
-            <Descriptions.Item label="结束日期">
-              {dayjs(result.end_date).format('YYYY-MM-DD')}
-            </Descriptions.Item>
-          </Descriptions>
+          <ProDescriptions
+            bordered
+            column={2}
+            style={{ marginBottom: 24 }}
+            dataSource={{
+              report_type: result.report_type,
+              generated_at: dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss'),
+              start_date: dayjs(result.start_date).format('YYYY-MM-DD'),
+              end_date: dayjs(result.end_date).format('YYYY-MM-DD'),
+            }}
+            columns={[
+              { title: '报表类型', dataIndex: 'report_type' },
+              { title: '生成时间', dataIndex: 'generated_at' },
+              { title: '开始日期', dataIndex: 'start_date' },
+              { title: '结束日期', dataIndex: 'end_date' },
+            ]}
+          />
 
           <Tabs defaultActiveKey="1">
             {/* 成本趋势分析 */}
@@ -282,13 +287,24 @@ const CostReportPage: React.FC = () => {
                         {Object.entries(result.structure_analysis.by_source_type).map(([sourceType, data]: [string, any]) => (
                           <Col span={12} key={sourceType} style={{ marginBottom: 16 }}>
                             <Card title={getSourceTypeTag(sourceType)} size="small">
-                              <Descriptions column={1} size="small">
-                                <Descriptions.Item label="总成本">¥{data.total_cost.toFixed(2)}</Descriptions.Item>
-                                <Descriptions.Item label="材料成本">¥{data.material_cost.toFixed(2)}</Descriptions.Item>
-                                <Descriptions.Item label="人工成本">¥{data.labor_cost.toFixed(2)}</Descriptions.Item>
-                                <Descriptions.Item label="制造费用">¥{data.manufacturing_cost.toFixed(2)}</Descriptions.Item>
-                                <Descriptions.Item label="记录数">{data.count}</Descriptions.Item>
-                              </Descriptions>
+                              <ProDescriptions
+                                column={1}
+                                size="small"
+                                dataSource={{
+                                  total_cost: `¥${data.total_cost.toFixed(2)}`,
+                                  material_cost: `¥${data.material_cost.toFixed(2)}`,
+                                  labor_cost: `¥${data.labor_cost.toFixed(2)}`,
+                                  manufacturing_cost: `¥${data.manufacturing_cost.toFixed(2)}`,
+                                  count: data.count,
+                                }}
+                                columns={[
+                                  { title: '总成本', dataIndex: 'total_cost' },
+                                  { title: '材料成本', dataIndex: 'material_cost' },
+                                  { title: '人工成本', dataIndex: 'labor_cost' },
+                                  { title: '制造费用', dataIndex: 'manufacturing_cost' },
+                                  { title: '记录数', dataIndex: 'count' },
+                                ]}
+                              />
                             </Card>
                           </Col>
                         ))}

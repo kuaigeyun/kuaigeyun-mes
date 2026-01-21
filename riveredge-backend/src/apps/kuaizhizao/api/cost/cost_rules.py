@@ -90,7 +90,24 @@ async def list_cost_rules(
     Returns:
         CostRuleListResponse: 成本核算规则列表
     """
-    rules = await CostRuleService().list_cost_rules(
+    service = CostRuleService()
+    
+    # 先查询总数（使用相同的查询条件，但不分页）
+    from apps.kuaizhizao.models.cost_rule import CostRule
+    from tortoise.queryset import Q
+    count_query = CostRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if rule_type:
+        count_query = count_query.filter(rule_type=rule_type)
+    if cost_type:
+        count_query = count_query.filter(cost_type=cost_type)
+    if is_active is not None:
+        count_query = count_query.filter(is_active=is_active)
+    if search:
+        count_query = count_query.filter(Q(code__icontains=search) | Q(name__icontains=search))
+    total = await count_query.count()
+    
+    # 查询分页数据
+    rules = await service.list_cost_rules(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
@@ -99,9 +116,6 @@ async def list_cost_rules(
         is_active=is_active,
         search=search,
     )
-    
-    # 计算总数
-    total = len(rules)
     
     return CostRuleListResponse(
         items=rules,

@@ -47,13 +47,17 @@ class ApplicationRegistryService:
         try:
             # 发现所有已安装的应用
             installed_apps = await cls._discover_installed_apps()
-            logger.info(f"📋 发现 {len(installed_apps)} 个已安装的应用")
+            logger.info(f"📋 发现 {len(installed_apps)} 个已安装的应用: {[app['code'] for app in installed_apps]}")
 
             # 注册应用模型
+            logger.info("🏗️ 开始注册应用模型...")
             await cls._register_app_models(installed_apps)
+            logger.info("✅ 应用模型注册完成")
 
             # 注册应用路由
+            logger.info("🔗 开始注册应用路由...")
             await cls._register_app_routes(installed_apps)
+            logger.info("✅ 应用路由注册完成")
 
             logger.info("✅ 动态应用注册服务初始化完成")
 
@@ -73,12 +77,14 @@ class ApplicationRegistryService:
         # 延迟导入，避免循环依赖
         from tortoise import connections
 
+        conn = None
         try:
-            # 使用Tortoise连接查询数据库
-            conn = connections.get("default")
+            # 使用数据库连接查询应用
+            from infra.infrastructure.database.database import get_db_connection
+            conn = await get_db_connection()
 
-            # 查询所有已安装且启用的应用（不限制租户，因为这是系统级配置）
-            rows = await conn.execute_query_dict("""
+            # 查询所有已安装且启用的应用（系统级配置，不按租户隔离）
+            rows = await conn.fetch("""
                 SELECT uuid, code, name, description, version,
                        route_path, entry_point, menu_config,
                        is_system, is_active, is_installed,
@@ -87,12 +93,15 @@ class ApplicationRegistryService:
                 WHERE is_installed = TRUE
                   AND is_active = TRUE
                   AND deleted_at IS NULL
+                  AND tenant_id = 1
                 ORDER BY sort_order, created_at
             """)
 
             apps = []
+            logger.info(f"📊 查询返回 {len(rows)} 行数据")
             for row in rows:
                 app_data = dict(row)
+                logger.info(f"📋 处理应用: {app_data.get('code')} (active: {app_data.get('is_active')}, installed: {app_data.get('is_installed')})")
                 # 解析JSON字段
                 if app_data.get('menu_config') and isinstance(app_data['menu_config'], str):
                     try:
@@ -154,6 +163,10 @@ class ApplicationRegistryService:
                 logger.warning("⚠️ 无法发现任何应用，系统可能无法正常工作")
 
             return apps
+
+        finally:
+            if conn:
+                await conn.close()
 
     @classmethod
     async def _register_app_models(cls, apps: List[Dict[str, Any]]) -> None:
@@ -239,7 +252,9 @@ class ApplicationRegistryService:
 
         为每个活跃的应用注册其API路由。
         """
-        logger.info("🔗 开始注册应用路由...")
+        logger.info(f"🔗 开始注册应用路由... apps数量: {len(apps)}")
+        for app in apps:
+            logger.info(f"📋 处理应用: {app.get('code')}")
 
         registered_routes = []
 
@@ -264,6 +279,14 @@ class ApplicationRegistryService:
                         if str(src_path) not in sys.path:
                             sys.path.insert(0, str(src_path))
                         
+                        # 如果模块已经导入过，先移除它以便重新导入（修复语法错误后需要重新导入）
+                        # 需要移除所有相关的子模块，否则可能仍然使用缓存的错误版本
+                        modules_to_remove = [m for m in sys.modules.keys() if m.startswith(route_module_path)]
+                        if modules_to_remove:
+                            logger.debug(f"🔄 移除 {len(modules_to_remove)} 个已缓存的模块以便重新导入: {route_module_path}")
+                            for m in modules_to_remove:
+                                del sys.modules[m]
+                        
                         route_module = importlib.import_module(route_module_path)
 
                         # 获取路由对象（通常命名为router）
@@ -271,6 +294,7 @@ class ApplicationRegistryService:
                         if router:
                             # 缓存路由对象
                             cls._registered_routes[app_code] = [router]
+                            logger.info(f"✅ 缓存路由对象: {app_code} -> {len([router])} 个路由器")
                             registered_routes.append(f"{app_name}({app_code})")
 
                             # 如果路由管理器已初始化，则注册路由
@@ -288,7 +312,10 @@ class ApplicationRegistryService:
                         logger.error(f"❌ 导入应用 {app_name}({app_code}) 路由模块失败: {ie}")
                         logger.info(f"💡 这可能是由于缺少运行时依赖导致的，请确保所有依赖都已正确安装")
                     except Exception as e:
+                        import traceback
+                        error_trace = traceback.format_exc()
                         logger.error(f"❌ 注册应用 {app_name}({app_code}) 路由时发生错误: {e}")
+                        logger.error(f"❌ 错误详情:\n{error_trace}")
                 else:
                     logger.warning(f"⚠️ 应用 {app_name}({app_code}) 的路由模块不存在: {route_module_path}")
 
@@ -405,6 +432,7 @@ class ApplicationRegistryService:
             conn = await get_db_connection()
             
             try:
+                logger.info(f"🔍 查询应用 {app_code} 的数据库记录...")
                 rows = await conn.fetch("""
                     SELECT uuid, code, name, description, version,
                            route_path, entry_point, menu_config,
@@ -415,14 +443,20 @@ class ApplicationRegistryService:
                       AND is_installed = TRUE
                       AND is_active = TRUE
                       AND deleted_at IS NULL
+                      AND tenant_id = 1
                     LIMIT 1
                 """, app_code)
+                logger.info(f"📊 应用 {app_code} 查询结果: {len(rows)} 条记录")
                 
                 if not rows:
                     logger.warning(f"应用 {app_code} 不存在或未启用")
+                    # 检查是否有任何记录（包括未启用的）
+                    all_rows = await conn.fetch("SELECT code, is_active, is_installed FROM core_applications WHERE code = $1", app_code)
+                    logger.warning(f"应用 {app_code} 的所有记录: {all_rows}")
                     return False
-                
+
                 app_data = dict(rows[0])
+                logger.info(f"✅ 找到应用 {app_code} 的数据库记录: is_active={app_data.get('is_active')}, is_installed={app_data.get('is_installed')}")
             finally:
                 await conn.close()
             
@@ -435,11 +469,24 @@ class ApplicationRegistryService:
             
             # 注册应用模型
             await cls._register_app_models([app_data])
-            
+
             # 注册应用路由
-            await cls._register_app_routes([app_data])
-            
+            logger.info(f"🔄 开始注册应用 {app_code} 的路由...")
+            try:
+                await cls._register_app_routes([app_data])
+                logger.info(f"✅ 应用 {app_code} 的路由注册完成")
+            except Exception as route_error:
+                logger.error(f"❌ 应用 {app_code} 的路由注册失败: {route_error}")
+                import traceback
+                logger.error(f"❌ 路由注册错误详情:\n{traceback.format_exc()}")
+                raise
+
+            # 更新缓存
+            cls._registered_apps[app_code] = app_data
+            logger.info(f"✅ 更新应用缓存: {app_code}")
+
             logger.info(f"✅ 应用 {app_code} 注册成功")
+            logger.info(f"📊 最终缓存状态: _registered_apps={list(cls._registered_apps.keys())}, _registered_routes={list(cls._registered_routes.keys())}")
             return True
             
         except Exception as e:

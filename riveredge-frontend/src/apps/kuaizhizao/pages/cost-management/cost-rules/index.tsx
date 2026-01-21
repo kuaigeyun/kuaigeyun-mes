@@ -337,7 +337,19 @@ const CostRulePage: React.FC = () => {
       <UniTable<CostRule>
         actionRef={actionRef}
         request={async (params) => {
-          const response = await costRuleApi.list(params);
+          // 将 ProTable 的分页参数转换为后端期望的格式
+          const queryParams: any = {
+            skip: (params.current! - 1) * params.pageSize!,
+            limit: params.pageSize!,
+          };
+          
+          // 传递其他搜索参数
+          if (params.rule_type) queryParams.rule_type = params.rule_type;
+          if (params.cost_type) queryParams.cost_type = params.cost_type;
+          if (params.is_active !== undefined) queryParams.is_active = params.is_active;
+          if (params.search) queryParams.search = params.search;
+          
+          const response = await costRuleApi.list(queryParams);
           return {
             data: response.items || [],
             success: true,

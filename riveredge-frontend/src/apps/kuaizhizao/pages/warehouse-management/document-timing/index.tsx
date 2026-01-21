@@ -9,7 +9,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText } from '@ant-design/pro-components';
-import { App, Card, Tag, Descriptions, Table } from 'antd';
+import { App, Card, Tag, Table } from 'antd';
+import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -186,26 +187,29 @@ const DocumentTimingPage: React.FC = () => {
           currentTiming ? (
             <div style={{ padding: '16px 0' }}>
               <Card title="基本信息" style={{ marginBottom: 16 }}>
-                <Descriptions column={2}>
-                  <Descriptions.Item label="单据类型">
-                    <Tag color={
-                      currentTiming.document_type === 'work_order' ? 'processing' :
-                      currentTiming.document_type === 'purchase_order' ? 'default' : 'success'
-                    }>
-                      {currentTiming.document_type === 'work_order' ? '工单' :
-                       currentTiming.document_type === 'purchase_order' ? '采购订单' : '销售订单'}
-                    </Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="单据编码">
-                    {currentTiming.document_code}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="总耗时（小时）">
-                    {currentTiming.total_duration_hours?.toFixed(2) || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="总耗时（秒）">
-                    {currentTiming.total_duration_seconds || '-'}
-                  </Descriptions.Item>
-                </Descriptions>
+                <ProDescriptions
+                  column={2}
+                  dataSource={{
+                    document_type: (
+                      <Tag color={
+                        currentTiming.document_type === 'work_order' ? 'processing' :
+                        currentTiming.document_type === 'purchase_order' ? 'default' : 'success'
+                      }>
+                        {currentTiming.document_type === 'work_order' ? '工单' :
+                         currentTiming.document_type === 'purchase_order' ? '采购订单' : '销售订单'}
+                      </Tag>
+                    ),
+                    document_code: currentTiming.document_code,
+                    total_duration_hours: currentTiming.total_duration_hours?.toFixed(2) || '-',
+                    total_duration_seconds: currentTiming.total_duration_seconds || '-',
+                  }}
+                  columns={[
+                    { title: '单据类型', dataIndex: 'document_type' },
+                    { title: '单据编码', dataIndex: 'document_code' },
+                    { title: '总耗时（小时）', dataIndex: 'total_duration_hours' },
+                    { title: '总耗时（秒）', dataIndex: 'total_duration_seconds' },
+                  ]}
+                />
               </Card>
 
               <Card title="节点耗时明细">

@@ -89,8 +89,7 @@ export interface PurchaseOrderListResponse {
  * 获取采购订单列表
  */
 export async function listPurchaseOrders(params: PurchaseOrderListParams = {}): Promise<PurchaseOrderListResponse> {
-  return apiRequest<PurchaseOrderListResponse>({
-    url: '/apps/kuaizhizao/purchase-orders',
+  return apiRequest<PurchaseOrderListResponse>('/apps/kuaizhizao/purchase-orders', {
     method: 'GET',
     params,
   });
@@ -100,8 +99,7 @@ export async function listPurchaseOrders(params: PurchaseOrderListParams = {}): 
  * 获取采购订单详情
  */
 export async function getPurchaseOrder(id: number): Promise<PurchaseOrder> {
-  return apiRequest<PurchaseOrder>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}`,
+  return apiRequest<PurchaseOrder>(`/apps/kuaizhizao/purchase-orders/${id}`, {
     method: 'GET',
   });
 }
@@ -110,8 +108,7 @@ export async function getPurchaseOrder(id: number): Promise<PurchaseOrder> {
  * 创建采购订单
  */
 export async function createPurchaseOrder(data: Partial<PurchaseOrder>): Promise<PurchaseOrder> {
-  return apiRequest<PurchaseOrder>({
-    url: '/apps/kuaizhizao/purchase-orders',
+  return apiRequest<PurchaseOrder>('/apps/kuaizhizao/purchase-orders', {
     method: 'POST',
     data,
   });
@@ -121,8 +118,7 @@ export async function createPurchaseOrder(data: Partial<PurchaseOrder>): Promise
  * 更新采购订单
  */
 export async function updatePurchaseOrder(id: number, data: Partial<PurchaseOrder>): Promise<PurchaseOrder> {
-  return apiRequest<PurchaseOrder>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}`,
+  return apiRequest<PurchaseOrder>(`/apps/kuaizhizao/purchase-orders/${id}`, {
     method: 'PUT',
     data,
   });
@@ -132,8 +128,7 @@ export async function updatePurchaseOrder(id: number, data: Partial<PurchaseOrde
  * 删除采购订单
  */
 export async function deletePurchaseOrder(id: number): Promise<void> {
-  return apiRequest<void>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}`,
+  return apiRequest<void>(`/apps/kuaizhizao/purchase-orders/${id}`, {
     method: 'DELETE',
   });
 }
@@ -153,8 +148,7 @@ export interface PurchaseOrderApproveRequest {
  * 审核采购订单
  */
 export async function approvePurchaseOrder(id: number, data: PurchaseOrderApproveRequest): Promise<PurchaseOrder> {
-  return apiRequest<PurchaseOrder>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}/approve`,
+  return apiRequest<PurchaseOrder>(`/apps/kuaizhizao/purchase-orders/${id}/approve`, {
     method: 'POST',
     data,
   });
@@ -164,8 +158,7 @@ export async function approvePurchaseOrder(id: number, data: PurchaseOrderApprov
  * 确认采购订单
  */
 export async function confirmPurchaseOrder(id: number): Promise<PurchaseOrder> {
-  return apiRequest<PurchaseOrder>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}/confirm`,
+  return apiRequest<PurchaseOrder>(`/apps/kuaizhizao/purchase-orders/${id}/confirm`, {
     method: 'POST',
   });
 }
@@ -174,8 +167,7 @@ export async function confirmPurchaseOrder(id: number): Promise<PurchaseOrder> {
  * 提交采购订单（非审核）
  */
 export async function submitPurchaseOrder(id: number): Promise<PurchaseOrder> {
-  return apiRequest<PurchaseOrder>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}/submit`,
+  return apiRequest<PurchaseOrder>(`/apps/kuaizhizao/purchase-orders/${id}/submit`, {
     method: 'POST',
   });
 }
@@ -184,8 +176,7 @@ export async function submitPurchaseOrder(id: number): Promise<PurchaseOrder> {
  * 下推到采购入库
  */
 export async function pushPurchaseOrderToReceipt(id: number, receiptQuantities?: Record<number, number>): Promise<any> {
-  return apiRequest<any>({
-    url: `/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`,
+  return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-receipt`, {
     method: 'POST',
     data: receiptQuantities || {},
   });
@@ -229,8 +220,7 @@ export interface ApprovalRecord {
  * 获取采购订单审批流程状态
  */
 export async function getPurchaseOrderApprovalStatus(orderId: number): Promise<ApprovalStatus> {
-  return apiRequest<ApprovalStatus>({
-    url: `/apps/kuaizhizao/purchase-orders/${orderId}/approval-status`,
+  return apiRequest<ApprovalStatus>(`/apps/kuaizhizao/purchase-orders/${orderId}/approval-status`, {
     method: 'GET',
   });
 }
@@ -239,8 +229,7 @@ export async function getPurchaseOrderApprovalStatus(orderId: number): Promise<A
  * 获取采购订单审批记录列表
  */
 export async function getPurchaseOrderApprovalRecords(orderId: number): Promise<{ data: ApprovalRecord[]; total: number }> {
-  return apiRequest<{ data: ApprovalRecord[]; total: number }>({
-    url: `/apps/kuaizhizao/purchase-orders/${orderId}/approval-records`,
+  return apiRequest<{ data: ApprovalRecord[]; total: number }>(`/apps/kuaizhizao/purchase-orders/${orderId}/approval-records`, {
     method: 'GET',
   });
 }

@@ -86,11 +86,6 @@ const ProcessInspectionPage: React.FC = () => {
   const [currentDefectInspection, setCurrentDefectInspection] = useState<ProcessInspection | null>(null);
   const defectFormRef = useRef<any>(null);
 
-  // 创建不合格品记录Modal状态
-  const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
-  const [currentDefectInspection, setCurrentDefectInspection] = useState<ProcessInspection | null>(null);
-  const defectFormRef = useRef<any>(null);
-
   // 统计数据状态
   const [stats, setStats] = useState({
     pendingCount: 8,
@@ -197,6 +192,42 @@ const ProcessInspectionPage: React.FC = () => {
       messageApi.success('导出成功');
     } catch (error: any) {
       messageApi.error(error.message || '导出失败');
+    }
+  };
+
+  // 处理创建不合格品记录
+  const handleCreateDefect = (record: ProcessInspection) => {
+    setCurrentDefectInspection(record);
+    setCreateDefectModalVisible(true);
+    defectFormRef.current?.setFieldsValue({
+      defect_quantity: record.unqualified_quantity || 0,
+      defect_type: 'other',
+      defect_reason: '',
+      disposition: 'rework', // 过程检验不合格默认返工
+      remarks: '',
+    });
+  };
+
+  // 处理创建不合格品记录提交
+  const handleCreateDefectSubmit = async (values: any) => {
+    try {
+      if (currentDefectInspection?.id) {
+        await qualityApi.processInspection.createDefect(currentDefectInspection.id.toString(), {
+          defect_quantity: values.defect_quantity,
+          defect_type: values.defect_type,
+          defect_reason: values.defect_reason,
+          disposition: values.disposition,
+          remarks: values.remarks,
+        });
+      }
+
+      messageApi.success('不合格品记录创建成功');
+      setCreateDefectModalVisible(false);
+      defectFormRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建不合格品记录失败');
+      throw error;
     }
   };
 

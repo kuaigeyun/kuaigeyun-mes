@@ -191,6 +191,9 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.warehouse",
                 f"apps.{module_code}.models.material",
                 f"apps.{module_code}.models.material_code_alias",
+                f"apps.{module_code}.models.material_code_mapping",
+                f"apps.{module_code}.models.material_batch",
+                f"apps.{module_code}.models.material_serial",
                 f"apps.{module_code}.models.process",
                 f"apps.{module_code}.models.customer",
                 f"apps.{module_code}.models.supplier",
@@ -199,15 +202,30 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.work_order",
                 f"apps.{module_code}.models.work_order_operation",
                 f"apps.{module_code}.models.reporting_record",
+                f"apps.{module_code}.models.rework_order",  # 返工单模型
+                f"apps.{module_code}.models.outsource_order",  # 工序委外模型
+                f"apps.{module_code}.models.outsource_work_order",  # 工单委外模型
+                f"apps.{module_code}.models.scrap_record",  # 报废记录模型
+                f"apps.{module_code}.models.defect_record",  # 不良品记录模型
+                f"apps.{module_code}.models.material_binding",  # 物料绑定模型
+                f"apps.{module_code}.models.material_shortage_exception",  # 缺料异常模型
+                f"apps.{module_code}.models.delivery_delay_exception",  # 延期异常模型
+                f"apps.{module_code}.models.quality_exception",  # 质量异常模型
+                f"apps.{module_code}.models.exception_process_record",  # 异常处理记录模型
                 # 仓储管理模块
+                f"apps.{module_code}.models.customer_material_registration",  # 客户来料登记模型（条码映射规则）
                 f"apps.{module_code}.models.production_picking",
                 f"apps.{module_code}.models.production_picking_item",
                 f"apps.{module_code}.models.finished_goods_receipt",
                 f"apps.{module_code}.models.finished_goods_receipt_item",
                 f"apps.{module_code}.models.sales_delivery",
                 f"apps.{module_code}.models.sales_delivery_item",
+                f"apps.{module_code}.models.sales_return",
+                f"apps.{module_code}.models.sales_return_item",
                 f"apps.{module_code}.models.purchase_receipt",
                 f"apps.{module_code}.models.purchase_receipt_item",
+                f"apps.{module_code}.models.purchase_return",
+                f"apps.{module_code}.models.purchase_return_item",
                 f"apps.{module_code}.models.purchase_order",
                 f"apps.{module_code}.models.purchase_order_item",
                 # 质量管理模块
@@ -223,6 +241,14 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.sales_forecast_item",
                 f"apps.{module_code}.models.sales_order",
                 f"apps.{module_code}.models.sales_order_item",
+                # 统一需求管理模块（第一阶段重构）
+                f"apps.{module_code}.models.demand",
+                f"apps.{module_code}.models.demand_item",
+                f"apps.{module_code}.models.demand_computation",
+                f"apps.{module_code}.models.demand_computation_item",
+                f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
+                f"apps.{module_code}.models.document_relation",  # 单据关联关系
+                f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
                 # BOM管理模块
                 # BOM管理已移至master_data APP，不再需要bill_of_materials模型
                 # f"apps.{module_code}.models.bill_of_materials",
@@ -232,6 +258,29 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.production_plan_item",
                 f"apps.{module_code}.models.mrp_result",
                 f"apps.{module_code}.models.lrp_result",
+                # 审核流程和状态流转模块
+                f"apps.{module_code}.models.approval_flow",  # 审核流程
+                f"apps.{module_code}.models.state_transition",  # 状态流转
+                # 设备管理模块
+                f"apps.{module_code}.models.equipment",  # 设备模型
+                f"apps.{module_code}.models.equipment_fault",  # 设备故障
+                f"apps.{module_code}.models.equipment_status_monitor",  # 设备状态监控
+                f"apps.{module_code}.models.maintenance_plan",  # 维护计划
+                f"apps.{module_code}.models.maintenance_reminder",  # 维护提醒
+                f"apps.{module_code}.models.mold",  # 模具模型
+                # 成本管理模块
+                f"apps.{module_code}.models.cost_calculation",  # 成本计算
+                f"apps.{module_code}.models.cost_rule",  # 成本规则
+                # 质量管理模块（补充）
+                f"apps.{module_code}.models.quality_standard",  # 质量标准
+                # 仓储管理模块（补充）
+                f"apps.{module_code}.models.inventory_transfer",  # 库存调拨
+                f"apps.{module_code}.models.inventory_alert",  # 库存预警
+                f"apps.{module_code}.models.stocktaking",  # 库存盘点
+                f"apps.{module_code}.models.packing_binding",  # 装箱绑定
+                f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
+                # 上线倒计时模块
+                f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
             ]
 
             # 只添加存在的模块
@@ -322,6 +371,9 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.warehouse",
                 f"apps.{module_code}.models.material",
                 f"apps.{module_code}.models.material_code_alias",
+                f"apps.{module_code}.models.material_code_mapping",
+                f"apps.{module_code}.models.material_batch",
+                f"apps.{module_code}.models.material_serial",
                 f"apps.{module_code}.models.process",
                 f"apps.{module_code}.models.customer",
                 f"apps.{module_code}.models.supplier",
@@ -330,15 +382,30 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.work_order",
                 f"apps.{module_code}.models.work_order_operation",
                 f"apps.{module_code}.models.reporting_record",
+                f"apps.{module_code}.models.rework_order",  # 返工单模型
+                f"apps.{module_code}.models.outsource_order",  # 工序委外模型
+                f"apps.{module_code}.models.outsource_work_order",  # 工单委外模型
+                f"apps.{module_code}.models.scrap_record",  # 报废记录模型
+                f"apps.{module_code}.models.defect_record",  # 不良品记录模型
+                f"apps.{module_code}.models.material_binding",  # 物料绑定模型
+                f"apps.{module_code}.models.material_shortage_exception",  # 缺料异常模型
+                f"apps.{module_code}.models.delivery_delay_exception",  # 延期异常模型
+                f"apps.{module_code}.models.quality_exception",  # 质量异常模型
+                f"apps.{module_code}.models.exception_process_record",  # 异常处理记录模型
                 # 仓储管理模块
+                f"apps.{module_code}.models.customer_material_registration",  # 客户来料登记模型（条码映射规则）
                 f"apps.{module_code}.models.production_picking",
                 f"apps.{module_code}.models.production_picking_item",
                 f"apps.{module_code}.models.finished_goods_receipt",
                 f"apps.{module_code}.models.finished_goods_receipt_item",
                 f"apps.{module_code}.models.sales_delivery",
                 f"apps.{module_code}.models.sales_delivery_item",
+                f"apps.{module_code}.models.sales_return",
+                f"apps.{module_code}.models.sales_return_item",
                 f"apps.{module_code}.models.purchase_receipt",
                 f"apps.{module_code}.models.purchase_receipt_item",
+                f"apps.{module_code}.models.purchase_return",
+                f"apps.{module_code}.models.purchase_return_item",
                 f"apps.{module_code}.models.purchase_order",
                 f"apps.{module_code}.models.purchase_order_item",
                 # 质量管理模块
@@ -354,6 +421,14 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.sales_forecast_item",
                 f"apps.{module_code}.models.sales_order",
                 f"apps.{module_code}.models.sales_order_item",
+                # 统一需求管理模块（第一阶段重构）
+                f"apps.{module_code}.models.demand",
+                f"apps.{module_code}.models.demand_item",
+                f"apps.{module_code}.models.demand_computation",
+                f"apps.{module_code}.models.demand_computation_item",
+                f"apps.{module_code}.models.computation_config",  # 需求计算参数配置
+                f"apps.{module_code}.models.document_relation",  # 单据关联关系
+                f"apps.{module_code}.models.document_node_timing",  # 单据节点耗时记录
                 # BOM管理模块
                 # BOM管理已移至master_data APP，不再需要bill_of_materials模型
                 # f"apps.{module_code}.models.bill_of_materials",
@@ -363,6 +438,29 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.production_plan_item",
                 f"apps.{module_code}.models.mrp_result",
                 f"apps.{module_code}.models.lrp_result",
+                # 审核流程和状态流转模块
+                f"apps.{module_code}.models.approval_flow",  # 审核流程
+                f"apps.{module_code}.models.state_transition",  # 状态流转
+                # 设备管理模块
+                f"apps.{module_code}.models.equipment",  # 设备模型
+                f"apps.{module_code}.models.equipment_fault",  # 设备故障
+                f"apps.{module_code}.models.equipment_status_monitor",  # 设备状态监控
+                f"apps.{module_code}.models.maintenance_plan",  # 维护计划
+                f"apps.{module_code}.models.maintenance_reminder",  # 维护提醒
+                f"apps.{module_code}.models.mold",  # 模具模型
+                # 成本管理模块
+                f"apps.{module_code}.models.cost_calculation",  # 成本计算
+                f"apps.{module_code}.models.cost_rule",  # 成本规则
+                # 质量管理模块（补充）
+                f"apps.{module_code}.models.quality_standard",  # 质量标准
+                # 仓储管理模块（补充）
+                f"apps.{module_code}.models.inventory_transfer",  # 库存调拨
+                f"apps.{module_code}.models.inventory_alert",  # 库存预警
+                f"apps.{module_code}.models.stocktaking",  # 库存盘点
+                f"apps.{module_code}.models.packing_binding",  # 装箱绑定
+                f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
+                # 上线倒计时模块
+                f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
             ]
 
             # 只添加存在的模块

@@ -33,9 +33,9 @@ import PurchaseReceiptsPage from './pages/purchase-management/purchase-receipts'
 import PurchaseReturnsPage from './pages/purchase-management/purchase-returns';
 
 // 销售管理页面
-// TODO: 销售预测和销售订单已合并为统一需求管理，相关页面已删除
+// TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理
 // import SalesForecastsPage from './pages/sales-management/sales-forecasts';
-// import SalesOrdersPage from './pages/sales-management/sales-orders';
+import SalesOrdersPage from './pages/sales-management/sales-orders';
 import SalesDeliveriesPage from './pages/sales-management/sales-deliveries';
 import SalesReturnsPage from './pages/sales-management/sales-returns';
 
@@ -47,6 +47,7 @@ import FinishedGoodsInspectionPage from './pages/quality-management/finished-goo
 // 成本管理页面
 import CostRulesPage from './pages/cost-management/cost-rules';
 import CostCalculationsPage from './pages/cost-management/cost-calculations';
+import CostCalculationTabsPage from './pages/cost-management/cost-calculation-tabs';
 import ProductionCostPage from './pages/cost-management/production-cost';
 import OutsourceCostPage from './pages/cost-management/outsource-cost';
 import PurchaseCostPage from './pages/cost-management/purchase-cost';
@@ -126,9 +127,9 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/exception-process" element={<ExceptionProcessPage />} />
 
       {/* 销售管理路由 */}
-      {/* TODO: 销售预测和销售订单路由已移除，已合并为统一需求管理 */}
+      {/* TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理 */}
       {/* <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} /> */}
-      {/* <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} /> */}
+      <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
       <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
       <Route path="sales-management/sales-returns" element={<SalesReturnsPage />} />
 
@@ -140,10 +141,13 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
       <Route path="cost-management/cost-calculations" element={<CostCalculationsPage />} />
-      <Route path="cost-management/production-cost" element={<ProductionCostPage />} />
-      <Route path="cost-management/outsource-cost" element={<OutsourceCostPage />} />
-      <Route path="cost-management/purchase-cost" element={<PurchaseCostPage />} />
-      <Route path="cost-management/quality-cost" element={<QualityCostPage />} />
+      {/* 统一的成本核算页面（使用Tabs） */}
+      <Route path="cost-management/cost-calculation-tabs" element={<CostCalculationTabsPage />} />
+      {/* 保留原有路由以兼容旧链接，但重定向到统一页面 */}
+      <Route path="cost-management/production-cost" element={<CostCalculationTabsPage />} />
+      <Route path="cost-management/outsource-cost" element={<CostCalculationTabsPage />} />
+      <Route path="cost-management/purchase-cost" element={<CostCalculationTabsPage />} />
+      <Route path="cost-management/quality-cost" element={<CostCalculationTabsPage />} />
       <Route path="cost-management/cost-comparison" element={<CostComparisonPage />} />
       <Route path="cost-management/cost-optimization" element={<CostOptimizationPage />} />
       <Route path="cost-management/cost-report" element={<CostReportPage />} />
