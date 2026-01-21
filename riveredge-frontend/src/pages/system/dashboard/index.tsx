@@ -178,13 +178,27 @@ interface QuickActionItem {
 }
 
 /**
- * 获取问候语
+ * 获取问候语（精细时间段划分，按北京时间）
  */
 const getGreeting = () => {
   const hour = new Date().getHours();
-  if (hour < 12) return '早上好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
+  
+  // 更精细的时间段划分（按北京时间）
+  if (hour >= 0 && hour < 6) {
+    return '凌晨好';
+  } else if (hour >= 6 && hour < 9) {
+    return '早上好';
+  } else if (hour >= 9 && hour < 12) {
+    return '上午好';
+  } else if (hour >= 12 && hour < 13) {
+    return '中午好';
+  } else if (hour >= 13 && hour < 17) {
+    return '下午好';
+  } else if (hour >= 17 && hour < 18) {
+    return '傍晚好';
+  } else {
+    return '晚上好';
+  }
 };
 
 /**

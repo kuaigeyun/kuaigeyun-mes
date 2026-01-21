@@ -41,12 +41,6 @@ export interface StatisticsResponse {
     completed: number;
     in_progress: number;
     completion_rate: number;
-    order_count?: number;
-    product_count?: number;
-    plan_quantity?: number;
-    completed_quantity?: number;
-    defect_rate?: number;
-    capacity_achievement_rate?: number;
   };
   inventory: {
     total_quantity: number;
@@ -91,17 +85,8 @@ export async function handleTodo(todoId: string, action: string): Promise<void> 
 /**
  * 获取统计数据
  */
-export async function getStatistics(
-  dateStart?: string,
-  dateEnd?: string
-): Promise<StatisticsResponse> {
-  return apiRequest<StatisticsResponse>('/apps/kuaizhizao/dashboard/statistics', {
-    method: 'GET',
-    params: {
-      date_start: dateStart,
-      date_end: dateEnd,
-    },
-  });
+export async function getStatistics(): Promise<StatisticsResponse> {
+  return apiRequest<StatisticsResponse>('/apps/kuaizhizao/dashboard/statistics');
 }
 
 /**
@@ -110,7 +95,6 @@ export async function getStatistics(
 export async function getDashboard(): Promise<DashboardResponse> {
   return apiRequest<DashboardResponse>('/apps/kuaizhizao/dashboard');
 }
-
 
 /**
  * 通知项接口
@@ -192,12 +176,12 @@ export async function markMessagesRead(messageUuids: string[]): Promise<{ update
 export interface ProcessProgressItem {
   process_id: string;
   process_name: string;
-  current_progress: number;     // 当前进度（百分比）
-  task_count: number;           // 生产任务数
-  planned_quantity: number;     // 计划数
-  qualified_quantity: number;   // 合格数
-  unqualified_quantity: number; // 不合格数
-  status: 'not_started' | 'in_progress' | 'completed';
+  current_progress: number;
+  task_count: number;
+  planned_quantity: number;
+  qualified_quantity: number;
+  unqualified_quantity: number;
+  status: string;
 }
 
 /**
@@ -209,44 +193,12 @@ export interface ProcessProgressResponse {
 
 /**
  * 获取工序执行进展
- * @param includeUnstarted 是否包含未开始生产任务
  */
-export async function getProcessProgress(
-  includeUnstarted: boolean = false
-): Promise<ProcessProgressItem[]> {
+export async function getProcessProgress(includeUnstarted: boolean = false): Promise<ProcessProgressItem[]> {
   const response = await apiRequest<ProcessProgressResponse>('/apps/kuaizhizao/dashboard/process-progress', {
-    method: 'GET',
-    params: {
-      include_unstarted: includeUnstarted,
-    },
+    params: { include_unstarted: includeUnstarted },
   });
   return response.items;
-}
-
-/**
- * 管理指标响应
- */
-export interface ManagementMetricsResponse {
-  average_production_cycle: number;  // 平均订单生产周期（天）
-  on_time_delivery_rate: number;     // 准交率（%）
-}
-
-/**
- * 获取管理指标
- * @param dateStart 开始日期（YYYY-MM-DD）
- * @param dateEnd 结束日期（YYYY-MM-DD）
- */
-export async function getManagementMetrics(
-  dateStart?: string,
-  dateEnd?: string
-): Promise<ManagementMetricsResponse> {
-  return apiRequest<ManagementMetricsResponse>('/apps/kuaizhizao/dashboard/management-metrics', {
-    method: 'GET',
-    params: {
-      date_start: dateStart,
-      date_end: dateEnd,
-    },
-  });
 }
 
 /**
@@ -254,15 +206,15 @@ export async function getManagementMetrics(
  */
 export interface ProductionBroadcastItem {
   id: string;
-  operator_name: string;        // 操作员姓名
-  process_name: string;         // 工序名称
-  date: string;                 // 日期
-  work_order_no: string;        // 工单号
-  product_code: string;         // 产品编码
-  product_name: string;         // 产品名称
-  qualified_quantity: number;   // 合格数
-  unqualified_quantity: number; // 不合格数
-  created_at: string;           // 创建时间
+  operator_name: string;
+  process_name: string;
+  date: string;
+  work_order_no: string;
+  product_code: string;
+  product_name: string;
+  qualified_quantity: number;
+  unqualified_quantity: number;
+  created_at: string;
 }
 
 /**
@@ -274,16 +226,10 @@ export interface ProductionBroadcastResponse {
 
 /**
  * 获取生产实时播报
- * @param limit 返回数量限制（默认10条，最多50条）
  */
-export async function getProductionBroadcast(
-  limit: number = 10
-): Promise<ProductionBroadcastItem[]> {
+export async function getProductionBroadcast(limit: number = 10): Promise<ProductionBroadcastItem[]> {
   const response = await apiRequest<ProductionBroadcastResponse>('/apps/kuaizhizao/dashboard/production-broadcast', {
-    method: 'GET',
-    params: {
-      limit,
-    },
+    params: { limit },
   });
   return response.items;
 }
