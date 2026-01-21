@@ -52,7 +52,7 @@ import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { RightOutlined, CheckOutlined } from '@ant-design/icons';
-import { translateMenuName, translatePathTitle, translateAppMenuName, translateAppMenuItemName, extractAppCodeFromPath } from '../utils/menuTranslation';
+import { translateMenuName, translatePathTitle, translateAppMenuName, translateAppMenuItemName, extractAppCodeFromPath, findMenuTitleWithTranslation } from '../utils/menuTranslation';
 import dayjs from 'dayjs';
 import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 
@@ -1643,19 +1643,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               menu = {
                 items: parentItem.children
                   .filter(child => child.name && child.path)
-                  .map(child => ({
-                    key: child.path!,
-                    label: translateMenuName(child.name as string, t), // 使用统一的翻译逻辑
-                    onClick: () => {
-                      navigate(child.path!);
-                    },
-                  })),
+                  .map(child => {
+                    // 检查是否是应用菜单（通过路径判断）
+                    const isAppMenu = child.path?.startsWith('/apps/');
+                    const label = isAppMenu
+                      ? translateAppMenuItemName(child.name as string, child.path, t)
+                      : translateMenuName(child.name as string, t);
+                    return {
+                      key: child.path!,
+                      label: label,
+                      onClick: () => {
+                        navigate(child.path!);
+                      },
+                    };
+                  }),
               };
             }
           }
-          
+
+          // 检查是否是应用菜单（通过路径判断）
+          const isAppMenu = item.path?.startsWith('/apps/');
+          const breadcrumbTitle = isAppMenu
+            ? translateAppMenuItemName(item.name as string, item.path, t)
+            : translateMenuName(item.name as string, t);
+
           breadcrumbItems.push({
-            title: translateMenuName(item.name as string, t), // 使用统一的翻译逻辑
+            title: breadcrumbTitle, // 使用统一的翻译逻辑
             path: actualPath, // 使用实际路径（可能是第一个菜单组下的第一个菜单项）
             icon: item.icon,
             menu: menu,
@@ -1742,7 +1755,27 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
     
     return breadcrumbItems;
-  }, [location.pathname, menuConfig, navigate]);
+  }, [location.pathname, menuConfig, navigate, t]);
+
+  /**
+   * 根据当前路径设置文档标题（浏览器标签页标题）
+   */
+  useEffect(() => {
+    // 排除登录页等特殊页面
+    if (location.pathname.startsWith('/login') || location.pathname.startsWith('/infra/login')) {
+      return;
+    }
+
+    // 获取当前页面的标题
+    const pageTitle = findMenuTitleWithTranslation(location.pathname, menuConfig, t);
+    
+    // 设置文档标题
+    if (pageTitle && pageTitle !== t('common.unnamedPage')) {
+      document.title = `${pageTitle} - RiverEdge SaaS`;
+    } else {
+      document.title = 'RiverEdge SaaS - 多组织管理框架';
+    }
+  }, [location.pathname, menuConfig, t]);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏

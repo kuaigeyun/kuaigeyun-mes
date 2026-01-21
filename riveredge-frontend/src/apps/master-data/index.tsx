@@ -6,6 +6,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 
 // 工厂建模页面
+import PlantsPage from './pages/factory/plants';
 import WorkshopsPage from './pages/factory/workshops';
 import ProductionLinesPage from './pages/factory/production-lines';
 import WorkstationsPage from './pages/factory/workstations';
@@ -44,6 +45,7 @@ const MasterDataApp: React.FC = () => {
   return (
     <Routes>
       {/* 工厂建模路由 */}
+      <Route path="factory/plants" element={<PlantsPage />} />
       <Route path="factory/workshops" element={<WorkshopsPage />} />
       <Route path="factory/production-lines" element={<ProductionLinesPage />} />
       <Route path="factory/workstations" element={<WorkstationsPage />} />

@@ -4,7 +4,7 @@
 定义工厂数据、物料、客户、供应商、产品的数据模型。
 """
 
-from .factory import Workshop, ProductionLine, Workstation
+from .factory import Plant, Workshop, ProductionLine, Workstation
 from .warehouse import Warehouse, StorageArea, StorageLocation
 from .material import MaterialGroup, Material, BOM
 from .material_code_mapping import MaterialCodeMapping
@@ -18,6 +18,7 @@ from .performance import Holiday, Skill
 from .product import Product
 
 __all__ = [
+    "Plant",
     "Workshop",
     "ProductionLine",
     "Workstation",
