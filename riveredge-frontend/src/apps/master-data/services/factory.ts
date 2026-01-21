@@ -1,11 +1,15 @@
 /**
  * 工厂数据 API 服务
  * 
- * 提供车间、产线、工位的 API 调用方法
+ * 提供厂区、车间、产线、工位的 API 调用方法
  */
 
 import { api } from '../../../services/api';
 import type {
+  Plant,
+  PlantCreate,
+  PlantUpdate,
+  PlantListParams,
   Workshop,
   WorkshopCreate,
   WorkshopUpdate,
@@ -19,6 +23,46 @@ import type {
   WorkstationUpdate,
   WorkstationListParams,
 } from '../types/factory';
+
+/**
+ * 厂区 API 服务
+ */
+export const plantApi = {
+  /**
+   * 创建厂区
+   */
+  create: async (data: PlantCreate): Promise<Plant> => {
+    return api.post('/apps/master-data/factory/plants', data);
+  },
+
+  /**
+   * 获取厂区列表
+   */
+  list: async (params?: PlantListParams): Promise<Plant[]> => {
+    return api.get('/apps/master-data/factory/plants', { params });
+  },
+
+  /**
+   * 获取厂区详情
+   */
+  get: async (uuid: string): Promise<Plant> => {
+    return api.get(`/apps/master-data/factory/plants/${uuid}`);
+  },
+
+  /**
+   * 更新厂区
+   */
+  update: async (uuid: string, data: PlantUpdate): Promise<Plant> => {
+    return api.put(`/apps/master-data/factory/plants/${uuid}`, data);
+  },
+
+  /**
+   * 删除厂区
+   */
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/factory/plants/${uuid}`);
+  },
+};
 
 /**
  * 车间 API 服务

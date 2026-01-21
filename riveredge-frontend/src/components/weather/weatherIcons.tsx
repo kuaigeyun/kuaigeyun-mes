@@ -153,6 +153,8 @@ export function getWeatherIcon(iconCode: string, description: string = ''): Reac
         fontSize: 'inherit', 
         lineHeight: 1,
         display: 'inline-block',
+        verticalAlign: 'middle',
+        transform: 'translateY(-4px)', // 硬编码补偿：向上偏移2px以修正emoji偏下的问题
         filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))',
       }}
     >

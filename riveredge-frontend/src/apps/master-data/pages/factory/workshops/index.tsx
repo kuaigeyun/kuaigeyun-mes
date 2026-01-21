@@ -20,8 +20,8 @@ import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider }
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { workshopApi } from '../../../services/factory';
-import type { Workshop, WorkshopCreate, WorkshopUpdate } from '../../../types/factory';
+import { workshopApi, plantApi } from '../../../services/factory';
+import type { Workshop, WorkshopCreate, WorkshopUpdate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { generateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -52,6 +52,9 @@ const WorkshopsPage: React.FC = () => {
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
     const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
 
+    // 厂区列表状态
+    const [plants, setPlants] = useState<Plant[]>([]);
+
   /**
    * 加载自定义字段
    */
@@ -72,6 +75,21 @@ const WorkshopsPage: React.FC = () => {
       }
     };
     loadCustomFields();
+  }, []);
+
+  /**
+   * 加载厂区列表
+   */
+  useEffect(() => {
+    const loadPlants = async () => {
+      try {
+        const plantList = await plantApi.list({ isActive: true });
+        setPlants(plantList);
+      } catch (error) {
+        console.error('加载厂区列表失败:', error);
+      }
+    };
+    loadPlants();
   }, []);
 
   /**
@@ -139,6 +157,7 @@ const WorkshopsPage: React.FC = () => {
         code: detail.code,
         name: detail.name,
         description: detail.description,
+        plantId: detail.plantId,
         isActive: detail.isActive,
       });
       
@@ -670,7 +689,7 @@ const WorkshopsPage: React.FC = () => {
   };
 
   /**
-   * 表格列定义（使用 useMemo 确保 customFields 变化时重新计算）
+   * 表格列定义（使用 useMemo 确保 customFields 和 plants 变化时重新计算）
    */
   const columns: ProColumns<Workshop>[] = useMemo(() => {
     const customFieldColumns = generateCustomFieldColumns();
@@ -685,6 +704,20 @@ const WorkshopsPage: React.FC = () => {
         title: '车间名称',
         dataIndex: 'name',
         width: 200,
+      },
+      {
+        title: '所属厂区',
+        dataIndex: 'plantId',
+        width: 150,
+        valueType: 'select',
+        valueEnum: plants.reduce((acc, plant) => {
+          acc[plant.id] = { text: plant.name };
+          return acc;
+        }, {} as Record<number, { text: string }>),
+        render: (_, record) => {
+          const plant = plants.find(p => p.id === record.plantId);
+          return plant ? plant.name : <Typography.Text type="secondary">-</Typography.Text>;
+        },
       },
       {
         title: '描述',
@@ -759,7 +792,7 @@ const WorkshopsPage: React.FC = () => {
     ];
 
     return fixedColumns;
-  }, [customFields]);
+  }, [customFields, plants]);
 
   /**
    * 详情 Drawer 的列定义
@@ -774,9 +807,29 @@ const WorkshopsPage: React.FC = () => {
       dataIndex: 'name',
     },
     {
+      title: '所属厂区',
+      dataIndex: 'plantId',
+      render: (_, record) => {
+        const plant = plants.find(p => p.id === record.plantId);
+        return plant ? plant.name : <Typography.Text type="secondary">-</Typography.Text>;
+      },
+    },
+    {
       title: '描述',
       dataIndex: 'description',
       span: 2,
+    },
+    {
+      title: '所属厂区',
+      dataIndex: 'plantId',
+      render: (_, record) => {
+        const plant = plants.find(p => p.id === record.plantId);
+        return plant ? (
+          <Typography.Text>{plant.name}</Typography.Text>
+        ) : (
+          <Typography.Text type="secondary">-</Typography.Text>
+        );
+      },
     },
     {
       title: '启用状态',
@@ -1014,6 +1067,17 @@ const WorkshopsPage: React.FC = () => {
               { required: true, message: '请输入车间名称' },
               { max: 200, message: '车间名称不能超过200个字符' },
             ]}
+          />
+          <SafeProFormSelect
+            name="plantId"
+            label="所属厂区"
+            placeholder="请选择所属厂区（可选）"
+            colProps={{ span: 12 }}
+            options={plants.map(plant => ({
+              label: `${plant.code} - ${plant.name}`,
+              value: plant.id,
+            }))}
+            allowClear
           />
           <ProFormTextArea
             name="description"

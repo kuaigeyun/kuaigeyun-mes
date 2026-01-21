@@ -19,6 +19,12 @@
                 "sort_order": 1,
                 "children": [
                     {
+                        "title": "厂区管理",
+                        "path": "/apps/master-data/factory/plants",
+                        "permission": "master-data:factory:plant:view",
+                        "sort_order": 0
+                    },
+                    {
                         "title": "车间",
                         "path": "/apps/master-data/factory/workshops",
                         "permission": "master-data:factory:workshop:view",
@@ -178,6 +184,10 @@
         ]
     },
     "permissions": [
+        "master-data:factory:plant:view",
+        "master-data:factory:plant:create",
+        "master-data:factory:plant:update",
+        "master-data:factory:plant:delete",
         "master-data:factory:workshop:view",
         "master-data:factory:workshop:create",
         "master-data:factory:workshop:update",
