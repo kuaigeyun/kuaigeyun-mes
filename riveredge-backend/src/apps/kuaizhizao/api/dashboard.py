@@ -237,6 +237,8 @@ async def handle_todo(
 
 @router.get("/statistics", response_model=StatisticsResponse, summary="获取统计数据")
 async def get_statistics(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StatisticsResponse:
@@ -244,28 +246,109 @@ async def get_statistics(
     获取统计数据
     
     包括：
-    - 生产统计（工单数量、完成率、在制品数量等）
+    - 生产统计（工单数量、完成率、在制品数量、订单数、商品数、生产计划数、完工数量、不良品率、产能达成率等）
     - 库存统计（库存总量、库存周转率、预警数量等）
     - 质量统计（合格率、不良品数量、质量异常数量等）
     """
+    from datetime import datetime, timedelta
+    
+    # 解析时间范围
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            pass
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+            # 结束日期包含整天，所以设置为当天的23:59:59
+            date_end_dt = date_end_dt.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            pass
+    
     statistics = StatisticsResponse()
     
     try:
         # 生产统计
-        work_orders = await WorkOrderService().list_work_orders(
-            tenant_id=tenant_id,
-            limit=1000,
-        )
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+        from apps.kuaizhizao.services.reporting_service import ReportingService
+        from apps.kuaizhizao.services.defect_record_service import DefectRecordService
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from decimal import Decimal
+        
+        # 获取工单统计
+        work_order_query = WorkOrder.filter(tenant_id=tenant_id)
+        if date_start_dt:
+            work_order_query = work_order_query.filter(created_at__gte=date_start_dt)
+        if date_end_dt:
+            work_order_query = work_order_query.filter(created_at__lte=date_end_dt)
+        
+        work_orders = await work_order_query.all()
         
         total_work_orders = len(work_orders)
         completed_work_orders = len([wo for wo in work_orders if wo.status == "completed"])
         in_progress_work_orders = len([wo for wo in work_orders if wo.status == "in_progress"])
+        
+        # 计算完工数量（已完成工单的计划数量总和）
+        completed_quantity = sum(
+            float(wo.planned_quantity) for wo in work_orders 
+            if wo.status == "completed" and wo.planned_quantity
+        )
+        
+        # 获取订单统计
+        sales_order_query = SalesOrder.filter(tenant_id=tenant_id)
+        if date_start_dt:
+            sales_order_query = sales_order_query.filter(created_at__gte=date_start_dt)
+        if date_end_dt:
+            sales_order_query = sales_order_query.filter(created_at__lte=date_end_dt)
+        
+        sales_orders = await sales_order_query.all()
+        order_count = len(sales_orders)
+        
+        # 计算商品数（订单中不同商品的数量）
+        product_codes = set()
+        for so in sales_orders:
+            if hasattr(so, 'items') and so.items:
+                for item in so.items:
+                    if hasattr(item, 'product_code'):
+                        product_codes.add(item.product_code)
+        product_count = len(product_codes)
+        
+        # 计算生产计划数（所有工单的计划数量总和）
+        plan_quantity = sum(
+            float(wo.planned_quantity) for wo in work_orders 
+            if wo.planned_quantity
+        )
+        
+        # 获取报工统计，计算不良品率
+        reporting_service = ReportingService()
+        reporting_stats = await reporting_service.get_reporting_statistics(
+            tenant_id=tenant_id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+        )
+        
+        total_reported_quantity = float(reporting_stats.get("total_reported_quantity", 0)) if reporting_stats else 0
+        total_unqualified_quantity = float(reporting_stats.get("total_unqualified_quantity", 0)) if reporting_stats else 0
+        defect_rate = (total_unqualified_quantity / total_reported_quantity * 100) if total_reported_quantity > 0 else 0
+        
+        # 计算产能达成率（实际完工数量 / 计划数量 * 100）
+        capacity_achievement_rate = (completed_quantity / plan_quantity * 100) if plan_quantity > 0 else 0
         
         statistics.production = {
             "total": total_work_orders,
             "completed": completed_work_orders,
             "in_progress": in_progress_work_orders,
             "completion_rate": round(completed_work_orders / total_work_orders * 100, 2) if total_work_orders > 0 else 0,
+            "order_count": order_count,
+            "product_count": product_count,
+            "plan_quantity": round(plan_quantity, 2),
+            "completed_quantity": round(completed_quantity, 2),
+            "defect_rate": round(defect_rate, 2),
+            "capacity_achievement_rate": round(capacity_achievement_rate, 2),
         }
     except Exception as e:
         logger.error(f"获取生产统计失败: {e}")
@@ -274,6 +357,12 @@ async def get_statistics(
             "completed": 0,
             "in_progress": 0,
             "completion_rate": 0,
+            "order_count": 0,
+            "product_count": 0,
+            "plan_quantity": 0,
+            "completed_quantity": 0,
+            "defect_rate": 0,
+            "capacity_achievement_rate": 0,
         }
     
     try:
@@ -319,6 +408,8 @@ async def get_statistics(
         reporting_service = ReportingService()
         reporting_stats = await reporting_service.get_reporting_statistics(
             tenant_id=tenant_id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
         )
         
         quality_rate = reporting_stats.get("qualification_rate", 0) if reporting_stats else 0
@@ -337,6 +428,348 @@ async def get_statistics(
         }
     
     return statistics
+
+
+class ProcessProgressItem(BaseModel):
+    """工序执行进展项"""
+    process_id: str = Field(..., description="工序ID（工序编码）")
+    process_name: str = Field(..., description="工序名称")
+    current_progress: float = Field(..., description="当前进度（百分比）")
+    task_count: int = Field(..., description="生产任务数")
+    planned_quantity: float = Field(..., description="计划数")
+    qualified_quantity: float = Field(..., description="合格数")
+    unqualified_quantity: float = Field(..., description="不合格数")
+    status: str = Field(..., description="状态（not_started/in_progress/completed）")
+
+
+class ProcessProgressResponse(BaseModel):
+    """工序执行进展响应"""
+    items: List[ProcessProgressItem] = Field(default_factory=list, description="工序执行进展列表")
+
+
+@router.get("/process-progress", response_model=ProcessProgressResponse, summary="获取工序执行进展")
+async def get_process_progress(
+    include_unstarted: bool = Query(False, description="是否包含未开始生产任务"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProcessProgressResponse:
+    """
+    获取在制工序执行进展
+    
+    按工序名称分组，统计每个工序的执行情况。
+    
+    - **include_unstarted**: 是否包含未开始生产任务（默认：False）
+    """
+    from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from decimal import Decimal
+    from collections import defaultdict
+    
+    try:
+        # 查询在制工序（pending或in_progress状态）
+        query = WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        
+        if include_unstarted:
+            # 包含未开始的任务
+            query = query.filter(status__in=["pending", "in_progress"])
+        else:
+            # 只包含进行中的任务
+            query = query.filter(status="in_progress")
+        
+        operations = await query.all()
+        
+        # 按工序名称分组统计
+        process_stats = defaultdict(lambda: {
+            "process_id": "",
+            "process_name": "",
+            "task_count": 0,
+            "planned_quantity": Decimal("0"),
+            "completed_quantity": Decimal("0"),
+            "qualified_quantity": Decimal("0"),
+            "unqualified_quantity": Decimal("0"),
+            "statuses": set(),
+        })
+        
+        # 获取所有相关的工单ID
+        work_order_ids = list(set([op.work_order_id for op in operations]))
+        
+        # 批量获取工单信息（用于获取计划数量）
+        work_orders = {}
+        if work_order_ids:
+            wo_list = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=work_order_ids,
+            ).all()
+            work_orders = {wo.id: wo for wo in wo_list}
+        
+        # 统计每个工序的数据
+        for op in operations:
+            process_key = op.operation_name or op.operation_code
+            if not process_key:
+                continue
+            
+            stats = process_stats[process_key]
+            stats["process_id"] = op.operation_code or str(op.operation_id)
+            stats["process_name"] = op.operation_name or op.operation_code
+            stats["task_count"] += 1
+            
+            # 获取工单的计划数量（工单的quantity就是该工序的计划数量）
+            work_order = work_orders.get(op.work_order_id)
+            if work_order:
+                stats["planned_quantity"] += work_order.quantity or Decimal("0")
+            
+            # 累计完成数量、合格数量、不合格数量
+            stats["completed_quantity"] += op.completed_quantity or Decimal("0")
+            stats["qualified_quantity"] += op.qualified_quantity or Decimal("0")
+            stats["unqualified_quantity"] += op.unqualified_quantity or Decimal("0")
+            stats["statuses"].add(op.status)
+        
+        # 转换为响应格式
+        items = []
+        for process_name, stats in process_stats.items():
+            # 计算当前进度（已完成数量 / 计划数量 * 100）
+            planned_qty = float(stats["planned_quantity"])
+            completed_qty = float(stats["completed_quantity"])
+            current_progress = (completed_qty / planned_qty * 100) if planned_qty > 0 else 0.0
+            
+            # 确定状态
+            statuses = stats["statuses"]
+            if "in_progress" in statuses:
+                status = "in_progress"
+            elif "pending" in statuses:
+                status = "not_started"
+            else:
+                status = "completed"
+            
+            items.append(ProcessProgressItem(
+                process_id=stats["process_id"],
+                process_name=stats["process_name"],
+                current_progress=round(current_progress, 2),
+                task_count=stats["task_count"],
+                planned_quantity=round(planned_qty, 2),
+                qualified_quantity=round(float(stats["qualified_quantity"]), 2),
+                unqualified_quantity=round(float(stats["unqualified_quantity"]), 2),
+                status=status,
+            ))
+        
+        # 按工序名称排序
+        items.sort(key=lambda x: x.process_name)
+        
+        return ProcessProgressResponse(items=items)
+        
+    except Exception as e:
+        logger.error(f"获取工序执行进展失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return ProcessProgressResponse(items=[])
+
+
+class ManagementMetricsResponse(BaseModel):
+    """管理指标响应"""
+    average_production_cycle: float = Field(..., description="平均订单生产周期（天）")
+    on_time_delivery_rate: float = Field(..., description="准交率（%）")
+
+
+@router.get("/management-metrics", response_model=ManagementMetricsResponse, summary="获取管理指标")
+async def get_management_metrics(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ManagementMetricsResponse:
+    """
+    获取管理指标
+    
+    包括：
+    - 平均订单生产周期（天）：从工单创建到完成的平均天数
+    - 准交率（%）：按时交付的订单占比
+    """
+    from datetime import datetime, timedelta
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    
+    # 解析时间范围
+    date_start_dt = None
+    date_end_dt = None
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            pass
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+            date_end_dt = date_end_dt.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            pass
+    
+    try:
+        # 计算平均订单生产周期
+        # 查询已完成的工单
+        work_order_query = WorkOrder.filter(
+            tenant_id=tenant_id,
+            status="completed",
+            actual_start_date__isnull=False,
+            actual_end_date__isnull=False,
+        )
+        
+        if date_start_dt:
+            work_order_query = work_order_query.filter(actual_end_date__gte=date_start_dt)
+        if date_end_dt:
+            work_order_query = work_order_query.filter(actual_end_date__lte=date_end_dt)
+        
+        completed_work_orders = await work_order_query.all()
+        
+        total_cycle_days = 0
+        valid_orders = 0
+        
+        for wo in completed_work_orders:
+            if wo.actual_start_date and wo.actual_end_date:
+                cycle_days = (wo.actual_end_date - wo.actual_start_date).days
+                if cycle_days >= 0:  # 确保是有效的时间差
+                    total_cycle_days += cycle_days
+                    valid_orders += 1
+        
+        average_production_cycle = (total_cycle_days / valid_orders) if valid_orders > 0 else 0.0
+        
+        # 计算准交率
+        # 查询销售订单（已完成或已交付的订单）
+        sales_order_query = SalesOrder.filter(
+            tenant_id=tenant_id,
+        ).filter(
+            status__in=["completed", "delivered", "closed"]
+        )
+        
+        if date_start_dt:
+            sales_order_query = sales_order_query.filter(created_at__gte=date_start_dt)
+        if date_end_dt:
+            sales_order_query = sales_order_query.filter(created_at__lte=date_end_dt)
+        
+        sales_orders = await sales_order_query.all()
+        
+        on_time_count = 0
+        total_delivered_count = 0
+        
+        for so in sales_orders:
+            # 检查是否有交付日期字段
+            if hasattr(so, 'delivery_date') and so.delivery_date:
+                planned_delivery = so.delivery_date
+                # 实际交付日期：使用updated_at作为交付时间（订单完成/交付时更新时间）
+                actual_delivery = so.updated_at
+                
+                # 将delivery_date转换为date类型（如果是datetime则提取date部分）
+                if isinstance(planned_delivery, datetime):
+                    planned_delivery_date = planned_delivery.date()
+                else:
+                    planned_delivery_date = planned_delivery
+                
+                if actual_delivery:
+                    actual_delivery_date = actual_delivery.date() if isinstance(actual_delivery, datetime) else actual_delivery
+                    # 按时交付：实际交付日期 <= 计划交付日期
+                    if actual_delivery_date <= planned_delivery_date:
+                        on_time_count += 1
+                    total_delivered_count += 1
+        
+        on_time_delivery_rate = (on_time_count / total_delivered_count * 100) if total_delivered_count > 0 else 0.0
+        
+        return ManagementMetricsResponse(
+            average_production_cycle=round(average_production_cycle, 2),
+            on_time_delivery_rate=round(on_time_delivery_rate, 2),
+        )
+        
+    except Exception as e:
+        logger.error(f"获取管理指标失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return ManagementMetricsResponse(
+            average_production_cycle=0.0,
+            on_time_delivery_rate=0.0,
+        )
+
+
+class ProductionBroadcastItem(BaseModel):
+    """生产实时播报项"""
+    id: str = Field(..., description="播报ID")
+    operator_name: str = Field(..., description="操作员姓名")
+    process_name: str = Field(..., description="工序名称")
+    date: str = Field(..., description="日期")
+    work_order_no: str = Field(..., description="工单号")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    qualified_quantity: float = Field(..., description="合格数")
+    unqualified_quantity: float = Field(..., description="不合格数")
+    created_at: str = Field(..., description="创建时间")
+
+
+class ProductionBroadcastResponse(BaseModel):
+    """生产实时播报响应"""
+    items: List[ProductionBroadcastItem] = Field(default_factory=list, description="播报列表")
+
+
+@router.get("/production-broadcast", response_model=ProductionBroadcastResponse, summary="获取生产实时播报")
+async def get_production_broadcast(
+    limit: int = Query(10, ge=1, le=50, description="返回数量限制"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionBroadcastResponse:
+    """
+    获取生产实时播报
+    
+    返回最近的报工记录，用于实时展示生产活动。
+    
+    - **limit**: 返回数量限制（默认10条，最多50条）
+    """
+    from apps.kuaizhizao.models.reporting_record import ReportingRecord
+    from apps.kuaizhizao.models.work_order import WorkOrder
+    from datetime import datetime, timedelta
+    
+    try:
+        # 查询最近的报工记录（最近7天）
+        date_threshold = datetime.now() - timedelta(days=7)
+        
+        reporting_records = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            status="approved",  # 只显示已审核通过的报工记录
+            reported_at__gte=date_threshold,
+        ).order_by("-reported_at").limit(limit).all()
+        
+        # 获取相关的工单信息
+        work_order_ids = list(set([r.work_order_id for r in reporting_records if r.work_order_id]))
+        work_orders = {}
+        if work_order_ids:
+            wo_list = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=work_order_ids,
+            ).all()
+            work_orders = {wo.id: wo for wo in wo_list}
+        
+        items = []
+        for record in reporting_records:
+            work_order = work_orders.get(record.work_order_id) if record.work_order_id else None
+            
+            items.append(ProductionBroadcastItem(
+                id=str(record.id),
+                operator_name=record.worker_name or "未知操作员",
+                process_name=record.operation_name or "未知工序",
+                date=record.reported_at.strftime("%Y-%m-%d") if record.reported_at else datetime.now().strftime("%Y-%m-%d"),
+                work_order_no=record.work_order_code or (work_order.code if work_order else "未知工单"),
+                product_code=work_order.product_code if work_order else "未知产品",
+                product_name=work_order.product_name if work_order else "未知产品",
+                qualified_quantity=float(record.qualified_quantity or 0),
+                unqualified_quantity=float(record.unqualified_quantity or 0),
+                created_at=record.reported_at.isoformat() if record.reported_at else datetime.now().isoformat(),
+            ))
+        
+        return ProductionBroadcastResponse(items=items)
+        
+    except Exception as e:
+        logger.error(f"获取生产实时播报失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return ProductionBroadcastResponse(items=[])
 
 
 @router.get("", response_model=DashboardResponse, summary="获取工作台数据")

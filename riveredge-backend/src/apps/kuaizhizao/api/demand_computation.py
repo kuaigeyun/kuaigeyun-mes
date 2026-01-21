@@ -58,8 +58,13 @@ async def create_computation(
 @router.get("", summary="获取需求计算列表")
 async def list_computations(
     demand_id: Optional[int] = Query(None, description="需求ID"),
+    demand_code: Optional[str] = Query(None, description="需求编码"),
+    computation_code: Optional[str] = Query(None, description="计算编码"),
     computation_type: Optional[str] = Query(None, description="计算类型（MRP/LRP）"),
     computation_status: Optional[str] = Query(None, description="计算状态"),
+    business_mode: Optional[str] = Query(None, description="业务模式（MTS/MTO）"),
+    start_date: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    end_date: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=100, description="限制数量"),
     current_user: User = Depends(get_current_user),
@@ -68,14 +73,19 @@ async def list_computations(
     """
     获取需求计算列表
     
-    支持按需求ID、计算类型、计算状态筛选。
+    支持按需求ID、需求编码、计算编码、计算类型、计算状态、业务模式、时间范围筛选。
     """
     try:
         return await computation_service.list_computations(
             tenant_id=tenant_id,
             demand_id=demand_id,
+            demand_code=demand_code,
+            computation_code=computation_code,
             computation_type=computation_type,
             computation_status=computation_status,
+            business_mode=business_mode,
+            start_date=start_date,
+            end_date=end_date,
             skip=skip,
             limit=limit
         )

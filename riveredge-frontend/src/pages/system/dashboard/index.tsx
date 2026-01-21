@@ -3,12 +3,13 @@
  *
  * 用户工作台，提供快捷入口、消息通知、待办事项等功能
  * 参考 Ant Design Pro 工作台最佳实践
+ * 按照工作台设计规划文档实现
  *
  * Author: Luigi Lu
- * Date: 2025-12-30
+ * Date: 2026-01-21
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   Row,
@@ -23,7 +24,14 @@ import {
   App,
   Modal,
   Tree,
+  Tabs,
+  Progress,
+  Dropdown,
   message as antdMessage,
+  theme,
+  Segmented,
+  DatePicker,
+  Checkbox,
 } from 'antd';
 import {
   UserOutlined,
@@ -35,62 +43,50 @@ import {
   ShopOutlined,
   SettingOutlined,
   PlusOutlined,
+  PlayCircleOutlined,
+  WarningOutlined,
+  SafetyOutlined,
+  FileTextOutlined,
+  BarChartOutlined,
+  DatabaseOutlined,
+  ShoppingOutlined,
+  MoreOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { DashboardTemplate, type QuickAction } from '../../../components/layout-templates';
-import { getTodos, getStatistics, getDashboard, handleTodo, type TodoItem, type StatisticsResponse } from '../../../services/dashboard';
+import { QuickEntryGrid, type QuickEntryItem } from '../../../components/quick-entry/QuickEntryGrid';
+import { 
+  getTodos, 
+  getStatistics, 
+  getDashboard, 
+  handleTodo, 
+  getUserMessages,
+  markMessagesRead,
+  getProcessProgress,
+  getProductionBroadcast,
+  type TodoItem, 
+  type StatisticsResponse,
+  type NotificationItem,
+  type ProcessProgressItem,
+  type ProductionBroadcastItem,
+} from '../../../services/dashboard';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
 import { getUserPreference, updateUserPreference } from '../../../services/userPreference';
 import { ManufacturingIcons } from '../../../utils/manufacturingIcons';
+import { getAvatarUrl, getAvatarText } from '../../../utils/avatar';
+import { useGlobalStore } from '../../../stores';
+import { getUserInfo } from '../../../utils/auth';
+import WeatherWidget from '../../../components/weather/WeatherWidget';
 import * as LucideIcons from 'lucide-react';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
 
 const { Title, Text } = Typography;
-
-// 模拟数据API（实际项目中替换为真实API调用）
-const fetchNotifications = async () => {
-  await new Promise(resolve => setTimeout(resolve, 800));
-  return [
-    {
-      id: 1,
-      type: 'system',
-      title: '系统维护通知',
-      content: '系统将于今晚 22:00-24:00 进行维护升级',
-      time: '2025-11-19 14:30:00',
-      read: false,
-    },
-    {
-      id: 2,
-      type: 'task',
-      title: '生产计划审核',
-      content: '您有 3 个生产计划待审核',
-      time: '2025-11-19 13:45:00',
-      read: false,
-    },
-    {
-      id: 3,
-      type: 'message',
-      title: '新消息',
-      content: '张三给您发送了一条消息',
-      time: '2025-11-19 12:20:00',
-      read: true,
-    },
-  ];
-};
+const { useToken } = theme;
 
 
 /**
@@ -164,6 +160,7 @@ const convertMenuTreeToTreeData = (menus: MenuTree[]): DataNode[] => {
       title: menu.name,
       key: menu.uuid,
       icon: renderMenuIcon(menu),
+      path: menu.path, // 添加path信息，供QuickEntryGrid使用
       children: menu.children ? convertMenuTreeToTreeData(menu.children) : undefined,
       isLeaf: !menu.children || menu.children.length === 0,
     }));
@@ -181,20 +178,109 @@ interface QuickActionItem {
 }
 
 /**
+ * 获取问候语
+ */
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return '早上好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+};
+
+/**
  * 工作台页面组件
  */
 export default function DashboardPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { token } = useToken();
+  const { currentUser } = useGlobalStore();
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [selectedMenuKeys, setSelectedMenuKeys] = useState<React.Key[]>([]);
+  const [currentTime, setCurrentTime] = useState(dayjs());
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
+  
+  // 时间范围筛选器状态
+  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'custom'>('today');
+  const [customDateRange, setCustomDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  
+  // 实时更新时间
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(dayjs());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // 获取通知（暂时保留模拟数据）
-  const { data: notifications, isLoading: notificationsLoading } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: fetchNotifications,
-    refetchInterval: 60000,
+  // 获取用户信息
+  const userInfo = useMemo(() => getUserInfo(), []);
+  const userName = currentUser?.full_name || currentUser?.username || userInfo?.full_name || userInfo?.username || '用户';
+  const userRole = currentUser?.is_infra_admin || userInfo?.is_infra_admin
+    ? '平台管理员' 
+    : currentUser?.is_tenant_admin || userInfo?.is_tenant_admin
+    ? '组织管理员' 
+    : '普通用户';
+
+  // 加载用户头像 - 使用与 BasicLayout 和 LockScreen 相同的逻辑
+  useEffect(() => {
+    const loadAvatarUrl = async () => {
+      const userInfoFromStorage = getUserInfo();
+      const avatarUuid = (currentUser as any)?.avatar || userInfoFromStorage?.avatar;
+      
+      if (avatarUuid) {
+        try {
+          const url = await getAvatarUrl(avatarUuid);
+          if (url) {
+            setAvatarUrl(url);
+          } else {
+            setAvatarUrl(undefined);
+          }
+        } catch (error) {
+          console.error('加载头像 URL 失败:', error);
+          setAvatarUrl(undefined);
+        }
+      } else {
+        // 如果 currentUser 和 userInfo 都没有 avatar，尝试从个人资料 API 获取
+        let foundAvatar = false;
+        if (currentUser) {
+          try {
+            const { getUserProfile } = await import('../../../services/userProfile');
+            const profile = await getUserProfile();
+            if (profile.avatar) {
+              const url = await getAvatarUrl(profile.avatar);
+              if (url) {
+                setAvatarUrl(url);
+                foundAvatar = true;
+              }
+            }
+          } catch (error) {
+            // 静默失败，不影响其他功能
+          }
+        }
+        
+        // 只有在确实没有找到头像时才清空
+        if (!foundAvatar) {
+          setAvatarUrl(undefined);
+        }
+      }
+    };
+    
+    if (currentUser) {
+      loadAvatarUrl();
+    }
+  }, [currentUser]);
+
+  // 获取用户消息通知（接入真实API）
+  const { data: notifications, isLoading: notificationsLoading, refetch: refetchNotifications } = useQuery({
+    queryKey: ['user-messages'],
+    queryFn: () => getUserMessages(1, 20, false), // 获取前20条消息，包括已读和未读
+    refetchInterval: 60000, // 每60秒自动刷新
+    retry: 2, // 失败时重试2次
+    onError: (error: any) => {
+      console.error('获取用户消息失败:', error);
+      // 静默失败，不显示错误提示，避免影响用户体验
+    },
   });
 
   // 获取待办事项（使用真实API）
@@ -204,10 +290,54 @@ export default function DashboardPage() {
     refetchInterval: 30000,
   });
 
+  // 计算时间范围
+  const getDateRange = useMemo(() => {
+    const now = dayjs();
+    switch (timeRange) {
+      case 'today':
+        return {
+          dateStart: now.format('YYYY-MM-DD'),
+          dateEnd: now.format('YYYY-MM-DD'),
+        };
+      case 'yesterday':
+        const yesterday = now.subtract(1, 'day');
+        return {
+          dateStart: yesterday.format('YYYY-MM-DD'),
+          dateEnd: yesterday.format('YYYY-MM-DD'),
+        };
+      case 'last7days':
+        return {
+          dateStart: now.subtract(6, 'day').format('YYYY-MM-DD'),
+          dateEnd: now.format('YYYY-MM-DD'),
+        };
+      case 'last30days':
+        return {
+          dateStart: now.subtract(29, 'day').format('YYYY-MM-DD'),
+          dateEnd: now.format('YYYY-MM-DD'),
+        };
+      case 'custom':
+        if (customDateRange && customDateRange[0] && customDateRange[1]) {
+          return {
+            dateStart: customDateRange[0].format('YYYY-MM-DD'),
+            dateEnd: customDateRange[1].format('YYYY-MM-DD'),
+          };
+        }
+        return {
+          dateStart: now.format('YYYY-MM-DD'),
+          dateEnd: now.format('YYYY-MM-DD'),
+        };
+      default:
+        return {
+          dateStart: now.format('YYYY-MM-DD'),
+          dateEnd: now.format('YYYY-MM-DD'),
+        };
+    }
+  }, [timeRange, customDateRange]);
+
   // 获取统计数据（使用真实API）
   const { data: statistics, isLoading: statisticsLoading } = useQuery({
-    queryKey: ['dashboard-statistics'],
-    queryFn: getStatistics,
+    queryKey: ['dashboard-statistics', getDateRange.dateStart, getDateRange.dateEnd],
+    queryFn: () => getStatistics(getDateRange.dateStart, getDateRange.dateEnd),
     refetchInterval: 60000,
   });
 
@@ -216,6 +346,23 @@ export default function DashboardPage() {
     queryKey: ['dashboard-menu-tree'],
     queryFn: () => getMenuTree({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5分钟缓存
+  });
+
+  // 工序执行进展筛选状态
+  const [includeUnstarted, setIncludeUnstarted] = useState(false);
+  
+  // 获取工序执行进展
+  const { data: processProgress, isLoading: processProgressLoading } = useQuery({
+    queryKey: ['dashboard-process-progress', includeUnstarted],
+    queryFn: () => getProcessProgress(includeUnstarted),
+    refetchInterval: 60000, // 每60秒自动刷新
+  });
+
+  // 获取生产实时播报
+  const { data: productionBroadcast, isLoading: productionBroadcastLoading } = useQuery({
+    queryKey: ['dashboard-production-broadcast'],
+    queryFn: () => getProductionBroadcast(10),
+    refetchInterval: 30000, // 每30秒自动刷新
   });
 
   // 获取用户偏好设置
@@ -377,31 +524,720 @@ export default function DashboardPage() {
   return (
     <>
       <DashboardTemplate
-        quickActions={quickActions}
-        showConfigButton={true}
-        onConfigClick={handleOpenConfig}
+        quickActions={[]}
+        showConfigButton={false}
       >
-      {/* 欢迎区域 */}
-      <Card style={{ marginBottom: 24 }}>
-        <Space size="large">
-          <Avatar size={64} style={{ backgroundColor: '#1890ff' }}>
-            U
-          </Avatar>
-          <div>
-            <Title level={4} style={{ margin: 0, marginBottom: 8 }}>
-              欢迎使用 RiverEdge SaaS
-            </Title>
-            <Text type="secondary">
-              今天是 {dayjs().format('YYYY年MM月DD日 dddd')}
-            </Text>
-          </div>
-        </Space>
+      {/* 欢迎区域 - 增强设计 */}
+      <Card
+        style={{
+          marginTop: 0,
+          marginBottom: 24,
+          background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary}dd 100%)`,
+          border: 'none',
+        }}
+        bodyStyle={{ padding: '32px 24px' }}
+        className="welcome-banner-card"
+      >
+        <Row align="middle" justify="space-between">
+          <Col flex="auto">
+            <Space size="large">
+              <Avatar 
+                size={64} 
+                src={avatarUrl}
+                style={{ 
+                  backgroundColor: avatarUrl ? 'transparent' : '#ffffff',
+                  color: token.colorPrimary,
+                  fontSize: 24,
+                  fontWeight: 'bold',
+                }}
+              >
+                {!avatarUrl && getAvatarText(currentUser?.full_name || userInfo?.full_name, currentUser?.username || userInfo?.username)}
+              </Avatar>
+              <div>
+                <Title 
+                  level={3} 
+                  style={{ 
+                    margin: 0, 
+                    marginBottom: 8,
+                    color: '#ffffff',
+                  }}
+                >
+                  {getGreeting()}，{userName}
+                </Title>
+                <Space size="middle">
+                  <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14 }}>
+                    {currentTime.format('YYYY年MM月DD日 dddd')}
+                  </Text>
+                  <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 14, fontWeight: 500 }}>
+                    {currentTime.format('HH:mm:ss')}
+                  </Text>
+                  <Tag color="rgba(255, 255, 255, 0.2)" style={{ color: '#ffffff', border: 'none' }}>
+                    {userRole}
+                  </Tag>
+                </Space>
+              </div>
+            </Space>
+          </Col>
+          <Col>
+            <Row align="middle" gutter={24}>
+              {/* 天气预报 */}
+              <Col>
+                <WeatherWidget />
+              </Col>
+              
+              {/* 快捷操作按钮 */}
+              <Col>
+                <Space>
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<PlusOutlined />}
+                    style={{
+                      backgroundColor: '#ffffff',
+                      color: token.colorPrimary,
+                      border: 'none',
+                    }}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?action=create')}
+                  >
+                    新建工单
+                  </Button>
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<PlayCircleOutlined />}
+                    style={{
+                      backgroundColor: '#ffffff',
+                      color: token.colorPrimary,
+                      border: 'none',
+                    }}
+                    onClick={() => navigate('/apps/kuaizhizao/production-execution/reporting')}
+                  >
+                    快速报工
+                  </Button>
+                  <Dropdown
+                    menu={{
+                      items: [
+                        {
+                          key: 'demand',
+                          label: '创建需求',
+                          icon: <FileTextOutlined />,
+                          onClick: () => navigate('/apps/kuaizhizao/plan-management/demand-management?action=create'),
+                        },
+                        {
+                          key: 'purchase',
+                          label: '创建采购订单',
+                          icon: <ShoppingOutlined />,
+                          onClick: () => navigate('/apps/kuaizhizao/purchase-management/purchase-orders?action=create'),
+                        },
+                      ],
+                    }}
+                  >
+                    <Button
+                      size="large"
+                      icon={<MoreOutlined />}
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        color: '#ffffff',
+                        border: 'none',
+                      }}
+                    >
+                      更多操作
+                    </Button>
+                  </Dropdown>
+                </Space>
+              </Col>
+            </Row>
+          </Col>
+        </Row>
       </Card>
 
-      {/* 消息通知和待办事项 */}
-      <Row gutter={[16, 16]}>
-        {/* 消息通知 */}
-        <Col xs={24} lg={12}>
+      {/* 生产指标 - 参考设计 */}
+      <div style={{ marginBottom: 24 }}>
+        {/* 时间范围筛选器 */}
+        <Row justify="end" align="middle" style={{ marginBottom: 16 }}>
+          <Col>
+            <Space>
+              <Segmented
+                value={timeRange}
+                onChange={(value) => {
+                  setTimeRange(value as typeof timeRange);
+                  if (value !== 'custom') {
+                    setCustomDateRange(null);
+                  }
+                }}
+                options={[
+                  { label: '今天', value: 'today' },
+                  { label: '昨天', value: 'yesterday' },
+                  { label: '近7天', value: 'last7days' },
+                  { label: '近30天', value: 'last30days' },
+                  { label: '自定义', value: 'custom' },
+                ]}
+              />
+              {timeRange === 'custom' && (
+                <DatePicker.RangePicker
+                  value={customDateRange}
+                  onChange={(dates) => {
+                    if (dates && dates[0] && dates[1]) {
+                      setCustomDateRange([dates[0], dates[1]]);
+                    } else {
+                      setCustomDateRange(null);
+                    }
+                  }}
+                  format="YYYY-MM-DD"
+                />
+              )}
+            </Space>
+          </Col>
+        </Row>
+
+        {/* 生产指标卡片 - 参考设计，渐变背景，白色文字 */}
+        <Row gutter={[16, 16]} style={{ display: 'flex', alignItems: 'stretch' }}>
+        {/* 工单总数 */}
+        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+          <Card
+            hoverable
+            style={{
+              borderRadius: token.borderRadius,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+          >
+            {/* 背景图标 */}
+            <FileTextOutlined 
+              style={{ 
+                position: 'absolute',
+                right: 16,
+                top: 16,
+                fontSize: 80,
+                color: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 0,
+              }} 
+            />
+            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+              <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
+                工单总数
+              </Text>
+              <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
+                {statistics?.production?.total || 0}
+                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>单</Text>
+              </Title>
+            </Space>
+          </Card>
+        </Col>
+
+        {/* 进行中工单 */}
+        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+          <Card
+            hoverable
+            style={{
+              borderRadius: token.borderRadius,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
+          >
+            {/* 背景图标 */}
+            <PlayCircleOutlined 
+              style={{ 
+                position: 'absolute',
+                right: 16,
+                top: 16,
+                fontSize: 80,
+                color: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 0,
+              }} 
+            />
+            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+              <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
+                进行中工单
+              </Text>
+              <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
+                {statistics?.production?.in_progress || 0}
+                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>单</Text>
+              </Title>
+            </Space>
+          </Card>
+        </Col>
+
+        {/* 工单完成率 */}
+        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+          <Card
+            hoverable
+            style={{
+              borderRadius: token.borderRadius,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
+          >
+            {/* 背景图标 */}
+            <CheckCircleOutlined 
+              style={{ 
+                position: 'absolute',
+                right: 16,
+                top: 16,
+                fontSize: 80,
+                color: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 0,
+              }} 
+            />
+            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+              <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
+                工单完成率
+              </Text>
+              <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
+                {statistics?.production?.completion_rate || 0}%
+              </Title>
+            </Space>
+          </Card>
+        </Col>
+
+        {/* 完工数量 */}
+        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+          <Card
+            hoverable
+            style={{
+              borderRadius: token.borderRadius,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+          >
+            {/* 背景图标 */}
+            <CheckCircleOutlined 
+              style={{ 
+                position: 'absolute',
+                right: 16,
+                top: 16,
+                fontSize: 80,
+                color: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 0,
+              }} 
+            />
+            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+              <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
+                完工数量
+              </Text>
+              <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
+                {statistics?.production?.completed_quantity || 0}
+                <Text style={{ fontSize: 20, fontWeight: 'normal', marginLeft: 4, color: '#ffffff' }}>件</Text>
+              </Title>
+            </Space>
+          </Card>
+        </Col>
+
+        {/* 产能达成率 */}
+        <Col xs={24} sm={12} md={8} lg={8} style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+          <Card
+            hoverable
+            style={{
+              borderRadius: token.borderRadius,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+          >
+            {/* 背景图标 */}
+            <BarChartOutlined 
+              style={{ 
+                position: 'absolute',
+                right: 16,
+                top: 16,
+                fontSize: 80,
+                color: 'rgba(255, 255, 255, 0.15)',
+                zIndex: 0,
+              }} 
+            />
+            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+              <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
+                产能达成率
+              </Text>
+              <Title level={2} style={{ margin: 0, color: '#ffffff', fontWeight: 700 }}>
+                {statistics?.production?.capacity_achievement_rate || 0}%
+              </Title>
+            </Space>
+          </Card>
+        </Col>
+
+        </Row>
+      </div>
+
+      {/* 快捷入口、生产实时播报、待办事项、消息通知 - 四列，各占25% */}
+      <Row 
+        gutter={[16, 16]} 
+        style={{ 
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'stretch',
+        }}
+      >
+        {/* 快捷入口 - iOS风格（占25%） */}
+        <Col xs={24} sm={12} md={6} lg={6} style={{ display: 'flex' }}>
+          <QuickEntryGrid
+            title={
+              <Space>
+                <AppstoreOutlined />
+                <span>快捷入口</span>
+              </Space>
+            }
+            items={useMemo(() => {
+              // 从用户偏好设置中获取快捷入口配置
+              const quickEntries = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
+              
+              if (quickEntries && quickEntries.length > 0 && menuTree) {
+                return quickEntries
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((entry) => {
+                    const menu = findMenuInTree(menuTree, entry.menu_uuid);
+                    if (!menu || !menu.path) return null;
+                    
+                    return {
+                      ...entry,
+                      menu_name: entry.menu_name || menu.name,
+                      menu_path: entry.menu_path || menu.path,
+                      menu_icon: renderMenuIcon(menu),
+                    };
+                  })
+                  .filter((item): item is QuickEntryItem => item !== null);
+              }
+              
+              // 默认快捷入口
+              const defaultEntries: QuickEntryItem[] = [
+                { menu_uuid: 'work-orders', menu_name: '工单管理', menu_path: '/apps/kuaizhizao/production-execution/work-orders', menu_icon: <FileTextOutlined />, sort_order: 0 },
+                { menu_uuid: 'inventory', menu_name: '库存管理', menu_path: '/apps/kuaizhizao/warehouse-management/inventory', menu_icon: <DatabaseOutlined />, sort_order: 1 },
+                { menu_uuid: 'quality', menu_name: '质量管理', menu_path: '/apps/kuaizhizao/quality-management', menu_icon: <SafetyOutlined />, sort_order: 2 },
+                { menu_uuid: 'reports', menu_name: '报表分析', menu_path: '/apps/kuaizhizao/reports', menu_icon: <BarChartOutlined />, sort_order: 3 },
+                { menu_uuid: 'equipment', menu_name: '设备管理', menu_path: '/apps/kuaizhizao/equipment-management/equipment', menu_icon: <SettingOutlined />, sort_order: 4 },
+                { menu_uuid: 'plan', menu_name: '计划管理', menu_path: '/apps/kuaizhizao/plan-management', menu_icon: <CheckCircleOutlined />, sort_order: 5 },
+              ];
+              
+              return defaultEntries;
+            }, [userPreference, menuTree])}
+            menuTree={useMemo(() => {
+              if (!menuTree) return [];
+              return convertMenuTreeToTreeData(menuTree);
+            }, [menuTree])}
+            showConfig={true}
+            onSave={async (items: QuickEntryItem[]) => {
+              // 保存到用户偏好设置
+              const currentPreferences = userPreference?.preferences || {};
+              await updateUserPreference({
+                preferences: {
+                  ...currentPreferences,
+                  dashboard_quick_entries: items,
+                },
+              });
+              // 刷新用户偏好设置
+              queryClient.invalidateQueries({ queryKey: ['dashboard-user-preference'] });
+            }}
+            renderMenuIcon={(menuUuid: string) => {
+              if (!menuTree) return <ShopOutlined />;
+              const menu = findMenuInTree(menuTree, menuUuid);
+              return menu ? renderMenuIcon(menu) : <ShopOutlined />;
+            }}
+          />
+        </Col>
+
+        {/* 实时播报（占25%） */}
+        <Col xs={24} sm={12} md={6} lg={6} style={{ display: 'flex' }}>
+          <Card
+            title={
+              <Space>
+                <PlayCircleOutlined />
+                <span>实时播报</span>
+              </Space>
+            }
+            loading={productionBroadcastLoading}
+            extra={
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  navigate('/apps/kuaizhizao/production-execution/reporting');
+                }}
+              >
+                查看更多 <RightOutlined />
+              </Button>
+            }
+            style={{ 
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '400px',
+            }}
+            bodyStyle={{ 
+              flex: 1,
+              overflow: 'auto',
+              maxHeight: '400px',
+            }}
+          >
+            {productionBroadcast && productionBroadcast.length > 0 ? (
+              <div>
+                {productionBroadcast.map((item, index) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: '12px 0',
+                      borderBottom: index < productionBroadcast.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      navigate(`/apps/kuaizhizao/production-execution/reporting?work_order=${item.work_order_no}`);
+                    }}
+                  >
+                    <div style={{ marginBottom: 4 }}>
+                      <Space>
+                        <Text strong style={{ fontSize: 13 }}>
+                          {item.operator_name} | {item.process_name}
+                        </Text>
+                      </Space>
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      {item.date}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      工单号：{item.work_order_no}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      产品：{item.product_code} | {item.product_name}
+                    </Text>
+                    <Space>
+                      <Text type="success" style={{ fontSize: 12 }}>
+                        合格 {item.qualified_quantity.toFixed(0)}
+                      </Text>
+                      {item.unqualified_quantity > 0 && (
+                        <Text type="danger" style={{ fontSize: 12 }}>
+                          不合格 {item.unqualified_quantity.toFixed(0)}
+                        </Text>
+                      )}
+                    </Space>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty 
+                description="暂无生产播报" 
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                style={{ padding: '40px 0' }}
+              />
+            )}
+          </Card>
+        </Col>
+
+        {/* 待办事项（占25%） */}
+        <Col xs={24} sm={12} md={6} lg={6} style={{ display: 'flex' }}>
+          <Card
+            title={
+              <Space>
+                <CheckCircleOutlined />
+                <span>待办事项</span>
+                {todos && todos.length > 0 && (
+                  <Badge count={todos.length} />
+                )}
+              </Space>
+            }
+            loading={todosLoading}
+            extra={
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  navigate('/apps/kuaizhizao/production-execution/work-orders');
+                }}
+              >
+                查看全部 <RightOutlined />
+              </Button>
+            }
+            style={{ 
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '400px',
+            }}
+            bodyStyle={{ 
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: '0 24px 24px 24px',
+            }}
+          >
+            <Tabs
+              defaultActiveKey="all"
+              items={[
+                {
+                  key: 'all',
+                  label: `全部 (${todos.length})`,
+                  children: (
+                    <div style={{ flex: 1, overflow: 'auto', maxHeight: '400px' }}>
+                      {todos.length > 0 ? (
+                        <div>
+                          {todos.slice(0, 5).map((item, index) => (
+                            <div
+                              key={index}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todos.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                              }}
+                              onClick={() => {
+                                if (item.link) {
+                                  navigate(item.link);
+                                }
+                              }}
+                            >
+                              <Avatar
+                                style={{
+                                  backgroundColor: '#f0f0f0',
+                                  marginRight: 12,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <ClockCircleOutlined />
+                              </Avatar>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <Text strong={item.priority === 'high'}>{item.title}</Text>
+                                  <Tag color={priorityColorMap[item.priority]}>
+                                    {priorityTextMap[item.priority]}优先级
+                                  </Tag>
+                                </div>
+                                {item.description && (
+                                  <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: 4 }}>
+                                    {item.description}
+                                  </Text>
+                                )}
+                                {item.due_date && (
+                                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                                    截止日期：{dayjs(item.due_date).format('YYYY-MM-DD')}
+                                  </Text>
+                                )}
+                                <div style={{ marginTop: 8 }}>
+                                  <Button
+                                    size="small"
+                                    type="primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
+                                    }}
+                                  >
+                                    处理
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description="暂无待办事项" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'work_order',
+                  label: `工单 (${todos.filter(t => t.type === 'work_order').length})`,
+                  children: (
+                    <div>
+                      {todos.filter(t => t.type === 'work_order').length > 0 ? (
+                        <div>
+                          {todos.filter(t => t.type === 'work_order').slice(0, 5).map((item, index) => (
+                            <div
+                              key={index}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todos.filter(t => t.type === 'work_order').length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description="暂无工单待办" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'exception',
+                  label: `异常 (${todos.filter(t => t.type === 'exception').length})`,
+                  children: (
+                    <div>
+                      {todos.filter(t => t.type === 'exception').length > 0 ? (
+                        <div>
+                          {todos.filter(t => t.type === 'exception').slice(0, 5).map((item, index) => (
+                            <div
+                              key={index}
+                              style={{
+                                padding: '12px 0',
+                                borderBottom: index < Math.min(todos.filter(t => t.type === 'exception').length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => item.link && navigate(item.link)}
+                            >
+                              <Text>{item.title}</Text>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <Empty description="暂无异常待办" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        </Col>
+
+        {/* 消息通知（占25%） */}
+        <Col xs={24} sm={12} md={6} lg={6} style={{ display: 'flex' }}>
           <Card
             title={
               <Space>
@@ -424,307 +1260,182 @@ export default function DashboardPage() {
                 查看全部 <RightOutlined />
               </Button>
             }
-            style={{ height: '100%' }}
+            style={{ 
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '400px',
+            }}
+            bodyStyle={{ 
+              flex: 1,
+              overflow: 'auto',
+            }}
           >
             {notifications && notifications.length > 0 ? (
               <div>
-                {notifications.map((item, index) => (
+                {notifications.slice(0, 5).map((item, index) => (
                   <div
                     key={index}
                     style={{
                       padding: '12px 0',
-                      borderBottom: index < notifications.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      borderBottom: index < Math.min(notifications.length, 5) - 1 ? '1px solid #f0f0f0' : 'none',
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'flex-start',
                     }}
-                    onClick={() => {
-                      // TODO: 处理点击通知
-                    }}
-                  >
-                    <Avatar
-                      style={{
-                        backgroundColor: item.read ? '#f0f0f0' : '#1890ff',
-                        marginRight: 12,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <BellOutlined />
-                    </Avatar>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ marginBottom: 4 }}>
-                        <Space>
-                          <Text strong={!item.read}>{item.title}</Text>
-                          {!item.read && <Badge dot />}
-                        </Space>
-                      </div>
-                      <div style={{ marginBottom: 4 }}>{item.content}</div>
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        <ClockCircleOutlined style={{ marginRight: 4 }} />
-                        {dayjs(item.time).format('YYYY-MM-DD HH:mm')}
-                      </Text>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty description="暂无消息" />
-            )}
-          </Card>
-        </Col>
-
-        {/* 待办事项 */}
-        <Col xs={24} lg={12}>
-          <Card
-            title={
-              <Space>
-                <CheckCircleOutlined />
-                <span>待办事项</span>
-                {todos && todos.length > 0 && (
-                  <Badge count={todos.length} />
-                )}
-              </Space>
-            }
-            loading={todosLoading}
-            extra={
-              <Button
-                type="link"
-                size="small"
-                onClick={() => {
-                  // 跳转到待办事项列表页面（如果存在）或工单列表页面
-                  navigate('/apps/kuaizhizao/production-execution/work-orders');
-                }}
-              >
-                查看全部 <RightOutlined />
-              </Button>
-            }
-            style={{ height: '100%' }}
-          >
-            {todos && todos.length > 0 ? (
-              <div>
-                {todos.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      padding: '12px 0',
-                      borderBottom: index < todos.length - 1 ? '1px solid #f0f0f0' : 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                    }}
-                    onClick={() => {
-                      if (item.link) {
-                        navigate(item.link);
+                    onClick={async () => {
+                      // 点击通知时标记为已读
+                      if (!item.read) {
+                        try {
+                          await markMessagesRead([item.id]);
+                          // 刷新通知列表
+                          refetchNotifications();
+                        } catch (error) {
+                          console.error('标记消息已读失败:', error);
+                        }
                       }
                     }}
                   >
-                    <Avatar
-                      style={{
-                        backgroundColor: '#f0f0f0',
-                        marginRight: 12,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <ClockCircleOutlined />
-                    </Avatar>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text>{item.title}</Text>
-                        <Tag color={priorityColorMap[item.priority]}>
-                          {priorityTextMap[item.priority]}优先级
-                        </Tag>
-                      </div>
-                      {item.description && (
-                        <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: 4 }}>
-                          {item.description}
-                        </Text>
-                      )}
-                      {item.due_date && (
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          截止日期：{dayjs(item.due_date).format('YYYY-MM-DD')}
-                        </Text>
-                      )}
-                      <div style={{ marginTop: 8 }}>
-                        <Button
-                          size="small"
-                          type="primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTodoMutation.mutate({ todoId: item.id, action: 'handle' });
-                          }}
-                        >
-                          处理
-                        </Button>
-                      </div>
+                    <div style={{ marginBottom: 4 }}>
+                      <Space>
+                        <Text strong={!item.read} style={{ fontSize: 13 }}>{item.title}</Text>
+                        {!item.read && <Badge dot />}
+                      </Space>
                     </div>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      {item.content}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {dayjs(item.time).format('MM-DD HH:mm')}
+                    </Text>
                   </div>
                 ))}
               </div>
             ) : (
-              <Empty description="暂无待办事项" />
+              <Empty description="暂无消息" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )}
           </Card>
         </Col>
       </Row>
 
-      {/* 统计卡片 */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        {/* 生产统计 */}
-        <Col xs={24} sm={12} lg={8}>
-          <Card
-            title="生产统计"
-            loading={statisticsLoading}
-            style={{ height: '100%', cursor: 'pointer' }}
-            onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+      {/* 在制工序执行进展 - 参考设计 */}
+      <Card
+        title="在制工序执行进展"
+        loading={processProgressLoading}
+        extra={
+          <Checkbox
+            checked={includeUnstarted}
+            onChange={(e) => setIncludeUnstarted(e.target.checked)}
           >
-            {statistics?.production && (
-              <div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">工单总数</Text>
-                  <Title level={2} style={{ margin: 0 }}>
-                    {statistics.production.total}
-                  </Title>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">已完成</Text>
-                  <Title level={3} style={{ margin: 0, color: '#52c41a' }}>
-                    {statistics.production.completed}
-                  </Title>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">进行中</Text>
-                  <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-                    {statistics.production.in_progress}
-                  </Title>
-                </div>
-                <div>
-                  <Text type="secondary">完成率</Text>
-                  <Title level={3} style={{ margin: 0 }}>
-                    {statistics.production.completion_rate}%
-                  </Title>
-                </div>
-                {statistics.production.total > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: '已完成', value: statistics.production.completed },
-                            { name: '进行中', value: statistics.production.in_progress },
-                            { name: '其他', value: statistics.production.total - statistics.production.completed - statistics.production.in_progress },
-                          ]}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          <Cell fill="#52c41a" />
-                          <Cell fill="#1890ff" />
-                          <Cell fill="#d9d9d9" />
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-        </Col>
+            包含未开始生产任务
+          </Checkbox>
+        }
+        style={{ marginBottom: 24 }}
+      >
+        {processProgress && processProgress.length > 0 ? (
+          <>
+            <Row gutter={[16, 16]}>
+              {processProgress.map((item, index) => {
+                // 根据索引分配不同颜色（参考设计中的颜色方案）
+                const colorPalette = [
+                  '#1890ff',    // 蓝色（出库）
+                  '#b37feb',    // 浅紫色（总装）
+                  '#fa8c16',    // 橙色（数控冲床）
+                  '#52c41a',    // 绿色（冷镦）
+                  '#13c2c2',    // 浅蓝色（外圆磨）
+                  '#ff4d4f',    // 红色（冲压）
+                  '#faad14',    // 金色/黄色（去毛刺）
+                  '#95de64',    // 浅绿色（全检）
+                ];
+                const progressColor = colorPalette[index % colorPalette.length];
 
-        {/* 库存统计 */}
-        <Col xs={24} sm={12} lg={8}>
-          <Card
-            title="库存统计"
-            loading={statisticsLoading}
-            style={{ height: '100%', cursor: 'pointer' }}
-            onClick={() => navigate('/apps/kuaizhizao/warehouse-management/inventory')}
-          >
-            {statistics?.inventory && (
-              <div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">库存总量</Text>
-                  <Title level={2} style={{ margin: 0 }}>
-                    {statistics.inventory.total_quantity}
-                  </Title>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">库存价值</Text>
-                  <Title level={3} style={{ margin: 0 }}>
-                    ¥{statistics.inventory.total_value.toLocaleString()}
-                  </Title>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">周转率</Text>
-                  <Title level={3} style={{ margin: 0 }}>
-                    {statistics.inventory.turnover_rate}
-                  </Title>
-                </div>
-                <div>
-                  <Text type="secondary">预警数量</Text>
-                  <Title level={3} style={{ margin: 0, color: statistics.inventory.alert_count > 0 ? '#ff4d4f' : '#52c41a' }}>
-                    {statistics.inventory.alert_count}
-                  </Title>
-                </div>
+                return (
+                  <Col xs={24} sm={12} md={6} lg={6} key={item.process_id || index}>
+                    <Card
+                      hoverable
+                      style={{
+                        borderRadius: 8,
+                        border: '1px solid #f0f0f0',
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                        height: '100%',
+                      }}
+                      bodyStyle={{ padding: '16px' }}
+                      onClick={() => navigate(`/apps/kuaizhizao/production-execution/work-orders?operation=${encodeURIComponent(item.process_name)}`)}
+                    >
+                      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                        {/* 工序名称 */}
+                        <Text strong style={{ fontSize: 15, display: 'block' }}>
+                          {item.process_name}
+                        </Text>
+                        
+                        {/* 当前进度 */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <Text type="secondary" style={{ fontSize: 13 }}>当前进度</Text>
+                            <Text strong style={{ fontSize: 15, color: progressColor }}>
+                              {item.current_progress.toFixed(1)}%
+                            </Text>
+                          </div>
+                          <Progress
+                            percent={item.current_progress}
+                            strokeColor={progressColor}
+                            showInfo={false}
+                            size="default"
+                            style={{ marginBottom: 0 }}
+                          />
+                        </div>
+                        
+                        {/* 生产任务数 */}
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            生产任务数：<Text style={{ color: '#000000' }}>{item.task_count}</Text>
+                          </Text>
+                        </div>
+                        
+                        {/* 计划数、合格数、不合格数 */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <Text type="secondary">计划数</Text>
+                            <Text style={{ color: '#000000', fontWeight: 500 }}>
+                              {item.planned_quantity.toFixed(0)}
+                            </Text>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <Text type="secondary">合格数</Text>
+                            <Text type="success" style={{ fontWeight: 500 }}>
+                              {item.qualified_quantity.toFixed(0)}
+                            </Text>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <Text type="secondary">不合格数</Text>
+                            <Text type="danger" style={{ fontWeight: 500 }}>
+                              {item.unqualified_quantity.toFixed(0)}
+                            </Text>
+                          </div>
+                        </div>
+                      </Space>
+                    </Card>
+                  </Col>
+                );
+              })}
+            </Row>
+            
+            {/* 全部工序链接 */}
+            {processProgress.length > 8 && (
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
+                <Button
+                  type="link"
+                  icon={<ArrowDownOutlined />}
+                  onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
+                >
+                  全部工序
+                </Button>
               </div>
             )}
-          </Card>
-        </Col>
+          </>
+        ) : (
+          <Empty description="暂无在制工序" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        )}
+      </Card>
 
-        {/* 质量统计 */}
-        <Col xs={24} sm={12} lg={8}>
-          <Card
-            title="质量统计"
-            loading={statisticsLoading}
-            style={{ height: '100%', cursor: 'pointer' }}
-            onClick={() => navigate('/apps/kuaizhizao/quality-management')}
-          >
-            {statistics?.quality && (
-              <div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">质量合格率</Text>
-                  <Title level={2} style={{ margin: 0, color: statistics.quality.quality_rate >= 95 ? '#52c41a' : '#ff4d4f' }}>
-                    {statistics.quality.quality_rate}%
-                  </Title>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  <Text type="secondary">异常总数</Text>
-                  <Title level={3} style={{ margin: 0 }}>
-                    {statistics.quality.total_exceptions}
-                  </Title>
-                </div>
-                <div>
-                  <Text type="secondary">待处理异常</Text>
-                  <Title level={3} style={{ margin: 0, color: statistics.quality.open_exceptions > 0 ? '#ff4d4f' : '#52c41a' }}>
-                    {statistics.quality.open_exceptions}
-                  </Title>
-                </div>
-                {statistics.quality.total_exceptions > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart
-                        data={[
-                          { name: '总异常', value: statistics.quality.total_exceptions },
-                          { name: '待处理', value: statistics.quality.open_exceptions },
-                          { name: '已处理', value: statistics.quality.total_exceptions - statistics.quality.open_exceptions },
-                        ]}
-                      >
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="value" fill="#1890ff" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
       </DashboardTemplate>
 
       {/* 快捷操作配置模态框 */}
