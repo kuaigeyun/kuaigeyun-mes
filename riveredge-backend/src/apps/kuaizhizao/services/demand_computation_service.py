@@ -198,8 +198,13 @@ class DemandComputationService:
         self,
         tenant_id: int,
         demand_id: Optional[int] = None,
+        demand_code: Optional[str] = None,
+        computation_code: Optional[str] = None,
         computation_type: Optional[str] = None,
         computation_status: Optional[str] = None,
+        business_mode: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         skip: int = 0,
         limit: int = 20
     ) -> Dict[str, Any]:
@@ -209,22 +214,51 @@ class DemandComputationService:
         Args:
             tenant_id: 租户ID
             demand_id: 需求ID（可选）
+            demand_code: 需求编码（可选，支持模糊查询）
+            computation_code: 计算编码（可选，支持模糊查询）
             computation_type: 计算类型（可选）
             computation_status: 计算状态（可选）
+            business_mode: 业务模式（可选）
+            start_date: 开始日期（可选，YYYY-MM-DD格式）
+            end_date: 结束日期（可选，YYYY-MM-DD格式）
             skip: 跳过数量
             limit: 限制数量
             
         Returns:
             Dict: 包含计算列表和总数的字典
         """
+        from tortoise.expressions import Q
+        from datetime import datetime
+        
         query = DemandComputation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         
         if demand_id:
             query = query.filter(demand_id=demand_id)
+        if demand_code:
+            query = query.filter(demand_code__icontains=demand_code)
+        if computation_code:
+            query = query.filter(computation_code__icontains=computation_code)
         if computation_type:
             query = query.filter(computation_type=computation_type)
         if computation_status:
             query = query.filter(computation_status=computation_status)
+        if business_mode:
+            query = query.filter(business_mode=business_mode)
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(computation_start_time__gte=start_dt)
+            except ValueError:
+                pass  # 忽略无效的日期格式
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+                # 结束日期需要包含整天，所以设置为当天的23:59:59
+                from datetime import timedelta
+                end_dt = end_dt + timedelta(days=1) - timedelta(seconds=1)
+                query = query.filter(computation_start_time__lte=end_dt)
+            except ValueError:
+                pass  # 忽略无效的日期格式
         
         total = await query.count()
         computations = await query.offset(skip).limit(limit).order_by('-computation_start_time')

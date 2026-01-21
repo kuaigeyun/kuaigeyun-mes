@@ -13,6 +13,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Drawer, Table, message } from 'antd';
 import { PlayCircleOutlined, EyeOutlined, ReloadOutlined, FileAddOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
@@ -222,16 +223,24 @@ const DemandComputationPage: React.FC = () => {
       dataIndex: 'computation_code',
       width: 150,
       fixed: 'left',
+      hideInSearch: false,
     },
     {
       title: '需求编码',
       dataIndex: 'demand_code',
       width: 150,
+      hideInSearch: false,
     },
     {
       title: '计算类型',
       dataIndex: 'computation_type',
       width: 100,
+      valueType: 'select',
+      valueEnum: {
+        'MRP': { text: 'MRP' },
+        'LRP': { text: 'LRP' },
+      },
+      hideInSearch: false,
       render: (text: string) => (
         <Tag color={text === 'MRP' ? 'blue' : 'green'}>{text}</Tag>
       ),
@@ -240,6 +249,14 @@ const DemandComputationPage: React.FC = () => {
       title: '计算状态',
       dataIndex: 'computation_status',
       width: 100,
+      valueType: 'select',
+      valueEnum: {
+        '进行中': { text: '进行中' },
+        '计算中': { text: '计算中' },
+        '完成': { text: '完成' },
+        '失败': { text: '失败' },
+      },
+      hideInSearch: false,
       render: (status: string) => {
         const colorMap: Record<string, string> = {
           '进行中': 'processing',
@@ -251,16 +268,36 @@ const DemandComputationPage: React.FC = () => {
       },
     },
     {
+      title: '业务模式',
+      dataIndex: 'business_mode',
+      width: 100,
+      valueType: 'select',
+      valueEnum: {
+        'MTS': { text: 'MTS' },
+        'MTO': { text: 'MTO' },
+      },
+      hideInSearch: false,
+      render: (text: string) => (
+        <Tag color={text === 'MTS' ? 'cyan' : 'purple'}>{text}</Tag>
+      ),
+    },
+    {
       title: '开始时间',
       dataIndex: 'computation_start_time',
       width: 160,
       valueType: 'dateTime',
+      hideInSearch: false,
+      search: {
+        valueType: 'dateRange',
+      },
     },
     {
       title: '结束时间',
       dataIndex: 'computation_end_time',
       width: 160,
       valueType: 'dateTime',
+      hideInTable: false,
+      hideInSearch: true,
     },
     {
       title: '操作',
@@ -313,14 +350,49 @@ const DemandComputationPage: React.FC = () => {
       <UniTable<DemandComputation>
         actionRef={actionRef}
         columns={columns}
-        request={async (params) => {
-          const result = await listDemandComputations({
+        showAdvancedSearch={true}
+        request={async (params, sort, _filter, searchFormValues) => {
+          const apiParams: any = {
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize!,
-            demand_id: params.demand_id,
-            computation_type: params.computation_type as 'MRP' | 'LRP' | undefined,
-            computation_status: params.computation_status,
-          });
+          };
+          
+          // 处理搜索参数
+          if (searchFormValues?.computation_code) {
+            apiParams.computation_code = searchFormValues.computation_code;
+          }
+          if (searchFormValues?.demand_code) {
+            apiParams.demand_code = searchFormValues.demand_code;
+          }
+          if (searchFormValues?.computation_type) {
+            apiParams.computation_type = searchFormValues.computation_type;
+          }
+          if (searchFormValues?.computation_status) {
+            apiParams.computation_status = searchFormValues.computation_status;
+          }
+          if (searchFormValues?.business_mode) {
+            apiParams.business_mode = searchFormValues.business_mode;
+          }
+          if (searchFormValues?.demand_id) {
+            apiParams.demand_id = searchFormValues.demand_id;
+          }
+          
+          // 处理时间范围搜索
+          if (searchFormValues?.computation_start_time) {
+            if (Array.isArray(searchFormValues.computation_start_time)) {
+              if (searchFormValues.computation_start_time[0]) {
+                apiParams.start_date = dayjs(searchFormValues.computation_start_time[0]).format('YYYY-MM-DD');
+              }
+              if (searchFormValues.computation_start_time[1]) {
+                apiParams.end_date = dayjs(searchFormValues.computation_start_time[1]).format('YYYY-MM-DD');
+              }
+            } else if (searchFormValues.computation_start_time) {
+              // 单个日期值
+              apiParams.start_date = dayjs(searchFormValues.computation_start_time).format('YYYY-MM-DD');
+            }
+          }
+          
+          const result = await listDemandComputations(apiParams);
           return {
             data: result.data || [],
             success: result.success,

@@ -350,7 +350,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
 
       {/* 自定义内容 */}
       {children && (
-        <div style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
+        <div style={{ marginTop: 0 }}>
           {children}
         </div>
       )}

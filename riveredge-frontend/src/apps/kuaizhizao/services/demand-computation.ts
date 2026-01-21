@@ -80,8 +80,13 @@ export interface DemandComputationListParams {
   skip?: number;
   limit?: number;
   demand_id?: number;
+  demand_code?: string;
+  computation_code?: string;
   computation_type?: 'MRP' | 'LRP';
   computation_status?: string;
+  business_mode?: 'MTS' | 'MTO';
+  start_date?: string;
+  end_date?: string;
 }
 
 /**
