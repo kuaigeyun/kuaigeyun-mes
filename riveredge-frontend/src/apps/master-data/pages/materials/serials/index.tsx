@@ -148,6 +148,53 @@ const MaterialSerialPage: React.FC = () => {
   };
 
   /**
+   * 处理批量删除序列号
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的记录');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let successCount = 0;
+          let failCount = 0;
+          const errors: string[] = [];
+
+          for (const key of selectedRowKeys) {
+            try {
+              await materialSerialApi.delete(key.toString());
+              successCount++;
+            } catch (error: any) {
+              failCount++;
+              errors.push(error.message || '删除失败');
+            }
+          }
+
+          if (successCount > 0) {
+            messageApi.success(`成功删除 ${successCount} 条记录`);
+          }
+          if (failCount > 0) {
+            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+          }
+
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理提交表单（创建/更新）
    */
   const handleSubmit = async (values: any): Promise<void> => {
@@ -390,23 +437,33 @@ const MaterialSerialPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建序列号
-            </Button>,
-            <Button
-              key="generate"
-              icon={<ReloadOutlined />}
-              onClick={() => setGenerateModalVisible(true)}
-            >
-              批量生成
-            </Button>,
-          ]}
+          enableRowSelection={true}
+          onRowSelectionChange={setSelectedRowKeys}
+          headerActions={
+            <Space>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleCreate}
+              >
+                新建序列号
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => setGenerateModalVisible(true)}
+              >
+                批量生成
+              </Button>
+              <Button
+                danger
+                disabled={selectedRowKeys.length === 0}
+                icon={<DeleteOutlined />}
+                onClick={handleBatchDelete}
+              >
+                批量删除
+              </Button>
+            </Space>
+          }
           search={{
             labelWidth: 'auto',
           }}
