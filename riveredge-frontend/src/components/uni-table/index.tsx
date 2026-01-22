@@ -1251,18 +1251,29 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           overflow-y: hidden !important;
         }
         /* 当表格为空时，隐藏垂直滚动条 */
+        /* 使用更精确的选择器，确保覆盖所有可能的空状态 */
         .uni-table-pro-table .ant-table-empty .ant-table-body,
         .uni-table-pro-table .ant-table-placeholder .ant-table-body,
         .uni-table-pro-table .ant-table-empty .ant-table-container,
-        .uni-table-pro-table .ant-table-placeholder .ant-table-container {
+        .uni-table-pro-table .ant-table-placeholder .ant-table-container,
+        .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-body,
+        .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-body,
+        .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-container,
+        .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-container {
           overflow-y: hidden !important;
+          overflow-x: hidden !important;
         }
         /* 两栏布局中的空表格也隐藏滚动条 */
         .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-body,
         .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-body,
         .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-container,
-        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-container {
+        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-container,
+        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-body,
+        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-body,
+        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-container,
+        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-container {
           overflow-y: hidden !important;
+          overflow-x: hidden !important;
         }
         /* 当表格为空时，隐藏整个表格容器的滚动条 */
         .uni-table-pro-table .ant-table-wrapper.ant-table-empty,
@@ -1271,6 +1282,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
         .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty,
         .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder {
+          overflow-y: hidden !important;
+        }
+        /* 当表格tbody为空时（没有数据行），也隐藏滚动条 */
+        .uni-table-pro-table .ant-table-tbody:empty ~ .ant-table-body,
+        .uni-table-pro-table .ant-table-tbody:has(tr.ant-table-placeholder) ~ .ant-table-body {
           overflow-y: hidden !important;
         }
         /* 优化滚动条显示：只在内容超出时显示 */
