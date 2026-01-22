@@ -6,6 +6,7 @@
 
 from typing import List, Optional
 from datetime import date
+from tortoise.exceptions import IntegrityError
 
 from apps.master_data.models.performance import Holiday, Skill
 from apps.master_data.schemas.performance_schemas import (
@@ -241,10 +242,16 @@ class PerformanceService:
             raise ValidationError(f"技能编码 {data.code} 已存在")
         
         # 创建技能
-        skill = await Skill.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            skill = await Skill.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"技能编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return SkillResponse.model_validate(skill)
     
@@ -359,7 +366,13 @@ class PerformanceService:
         for key, value in update_data.items():
             setattr(skill, key, value)
         
-        await skill.save()
+        try:
+            await skill.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"技能编码 {data.code or skill.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return SkillResponse.model_validate(skill)
     

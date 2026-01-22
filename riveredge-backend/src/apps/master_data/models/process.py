@@ -172,7 +172,9 @@ class Operation(BaseModel):
             ("code",),
             ("uuid",),
         ]
-        unique_together = [("tenant_id", "code")]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
@@ -321,7 +323,9 @@ class ProcessRoute(BaseModel):
             ("parent_operation_uuid",),  # 父工序UUID索引
             ("level",),  # 嵌套层级索引
         ]
-        unique_together = [("tenant_id", "code", "version")]  # 同一租户下，编码+版本唯一
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码+版本组合，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code", "version")]  # 同一租户下，编码+版本唯一
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
@@ -398,7 +402,9 @@ class ProcessRouteTemplate(BaseModel):
             ("version",),
             ("is_active",),
         ]
-        unique_together = [("tenant_id", "code", "version")]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码+版本组合，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code", "version")]
     
     # 主键
     id = fields.IntField(pk=True, description="主键ID")
@@ -557,7 +563,9 @@ class SOP(BaseModel):
             ("uuid",),
             ("operation_id",),
         ]
-        unique_together = [("tenant_id", "code")]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")

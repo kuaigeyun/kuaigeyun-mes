@@ -6,6 +6,7 @@
 
 from typing import List, Optional, Dict, Any
 import re
+from tortoise.exceptions import IntegrityError
 
 from apps.master_data.models.process import DefectType, Operation, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
@@ -98,10 +99,16 @@ class ProcessService:
             raise ValidationError(f"不良品编码 {data.code} 已存在")
         
         # 创建不良品
-        defect_type = await DefectType.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            defect_type = await DefectType.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"不良品编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return DefectTypeResponse.model_validate(defect_type)
     
@@ -216,7 +223,13 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(defect_type, key, value)
         
-        await defect_type.save()
+        try:
+            await defect_type.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"不良品编码 {data.code or defect_type.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return DefectTypeResponse.model_validate(defect_type)
     
@@ -280,10 +293,16 @@ class ProcessService:
             raise ValidationError(f"工序编码 {data.code} 已存在")
         
         # 创建工序
-        operation = await Operation.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            operation = await Operation.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工序编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return OperationResponse.model_validate(operation)
     
@@ -393,7 +412,13 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(operation, key, value)
         
-        await operation.save()
+        try:
+            await operation.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工序编码 {data.code or operation.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return OperationResponse.model_validate(operation)
     
@@ -606,7 +631,13 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(process_route, key, value)
         
-        await process_route.save()
+        try:
+            await process_route.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工艺路线编码 {data.code or process_route.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return await ProcessService._to_process_route_response(process_route)
     
@@ -784,10 +815,16 @@ class ProcessService:
             raise ValidationError(f"SOP编码 {data.code} 已存在")
         
         # 创建SOP
-        sop = await SOP.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            sop = await SOP.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"SOP编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return SOPResponse.model_validate(sop)
     
@@ -914,7 +951,13 @@ class ProcessService:
         for key, value in update_data.items():
             setattr(sop, key, value)
         
-        await sop.save()
+        try:
+            await sop.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"SOP编码 {data.code or sop.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return SOPResponse.model_validate(sop)
     

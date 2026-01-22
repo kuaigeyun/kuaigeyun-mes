@@ -59,10 +59,16 @@ class FactoryService:
             raise ValidationError(f"厂区编码 {data.code} 已存在")
         
         # 创建厂区
-        plant = await Plant.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            plant = await Plant.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"厂区编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return PlantResponse.model_validate(plant)
     
@@ -210,7 +216,13 @@ class FactoryService:
         for key, value in update_data.items():
             setattr(plant, key, value)
         
-        await plant.save()
+        try:
+            await plant.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"厂区编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return PlantResponse.model_validate(plant)
     
@@ -367,10 +379,16 @@ class FactoryService:
             raise ValidationError(f"车间编码 {data.code} 已存在")
         
         # 创建车间
-        workshop = await Workshop.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            workshop = await Workshop.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return WorkshopResponse.model_validate(workshop)
     
@@ -518,7 +536,13 @@ class FactoryService:
         for key, value in update_data.items():
             setattr(workshop, key, value)
         
-        await workshop.save()
+        try:
+            await workshop.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return WorkshopResponse.model_validate(workshop)
     
@@ -685,10 +709,16 @@ class FactoryService:
             raise ValidationError(f"产线编码 {data.code} 已存在")
         
         # 创建产线
-        production_line = await ProductionLine.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            production_line = await ProductionLine.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"产线编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return ProductionLineResponse.model_validate(production_line)
     
@@ -814,7 +844,13 @@ class FactoryService:
         for key, value in update_data.items():
             setattr(production_line, key, value)
         
-        await production_line.save()
+        try:
+            await production_line.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"产线编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return ProductionLineResponse.model_validate(production_line)
     
@@ -981,10 +1017,16 @@ class FactoryService:
             raise ValidationError(f"工位编码 {data.code} 已存在")
         
         # 创建工位
-        workstation = await Workstation.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            workstation = await Workstation.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工位编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return WorkstationResponse.model_validate(workstation)
     
@@ -1110,7 +1152,13 @@ class FactoryService:
         for key, value in update_data.items():
             setattr(workstation, key, value)
         
-        await workstation.save()
+        try:
+            await workstation.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"工位编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return WorkstationResponse.model_validate(workstation)
     
