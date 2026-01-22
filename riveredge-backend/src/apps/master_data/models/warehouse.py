@@ -37,7 +37,9 @@ class Warehouse(BaseModel):
             ("code",),
             ("uuid",),
         ]
-        unique_together = [("tenant_id", "code")]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
@@ -89,7 +91,9 @@ class StorageArea(BaseModel):
             ("uuid",),
             ("warehouse_id",),
         ]
-        unique_together = [("tenant_id", "code")]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")
@@ -148,7 +152,9 @@ class StorageLocation(BaseModel):
             ("uuid",),
             ("storage_area_id",),
         ]
-        unique_together = [("tenant_id", "code")]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")

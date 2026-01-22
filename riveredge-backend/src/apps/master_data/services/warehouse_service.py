@@ -5,6 +5,7 @@
 """
 
 from typing import List, Optional, TYPE_CHECKING
+from tortoise.exceptions import IntegrityError
 
 from apps.master_data.models.warehouse import Warehouse, StorageArea, StorageLocation
 from apps.master_data.schemas.warehouse_schemas import (
@@ -56,10 +57,16 @@ class WarehouseService:
             raise ValidationError(f"仓库编码 {data.code} 已存在")
         
         # 创建仓库
-        warehouse = await Warehouse.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            warehouse = await Warehouse.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"仓库编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return WarehouseResponse.model_validate(warehouse)
     
@@ -169,7 +176,13 @@ class WarehouseService:
         for key, value in update_data.items():
             setattr(warehouse, key, value)
         
-        await warehouse.save()
+        try:
+            await warehouse.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"仓库编码 {data.code or warehouse.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return WarehouseResponse.model_validate(warehouse)
     
@@ -329,10 +342,16 @@ class WarehouseService:
             raise ValidationError(f"库区编码 {data.code} 已存在")
         
         # 创建库区
-        storage_area = await StorageArea.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            storage_area = await StorageArea.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"库区编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return StorageAreaResponse.model_validate(storage_area)
     
@@ -458,7 +477,13 @@ class WarehouseService:
         for key, value in update_data.items():
             setattr(storage_area, key, value)
         
-        await storage_area.save()
+        try:
+            await storage_area.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"库区编码 {data.code or storage_area.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return StorageAreaResponse.model_validate(storage_area)
     
@@ -618,10 +643,16 @@ class WarehouseService:
             raise ValidationError(f"库位编码 {data.code} 已存在")
         
         # 创建库位
-        storage_location = await StorageLocation.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            storage_location = await StorageLocation.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"库位编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return StorageLocationResponse.model_validate(storage_location)
     
@@ -747,7 +778,13 @@ class WarehouseService:
         for key, value in update_data.items():
             setattr(storage_location, key, value)
         
-        await storage_location.save()
+        try:
+            await storage_location.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"库位编码 {data.code or storage_location.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return StorageLocationResponse.model_validate(storage_location)
     

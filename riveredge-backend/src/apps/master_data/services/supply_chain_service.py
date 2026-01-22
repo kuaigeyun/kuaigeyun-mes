@@ -5,6 +5,7 @@
 """
 
 from typing import List, Optional
+from tortoise.exceptions import IntegrityError
 
 from tortoise.models import Q
 from apps.master_data.models.customer import Customer
@@ -50,10 +51,16 @@ class SupplyChainService:
             raise ValidationError(f"客户编码 {data.code} 已存在")
         
         # 创建客户
-        customer = await Customer.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            customer = await Customer.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"客户编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return CustomerResponse.model_validate(customer)
     
@@ -168,7 +175,13 @@ class SupplyChainService:
         for key, value in update_data.items():
             setattr(customer, key, value)
         
-        await customer.save()
+        try:
+            await customer.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"客户编码 {data.code or customer.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return CustomerResponse.model_validate(customer)
     
@@ -232,10 +245,16 @@ class SupplyChainService:
             raise ValidationError(f"供应商编码 {data.code} 已存在")
         
         # 创建供应商
-        supplier = await Supplier.create(
-            tenant_id=tenant_id,
-            **data.dict()
-        )
+        try:
+            supplier = await Supplier.create(
+                tenant_id=tenant_id,
+                **data.dict()
+            )
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"供应商编码 {data.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return SupplierResponse.model_validate(supplier)
     
@@ -371,7 +390,13 @@ class SupplyChainService:
         for key, value in update_data.items():
             setattr(supplier, key, value)
         
-        await supplier.save()
+        try:
+            await supplier.save()
+        except IntegrityError as e:
+            # 捕获数据库唯一约束错误，提供友好提示
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                raise ValidationError(f"供应商编码 {data.code or supplier.code} 已存在（可能已被软删除，请检查）")
+            raise
         
         return SupplierResponse.model_validate(supplier)
     
