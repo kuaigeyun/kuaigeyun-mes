@@ -1,5 +1,5 @@
 """
-检查菜单数据
+检查仓库菜单数据
 """
 
 import asyncio
@@ -17,32 +17,32 @@ from core.models.menu import Menu
 from infra.infrastructure.database.database import TORTOISE_ORM
 
 
-async def check_menu():
-    """检查菜单数据"""
+async def check_warehouse_menu():
+    """检查仓库菜单数据"""
     await Tortoise.init(config=TORTOISE_ORM)
     
     try:
-        # 查找物料相关的菜单
+        # 查找仓库相关的菜单
         menus = await Menu.filter(
             tenant_id=1,
             application_uuid='df31f29d-50ce-4679-b3d5-e823e447f9ba',
-            path__contains='materials',
+            path__contains='warehouse',
             deleted_at__isnull=True
-        ).all()
+        ).order_by('sort_order').all()
         
-        print('物料相关菜单:')
+        print('仓库相关菜单:')
         for m in menus:
             print(f'  {m.name} ({m.path}) - sort_order: {m.sort_order}')
         
-        # 查找物料数据的父菜单
+        # 查找仓库数据的父菜单
         parent_menus = await Menu.filter(
             tenant_id=1,
             application_uuid='df31f29d-50ce-4679-b3d5-e823e447f9ba',
-            name__contains='物料',
+            name__contains='仓库',
             deleted_at__isnull=True
         ).all()
         
-        print('\n物料数据父菜单:')
+        print('\n仓库数据父菜单:')
         for m in parent_menus:
             print(f'  {m.name} ({m.path}) - sort_order: {m.sort_order}, parent_id: {m.parent_id}')
             # 查找子菜单
@@ -59,4 +59,4 @@ async def check_menu():
 
 
 if __name__ == "__main__":
-    asyncio.run(check_menu())
+    asyncio.run(check_warehouse_menu())

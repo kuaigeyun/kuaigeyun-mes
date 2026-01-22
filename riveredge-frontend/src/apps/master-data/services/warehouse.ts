@@ -4,7 +4,7 @@
  * 提供仓库、库区、库位的 API 调用方法
  */
 
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
 import type {
   Warehouse,
   WarehouseCreate,
@@ -58,6 +58,25 @@ export const warehouseApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/warehouse/warehouses/${uuid}`);
   },
+
+  /**
+   * 批量删除仓库
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/warehouse/warehouses/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
+  },
 };
 
 /**
@@ -98,6 +117,25 @@ export const storageAreaApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/warehouse/storage-areas/${uuid}`);
   },
+
+  /**
+   * 批量删除库区
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/warehouse/storage-areas/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
+  },
 };
 
 /**
@@ -137,6 +175,25 @@ export const storageLocationApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/warehouse/storage-locations/${uuid}`);
+  },
+
+  /**
+   * 批量删除库位
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/warehouse/storage-locations/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
   },
 };
 

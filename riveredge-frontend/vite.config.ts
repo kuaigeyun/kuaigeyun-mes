@@ -74,6 +74,8 @@ export default defineConfig({
         // 优化重连逻辑
         reconnectInterval: 3000,
         reconnectDelay: 1000,
+        // 禁用 HMR 连接日志（减少控制台输出）
+        logging: 'none', // 'none' | 'error' | 'warn' | 'info'
       },
     },
     watch: {

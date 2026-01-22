@@ -14,7 +14,8 @@ from apps.master_data.schemas.warehouse_schemas import (
     WarehouseCreate, WarehouseUpdate, WarehouseResponse,
     StorageAreaCreate, StorageAreaUpdate, StorageAreaResponse,
     StorageLocationCreate, StorageLocationUpdate, StorageLocationResponse,
-    WarehouseTreeResponse
+    WarehouseTreeResponse, BatchDeleteWarehousesRequest,
+    BatchDeleteStorageAreasRequest, BatchDeleteStorageLocationsRequest
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -100,6 +101,35 @@ async def update_warehouse(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/warehouses/batch-delete", summary="批量删除仓库")
+async def batch_delete_warehouses(
+    request: BatchDeleteWarehousesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除仓库（软删除）
+    
+    - **uuids**: 要删除的仓库UUID列表（最多100条）
+    
+    注意：只能删除没有关联库区的仓库
+    """
+    try:
+        result = await WarehouseService.batch_delete_warehouses(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个仓库，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除仓库失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除仓库失败: {str(e)}"
+        )
 
 
 @router.delete("/warehouses/{warehouse_uuid}", summary="删除仓库")
@@ -209,6 +239,35 @@ async def update_storage_area(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.delete("/storage-areas/batch-delete", summary="批量删除库区")
+async def batch_delete_storage_areas(
+    request: BatchDeleteStorageAreasRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除库区（软删除）
+    
+    - **uuids**: 要删除的库区UUID列表（最多100条）
+    
+    注意：只能删除没有关联库位的库区
+    """
+    try:
+        result = await WarehouseService.batch_delete_storage_areas(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个库区，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除库区失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除库区失败: {str(e)}"
+        )
+
+
 @router.delete("/storage-areas/{storage_area_uuid}", summary="删除库区")
 async def delete_storage_area(
     storage_area_uuid: str,
@@ -314,6 +373,33 @@ async def update_storage_location(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/storage-locations/batch-delete", summary="批量删除库位")
+async def batch_delete_storage_locations(
+    request: BatchDeleteStorageLocationsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除库位（软删除）
+    
+    - **uuids**: 要删除的库位UUID列表（最多100条）
+    """
+    try:
+        result = await WarehouseService.batch_delete_storage_locations(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个库位，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除库位失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除库位失败: {str(e)}"
+        )
 
 
 @router.delete("/storage-locations/{storage_location_uuid}", summary="删除库位")

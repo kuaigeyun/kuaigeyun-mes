@@ -442,10 +442,24 @@ const WorkshopsPage: React.FC = () => {
    * 
    * 支持从 Excel 导入车间数据，批量创建车间
    * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
+   * 
+   * 所属厂区字段说明：
+   * - 可以填写厂区编码（如：PLANT001）或厂区名称（如：无锡生产基地）
+   * - 系统会根据编码或名称自动匹配对应的厂区
+   * - 如果厂区不存在，导入会失败并提示错误
    */
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
       messageApi.warning('导入数据为空');
+      return;
+    }
+
+    // 如果厂区列表为空，提示用户先创建厂区
+    if (plants.length === 0) {
+      Modal.warning({
+        title: '无法导入',
+        content: '当前没有可用的厂区数据，请先创建厂区后再导入车间数据。',
+      });
       return;
     }
 
@@ -486,6 +500,14 @@ const WorkshopsPage: React.FC = () => {
       '*名称': 'name',
       'name': 'name',
       '*name': 'name',
+      '所属厂区': 'plantCode',
+      '厂区': 'plantCode',
+      '厂区编码': 'plantCode',
+      '厂区名称': 'plantName',
+      'plantCode': 'plantCode',
+      'plant_code': 'plantCode',
+      'plantName': 'plantName',
+      'plant_name': 'plantName',
       '描述': 'description',
       'description': 'description',
     };
@@ -548,6 +570,8 @@ const WorkshopsPage: React.FC = () => {
         const codeIndex = headerIndexMap['code'];
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
+        const plantCodeIndex = headerIndexMap['plantCode'];
+        const plantNameIndex = headerIndexMap['plantName'];
 
         // 确保数组有足够的长度
         if (codeIndex === undefined || nameIndex === undefined) {
@@ -559,6 +583,12 @@ const WorkshopsPage: React.FC = () => {
         const name = row[nameIndex];
         const description = descriptionIndex !== undefined && row[descriptionIndex] !== undefined
           ? row[descriptionIndex]
+          : undefined;
+        const plantCode = plantCodeIndex !== undefined && row[plantCodeIndex] !== undefined
+          ? row[plantCodeIndex]
+          : undefined;
+        const plantName = plantNameIndex !== undefined && row[plantNameIndex] !== undefined
+          ? row[plantNameIndex]
           : undefined;
         
         // 验证必需字段（去除空白字符后检查）
@@ -574,10 +604,45 @@ const WorkshopsPage: React.FC = () => {
           return;
         }
 
+        // 处理所属厂区（根据厂区编码或名称查找 plantId）
+        let plantId: number | undefined = undefined;
+        if (plantCode || plantName) {
+          const plantCodeValue = plantCode ? String(plantCode).trim().toUpperCase() : '';
+          const plantNameValue = plantName ? String(plantName).trim() : '';
+          
+          // 优先通过编码查找
+          if (plantCodeValue) {
+            const foundPlant = plants.find(p => p.code.toUpperCase() === plantCodeValue);
+            if (foundPlant) {
+              plantId = foundPlant.id;
+            } else {
+              errors.push({ 
+                row: actualRowIndex, 
+                message: `厂区编码 "${plantCodeValue}" 不存在，请检查厂区编码是否正确` 
+              });
+              return;
+            }
+          } 
+          // 如果编码未找到，尝试通过名称查找
+          else if (plantNameValue) {
+            const foundPlant = plants.find(p => p.name === plantNameValue);
+            if (foundPlant) {
+              plantId = foundPlant.id;
+            } else {
+              errors.push({ 
+                row: actualRowIndex, 
+                message: `厂区名称 "${plantNameValue}" 不存在，请检查厂区名称是否正确` 
+              });
+              return;
+            }
+          }
+        }
+
         // 构建导入数据（isActive 使用默认值 true，不导入）
         const workshopData: WorkshopCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
+          plantId: plantId,
           description: description ? String(description).trim() : undefined,
           isActive: true, // 默认启用
         };
@@ -593,9 +658,12 @@ const WorkshopsPage: React.FC = () => {
 
     // 如果有验证错误，显示错误信息
     if (errors.length > 0) {
+      // 检查是否有厂区相关的错误
+      const hasPlantError = errors.some(e => e.message.includes('厂区'));
+      
       Modal.warning({
         title: '数据验证失败',
-        width: 600,
+        width: 700,
         content: (
           <div>
             <p>以下数据行存在错误，请修正后重新导入：</p>
@@ -610,6 +678,26 @@ const WorkshopsPage: React.FC = () => {
                 </List.Item>
               )}
             />
+            {hasPlantError && plants.length > 0 && (
+              <div style={{ marginTop: 16, padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
+                <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                  当前可用的厂区列表：
+                </Typography.Text>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {plants.map(plant => (
+                    <li key={plant.id} style={{ marginBottom: 4 }}>
+                      <Typography.Text strong>{plant.code}</Typography.Text>
+                      <Typography.Text type="secondary" style={{ marginLeft: 8 }}>
+                        - {plant.name}
+                      </Typography.Text>
+                    </li>
+                  ))}
+                </ul>
+                <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: '12px' }}>
+                  提示：所属厂区列可以填写厂区编码（如：{plants[0]?.code}）或厂区名称（如：{plants[0]?.name}）
+                </Typography.Text>
+              </div>
+            )}
           </div>
         ),
       });
@@ -989,8 +1077,13 @@ const WorkshopsPage: React.FC = () => {
         viewTypes={['table']}
         defaultViewType="table"
         onImport={handleImport}
-        importHeaders={['*车间编码', '*车间名称', '描述']}
-        importExampleRow={['WS001', '装配车间', '主要负责产品装配作业']}
+        importHeaders={['*车间编码', '*车间名称', '所属厂区', '描述']}
+        importExampleRow={[
+          'WS001', 
+          '装配车间', 
+          plants.length > 0 ? plants[0].code : 'PLANT001', 
+          '主要负责产品装配作业'
+        ]}
         importFieldMap={{
           '车间编码': 'code',
           '*车间编码': 'code',
@@ -1004,6 +1097,14 @@ const WorkshopsPage: React.FC = () => {
           '*名称': 'name',
           'name': 'name',
           '*name': 'name',
+          '所属厂区': 'plantCode',
+          '厂区': 'plantCode',
+          '厂区编码': 'plantCode',
+          '厂区名称': 'plantName',
+          'plantCode': 'plantCode',
+          'plant_code': 'plantCode',
+          'plantName': 'plantName',
+          'plant_name': 'plantName',
           '描述': 'description',
           'description': 'description',
         }}

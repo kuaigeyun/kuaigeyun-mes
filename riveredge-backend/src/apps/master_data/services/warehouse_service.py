@@ -213,6 +213,81 @@ class WarehouseService:
         warehouse.deleted_at = timezone.now()
         await warehouse.save()
     
+    @staticmethod
+    async def batch_delete_warehouses(
+        tenant_id: int,
+        warehouse_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除仓库（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            warehouse_uuids: 仓库UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for warehouse_uuid in warehouse_uuids:
+            try:
+                warehouse = await Warehouse.filter(
+                    tenant_id=tenant_id,
+                    uuid=warehouse_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not warehouse:
+                    failed_records.append({
+                        "uuid": warehouse_uuid,
+                        "reason": f"仓库 {warehouse_uuid} 不存在"
+                    })
+                    continue
+                
+                # 检查是否有关联的库区
+                storage_areas_count = await StorageArea.filter(
+                    tenant_id=tenant_id,
+                    warehouse_id=warehouse.id,
+                    deleted_at__isnull=True
+                ).count()
+                
+                if storage_areas_count > 0:
+                    failed_records.append({
+                        "uuid": warehouse_uuid,
+                        "code": warehouse.code,
+                        "name": warehouse.name,
+                        "reason": f"仓库下存在 {storage_areas_count} 个库区，无法删除"
+                    })
+                    continue
+                
+                # 软删除
+                warehouse.deleted_at = timezone.now()
+                await warehouse.save()
+                
+                success_records.append({
+                    "uuid": warehouse_uuid,
+                    "code": warehouse.code,
+                    "name": warehouse.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除仓库失败 (uuid: {warehouse_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": warehouse_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
+    
     # ==================== 库区相关方法 ====================
     
     @staticmethod
@@ -427,6 +502,81 @@ class WarehouseService:
         storage_area.deleted_at = timezone.now()
         await storage_area.save()
     
+    @staticmethod
+    async def batch_delete_storage_areas(
+        tenant_id: int,
+        storage_area_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除库区（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            storage_area_uuids: 库区UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for storage_area_uuid in storage_area_uuids:
+            try:
+                storage_area = await StorageArea.filter(
+                    tenant_id=tenant_id,
+                    uuid=storage_area_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not storage_area:
+                    failed_records.append({
+                        "uuid": storage_area_uuid,
+                        "reason": f"库区 {storage_area_uuid} 不存在"
+                    })
+                    continue
+                
+                # 检查是否有关联的库位
+                storage_locations_count = await StorageLocation.filter(
+                    tenant_id=tenant_id,
+                    storage_area_id=storage_area.id,
+                    deleted_at__isnull=True
+                ).count()
+                
+                if storage_locations_count > 0:
+                    failed_records.append({
+                        "uuid": storage_area_uuid,
+                        "code": storage_area.code,
+                        "name": storage_area.name,
+                        "reason": f"库区下存在 {storage_locations_count} 个库位，无法删除"
+                    })
+                    continue
+                
+                # 软删除
+                storage_area.deleted_at = timezone.now()
+                await storage_area.save()
+                
+                success_records.append({
+                    "uuid": storage_area_uuid,
+                    "code": storage_area.code,
+                    "name": storage_area.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除库区失败 (uuid: {storage_area_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": storage_area_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
+    
     # ==================== 库位相关方法 ====================
     
     @staticmethod
@@ -629,6 +779,65 @@ class WarehouseService:
         from tortoise import timezone
         storage_location.deleted_at = timezone.now()
         await storage_location.save()
+    
+    @staticmethod
+    async def batch_delete_storage_locations(
+        tenant_id: int,
+        storage_location_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除库位（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            storage_location_uuids: 库位UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for storage_location_uuid in storage_location_uuids:
+            try:
+                storage_location = await StorageLocation.filter(
+                    tenant_id=tenant_id,
+                    uuid=storage_location_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not storage_location:
+                    failed_records.append({
+                        "uuid": storage_location_uuid,
+                        "reason": f"库位 {storage_location_uuid} 不存在"
+                    })
+                    continue
+                
+                # 软删除（库位没有下级关联，可以直接删除）
+                storage_location.deleted_at = timezone.now()
+                await storage_location.save()
+                
+                success_records.append({
+                    "uuid": storage_location_uuid,
+                    "code": storage_location.code,
+                    "name": storage_location.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除库位失败 (uuid: {storage_location_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": storage_location_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
     
     # ==================== 级联查询相关方法 ====================
     

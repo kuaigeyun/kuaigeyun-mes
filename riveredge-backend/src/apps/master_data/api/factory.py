@@ -16,7 +16,8 @@ from apps.master_data.schemas.factory_schemas import (
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse,
-    WorkshopTreeResponse, BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest
+    WorkshopTreeResponse, BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest,
+    BatchDeleteProductionLinesRequest, BatchDeleteWorkstationsRequest
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -120,28 +121,6 @@ async def update_plant(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/plants/{plant_uuid}", summary="删除厂区")
-async def delete_plant(
-    plant_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    删除厂区（软删除）
-    
-    - **plant_uuid**: 厂区UUID
-    
-    注意：删除厂区前需要检查是否有关联的车间
-    """
-    try:
-        await FactoryService.delete_plant(tenant_id, plant_uuid)
-        return {"message": "厂区删除成功"}
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
 @router.delete("/plants/batch-delete", summary="批量删除厂区")
 async def batch_delete_plants(
     request: BatchDeletePlantsRequest,
@@ -169,6 +148,28 @@ async def batch_delete_plants(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"批量删除厂区失败: {str(e)}"
         )
+
+
+@router.delete("/plants/{plant_uuid}", summary="删除厂区")
+async def delete_plant(
+    plant_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除厂区（软删除）
+    
+    - **plant_uuid**: 厂区UUID
+    
+    注意：删除厂区前需要检查是否有关联的车间
+    """
+    try:
+        await FactoryService.delete_plant(tenant_id, plant_uuid)
+        return {"message": "厂区删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ==================== 车间相关接口 ====================
@@ -266,28 +267,6 @@ async def update_workshop(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.delete("/workshops/{workshop_uuid}", summary="删除车间")
-async def delete_workshop(
-    workshop_uuid: str,
-    current_user: Annotated[User, Depends(get_current_user)],
-    tenant_id: Annotated[int, Depends(get_current_tenant)]
-):
-    """
-    删除车间（软删除）
-    
-    - **workshop_uuid**: 车间UUID
-    
-    注意：删除车间前需要检查是否有关联的产线
-    """
-    try:
-        await FactoryService.delete_workshop(tenant_id, workshop_uuid)
-        return {"message": "车间删除成功"}
-    except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
 @router.delete("/workshops/batch-delete", summary="批量删除车间")
 async def batch_delete_workshops(
     request: BatchDeleteWorkshopsRequest,
@@ -315,6 +294,28 @@ async def batch_delete_workshops(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"批量删除车间失败: {str(e)}"
         )
+
+
+@router.delete("/workshops/{workshop_uuid}", summary="删除车间")
+async def delete_workshop(
+    workshop_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除车间（软删除）
+    
+    - **workshop_uuid**: 车间UUID
+    
+    注意：删除车间前需要检查是否有关联的产线
+    """
+    try:
+        await FactoryService.delete_workshop(tenant_id, workshop_uuid)
+        return {"message": "车间删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ==================== 产线相关接口 ====================
@@ -400,6 +401,35 @@ async def update_production_line(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/production-lines/batch-delete", summary="批量删除产线")
+async def batch_delete_production_lines(
+    request: BatchDeleteProductionLinesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除产线（软删除）
+    
+    - **uuids**: 要删除的产线UUID列表（最多100条）
+    
+    注意：只能删除没有关联工位的产线
+    """
+    try:
+        result = await FactoryService.batch_delete_production_lines(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个产线，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除产线失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除产线失败: {str(e)}"
+        )
 
 
 @router.delete("/production-lines/{production_line_uuid}", summary="删除产线")
@@ -507,6 +537,33 @@ async def update_workstation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/workstations/batch-delete", summary="批量删除工位")
+async def batch_delete_workstations(
+    request: BatchDeleteWorkstationsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除工位（软删除）
+    
+    - **uuids**: 要删除的工位UUID列表（最多100条）
+    """
+    try:
+        result = await FactoryService.batch_delete_workstations(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个工位，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除工位失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除工位失败: {str(e)}"
+        )
 
 
 @router.delete("/workstations/{workstation_uuid}", summary="删除工位")

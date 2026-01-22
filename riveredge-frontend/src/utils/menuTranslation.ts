@@ -198,7 +198,8 @@ export function translateAppMenuItemName(
     }
   }
 
-  // 如果无法找到翻译，返回原始名称
+  // 如果无法找到翻译，直接返回原始名称（不使用 translatePathTitle 的硬编码映射）
+  // 这样可以确保数据库中的菜单名称（如"仓库管理"）不会被硬编码映射（如"仓库"）覆盖
   return name;
 }
 
@@ -270,9 +271,9 @@ export function translatePathTitle(path: string, t: TFunction): string {
     'workshops': '车间',
     'production-lines': '产线',
     'workstations': '工位',
-    'warehouses': '仓库',
-    'storage-areas': '库区',
-    'storage-locations': '库位',
+    'warehouses': '仓库管理',
+    'storage-areas': '库区管理',
+    'storage-locations': '库位管理',
     'materials': '物料管理',
     'bom': 'BOM',
     'code-mapping': '编码映射',

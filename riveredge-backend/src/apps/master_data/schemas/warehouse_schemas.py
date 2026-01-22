@@ -252,3 +252,20 @@ class WarehouseTreeResponse(WarehouseResponse):
         by_alias=True
     )
 
+
+# ==================== 批量删除请求 Schema ====================
+
+class BatchDeleteWarehousesRequest(BaseModel):
+    """批量删除仓库请求"""
+    uuids: List[str] = Field(..., description="要删除的仓库UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteStorageAreasRequest(BaseModel):
+    """批量删除库区请求"""
+    uuids: List[str] = Field(..., description="要删除的库区UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteStorageLocationsRequest(BaseModel):
+    """批量删除库位请求"""
+    uuids: List[str] = Field(..., description="要删除的库位UUID列表", min_items=1, max_items=100)
+
