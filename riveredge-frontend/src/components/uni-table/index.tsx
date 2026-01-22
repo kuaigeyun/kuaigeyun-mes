@@ -1252,12 +1252,25 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
         /* 当表格为空时，隐藏垂直滚动条 */
         .uni-table-pro-table .ant-table-empty .ant-table-body,
-        .uni-table-pro-table .ant-table-placeholder .ant-table-body {
+        .uni-table-pro-table .ant-table-placeholder .ant-table-body,
+        .uni-table-pro-table .ant-table-empty .ant-table-container,
+        .uni-table-pro-table .ant-table-placeholder .ant-table-container {
           overflow-y: hidden !important;
         }
         /* 两栏布局中的空表格也隐藏滚动条 */
         .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-body,
-        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-body {
+        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-body,
+        .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-container,
+        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-container {
+          overflow-y: hidden !important;
+        }
+        /* 当表格为空时，隐藏整个表格容器的滚动条 */
+        .uni-table-pro-table .ant-table-wrapper.ant-table-empty,
+        .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder {
+          overflow-y: hidden !important;
+        }
+        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty,
+        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder {
           overflow-y: hidden !important;
         }
         /* 优化滚动条显示：只在内容超出时显示 */
@@ -1522,7 +1535,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             }
             
             // 如果在两栏布局中且有计算出的高度，设置垂直滚动
-            if (tableScrollY !== undefined) {
+            // 注意：只有当有数据时才设置y，避免空数据时显示滚动条
+            if (tableScrollY !== undefined && tableData.length > 0) {
               scrollConfig.y = tableScrollY;
             }
             
