@@ -268,26 +268,26 @@ export function translatePathTitle(path: string, t: TFunction): string {
   // 如果都找不到，尝试使用中文映射（硬编码的后备方案）
   const chinesePathMap: Record<string, string> = {
     'plants': '厂区管理',
-    'workshops': '车间',
-    'production-lines': '产线',
-    'workstations': '工位',
+    'workshops': '车间管理',
+    'production-lines': '产线管理',
+    'workstations': '工位管理',
     'warehouses': '仓库管理',
     'storage-areas': '库区管理',
     'storage-locations': '库位管理',
     'materials': '物料管理',
-    'bom': 'BOM',
+    'bom': '物料清单BOM',
     'code-mapping': '编码映射',
     'variant-attributes': '变体属性',
     'batches': '批号管理',
     'serials': '序列号管理',
-    'defect-types': '不良品',
+    'defect-types': '不良品类型',
     'operations': '工序',
     'routes': '工艺路线',
     'sop': '作业程序',
     'customers': '客户',
     'suppliers': '供应商',
-    'holidays': '假期',
-    'skills': '技能',
+    'holidays': '假期设置',
+    'skills': '技能管理',
   };
 
   if (segment && chinesePathMap[segment]) {
