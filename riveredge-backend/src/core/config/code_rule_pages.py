@@ -13,6 +13,16 @@ CodeRulePageConfig = Dict[str, Any]
 CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     # 主数据管理 - 工厂建模
     {
+        "page_code": "master-data-factory-plant",
+        "page_name": "厂区管理",
+        "page_path": "/apps/master-data/factory/plants",
+        "code_field": "code",
+        "code_field_label": "厂区编码",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": False,
+    },
+    {
         "page_code": "master-data-factory-workshop",
         "page_name": "车间管理",
         "page_path": "/apps/master-data/factory/workshops",
