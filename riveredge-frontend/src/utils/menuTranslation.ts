@@ -146,10 +146,11 @@ export function translateAppMenuName(
 export function translateAppMenuItemName(
   name: string | undefined,
   path: string | undefined,
-  t: TFunction
+  t: TFunction,
+  children?: Array<{ path?: string }> // 添加子菜单参数，用于分组菜单翻译
 ): string {
-  if (!name || !path) {
-    return name || '';
+  if (!name) {
+    return '';
   }
 
   // 如果 name 已经是翻译 key，直接翻译
@@ -160,13 +161,41 @@ export function translateAppMenuItemName(
     }
   }
 
-  // 尝试从路径提取应用 code 和菜单路径
-  const appCode = extractAppCodeFromPath(path);
+  // 对于没有path的分组菜单，尝试从子菜单的path中提取应用code
+  let appCode: string | null = null;
+  let relativePath: string | null = null;
+  
+  if (path) {
+    // 有path的情况：从路径提取应用 code 和菜单路径
+    appCode = extractAppCodeFromPath(path);
+    if (appCode) {
+      relativePath = path.replace(`/apps/${appCode}/`, '');
+    }
+  } else if (children && children.length > 0) {
+    // 没有path但有子菜单的情况（分组菜单）：从第一个子菜单的path提取应用code
+    const firstChildPath = children[0]?.path;
+    if (firstChildPath) {
+      appCode = extractAppCodeFromPath(firstChildPath);
+      if (appCode) {
+        // 对于分组菜单，使用菜单名称来构建翻译key
+        // 将中文名称转换为对应的key格式（例如："销售管理" -> "sales-management"）
+        // 但更可靠的方法是直接从子菜单路径推断分组名称
+        const childRelativePath = firstChildPath.replace(`/apps/${appCode}/`, '');
+        const pathSegments = childRelativePath.split('/');
+        if (pathSegments.length > 0) {
+          // 使用子菜单路径的第一段作为分组名称（例如：sales-management/sales-orders -> sales-management）
+          relativePath = pathSegments[0];
+        }
+      }
+    }
+  }
+  
+  if (!appCode) {
+    // 如果无法提取应用code，返回原始名称
+    return name;
+  }
 
-  if (appCode) {
-    // 提取菜单相对路径（去掉 /apps/{app-code}/ 前缀）
-    const relativePath = path.replace(`/apps/${appCode}/`, '');
-
+  if (relativePath) {
     // 构建菜单项翻译 key：app.{app-code}.menu.{menu-path}
     // 将路径中的 / 替换为 .，例如：plan-management/demand-management → plan-management.demand-management
     const menuPathKey = relativePath.replace(/\//g, '.');
@@ -179,14 +208,29 @@ export function translateAppMenuItemName(
       return translated;
     }
 
-    // 如果完整路径翻译失败，尝试只翻译路径的最后一段
+    // 如果完整路径翻译失败，尝试只翻译路径的第一段（用于分组菜单）
     const pathSegments = relativePath.split('/');
     if (pathSegments.length > 1) {
+      const firstSegment = pathSegments[0];
+      const firstSegmentKey = `app.${appCode}.menu.${firstSegment}`;
+      const firstSegmentTranslated = t(firstSegmentKey, { defaultValue: name });
+      if (firstSegmentTranslated !== firstSegmentKey) {
+        return firstSegmentTranslated;
+      }
+      
+      // 尝试最后一段（用于子菜单）
       const lastSegment = pathSegments[pathSegments.length - 1];
       const lastSegmentKey = `app.${appCode}.menu.${lastSegment}`;
       const lastSegmentTranslated = t(lastSegmentKey, { defaultValue: name });
       if (lastSegmentTranslated !== lastSegmentKey) {
         return lastSegmentTranslated;
+      }
+    } else if (pathSegments.length === 1) {
+      // 只有一段路径（可能是分组菜单）
+      const segmentKey = `app.${appCode}.menu.${pathSegments[0]}`;
+      const segmentTranslated = t(segmentKey, { defaultValue: name });
+      if (segmentTranslated !== segmentKey) {
+        return segmentTranslated;
       }
     }
 
