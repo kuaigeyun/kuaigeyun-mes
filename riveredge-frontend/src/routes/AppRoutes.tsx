@@ -143,19 +143,19 @@ const AppRoutes: React.FC = () => {
 
       // 获取已安装且启用的应用列表
       let applications = await getInstalledApplicationList({ is_active: true });
-      console.log('📦 [AppRoutes] 获取到的应用列表:', applications.length, applications.map(a => ({ code: a.code, name: a.name, entry_point: a.entry_point, route_path: a.route_path })));
+      // console.log('📦 [AppRoutes] 获取到的应用列表:', applications.length, applications.map(a => ({ code: a.code, name: a.name, entry_point: a.entry_point, route_path: a.route_path })));
 
       // 如果应用列表为空且尚未扫描过，尝试扫描并注册应用
       if (applications.length === 0 && !hasScanned) {
-        console.log('🔄 [AppRoutes] 应用列表为空，尝试扫描并注册应用...');
+        // console.log('🔄 [AppRoutes] 应用列表为空，尝试扫描并注册应用...');
         try {
           const scannedApps = await scanPlugins();
-          console.log('✅ [AppRoutes] 扫描完成，发现应用:', scannedApps.length, scannedApps.map(a => ({ code: a.code, name: a.name, is_installed: a.is_installed, is_active: a.is_active })));
+          // console.log('✅ [AppRoutes] 扫描完成，发现应用:', scannedApps.length, scannedApps.map(a => ({ code: a.code, name: a.name, is_installed: a.is_installed, is_active: a.is_active })));
           setHasScanned(true);
           
           // 重新获取已安装且启用的应用列表
           applications = await getInstalledApplicationList({ is_active: true });
-          console.log('📦 [AppRoutes] 重新获取应用列表:', applications.length);
+          // console.log('📦 [AppRoutes] 重新获取应用列表:', applications.length);
         } catch (scanError: any) {
           console.error('❌ [AppRoutes] 扫描应用失败:', scanError);
           // 扫描失败不影响后续流程，继续使用空列表
@@ -168,9 +168,9 @@ const AppRoutes: React.FC = () => {
       const loadPromises = applications.map(async (app: Application) => {
         if (app.entry_point && app.route_path) {
           try {
-            console.log(`🔄 [AppRoutes] 开始加载应用: ${app.code}`, { entry_point: app.entry_point, route_path: app.route_path });
+            // console.log(`🔄 [AppRoutes] 开始加载应用: ${app.code}`, { entry_point: app.entry_point, route_path: app.route_path });
             const pluginRouteConfigs = await loadPlugin(app);
-            console.log(`✅ [AppRoutes] 应用 ${app.code} 加载成功，路由配置:`, pluginRouteConfigs);
+            // console.log(`✅ [AppRoutes] 应用 ${app.code} 加载成功，路由配置:`, pluginRouteConfigs);
 
             // 为每个路由配置创建Route组件
             for (const routeConfig of pluginRouteConfigs) {
@@ -236,7 +236,7 @@ const AppRoutes: React.FC = () => {
       // 等待所有应用加载完成
       await Promise.all(loadPromises);
 
-      console.log(`🎉 [AppRoutes] 应用加载完成，共加载 ${routes.length} 个路由`);
+      // console.log(`🎉 [AppRoutes] 应用加载完成，共加载 ${routes.length} 个路由`);
       setAppRoutes(routes);
       setLoading(false);
 

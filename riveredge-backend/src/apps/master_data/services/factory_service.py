@@ -1,15 +1,16 @@
 """
 工厂数据服务模块
 
-提供工厂数据的业务逻辑处理（车间、产线、工位），支持多组织隔离。
+提供工厂数据的业务逻辑处理（厂区、车间、产线、工位），支持多组织隔离。
 """
 
 from typing import List, Optional, TYPE_CHECKING
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
-from apps.master_data.models.factory import Workshop, ProductionLine, Workstation
+from apps.master_data.models.factory import Plant, Workshop, ProductionLine, Workstation
 from apps.master_data.schemas.factory_schemas import (
+    PlantCreate, PlantUpdate, PlantResponse,
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse
@@ -26,6 +27,314 @@ if TYPE_CHECKING:
 
 class FactoryService:
     """工厂数据服务"""
+    
+    # ==================== 厂区相关方法 ====================
+    
+    @staticmethod
+    async def create_plant(
+        tenant_id: int,
+        data: PlantCreate
+    ) -> PlantResponse:
+        """
+        创建厂区
+        
+        Args:
+            tenant_id: 租户ID
+            data: 厂区创建数据
+            
+        Returns:
+            PlantResponse: 创建的厂区对象
+            
+        Raises:
+            ValidationError: 当编码已存在时抛出
+        """
+        # 检查编码是否已存在
+        existing = await Plant.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=True
+        ).first()
+        
+        if existing:
+            raise ValidationError(f"厂区编码 {data.code} 已存在")
+        
+        # 创建厂区
+        plant = await Plant.create(
+            tenant_id=tenant_id,
+            **data.dict()
+        )
+        
+        return PlantResponse.model_validate(plant)
+    
+    @staticmethod
+    async def get_plant_by_uuid(
+        tenant_id: int,
+        plant_uuid: str
+    ) -> PlantResponse:
+        """
+        根据UUID获取厂区
+        
+        Args:
+            tenant_id: 租户ID
+            plant_uuid: 厂区UUID
+            
+        Returns:
+            PlantResponse: 厂区对象
+            
+        Raises:
+            NotFoundError: 当厂区不存在时抛出
+        """
+        plant = await Plant.filter(
+            tenant_id=tenant_id,
+            uuid=plant_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not plant:
+            raise NotFoundError(f"厂区 {plant_uuid} 不存在")
+        
+        return PlantResponse.model_validate(plant)
+    
+    @staticmethod
+    async def list_plants(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        is_active: Optional[bool] = None,
+        keyword: Optional[str] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
+    ) -> List[PlantResponse]:
+        """
+        获取厂区列表
+
+        Args:
+            tenant_id: 租户ID
+            skip: 跳过数量
+            limit: 限制数量
+            is_active: 是否启用（可选）
+            keyword: 搜索关键词（厂区编码或名称）
+            code: 厂区编码（精确匹配）
+            name: 厂区名称（模糊匹配）
+
+        Returns:
+            List[PlantResponse]: 厂区列表
+        """
+        try:
+            query = Plant.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+
+            if is_active is not None:
+                query = query.filter(is_active=is_active)
+
+            # 添加搜索条件
+            if keyword:
+                # 关键词搜索厂区编码或名称
+                query = query.filter(
+                    Q(code__icontains=keyword) | Q(name__icontains=keyword)
+                )
+
+            if code:
+                # 精确匹配厂区编码
+                query = query.filter(code__icontains=code)
+
+            if name:
+                # 模糊匹配厂区名称
+                query = query.filter(name__icontains=name)
+            
+            plants = await query.offset(skip).limit(limit).order_by("code").all()
+            
+            # 转换为响应格式
+            result = []
+            for p in plants:
+                try:
+                    result.append(PlantResponse.model_validate(p))
+                except Exception as e:
+                    from loguru import logger
+                    logger.error(f"转换厂区数据失败 (ID: {p.id}, UUID: {p.uuid}): {str(e)}")
+                    # 跳过有问题的记录，继续处理其他记录
+                    continue
+            
+            return result
+        except Exception as e:
+            from loguru import logger
+            logger.exception(f"获取厂区列表失败 (tenant_id: {tenant_id}): {str(e)}")
+            # 重新抛出异常，让 API 层处理
+            raise
+    
+    @staticmethod
+    async def update_plant(
+        tenant_id: int,
+        plant_uuid: str,
+        data: PlantUpdate
+    ) -> PlantResponse:
+        """
+        更新厂区
+        
+        Args:
+            tenant_id: 租户ID
+            plant_uuid: 厂区UUID
+            data: 厂区更新数据
+            
+        Returns:
+            PlantResponse: 更新后的厂区对象
+            
+        Raises:
+            NotFoundError: 当厂区不存在时抛出
+            ValidationError: 当编码已存在时抛出
+        """
+        plant = await Plant.filter(
+            tenant_id=tenant_id,
+            uuid=plant_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not plant:
+            raise NotFoundError(f"厂区 {plant_uuid} 不存在")
+        
+        # 如果更新编码，检查是否已存在
+        if data.code and data.code != plant.code:
+            existing = await Plant.filter(
+                tenant_id=tenant_id,
+                code=data.code,
+                deleted_at__isnull=True
+            ).first()
+            
+            if existing:
+                raise ValidationError(f"厂区编码 {data.code} 已存在")
+        
+        # 更新字段
+        update_data = data.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(plant, key, value)
+        
+        await plant.save()
+        
+        return PlantResponse.model_validate(plant)
+    
+    @staticmethod
+    async def delete_plant(
+        tenant_id: int,
+        plant_uuid: str
+    ) -> None:
+        """
+        删除厂区（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            plant_uuid: 厂区UUID
+            
+        Raises:
+            NotFoundError: 当厂区不存在时抛出
+            ValidationError: 当厂区下有关联的车间时抛出
+        """
+        plant = await Plant.filter(
+            tenant_id=tenant_id,
+            uuid=plant_uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not plant:
+            raise NotFoundError(f"厂区 {plant_uuid} 不存在")
+        
+        # 检查是否有关联的车间
+        workshops_count = await Workshop.filter(
+            tenant_id=tenant_id,
+            plant_id=plant.id,
+            deleted_at__isnull=True
+        ).count()
+        
+        if workshops_count > 0:
+            raise ValidationError(f"厂区下存在 {workshops_count} 个车间，无法删除")
+        
+        # 软删除
+        from tortoise import timezone
+        plant.deleted_at = timezone.now()
+        await plant.save()
+    
+    @staticmethod
+    async def batch_delete_plants(
+        tenant_id: int,
+        plant_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除厂区（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            plant_uuids: 厂区UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+                {
+                    "success_count": int,
+                    "failed_count": int,
+                    "success_records": List[dict],
+                    "failed_records": List[dict]
+                }
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for plant_uuid in plant_uuids:
+            try:
+                # 查找厂区
+                plant = await Plant.filter(
+                    tenant_id=tenant_id,
+                    uuid=plant_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not plant:
+                    failed_records.append({
+                        "uuid": plant_uuid,
+                        "reason": f"厂区 {plant_uuid} 不存在"
+                    })
+                    continue
+                
+                # 检查是否有关联的车间
+                workshops_count = await Workshop.filter(
+                    tenant_id=tenant_id,
+                    plant_id=plant.id,
+                    deleted_at__isnull=True
+                ).count()
+                
+                if workshops_count > 0:
+                    failed_records.append({
+                        "uuid": plant_uuid,
+                        "code": plant.code,
+                        "name": plant.name,
+                        "reason": f"厂区下存在 {workshops_count} 个车间，无法删除"
+                    })
+                    continue
+                
+                # 软删除
+                plant.deleted_at = timezone.now()
+                await plant.save()
+                
+                success_records.append({
+                    "uuid": plant_uuid,
+                    "code": plant.code,
+                    "name": plant.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除厂区失败 (uuid: {plant_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": plant_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
     
     # ==================== 车间相关方法 ====================
     
@@ -252,6 +561,88 @@ class FactoryService:
         from tortoise import timezone
         workshop.deleted_at = timezone.now()
         await workshop.save()
+    
+    @staticmethod
+    async def batch_delete_workshops(
+        tenant_id: int,
+        workshop_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除车间（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            workshop_uuids: 车间UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+                {
+                    "success_count": int,
+                    "failed_count": int,
+                    "success_records": List[dict],
+                    "failed_records": List[dict]
+                }
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for workshop_uuid in workshop_uuids:
+            try:
+                # 查找车间
+                workshop = await Workshop.filter(
+                    tenant_id=tenant_id,
+                    uuid=workshop_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not workshop:
+                    failed_records.append({
+                        "uuid": workshop_uuid,
+                        "reason": f"车间 {workshop_uuid} 不存在"
+                    })
+                    continue
+                
+                # 检查是否有关联的产线
+                production_lines_count = await ProductionLine.filter(
+                    tenant_id=tenant_id,
+                    workshop_id=workshop.id,
+                    deleted_at__isnull=True
+                ).count()
+                
+                if production_lines_count > 0:
+                    failed_records.append({
+                        "uuid": workshop_uuid,
+                        "code": workshop.code,
+                        "name": workshop.name,
+                        "reason": f"车间下存在 {production_lines_count} 条产线，无法删除"
+                    })
+                    continue
+                
+                # 软删除
+                workshop.deleted_at = timezone.now()
+                await workshop.save()
+                
+                success_records.append({
+                    "uuid": workshop_uuid,
+                    "code": workshop.code,
+                    "name": workshop.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除车间失败 (uuid: {workshop_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": workshop_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
     
     # ==================== 产线相关方法 ====================
     

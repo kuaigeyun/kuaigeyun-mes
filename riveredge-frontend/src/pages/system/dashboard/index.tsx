@@ -549,7 +549,7 @@ export default function DashboardPage() {
           background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary}dd 100%)`,
           border: 'none',
         }}
-        bodyStyle={{ padding: '32px 24px' }}
+        styles={{ body: { padding: '32px 24px' } }}
         className="welcome-banner-card"
       >
         <Row align="middle" justify="space-between">
@@ -722,7 +722,7 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {/* 背景图标 */}
@@ -736,7 +736,7 @@ export default function DashboardPage() {
                 zIndex: 0,
               }} 
             />
-            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
                 工单总数
               </Text>
@@ -764,7 +764,7 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=in_progress')}
           >
             {/* 背景图标 */}
@@ -778,7 +778,7 @@ export default function DashboardPage() {
                 zIndex: 0,
               }} 
             />
-            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
                 进行中工单
               </Text>
@@ -806,7 +806,7 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders?status=completed')}
           >
             {/* 背景图标 */}
@@ -820,7 +820,7 @@ export default function DashboardPage() {
                 zIndex: 0,
               }} 
             />
-            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
                 工单完成率
               </Text>
@@ -847,7 +847,7 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {/* 背景图标 */}
@@ -861,7 +861,7 @@ export default function DashboardPage() {
                 zIndex: 0,
               }} 
             />
-            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
                 完工数量
               </Text>
@@ -889,7 +889,7 @@ export default function DashboardPage() {
               position: 'relative',
               overflow: 'hidden',
             }}
-            bodyStyle={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}
+            styles={{ body: { padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 } }}
             onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
           >
             {/* 背景图标 */}
@@ -903,7 +903,7 @@ export default function DashboardPage() {
                 zIndex: 0,
               }} 
             />
-            <Space direction="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%', flex: 1, position: 'relative', zIndex: 2 }}>
               <Text style={{ fontSize: 14, color: '#ffffff', fontWeight: 500 }}>
                 产能达成率
               </Text>
@@ -1020,10 +1020,12 @@ export default function DashboardPage() {
               flexDirection: 'column',
               minHeight: '400px',
             }}
-            bodyStyle={{ 
-              flex: 1,
-              overflow: 'auto',
-              maxHeight: '400px',
+            styles={{ 
+              body: {
+                flex: 1,
+                overflow: 'auto',
+                maxHeight: '400px',
+              }
             }}
           >
             {productionBroadcast && productionBroadcast.length > 0 ? (
@@ -1109,12 +1111,14 @@ export default function DashboardPage() {
               flexDirection: 'column',
               minHeight: '400px',
             }}
-            bodyStyle={{ 
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              padding: '0 24px 24px 24px',
+            styles={{ 
+              body: {
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                padding: '0 24px 24px 24px',
+              }
             }}
           >
             <Tabs
@@ -1280,9 +1284,11 @@ export default function DashboardPage() {
               flexDirection: 'column',
               minHeight: '400px',
             }}
-            bodyStyle={{ 
-              flex: 1,
-              overflow: 'auto',
+            styles={{ 
+              body: {
+                flex: 1,
+                overflow: 'auto',
+              }
             }}
           >
             {notifications && notifications.length > 0 ? (
@@ -1371,10 +1377,10 @@ export default function DashboardPage() {
                         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
                         height: '100%',
                       }}
-                      bodyStyle={{ padding: '16px' }}
+                      styles={{ body: { padding: '16px' } }}
                       onClick={() => navigate(`/apps/kuaizhizao/production-execution/work-orders?operation=${encodeURIComponent(item.process_name)}`)}
                     >
-                      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
                         {/* 工序名称 */}
                         <Text strong style={{ fontSize: 15, display: 'block' }}>
                           {item.process_name}
