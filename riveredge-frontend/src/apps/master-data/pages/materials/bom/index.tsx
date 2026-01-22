@@ -14,7 +14,6 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOu
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
-import { UniImport } from '../../../../../components/uni-import';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
 
@@ -45,8 +44,7 @@ const BOMPage: React.FC = () => {
   const [approvalComment, setApprovalComment] = useState<string>('');
   const [approvalLoading, setApprovalLoading] = useState(false);
   
-  // 批量导入Modal状态
-  const [batchImportVisible, setBatchImportVisible] = useState(false);
+  // 批量导入加载状态
   const [batchImportLoading, setBatchImportLoading] = useState(false);
   
   // 版本管理Modal状态
@@ -379,14 +377,7 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理批量导入
-   */
-  const handleBatchImport = () => {
-    setBatchImportVisible(true);
-  };
-
-  /**
-   * 处理批量导入确认
+   * 处理批量导入（UniTable导入功能）
    */
   const handleBatchImportConfirm = async (data: any[][]) => {
     try {
@@ -512,7 +503,6 @@ const BOMPage: React.FC = () => {
 
       await bomApi.batchImport(batchImportData);
       messageApi.success(`成功导入 ${importItems.length} 条BOM数据`);
-      setBatchImportVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '批量导入失败');
@@ -521,12 +511,6 @@ const BOMPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理批量导入取消
-   */
-  const handleBatchImportCancel = () => {
-    setBatchImportVisible(false);
-  };
 
   /**
    * 处理创建新版本
@@ -1182,30 +1166,36 @@ const BOMPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        toolBarRender={() => [
-          <Button
-            key="batchImport"
-            icon={<UploadOutlined />}
-            onClick={handleBatchImport}
-          >
-            批量导入
-          </Button>,
-          <Button
-            key="designer"
-            icon={<ApartmentOutlined />}
-            onClick={handleOpenDesigner}
-          >
-            图形化设计
-          </Button>,
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            新建BOM
-          </Button>,
-        ]}
+        headerActions={
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+            >
+              新建BOM
+            </Button>
+            <Button
+              icon={<ApartmentOutlined />}
+              onClick={handleOpenDesigner}
+            >
+              图形化设计
+            </Button>
+          </Space>
+        }
+        showImportButton={true}
+        onImport={handleBatchImportConfirm}
+        importHeaders={['父件编码', '子件编码', '子件数量', '子件单位', '损耗率', '是否必选', '备注']}
+        importExampleRow={['SALE-A001', 'PROD-A001', '2', '个', '0%', '是', '']}
+        importFieldMap={{
+          '父件编码': 'parentCode',
+          '子件编码': 'componentCode',
+          '子件数量': 'quantity',
+          '子件单位': 'unit',
+          '损耗率': 'wasteRate',
+          '是否必选': 'isRequired',
+          '备注': 'remark',
+        }}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -1680,19 +1670,6 @@ const BOMPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* 批量导入Modal */}
-      <UniImport
-        visible={batchImportVisible}
-        onCancel={handleBatchImportCancel}
-        onConfirm={handleBatchImportConfirm}
-        title="批量导入BOM"
-        width={1400}
-        height={700}
-        confirmText="导入"
-        cancelText="取消"
-        headers={['父件编码', '子件编码', '子件数量', '子件单位', '损耗率', '是否必选', '备注']}
-        exampleRow={['SALE-A001', 'PROD-A001', '2', '个', '0%', '是', '']}
-      />
 
       {/* 创建新版本Modal */}
       <FormModalTemplate
