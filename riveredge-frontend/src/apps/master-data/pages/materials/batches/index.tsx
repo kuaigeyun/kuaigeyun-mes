@@ -445,6 +445,7 @@ const MaterialBatchPage: React.FC = () => {
           headerTitle="物料批号管理"
           actionRef={actionRef}
           columns={columns}
+          showAdvancedSearch={true}
           request={async (params, sort, _filter, searchFormValues) => {
             const { current = 1, pageSize = 20, ...rest } = params;
             
