@@ -1169,7 +1169,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     let menuName = menu.name;
     if (isAppMenu && menuName) {
       // 应用菜单使用应用菜单翻译函数
-      menuName = translateAppMenuItemName(menuName, menu.path, t);
+      // 对于分组菜单（没有path），传递子菜单以便从子菜单路径提取应用code
+      menuName = translateAppMenuItemName(menuName, menu.path, t, menu.children);
     } else if (menuName) {
       // 系统菜单使用通用菜单翻译函数
       menuName = translateMenuName(menuName, t);
