@@ -287,6 +287,7 @@ const VariantAttributesPage: React.FC = () => {
           headerTitle="变体属性定义"
           actionRef={actionRef}
           columns={columns}
+          showAdvancedSearch={true}
           request={async (_params, _sort, _filter, searchFormValues) => {
             try {
               const data = await variantAttributeApi.list({
