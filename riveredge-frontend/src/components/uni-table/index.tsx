@@ -1189,7 +1189,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0 !important;
           width: 100% !important;
           overflow-x: auto !important;
-          overflow-y: visible !important;
+          overflow-y: hidden !important; /* 修复：隐藏wrapper的垂直滚动条 */
         }
         .uni-table-pro-table .ant-table {
           width: 100% !important;
@@ -1198,12 +1198,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-pro-table .ant-table-container {
           width: 100% !important;
           overflow-x: auto !important;
-          overflow-y: visible !important;
+          overflow-y: hidden !important; /* 修复：隐藏container的垂直滚动条，避免双重滚动条 */
         }
-        /* 当表格内容没有超出时，隐藏垂直滚动条 */
+        /* 修复：确保只有body有垂直滚动条，container和wrapper不应该有垂直滚动条 */
+        /* 注意：body的overflow-y由Ant Design的scroll.y属性控制，这里不强制设置 */
         .uni-table-pro-table .ant-table-body {
           overflow-x: auto !important;
-          overflow-y: visible !important;
+          /* overflow-y由scroll.y属性控制，不在这里强制设置 */
         }
         /* 两栏布局中的表格需要垂直滚动 */
         .two-column-layout-content .uni-table-pro-table .ant-table-body {
