@@ -8,7 +8,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { App, Tag, Space, Button, Popconfirm } from 'antd';
+import { App, Tag, Space, Button, Popconfirm, Modal } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,6 +26,7 @@ const VariantAttributesPage: React.FC = () => {
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [historyUuid, setHistoryUuid] = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   /**
    * 获取属性类型选项
@@ -229,6 +230,53 @@ const VariantAttributesPage: React.FC = () => {
   };
 
   /**
+   * 处理批量删除
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的记录');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let successCount = 0;
+          let failCount = 0;
+          const errors: string[] = [];
+
+          for (const key of selectedRowKeys) {
+            try {
+              await variantAttributeApi.delete(key.toString());
+              successCount++;
+            } catch (error: any) {
+              failCount++;
+              errors.push(error.message || '删除失败');
+            }
+          }
+
+          if (successCount > 0) {
+            messageApi.success(`成功删除 ${successCount} 条记录`);
+          }
+          if (failCount > 0) {
+            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+          }
+
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理查看历史
    */
   const handleViewHistory = (uuid: string) => {
@@ -309,16 +357,27 @@ const VariantAttributesPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建属性定义
-            </Button>,
-          ]}
+          enableRowSelection={true}
+          onRowSelectionChange={setSelectedRowKeys}
+          headerActions={
+            <Space>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleCreate}
+              >
+                新建属性定义
+              </Button>
+              <Button
+                danger
+                disabled={selectedRowKeys.length === 0}
+                icon={<DeleteOutlined />}
+                onClick={handleBatchDelete}
+              >
+                批量删除
+              </Button>
+            </Space>
+          }
           search={{
             labelWidth: 'auto',
           }}

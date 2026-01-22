@@ -452,6 +452,53 @@ const MaterialsManagementPage: React.FC = () => {
     }
   };
 
+  /**
+   * 处理批量删除物料
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的记录');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let successCount = 0;
+          let failCount = 0;
+          const errors: string[] = [];
+
+          for (const key of selectedRowKeys) {
+            try {
+              await materialApi.delete(key.toString());
+              successCount++;
+            } catch (error: any) {
+              failCount++;
+              errors.push(error.message || '删除失败');
+            }
+          }
+
+          if (successCount > 0) {
+            messageApi.success(`成功删除 ${successCount} 条记录`);
+          }
+          if (failCount > 0) {
+            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+          }
+
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
   const handleMaterialSubmit = async (values: any) => {
     try {
       setMaterialFormLoading(true);
@@ -757,14 +804,9 @@ const MaterialsManagementPage: React.FC = () => {
                   danger
                   disabled={selectedRowKeys.length === 0}
                   icon={<DeleteOutlined />}
-                  onClick={() => {
-                    if (selectedRowKeys.length > 0) {
-                      // TODO: 实现批量删除
-                      messageApi.info('批量删除功能开发中');
-                    }
-                  }}
+                  onClick={handleBatchDelete}
                 >
-                  删除
+                  批量删除
                 </Button>
               </Space>
             }
