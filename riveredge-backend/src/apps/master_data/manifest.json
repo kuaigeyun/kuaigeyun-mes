@@ -23,19 +23,19 @@
                         "sort_order": 0
                     },
                     {
-                        "title": "车间",
+                        "title": "车间管理",
                         "path": "/apps/master-data/factory/workshops",
                         "permission": "master-data:factory:workshop:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "产线",
+                        "title": "产线管理",
                         "path": "/apps/master-data/factory/production-lines",
                         "permission": "master-data:factory:production-line:view",
                         "sort_order": 2
                     },
                     {
-                        "title": "工位",
+                        "title": "工位管理",
                         "path": "/apps/master-data/factory/workstations",
                         "permission": "master-data:factory:workstation:view",
                         "sort_order": 3
@@ -106,8 +106,8 @@
                 "title": "工艺数据",
                 "icon": "workflow",
                 "sort_order": 4,
-                "children": [{
-                        "title": "不良品",
+                "children": [                    {
+                        "title": "不良品类型",
                         "path": "/apps/master-data/process/defect-types",
                         "permission": "master-data:process:defect-type:view",
                         "sort_order": 1
@@ -154,14 +154,14 @@
                 "title": "绩效数据",
                 "icon": "analytics",
                 "sort_order": 6,
-                "children": [{
-                        "title": "假期",
+                "children": [                    {
+                        "title": "假期设置",
                         "path": "/apps/master-data/performance/holidays",
                         "permission": "master-data:performance:holiday:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "技能",
+                        "title": "技能管理",
                         "path": "/apps/master-data/performance/skills",
                         "permission": "master-data:performance:skill:view",
                         "sort_order": 2
