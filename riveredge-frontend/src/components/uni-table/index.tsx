@@ -1250,6 +1250,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         .uni-table-pro-table .ant-table-body:not(:has(.ant-table-tbody > tr:last-child)):not(.two-column-layout-content .ant-table-body) {
           overflow-y: hidden !important;
         }
+        /* 当表格为空时，隐藏垂直滚动条 */
+        .uni-table-pro-table .ant-table-empty .ant-table-body,
+        .uni-table-pro-table .ant-table-placeholder .ant-table-body {
+          overflow-y: hidden !important;
+        }
+        /* 两栏布局中的空表格也隐藏滚动条 */
+        .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-body,
+        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-body {
+          overflow-y: hidden !important;
+        }
         /* 优化滚动条显示：只在内容超出时显示 */
         .uni-table-pro-table .ant-table-body {
           scrollbar-width: thin;
