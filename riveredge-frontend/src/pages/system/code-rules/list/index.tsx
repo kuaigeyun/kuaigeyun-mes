@@ -658,7 +658,33 @@ const CodeRuleListPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              getCodeRuleModules().map(module => {
+              <>
+              {/* 提示：如果页面配置数量较少，提示可能遗漏的页面 */}
+              {pageConfigs.length < 30 && (
+                <Alert
+                  message="提示"
+                  description={
+                    <div>
+                      <p style={{ margin: 0, marginBottom: '8px' }}>
+                        如果发现新增的单据页面未显示在此列表中，请检查：
+                      </p>
+                      <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
+                        <li>是否在页面代码中使用了 <code>isAutoGenerateEnabled</code> 或 <code>getPageRuleCode</code></li>
+                        <li>是否在后端配置文件 <code>code_rule_pages.py</code> 中添加了页面配置</li>
+                        <li>是否在前端配置文件 <code>codeRulePages.ts</code> 中添加了页面配置</li>
+                      </ul>
+                      <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: token.colorTextSecondary }}>
+                        💡 建议：新增单据页面时，请同步更新编码规则配置文件
+                      </p>
+                    </div>
+                  }
+                  type="info"
+                  showIcon
+                  closable
+                  style={{ marginBottom: '12px', fontSize: '12px' }}
+                />
+              )}
+              {getCodeRuleModules().map(module => {
               const modulePages = (filteredPages || []).filter(page => page?.module === module);
               if (modulePages.length === 0) return null;
 
@@ -729,7 +755,9 @@ const CodeRuleListPage: React.FC = () => {
                   })}
                 </div>
               );
-            }))}
+              })}
+              </>
+            )}
           </div>
         </div>
 

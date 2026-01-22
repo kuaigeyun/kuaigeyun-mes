@@ -8,7 +8,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Tree, message } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -130,6 +130,53 @@ const RoleListPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
     }
+  };
+
+  /**
+   * 处理批量删除角色
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的记录');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？系统角色无法删除。此操作不可恢复。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let successCount = 0;
+          let failCount = 0;
+          const errors: string[] = [];
+
+          for (const key of selectedRowKeys) {
+            try {
+              await deleteRole(key.toString());
+              successCount++;
+            } catch (error: any) {
+              failCount++;
+              errors.push(error.message || '删除失败');
+            }
+          }
+
+          if (successCount > 0) {
+            messageApi.success(`成功删除 ${successCount} 条记录`);
+          }
+          if (failCount > 0) {
+            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+          }
+
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
   };
 
   /**
@@ -396,8 +443,17 @@ const RoleListPage: React.FC = () => {
             pageSizeOptions: ['10', '20', '50', '100'],
           }}
           toolBarRender={() => [
-            <Button key="create" type="primary" onClick={handleCreate}>
+            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
               新建角色
+            </Button>,
+            <Button
+              key="batch-delete"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchDelete}
+            >
+              批量删除
             </Button>,
           ]}
           rowSelection={{

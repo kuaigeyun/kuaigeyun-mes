@@ -54,6 +54,16 @@ export interface CodeRulePageConfig {
 export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   // 主数据管理 - 工厂建模
   {
+    pageCode: 'master-data-factory-plant',
+    pageName: '厂区管理',
+    pagePath: '/apps/master-data/factory/plants',
+    codeField: 'code',
+    codeFieldLabel: '厂区编码',
+    module: '主数据管理',
+    moduleIcon: 'database',
+    autoGenerate: false,
+  },
+  {
     pageCode: 'master-data-factory-workshop',
     pageName: '车间管理',
     pagePath: '/apps/master-data/factory/workshops',

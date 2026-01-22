@@ -6,7 +6,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Card } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Card, Modal } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -102,6 +102,53 @@ const OperationsPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
     }
+  };
+
+  /**
+   * 处理批量删除工序
+   */
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择要删除的记录');
+      return;
+    }
+
+    Modal.confirm({
+      title: '确认批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？删除工序前需要检查是否有关联的工艺路线或SOP。此操作不可恢复。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          let successCount = 0;
+          let failCount = 0;
+          const errors: string[] = [];
+
+          for (const key of selectedRowKeys) {
+            try {
+              await operationApi.delete(key.toString());
+              successCount++;
+            } catch (error: any) {
+              failCount++;
+              errors.push(error.message || '删除失败');
+            }
+          }
+
+          if (successCount > 0) {
+            messageApi.success(`成功删除 ${successCount} 条记录`);
+          }
+          if (failCount > 0) {
+            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
+          }
+
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
   };
 
   /**
@@ -370,6 +417,14 @@ const OperationsPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            新建工序
+          </Button>,
+          <Button
             key="batch-qrcode"
             icon={<QrcodeOutlined />}
             disabled={selectedRowKeys.length === 0}
@@ -378,12 +433,13 @@ const OperationsPage: React.FC = () => {
             批量生成二维码
           </Button>,
           <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
+            key="batch-delete"
+            danger
+            icon={<DeleteOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={handleBatchDelete}
           >
-            新建工序
+            批量删除
           </Button>,
         ]}
         rowSelection={{
