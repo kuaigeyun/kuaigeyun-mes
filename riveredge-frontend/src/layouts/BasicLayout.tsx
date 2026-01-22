@@ -2870,10 +2870,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
-          padding-right: 16px !important;
+          padding-right: 24px !important; /* 增加右侧padding，为下拉箭头留出更多空间 */
           color: ${siderTextColor} !important;
           font-size: var(--ant-fontSize) !important;
           font-weight: normal !important;
+        }
+        
+        /* 优化菜单标题内容，防止文字与箭头重叠 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-title-content {
+          max-width: calc(100% - 32px) !important; /* 为箭头预留32px空间 */
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          flex: 1 !important;
+          min-width: 0 !important; /* 允许flex子元素收缩 */
+        }
+        
+        /* 一级菜单项的文字内容也需要优化 */
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-item .ant-menu-title-content,
+        .ant-pro-layout .ant-pro-sider-menu > .ant-menu-submenu > .ant-menu-submenu-title .ant-menu-title-content {
+          max-width: calc(100% - 32px) !important; /* 为箭头预留32px空间 */
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          flex: 1 !important;
+          min-width: 0 !important; /* 允许flex子元素收缩 */
+        }
+        
+        /* 确保下拉箭头有足够的空间 */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
+          flex-shrink: 0 !important;
+          margin-left: 8px !important; /* 增加箭头与文字的间距 */
         }
         /* 子菜单标题悬浮状态 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title:hover {
