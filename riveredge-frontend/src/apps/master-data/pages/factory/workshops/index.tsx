@@ -17,6 +17,7 @@ const safeOptions = (options: any): any[] => {
   return [];
 };
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Divider } from 'antd';
+import { downloadFile } from '../../../../kuaizhizao/services/common';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -223,6 +224,34 @@ const WorkshopsPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  /**
+   * 处理批量删除车间
+   */
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请至少选择一条记录');
+      return;
+    }
+
+    try {
+      const uuids = selectedRowKeys.map(key => String(key));
+      const result = await workshopApi.batchDelete(uuids);
+      
+      if (result.success) {
+        messageApi.success(result.message || '批量删除成功');
+      } else {
+        messageApi.warning(result.message || '部分删除失败');
+      }
+      
+      // 清空选择
+      setSelectedRowKeys([]);
+      // 刷新列表
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '批量删除失败');
     }
   };
 
@@ -443,6 +472,7 @@ const WorkshopsPage: React.FC = () => {
     }
 
     // 表头字段映射（支持中英文，支持带*号的必填项标识）
+    // 注意：不包含 isActive 和 createdAt，这些字段使用默认值
     const headerMap: Record<string, string> = {
       '车间编码': 'code',
       '*车间编码': 'code',
@@ -458,10 +488,6 @@ const WorkshopsPage: React.FC = () => {
       '*name': 'name',
       '描述': 'description',
       'description': 'description',
-      '启用状态': 'isActive',
-      '启用': 'isActive',
-      'isActive': 'isActive',
-      'is_active': 'isActive',
     };
 
     // 找到表头索引（支持去除空格和特殊字符）
@@ -522,7 +548,6 @@ const WorkshopsPage: React.FC = () => {
         const codeIndex = headerIndexMap['code'];
         const nameIndex = headerIndexMap['name'];
         const descriptionIndex = headerIndexMap['description'];
-        const isActiveIndex = headerIndexMap['isActive'];
 
         // 确保数组有足够的长度
         if (codeIndex === undefined || nameIndex === undefined) {
@@ -535,9 +560,6 @@ const WorkshopsPage: React.FC = () => {
         const description = descriptionIndex !== undefined && row[descriptionIndex] !== undefined
           ? row[descriptionIndex]
           : undefined;
-        const isActiveStr = isActiveIndex !== undefined && row[isActiveIndex] !== undefined
-          ? String(row[isActiveIndex] || '').trim().toLowerCase()
-          : 'true';
         
         // 验证必需字段（去除空白字符后检查）
         const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
@@ -552,18 +574,12 @@ const WorkshopsPage: React.FC = () => {
           return;
         }
 
-        // 转换启用状态
-        let isActive = true;
-        if (isActiveStr === 'false' || isActiveStr === '0' || isActiveStr === '否' || isActiveStr === '禁用') {
-          isActive = false;
-        }
-
-        // 构建导入数据
+        // 构建导入数据（isActive 使用默认值 true，不导入）
         const workshopData: WorkshopCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
           description: description ? String(description).trim() : undefined,
-          isActive,
+          isActive: true, // 默认启用
         };
 
         importData.push(workshopData);
@@ -652,6 +668,76 @@ const WorkshopsPage: React.FC = () => {
       }
     } catch (error: any) {
       messageApi.error(error.message || '导入失败');
+    }
+  };
+
+  /**
+   * 处理批量导出车间
+   */
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: Workshop[]
+  ) => {
+    try {
+      let exportData: Workshop[] = [];
+      let filename = '';
+
+      if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
+        // 导出选中的数据
+        if (!currentPageData) {
+          messageApi.warning('无法获取选中数据，请重试');
+          return;
+        }
+        exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
+        filename = `车间数据_选中_${new Date().toISOString().slice(0, 10)}.csv`;
+      } else if (type === 'currentPage' && currentPageData) {
+        // 导出当前页数据
+        exportData = currentPageData;
+        filename = `车间数据_当前页_${new Date().toISOString().slice(0, 10)}.csv`;
+      } else {
+        // 导出全部数据
+        const allData = await workshopApi.list({ skip: 0, limit: 10000 });
+        exportData = allData;
+        filename = `车间数据_全部_${new Date().toISOString().slice(0, 10)}.csv`;
+      }
+
+      if (exportData.length === 0) {
+        messageApi.warning('没有可导出的数据');
+        return;
+      }
+
+      // 构建 CSV 内容
+      const headers = ['车间编码', '车间名称', '所属厂区', '描述', '状态', '创建时间'];
+      const csvRows: string[] = [headers.join(',')];
+
+      exportData.forEach((item) => {
+        const plant = plants.find(p => p.id === item.plantId);
+        const row = [
+          item.code || '',
+          item.name || '',
+          plant ? plant.name : '',
+          item.description || '',
+          item.isActive ? '启用' : '禁用',
+          item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '',
+        ];
+        // 处理包含逗号、引号或换行符的字段
+        csvRows.push(row.map(cell => {
+          const cellStr = String(cell || '');
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // 添加 BOM 以支持 Excel 正确显示中文
+      
+      downloadFile(blob, filename);
+      messageApi.success(`成功导出 ${exportData.length} 条数据`);
+    } catch (error: any) {
+      messageApi.error(error.message || '导出失败');
     }
   };
 
@@ -900,9 +986,11 @@ const WorkshopsPage: React.FC = () => {
         <UniTable<Workshop>
         actionRef={actionRef}
         columns={columns}
+        viewTypes={['table']}
+        defaultViewType="table"
         onImport={handleImport}
-        importHeaders={['车间编码', '车间名称', '描述', '启用状态']}
-        importExampleRow={['WS001', '装配车间', '主要负责产品装配作业', '启用']}
+        importHeaders={['*车间编码', '*车间名称', '描述']}
+        importExampleRow={['WS001', '装配车间', '主要负责产品装配作业']}
         importFieldMap={{
           '车间编码': 'code',
           '*车间编码': 'code',
@@ -918,11 +1006,13 @@ const WorkshopsPage: React.FC = () => {
           '*name': 'name',
           '描述': 'description',
           'description': 'description',
-          '启用状态': 'isActive',
-          '启用': 'isActive',
-          'isActive': 'isActive',
-          'is_active': 'isActive',
         }}
+        importFieldRules={{
+          code: { required: true },
+          name: { required: true },
+        }}
+        showExportButton={true}
+        onExport={handleExport}
         request={async (params, _sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
@@ -1005,6 +1095,24 @@ const WorkshopsPage: React.FC = () => {
           >
             新建车间
           </Button>,
+          <Popconfirm
+            key="batchDelete"
+            title="确定要批量删除选中的车间吗？"
+            description={`将删除 ${selectedRowKeys.length} 个车间，删除后无法恢复，请谨慎操作。`}
+            onConfirm={handleBatchDelete}
+            okText="确定"
+            cancelText="取消"
+            disabled={selectedRowKeys.length === 0}
+          >
+            <Button
+              type="default"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量删除
+            </Button>
+          </Popconfirm>,
         ]}
         rowSelection={{
           selectedRowKeys,

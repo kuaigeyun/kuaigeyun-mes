@@ -168,9 +168,11 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           flexDirection: 'column',
           minHeight: '400px',
         }}
-        bodyStyle={{
-          flex: 1,
-          overflow: 'auto',
+        styles={{
+          body: {
+            flex: 1,
+            overflow: 'auto',
+          },
         }}
       >
         <Row gutter={[12, 12]}>

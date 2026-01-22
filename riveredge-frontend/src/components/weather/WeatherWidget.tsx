@@ -111,7 +111,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
       </div>
       
       {/* 天气信息 */}
-      <Space direction="vertical" size={0}>
+      <Space orientation="vertical" size={0}>
         <Space size="small">
           <Text 
             style={{ 

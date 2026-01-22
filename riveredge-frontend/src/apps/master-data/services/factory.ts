@@ -4,7 +4,7 @@
  * 提供厂区、车间、产线、工位的 API 调用方法
  */
 
-import { api } from '../../../services/api';
+import { api, apiRequest } from '../../../services/api';
 import type {
   Plant,
   PlantCreate,
@@ -62,6 +62,25 @@ export const plantApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/factory/plants/${uuid}`);
   },
+
+  /**
+   * 批量删除厂区
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/factory/plants/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
+  },
 };
 
 /**
@@ -101,6 +120,25 @@ export const workshopApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/factory/workshops/${uuid}`);
+  },
+
+  /**
+   * 批量删除车间
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/factory/workshops/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
   },
 };
 

@@ -156,15 +156,15 @@ export async function apiRequest<T = any>(
   // 1. 获取 Token（公开接口不需要）
   const token = !isPublicEndpoint ? localStorage.getItem('token') : null;
   
-  // 调试日志：检查 Token
-  if (!isPublicEndpoint) {
-    console.log('🔍 apiRequest 调试:', {
-      url,
-      hasToken: !!token,
-      tokenLength: token?.length || 0,
-      tokenPreview: token ? `${token.substring(0, 20)}...` : 'null',
-    });
-  }
+  // 调试日志：检查 Token（已禁用以减少控制台输出）
+  // if (!isPublicEndpoint) {
+  //   console.log('🔍 apiRequest 调试:', {
+  //     url,
+  //     hasToken: !!token,
+  //     tokenLength: token?.length || 0,
+  //     tokenPreview: token ? `${token.substring(0, 20)}...` : 'null',
+  //   });
+  // }
   
   // 2. 获取 Tenant ID 和用户信息（公开接口不需要）
   let tenantId: string | null = null;
@@ -210,7 +210,7 @@ export async function apiRequest<T = any>(
   // Authorization（公开接口不需要）
   if (token && !isPublicEndpoint) {
     headers['Authorization'] = `Bearer ${token}`;
-    console.log('✅ apiRequest: 添加 Authorization 头');
+    // console.log('✅ apiRequest: 添加 Authorization 头');
   } else if (!isPublicEndpoint) {
     console.error('❌ apiRequest: Token 缺失，无法添加 Authorization 头', {
       url,
@@ -222,7 +222,7 @@ export async function apiRequest<T = any>(
   // X-Tenant-ID（所有非公开接口都需要添加，因为后端所有需要租户上下文的API都需要这个请求头）
   if (!isPublicEndpoint && tenantId) {
     headers['X-Tenant-ID'] = tenantId;
-    console.log('✅ apiRequest: 添加 X-Tenant-ID 头:', tenantId);
+    // console.log('✅ apiRequest: 添加 X-Tenant-ID 头:', tenantId);
   } else if (!isPublicEndpoint && !tenantId) {
     console.warn('⚠️ apiRequest: 租户ID缺失，可能影响请求', {
       url,

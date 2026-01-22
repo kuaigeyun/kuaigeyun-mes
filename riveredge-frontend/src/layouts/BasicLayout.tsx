@@ -1769,13 +1769,36 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 获取当前页面的标题
     const pageTitle = findMenuTitleWithTranslation(location.pathname, menuConfig, t);
     
+    // 获取站点名称（优先使用 siteSetting，如果未加载则尝试从缓存读取，最后使用默认值）
+    let currentSiteName = 'RiverEdge SaaS';
+    
+    if (siteSetting?.settings?.site_name?.trim()) {
+      // 如果 siteSetting 已加载且有站点名称，使用它并缓存
+      currentSiteName = siteSetting.settings.site_name.trim();
+      try {
+        localStorage.setItem('cachedSiteName', currentSiteName);
+      } catch (error) {
+        // 忽略存储错误
+      }
+    } else {
+      // 如果 siteSetting 未加载或没有站点名称，尝试从缓存读取
+      try {
+        const cachedSiteName = localStorage.getItem('cachedSiteName');
+        if (cachedSiteName) {
+          currentSiteName = cachedSiteName;
+        }
+      } catch (error) {
+        // 忽略读取错误
+      }
+    }
+    
     // 设置文档标题
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
-      document.title = `${pageTitle} - RiverEdge SaaS`;
+      document.title = `${pageTitle} - ${currentSiteName}`;
     } else {
-      document.title = 'RiverEdge SaaS - 多组织管理框架';
+      document.title = `${currentSiteName} - 多组织管理框架`;
     }
-  }, [location.pathname, menuConfig, t]);
+  }, [location.pathname, menuConfig, t, siteSetting]);
 
   /**
    * 检测面包屑是否换行，如果换行则隐藏

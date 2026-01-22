@@ -1,7 +1,7 @@
 """
 工厂数据 API 模块
 
-提供工厂数据的 RESTful API 接口（车间、产线、工位），支持多组织隔离。
+提供工厂数据的 RESTful API 接口（厂区、车间、产线、工位），支持多组织隔离。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,14 +12,163 @@ from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from apps.master_data.services.factory_service import FactoryService
 from apps.master_data.schemas.factory_schemas import (
+    PlantCreate, PlantUpdate, PlantResponse,
     WorkshopCreate, WorkshopUpdate, WorkshopResponse,
     ProductionLineCreate, ProductionLineUpdate, ProductionLineResponse,
     WorkstationCreate, WorkstationUpdate, WorkstationResponse,
-    WorkshopTreeResponse
+    WorkshopTreeResponse, BatchDeletePlantsRequest, BatchDeleteWorkshopsRequest
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/factory", tags=["Factory"])
+
+
+# ==================== 厂区相关接口 ====================
+
+@router.post("/plants", response_model=PlantResponse, response_model_by_alias=True, summary="创建厂区")
+async def create_plant(
+    data: PlantCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    创建厂区
+    
+    - **code**: 厂区编码（必填，组织内唯一）
+    - **name**: 厂区名称（必填）
+    - **description**: 描述（可选）
+    - **address**: 地址（可选）
+    - **is_active**: 是否启用（默认：true）
+    """
+    try:
+        return await FactoryService.create_plant(tenant_id, data)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/plants", response_model=List[PlantResponse], response_model_by_alias=True, summary="获取厂区列表")
+async def list_plants(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="搜索关键词（厂区编码或名称）"),
+    code: Optional[str] = Query(None, description="厂区编码（精确匹配）"),
+    name: Optional[str] = Query(None, description="厂区名称（模糊匹配）")
+):
+    """
+    获取厂区列表
+
+    - **skip**: 跳过数量（默认：0）
+    - **limit**: 限制数量（默认：100，最大：1000）
+    - **is_active**: 是否启用（可选）
+    - **keyword**: 搜索关键词（厂区编码或名称）
+    - **code**: 厂区编码（精确匹配）
+    - **name**: 厂区名称（模糊匹配）
+    """
+    try:
+        return await FactoryService.list_plants(tenant_id, skip, limit, is_active, keyword, code, name)
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"获取厂区列表失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取厂区列表失败: {str(e)}"
+        )
+
+
+@router.get("/plants/{plant_uuid}", response_model=PlantResponse, response_model_by_alias=True, summary="获取厂区详情")
+async def get_plant(
+    plant_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    根据UUID获取厂区详情
+    
+    - **plant_uuid**: 厂区UUID
+    """
+    try:
+        return await FactoryService.get_plant_by_uuid(tenant_id, plant_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put("/plants/{plant_uuid}", response_model=PlantResponse, response_model_by_alias=True, summary="更新厂区")
+async def update_plant(
+    plant_uuid: str,
+    data: PlantUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    更新厂区
+    
+    - **plant_uuid**: 厂区UUID
+    - **code**: 厂区编码（可选）
+    - **name**: 厂区名称（可选）
+    - **description**: 描述（可选）
+    - **address**: 地址（可选）
+    - **is_active**: 是否启用（可选）
+    """
+    try:
+        return await FactoryService.update_plant(tenant_id, plant_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/plants/{plant_uuid}", summary="删除厂区")
+async def delete_plant(
+    plant_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    删除厂区（软删除）
+    
+    - **plant_uuid**: 厂区UUID
+    
+    注意：删除厂区前需要检查是否有关联的车间
+    """
+    try:
+        await FactoryService.delete_plant(tenant_id, plant_uuid)
+        return {"message": "厂区删除成功"}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/plants/batch-delete", summary="批量删除厂区")
+async def batch_delete_plants(
+    request: BatchDeletePlantsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除厂区（软删除）
+    
+    - **uuids**: 要删除的厂区UUID列表（最多100条）
+    
+    注意：只能删除没有关联车间的厂区
+    """
+    try:
+        result = await FactoryService.batch_delete_plants(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个厂区，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除厂区失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除厂区失败: {str(e)}"
+        )
 
 
 # ==================== 车间相关接口 ====================
@@ -137,6 +286,35 @@ async def delete_workshop(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/workshops/batch-delete", summary="批量删除车间")
+async def batch_delete_workshops(
+    request: BatchDeleteWorkshopsRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)]
+):
+    """
+    批量删除车间（软删除）
+    
+    - **uuids**: 要删除的车间UUID列表（最多100条）
+    
+    注意：只能删除没有关联产线的车间
+    """
+    try:
+        result = await FactoryService.batch_delete_workshops(tenant_id, request.uuids)
+        return {
+            "success": result["failed_count"] == 0,
+            "message": f"成功删除 {result['success_count']} 个车间，失败 {result['failed_count']} 个",
+            "data": result
+        }
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"批量删除车间失败: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批量删除车间失败: {str(e)}"
+        )
 
 
 # ==================== 产线相关接口 ====================
