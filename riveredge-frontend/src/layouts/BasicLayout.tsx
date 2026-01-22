@@ -2870,7 +2870,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 注意：只针对侧边栏内的子菜单标题，不影响弹出菜单 */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-submenu-title {
           /* 子菜单标题的独立样式，与普通菜单项区分开 */
-          padding-right: 24px !important; /* 增加右侧padding，为下拉箭头留出更多空间 */
+          padding-right: 4px !important; /* 增加右侧padding，为下拉箭头留出更多空间 */
           color: ${siderTextColor} !important;
           font-size: var(--ant-fontSize) !important;
           font-weight: normal !important;
