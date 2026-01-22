@@ -94,23 +94,54 @@ const OperationLogsPage: React.FC = () => {
   };
 
   /**
-   * 详情列定义
+   * 格式化操作模块名称（使其更友好）
+   */
+  const formatModuleName = (module: string | undefined): string => {
+    if (!module) return '-';
+    // 将技术性路径转换为友好名称
+    const moduleMap: Record<string, string> = {
+      'apps/master-data': '基础数据',
+      'apps/master-data/factory': '工厂管理',
+      'apps/master-data/warehouse': '仓库管理',
+      'apps/master-data/material': '物料管理',
+      'apps/master-data/product': '产品管理',
+      'apps/master-data/customer': '客户管理',
+      'apps/master-data/supplier': '供应商管理',
+      'apps/master-data/process': '工艺管理',
+      'apps/master-data/performance': '绩效管理',
+      'core': '系统管理',
+      'infra': '平台管理',
+    };
+    return moduleMap[module] || module;
+  };
+
+  /**
+   * 格式化操作内容（使其更友好）
+   */
+  const formatOperationContent = (content: string | undefined, objectType: string | undefined): string => {
+    if (content) return content;
+    if (!objectType) return '-';
+    // 如果没有操作内容，根据对象类型生成友好描述
+    return `${objectType}相关操作`;
+  };
+
+  /**
+   * 获取用户显示名称
+   */
+  const getUserDisplayName = (record: OperationLog): string => {
+    if (record.user_full_name) return record.user_full_name;
+    if (record.username) return record.username;
+    return `用户${record.user_id}`;
+  };
+
+  /**
+   * 详情列定义（优化：突出有用信息，技术性字段放在后面）
    */
   const detailColumns = [
     {
-      title: 'UUID',
-      dataIndex: 'uuid',
-      render: (value: string) => value,
-    },
-    {
-      title: '组织ID',
-      dataIndex: 'tenant_id',
-      render: (value: number) => value || '-',
-    },
-    {
-      title: '用户ID',
-      dataIndex: 'user_id',
-      render: (value: number) => value || '-',
+      title: '操作时间',
+      dataIndex: 'created_at',
+      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
     },
     {
       title: '操作类型',
@@ -120,7 +151,7 @@ const OperationLogsPage: React.FC = () => {
     {
       title: '操作模块',
       dataIndex: 'operation_module',
-      render: (value: string) => value || '-',
+      render: (value: string) => formatModuleName(value),
     },
     {
       title: '操作对象类型',
@@ -128,39 +159,24 @@ const OperationLogsPage: React.FC = () => {
       render: (value: string) => value || '-',
     },
     {
-      title: '操作对象ID',
-      dataIndex: 'operation_object_id',
-      render: (value: number) => value || '-',
-    },
-    {
-      title: '操作对象UUID',
-      dataIndex: 'operation_object_uuid',
-      render: (value: string) => value || '-',
-    },
-    {
       title: '操作内容',
       dataIndex: 'operation_content',
       span: 2,
-      render: (value: string) => (
+      render: (value: string, record: OperationLog) => (
         <div style={{ wordBreak: 'break-word' }}>
-          {value || '-'}
+          {formatOperationContent(value, record.operation_object_type)}
         </div>
       ),
+    },
+    {
+      title: '操作人',
+      dataIndex: 'user_id',
+      render: (_: any, record: OperationLog) => getUserDisplayName(record),
     },
     {
       title: 'IP地址',
       dataIndex: 'ip_address',
       render: (value: string) => value || '-',
-    },
-    {
-      title: '用户代理',
-      dataIndex: 'user_agent',
-      span: 2,
-      render: (value: string) => (
-        <div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto' }}>
-          {value || '-'}
-        </div>
-      ),
     },
     {
       title: '请求方法',
@@ -172,15 +188,20 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'request_path',
       span: 2,
       render: (value: string) => (
-        <div style={{ wordBreak: 'break-word' }}>
+        <div style={{ wordBreak: 'break-word', fontFamily: 'monospace', fontSize: '12px' }}>
           {value || '-'}
         </div>
       ),
     },
     {
-      title: '操作时间',
-      dataIndex: 'created_at',
-      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
+      title: '用户代理',
+      dataIndex: 'user_agent',
+      span: 2,
+      render: (value: string) => (
+        <div style={{ wordBreak: 'break-word', maxHeight: '100px', overflow: 'auto', fontSize: '12px', color: '#666' }}>
+          {value || '-'}
+        </div>
+      ),
     },
   ];
 
@@ -223,7 +244,7 @@ const OperationLogsPage: React.FC = () => {
             .slice(0, 5)
             .map(([module, count]) => (
               <Tag key={module}>
-                {module}: {count}
+                {formatModuleName(module)}: {count}
               </Tag>
             ))}
           {Object.keys(stats.by_module).length > 5 && (
@@ -235,9 +256,19 @@ const OperationLogsPage: React.FC = () => {
   ] : [];
 
   /**
-   * 表格列定义
+   * 表格列定义（优化：突出对用户有用的信息）
    */
   const columns: ProColumns<OperationLog>[] = [
+    {
+      title: '操作时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      valueType: 'dateTimeRange',
+      sorter: true,
+      render: (_: any, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
+      width: 180,
+      fixed: 'left',
+    },
     {
       title: '操作类型',
       dataIndex: 'operation_type',
@@ -259,14 +290,16 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'operation_module',
       key: 'operation_module',
       ellipsis: true,
-      width: 150,
+      width: 120,
+      render: (value: string) => formatModuleName(value),
     },
     {
-      title: '操作对象类型',
+      title: '操作对象',
       dataIndex: 'operation_object_type',
       key: 'operation_object_type',
       ellipsis: true,
       width: 120,
+      render: (value: string) => value || '-',
     },
     {
       title: '操作内容',
@@ -274,15 +307,17 @@ const OperationLogsPage: React.FC = () => {
       key: 'operation_content',
       ellipsis: true,
       search: false,
-      width: 200,
-      render: (value: string) => value || '-',
+      width: 250,
+      render: (value: string, record: OperationLog) => 
+        formatOperationContent(value, record.operation_object_type),
     },
     {
-      title: '用户ID',
+      title: '操作人',
       dataIndex: 'user_id',
       key: 'user_id',
       valueType: 'digit',
-      width: 100,
+      width: 120,
+      render: (_: any, record: OperationLog) => getUserDisplayName(record),
     },
     {
       title: 'IP地址',
@@ -291,6 +326,7 @@ const OperationLogsPage: React.FC = () => {
       ellipsis: true,
       search: false,
       width: 120,
+      hideInTable: true, // 默认隐藏，详情中可见
     },
     {
       title: '请求方法',
@@ -305,6 +341,7 @@ const OperationLogsPage: React.FC = () => {
         DELETE: { text: 'DELETE' },
       },
       width: 100,
+      hideInTable: true, // 默认隐藏，详情中可见
     },
     {
       title: '请求路径',
@@ -313,15 +350,7 @@ const OperationLogsPage: React.FC = () => {
       ellipsis: true,
       search: false,
       width: 200,
-    },
-    {
-      title: '操作时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      valueType: 'dateTimeRange',
-      sorter: true,
-      render: (_: any, record: OperationLog) => dayjs(record.created_at).format('YYYY-MM-DD HH:mm:ss'),
-      width: 180,
+      hideInTable: true, // 默认隐藏，详情中可见
     },
   ];
 

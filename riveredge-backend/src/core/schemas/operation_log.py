@@ -15,6 +15,9 @@ class OperationLogResponse(BaseModel):
     uuid: UUID = Field(..., description="操作日志UUID")
     tenant_id: int = Field(..., description="组织ID")
     user_id: int = Field(..., description="操作用户ID")
+    # 用户信息（可选，用于前端友好显示）
+    username: Optional[str] = Field(None, description="操作用户名")
+    user_full_name: Optional[str] = Field(None, description="操作用户全名")
     operation_type: str = Field(..., description="操作类型")
     operation_module: Optional[str] = Field(None, description="操作模块")
     operation_object_type: Optional[str] = Field(None, description="操作对象类型")
