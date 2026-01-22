@@ -10,6 +10,8 @@ export interface OperationLog {
   uuid: string;
   tenant_id: number;
   user_id: number;
+  username?: string; // 操作用户名
+  user_full_name?: string; // 操作用户全名
   operation_type: string;
   operation_module?: string;
   operation_object_type?: string;

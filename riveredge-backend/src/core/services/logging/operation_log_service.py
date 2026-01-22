@@ -136,8 +136,22 @@ class OperationLogService:
         offset = (page - 1) * page_size
         logs = await OperationLog.filter(query).order_by("-created_at").offset(offset).limit(page_size)
         
-        # 转换为响应格式
-        items = [OperationLogResponse.model_validate(log) for log in logs]
+        # 批量查询用户信息（优化性能）
+        from infra.models.user import User
+        user_ids = list(set([log.user_id for log in logs]))
+        users = await User.filter(id__in=user_ids).all()
+        user_map = {user.id: user for user in users}
+        
+        # 转换为响应格式，并添加用户信息
+        items = []
+        for log in logs:
+            log_dict = OperationLogResponse.model_validate(log).model_dump()
+            # 添加用户信息
+            user = user_map.get(log.user_id)
+            if user:
+                log_dict['username'] = user.username
+                log_dict['user_full_name'] = user.full_name
+            items.append(OperationLogResponse(**log_dict))
         
         return OperationLogListResponse(
             items=items,
@@ -170,7 +184,17 @@ class OperationLogService:
         if not log:
             raise NotFoundError("操作日志", uuid)
         
-        return OperationLogResponse.model_validate(log)
+        # 查询用户信息
+        from infra.models.user import User
+        user = await User.get_or_none(id=log.user_id)
+        
+        # 转换为响应格式，并添加用户信息
+        log_dict = OperationLogResponse.model_validate(log).model_dump()
+        if user:
+            log_dict['username'] = user.username
+            log_dict['user_full_name'] = user.full_name
+        
+        return OperationLogResponse(**log_dict)
     
     @staticmethod
     async def get_operation_log_stats(
