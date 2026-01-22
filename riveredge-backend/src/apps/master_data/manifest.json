@@ -47,19 +47,19 @@
                 "icon": "archive",
                 "sort_order": 2,
                 "children": [{
-                        "title": "仓库",
+                        "title": "仓库管理",
                         "path": "/apps/master-data/warehouse/warehouses",
                         "permission": "master-data:warehouse:warehouse:view",
                         "sort_order": 1
                     },
                     {
-                        "title": "库区",
+                        "title": "库区管理",
                         "path": "/apps/master-data/warehouse/storage-areas",
                         "permission": "master-data:warehouse:storage-area:view",
                         "sort_order": 2
                     },
                     {
-                        "title": "库位",
+                        "title": "库位管理",
                         "path": "/apps/master-data/warehouse/storage-locations",
                         "permission": "master-data:warehouse:storage-location:view",
                         "sort_order": 3
@@ -71,40 +71,34 @@
                 "icon": "package",
                 "sort_order": 3,
                 "children": [{
-                        "title": "物料管理",
-                        "path": "/apps/master-data/materials",
-                        "permission": "master-data:material:view",
-                        "sort_order": 1
-                    },
-                    {
-                        "title": "BOM",
-                        "path": "/apps/master-data/materials/bom",
-                        "permission": "master-data:material:bom:view",
-                        "sort_order": 2
-                    },
-                    {
-                        "title": "编码映射",
-                        "path": "/apps/master-data/materials/code-mapping",
-                        "permission": "master-data:material:code-mapping:view",
-                        "sort_order": 3
-                    },
-                    {
                         "title": "变体属性",
                         "path": "/apps/master-data/materials/variant-attributes",
                         "permission": "master-data:material:variant-attribute:view",
-                        "sort_order": 4
+                        "sort_order": 1
+                    },
+                    {
+                        "title": "物料管理",
+                        "path": "/apps/master-data/materials",
+                        "permission": "master-data:material:view",
+                        "sort_order": 2
+                    },
+                    {
+                        "title": "物料清单BOM",
+                        "path": "/apps/master-data/materials/bom",
+                        "permission": "master-data:material:bom:view",
+                        "sort_order": 3
                     },
                     {
                         "title": "批号管理",
                         "path": "/apps/master-data/materials/batches",
                         "permission": "master-data:material:batch:view",
-                        "sort_order": 5
+                        "sort_order": 4
                     },
                     {
                         "title": "序列号管理",
                         "path": "/apps/master-data/materials/serials",
                         "permission": "master-data:material:serial:view",
-                        "sort_order": 6
+                        "sort_order": 5
                     }
                 ]
             },

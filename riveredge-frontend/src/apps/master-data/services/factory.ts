@@ -180,6 +180,25 @@ export const productionLineApi = {
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/factory/production-lines/${uuid}`);
   },
+
+  /**
+   * 批量删除产线
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/factory/production-lines/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
+  },
 };
 
 /**
@@ -219,6 +238,25 @@ export const workstationApi = {
    */
   delete: async (uuid: string): Promise<void> => {
     return api.delete(`/apps/master-data/factory/workstations/${uuid}`);
+  },
+
+  /**
+   * 批量删除工位
+   */
+  batchDelete: async (uuids: string[]): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      success_count: number;
+      failed_count: number;
+      success_records: Array<{ uuid: string; code?: string; name?: string }>;
+      failed_records: Array<{ uuid: string; code?: string; name?: string; reason: string }>;
+    };
+  }> => {
+    return apiRequest('/apps/master-data/factory/workstations/batch-delete', {
+      method: 'DELETE',
+      data: { uuids },
+    });
   },
 };
 

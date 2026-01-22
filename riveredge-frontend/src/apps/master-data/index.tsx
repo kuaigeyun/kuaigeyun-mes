@@ -20,7 +20,6 @@ import StorageLocationsPage from './pages/warehouse/storage-locations';
 import MaterialsManagementPage from './pages/materials/management';
 import BOMPage from './pages/materials/bom';
 import BOMDesignerPage from './pages/materials/bom/designer';
-import MaterialCodeMappingPage from './pages/materials/code-mapping';
 import VariantAttributesPage from './pages/materials/variant-attributes';
 import MaterialBatchesPage from './pages/materials/batches';
 import MaterialSerialsPage from './pages/materials/serials';
@@ -59,7 +58,6 @@ const MasterDataApp: React.FC = () => {
       <Route path="materials" element={<MaterialsManagementPage />} />
       <Route path="materials/bom" element={<BOMPage />} />
       <Route path="materials/bom/designer" element={<BOMDesignerPage />} />
-      <Route path="materials/code-mapping" element={<MaterialCodeMappingPage />} />
       <Route path="materials/variant-attributes" element={<VariantAttributesPage />} />
       <Route path="materials/batches" element={<MaterialBatchesPage />} />
       <Route path="materials/serials" element={<MaterialSerialsPage />} />

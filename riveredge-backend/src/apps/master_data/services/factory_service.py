@@ -858,6 +858,88 @@ class FactoryService:
         production_line.deleted_at = timezone.now()
         await production_line.save()
     
+    @staticmethod
+    async def batch_delete_production_lines(
+        tenant_id: int,
+        production_line_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除产线（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            production_line_uuids: 产线UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+                {
+                    "success_count": int,
+                    "failed_count": int,
+                    "success_records": List[dict],
+                    "failed_records": List[dict]
+                }
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for production_line_uuid in production_line_uuids:
+            try:
+                # 查找产线
+                production_line = await ProductionLine.filter(
+                    tenant_id=tenant_id,
+                    uuid=production_line_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not production_line:
+                    failed_records.append({
+                        "uuid": production_line_uuid,
+                        "reason": f"产线 {production_line_uuid} 不存在"
+                    })
+                    continue
+                
+                # 检查是否有关联的工位
+                workstations_count = await Workstation.filter(
+                    tenant_id=tenant_id,
+                    production_line_id=production_line.id,
+                    deleted_at__isnull=True
+                ).count()
+                
+                if workstations_count > 0:
+                    failed_records.append({
+                        "uuid": production_line_uuid,
+                        "code": production_line.code,
+                        "name": production_line.name,
+                        "reason": f"产线下存在 {workstations_count} 个工位，无法删除"
+                    })
+                    continue
+                
+                # 软删除
+                production_line.deleted_at = timezone.now()
+                await production_line.save()
+                
+                success_records.append({
+                    "uuid": production_line_uuid,
+                    "code": production_line.code,
+                    "name": production_line.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除产线失败 (uuid: {production_line_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": production_line_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
+    
     # ==================== 工位相关方法 ====================
     
     @staticmethod
@@ -1060,6 +1142,72 @@ class FactoryService:
         from tortoise import timezone
         workstation.deleted_at = timezone.now()
         await workstation.save()
+    
+    @staticmethod
+    async def batch_delete_workstations(
+        tenant_id: int,
+        workstation_uuids: List[str]
+    ) -> dict:
+        """
+        批量删除工位（软删除）
+        
+        Args:
+            tenant_id: 租户ID
+            workstation_uuids: 工位UUID列表
+            
+        Returns:
+            dict: 包含成功和失败记录的字典
+                {
+                    "success_count": int,
+                    "failed_count": int,
+                    "success_records": List[dict],
+                    "failed_records": List[dict]
+                }
+        """
+        from tortoise import timezone
+        from loguru import logger
+        
+        success_records = []
+        failed_records = []
+        
+        for workstation_uuid in workstation_uuids:
+            try:
+                # 查找工位
+                workstation = await Workstation.filter(
+                    tenant_id=tenant_id,
+                    uuid=workstation_uuid,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if not workstation:
+                    failed_records.append({
+                        "uuid": workstation_uuid,
+                        "reason": f"工位 {workstation_uuid} 不存在"
+                    })
+                    continue
+                
+                # 软删除（工位没有下级关联，可以直接删除）
+                workstation.deleted_at = timezone.now()
+                await workstation.save()
+                
+                success_records.append({
+                    "uuid": workstation_uuid,
+                    "code": workstation.code,
+                    "name": workstation.name
+                })
+            except Exception as e:
+                logger.exception(f"批量删除工位失败 (uuid: {workstation_uuid}): {str(e)}")
+                failed_records.append({
+                    "uuid": workstation_uuid,
+                    "reason": f"删除失败: {str(e)}"
+                })
+        
+        return {
+            "success_count": len(success_records),
+            "failed_count": len(failed_records),
+            "success_records": success_records,
+            "failed_records": failed_records
+        }
     
     # ==================== 级联查询相关方法 ====================
     

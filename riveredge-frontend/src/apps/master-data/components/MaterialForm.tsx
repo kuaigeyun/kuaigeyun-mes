@@ -12,10 +12,10 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency } from '@ant-design/pro-components';
-import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit } from '../types/material';
+import type { Material, MaterialCreate, MaterialUpdate, DepartmentCodeMapping, CustomerCodeMapping, SupplierCodeMapping, MaterialDefaults, MaterialUnits, MaterialUnit, MaterialCodeMapping } from '../types/material';
 import type { Customer } from '../types/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
@@ -23,7 +23,7 @@ import { customerApi } from '../services/supply-chain';
 import { supplierApi } from '../services/supply-chain';
 import { warehouseApi } from '../services/warehouse';
 import { processRouteApi } from '../services/process';
-import { materialSourceApi } from '../services/material';
+import { materialSourceApi, materialCodeMappingApi } from '../services/material';
 import type { Warehouse } from '../types/warehouse';
 import type { ProcessRoute } from '../types/process';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
@@ -89,6 +89,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [departmentCodes, setDepartmentCodes] = useState<DepartmentCodeMapping[]>([]);
   const [customerCodes, setCustomerCodes] = useState<CustomerCodeMapping[]>([]);
   const [supplierCodes, setSupplierCodes] = useState<SupplierCodeMapping[]>([]);
+  const [externalSystemCodes, setExternalSystemCodes] = useState<MaterialCodeMapping[]>([]);
+  const [externalSystemCodesLoading, setExternalSystemCodesLoading] = useState(false);
 
 
   /**
@@ -148,6 +150,21 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       console.error('加载工艺路线列表失败:', error);
     } finally {
       setProcessRoutesLoading(false);
+    }
+  };
+
+  /**
+   * 加载外部系统编码映射
+   */
+  const loadExternalSystemCodes = async (materialUuid: string) => {
+    try {
+      setExternalSystemCodesLoading(true);
+      const result = await materialCodeMappingApi.list({ materialUuid, page: 1, pageSize: 1000 });
+      setExternalSystemCodes(result.items || []);
+    } catch (error: any) {
+      console.error('加载外部系统编码映射失败:', error);
+    } finally {
+      setExternalSystemCodesLoading(false);
     }
   };
 
@@ -283,6 +300,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           setDepartmentCodes([]);
           setCustomerCodes([]);
           setSupplierCodes([]);
+        }
+        
+        // 加载外部系统编码映射
+        if (material.uuid) {
+          loadExternalSystemCodes(material.uuid);
         }
         
         // 加载默认值（兼容处理：后端可能返回 snake_case 或 camelCase）
@@ -518,7 +540,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         }
       });
 
-      await onFinish(submitData);
+      const result = await onFinish(submitData);
+      
+      // 如果是新建模式，需要等待物料创建完成后再保存外部系统编码映射
+      // 如果是编辑模式，外部系统编码映射已经在 CodeMappingTab 中单独管理
+      // 这里不需要额外处理，因为外部系统编码映射是独立实体，有自己的API
+      
+      return result;
     } catch (error: any) {
       messageApi.error(error.message || '提交失败');
       throw error;
@@ -687,6 +715,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   departmentCodes={departmentCodes}
                   customerCodes={customerCodes}
                   supplierCodes={supplierCodes}
+                  externalSystemCodes={externalSystemCodes}
+                  externalSystemCodesLoading={externalSystemCodesLoading}
+                  materialUuid={isEdit && material ? material.uuid : undefined}
+                  onExternalSystemCodesChange={setExternalSystemCodes}
+                  onReloadExternalSystemCodes={material?.uuid ? () => loadExternalSystemCodes(material.uuid) : undefined}
                   customers={customers}
                   suppliers={suppliers}
                   customersLoading={customersLoading}
@@ -1650,6 +1683,9 @@ interface CodeMappingTabProps {
   departmentCodes: DepartmentCodeMapping[];
   customerCodes: CustomerCodeMapping[];
   supplierCodes: SupplierCodeMapping[];
+  externalSystemCodes: MaterialCodeMapping[];
+  externalSystemCodesLoading: boolean;
+  materialUuid?: string;
   customers: Customer[];
   suppliers: Supplier[];
   customersLoading: boolean;
@@ -1657,12 +1693,17 @@ interface CodeMappingTabProps {
   onDepartmentCodesChange: (codes: DepartmentCodeMapping[]) => void;
   onCustomerCodesChange: (codes: CustomerCodeMapping[]) => void;
   onSupplierCodesChange: (codes: SupplierCodeMapping[]) => void;
+  onExternalSystemCodesChange: (codes: MaterialCodeMapping[]) => void;
+  onReloadExternalSystemCodes?: () => void;
 }
 
 const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   departmentCodes,
   customerCodes,
   supplierCodes,
+  externalSystemCodes,
+  externalSystemCodesLoading,
+  materialUuid,
   customers,
   suppliers,
   customersLoading,
@@ -1670,15 +1711,21 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   onDepartmentCodesChange,
   onCustomerCodesChange,
   onSupplierCodesChange,
+  onExternalSystemCodesChange,
+  onReloadExternalSystemCodes,
 }) => {
+  const { message: messageApi } = App.useApp();
   const [deptForm] = Form.useForm();
   const [customerForm] = Form.useForm();
   const [supplierForm] = Form.useForm();
+  const [externalSystemForm] = Form.useForm();
 
   // Modal 状态
   const [deptModalVisible, setDeptModalVisible] = useState(false);
   const [customerModalVisible, setCustomerModalVisible] = useState(false);
   const [supplierModalVisible, setSupplierModalVisible] = useState(false);
+  const [externalSystemModalVisible, setExternalSystemModalVisible] = useState(false);
+  const [editingExternalSystemCode, setEditingExternalSystemCode] = useState<MaterialCodeMapping | null>(null);
 
   // 部门编码类型选项
   const departmentCodeTypes = [
@@ -1909,6 +1956,102 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
         />
       </div>
 
+      {/* 外部系统编码映射 */}
+      {materialUuid && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>外部系统编码映射</div>
+          <Table
+            dataSource={externalSystemCodes}
+            loading={externalSystemCodesLoading}
+            columns={[
+              { title: '外部系统', dataIndex: 'externalSystem', key: 'externalSystem', width: 120 },
+              { title: '外部编码', dataIndex: 'externalCode', key: 'externalCode', width: 150 },
+              { title: '内部编码', dataIndex: 'internalCode', key: 'internalCode', width: 150 },
+              { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+              { 
+                title: '状态', 
+                dataIndex: 'isActive', 
+                key: 'isActive', 
+                width: 80,
+                render: (value: boolean) => (
+                  <Tag color={value ? 'success' : 'default'}>
+                    {value ? '启用' : '禁用'}
+                  </Tag>
+                ),
+              },
+              {
+                title: '操作',
+                key: 'action',
+                width: 120,
+                fixed: 'right' as const,
+                render: (_: any, record: MaterialCodeMapping) => (
+                  <Space>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setEditingExternalSystemCode(record);
+                        externalSystemForm.setFieldsValue({
+                          externalSystem: record.externalSystem,
+                          externalCode: record.externalCode,
+                          internalCode: record.internalCode,
+                          description: record.description,
+                          isActive: record.isActive,
+                        });
+                        setExternalSystemModalVisible(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      type="link"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={async () => {
+                        try {
+                          await materialCodeMappingApi.delete(record.uuid);
+                          messageApi.success('删除成功');
+                          if (onReloadExternalSystemCodes) {
+                            onReloadExternalSystemCodes();
+                          }
+                        } catch (error: any) {
+                          messageApi.error(error.message || '删除失败');
+                        }
+                      }}
+                    >
+                      删除
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+            pagination={false}
+            size="small"
+            locale={{ emptyText: '暂无外部系统编码映射' }}
+            footer={() => (
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingExternalSystemCode(null);
+                  externalSystemForm.resetFields();
+                  externalSystemForm.setFieldsValue({
+                    internalCode: '', // 将在提交时自动填充物料编码
+                    isActive: true,
+                  });
+                  setExternalSystemModalVisible(true);
+                }}
+                block
+              >
+                添加外部系统编码映射
+              </Button>
+            )}
+          />
+        </div>
+      )}
+
       {/* 部门编码 Modal */}
       <Modal
         title="添加部门编码"
@@ -1997,11 +2140,90 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
           <Form.Item name="description" label="描述（可选）">
             <Input.TextArea placeholder="描述（可选）" rows={3} />
           </Form.Item>
-        </Form>
-      </Modal>
-    </>
-  );
-};
+          </Form>
+        </Modal>
+
+        {/* 外部系统编码映射 Modal */}
+        {materialUuid && (
+          <Modal
+            title={editingExternalSystemCode ? '编辑外部系统编码映射' : '添加外部系统编码映射'}
+            open={externalSystemModalVisible}
+            onOk={async () => {
+              try {
+                const values = await externalSystemForm.validateFields();
+                if (editingExternalSystemCode) {
+                  // 更新
+                  await materialCodeMappingApi.update(editingExternalSystemCode.uuid, {
+                    externalSystem: values.externalSystem,
+                    externalCode: values.externalCode,
+                    internalCode: values.internalCode || undefined,
+                    description: values.description,
+                    isActive: values.isActive,
+                  });
+                  messageApi.success('更新成功');
+                } else {
+                  // 创建
+                  await materialCodeMappingApi.create({
+                    materialUuid: materialUuid,
+                    internalCode: values.internalCode || '', // 如果为空，后端会使用物料主编码
+                    externalCode: values.externalCode,
+                    externalSystem: values.externalSystem,
+                    description: values.description,
+                    isActive: values.isActive !== false,
+                  });
+                  messageApi.success('创建成功');
+                }
+                setExternalSystemModalVisible(false);
+                setEditingExternalSystemCode(null);
+                externalSystemForm.resetFields();
+                if (onReloadExternalSystemCodes) {
+                  onReloadExternalSystemCodes();
+                }
+              } catch (error: any) {
+                messageApi.error(error.message || (editingExternalSystemCode ? '更新失败' : '创建失败'));
+              }
+            }}
+            onCancel={() => {
+              setExternalSystemModalVisible(false);
+              setEditingExternalSystemCode(null);
+              externalSystemForm.resetFields();
+            }}
+            width={600}
+          >
+            <Form form={externalSystemForm} layout="vertical">
+              <Form.Item 
+                name="externalSystem" 
+                label="外部系统" 
+                rules={[{ required: true, message: '请输入外部系统名称' }]}
+              >
+                <Input placeholder="如：ERP、WMS、MES等" />
+              </Form.Item>
+              <Form.Item 
+                name="externalCode" 
+                label="外部编码" 
+                rules={[{ required: true, message: '请输入外部编码' }]}
+              >
+                <Input placeholder="外部系统中的物料编码" />
+              </Form.Item>
+              <Form.Item 
+                name="internalCode" 
+                label="内部编码（可选）"
+                tooltip="如果不填写，将使用物料主编码"
+              >
+                <Input placeholder="内部编码（可选，默认使用物料主编码）" />
+              </Form.Item>
+              <Form.Item name="description" label="描述（可选）">
+                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              </Form.Item>
+              <Form.Item name="isActive" label="是否启用" valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </Form>
+          </Modal>
+        )}
+      </>
+    );
+  };
 
 /**
  * 默认值设置标签页

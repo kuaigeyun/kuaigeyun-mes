@@ -334,3 +334,13 @@ class BatchDeletePlantsRequest(BaseModel):
 class BatchDeleteWorkshopsRequest(BaseModel):
     """批量删除车间请求"""
     uuids: List[str] = Field(..., description="要删除的车间UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteProductionLinesRequest(BaseModel):
+    """批量删除产线请求"""
+    uuids: List[str] = Field(..., description="要删除的产线UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteWorkstationsRequest(BaseModel):
+    """批量删除工位请求"""
+    uuids: List[str] = Field(..., description="要删除的工位UUID列表", min_items=1, max_items=100)

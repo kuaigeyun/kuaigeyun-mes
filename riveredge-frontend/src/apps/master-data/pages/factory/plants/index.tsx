@@ -713,7 +713,6 @@ const PlantsPage: React.FC = () => {
         <ProFormSwitch
           name="isActive"
           label="是否启用"
-          initialValue={true}
         />
       </FormModalTemplate>
     </>
