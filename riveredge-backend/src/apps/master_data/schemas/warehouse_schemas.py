@@ -83,9 +83,11 @@ class StorageAreaBase(BaseModel):
     
     code: str = Field(..., max_length=50, description="库区编码")
     name: str = Field(..., max_length=200, description="库区名称")
-    warehouse_id: int = Field(..., description="所属仓库ID")
+    warehouse_id: int = Field(..., description="所属仓库ID", alias="warehouseId")
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -112,9 +114,11 @@ class StorageAreaUpdate(BaseModel):
     
     code: Optional[str] = Field(None, max_length=50, description="库区编码")
     name: Optional[str] = Field(None, max_length=200, description="库区名称")
-    warehouse_id: Optional[int] = Field(None, description="所属仓库ID")
+    warehouse_id: Optional[int] = Field(None, description="所属仓库ID", alias="warehouseId")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -155,9 +159,11 @@ class StorageLocationBase(BaseModel):
     
     code: str = Field(..., max_length=50, description="库位编码")
     name: str = Field(..., max_length=200, description="库位名称")
-    storage_area_id: int = Field(..., description="所属库区ID")
+    storage_area_id: int = Field(..., description="所属库区ID", alias="storageAreaId")
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -184,9 +190,11 @@ class StorageLocationUpdate(BaseModel):
     
     code: Optional[str] = Field(None, max_length=50, description="库位编码")
     name: Optional[str] = Field(None, max_length=200, description="库位名称")
-    storage_area_id: Optional[int] = Field(None, description="所属库区ID")
+    storage_area_id: Optional[int] = Field(None, description="所属库区ID", alias="storageAreaId")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):

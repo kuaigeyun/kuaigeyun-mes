@@ -4,7 +4,7 @@
 提供根据编码规则生成编码的功能。
 """
 
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Any
 from datetime import datetime, date
 import re
 from tortoise.transactions import in_transaction
@@ -12,6 +12,7 @@ from tortoise.transactions import in_transaction
 from core.models.code_rule import CodeRule
 from core.models.code_sequence import CodeSequence
 from core.services.business.code_rule_service import CodeRuleService
+from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from infra.exceptions.exceptions import ValidationError
 
 
@@ -47,6 +48,22 @@ class CodeGenerationService:
         if not rule:
             raise ValidationError(f"编码规则 {rule_code} 不存在或未启用")
         
+        # 获取规则组件配置（优先使用新格式）
+        components = rule.get_rule_components()
+        counter_config = None
+        if components:
+            counter_config = CodeRuleComponentService.get_counter_component_config(components)
+        
+        # 获取序号配置（优先从组件读取，否则使用旧字段）
+        if counter_config:
+            seq_start = counter_config.get("initial_value", 1)
+            seq_step = 1  # 组件格式中步长固定为1
+            seq_reset_rule = counter_config.get("reset_cycle", "never")
+        else:
+            seq_start = rule.seq_start
+            seq_step = rule.seq_step
+            seq_reset_rule = rule.seq_reset_rule or "never"
+        
         # 获取或创建序号记录（不使用嵌套事务，避免死锁）
         sequence = await CodeSequence.get_or_none(
             code_rule_id=rule.id,
@@ -57,33 +74,40 @@ class CodeGenerationService:
             sequence = await CodeSequence.create(
                 code_rule_id=rule.id,
                 tenant_id=tenant_id,
-                current_seq=rule.seq_start - rule.seq_step
+                current_seq=seq_start - seq_step
             )
         
         # 检查是否需要重置序号
-        if rule.seq_reset_rule:
+        if seq_reset_rule and seq_reset_rule != "never":
             now = date.today()
             if sequence.reset_date != now:
-                if rule.seq_reset_rule == "daily":
-                    sequence.current_seq = rule.seq_start - rule.seq_step
+                if seq_reset_rule == "daily":
+                    sequence.current_seq = seq_start - seq_step
                     sequence.reset_date = now
-                elif rule.seq_reset_rule == "monthly":
+                elif seq_reset_rule == "monthly":
                     if not sequence.reset_date or sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
-                        sequence.current_seq = rule.seq_start - rule.seq_step
+                        sequence.current_seq = seq_start - seq_step
                         sequence.reset_date = now
-                elif rule.seq_reset_rule == "yearly":
+                elif seq_reset_rule == "yearly":
                     if not sequence.reset_date or sequence.reset_date.year != now.year:
-                        sequence.current_seq = rule.seq_start - rule.seq_step
+                        sequence.current_seq = seq_start - seq_step
                         sequence.reset_date = now
         
         # 递增序号（在外部事务中保存）
-        sequence.current_seq += rule.seq_step
+        sequence.current_seq += seq_step
         await sequence.save()
         
         # 生成编码
-        return await CodeGenerationService._render_expression(
-            rule, sequence.current_seq, context
-        )
+        if components:
+            # 使用新格式（组件）
+            return CodeRuleComponentService.render_components(
+                components, sequence.current_seq, context
+            )
+        else:
+            # 使用旧格式（表达式）
+            return await CodeGenerationService._render_expression(
+                rule, sequence.current_seq, context
+            )
     
     @staticmethod
     async def test_generate_code(
@@ -111,6 +135,20 @@ class CodeGenerationService:
         if not rule:
             raise ValidationError(f"编码规则 {rule_code} 不存在或未启用")
         
+        # 获取规则组件配置（优先使用新格式）
+        components = rule.get_rule_components()
+        counter_config = None
+        if components:
+            counter_config = CodeRuleComponentService.get_counter_component_config(components)
+        
+        # 获取序号配置（优先从组件读取，否则使用旧字段）
+        if counter_config:
+            seq_start = counter_config.get("initial_value", 1)
+            seq_step = 1  # 组件格式中步长固定为1
+        else:
+            seq_start = rule.seq_start
+            seq_step = rule.seq_step
+        
         # 获取当前序号（不更新）
         sequence = await CodeSequence.get_or_none(
             code_rule_id=rule.id,
@@ -119,13 +157,20 @@ class CodeGenerationService:
         )
         
         # 如果没有序号记录，使用起始值
-        current_seq = sequence.current_seq if sequence else rule.seq_start
+        current_seq = sequence.current_seq if sequence else seq_start
         
         # 生成编码（使用当前序号 + 步长，但不保存）
-        test_seq = current_seq + rule.seq_step
-        test_code = await CodeGenerationService._render_expression(
-            rule, test_seq, context
-        )
+        test_seq = current_seq + seq_step
+        if components:
+            # 使用新格式（组件）
+            test_code = CodeRuleComponentService.render_components(
+                components, test_seq, context
+            )
+        else:
+            # 使用旧格式（表达式）
+            test_code = await CodeGenerationService._render_expression(
+                rule, test_seq, context
+            )
         
         # 如果需要检查重复，自动递增直到找到不重复的编码
         if check_duplicate and entity_type:
@@ -145,10 +190,15 @@ class CodeGenerationService:
                     return test_code
                 
                 # 编码已存在，递增序号继续尝试
-                test_seq += rule.seq_step
-                test_code = await CodeGenerationService._render_expression(
-                    rule, test_seq, context
-                )
+                test_seq += seq_step
+                if components:
+                    test_code = CodeRuleComponentService.render_components(
+                        components, test_seq, context
+                    )
+                else:
+                    test_code = await CodeGenerationService._render_expression(
+                        rule, test_seq, context
+                    )
                 attempt += 1
             
             # 如果尝试100次仍然重复，返回最后一次生成的编码（虽然理论上不应该发生）

@@ -46,25 +46,58 @@ class WarehouseService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
-        # 检查编码是否已存在
-        existing = await Warehouse.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        existing_active = await Warehouse.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"仓库编码 {data.code} 已存在")
         
-        # 创建仓库
+        # 检查是否存在相同编码的软删除记录
+        existing_deleted = await Warehouse.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return WarehouseResponse.model_validate(existing_deleted)
+        
+        # 创建新仓库
         try:
             warehouse = await Warehouse.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                # 再次检查是否有软删除记录（可能在并发情况下被创建）
+                existing_deleted_retry = await Warehouse.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return WarehouseResponse.model_validate(existing_deleted_retry)
+                
                 raise ValidationError(f"仓库编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
@@ -331,25 +364,60 @@ class WarehouseService:
         if not warehouse:
             raise ValidationError(f"仓库 {data.warehouse_id} 不存在")
         
-        # 检查编码是否已存在
-        existing = await StorageArea.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        existing_active = await StorageArea.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"库区编码 {data.code} 已存在")
         
-        # 创建库区
+        # 检查是否存在相同编码的软删除记录
+        existing_deleted = await StorageArea.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.warehouse_id = data.warehouse_id
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return StorageAreaResponse.model_validate(existing_deleted)
+        
+        # 创建新库区
         try:
             storage_area = await StorageArea.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                # 再次检查是否有软删除记录（可能在并发情况下被创建）
+                existing_deleted_retry = await StorageArea.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.warehouse_id = data.warehouse_id
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return StorageAreaResponse.model_validate(existing_deleted_retry)
+                
                 raise ValidationError(f"库区编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
@@ -632,25 +700,60 @@ class WarehouseService:
         if not storage_area:
             raise ValidationError(f"库区 {data.storage_area_id} 不存在")
         
-        # 检查编码是否已存在
-        existing = await StorageLocation.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        existing_active = await StorageLocation.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"库位编码 {data.code} 已存在")
         
-        # 创建库位
+        # 检查是否存在相同编码的软删除记录
+        existing_deleted = await StorageLocation.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.storage_area_id = data.storage_area_id
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return StorageLocationResponse.model_validate(existing_deleted)
+        
+        # 创建新库位
         try:
             storage_location = await StorageLocation.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                # 再次检查是否有软删除记录（可能在并发情况下被创建）
+                existing_deleted_retry = await StorageLocation.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.storage_area_id = data.storage_area_id
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return StorageLocationResponse.model_validate(existing_deleted_retry)
+                
                 raise ValidationError(f"库位编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         

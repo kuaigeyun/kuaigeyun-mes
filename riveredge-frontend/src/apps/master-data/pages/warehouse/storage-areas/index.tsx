@@ -15,6 +15,8 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { storageAreaApi, warehouseApi } from '../../../services/warehouse';
 import type { StorageArea, StorageAreaCreate, StorageAreaUpdate, Warehouse } from '../../../types/warehouse';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 库区管理列表页面组件
@@ -35,6 +37,8 @@ const StorageAreasPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  // 保存预览编码，用于在提交时判断是否需要正式生成
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   
   // 仓库列表（用于下拉选择）
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -61,14 +65,44 @@ const StorageAreasPage: React.FC = () => {
   /**
    * 处理新建库区
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentStorageAreaUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+    
+    // 检查是否启用自动编码
+    if (isAutoGenerateEnabled('master-data-warehouse-storage-area')) {
+      const ruleCode = getPageRuleCode('master-data-warehouse-storage-area');
+      if (ruleCode) {
+        try {
+          // 使用测试生成（不更新序号），仅用于预览
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const previewCodeValue = codeResponse.code;
+          setPreviewCode(previewCodeValue);
+          formRef.current?.setFieldsValue({
+            code: previewCodeValue,
+            isActive: true,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          setPreviewCode(null);
+          formRef.current?.setFieldsValue({
+            isActive: true,
+          });
+        }
+      } else {
+        setPreviewCode(null);
+        formRef.current?.setFieldsValue({
+          isActive: true,
+        });
+      }
+    } else {
+      setPreviewCode(null);
+      formRef.current?.setFieldsValue({
+        isActive: true,
+      });
+    }
   };
 
   /**
@@ -551,11 +585,29 @@ const StorageAreasPage: React.FC = () => {
         messageApi.success('更新成功');
       } else {
         // 创建库区
+        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
+        if (!isEdit && isAutoGenerateEnabled('master-data-warehouse-storage-area')) {
+          const ruleCode = getPageRuleCode('master-data-warehouse-storage-area');
+          const currentCode = values.code;
+          
+          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成编码失败，使用预览编码:', error);
+              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
+            }
+          }
+        }
+        
         await storageAreaApi.create(values as StorageAreaCreate);
         messageApi.success('创建成功');
       }
       
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -570,6 +622,7 @@ const StorageAreasPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -590,6 +643,8 @@ const StorageAreasPage: React.FC = () => {
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
+      ellipsis: true,
+      copyable: true,
     },
     {
       title: '库区名称',
@@ -864,65 +919,60 @@ const StorageAreasPage: React.FC = () => {
           isActive: true,
         }}
       >
-          <SafeProFormSelect
-            name="warehouseId"
-            label="所属仓库"
-            placeholder="请选择仓库"
-            colProps={{ span: 12 }}
-            options={warehouses.map(w => ({
-              label: `${w.code} - ${w.name}`,
-              value: w.id,
-            }))}
-            rules={[
-              { required: true, message: '请选择仓库' },
-            ]}
-            fieldProps={{
-              loading: warehousesLoading,
-              showSearch: true,
-              filterOption: (input, option) => {
-                const label = option?.label as string || '';
-                return label.toLowerCase().includes(input.toLowerCase());
-              },
-            }}
-          />
-          <ProFormText
-            name="code"
-            label="库区编码"
-            placeholder="请输入库区编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入库区编码' },
-              { max: 50, message: '库区编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="库区名称"
-            placeholder="请输入库区名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入库区名称' },
-              { max: 200, message: '库区名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
+        <ProFormText
+          name="code"
+          label="库区编码"
+          placeholder="请输入库区编码"
+          rules={[
+            { required: true, message: '请输入库区编码' },
+            { max: 50, message: '库区编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            disabled: isEdit, // 编辑时不允许修改编码
+          }}
+        />
+        <ProFormText
+          name="name"
+          label="库区名称"
+          placeholder="请输入库区名称"
+          rules={[
+            { required: true, message: '请输入库区名称' },
+            { max: 200, message: '库区名称不能超过200个字符' },
+          ]}
+        />
+        <SafeProFormSelect
+          name="warehouseId"
+          label="所属仓库"
+          placeholder="请选择仓库"
+          options={warehouses.map(w => ({
+            label: `${w.code} - ${w.name}`,
+            value: w.id,
+          }))}
+          rules={[
+            { required: true, message: '请选择仓库' },
+          ]}
+          fieldProps={{
+            loading: warehousesLoading,
+            showSearch: true,
+            filterOption: (input, option) => {
+              const label = option?.label as string || '';
+              return label.toLowerCase().includes(input.toLowerCase());
+            },
+          }}
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入描述信息"
+          fieldProps={{
+            rows: 4,
+            maxLength: 1000,
+          }}
+        />
       </FormModalTemplate>
     </>
   );

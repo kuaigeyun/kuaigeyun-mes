@@ -376,6 +376,45 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     autoGenerate: false,
     ruleCode: 'PRODUCTION_PLAN_CODE',
   },
+  
+  // 快格轻制造 - 采购管理（补充）
+  {
+    pageCode: 'kuaizhizao-purchase-return',
+    pageName: '采购退货',
+    pagePath: '/apps/kuaizhizao/purchase-management/purchase-returns',
+    codeField: 'return_code',
+    codeFieldLabel: '采购退货单编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: false,
+    ruleCode: 'PURCHASE_RETURN_CODE',
+  },
+  
+  // 快格轻制造 - 销售管理（补充）
+  {
+    pageCode: 'kuaizhizao-sales-return',
+    pageName: '销售退货',
+    pagePath: '/apps/kuaizhizao/sales-management/sales-returns',
+    codeField: 'return_code',
+    codeFieldLabel: '销售退货单编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: false,
+    ruleCode: 'SALES_RETURN_CODE',
+  },
+  
+  // 快格轻制造 - 生产执行（补充）
+  {
+    pageCode: 'kuaizhizao-production-outsource-work-order',
+    pageName: '委外工单',
+    pagePath: '/apps/kuaizhizao/production-execution/outsource-work-orders',
+    codeField: 'code',
+    codeFieldLabel: '委外工单编码',
+    module: '快格轻制造',
+    moduleIcon: 'tool',
+    autoGenerate: false,
+    ruleCode: 'OUTSOURCE_WORK_ORDER_CODE',
+  },
 ];
 
 /**

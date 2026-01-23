@@ -14,6 +14,7 @@ from core.services.business.code_rule_service import CodeRuleService
 from core.services.system.system_parameter_service import SystemParameterService
 from core.schemas.code_rule import CodeRuleCreate
 from core.schemas.system_parameter import SystemParameterCreate
+from core.config.code_rule_pages import CODE_RULE_PAGES
 
 
 class DefaultValuesService:
@@ -294,10 +295,121 @@ class DefaultValuesService:
         },
     ]
     
+    # 页面功能缩写映射表
+    PAGE_CODE_ABBREVIATIONS = {
+        # 主数据管理 - 工厂建模
+        "master-data-factory-plant": "PLANT",
+        "master-data-factory-workshop": "WS",
+        "master-data-factory-production-line": "PL",
+        "master-data-factory-workstation": "WST",
+        # 主数据管理 - 仓库管理
+        "master-data-warehouse-warehouse": "WH",
+        "master-data-warehouse-storage-area": "SA",
+        "master-data-warehouse-storage-location": "SL",
+        # 主数据管理 - 物料管理
+        "master-data-material-group": "MG",
+        "master-data-material": "MAT",
+        # 主数据管理 - 工艺管理
+        "master-data-process-operation": "OP",
+        "master-data-process-route": "PR",
+        # 主数据管理 - 供应链
+        "master-data-supply-chain-customer": "CUST",
+        "master-data-supply-chain-supplier": "SUP",
+        # 主数据管理 - 绩效管理
+        "master-data-performance-skill": "SK",
+        # 快格轻制造 - 生产执行
+        "kuaizhizao-production-work-order": "WO",
+        "kuaizhizao-production-rework-order": "RWO",
+        "kuaizhizao-production-outsource-order": "OO",
+        "kuaizhizao-production-outsource-work-order": "OWO",
+        # 快格轻制造 - 采购管理
+        "kuaizhizao-purchase-order": "PO",
+        "kuaizhizao-purchase-receipt": "PREC",
+        "kuaizhizao-purchase-return": "PRT",
+        # 快格轻制造 - 销售管理
+        "kuaizhizao-sales-order": "SO",
+        "kuaizhizao-sales-delivery": "SD",
+        "kuaizhizao-sales-forecast": "SF",
+        "kuaizhizao-sales-return": "SRT",
+        # 快格轻制造 - 仓储管理
+        "kuaizhizao-warehouse-inbound": "PM",  # Production Material (生产领料)
+        "kuaizhizao-warehouse-finished-goods-inbound": "FGR",  # Finished Goods Receipt (成品入库)
+        "kuaizhizao-warehouse-sales-outbound": "SOB",
+        # 快格轻制造 - 质量管理
+        "kuaizhizao-quality-incoming-inspection": "II",
+        "kuaizhizao-quality-process-inspection": "QI",  # Quality Inspection (过程检验)
+        "kuaizhizao-quality-finished-goods-inspection": "FGI",  # Finished Goods Inspection (成品检验)
+        # 快格轻制造 - 计划管理
+        "kuaizhizao-plan-production-plan": "PP",
+    }
+    
+    @staticmethod
+    def _is_business_document(page_code: str) -> bool:
+        """
+        判断页面是否为业务单据
+        
+        Args:
+            page_code: 页面代码
+            
+        Returns:
+            bool: 是否为业务单据
+        """
+        # 业务单据通常以 kuaizhizao- 开头（除了物料管理）
+        return page_code.startswith("kuaizhizao-")
+    
+    @staticmethod
+    def _build_rule_components(page_code: str, abbreviation: str) -> List[Dict[str, Any]]:
+        """
+        构建规则组件列表
+        
+        Args:
+            page_code: 页面代码
+            abbreviation: 功能缩写
+            
+        Returns:
+            List[Dict[str, Any]]: 规则组件列表
+        """
+        components = []
+        order = 0
+        
+        # 1. 固定文本（功能缩写）
+        components.append({
+            "type": "fixed_text",
+            "order": order,
+            "text": abbreviation,
+        })
+        order += 1
+        
+        # 2. 如果是业务单据，添加日期组件
+        if DefaultValuesService._is_business_document(page_code):
+            components.append({
+                "type": "date",
+                "order": order,
+                "format_type": "preset",
+                "preset_format": "YYYYMMDD",
+            })
+            order += 1
+        
+        # 3. 自动计数组件（必选）
+        components.append({
+            "type": "auto_counter",
+            "order": order,
+            "digits": 4,
+            "fixed_width": True,
+            "reset_cycle": "daily" if DefaultValuesService._is_business_document(page_code) else "never",
+            "initial_value": 1,
+        })
+        
+        return components
+    
     @staticmethod
     async def create_default_code_rules(tenant_id: int) -> List[Dict[str, Any]]:
         """
         为新组织创建默认编码规则
+        
+        根据CODE_RULE_PAGES配置，为每个页面创建预设的编码规则：
+        - 基础数据：功能缩写+流水号
+        - 业务单据：功能缩写+年月日+流水号
         
         Args:
             tenant_id: 组织ID
@@ -307,6 +419,7 @@ class DefaultValuesService:
         """
         created_rules = []
         
+        # 1. 创建旧的默认编码规则（向后兼容）
         for rule_config in DefaultValuesService.DEFAULT_CODE_RULES:
             try:
                 rule_data = CodeRuleCreate(**rule_config)
@@ -320,6 +433,57 @@ class DefaultValuesService:
             except Exception as e:
                 # 如果规则已存在，跳过（避免重复创建）
                 logger.warning(f"为组织 {tenant_id} 创建编码规则 {rule_config['code']} 失败: {e}")
+                continue
+        
+        # 2. 为每个页面创建预设编码规则（使用新的组件格式）
+        for page_config in CODE_RULE_PAGES:
+            page_code = page_config.get("page_code")
+            page_name = page_config.get("page_name", page_code)
+            rule_code = page_config.get("rule_code")
+            
+            # 如果没有指定rule_code，使用page_code作为rule_code
+            if not rule_code:
+                rule_code = page_code.upper().replace("-", "_")
+            
+            # 获取功能缩写
+            abbreviation = DefaultValuesService.PAGE_CODE_ABBREVIATIONS.get(page_code)
+            if not abbreviation:
+                # 如果没有定义缩写，从page_code提取
+                parts = page_code.split("-")
+                abbreviation = "".join([p[0].upper() for p in parts[-2:]])[:4]
+            
+            # 构建规则组件
+            rule_components = DefaultValuesService._build_rule_components(page_code, abbreviation)
+            
+            # 判断是否为业务单据
+            is_business = DefaultValuesService._is_business_document(page_code)
+            
+            # 构建规则名称和描述
+            rule_name = f"{page_name}编码规则"
+            if is_business:
+                description = f"{page_name}编码规则，格式：{abbreviation} + 日期（YYYYMMDD）+ 4位序号，每日重置"
+            else:
+                description = f"{page_name}编码规则，格式：{abbreviation} + 4位序号"
+            
+            try:
+                rule_data = CodeRuleCreate(
+                    name=rule_name,
+                    code=rule_code,
+                    rule_components=rule_components,
+                    description=description,
+                    is_system=True,
+                    is_active=True,
+                )
+                rule = await CodeRuleService.create_rule(tenant_id, rule_data)
+                created_rules.append({
+                    "code": rule.code,
+                    "name": rule.name,
+                    "uuid": rule.uuid,
+                })
+                logger.debug(f"为组织 {tenant_id} 创建页面编码规则: {rule.code} ({page_name})")
+            except Exception as e:
+                # 如果规则已存在，跳过（避免重复创建）
+                logger.warning(f"为组织 {tenant_id} 创建页面编码规则 {rule_code} 失败: {e}")
                 continue
         
         logger.info(f"为组织 {tenant_id} 创建了 {len(created_rules)} 个默认编码规则")

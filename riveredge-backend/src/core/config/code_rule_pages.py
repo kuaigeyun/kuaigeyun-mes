@@ -371,5 +371,44 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "rule_code": "PRODUCTION_PLAN_CODE",
         "allow_manual_edit": True,
     },
+    # 快格轻制造 - 采购管理（补充）
+    {
+        "page_code": "kuaizhizao-purchase-return",
+        "page_name": "采购退货",
+        "page_path": "/apps/kuaizhizao/purchase-management/purchase-returns",
+        "code_field": "return_code",
+        "code_field_label": "采购退货单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PURCHASE_RETURN_CODE",
+        "allow_manual_edit": True,
+    },
+    # 快格轻制造 - 销售管理（补充）
+    {
+        "page_code": "kuaizhizao-sales-return",
+        "page_name": "销售退货",
+        "page_path": "/apps/kuaizhizao/sales-management/sales-returns",
+        "code_field": "return_code",
+        "code_field_label": "销售退货单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "SALES_RETURN_CODE",
+        "allow_manual_edit": True,
+    },
+    # 快格轻制造 - 生产执行（补充）
+    {
+        "page_code": "kuaizhizao-production-outsource-work-order",
+        "page_name": "委外工单",
+        "page_path": "/apps/kuaizhizao/production-execution/outsource-work-orders",
+        "code_field": "code",
+        "code_field_label": "委外工单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OUTSOURCE_WORK_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
 ]
 

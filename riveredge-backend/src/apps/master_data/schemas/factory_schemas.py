@@ -85,8 +85,11 @@ class WorkshopBase(BaseModel):
     
     code: str = Field(..., max_length=50, description="车间编码")
     name: str = Field(..., max_length=200, description="车间名称")
+    plant_id: Optional[int] = Field(None, description="所属厂区ID（可选）", alias="plantId")
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -113,8 +116,11 @@ class WorkshopUpdate(BaseModel):
     
     code: Optional[str] = Field(None, max_length=50, description="车间编码")
     name: Optional[str] = Field(None, max_length=200, description="车间名称")
+    plant_id: Optional[int] = Field(None, description="所属厂区ID（可选）", alias="plantId")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -154,9 +160,11 @@ class ProductionLineBase(BaseModel):
     
     code: str = Field(..., max_length=50, description="产线编码")
     name: str = Field(..., max_length=200, description="产线名称")
-    workshop_id: int = Field(..., description="所属车间ID")
+    workshop_id: int = Field(..., description="所属车间ID", alias="workshopId")
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -183,9 +191,11 @@ class ProductionLineUpdate(BaseModel):
     
     code: Optional[str] = Field(None, max_length=50, description="产线编码")
     name: Optional[str] = Field(None, max_length=200, description="产线名称")
-    workshop_id: Optional[int] = Field(None, description="所属车间ID")
+    workshop_id: Optional[int] = Field(None, description="所属车间ID", alias="workshopId")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -226,9 +236,11 @@ class WorkstationBase(BaseModel):
     
     code: str = Field(..., max_length=50, description="工位编码")
     name: str = Field(..., max_length=200, description="工位名称")
-    production_line_id: int = Field(..., description="所属产线ID")
+    production_line_id: int = Field(..., description="所属产线ID", alias="productionLineId")
     description: Optional[str] = Field(None, description="描述")
     is_active: bool = Field(True, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):
@@ -255,9 +267,11 @@ class WorkstationUpdate(BaseModel):
     
     code: Optional[str] = Field(None, max_length=50, description="工位编码")
     name: Optional[str] = Field(None, max_length=200, description="工位名称")
-    production_line_id: Optional[int] = Field(None, description="所属产线ID")
+    production_line_id: Optional[int] = Field(None, description="所属产线ID", alias="productionLineId")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):

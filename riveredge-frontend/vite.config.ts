@@ -77,6 +77,8 @@ export default defineConfig({
         // 禁用 HMR 连接日志（减少控制台输出）
         logging: 'none', // 'none' | 'error' | 'warn' | 'info'
       },
+      // ⚠️ 增强：优化 HMR 更新策略，减少不必要的全量重载
+      fullReload: false, // 禁用全量重载，只使用 HMR
     },
     watch: {
       // 优化文件监听，确保 HMR 正常工作，避免频繁重启
@@ -136,17 +138,28 @@ export default defineConfig({
         '**/uv.lock',
         '**/Pipfile.lock',
         '**/poetry.lock',
+        // 忽略测试文件
+        '**/tests/**',
+        '**/test/**',
+        '**/*.test.{js,ts,jsx,tsx}',
+        '**/*.spec.{js,ts,jsx,tsx}',
+        // 忽略构建产物
+        '**/*.map',
+        '**/*.min.js',
+        '**/*.min.css',
       ],
       // Windows 环境下使用轮询模式以确保文件变化能被检测到
       usePolling: platform() === 'win32',
       // ⚠️ 优化：增加文件变化检测间隔，减少 CPU 占用和重启频率
-      interval: platform() === 'win32' ? 1000 : 300, // 减少检测频率
+      interval: platform() === 'win32' ? 2000 : 500, // Windows 增加到 2 秒，其他平台 0.5 秒
       // 优化文件监听性能
-      binaryInterval: platform() === 'win32' ? 2000 : 500,
+      binaryInterval: platform() === 'win32' ? 3000 : 1000, // Windows 增加到 3 秒
       // 减少监听的文件类型，只监听源码文件
       include: [
         '**/*.{js,jsx,ts,tsx,json,css,less,scss,html}',
       ],
+      // 使用原子写入检测，减少不必要的重载
+      atomic: true,
     },
   },
   // 构建配置 - 优化性能
@@ -245,7 +258,13 @@ export default defineConfig({
       fastRefresh: true,
       // 包含所有 React 文件进行 HMR
       include: '**/*.{jsx,tsx}',
-      exclude: '**/node_modules/**',
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/*.test.{jsx,tsx}',
+        '**/*.spec.{jsx,tsx}',
+      ],
       // ⚠️ 优化：移除不必要的babel配置，让React插件自动处理
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
@@ -253,6 +272,8 @@ export default defineConfig({
       fastRefreshOptions: {
         // 强制启用Fast Refresh
         force: true,
+        // 优化：只对组件文件启用 Fast Refresh，减少不必要的重载
+        strict: false, // 允许在非组件文件中使用 Fast Refresh
       },
     }),
   ],

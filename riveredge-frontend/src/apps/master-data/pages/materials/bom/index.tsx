@@ -1,7 +1,7 @@
 /**
- * BOM（物料清单）管理页面
+ * 工程BOM管理页面
  * 
- * 提供BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ * 提供工程BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -18,7 +18,7 @@ import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
 
 /**
- * BOM管理列表页面组件
+ * 工程BOM管理列表页面组件
  */
 const BOMPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -114,7 +114,7 @@ const BOMPage: React.FC = () => {
    */
   const handleOpenDesigner = () => {
     // 跳转到BOM设计器页面（新建模式，不传materialId）
-    navigate('/apps/master-data/materials/bom/designer');
+    navigate('/apps/master-data/process/engineering-bom/designer');
   };
 
   /**

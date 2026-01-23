@@ -42,6 +42,7 @@ from .custom_field import (
     CustomFieldValueRequest,
     CustomFieldValueResponse,
     BatchSetFieldValuesRequest,
+    CustomFieldPageConfigResponse,
 )
 
 # 站点设置 Schema
@@ -303,6 +304,7 @@ __all__ = [
     "CustomFieldValueRequest",
     "CustomFieldValueResponse",
     "BatchSetFieldValuesRequest",
+    "CustomFieldPageConfigResponse",
     # 站点设置 Schema
     "SiteSettingUpdate",
     "SiteSettingResponse",

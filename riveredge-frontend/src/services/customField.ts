@@ -209,3 +209,48 @@ export async function getFieldValues(recordTable: string, recordId: number): Pro
   return apiRequest<Record<string, any>>(`/core/custom-fields/values/${recordTable}/${recordId}`);
 }
 
+/**
+ * 自定义字段页面配置接口
+ */
+export interface CustomFieldPageConfig {
+  page_code: string;
+  page_name: string;
+  page_path: string;
+  table_name: string;
+  table_name_label: string;
+  module: string;
+  module_icon?: string;
+}
+
+/**
+ * 获取自定义字段功能页面配置列表
+ * 
+ * 返回系统中所有支持自定义字段的功能页面配置。
+ * 
+ * @returns 功能页面配置列表（已转换为camelCase格式）
+ */
+export async function getCustomFieldPages(): Promise<CustomFieldPageConfig[]> {
+  try {
+    console.log('📡 请求自定义字段页面配置 API: /core/custom-fields/pages');
+    const pages = await apiRequest<CustomFieldPageConfig[]>('/core/custom-fields/pages');
+    console.log(`📋 API 返回 ${pages.length} 个页面配置`);
+    
+    // 转换字段名从 snake_case 到 camelCase
+    const convertedPages = pages.map(page => ({
+      pageCode: page.page_code,
+      pageName: page.page_name,
+      pagePath: page.page_path,
+      tableName: page.table_name,
+      tableNameLabel: page.table_name_label,
+      module: page.module,
+      moduleIcon: page.module_icon,
+    }));
+    
+    console.log('✅ 转换后的页面配置:', convertedPages.map(p => p.pageCode));
+    return convertedPages;
+  } catch (error: any) {
+    console.error('❌ 获取自定义字段页面配置失败:', error);
+    throw error;
+  }
+}
+

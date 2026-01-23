@@ -56,8 +56,6 @@ const MasterDataApp: React.FC = () => {
 
       {/* 物料管理路由 */}
       <Route path="materials" element={<MaterialsManagementPage />} />
-      <Route path="materials/bom" element={<BOMPage />} />
-      <Route path="materials/bom/designer" element={<BOMDesignerPage />} />
       <Route path="materials/variant-attributes" element={<VariantAttributesPage />} />
       <Route path="materials/batches" element={<MaterialBatchesPage />} />
       <Route path="materials/serials" element={<MaterialSerialsPage />} />
@@ -66,6 +64,8 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/defect-types" element={<DefectTypesPage />} />
       <Route path="process/operations" element={<OperationsPage />} />
       <Route path="process/routes" element={<ProcessRoutesPage />} />
+      <Route path="process/engineering-bom" element={<BOMPage />} />
+      <Route path="process/engineering-bom/designer" element={<BOMDesignerPage />} />
       <Route path="process/sop" element={<SOPPage />} />
       <Route path="process/sop/designer" element={<ESOPDesignerPage />} />
       <Route path="process/sop/execution" element={<SOPExecutionPage />} />

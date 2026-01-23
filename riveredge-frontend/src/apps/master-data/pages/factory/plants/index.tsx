@@ -5,14 +5,14 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { plantApi } from '../../../services/factory';
 import type { Plant, PlantCreate, PlantUpdate } from '../../../types/factory';
-import { generateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { downloadFile } from '../../../../kuaizhizao/services/common';
@@ -32,6 +32,13 @@ const PlantsPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [currentPlantUuid, setCurrentPlantUuid] = useState<string | null>(null);
+  // 保存预览编码，用于在提交时判断是否需要正式生成
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [plantDetail, setPlantDetail] = useState<Plant | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   /**
    * 处理新建厂区
@@ -44,13 +51,23 @@ const PlantsPage: React.FC = () => {
     
     // 检查是否启用自动编码
     if (isAutoGenerateEnabled('master-data-factory-plant')) {
-      try {
-        const ruleCode = getPageRuleCode('master-data-factory-plant');
-        const code = await generateCode(ruleCode);
-        formRef.current?.setFieldsValue({ code });
-      } catch (error) {
-        console.error('自动生成编码失败:', error);
+      const ruleCode = getPageRuleCode('master-data-factory-plant');
+      if (ruleCode) {
+        try {
+          // 使用测试生成（不更新序号），仅用于预览
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const previewCodeValue = codeResponse.code;
+          setPreviewCode(previewCodeValue);
+          formRef.current?.setFieldsValue({
+            code: previewCodeValue,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          setPreviewCode(null);
+        }
       }
+    } else {
+      setPreviewCode(null);
     }
   };
 
@@ -75,6 +92,30 @@ const PlantsPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '加载厂区详情失败');
     }
+  };
+
+  /**
+   * 处理打开详情
+   */
+  const handleOpenDetail = async (record: Plant) => {
+    try {
+      setDrawerVisible(true);
+      setDetailLoading(true);
+      const detail = await plantApi.get(record.uuid);
+      setPlantDetail(detail);
+    } catch (error: any) {
+      messageApi.error(error.message || '获取厂区详情失败');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  /**
+   * 处理关闭详情
+   */
+  const handleCloseDetail = () => {
+    setDrawerVisible(false);
+    setPlantDetail(null);
   };
 
   /**
@@ -438,11 +479,29 @@ const PlantsPage: React.FC = () => {
         messageApi.success('更新成功');
       } else {
         // 创建厂区
+        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
+        if (!isEdit && isAutoGenerateEnabled('master-data-factory-plant')) {
+          const ruleCode = getPageRuleCode('master-data-factory-plant');
+          const currentCode = values.code;
+          
+          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成编码失败，使用预览编码:', error);
+              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
+            }
+          }
+        }
+        
         await plantApi.create(values as PlantCreate);
         messageApi.success('创建成功');
       }
       
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -457,6 +516,7 @@ const PlantsPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -520,35 +580,64 @@ const PlantsPage: React.FC = () => {
       valueType: 'option',
       width: 150,
       fixed: 'right',
-      render: (_, record) => [
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => handleEdit(record)}
-        >
-          编辑
-        </Button>,
-        <Popconfirm
-          key="delete"
-          title="确定要删除这个厂区吗？"
-          description="删除后无法恢复，请谨慎操作。"
-          onConfirm={() => handleDelete(record)}
-          okText="确定"
-          cancelText="取消"
-        >
+      render: (_, record) => (
+        <Space>
           <Button
             type="link"
             size="small"
-            danger
-            icon={<DeleteOutlined />}
+            onClick={() => handleOpenDetail(record)}
           >
-            删除
+            详情
           </Button>
-        </Popconfirm>,
-      ],
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            编辑
+          </Button>
+          <Popconfirm
+            title="确定要删除这个厂区吗？"
+            description="删除后无法恢复，请谨慎操作。"
+            onConfirm={() => handleDelete(record)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
     },
+  ];
+
+  /**
+   * 详情 Drawer 的列定义
+   */
+  const detailColumns: ProDescriptionsItemType<Plant>[] = [
+    { title: '厂区编码', dataIndex: 'code' },
+    { title: '厂区名称', dataIndex: 'name' },
+    { title: '地址', dataIndex: 'address', span: 2 },
+    { title: '描述', dataIndex: 'description', span: 2 },
+    {
+      title: '状态',
+      dataIndex: 'isActive',
+      render: (_, record) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+      span: 2,
+    },
+    { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
   ];
 
   return (
@@ -657,6 +746,17 @@ const PlantsPage: React.FC = () => {
           onExport={handleExport}
         />
       </ListPageTemplate>
+
+      {/* 详情 Drawer */}
+      <DetailDrawerTemplate<Plant>
+        title="厂区详情"
+        open={drawerVisible}
+        onClose={handleCloseDetail}
+        dataSource={plantDetail || undefined}
+        columns={detailColumns}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+      />
 
       {/* 创建/编辑厂区 Modal */}
       <FormModalTemplate
