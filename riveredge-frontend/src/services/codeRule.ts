@@ -8,13 +8,19 @@
 import { apiRequest } from './api';
 
 /**
+ * 编码规则组件类型
+ */
+import { CodeRuleComponent } from '../types/codeRuleComponent';
+
+/**
  * 编码规则信息接口
  */
 export interface CodeRule {
   uuid: string;
   name: string;
   code: string;
-  expression: string;
+  expression?: string; // 旧格式，向后兼容
+  rule_components?: CodeRuleComponent[]; // 新格式，完全可配置
   description?: string;
   seq_start: number;
   seq_step: number;
@@ -25,6 +31,37 @@ export interface CodeRule {
   tenant_id: number;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * 创建编码规则数据
+ */
+export interface CreateCodeRuleData {
+  name: string;
+  code: string;
+  expression?: string; // 旧格式，向后兼容
+  rule_components?: CodeRuleComponent[]; // 新格式，完全可配置
+  description?: string;
+  seq_start?: number;
+  seq_step?: number;
+  seq_reset_rule?: 'never' | 'daily' | 'monthly' | 'yearly';
+  is_active?: boolean;
+  allow_manual_edit?: boolean;
+}
+
+/**
+ * 更新编码规则数据
+ */
+export interface UpdateCodeRuleData {
+  name?: string;
+  expression?: string; // 旧格式，向后兼容
+  rule_components?: CodeRuleComponent[]; // 新格式，完全可配置
+  description?: string;
+  seq_start?: number;
+  seq_step?: number;
+  seq_reset_rule?: 'never' | 'daily' | 'monthly' | 'yearly';
+  is_active?: boolean;
+  allow_manual_edit?: boolean;
 }
 
 /**

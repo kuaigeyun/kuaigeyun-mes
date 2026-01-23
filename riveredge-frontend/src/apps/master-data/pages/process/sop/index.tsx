@@ -1,7 +1,7 @@
 /**
- * 标准作业程序（SOP）管理页面
+ * 制造BOM管理页面
  * 
- * 提供SOP的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ * 提供制造BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
 import React, { useRef, useState, useEffect } from 'react';
@@ -19,7 +19,7 @@ import FormSchemaEditor from './FormSchemaEditor';
 import type { ISchema } from '@formily/core';
 
 /**
- * SOP管理列表页面组件
+ * 制造BOM管理列表页面组件
  */
 const SOPPage: React.FC = () => {
   const { message: messageApi } = App.useApp();

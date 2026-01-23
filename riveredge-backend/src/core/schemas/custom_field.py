@@ -159,3 +159,20 @@ class BatchSetFieldValuesRequest(BaseModel):
     record_table: str = Field(..., min_length=1, max_length=50, description="关联表名")
     values: List[CustomFieldValueRequest] = Field(..., description="字段值列表")
 
+
+class CustomFieldPageConfigResponse(BaseModel):
+    """
+    自定义字段页面配置响应 Schema
+    
+    用于返回支持自定义字段的页面配置信息。
+    """
+    page_code: str = Field(..., description="页面代码（唯一标识）")
+    page_name: str = Field(..., description="页面名称")
+    page_path: str = Field(..., description="页面路径")
+    table_name: str = Field(..., description="关联的表名（数据库表名）")
+    table_name_label: str = Field(..., description="表名显示标签")
+    module: str = Field(..., description="模块名称")
+    module_icon: Optional[str] = Field(None, description="模块图标")
+    
+    model_config = ConfigDict(from_attributes=True)
+

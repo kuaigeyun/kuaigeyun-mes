@@ -78,12 +78,14 @@ export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
 # 主机和端口从环境变量读取（HOST 和 PORT），未设置时使用配置文件默认值
 # 优化热重载配置：
 #   --reload-exclude: 排除不需要监听的文件/目录，减少不必要的重启
-#   --reload-delay: 增加检测间隔到 0.5 秒，减少频繁检测（Windows 上更稳定）
+#   --reload-delay: 增加检测间隔到 1.0 秒，减少频繁检测（Windows 上更稳定）
+#   --reload-include: 只监听 .py 文件，忽略其他文件类型
 PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run uvicorn server.main:app \
   --host "${BACKEND_HOST}" \
   --port "${BACKEND_PORT}" \
   --reload \
   --reload-dir src \
+  --reload-include "*.py" \
   --reload-exclude "**/__pycache__/**" \
   --reload-exclude "**/*.pyc" \
   --reload-exclude "**/*.pyo" \
@@ -101,6 +103,19 @@ PYTHONPATH="${PYTHONPATH}:$(pwd)/src" uv run uvicorn server.main:app \
   --reload-exclude "**/Thumbs.db" \
   --reload-exclude "**/.vscode/**" \
   --reload-exclude "**/.idea/**" \
-  --reload-delay 0.5
+  --reload-exclude "**/migrations/**" \
+  --reload-exclude "**/tests/**" \
+  --reload-exclude "**/test_*.py" \
+  --reload-exclude "**/*_test.py" \
+  --reload-exclude "**/conftest.py" \
+  --reload-exclude "**/.logs/**" \
+  --reload-exclude "**/logs/**" \
+  --reload-exclude "**/static/**" \
+  --reload-exclude "**/templates/**" \
+  --reload-exclude "**/*.sql" \
+  --reload-exclude "**/*.sqlite" \
+  --reload-exclude "**/*.db" \
+  --reload-exclude "**/scripts/**" \
+  --reload-delay 1.0
 
 

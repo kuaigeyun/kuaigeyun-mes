@@ -343,8 +343,8 @@ class MaterialService:
             if not group:
                 raise ValidationError(f"物料分组 {data.group_id} 不存在")
         
-        # 生成主编码（如果未提供）
-        if not data.main_code:
+        # 生成主编码（如果未提供或为空字符串）
+        if not data.main_code or (isinstance(data.main_code, str) and not data.main_code.strip()):
             # 首先尝试使用编码规则生成编码
             material_page_config = next(
                 (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
@@ -538,12 +538,19 @@ class MaterialService:
         
         # 准备创建数据
         # 使用 model_dump 方法（Pydantic v2）或 dict 方法（Pydantic v1）
+        # 使用 by_alias=False 确保使用字段名（下划线命名）而不是别名（驼峰命名）
         if hasattr(data, 'model_dump'):
-            material_data = data.model_dump(exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+            material_data = data.model_dump(
+                exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"},
+                by_alias=False  # 使用字段名而不是别名
+            )
         else:
-            material_data = data.dict(exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"})
+            material_data = data.dict(
+                exclude={"department_codes", "customer_codes", "supplier_codes", "defaults"},
+                by_alias=False  # 使用字段名而不是别名
+            )
         # 兼容处理：如果提供了code但没有main_code，将code作为main_code（向后兼容）
-        if not material_data.get("main_code") and material_data.get("code"):
+        if (not material_data.get("main_code") or (isinstance(material_data.get("main_code"), str) and not material_data.get("main_code").strip())) and material_data.get("code"):
             material_data["main_code"] = material_data["code"]
         
         # 处理变体属性：确保JSON键顺序一致（用于数据库唯一性索引）
@@ -654,7 +661,13 @@ class MaterialService:
         
         # 构建响应
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
-        response = MaterialResponse.model_validate(material)
+        # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
+        response = MaterialResponse.model_validate(
+            material,
+            from_attributes=True,
+            exclude={'code_aliases'}  # 排除 code_aliases，手动设置
+        )
+        # 手动设置编码别名列表
         response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
         # 确保defaults字段被包含在响应中
         if hasattr(material, 'defaults'):
@@ -757,7 +770,12 @@ class MaterialService:
                 tenant_id=tenant_id,
                 material_id=variant.id
             )
-            response = MaterialResponse.model_validate(variant)
+            # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
+            response = MaterialResponse.model_validate(
+                variant,
+                from_attributes=True,
+                exclude={'code_aliases'}  # 排除 code_aliases，手动设置
+            )
             response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
             if hasattr(variant, 'defaults'):
                 response.defaults = variant.defaults
@@ -800,7 +818,12 @@ class MaterialService:
         
         # 构建响应
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
-        response = MaterialResponse.model_validate(material)
+        # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
+        response = MaterialResponse.model_validate(
+            material,
+            from_attributes=True,
+            exclude={'code_aliases'}  # 排除 code_aliases，手动设置
+        )
         response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
         # 确保defaults字段被包含在响应中
         if hasattr(material, 'defaults'):
@@ -1198,7 +1221,12 @@ class MaterialService:
         
         # 构建响应
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
-        response = MaterialResponse.model_validate(material)
+        # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
+        response = MaterialResponse.model_validate(
+            material,
+            from_attributes=True,
+            exclude={'code_aliases'}  # 排除 code_aliases，手动设置
+        )
         response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
         
         return response

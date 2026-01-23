@@ -15,6 +15,7 @@ from core.schemas.custom_field import (
     CustomFieldValueRequest,
     CustomFieldValueResponse,
     BatchSetFieldValuesRequest,
+    CustomFieldPageConfigResponse,
 )
 from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
@@ -93,6 +94,37 @@ async def list_fields(
         page=page,
         page_size=page_size
     )
+
+
+@router.get("/pages", response_model=List[CustomFieldPageConfigResponse])
+async def list_custom_field_pages():
+    """
+    获取自定义字段功能页面配置列表
+    
+    返回系统中所有支持自定义字段的功能页面配置，用于在自定义字段页面展示和配置。
+    通过服务发现机制自动从应用的 manifest.json 中提取页面配置。
+    
+    Returns:
+        List[CustomFieldPageConfigResponse]: 功能页面配置列表
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    from core.services.custom_field.custom_field_page_discovery import CustomFieldPageDiscoveryService
+    
+    try:
+        # 使用服务发现获取页面配置
+        pages = CustomFieldPageDiscoveryService.get_all_pages()
+        logger.info(f"🔍 自定义字段页面发现: 获取到 {len(pages)} 个页面配置")
+        
+        if not pages:
+            logger.warning("⚠️ 自定义字段页面发现: 未发现任何页面配置")
+        
+        return [CustomFieldPageConfigResponse(**page) for page in pages]
+    except Exception as e:
+        logger.error(f"❌ 获取自定义字段页面配置失败: {e}", exc_info=True)
+        # 返回空列表而不是抛出异常，避免前端崩溃
+        return []
 
 
 @router.get("/by-table/{table_name}", response_model=List[CustomFieldResponse])

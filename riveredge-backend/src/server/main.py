@@ -721,5 +721,39 @@ if __name__ == "__main__":
         host=infra_settings.HOST,  # 从环境变量读取
         port=infra_settings.PORT,  # 从环境变量读取
         reload=True,
-        reload_dirs=["src"]
+        reload_dirs=["src"],
+        reload_includes=["*.py"],  # 只监听 Python 文件
+        reload_excludes=[
+            "**/__pycache__/**",
+            "**/*.pyc",
+            "**/*.pyo",
+            "**/*.pyd",
+            "**/.git/**",
+            "**/.venv/**",
+            "**/venv*/**",
+            "**/node_modules/**",
+            "**/.mypy_cache/**",
+            "**/.pytest_cache/**",
+            "**/.ruff_cache/**",
+            "**/*.log",
+            "**/*.tmp",
+            "**/.DS_Store",
+            "**/Thumbs.db",
+            "**/.vscode/**",
+            "**/.idea/**",
+            "**/migrations/**",
+            "**/tests/**",
+            "**/test_*.py",
+            "**/*_test.py",
+            "**/conftest.py",
+            "**/.logs/**",
+            "**/logs/**",
+            "**/static/**",
+            "**/templates/**",
+            "**/*.sql",
+            "**/*.sqlite",
+            "**/*.db",
+            "**/scripts/**",
+        ],
+        reload_delay=1.0,  # 增加检测间隔到 1 秒
     )

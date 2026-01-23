@@ -5,6 +5,8 @@
 """
 
 import re
+import json
+from typing import Optional, List, Dict, Any
 from tortoise import fields
 from .base import BaseModel
 
@@ -41,15 +43,16 @@ class CodeRule(BaseModel):
     
     name = fields.CharField(max_length=100, description="规则名称")
     code = fields.CharField(max_length=50, description="规则代码（唯一，用于程序识别）")
-    expression = fields.CharField(max_length=200, description="规则表达式")
+    expression = fields.CharField(max_length=500, null=True, description="规则表达式（旧格式，向后兼容）")
+    rule_components = fields.JSONField(null=True, description="规则组件列表（新格式，完全可配置，JSON格式）")
     description = fields.TextField(null=True, description="规则描述")
     
-    seq_start = fields.IntField(default=1, description="序号起始值")
-    seq_step = fields.IntField(default=1, description="序号步长")
+    seq_start = fields.IntField(default=1, description="序号起始值（向后兼容，从自动计数组件读取）")
+    seq_step = fields.IntField(default=1, description="序号步长（向后兼容）")
     seq_reset_rule = fields.CharField(
         max_length=20,
         null=True,
-        description="序号重置规则：never、daily、monthly、yearly"
+        description="序号重置规则：never、daily、monthly、yearly（向后兼容，从自动计数组件读取）"
     )
     
     is_system = fields.BooleanField(default=False, description="是否系统规则（系统规则不可删除）")
@@ -73,11 +76,19 @@ class CodeRule(BaseModel):
     
     def validate_expression(self) -> bool:
         """
-        验证表达式是否有效
+        验证表达式是否有效（向后兼容）
         
         Returns:
             bool: 表达式是否有效
         """
+        # 如果使用新格式（rule_components），不需要验证expression
+        if self.rule_components:
+            return True
+        
+        # 如果使用旧格式（expression），验证表达式格式
+        if not self.expression:
+            return False
+        
         # 检查表达式格式
         pattern = r'\{[A-Z0-9_:]+\}'
         matches = re.findall(pattern, self.expression)
@@ -88,6 +99,28 @@ class CodeRule(BaseModel):
             if var not in supported_vars:
                 return False
         return True
+    
+    def get_rule_components(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取规则组件列表
+        
+        Returns:
+            Optional[List[Dict[str, Any]]]: 规则组件列表
+        """
+        if self.rule_components:
+            if isinstance(self.rule_components, str):
+                return json.loads(self.rule_components)
+            return self.rule_components
+        return None
+    
+    def set_rule_components(self, components: List[Dict[str, Any]]) -> None:
+        """
+        设置规则组件列表
+        
+        Args:
+            components: 规则组件列表
+        """
+        self.rule_components = components
     
     def __str__(self):
         """字符串表示"""

@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormDigit, ProFormDatePicker } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 
 // 安全处理 options 的工具函数
@@ -24,7 +24,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { workshopApi, plantApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, WorkshopUpdate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { generateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../../../../services/customField';
 
@@ -55,6 +55,9 @@ const WorkshopsPage: React.FC = () => {
 
     // 厂区列表状态
     const [plants, setPlants] = useState<Plant[]>([]);
+    
+    // 保存预览编码，用于在提交时判断是否需要正式生成
+    const [previewCode, setPreviewCode] = useState<string | null>(null);
 
   /**
    * 加载自定义字段
@@ -120,23 +123,29 @@ const WorkshopsPage: React.FC = () => {
       const ruleCode = getPageRuleCode('master-data-factory-workshop');
       if (ruleCode) {
         try {
-          const codeResponse = await generateCode({ rule_code: ruleCode });
+          // 使用测试生成（不更新序号），仅用于预览
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const previewCodeValue = codeResponse.code;
+          setPreviewCode(previewCodeValue);
           formRef.current?.setFieldsValue({
-            code: codeResponse.code,
+            code: previewCodeValue,
             isActive: true,
           });
         } catch (error: any) {
           console.warn('自动生成编码失败:', error);
+          setPreviewCode(null);
           formRef.current?.setFieldsValue({
             isActive: true,
           });
         }
       } else {
+        setPreviewCode(null);
         formRef.current?.setFieldsValue({
           isActive: true,
         });
       }
     } else {
+      setPreviewCode(null);
       formRef.current?.setFieldsValue({
         isActive: true,
       });
@@ -284,6 +293,23 @@ const WorkshopsPage: React.FC = () => {
         messageApi.success('更新成功');
       } else {
         // 创建车间
+        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
+        if (!isEdit && isAutoGenerateEnabled('master-data-factory-workshop')) {
+          const ruleCode = getPageRuleCode('master-data-factory-workshop');
+          const currentCode = standardValues.code;
+          
+          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              standardValues.code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成编码失败，使用预览编码:', error);
+              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
+            }
+          }
+        }
+        
         const created = await workshopApi.create(standardValues as WorkshopCreate);
         workshopId = created.id;
         messageApi.success('创建成功');
@@ -314,6 +340,7 @@ const WorkshopsPage: React.FC = () => {
       }
       
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       setCustomFieldValues({});
       actionRef.current?.reload();
@@ -434,6 +461,7 @@ const WorkshopsPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -873,6 +901,8 @@ const WorkshopsPage: React.FC = () => {
         dataIndex: 'code',
         width: 150,
         fixed: 'left' as const,
+        ellipsis: true,
+        copyable: true,
       },
       {
         title: '车间名称',
@@ -992,18 +1022,6 @@ const WorkshopsPage: React.FC = () => {
       title: '描述',
       dataIndex: 'description',
       span: 2,
-    },
-    {
-      title: '所属厂区',
-      dataIndex: 'plantId',
-      render: (_, record) => {
-        const plant = plants.find(p => p.id === record.plantId);
-        return plant ? (
-          <Typography.Text>{plant.name}</Typography.Text>
-        ) : (
-          <Typography.Text type="secondary">-</Typography.Text>
-        );
-      },
     },
     {
       title: '启用状态',
@@ -1248,61 +1266,50 @@ const WorkshopsPage: React.FC = () => {
           isActive: true,
         }}
       >
-          <ProFormText
-            name="code"
-            label="车间编码"
-            placeholder="请输入车间编码（如启用自动编码，将自动生成）"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入车间编码' },
-              { max: 50, message: '车间编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-            extra={
-              isAutoGenerateEnabled('master-data-factory-workshop')
-                ? '已启用自动编码，编码将根据规则自动生成'
-                : undefined
-            }
-            disabled={!isEdit && isAutoGenerateEnabled('master-data-factory-workshop')}
-          />
-          <ProFormText
-            name="name"
-            label="车间名称"
-            placeholder="请输入车间名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入车间名称' },
-              { max: 200, message: '车间名称不能超过200个字符' },
-            ]}
-          />
-          <SafeProFormSelect
-            name="plantId"
-            label="所属厂区"
-            placeholder="请选择所属厂区（可选）"
-            colProps={{ span: 12 }}
-            options={plants.map(plant => ({
-              label: `${plant.code} - ${plant.name}`,
-              value: plant.id,
-            }))}
-            allowClear
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
+        <ProFormText
+          name="code"
+          label="车间编码"
+          placeholder="请输入车间编码"
+          rules={[
+            { required: true, message: '请输入车间编码' },
+            { max: 50, message: '车间编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            disabled: isEdit, // 编辑时不允许修改编码
+          }}
+        />
+        <ProFormText
+          name="name"
+          label="车间名称"
+          placeholder="请输入车间名称"
+          rules={[
+            { required: true, message: '请输入车间名称' },
+            { max: 200, message: '车间名称不能超过200个字符' },
+          ]}
+        />
+        <SafeProFormSelect
+          name="plantId"
+          label="所属厂区"
+          placeholder="请选择所属厂区（可选）"
+          options={plants.map(plant => ({
+            label: `${plant.code} - ${plant.name}`,
+            value: plant.id,
+          }))}
+          allowClear
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入描述信息"
+          fieldProps={{
+            rows: 4,
+            maxLength: 1000,
+          }}
+        />
           
           {/* 自定义字段分割线 */}
           {customFields.length > 0 && (

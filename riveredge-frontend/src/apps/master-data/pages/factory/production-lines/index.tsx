@@ -15,6 +15,8 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { productionLineApi, workshopApi } from '../../../services/factory';
 import type { ProductionLine, ProductionLineCreate, ProductionLineUpdate, Workshop } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 产线管理列表页面组件
@@ -35,6 +37,8 @@ const ProductionLinesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  // 保存预览编码，用于在提交时判断是否需要正式生成
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   
   // 车间列表（用于下拉选择）
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
@@ -61,14 +65,44 @@ const ProductionLinesPage: React.FC = () => {
   /**
    * 处理新建产线
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentProductionLineUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+    
+    // 检查是否启用自动编码
+    if (isAutoGenerateEnabled('master-data-factory-production-line')) {
+      const ruleCode = getPageRuleCode('master-data-factory-production-line');
+      if (ruleCode) {
+        try {
+          // 使用测试生成（不更新序号），仅用于预览
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const previewCodeValue = codeResponse.code;
+          setPreviewCode(previewCodeValue);
+          formRef.current?.setFieldsValue({
+            code: previewCodeValue,
+            isActive: true,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          setPreviewCode(null);
+          formRef.current?.setFieldsValue({
+            isActive: true,
+          });
+        }
+      } else {
+        setPreviewCode(null);
+        formRef.current?.setFieldsValue({
+          isActive: true,
+        });
+      }
+    } else {
+      setPreviewCode(null);
+      formRef.current?.setFieldsValue({
+        isActive: true,
+      });
+    }
   };
 
   /**
@@ -551,11 +585,29 @@ const ProductionLinesPage: React.FC = () => {
         messageApi.success('更新成功');
       } else {
         // 创建产线
+        // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
+        if (!isEdit && isAutoGenerateEnabled('master-data-factory-production-line')) {
+          const ruleCode = getPageRuleCode('master-data-factory-production-line');
+          const currentCode = values.code;
+          
+          // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成编码失败，使用预览编码:', error);
+              // 如果正式生成失败，继续使用预览编码（虽然序号未更新，但至少可以保存）
+            }
+          }
+        }
+        
         await productionLineApi.create(values as ProductionLineCreate);
         messageApi.success('创建成功');
       }
       
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -570,6 +622,7 @@ const ProductionLinesPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -582,6 +635,8 @@ const ProductionLinesPage: React.FC = () => {
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
+      ellipsis: true,
+      copyable: true,
     },
     {
       title: '产线名称',
@@ -865,65 +920,60 @@ const ProductionLinesPage: React.FC = () => {
           isActive: true,
         }}
       >
-          <SafeProFormSelect
-            name="workshopId"
-            label="所属车间"
-            placeholder="请选择车间"
-            colProps={{ span: 12 }}
-            options={workshops.map(w => ({
-              label: `${w.code} - ${w.name}`,
-              value: w.id,
-            }))}
-            rules={[
-              { required: true, message: '请选择车间' },
-            ]}
-            fieldProps={{
-              loading: workshopsLoading,
-              showSearch: true,
-              filterOption: (input, option) => {
-                const label = option?.label as string || '';
-                return label.toLowerCase().includes(input.toLowerCase());
-              },
-            }}
-          />
-          <ProFormText
-            name="code"
-            label="产线编码"
-            placeholder="请输入产线编码"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入产线编码' },
-              { max: 50, message: '产线编码不能超过50个字符' },
-            ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
-          />
-          <ProFormText
-            name="name"
-            label="产线名称"
-            placeholder="请输入产线名称"
-            colProps={{ span: 12 }}
-            rules={[
-              { required: true, message: '请输入产线名称' },
-              { max: 200, message: '产线名称不能超过200个字符' },
-            ]}
-          />
-          <ProFormTextArea
-            name="description"
-            label="描述"
-            placeholder="请输入描述"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 4,
-              maxLength: 500,
-            }}
-          />
-          <ProFormSwitch
-            name="isActive"
-            label="是否启用"
-            colProps={{ span: 12 }}
-          />
+        <ProFormText
+          name="code"
+          label="产线编码"
+          placeholder="请输入产线编码"
+          rules={[
+            { required: true, message: '请输入产线编码' },
+            { max: 50, message: '产线编码不能超过50个字符' },
+          ]}
+          fieldProps={{
+            disabled: isEdit, // 编辑时不允许修改编码
+          }}
+        />
+        <ProFormText
+          name="name"
+          label="产线名称"
+          placeholder="请输入产线名称"
+          rules={[
+            { required: true, message: '请输入产线名称' },
+            { max: 200, message: '产线名称不能超过200个字符' },
+          ]}
+        />
+        <SafeProFormSelect
+          name="workshopId"
+          label="所属车间"
+          placeholder="请选择车间"
+          options={workshops.map(w => ({
+            label: `${w.code} - ${w.name}`,
+            value: w.id,
+          }))}
+          rules={[
+            { required: true, message: '请选择车间' },
+          ]}
+          fieldProps={{
+            loading: workshopsLoading,
+            showSearch: true,
+            filterOption: (input, option) => {
+              const label = option?.label as string || '';
+              return label.toLowerCase().includes(input.toLowerCase());
+            },
+          }}
+        />
+        <ProFormSwitch
+          name="isActive"
+          label="是否启用"
+        />
+        <ProFormTextArea
+          name="description"
+          label="描述"
+          placeholder="请输入描述信息"
+          fieldProps={{
+            rows: 4,
+            maxLength: 1000,
+          }}
+        />
       </FormModalTemplate>
     </>
   );

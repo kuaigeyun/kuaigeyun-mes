@@ -12,7 +12,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormJsonSchema } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, message, Input, theme, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, message, Input, theme, Modal, Spin } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, PAGE_SPACING } from '../../../../components/layout-templates';
@@ -22,24 +22,22 @@ import {
   createCustomField,
   updateCustomField,
   deleteCustomField,
+  getCustomFieldPages,
   CustomField,
   CreateCustomFieldData,
   UpdateCustomFieldData,
-} from '../../../../services/customField';
-import {
-  CUSTOM_FIELD_PAGES,
-  getCustomFieldPagesByModule,
-  getCustomFieldModules,
   CustomFieldPageConfig,
-} from '../../../../config/customFieldPages';
+} from '../../../../services/customField';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
+ * 
+ * @param pageConfigs - 页面配置列表
  */
-const getTableNameOptions = () => {
+const getTableNameOptions = (pageConfigs: CustomFieldPageConfig[]) => {
   // 去重，获取所有唯一的表名
   const tableMap = new Map<string, { label: string; value: string }>();
-  CUSTOM_FIELD_PAGES.forEach(page => {
+  pageConfigs.forEach(page => {
     if (!tableMap.has(page.tableName)) {
       tableMap.set(page.tableName, {
         label: `${page.tableNameLabel} (${page.tableName})`,
@@ -73,11 +71,8 @@ const getTableFieldOptions = (tableName?: string): { label: string; value: strin
   ];
 
   // 如果提供了表名，尝试从配置中获取特定字段
-  const page = CUSTOM_FIELD_PAGES.find(p => p.tableName === tableName);
-  if (page) {
-    // 可以根据表名添加特定字段，这里先返回通用字段
-    // 后续可以根据实际需求扩展
-  }
+  // 注意：这里需要传入pageConfigs，但由于是组件外部函数，暂时返回通用字段
+  // 后续可以根据实际需求扩展
 
   return commonFields;
 };
@@ -111,15 +106,53 @@ const CustomFieldListPage: React.FC = () => {
   const [detailData, setDetailData] = useState<CustomField | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   
+  // 页面配置状态
+  const [pageConfigs, setPageConfigs] = useState<CustomFieldPageConfig[]>([]);
+  const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
+  
+  /**
+   * 加载页面配置列表
+   */
+  const loadPageConfigs = async () => {
+    try {
+      setPageConfigsLoading(true);
+      console.log('🔍 开始加载自定义字段页面配置...');
+      const pages = await getCustomFieldPages();
+      console.log(`✅ 成功加载 ${pages.length} 个页面配置:`, pages.map(p => p.pageCode));
+      setPageConfigs(pages);
+      
+      // 默认选中第一个页面（仅当没有选中页面时）
+      if (pages.length > 0 && !selectedPageCode) {
+        setSelectedPageCode(pages[0].pageCode);
+      } else if (pages.length === 0) {
+        console.warn('⚠️ 未发现任何自定义字段页面配置，请检查应用的 manifest.json 是否包含 custom_field_pages 配置');
+        messageApi.warning('未发现任何页面配置，请检查应用配置');
+      }
+    } catch (error: any) {
+      console.error('❌ 加载页面配置列表失败:', error);
+      const errorMessage = error?.message || error?.error?.message || '加载页面配置失败';
+      messageApi.error(`加载页面配置失败: ${errorMessage}`);
+      // 即使失败也设置空数组，避免页面崩溃
+      setPageConfigs([]);
+    } finally {
+      setPageConfigsLoading(false);
+    }
+  };
+  
+  // 初始化加载页面配置
+  useEffect(() => {
+    loadPageConfigs();
+  }, []);
+  
   /**
    * 获取过滤后的功能页面列表
    */
   const getFilteredPages = (): CustomFieldPageConfig[] => {
     if (!pageSearchValue) {
-      return CUSTOM_FIELD_PAGES;
+      return pageConfigs;
     }
     const searchLower = pageSearchValue.toLowerCase();
-    return (CUSTOM_FIELD_PAGES || []).filter(
+    return (pageConfigs || []).filter(
       page =>
         page.pageName.toLowerCase().includes(searchLower) ||
         page.pagePath.toLowerCase().includes(searchLower) ||
@@ -132,7 +165,7 @@ const CustomFieldListPage: React.FC = () => {
    */
   const getSelectedPageConfig = (): CustomFieldPageConfig | null => {
     if (!selectedPageCode) return null;
-    return CUSTOM_FIELD_PAGES.find(page => page.pageCode === selectedPageCode) || null;
+    return pageConfigs.find(page => page.pageCode === selectedPageCode) || null;
   };
   
   /**
@@ -152,7 +185,7 @@ const CustomFieldListPage: React.FC = () => {
   const updatePageFieldCounts = async () => {
     try {
       const counts: Record<string, number> = {};
-      for (const page of CUSTOM_FIELD_PAGES) {
+      for (const page of pageConfigs) {
         try {
           const response = await getCustomFieldList({
             page: 1,
@@ -457,249 +490,291 @@ const CustomFieldListPage: React.FC = () => {
       case 'text':
         return (
           <>
-            <ProFormText
-              name="default_value"
-              label="默认值"
-              placeholder="请输入默认值（可选）"
-            />
-            <ProFormDigit
-              name="max_length"
-              label="最大长度"
-              placeholder="请输入最大长度（可选）"
-              fieldProps={{ min: 1 }}
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="default_value"
+                label="默认值"
+                placeholder="请输入默认值（可选）"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormDigit
+                name="max_length"
+                label="最大长度"
+                placeholder="请输入最大长度（可选）"
+                fieldProps={{ min: 1 }}
+              />
+            </div>
           </>
         );
       case 'number':
         return (
           <>
-            <ProFormDigit
-              name="default_value"
-              label="默认值"
-              placeholder="请输入默认值（可选）"
-            />
-            <Space style={{ width: '100%' }} size="large">
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormDigit
+                name="default_value"
+                label="默认值"
+                placeholder="请输入默认值（可选）"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="min_value"
                 label="最小值"
                 placeholder="最小值（可选）"
-                width="md"
               />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
               <ProFormDigit
                 name="max_value"
                 label="最大值"
                 placeholder="最大值（可选）"
-                width="md"
               />
-            </Space>
+            </div>
           </>
         );
       case 'date':
         return (
           <>
-            <ProFormText
-              name="default_value"
-              label="默认值"
-              placeholder="请输入默认日期，例如：2025-01-01（可选）"
-            />
-            <ProFormText
-              name="date_format"
-              label="日期格式"
-              placeholder="例如：YYYY-MM-DD"
-              initialValue="YYYY-MM-DD"
-              extra="支持的格式：YYYY-MM-DD、YYYY/MM/DD、YYYY年MM月DD日等"
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="default_value"
+                label="默认值"
+                placeholder="请输入默认日期，例如：2025-01-01（可选）"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="date_format"
+                label="日期格式"
+                placeholder="例如：YYYY-MM-DD"
+                initialValue="YYYY-MM-DD"
+                extra="支持的格式：YYYY-MM-DD、YYYY/MM/DD、YYYY年MM月DD日等"
+              />
+            </div>
           </>
         );
       case 'time':
         return (
           <>
-            <ProFormText
-              name="default_value"
-              label="默认值"
-              placeholder="请输入默认时间，例如：14:30:00（可选）"
-            />
-            <ProFormText
-              name="time_format"
-              label="时间格式"
-              placeholder="例如：HH:mm:ss"
-              initialValue="HH:mm:ss"
-              extra="支持的格式：HH:mm:ss、HH:mm等"
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="default_value"
+                label="默认值"
+                placeholder="请输入默认时间，例如：14:30:00（可选）"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="time_format"
+                label="时间格式"
+                placeholder="例如：HH:mm:ss"
+                initialValue="HH:mm:ss"
+                extra="支持的格式：HH:mm:ss、HH:mm等"
+              />
+            </div>
           </>
         );
       case 'datetime':
         return (
           <>
-            <ProFormText
-              name="default_value"
-              label="默认值"
-              placeholder="请输入默认日期时间，例如：2025-01-01 14:30:00（可选）"
-            />
-            <ProFormText
-              name="datetime_format"
-              label="日期时间格式"
-              placeholder="例如：YYYY-MM-DD HH:mm:ss"
-              initialValue="YYYY-MM-DD HH:mm:ss"
-              extra="支持的格式：YYYY-MM-DD HH:mm:ss、YYYY/MM/DD HH:mm等"
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="default_value"
+                label="默认值"
+                placeholder="请输入默认日期时间，例如：2025-01-01 14:30:00（可选）"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="datetime_format"
+                label="日期时间格式"
+                placeholder="例如：YYYY-MM-DD HH:mm:ss"
+                initialValue="YYYY-MM-DD HH:mm:ss"
+                extra="支持的格式：YYYY-MM-DD HH:mm:ss、YYYY/MM/DD HH:mm等"
+              />
+            </div>
           </>
         );
       case 'select':
         return (
           <>
-            <ProFormTextArea
-              name="select_options"
-              label="选项配置（JSON）"
-              placeholder='请输入选项 JSON，例如：[{"label": "选项1", "value": "1"}, {"label": "选项2", "value": "2"}]'
-              fieldProps={{ rows: 6 }}
-              extra={
-                <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                  格式示例：
-                  <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
+            <div style={{ gridColumn: 'span 2' }}>
+              <ProFormTextArea
+                name="select_options"
+                label="选项配置（JSON）"
+                placeholder='请输入选项 JSON，例如：[{"label": "选项1", "value": "1"}, {"label": "选项2", "value": "2"}]'
+                fieldProps={{ rows: 6 }}
+                extra={
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+                    格式示例：
+                    <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
 {`[
   {"label": "选项1", "value": "1"},
   {"label": "选项2", "value": "2"}
 ]`}
-                  </pre>
-                </div>
-              }
-            />
+                    </pre>
+                  </div>
+                }
+              />
+            </div>
           </>
         );
       case 'multiselect':
         return (
           <>
-            <ProFormTextArea
-              name="select_options"
-              label="选项配置（JSON）"
-              placeholder='请输入选项 JSON，例如：[{"label": "选项1", "value": "1"}, {"label": "选项2", "value": "2"}]'
-              fieldProps={{ rows: 6 }}
-              extra={
-                <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
-                  格式示例：
-                  <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
+            <div style={{ gridColumn: 'span 2' }}>
+              <ProFormTextArea
+                name="select_options"
+                label="选项配置（JSON）"
+                placeholder='请输入选项 JSON，例如：[{"label": "选项1", "value": "1"}, {"label": "选项2", "value": "2"}]'
+                fieldProps={{ rows: 6 }}
+                extra={
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+                    格式示例：
+                    <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
 {`[
   {"label": "选项1", "value": "1"},
   {"label": "选项2", "value": "2"}
 ]`}
-                  </pre>
-                </div>
-              }
-            />
+                    </pre>
+                  </div>
+                }
+              />
+            </div>
           </>
         );
       case 'image':
         return (
           <>
-            <ProFormDigit
-              name="image_max_size"
-              label="最大文件大小（KB）"
-              placeholder="请输入最大文件大小，例如：2048"
-              fieldProps={{ min: 1 }}
-              extra="单位：KB，例如：2048 表示 2MB"
-            />
-            <ProFormText
-              name="image_allowed_types"
-              label="允许的文件类型"
-              placeholder="例如：jpg,jpeg,png,gif"
-              extra="多个类型用逗号分隔，例如：jpg,jpeg,png,gif"
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormDigit
+                name="image_max_size"
+                label="最大文件大小（KB）"
+                placeholder="请输入最大文件大小，例如：2048"
+                fieldProps={{ min: 1 }}
+                extra="单位：KB，例如：2048 表示 2MB"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="image_allowed_types"
+                label="允许的文件类型"
+                placeholder="例如：jpg,jpeg,png,gif"
+                extra="多个类型用逗号分隔，例如：jpg,jpeg,png,gif"
+              />
+            </div>
           </>
         );
       case 'file':
         return (
           <>
-            <ProFormDigit
-              name="file_max_size"
-              label="最大文件大小（KB）"
-              placeholder="请输入最大文件大小，例如：10240"
-              fieldProps={{ min: 1 }}
-              extra="单位：KB，例如：10240 表示 10MB"
-            />
-            <ProFormText
-              name="file_allowed_types"
-              label="允许的文件类型"
-              placeholder="例如：pdf,doc,docx,xls,xlsx"
-              extra="多个类型用逗号分隔，例如：pdf,doc,docx,xls,xlsx"
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormDigit
+                name="file_max_size"
+                label="最大文件大小（KB）"
+                placeholder="请输入最大文件大小，例如：10240"
+                fieldProps={{ min: 1 }}
+                extra="单位：KB，例如：10240 表示 10MB"
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormText
+                name="file_allowed_types"
+                label="允许的文件类型"
+                placeholder="例如：pdf,doc,docx,xls,xlsx"
+                extra="多个类型用逗号分隔，例如：pdf,doc,docx,xls,xlsx"
+              />
+            </div>
           </>
         );
       case 'associated_object':
         return (
           <>
-            <SafeProFormSelect
-              name="associated_table"
-              label="关联表名"
-              rules={[{ required: true, message: '请选择关联表名' }]}
-              options={getTableNameOptions()}
-              placeholder="请选择关联的数据表"
-              extra="选择要关联的数据表"
-              fieldProps={{
-                onChange: (value: string) => {
-                  // 当关联表名改变时，清空关联字段名
-                  formRef.current?.setFieldsValue({
-                    associated_field: undefined,
-                  });
-                },
-              }}
-            />
-            <SafeProFormSelect
-              name="associated_field"
-              label="关联字段名"
-              rules={[{ required: true, message: '请选择关联字段名' }]}
-              dependencies={['associated_table']}
-              options={({ associated_table }) => {
-                if (!associated_table) {
-                  return [];
-                }
-                return getTableFieldOptions(associated_table);
-              }}
-              placeholder="请选择用于显示的字段"
-              extra="选择用于显示的字段名称"
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <SafeProFormSelect
+                name="associated_table"
+                label="关联表名"
+                rules={[{ required: true, message: '请选择关联表名' }]}
+                options={getTableNameOptions(pageConfigs)}
+                placeholder="请选择关联的数据表"
+                extra="选择要关联的数据表"
+                fieldProps={{
+                  onChange: (value: string) => {
+                    // 当关联表名改变时，清空关联字段名
+                    formRef.current?.setFieldsValue({
+                      associated_field: undefined,
+                    });
+                  },
+                }}
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <SafeProFormSelect
+                name="associated_field"
+                label="关联字段名"
+                rules={[{ required: true, message: '请选择关联字段名' }]}
+                dependencies={['associated_table']}
+                options={({ associated_table }) => {
+                  if (!associated_table) {
+                    return [];
+                  }
+                  return getTableFieldOptions(associated_table);
+                }}
+                placeholder="请选择用于显示的字段"
+                extra="选择用于显示的字段名称"
+              />
+            </div>
           </>
         );
       case 'formula':
         return (
           <>
-            <ProFormTextArea
-              name="formula_expression"
-              label="公式表达式"
-              placeholder="例如：{field1} + {field2} * 2"
-              fieldProps={{ rows: 4 }}
-              extra="使用 {字段名} 引用其他字段，支持基本数学运算"
-            />
+            <div style={{ gridColumn: 'span 2' }}>
+              <ProFormTextArea
+                name="formula_expression"
+                label="公式表达式"
+                placeholder="例如：{field1} + {field2} * 2"
+                fieldProps={{ rows: 4 }}
+                extra="使用 {字段名} 引用其他字段，支持基本数学运算"
+              />
+            </div>
           </>
         );
       case 'textarea':
         return (
           <>
-            <ProFormTextArea
-              name="default_value"
-              label="默认值"
-              placeholder="请输入默认值（可选）"
-              fieldProps={{ rows: 3 }}
-            />
-            <ProFormDigit
-              name="textarea_rows"
-              label="行数"
-              placeholder="请输入行数"
-              fieldProps={{ min: 1, max: 20 }}
-              initialValue={4}
-            />
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormTextArea
+                name="default_value"
+                label="默认值"
+                placeholder="请输入默认值（可选）"
+                fieldProps={{ rows: 3 }}
+              />
+            </div>
+            <div style={{ gridColumn: 'span 1' }}>
+              <ProFormDigit
+                name="textarea_rows"
+                label="行数"
+                placeholder="请输入行数"
+                fieldProps={{ min: 1, max: 20 }}
+                initialValue={4}
+              />
+            </div>
           </>
         );
       case 'json':
         return (
           <>
-            <ProFormTextArea
-              name="default_value"
-              label="默认值（JSON）"
-              placeholder='请输入 JSON 格式的默认值，例如：{"key": "value"}'
-              fieldProps={{ rows: 6 }}
-              extra="请输入有效的 JSON 格式"
-            />
+            <div style={{ gridColumn: 'span 2' }}>
+              <ProFormTextArea
+                name="default_value"
+                label="默认值（JSON）"
+                placeholder='请输入 JSON 格式的默认值，例如：{"key": "value"}'
+                fieldProps={{ rows: 6 }}
+                extra="请输入有效的 JSON 格式"
+              />
+            </div>
           </>
         );
       default:
@@ -967,30 +1042,38 @@ const CustomFieldListPage: React.FC = () => {
 
             {/* 功能页面列表 */}
             <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-              {getCustomFieldModules().map(module => {
-                const modulePages = (filteredPages || []).filter(page => page?.module === module);
-                if (modulePages.length === 0) return null;
+              {pageConfigsLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Spin size="large" />
+                  <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>
+                    加载页面配置中...
+                  </div>
+                </div>
+              ) : (
+                Array.from(new Set(pageConfigs.map(p => p.module))).map(module => {
+                  const modulePages = (filteredPages || []).filter(page => page?.module === module);
+                  if (modulePages.length === 0) return null;
 
-                return (
-                  <div key={module} style={{ marginBottom: '16px' }}>
-                    <div
-                      style={{
-                        padding: '8px 12px',
-                        fontWeight: 500,
-                        fontSize: '14px',
-                        color: token.colorTextHeading,
-                        backgroundColor: token.colorFillSecondary,
-                        borderRadius: token.borderRadius,
-                        marginBottom: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                      }}
-                    >
-                      <DatabaseOutlined />
-                      {module}
-                    </div>
-                    {modulePages.map(page => {
+                  return (
+                    <div key={module} style={{ marginBottom: '16px' }}>
+                      <div
+                        style={{
+                          padding: '8px 12px',
+                          fontWeight: 500,
+                          fontSize: '14px',
+                          color: token.colorTextHeading,
+                          backgroundColor: token.colorFillSecondary,
+                          borderRadius: token.borderRadius,
+                          marginBottom: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <DatabaseOutlined />
+                        {module}
+                      </div>
+                      {modulePages.map(page => {
                       const isSelected = selectedPageCode === page.pageCode;
                       const fieldCount = pageFieldCounts[page.pageCode] || 0;
                       return (
@@ -1036,9 +1119,10 @@ const CustomFieldListPage: React.FC = () => {
                         </div>
                       );
                     })}
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -1183,18 +1267,23 @@ const CustomFieldListPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.LARGE_WIDTH}
       >
         <ProForm
           formRef={formRef}
           submitter={false}
           layout="vertical"
+          grid={true}
+          rowProps={{
+            gutter: 16,
+          }}
         >
           <ProFormText
             name="name"
             label="字段名称"
             rules={[{ required: true, message: '请输入字段名称' }]}
             placeholder="请输入字段名称"
+            colProps={{ span: 12 }}
           />
           <ProFormText
             name="code"
@@ -1203,6 +1292,7 @@ const CustomFieldListPage: React.FC = () => {
             placeholder="请输入字段代码（唯一标识）"
             disabled={isEdit}
             extra="字段代码用于程序调用，创建后不可修改"
+            colProps={{ span: 12 }}
           />
           <ProFormText
             name="table_name"
@@ -1211,6 +1301,7 @@ const CustomFieldListPage: React.FC = () => {
             disabled={true}
             initialValue={selectedPage?.tableName || ''}
             extra={isEdit ? "关联表名，创建后不可修改" : "关联表名，根据选中的功能页面自动填充"}
+            colProps={{ span: 12 }}
           />
           <SafeProFormSelect
             name="field_type"
@@ -1239,16 +1330,19 @@ const CustomFieldListPage: React.FC = () => {
               },
             }}
             disabled={isEdit}
+            colProps={{ span: 12 }}
           />
           <ProFormText
             name="label"
             label="字段标签"
             placeholder="请输入字段标签（显示名称）"
+            colProps={{ span: 12 }}
           />
           <ProFormText
             name="placeholder"
             label="占位符"
             placeholder="请输入占位符"
+            colProps={{ span: 12 }}
           />
           <div style={{ 
             padding: '16px', 
@@ -1256,33 +1350,39 @@ const CustomFieldListPage: React.FC = () => {
             borderRadius: '4px',
             border: '1px solid #d9d9d9',
             marginBottom: 16,
+            gridColumn: '1 / -1',
           }}>
             <div style={{ marginBottom: 12, fontWeight: 500 }}>字段配置</div>
-            {renderConfigFields()}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {renderConfigFields()}
+            </div>
           </div>
-          <Space style={{ width: '100%' }} size="large">
-            <ProFormSwitch
-              name="is_required"
-              label="是否必填"
-            />
-            <ProFormSwitch
-              name="is_searchable"
-              label="是否可搜索"
-            />
-            <ProFormSwitch
-              name="is_sortable"
-              label="是否可排序"
-            />
-          </Space>
+          <ProFormSwitch
+            name="is_required"
+            label="是否必填"
+            colProps={{ span: 8 }}
+          />
+          <ProFormSwitch
+            name="is_searchable"
+            label="是否可搜索"
+            colProps={{ span: 8 }}
+          />
+          <ProFormSwitch
+            name="is_sortable"
+            label="是否可排序"
+            colProps={{ span: 8 }}
+          />
           <ProFormDigit
             name="sort_order"
             label="排序顺序"
             fieldProps={{ min: 0 }}
             initialValue={0}
+            colProps={{ span: 12 }}
           />
           <ProFormSwitch
             name="is_active"
             label="是否启用"
+            colProps={{ span: 12 }}
           />
         </ProForm>
       </FormModalTemplate>

@@ -1,7 +1,7 @@
 /**
- * BOM可视化设计器页面
+ * 工程BOM可视化设计器页面
  * 
- * 使用 ProFlow 可视化设计BOM（物料清单）结构。
+ * 使用 ProFlow 可视化设计工程BOM结构。
  * 支持节点拖拽、连接线绘制、节点属性配置等功能。
  * 
  * Author: Luigi Lu
@@ -141,7 +141,7 @@ const BOMDesignerPage: React.FC = () => {
       loadBOMData();
     } else {
       messageApi.warning('缺少物料ID参数');
-      navigate('/apps/master-data/materials/bom');
+      navigate('/apps/master-data/process/engineering-bom');
     }
   }, [materialId, version]);
 
@@ -251,7 +251,7 @@ const BOMDesignerPage: React.FC = () => {
       setEdges(childEdges);
     } catch (error: any) {
       messageApi.error(error.message || '加载BOM数据失败');
-      navigate('/apps/master-data/materials/bom');
+      navigate('/apps/master-data/process/engineering-bom');
     } finally {
       setLoading(false);
     }

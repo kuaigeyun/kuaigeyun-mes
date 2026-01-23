@@ -101,11 +101,11 @@ export const CUSTOM_FIELD_PAGES: CustomFieldPageConfig[] = [
   {
     module: '主数据管理',
     moduleIcon: 'database',
-    pageCode: 'master-data-bom',
-    pageName: 'BOM管理',
-    pagePath: '/apps/master-data/materials/bom',
+    pageCode: 'master-data-engineering-bom',
+    pageName: '工程BOM',
+    pagePath: '/apps/master-data/process/engineering-bom',
     tableName: 'master_data_boms',
-    tableNameLabel: 'BOM表',
+    tableNameLabel: '工程BOM表',
   },
   // 主数据管理 - 工艺管理
   {
@@ -138,11 +138,11 @@ export const CUSTOM_FIELD_PAGES: CustomFieldPageConfig[] = [
   {
     module: '主数据管理',
     moduleIcon: 'database',
-    pageCode: 'master-data-sop',
-    pageName: 'SOP管理',
+    pageCode: 'master-data-manufacturing-bom',
+    pageName: '制造BOM',
     pagePath: '/apps/master-data/process/sop',
     tableName: 'master_data_sops',
-    tableNameLabel: 'SOP表',
+    tableNameLabel: '制造BOM表',
   },
   // 主数据管理 - 供应链
   {

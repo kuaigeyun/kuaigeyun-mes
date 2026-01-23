@@ -48,25 +48,60 @@ class FactoryService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
-        # 检查编码是否已存在
-        existing = await Plant.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        existing_active = await Plant.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"厂区编码 {data.code} 已存在")
         
-        # 创建厂区
+        # 检查是否存在相同编码的软删除记录
+        existing_deleted = await Plant.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.address = data.address if hasattr(data, 'address') else None
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return PlantResponse.model_validate(existing_deleted)
+        
+        # 创建新厂区
         try:
             plant = await Plant.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                # 再次检查是否有软删除记录（可能在并发情况下被创建）
+                existing_deleted_retry = await Plant.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.address = data.address if hasattr(data, 'address') else None
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return PlantResponse.model_validate(existing_deleted_retry)
+                
                 raise ValidationError(f"厂区编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
@@ -368,25 +403,112 @@ class FactoryService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
-        # 检查编码是否已存在
-        existing = await Workshop.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        # 先尝试精确匹配
+        existing_active = await Workshop.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"车间编码 {data.code} 已存在")
         
-        # 创建车间
+        # 检查是否存在相同编码的软删除记录（精确匹配）
+        existing_deleted = await Workshop.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return WorkshopResponse.model_validate(existing_deleted)
+        
+        # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
+        code_upper = data.code.upper() if data.code else None
+        if code_upper:
+            # 查询所有可能的匹配（使用模糊查询，然后手动过滤）
+            all_possible = await Workshop.filter(
+                tenant_id=tenant_id,
+                code__icontains=code_upper
+            ).all()
+            
+            # 手动精确匹配（不区分大小写）
+            for record in all_possible:
+                if record.code and record.code.upper() == code_upper:
+                    if record.deleted_at is None:
+                        raise ValidationError(f"车间编码 {data.code} 已存在（编码大小写不一致）")
+                    else:
+                        # 找到软删除记录，恢复它
+                        existing_deleted = record
+                        existing_deleted.deleted_at = None
+                        existing_deleted.name = data.name
+                        existing_deleted.description = data.description
+                        existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
+                        existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+                        # 统一使用新传入的编码
+                        existing_deleted.code = data.code
+                        await existing_deleted.save()
+                        return WorkshopResponse.model_validate(existing_deleted)
+        
+        # 创建新车间
         try:
             workshop = await Workshop.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                # 再次检查是否有软删除记录（可能在并发情况下被创建）
+                # 先尝试精确匹配
+                existing_deleted_retry = await Workshop.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return WorkshopResponse.model_validate(existing_deleted_retry)
+                
+                # 如果不区分大小写的匹配
+                if code_upper:
+                    all_possible_retry = await Workshop.filter(
+                        tenant_id=tenant_id,
+                        code__icontains=code_upper
+                    ).all()
+                    
+                    for record in all_possible_retry:
+                        if record.code and record.code.upper() == code_upper:
+                            if record.deleted_at is not None:
+                                # 恢复软删除的记录
+                                record.deleted_at = None
+                                record.name = data.name
+                                record.description = data.description
+                                record.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
+                                record.is_active = data.is_active if hasattr(data, 'is_active') else True
+                                # 统一使用新传入的编码
+                                record.code = data.code
+                                await record.save()
+                                return WorkshopResponse.model_validate(record)
+                            else:
+                                raise ValidationError(f"车间编码 {data.code} 已存在")
+                
                 raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
@@ -698,25 +820,137 @@ class FactoryService:
         if not workshop:
             raise ValidationError(f"车间 {data.workshop_id} 不存在")
         
-        # 检查编码是否已存在
-        existing = await ProductionLine.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        code_upper = data.code.upper() if data.code else None
+        
+        # 先尝试精确匹配活跃记录
+        existing_active = await ProductionLine.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"产线编码 {data.code} 已存在")
         
-        # 创建产线
+        # 检查是否存在相同编码的软删除记录（精确匹配）
+        existing_deleted = await ProductionLine.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.workshop_id = data.workshop_id
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return ProductionLineResponse.model_validate(existing_deleted)
+        
+        # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
+        # 注意：即使 code 已经是大写，也要检查，因为数据库中可能有不同大小写的记录
+        if code_upper:
+            # 查询所有可能的匹配（使用模糊查询，然后手动过滤）
+            all_possible = await ProductionLine.filter(
+                tenant_id=tenant_id,
+                code__icontains=code_upper
+            ).all()
+            
+            # 手动精确匹配（不区分大小写）
+            for record in all_possible:
+                if record.code and record.code.upper() == code_upper:
+                    if record.deleted_at is None:
+                        raise ValidationError(f"产线编码 {data.code} 已存在（编码大小写不一致：{record.code}）")
+                    else:
+                        # 找到软删除记录，恢复它
+                        existing_deleted = record
+                        existing_deleted.deleted_at = None
+                        existing_deleted.name = data.name
+                        existing_deleted.description = data.description
+                        existing_deleted.workshop_id = data.workshop_id
+                        existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+                        # 统一使用新传入的编码
+                        existing_deleted.code = data.code
+                        await existing_deleted.save()
+                        return ProductionLineResponse.model_validate(existing_deleted)
+        
+        # 创建新产线
         try:
             production_line = await ProductionLine.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                from loguru import logger
+                logger.debug(f"产线编码 {data.code} 创建时发生 IntegrityError，尝试查找软删除记录: {error_str}")
+                
+                # 再次全面检查是否有软删除记录（可能在并发情况下被创建，或查询时遗漏）
+                # 先尝试精确匹配
+                existing_deleted_retry = await ProductionLine.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    logger.info(f"找到软删除的产线记录，恢复: {data.code}")
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.workshop_id = data.workshop_id
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return ProductionLineResponse.model_validate(existing_deleted_retry)
+                
+                # 如果不区分大小写的匹配（更全面的搜索）
+                # 直接查询所有记录（包括软删除的），然后手动过滤，确保不遗漏
+                if code_upper:
+                    # 查询所有记录（不限制 deleted_at），然后手动过滤
+                    all_records = await ProductionLine.filter(
+                        tenant_id=tenant_id
+                    ).all()
+                    
+                    logger.debug(f"查询到 {len(all_records)} 条产线记录（包括软删除的）")
+                    
+                    for record in all_records:
+                        if record.code and record.code.upper() == code_upper:
+                            if record.deleted_at is not None:
+                                logger.info(f"找到软删除的产线记录（大小写不一致），恢复: {record.code} -> {data.code}")
+                                # 恢复软删除的记录
+                                record.deleted_at = None
+                                record.name = data.name
+                                record.description = data.description
+                                record.workshop_id = data.workshop_id
+                                record.is_active = data.is_active if hasattr(data, 'is_active') else True
+                                # 统一使用新传入的编码
+                                record.code = data.code
+                                await record.save()
+                                return ProductionLineResponse.model_validate(record)
+                            else:
+                                # 如果找到活跃记录，说明有并发问题
+                                logger.warning(f"发现活跃的产线记录（大小写不一致）: {record.code}，但之前检查未找到")
+                                raise ValidationError(f"产线编码 {data.code} 已存在（编码大小写不一致：{record.code}）")
+                
+                # 如果仍然找不到软删除记录，检查是否有活跃记录（可能是并发创建）
+                existing_active_retry = await ProductionLine.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if existing_active_retry:
+                    logger.warning(f"发现活跃的产线记录: {data.code}，但之前检查未找到（可能是并发创建）")
+                    raise ValidationError(f"产线编码 {data.code} 已存在")
+                
+                # 如果仍然找不到任何记录，可能是数据库约束问题
+                logger.error(f"产线编码 {data.code} 创建失败，IntegrityError: {error_str}，但未找到任何匹配记录")
                 raise ValidationError(f"产线编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
@@ -1006,25 +1240,137 @@ class FactoryService:
         if not production_line:
             raise ValidationError(f"产线 {data.production_line_id} 不存在")
         
-        # 检查编码是否已存在
-        existing = await Workstation.filter(
+        # 检查编码是否已存在（包括软删除的记录）
+        code_upper = data.code.upper() if data.code else None
+        
+        # 先尝试精确匹配活跃记录
+        existing_active = await Workstation.filter(
             tenant_id=tenant_id,
             code=data.code,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"工位编码 {data.code} 已存在")
         
-        # 创建工位
+        # 检查是否存在相同编码的软删除记录（精确匹配）
+        existing_deleted = await Workstation.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录，更新其数据
+            existing_deleted.deleted_at = None
+            existing_deleted.name = data.name
+            existing_deleted.description = data.description
+            existing_deleted.production_line_id = data.production_line_id
+            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+            await existing_deleted.save()
+            return WorkstationResponse.model_validate(existing_deleted)
+        
+        # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
+        # 注意：即使 code 已经是大写，也要检查，因为数据库中可能有不同大小写的记录
+        if code_upper:
+            # 查询所有可能的匹配（使用模糊查询，然后手动过滤）
+            all_possible = await Workstation.filter(
+                tenant_id=tenant_id,
+                code__icontains=code_upper
+            ).all()
+            
+            # 手动精确匹配（不区分大小写）
+            for record in all_possible:
+                if record.code and record.code.upper() == code_upper:
+                    if record.deleted_at is None:
+                        raise ValidationError(f"工位编码 {data.code} 已存在（编码大小写不一致：{record.code}）")
+                    else:
+                        # 找到软删除记录，恢复它
+                        existing_deleted = record
+                        existing_deleted.deleted_at = None
+                        existing_deleted.name = data.name
+                        existing_deleted.description = data.description
+                        existing_deleted.production_line_id = data.production_line_id
+                        existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
+                        # 统一使用新传入的编码
+                        existing_deleted.code = data.code
+                        await existing_deleted.save()
+                        return WorkstationResponse.model_validate(existing_deleted)
+        
+        # 创建新工位
         try:
             workstation = await Workstation.create(
                 tenant_id=tenant_id,
                 **data.dict()
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            # 捕获数据库唯一约束或主键冲突错误
+            error_str = str(e).lower()
+            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
+                from loguru import logger
+                logger.debug(f"工位编码 {data.code} 创建时发生 IntegrityError，尝试查找软删除记录: {error_str}")
+                
+                # 再次全面检查是否有软删除记录（可能在并发情况下被创建，或查询时遗漏）
+                # 先尝试精确匹配
+                existing_deleted_retry = await Workstation.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=False
+                ).first()
+                
+                if existing_deleted_retry:
+                    logger.info(f"找到软删除的工位记录，恢复: {data.code}")
+                    # 恢复软删除的记录
+                    existing_deleted_retry.deleted_at = None
+                    existing_deleted_retry.name = data.name
+                    existing_deleted_retry.description = data.description
+                    existing_deleted_retry.production_line_id = data.production_line_id
+                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
+                    await existing_deleted_retry.save()
+                    return WorkstationResponse.model_validate(existing_deleted_retry)
+                
+                # 如果不区分大小写的匹配（更全面的搜索）
+                # 直接查询所有记录（包括软删除的），然后手动过滤，确保不遗漏
+                if code_upper:
+                    # 查询所有记录（不限制 deleted_at），然后手动过滤
+                    all_records = await Workstation.filter(
+                        tenant_id=tenant_id
+                    ).all()
+                    
+                    logger.debug(f"查询到 {len(all_records)} 条工位记录（包括软删除的）")
+                    
+                    for record in all_records:
+                        if record.code and record.code.upper() == code_upper:
+                            if record.deleted_at is not None:
+                                logger.info(f"找到软删除的工位记录（大小写不一致），恢复: {record.code} -> {data.code}")
+                                # 恢复软删除的记录
+                                record.deleted_at = None
+                                record.name = data.name
+                                record.description = data.description
+                                record.production_line_id = data.production_line_id
+                                record.is_active = data.is_active if hasattr(data, 'is_active') else True
+                                # 统一使用新传入的编码
+                                record.code = data.code
+                                await record.save()
+                                return WorkstationResponse.model_validate(record)
+                            else:
+                                # 如果找到活跃记录，说明有并发问题
+                                logger.warning(f"发现活跃的工位记录（大小写不一致）: {record.code}，但之前检查未找到")
+                                raise ValidationError(f"工位编码 {data.code} 已存在（编码大小写不一致：{record.code}）")
+                
+                # 如果仍然找不到软删除记录，检查是否有活跃记录（可能是并发创建）
+                existing_active_retry = await Workstation.filter(
+                    tenant_id=tenant_id,
+                    code=data.code,
+                    deleted_at__isnull=True
+                ).first()
+                
+                if existing_active_retry:
+                    logger.warning(f"发现活跃的工位记录: {data.code}，但之前检查未找到（可能是并发创建）")
+                    raise ValidationError(f"工位编码 {data.code} 已存在")
+                
+                # 如果仍然找不到任何记录，可能是数据库约束问题
+                logger.error(f"工位编码 {data.code} 创建失败，IntegrityError: {error_str}，但未找到任何匹配记录")
                 raise ValidationError(f"工位编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         

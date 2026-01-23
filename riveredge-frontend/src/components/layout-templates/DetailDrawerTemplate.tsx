@@ -75,12 +75,30 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
 }: DetailDrawerTemplateProps<T>) => {
   const { token } = useToken();
 
+  // 根据宽度选择合适的 size
+  // Ant Design 5.x: size='default' (378px) 或 size='large' (736px)
+  // 对于自定义宽度，如果接近预设值则使用 size，否则使用 width（虽然弃用但功能正常）
+  let drawerSize: 'default' | 'large' | undefined = undefined;
+  let drawerWidth: number | string | undefined = undefined;
+  
+  if (typeof width === 'number') {
+    if (width <= 400) {
+      drawerSize = 'default'; // 378px
+    } else if (width <= 750) {
+      drawerSize = 'large'; // 736px，适合 720px
+    } else {
+      drawerWidth = width; // 超过 750px 使用自定义宽度（虽然会警告，但功能正常）
+    }
+  } else {
+    drawerWidth = width; // 字符串类型的宽度
+  }
+
   return (
     <Drawer
       title={title}
       open={open}
       onClose={onClose}
-      size={width}
+      {...(drawerSize ? { size: drawerSize } : { width: drawerWidth })}
       loading={loading}
       className={className}
       extra={extra}
