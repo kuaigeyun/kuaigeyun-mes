@@ -64,10 +64,19 @@ const CodeField: React.FC<CodeFieldProps> = ({
       setLoading(true);
       
       // 使用测试生成（不更新序号）或正式生成（更新序号）
+      // 根据 pageCode 确定实体类型
+      const entityTypeMap: Record<string, string> = {
+        'master-data-material': 'material',
+        'master-data-process-route': 'process_route',
+      };
+      const entityType = entityTypeMap[pageCode];
+      
       const response = isTest
         ? await testGenerateCode({
             rule_code: config.ruleCode,
             context,
+            check_duplicate: true,
+            entity_type: entityType,
           })
         : await generateCode({
             rule_code: config.ruleCode,
@@ -94,14 +103,33 @@ const CodeField: React.FC<CodeFieldProps> = ({
         
         // 如果是新建且启用自动生成，自动生成编码
         if (autoGenerateOnCreate && config?.autoGenerate && config?.ruleCode && !value) {
-          handleGenerateCode(config, false);  // 使用正式生成（更新序号）
+          // 使用测试生成（带重复检测），避免正式生成时序号被占用
+          const entityTypeMap: Record<string, string> = {
+            'master-data-material': 'material',
+            'master-data-process-route': 'process_route',
+          };
+          const entityType = entityTypeMap[pageCode];
+          
+          try {
+            const response = await testGenerateCode({
+              rule_code: config.ruleCode,
+              context,
+              check_duplicate: true,
+              entity_type: entityType,
+            });
+            if (response.code && onChange) {
+              onChange(response.code);
+            }
+          } catch (error: any) {
+            console.warn('自动生成编码失败:', error);
+          }
         }
       } catch (error) {
         console.error('加载编码规则配置失败:', error);
       }
     };
     loadConfig();
-  }, [pageCode, autoGenerateOnCreate, handleGenerateCode, value]);
+  }, [pageCode, autoGenerateOnCreate, context, onChange, value]);
 
   // 如果未配置编码规则，使用普通文本输入框
   if (!pageConfig || !pageConfig.autoGenerate) {

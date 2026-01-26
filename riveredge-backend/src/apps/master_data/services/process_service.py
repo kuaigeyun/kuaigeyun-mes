@@ -661,7 +661,7 @@ class ProcessService:
         data: ProcessRouteCreate
     ) -> ProcessRouteResponse:
         """
-        创建工艺路线
+        创建工艺路线。支持软删除后重用编码：若编码仅存在于已软删除记录，则恢复该记录并更新。
         
         Args:
             tenant_id: 租户ID
@@ -673,17 +673,44 @@ class ProcessService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
+        code_upper = (data.code or "").strip().upper()
+        if not code_upper:
+            raise ValidationError("工艺路线编码不能为空")
+        
         # 检查编码+版本是否已存在（同一编码可以有多个版本）
         version = data.version if hasattr(data, 'version') and data.version else "1.0"
-        existing = await ProcessRoute.filter(
+        
+        # 检查未删除记录
+        existing_active = await ProcessRoute.filter(
             tenant_id=tenant_id,
-            code=data.code,
+            code=code_upper,
             version=version,
             deleted_at__isnull=True
         ).first()
         
-        if existing:
+        if existing_active:
             raise ValidationError(f"工艺路线编码 {data.code} 版本 {version} 已存在")
+        
+        # 检查软删除记录：存在则恢复并更新
+        existing_deleted = await ProcessRoute.filter(
+            tenant_id=tenant_id,
+            code=code_upper,
+            version=version,
+            deleted_at__isnull=False
+        ).first()
+        
+        if existing_deleted:
+            # 恢复软删除的记录并更新
+            existing_deleted.deleted_at = None
+            existing_deleted.code = code_upper
+            existing_deleted.name = data.name
+            existing_deleted.description = getattr(data, 'description', None)
+            existing_deleted.is_active = getattr(data, 'is_active', True)
+            existing_deleted.operation_sequence = getattr(data, 'operation_sequence', None)
+            await existing_deleted.save()
+            
+            # 返回恢复的记录
+            return ProcessRouteResponse.from_orm(existing_deleted)
         
         # 创建工艺路线
         route_data = data.dict(exclude={'parent_route_uuid'})

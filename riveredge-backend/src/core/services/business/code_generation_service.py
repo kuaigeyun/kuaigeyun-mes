@@ -232,6 +232,17 @@ class CodeGenerationService:
             ).first()
             return existing is not None
         
+        if entity_type == 'process_route':
+            from apps.master_data.models.process import ProcessRoute
+            # 检查未删除的记录（同一编码可以有多个版本，这里只检查编码是否存在）
+            # 注意：工艺路线支持同一编码有多个版本，所以这里只检查编码是否存在
+            existing = await ProcessRoute.filter(
+                tenant_id=tenant_id,
+                code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+        
         # 其他实体类型的检查可以在这里扩展
         return False
     

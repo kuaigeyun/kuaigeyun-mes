@@ -162,10 +162,10 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     pageName: '工艺路线',
     pagePath: '/apps/master-data/process/routes',
     codeField: 'code',
-    codeFieldLabel: '路线编码',
+    codeFieldLabel: '工艺路线编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
   },
   {
     pageCode: 'master-data-defect-type',
