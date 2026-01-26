@@ -19,6 +19,7 @@ import type { ProcessRoute, ProcessRouteCreate, ProcessRouteUpdate, Operation, P
 import type { Material, MaterialGroup } from '../../../types/material';
 import { ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import CodeField from '../../../../../components/code-field';
 
 /**
  * 工序项接口
@@ -1936,19 +1937,16 @@ const ProcessRoutesPage: React.FC = () => {
             padding-left: 8px;
           }
         `}</style>
-        <ProFormText
+        <CodeField
+          pageCode="master-data-process-route"
           name="code"
           label="工艺路线编码"
-          placeholder="请输入工艺路线编码"
+          required={true}
           colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: '请输入工艺路线编码' },
-            { max: 50, message: '工艺路线编码不能超过50个字符' },
-          ]}
           fieldProps={{
             style: { textTransform: 'uppercase' },
           }}
-          extra="工艺路线的唯一标识编码"
+          autoGenerateOnCreate={!isEdit}
         />
         <ProFormText
           name="name"

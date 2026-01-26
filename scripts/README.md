@@ -10,6 +10,7 @@ scripts/
 ├── init/           # 初始化脚本
 ├── tests/          # 测试脚本
 ├── sql/            # SQL 脚本
+├── reports/        # 检查报告和生成的分析报告
 └── ...             # 其他脚本（路由重载、测试等）
 ```
 
@@ -30,6 +31,13 @@ scripts/
 
 ### sql/ - SQL 脚本
 - `init_apps.sql` - 初始化应用数据的 SQL 脚本
+
+### reports/ - 检查报告
+- `factory_pages_uniformity_report.md` - 工厂数据页面功能统一性报告
+- `menu_display_check_report.md` - 应用菜单显示检查报告
+- `menu_display_comprehensive_report.md` - 应用菜单显示全面检查报告
+- `menu_translation_optimization.md` - 菜单翻译优化报告
+- `menu_unification_final_report.md` - 菜单统一化最终报告
 
 ### 其他脚本
 - `reload-app-routes.sh` - 重载应用路由（Shell 脚本）
