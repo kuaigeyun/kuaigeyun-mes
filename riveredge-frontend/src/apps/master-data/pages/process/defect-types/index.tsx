@@ -13,6 +13,8 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../..
 import { defectTypeApi } from '../../../services/process';
 import type { DefectType, DefectTypeCreate, DefectTypeUpdate } from '../../../types/process';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 不良品信息管理列表页面组件
@@ -33,18 +35,42 @@ const DefectTypesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  /** 预览编码（自动编码时使用，提交时若未修改则正式生成） */
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
 
   /**
    * 处理新建不良品
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentDefectTypeUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+
+    if (isAutoGenerateEnabled('master-data-defect-type')) {
+      const ruleCode = getPageRuleCode('master-data-defect-type');
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const previewCodeValue = codeResponse.code;
+          setPreviewCode(previewCodeValue);
+          formRef.current?.setFieldsValue({
+            code: previewCodeValue,
+            isActive: true,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          setPreviewCode(null);
+          formRef.current?.setFieldsValue({ isActive: true });
+        }
+      } else {
+        setPreviewCode(null);
+        formRef.current?.setFieldsValue({ isActive: true });
+      }
+    } else {
+      setPreviewCode(null);
+      formRef.current?.setFieldsValue({ isActive: true });
+    }
   };
 
   /**
@@ -54,9 +80,9 @@ const DefectTypesPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentDefectTypeUuid(record.uuid);
+      setPreviewCode(null);
       setModalVisible(true);
-      
-      // 获取不良品详情
+
       const detail = await defectTypeApi.get(record.uuid);
       formRef.current?.setFieldsValue({
         code: detail.code,
@@ -163,18 +189,29 @@ const DefectTypesPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
+
       if (isEdit && currentDefectTypeUuid) {
-        // 更新不良品
         await defectTypeApi.update(currentDefectTypeUuid, values as DefectTypeUpdate);
         messageApi.success('更新成功');
       } else {
-        // 创建不良品
+        if (isAutoGenerateEnabled('master-data-defect-type')) {
+          const ruleCode = getPageRuleCode('master-data-defect-type');
+          const currentCode = values.code;
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成编码失败，使用预览编码:', error);
+            }
+          }
+        }
         await defectTypeApi.create(values as DefectTypeCreate);
         messageApi.success('创建成功');
       }
-      
+
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -189,6 +226,7 @@ const DefectTypesPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -392,7 +430,7 @@ const DefectTypesPage: React.FC = () => {
         <ProFormText
           name="code"
           label="不良品编码"
-          placeholder="请输入不良品编码"
+          placeholder={isAutoGenerateEnabled('master-data-defect-type') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入不良品编码'}
           colProps={{ span: 12 }}
           rules={[
             { required: true, message: '请输入不良品编码' },

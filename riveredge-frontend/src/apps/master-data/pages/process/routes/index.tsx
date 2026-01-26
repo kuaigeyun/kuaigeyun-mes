@@ -5,10 +5,10 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col, Spin, Empty } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions, ProForm } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, message, Select, Divider, Typography, Row, Col, Spin, Empty, Alert, Table } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, HolderOutlined, BranchesOutlined, HistoryOutlined, DiffOutlined, FileTextOutlined, CopyOutlined } from '@ant-design/icons';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, DragOverEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { UniTable } from '../../../../../components/uni-table';
@@ -40,6 +40,14 @@ interface OperationItem {
    * 工序描述
    */
   description?: string;
+  /**
+   * 报工类型
+   */
+  reportingType?: 'quantity' | 'status';
+  /**
+   * 是否允许跳转
+   */
+  allowJump?: boolean;
 }
 
 /**
@@ -167,7 +175,13 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
   const [operations, setOperations] = useState<OperationItem[]>(value);
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedOperationUuid, setSelectedOperationUuid] = useState<string | undefined>(undefined);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [selectedOperationUuids, setSelectedOperationUuids] = useState<string[]>([]);
+  const [replaceModalVisible, setReplaceModalVisible] = useState(false);
+  const [replacingOperationUuid, setReplacingOperationUuid] = useState<string | null>(null);
+  const [replacementOperationUuid, setReplacementOperationUuid] = useState<string | undefined>(undefined);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -202,10 +216,27 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
   }, [value]);
 
   /**
+   * 处理拖拽开始
+   */
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  /**
+   * 处理拖拽悬停
+   */
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    setOverId(over ? (over.id as string) : null);
+  };
+
+  /**
    * 处理拖拽结束
    */
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveId(null);
+    setOverId(null);
 
     if (over && active.id !== over.id) {
       const oldIndex = operations.findIndex((op) => op.uuid === active.id);
@@ -221,36 +252,49 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
    * 添加工序
    */
   const handleAddOperation = () => {
-    if (!selectedOperationUuid) {
+    if (!selectedOperationUuids || selectedOperationUuids.length === 0) {
       message.warning('请选择要添加的工序');
       return;
     }
 
-    // 检查是否已添加
-    if (operations.some((op) => op.uuid === selectedOperationUuid)) {
-      message.warning('该工序已添加');
+    // 过滤出未添加的工序
+    const newOperations = selectedOperationUuids
+      .map((uuid) => allOperations.find((op) => op.uuid === uuid))
+      .filter((op): op is Operation => {
+        if (!op) {
+          return false;
+        }
+        // 检查是否已添加
+        if (operations.some((existingOp) => existingOp.uuid === op.uuid)) {
+          return false;
+        }
+        return true;
+      });
+
+    if (newOperations.length === 0) {
+      message.warning('所选工序均已添加或未找到');
       return;
     }
 
-    // 查找选中的工序
-    const selectedOperation = allOperations.find((op) => op.uuid === selectedOperationUuid);
-    if (!selectedOperation) {
-      message.error('未找到选中的工序');
-      return;
-    }
+    // 批量添加工序
+    const newOperationItems: OperationItem[] = newOperations.map((op) => ({
+      uuid: op.uuid,
+      code: op.code,
+      name: op.name,
+      description: op.description || undefined,
+      reportingType: op.reportingType,
+      allowJump: op.allowJump,
+    }));
 
-    // 添加到列表
-    const newOperation: OperationItem = {
-      uuid: selectedOperation.uuid,
-      code: selectedOperation.code,
-      name: selectedOperation.name,
-      description: selectedOperation.description,
-    };
+    // 添加新工序到列表
+    const updatedOperations = [...operations, ...newOperationItems];
+    setOperations(updatedOperations);
+    onChange?.(updatedOperations);
 
-    const newOperations = [...operations, newOperation];
-    setOperations(newOperations);
-    onChange?.(newOperations);
-    setSelectedOperationUuid(undefined);
+    // 关闭 Modal 并清空选择
+    setAddModalVisible(false);
+    setSelectedOperationUuids([]);
+    message.success(`成功添加 ${newOperationItems.length} 个工序`);
   };
 
   /**
@@ -262,134 +306,625 @@ const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({ value
     onChange?.(newOperations);
   };
 
+  /**
+   * 打开替换工序 Modal
+   */
+  const handleOpenReplaceModal = (uuid: string) => {
+    setReplacingOperationUuid(uuid);
+    setReplacementOperationUuid(undefined);
+    setReplaceModalVisible(true);
+  };
+
+  /**
+   * 替换工序
+   */
+  const handleReplaceOperation = () => {
+    if (!replacingOperationUuid || !replacementOperationUuid) {
+      message.warning('请选择要替换的工序');
+      return;
+    }
+
+    // 检查是否选择了相同的工序
+    if (replacingOperationUuid === replacementOperationUuid) {
+      message.warning('不能替换为相同的工序');
+      return;
+    }
+
+    // 检查替换的工序是否已在列表中（排除当前要替换的）
+    if (operations.some((op) => op.uuid === replacementOperationUuid && op.uuid !== replacingOperationUuid)) {
+      message.warning('该工序已在列表中');
+      return;
+    }
+
+    // 查找要替换的工序和替换的工序
+    const replacingIndex = operations.findIndex((op) => op.uuid === replacingOperationUuid);
+    if (replacingIndex === -1) {
+      message.error('未找到要替换的工序');
+      return;
+    }
+
+    const replacementOperation = allOperations.find((op) => op.uuid === replacementOperationUuid);
+    if (!replacementOperation) {
+      message.error('未找到替换的工序');
+      return;
+    }
+
+    // 替换工序
+    const newOperations = [...operations];
+    newOperations[replacingIndex] = {
+      uuid: replacementOperation.uuid,
+      code: replacementOperation.code,
+      name: replacementOperation.name,
+      description: replacementOperation.description || undefined,
+      reportingType: replacementOperation.reportingType,
+      allowJump: replacementOperation.allowJump,
+    };
+
+    setOperations(newOperations);
+    onChange?.(newOperations);
+
+    // 关闭 Modal 并清空选择
+    setReplaceModalVisible(false);
+    setReplacingOperationUuid(null);
+    setReplacementOperationUuid(undefined);
+    message.success('工序替换成功');
+  };
+
   // 获取可选的工序列表（排除已添加的）
   const availableOperations = allOperations.filter(
     (op) => !operations.some((addedOp) => addedOp.uuid === op.uuid)
   );
 
-  return (
-    <div style={{ minHeight: 240 }}>
-      {/* 工序选择器 */}
-      <div style={{ marginBottom: 24 }}>
-        <Typography.Text strong style={{ marginBottom: 12, display: 'block' }}>
-          添加工序
-        </Typography.Text>
-        <Space.Compact style={{ width: '100%' }}>
-          <Select
-            placeholder="搜索并选择工序..."
-            options={availableOperations.map((op) => ({
-              label: `${op.code} - ${op.name}`,
-              value: op.uuid,
-              title: op.description || `${op.code} - ${op.name}`,
-            }))}
-            value={selectedOperationUuid}
-            onChange={setSelectedOperationUuid}
-            style={{ flex: 1, minWidth: 200 }}
-            loading={loading}
-            showSearch
-            allowClear
-            filterOption={(input: string, option: any) => {
-              const label = option?.label || '';
-              return label.toLowerCase().includes(input.toLowerCase());
+  // 获取替换时可选的工序列表（排除已添加的，但包括当前要替换的工序）
+  const getAvailableOperationsForReplace = (excludeUuid: string | null) => {
+    if (!excludeUuid) return availableOperations;
+    return allOperations.filter(
+      (op) => op.uuid === excludeUuid || !operations.some((addedOp) => addedOp.uuid === op.uuid)
+    );
+  };
+
+  // 表格列定义
+  const columns = [
+    {
+      title: '序号',
+      key: 'index',
+      width: 100,
+      render: (_: any, record: OperationItem, index: number) => (
+        <Space>
+          <span 
+            className="drag-handle" 
+            style={{ 
+              color: '#1890ff', 
+              cursor: 'move', 
+              display: 'inline-flex', 
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              padding: '4px',
+              minWidth: '24px',
+              minHeight: '24px',
             }}
-            notFoundContent={loading ? '加载中...' : '暂无可用工序'}
-          />
-          <Button
-            type="primary"
-            onClick={handleAddOperation}
-            disabled={!selectedOperationUuid || loading}
-            style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+            title="拖拽排序"
           >
-            <PlusOutlined />
-            添加
+            <HolderOutlined style={{ fontSize: '16px' }} />
+          </span>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '28px',
+              height: '28px',
+              padding: '0 8px',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #91d5ff',
+              borderRadius: '6px',
+              color: '#1890ff',
+              fontWeight: 600,
+              fontSize: '13px',
+            }}
+          >
+            {index + 1}
+          </span>
+        </Space>
+      ),
+    },
+    {
+      title: '工序代码/名称',
+      key: 'operation',
+      render: (_: any, record: OperationItem) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{record.code} - {record.name}</div>
+          {record.description && (
+            <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: 4 }}>
+              {record.description}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: '报工类型',
+      key: 'reportingType',
+      width: 120,
+      render: (_: any, record: OperationItem) => (
+        <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
+          {record.reportingType === 'quantity' ? '按数量报工' : record.reportingType === 'status' ? '按状态报工' : '-'}
+        </Tag>
+      ),
+    },
+    {
+      title: '允许跳转',
+      key: 'allowJump',
+      width: 100,
+      render: (_: any, record: OperationItem) => (
+        <Tag color={record.allowJump ? 'success' : 'default'}>
+          {record.allowJump ? '允许' : '不允许'}
+        </Tag>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 150,
+      render: (_: any, record: OperationItem) => (
+        <Space onClick={(e) => e.stopPropagation()}>
+          <Button
+            type="link"
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenReplaceModal(record.uuid);
+            }}
+          >
+            替换
           </Button>
-        </Space.Compact>
+          <Button
+            type="link"
+            danger
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteOperation(record.uuid);
+            }}
+          >
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  // 可拖拽的行组件
+  const DraggableRow = ({ children, ...props }: any) => {
+    const index = operations.findIndex((op) => op.uuid === props['data-row-key']);
+    const operation = operations[index];
+    
+    if (!operation) {
+      return <tr {...props}>{children}</tr>;
+    }
+
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+      isOver,
+    } = useSortable({ id: operation.uuid });
+
+    const isActiveOver = activeId && overId === operation.uuid && activeId !== operation.uuid;
+    const activeIndex = activeId ? operations.findIndex((op) => op.uuid === activeId) : -1;
+    const currentIndex = operations.findIndex((op) => op.uuid === operation.uuid);
+    const showInsertBefore = isActiveOver && activeIndex < currentIndex;
+    const showInsertAfter = isActiveOver && activeIndex > currentIndex;
+
+    const style = {
+      ...props.style,
+      transform: CSS.Transform.toString(transform),
+      transition: isDragging ? 'none' : transition,
+      opacity: isDragging ? 0.4 : 1,
+      backgroundColor: isDragging ? '#f0f9ff' : isOver && !isDragging ? '#e6f7ff' : 'transparent',
+      boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+      position: 'relative' as const,
+    };
+
+    return (
+      <tr
+        ref={setNodeRef}
+        style={style}
+        {...props}
+      >
+        {React.Children.map(children, (child: any, idx: number) => {
+          // 第一个单元格（序号列）包含拖拽手柄，应用拖拽监听器
+          if (idx === 0 && React.isValidElement(child)) {
+            return React.cloneElement(child, {
+              children: React.Children.map(child.props.children, (cellContent: any) => {
+                if (React.isValidElement(cellContent) && cellContent.type === Space) {
+                  return React.cloneElement(cellContent, {
+                    children: React.Children.map(cellContent.props.children, (item: any) => {
+                      // 找到包含 drag-handle class 的 span，应用拖拽监听器
+                      if (React.isValidElement(item) && item.props?.className === 'drag-handle') {
+                        return React.cloneElement(item, {
+                          ...attributes,
+                          ...listeners,
+                        });
+                      }
+                      return item;
+                    }),
+                  });
+                }
+                return cellContent;
+              }),
+            });
+          }
+          // 操作列阻止事件冒泡
+          if (idx === 4 && React.isValidElement(child)) {
+            return React.cloneElement(child, {
+              onClick: (e: React.MouseEvent) => {
+                e.stopPropagation();
+              },
+            });
+          }
+          return child;
+        })}
+      </tr>
+    );
+  };
+
+  // 获取正在拖拽的工序
+  const activeOperation = activeId ? operations.find((op) => op.uuid === activeId) : null;
+
+  return (
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+      {operations.length > 0 ? (
+        <SortableContext
+          items={operations.map((op) => op.uuid)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div style={{ position: 'relative', width: '100%', margin: 0, padding: 0 }}>
+            <Table
+                columns={columns}
+                dataSource={operations}
+                rowKey="uuid"
+                pagination={false}
+                size="small"
+                components={{
+                  body: {
+                    wrapper: (props: any) => {
+                      const activeIndex = activeId ? operations.findIndex((op) => op.uuid === activeId) : -1;
+                      const overIndex = overId ? operations.findIndex((op) => op.uuid === overId) : -1;
+                      const showInsertLine = activeId && overId && activeId !== overId && activeIndex !== -1 && overIndex !== -1;
+                      const insertBefore = showInsertLine && activeIndex < overIndex;
+                      const insertAfter = showInsertLine && activeIndex > overIndex;
+                      const insertIndex = insertBefore ? overIndex : insertAfter ? overIndex + 1 : -1;
+
+                      return (
+                        <tbody {...props}>
+                          {operations.map((op, idx) => {
+                            const isInsertBefore = showInsertLine && insertIndex === idx && insertBefore;
+                            const isInsertAfter = showInsertLine && insertIndex === idx && insertAfter;
+                            
+                            return (
+                              <React.Fragment key={op.uuid}>
+                                {isInsertBefore && (
+                                  <tr>
+                                    <td colSpan={5} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                      <div
+                                        style={{
+                                          height: '2px',
+                                          backgroundColor: '#1890ff',
+                                          margin: '0',
+                                          boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)',
+                                        }}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                                <DraggableRow data-row-key={op.uuid}>
+                                  <td>
+                                    <Space>
+                                      <span 
+                                        className="drag-handle" 
+                                        style={{ 
+                                          color: '#1890ff', 
+                                          cursor: 'move', 
+                                          display: 'inline-flex', 
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          fontSize: '16px',
+                                          padding: '4px',
+                                          minWidth: '24px',
+                                          minHeight: '24px',
+                                        }}
+                                        title="拖拽排序"
+                                      >
+                                        <HolderOutlined style={{ fontSize: '16px' }} />
+                                      </span>
+                                      <span
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          minWidth: '28px',
+                                          height: '28px',
+                                          padding: '0 8px',
+                                          backgroundColor: '#f0f9ff',
+                                          border: '1px solid #91d5ff',
+                                          borderRadius: '6px',
+                                          color: '#1890ff',
+                                          fontWeight: 600,
+                                          fontSize: '13px',
+                                        }}
+                                      >
+                                        {idx + 1}
+                                      </span>
+                                    </Space>
+                                  </td>
+                                  <td>
+                                    <div>
+                                      <div style={{ fontWeight: 500 }}>{op.code} - {op.name}</div>
+                                      {op.description && (
+                                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: 4 }}>
+                                          {op.description}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <Tag color={op.reportingType === 'quantity' ? 'blue' : 'green'}>
+                                      {op.reportingType === 'quantity' ? '按数量报工' : op.reportingType === 'status' ? '按状态报工' : '-'}
+                                    </Tag>
+                                  </td>
+                                  <td>
+                                    <Tag color={op.allowJump ? 'success' : 'default'}>
+                                      {op.allowJump ? '允许' : '不允许'}
+                                    </Tag>
+                                  </td>
+                                  <td onClick={(e) => e.stopPropagation()}>
+                                    <Space>
+                                      <Button
+                                        type="link"
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenReplaceModal(op.uuid);
+                                        }}
+                                      >
+                                        替换
+                                      </Button>
+                                      <Button
+                                        type="link"
+                                        danger
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteOperation(op.uuid);
+                                        }}
+                                      >
+                                        删除
+                                      </Button>
+                                    </Space>
+                                  </td>
+                                </DraggableRow>
+                                {isInsertAfter && (
+                                  <tr>
+                                    <td colSpan={5} style={{ padding: 0, height: 0, lineHeight: 0 }}>
+                                      <div
+                                        style={{
+                                          height: '2px',
+                                          backgroundColor: '#1890ff',
+                                          margin: '0',
+                                          boxShadow: '0 0 4px rgba(24, 144, 255, 0.5)',
+                                        }}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      );
+                    },
+                    row: DraggableRow,
+                  },
+                }}
+                style={{ width: '100%' }}
+                locale={{
+                  emptyText: (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="暂无数据"
+                    />
+                  ),
+                }}
+              />
+            </div>
+          </SortableContext>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={operations}
+            rowKey="uuid"
+            pagination={false}
+            size="small"
+            style={{ width: '100%' }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="暂无数据"
+                />
+              ),
+            }}
+          />
+        )}
+        
+        {/* 拖拽时的覆盖层 */}
+        <DragOverlay>
+          {activeOperation ? (
+            <div
+              style={{
+                padding: '12px 16px',
+                background: '#fff',
+                border: '1px solid #1890ff',
+                borderRadius: '4px',
+                boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)',
+                width: '100%',
+                minWidth: 300,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <HolderOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, color: '#262626' }}>
+                    {activeOperation.code} - {activeOperation.name}
+                  </div>
+                  {activeOperation.description && (
+                    <div style={{ fontSize: '12px', color: '#8c8c8c', marginTop: 4 }}>
+                      {activeOperation.description}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+      
+      {/* 新增工序按钮 */}
+      <div
+        onClick={() => setAddModalVisible(true)}
+        style={{
+          marginTop: 16,
+          padding: '12px',
+          border: '1px dashed #1890ff',
+          borderRadius: '4px',
+          textAlign: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          color: '#1890ff',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = '#40a9ff';
+          e.currentTarget.style.backgroundColor = '#f0f9ff';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = '#1890ff';
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }}
+      >
+        <PlusOutlined style={{ marginRight: 8 }} />
+        <span>新增工序</span>
+      </div>
+
+      {/* 添加工序 Modal */}
+      <Modal
+        title="选择工序"
+        open={addModalVisible}
+        onOk={handleAddOperation}
+        onCancel={() => {
+          setAddModalVisible(false);
+          setSelectedOperationUuids([]);
+        }}
+        okText="确定"
+        cancelText="取消"
+        okButtonProps={{ disabled: !selectedOperationUuids || selectedOperationUuids.length === 0 || loading }}
+      >
+        <Select
+          mode="multiple"
+          placeholder="搜索并选择工序（可多选）..."
+          options={availableOperations.map((op) => ({
+            label: `${op.code} - ${op.name}`,
+            value: op.uuid,
+            title: op.description || `${op.code} - ${op.name}`,
+          }))}
+          value={selectedOperationUuids}
+          onChange={setSelectedOperationUuids}
+          style={{ width: '100%' }}
+          loading={loading}
+          showSearch
+          allowClear
+          maxTagCount="responsive"
+          filterOption={(input: string, option: any) => {
+            const label = option?.label || '';
+            return label.toLowerCase().includes(input.toLowerCase());
+          }}
+          notFoundContent={loading ? '加载中...' : '暂无可用工序'}
+        />
         {availableOperations.length === 0 && !loading && (
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 16 }}>
             <Typography.Text type="danger" style={{ fontSize: '12px' }}>
               没有可用的工序，请先在"工序管理"中创建工序
             </Typography.Text>
           </div>
         )}
-      </div>
+      </Modal>
 
-      <Divider style={{ margin: '16px 0' }} />
-
-      {/* 工序列表 */}
-      <div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16
-        }}>
-          <Typography.Text strong>
-            工序序列 ({operations.length} 个)
+      {/* 替换工序 Modal */}
+      <Modal
+        title="替换工序"
+        open={replaceModalVisible}
+        onOk={handleReplaceOperation}
+        onCancel={() => {
+          setReplaceModalVisible(false);
+          setReplacingOperationUuid(null);
+          setReplacementOperationUuid(undefined);
+        }}
+        okText="确定"
+        cancelText="取消"
+        okButtonProps={{ disabled: !replacementOperationUuid || loading }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+            当前工序：
           </Typography.Text>
-          {operations.length > 1 && (
-            <Button
-              size="small"
-              danger
-              onClick={() => {
-                Modal.confirm({
-                  title: '清空工序',
-                  content: '确定要清空所有工序吗？此操作不可撤销。',
-                  okText: '确定清空',
-                  cancelText: '取消',
-                  okButtonProps: { danger: true },
-                  onOk: () => {
-                    setOperations([]);
-                    onChange?.([]);
-                    setSelectedOperationUuid(undefined);
-                  },
-                });
-              }}
-            >
-              清空全部
-            </Button>
-          )}
+          <div style={{ marginTop: 4 }}>
+            {replacingOperationUuid && (() => {
+              const currentOp = operations.find((op) => op.uuid === replacingOperationUuid);
+              return currentOp ? (
+                <Tag color="blue">{currentOp.code} - {currentOp.name}</Tag>
+              ) : null;
+            })()}
+          </div>
         </div>
-
-        {operations.length > 0 ? (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={operations.map((op) => op.uuid)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div style={{
-                border: '1px solid #d9d9d9',
-                padding: '20px',
-                background: '#fafafa',
-                minHeight: 120
-              }}>
-                {operations.map((operation) => (
-                  <SortableOperationItem
-                    key={operation.uuid}
-                    operation={operation}
-                    onDelete={() => handleDeleteOperation(operation.uuid)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        ) : (
-          <div style={{
-            padding: '48px 24px',
-            textAlign: 'center',
-            background: '#fafafa',
-            border: '1px dashed #d9d9d9'
-          }}>
-            <Typography.Text type="secondary" style={{ fontSize: '14px' }}>
-              暂无工序，请从上方选择工序并点击"添加"按钮
+        <Select
+          placeholder="搜索并选择要替换的工序..."
+          options={getAvailableOperationsForReplace(replacingOperationUuid).map((op) => ({
+            label: `${op.code} - ${op.name}`,
+            value: op.uuid,
+            title: op.description || `${op.code} - ${op.name}`,
+          }))}
+          value={replacementOperationUuid}
+          onChange={setReplacementOperationUuid}
+          style={{ width: '100%' }}
+          loading={loading}
+          showSearch
+          allowClear
+          filterOption={(input: string, option: any) => {
+            const label = option?.label || '';
+            return label.toLowerCase().includes(input.toLowerCase());
+          }}
+          notFoundContent={loading ? '加载中...' : '暂无可用工序'}
+        />
+        {getAvailableOperationsForReplace(replacingOperationUuid).length === 0 && !loading && (
+          <div style={{ marginTop: 16 }}>
+            <Typography.Text type="danger" style={{ fontSize: '12px' }}>
+              没有可用的工序，请先在"工序管理"中创建工序
             </Typography.Text>
           </div>
         )}
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 };
 
@@ -1388,25 +1923,22 @@ const ProcessRoutesPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
         initialValues={{ is_active: true }}
+        className="process-route-modal"
       >
-        {/* 快捷键提示 */}
-        <div style={{
-          marginBottom: 16,
-          padding: '8px 12px',
-          background: '#f6ffed',
-          border: '1px solid #b7eb8f',
-          textAlign: 'center',
-          gridColumn: 'span 24',
-        }}>
-          <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-            💡 快捷键：Ctrl+Enter 保存 • Esc 关闭
-          </Typography.Text>
-        </div>
-
-        {/* 基本信息 */}
+        <style>{`
+          /* 只给工序配置的 ProForm.Item 的内容区域添加 8px 左边距，与 ant-col 对齐 */
+          /* 不影响其他 ProFormText 等组件 */
+          .process-route-modal .operation-sequence-form-item .ant-form-item-control-input {
+            padding-left: 8px;
+          }
+          /* 调整工序标签的左边距，与输入框对齐 */
+          .process-route-modal .operation-sequence-form-item .ant-form-item-label {
+            padding-left: 8px;
+          }
+        `}</style>
         <ProFormText
           name="code"
-          label={<Typography.Text strong>工艺路线编码</Typography.Text>}
+          label="工艺路线编码"
           placeholder="请输入工艺路线编码"
           colProps={{ span: 12 }}
           rules={[
@@ -1416,48 +1948,50 @@ const ProcessRoutesPage: React.FC = () => {
           fieldProps={{
             style: { textTransform: 'uppercase' },
           }}
+          extra="工艺路线的唯一标识编码"
         />
         <ProFormText
           name="name"
-          label={<Typography.Text strong>工艺路线名称</Typography.Text>}
+          label="工艺路线名称"
           placeholder="请输入工艺路线名称"
           colProps={{ span: 12 }}
           rules={[
             { required: true, message: '请输入工艺路线名称' },
             { max: 200, message: '工艺路线名称不能超过200个字符' },
           ]}
+          extra="工艺路线的显示名称"
         />
 
         {/* 工序序列配置 */}
-        <div style={{ marginTop: 24, marginBottom: 24, gridColumn: 'span 24' }}>
+        <ProForm.Item
+          label="工序"
+          colProps={{ span: 24 }}
+          className="operation-sequence-form-item"
+        >
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: 16
           }}>
-            <Typography.Text strong style={{ fontSize: '16px' }}>
-              工序序列配置
-            </Typography.Text>
             <Space>
-              <Tag color={operationSequence.length > 0 ? 'processing' : 'default'} size="small">
-                {operationSequence.length} 个工序
+              <Tag color={operationSequence.length > 0 ? 'processing' : 'default'}>
+                已配置 {operationSequence.length} 个工序
               </Tag>
-              <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-                支持拖拽排序，点击删除移除工序
-              </Typography.Text>
             </Space>
+            <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
+              支持拖拽排序，点击删除移除工序
+            </Typography.Text>
           </div>
           <OperationSequenceEditor
             value={operationSequence}
             onChange={setOperationSequence}
           />
-        </div>
+        </ProForm.Item>
 
-        {/* 描述 */}
         <ProFormTextArea
           name="description"
-          label={<Typography.Text strong>描述</Typography.Text>}
+          label="描述"
           placeholder="请输入工艺路线的详细描述（可选）"
           colProps={{ span: 24 }}
           fieldProps={{
@@ -1465,22 +1999,17 @@ const ProcessRoutesPage: React.FC = () => {
             maxLength: 500,
             showCount: true,
           }}
+          extra="工艺路线的详细说明信息"
         />
 
-        {/* 启用状态 */}
+        {/* 状态设置 */}
         <ProFormSwitch
           name="is_active"
-          label={
-            <Space orientation="vertical" size={4}>
-              <Typography.Text strong>是否启用</Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: '12px' }}>
-                禁用后该工艺路线将不可用
-              </Typography.Text>
-            </Space>
-          }
+          label="是否启用"
           checkedChildren="启用"
           unCheckedChildren="禁用"
           colProps={{ span: 24 }}
+          extra="禁用后该工艺路线将不可用"
         />
       </FormModalTemplate>
 

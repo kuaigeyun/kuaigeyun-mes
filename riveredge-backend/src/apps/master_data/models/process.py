@@ -5,6 +5,7 @@
 """
 
 from tortoise import fields
+from tortoise.models import Model
 from core.models.base import BaseModel
 
 
@@ -198,12 +199,37 @@ class Operation(BaseModel):
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     
+    # 默认生产人员（用户ID列表，JSON格式存储，同组织）
+    default_operator_ids = fields.JSONField(null=True, description="默认生产人员（用户ID列表，JSON数组）")
+    
+    # 绑定不良品项（M2M，通过 OperationDefectType）
+    defect_types = fields.ManyToManyField(
+        "models.DefectType",
+        through="models.OperationDefectType",
+        related_name="operations",
+        description="允许绑定的不良品项",
+    )
+    
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
     
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.name}"
+
+
+class OperationDefectType(Model):
+    """
+    工序-不良品项关联（M2M 中间表）
+    工序允许绑定的不良品项。表仅含 id、operation_id、defect_type_id。
+    """
+    class Meta:
+        table = "apps_master_data_operation_defect_types"
+        unique_together = [("operation_id", "defect_type_id")]
+
+    id = fields.IntField(pk=True)
+    operation = fields.ForeignKeyField("models.Operation", on_delete=fields.CASCADE, related_name="operation_defect_type_links")
+    defect_type = fields.ForeignKeyField("models.DefectType", on_delete=fields.CASCADE, related_name="operation_defect_type_links")
 
 
 class SOPExecution(BaseModel):

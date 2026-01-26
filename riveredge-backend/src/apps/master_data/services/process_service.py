@@ -8,9 +8,9 @@ from typing import List, Optional, Dict, Any
 import re
 from tortoise.exceptions import IntegrityError
 
-from apps.master_data.models.process import DefectType, Operation, ProcessRoute, ProcessRouteTemplate, SOP
+from apps.master_data.models.process import DefectType, Operation, OperationDefectType, ProcessRoute, ProcessRouteTemplate, SOP
 from apps.master_data.schemas.process_schemas import (
-    DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse,
+    DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse, DefectTypeMinimal,
     OperationCreate, OperationUpdate, OperationResponse,
     ProcessRouteCreate, ProcessRouteUpdate, ProcessRouteResponse,
     ProcessRouteVersionCreate, ProcessRouteVersionCompare, ProcessRouteVersionCompareResult,
@@ -19,6 +19,108 @@ from apps.master_data.schemas.process_schemas import (
     SOPCreate, SOPUpdate, SOPResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+async def _resolve_default_operator_uuids(tenant_id: int, default_operator_uuids: Optional[List[str]]) -> List[int]:
+    """解析默认生产人员 UUID 列表 -> 用户 ID 列表，校验同组织。"""
+    if not default_operator_uuids or not isinstance(default_operator_uuids, list):
+        return []
+    from infra.models.user import User
+    uuids = [str(uuid).strip() for uuid in default_operator_uuids if uuid and str(uuid).strip()]
+    if not uuids:
+        return []
+    users = await User.filter(uuid__in=uuids, tenant_id=tenant_id, deleted_at__isnull=True).all()
+    found_uuids = {str(u.uuid) for u in users}
+    missing = [uuid for uuid in uuids if uuid not in found_uuids]
+    if missing:
+        raise ValidationError(f"默认生产人员不存在或不属于当前组织: {', '.join(missing[:3])}{'...' if len(missing) > 3 else ''}")
+    return [u.id for u in users]
+
+
+async def _sync_operation_defect_types(operation_id: int, defect_type_uuids: List[str], tenant_id: int) -> None:
+    """同步工序绑定不良品项：清空后按 uuid 列表重建。"""
+    await OperationDefectType.filter(operation_id=operation_id).delete()
+    if not defect_type_uuids:
+        return
+    ids_by_uuid = {}
+    for dt in await DefectType.filter(tenant_id=tenant_id, uuid__in=defect_type_uuids, deleted_at__isnull=True).all():
+        ids_by_uuid[str(dt.uuid)] = dt.id
+    for uuid in defect_type_uuids:
+        did = ids_by_uuid.get(uuid) or ids_by_uuid.get(str(uuid))
+        if did:
+            await OperationDefectType.create(operation_id=operation_id, defect_type_id=did)
+
+
+def _apply_default_operator_ids(op: Operation, default_operator_ids: List[int]) -> None:
+    """将解析后的 default_operator_ids 赋给 op（JSON数组）。"""
+    op.default_operator_ids = default_operator_ids if default_operator_ids else None
+
+
+def _defect_type_to_response_data(dt: DefectType) -> Dict[str, Any]:
+    """从 DefectType ORM 实例构建 DefectTypeResponse 所需的字典，避免 model_validate(orm) 引发 500。"""
+    return {
+        "id": dt.id,
+        "uuid": str(dt.uuid),
+        "tenant_id": dt.tenant_id,
+        "code": dt.code,
+        "name": dt.name,
+        "category": getattr(dt, "category", None),
+        "description": getattr(dt, "description", None),
+        "is_active": getattr(dt, "is_active", True),
+        "created_at": dt.created_at,
+        "updated_at": dt.updated_at,
+        "deleted_at": getattr(dt, "deleted_at", None),
+    }
+
+
+async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
+    """从 Operation ORM 实例构建 OperationResponse 所需的字典，含绑定不良品项与默认生产人员。"""
+    defect_types: List[Dict[str, Any]] = []
+    try:
+        dts = await op.defect_types.all()
+        defect_types = [{"uuid": str(dt.uuid), "code": dt.code, "name": dt.name} for dt in dts]
+    except Exception:
+        pass
+    default_operator_ids: List[int] = []
+    default_operator_uuids: List[str] = []
+    default_operator_names: List[str] = []
+    oids = getattr(op, "default_operator_ids", None)
+    if oids:
+        try:
+            if isinstance(oids, list):
+                default_operator_ids = [int(oid) for oid in oids if oid]
+            elif isinstance(oids, str):
+                import json
+                default_operator_ids = json.loads(oids) if oids else []
+            if default_operator_ids:
+                from infra.models.user import User
+                users = await User.filter(id__in=default_operator_ids, deleted_at__isnull=True).all()
+                user_map = {u.id: u for u in users}
+                for oid in default_operator_ids:
+                    u = user_map.get(oid)
+                    if u:
+                        default_operator_uuids.append(str(u.uuid))
+                        default_operator_names.append(u.full_name or u.username)
+        except Exception:
+            pass
+    return {
+        "id": op.id,
+        "uuid": str(op.uuid),
+        "tenant_id": op.tenant_id,
+        "code": op.code,
+        "name": op.name,
+        "description": getattr(op, "description", None),
+        "reporting_type": getattr(op, "reporting_type", "quantity"),
+        "allow_jump": getattr(op, "allow_jump", False),
+        "is_active": getattr(op, "is_active", True),
+        "created_at": op.created_at,
+        "updated_at": op.updated_at,
+        "deleted_at": getattr(op, "deleted_at", None),
+        "defect_types": defect_types,
+        "default_operator_ids": default_operator_ids,
+        "default_operator_uuids": default_operator_uuids,
+        "default_operator_names": default_operator_names,
+    }
 
 
 class ProcessService:
@@ -98,11 +200,12 @@ class ProcessService:
         if existing:
             raise ValidationError(f"不良品编码 {data.code} 已存在")
         
-        # 创建不良品
+        # 创建不良品（使用 model_dump 兼容 Pydantic v2）
+        create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
         try:
             defect_type = await DefectType.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
@@ -110,7 +213,7 @@ class ProcessService:
                 raise ValidationError(f"不良品编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return DefectTypeResponse.model_validate(defect_type)
+        return DefectTypeResponse.model_validate(_defect_type_to_response_data(defect_type))
     
     @staticmethod
     async def get_defect_type_by_uuid(
@@ -139,7 +242,7 @@ class ProcessService:
         if not defect_type:
             raise NotFoundError(f"不良品 {defect_type_uuid} 不存在")
         
-        return DefectTypeResponse.model_validate(defect_type)
+        return DefectTypeResponse.model_validate(_defect_type_to_response_data(defect_type))
     
     @staticmethod
     async def list_defect_types(
@@ -175,7 +278,7 @@ class ProcessService:
         
         defect_types = await query.offset(skip).limit(limit).order_by("code").all()
         
-        return [DefectTypeResponse.model_validate(dt) for dt in defect_types]
+        return [DefectTypeResponse.model_validate(_defect_type_to_response_data(dt)) for dt in defect_types]
     
     @staticmethod
     async def update_defect_type(
@@ -218,20 +321,19 @@ class ProcessService:
             if existing:
                 raise ValidationError(f"不良品编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 更新字段（使用 model_dump 兼容 Pydantic v2）
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(defect_type, key, value)
         
         try:
             await defect_type.save()
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 raise ValidationError(f"不良品编码 {data.code or defect_type.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return DefectTypeResponse.model_validate(defect_type)
+        return DefectTypeResponse.model_validate(_defect_type_to_response_data(defect_type))
     
     @staticmethod
     async def delete_defect_type(
@@ -270,41 +372,121 @@ class ProcessService:
         data: OperationCreate
     ) -> OperationResponse:
         """
-        创建工序
-        
-        Args:
-            tenant_id: 租户ID
-            data: 工序创建数据
-            
-        Returns:
-            OperationResponse: 创建的工序对象
-            
-        Raises:
-            ValidationError: 当编码已存在时抛出
+        创建工序。支持软删除后重用编码：若编码仅存在于已软删除记录，则恢复该记录并更新。
         """
-        # 检查编码是否已存在
-        existing = await Operation.filter(
+        code_upper = (data.code or "").strip().upper()
+        if not code_upper:
+            raise ValidationError("工序编码不能为空")
+
+        # 检查未删除记录
+        existing_active = await Operation.filter(
             tenant_id=tenant_id,
-            code=data.code,
+            code=code_upper,
             deleted_at__isnull=True
         ).first()
-        
-        if existing:
+        if existing_active:
             raise ValidationError(f"工序编码 {data.code} 已存在")
-        
-        # 创建工序
+
+        # 检查软删除记录：存在则恢复并更新
+        existing_deleted = await Operation.filter(
+            tenant_id=tenant_id,
+            code=code_upper,
+            deleted_at__isnull=False
+        ).first()
+        if existing_deleted:
+            default_operator_uuids = getattr(data, "default_operator_uuids", None) or getattr(data, "defaultOperatorUuids", None) or []
+            oids = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids)
+            existing_deleted.deleted_at = None
+            existing_deleted.code = data.code.strip().upper()
+            existing_deleted.name = data.name.strip()
+            existing_deleted.description = (data.description or "").strip() or None
+            reporting_type = getattr(data, "reporting_type", None) or getattr(data, "reportingType", None) or "quantity"
+            existing_deleted.reporting_type = reporting_type
+            existing_deleted.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
+            existing_deleted.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
+            _apply_default_operator_ids(existing_deleted, oids)
+            await _sync_operation_defect_types(existing_deleted.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
+            await existing_deleted.save()
+            return OperationResponse.model_validate(await _operation_to_response_data(existing_deleted))
+
+        # 使用 exclude_unset=False 确保包含所有字段（包括有默认值的字段）
+        create_data = data.model_dump(exclude_unset=False, by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        create_data.pop("defect_type_uuids", None)
+        default_operator_uuids = create_data.pop("default_operator_uuids", None) or getattr(data, "defaultOperatorUuids", None) or []
+        create_data["code"] = code_upper
+        create_data["name"] = (data.name or "").strip()
+        create_data["description"] = (create_data.get("description") or "").strip() or None
+        # 确保 reporting_type、allow_jump、is_active 有正确的值（处理前端可能发送的 camelCase）
+        # 如果字段不存在或为 None，使用默认值
+        if "reporting_type" not in create_data or create_data.get("reporting_type") is None:
+            reporting_type = getattr(data, "reporting_type", None) or getattr(data, "reportingType", None) or "quantity"
+            create_data["reporting_type"] = reporting_type
+        if "allow_jump" not in create_data or create_data.get("allow_jump") is None:
+            allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None)
+            create_data["allow_jump"] = allow_jump if allow_jump is not None else False
+        if "is_active" not in create_data or create_data.get("is_active") is None:
+            is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None)
+            create_data["is_active"] = is_active if is_active is not None else True
+        create_data["default_operator_ids"] = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids)
+
         try:
-            operation = await Operation.create(
-                tenant_id=tenant_id,
-                **data.dict()
-            )
+            operation = await Operation.create(tenant_id=tenant_id, **create_data)
+            await _sync_operation_defect_types(operation.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
+            return OperationResponse.model_validate(await _operation_to_response_data(operation))
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            err = str(e).lower()
+            if "unique" in err or "duplicate" in err:
+                retry = await Operation.filter(
+                    tenant_id=tenant_id,
+                    code=code_upper,
+                    deleted_at__isnull=False
+                ).first()
+                if retry:
+                    default_operator_uuids = getattr(data, "default_operator_uuids", None) or getattr(data, "defaultOperatorUuids", None) or []
+                    oids = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids)
+                    retry.deleted_at = None
+                    retry.code = data.code.strip().upper()
+                    retry.name = data.name.strip()
+                    retry.description = (data.description or "").strip() or None
+                    reporting_type = getattr(data, "reporting_type", None) or getattr(data, "reportingType", None) or "quantity"
+                    retry.reporting_type = reporting_type
+                    retry.allow_jump = getattr(data, "allow_jump", None) or getattr(data, "allowJump", None) or False
+                    retry.is_active = getattr(data, "is_active", None) or getattr(data, "isActive", None) or True
+                    _apply_default_operator_ids(retry, oids)
+                    await _sync_operation_defect_types(retry.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
+                    await retry.save()
+                    return OperationResponse.model_validate(await _operation_to_response_data(retry))
                 raise ValidationError(f"工序编码 {data.code} 已存在（可能已被软删除，请检查）")
+            if "pkey" in err or "primary" in err or "键值" in err:
+                # 自动修复序列并重试一次
+                try:
+                    from tortoise import Tortoise
+                    db = Tortoise.get_connection("default")
+                    # 直接执行序列修复 SQL（使用 DO 块）
+                    await db.execute_query("""
+                        DO $$
+                        DECLARE
+                            seq_name text;
+                        BEGIN
+                            seq_name := pg_get_serial_sequence('apps_master_data_operations', 'id');
+                            IF seq_name IS NOT NULL THEN
+                                EXECUTE format(
+                                    'SELECT setval(%L::regclass, (SELECT COALESCE(MAX(id), 1) FROM apps_master_data_operations))',
+                                    seq_name
+                                );
+                            END IF;
+                        END $$;
+                    """)
+                    # 重试创建
+                    operation = await Operation.create(tenant_id=tenant_id, **create_data)
+                    await _sync_operation_defect_types(operation.id, getattr(data, "defect_type_uuids", None) or [], tenant_id)
+                    return OperationResponse.model_validate(await _operation_to_response_data(operation))
+                except Exception as retry_err:
+                    raise ValidationError(
+                        f"工序主键 id 序列不同步，自动修复失败: {str(retry_err)}。"
+                        "请联系管理员执行迁移 64_20260126000000_sync_operations_id_sequence。"
+                    )
             raise
-        
-        return OperationResponse.model_validate(operation)
     
     @staticmethod
     async def get_operation_by_uuid(
@@ -333,7 +515,7 @@ class ProcessService:
         if not operation:
             raise NotFoundError(f"工序 {operation_uuid} 不存在")
         
-        return OperationResponse.model_validate(operation)
+        return OperationResponse.model_validate(await _operation_to_response_data(operation))
     
     @staticmethod
     async def list_operations(
@@ -363,9 +545,11 @@ class ProcessService:
             query = query.filter(is_active=is_active)
         
         operations = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [OperationResponse.model_validate(op) for op in operations]
-    
+        out = []
+        for op in operations:
+            out.append(OperationResponse.model_validate(await _operation_to_response_data(op)))
+        return out
+
     @staticmethod
     async def update_operation(
         tenant_id: int,
@@ -407,20 +591,27 @@ class ProcessService:
             if existing:
                 raise ValidationError(f"工序编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        had_defect = "defect_type_uuids" in update_data
+        had_op = "default_operator_uuids" in update_data
+        defect_type_uuids = update_data.pop("defect_type_uuids", None) if had_defect else None
+        default_operator_uuids = update_data.pop("default_operator_uuids", None) if had_op else None
+        if had_op:
+            oids = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids or [])
+            operation.default_operator_ids = oids if oids else None
         for key, value in update_data.items():
             setattr(operation, key, value)
         
         try:
             await operation.save()
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 raise ValidationError(f"工序编码 {data.code or operation.code} 已存在（可能已被软删除，请检查）")
             raise
+        if had_defect:
+            await _sync_operation_defect_types(operation.id, defect_type_uuids or [], tenant_id)
         
-        return OperationResponse.model_validate(operation)
+        return OperationResponse.model_validate(await _operation_to_response_data(operation))
     
     @staticmethod
     async def delete_operation(

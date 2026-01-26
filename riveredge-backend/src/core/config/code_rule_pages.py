@@ -141,6 +141,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module": "主数据管理",
         "module_icon": "database",
         "auto_generate": False,
+        "rule_code": "OPERATION_CODE",
     },
     {
         "page_code": "master-data-process-route",
@@ -151,6 +152,17 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module": "主数据管理",
         "module_icon": "database",
         "auto_generate": False,
+    },
+    {
+        "page_code": "master-data-defect-type",
+        "page_name": "不良品项",
+        "page_path": "/apps/master-data/process/defect-types",
+        "code_field": "code",
+        "code_field_label": "不良品编码",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": False,
+        "rule_code": "DEFECT_TYPE_CODE",
     },
     # 主数据管理 - 供应链
     {

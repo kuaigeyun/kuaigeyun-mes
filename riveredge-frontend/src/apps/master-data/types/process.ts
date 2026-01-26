@@ -41,6 +41,13 @@ export interface DefectTypeListParams {
   isActive?: boolean;
 }
 
+/** 不良品项简要（工序绑定用） */
+export interface DefectTypeMinimal {
+  uuid: string;
+  code: string;
+  name: string;
+}
+
 export interface Operation {
   id: number;
   uuid: string;
@@ -48,9 +55,18 @@ export interface Operation {
   code: string;
   name: string;
   description?: string;
-  reportingType: 'quantity' | 'status'; // 报工类型（quantity:按数量报工, status:按状态报工）
-  allowJump: boolean; // 是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）
+  reportingType: 'quantity' | 'status';
+  allowJump: boolean;
   isActive: boolean;
+  /** 允许绑定的不良品项（API 可能返回 defect_types） */
+  defectTypes?: DefectTypeMinimal[];
+  defect_types?: DefectTypeMinimal[];
+  defaultOperatorId?: number;
+  default_operator_id?: number;
+  defaultOperatorUuids?: string[];
+  default_operator_uuids?: string[];
+  defaultOperatorNames?: string[];
+  default_operator_names?: string[];
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -60,18 +76,22 @@ export interface OperationCreate {
   code: string;
   name: string;
   description?: string;
-  reportingType?: 'quantity' | 'status'; // 报工类型（默认：quantity）
-  allowJump?: boolean; // 是否允许跳转（默认：false）
+  reportingType?: 'quantity' | 'status';
+  allowJump?: boolean;
   isActive?: boolean;
+  defectTypeUuids?: string[];
+  defaultOperatorUuids?: string[];
 }
 
 export interface OperationUpdate {
   code?: string;
   name?: string;
   description?: string;
-  reportingType?: 'quantity' | 'status'; // 报工类型
-  allowJump?: boolean; // 是否允许跳转
+  reportingType?: 'quantity' | 'status';
+  allowJump?: boolean;
   isActive?: boolean;
+  defectTypeUuids?: string[];
+  defaultOperatorUuids?: string[];
 }
 
 export interface OperationListParams {

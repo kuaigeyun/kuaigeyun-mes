@@ -23,6 +23,43 @@ from core.config.code_rule_pages import CODE_RULE_PAGES
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
+
+def _material_to_response_data(material) -> Dict[str, Any]:
+    """
+    从 Material ORM 实例构建 MaterialResponse 所需的字典（不含 code_aliases）。
+    model_validate 不支持 exclude，故用字典校验避免 ReverseRelation 传入。
+    """
+    pr = getattr(material, "process_route", None)
+    return {
+        "id": material.id,
+        "uuid": str(material.uuid),
+        "tenant_id": material.tenant_id,
+        "main_code": material.main_code or (getattr(material, "code", None) or ""),
+        "code": getattr(material, "code", None),
+        "name": material.name,
+        "material_type": getattr(material, "material_type", None),
+        "group_id": getattr(material, "group_id", None),
+        "specification": getattr(material, "specification", None),
+        "base_unit": material.base_unit,
+        "units": getattr(material, "units", None),
+        "batch_managed": getattr(material, "batch_managed", False),
+        "variant_managed": getattr(material, "variant_managed", False),
+        "variant_attributes": getattr(material, "variant_attributes", None),
+        "description": getattr(material, "description", None),
+        "brand": getattr(material, "brand", None),
+        "model": getattr(material, "model", None),
+        "is_active": getattr(material, "is_active", True),
+        "defaults": getattr(material, "defaults", None),
+        "source_type": getattr(material, "source_type", None),
+        "source_config": getattr(material, "source_config", None),
+        "process_route_id": getattr(material, "process_route_id", None) or (getattr(pr, "id", None) if pr else None),
+        "process_route_name": getattr(pr, "name", None) if pr else None,
+        "created_at": material.created_at,
+        "updated_at": material.updated_at,
+        "deleted_at": getattr(material, "deleted_at", None),
+    }
+
+
 if TYPE_CHECKING:
     from apps.master_data.schemas.material_schemas import (
         MaterialGroupTreeResponse,
@@ -459,7 +496,7 @@ class MaterialService:
                         f"如需创建变体，请设置 variant_managed=True 并提供 variant_attributes"
                     )
                 else:
-                    # 如果编码已存在，自动重新生成一个新的编码
+                    # 如果编码已存在，循环重新生成直到得到未占用的编码（处理并发、序号未递增等场景）
                     logger.warning(f"主编码 {data.main_code} 已存在，自动重新生成新编码")
                     
                     # 获取物料分组信息（如果之前没有获取）
@@ -470,52 +507,52 @@ class MaterialService:
                             deleted_at__isnull=True
                         ).first()
                     
-                    # 尝试使用编码规则重新生成编码
                     material_page_config = next(
                         (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
                         None
                     )
                     
-                    if material_page_config and material_page_config.get("rule_code"):
-                        try:
-                            # 构建上下文变量
-                            context = {}
-                            if group:
-                                context["group_code"] = group.code
-                                context["group_name"] = group.name
-                            context["material_type"] = data.material_type
-                            context["name"] = data.name
-                            
-                            # 重新生成编码（会自动递增序号）
-                            data.main_code = await CodeGenerationService.generate_code(
-                                tenant_id=tenant_id,
-                                rule_code=material_page_config["rule_code"],
-                                context=context
-                            )
-                            logger.info(f"自动重新生成物料主编码: {data.main_code}")
-                        except Exception as e:
-                            # 如果编码规则生成失败，回退到默认生成方式
-                            logger.warning(f"使用编码规则重新生成物料编码失败: {e}，回退到默认生成方式")
+                    context = {}
+                    if group:
+                        context["group_code"] = group.code
+                        context["group_name"] = group.name
+                    context["material_type"] = data.material_type
+                    context["name"] = data.name
+                    
+                    max_attempts = 20
+                    for attempt in range(max_attempts):
+                        if material_page_config and material_page_config.get("rule_code"):
+                            try:
+                                data.main_code = await CodeGenerationService.generate_code(
+                                    tenant_id=tenant_id,
+                                    rule_code=material_page_config["rule_code"],
+                                    context=context
+                                )
+                                logger.info(f"自动重新生成物料主编码(尝试 {attempt + 1}/{max_attempts}): {data.main_code}")
+                            except Exception as e:
+                                logger.warning(f"使用编码规则重新生成物料编码失败: {e}，回退到默认生成方式")
+                                data.main_code = await MaterialCodeService.generate_main_code(
+                                    tenant_id=tenant_id,
+                                    material_type=data.material_type
+                                )
+                        else:
                             data.main_code = await MaterialCodeService.generate_main_code(
                                 tenant_id=tenant_id,
                                 material_type=data.material_type
                             )
-                    else:
-                        # 如果没有配置编码规则，使用默认生成方式
-                        data.main_code = await MaterialCodeService.generate_main_code(
+                        
+                        existing_check = await Material.filter(
                             tenant_id=tenant_id,
-                            material_type=data.material_type
-                        )
+                            main_code=data.main_code,
+                            deleted_at__isnull=True
+                        ).first()
+                        if not existing_check:
+                            break
+                        logger.warning(f"生成的编码 {data.main_code} 仍已存在，第 {attempt + 1} 次重试")
                     
-                    # 再次检查新生成的编码是否已存在（理论上不应该，但为了安全）
-                    existing_check = await Material.filter(
-                        tenant_id=tenant_id,
-                        main_code=data.main_code,
-                        deleted_at__isnull=True
-                    ).first()
-                    if existing_check:
+                    else:
                         raise ValidationError(
-                            f"自动生成的编码 {data.main_code} 仍然已存在，"
+                            f"连续 {max_attempts} 次生成的编码均已存在，"
                             f"请检查编码规则配置或联系系统管理员"
                         )
         
@@ -552,6 +589,15 @@ class MaterialService:
         # 兼容处理：如果提供了code但没有main_code，将code作为main_code（向后兼容）
         if (not material_data.get("main_code") or (isinstance(material_data.get("main_code"), str) and not material_data.get("main_code").strip())) and material_data.get("code"):
             material_data["main_code"] = material_data["code"]
+        
+        # 确保 main_code 必填（生成逻辑已设置 data.main_code，此处兜底）
+        main_code_val = material_data.get("main_code") or getattr(data, "main_code", None)
+        if not main_code_val or (isinstance(main_code_val, str) and not main_code_val.strip()):
+            raise ValidationError("物料主编码不能为空，请检查编码规则或手动填写")
+        material_data["main_code"] = main_code_val.strip() if isinstance(main_code_val, str) else main_code_val
+        
+        # 同步 code = main_code（列表等展示使用 code，需同时落库）
+        material_data["code"] = material_data["main_code"]
         
         # 处理变体属性：确保JSON键顺序一致（用于数据库唯一性索引）
         if material_data.get("variant_attributes"):
@@ -659,19 +705,11 @@ class MaterialService:
             material_id=material.id
         )
         
-        # 构建响应
+        # 构建响应（用字典校验，避免 model_validate 传入 ReverseRelation 的 code_aliases）
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
-        # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
-        response = MaterialResponse.model_validate(
-            material,
-            from_attributes=True,
-            exclude={'code_aliases'}  # 排除 code_aliases，手动设置
-        )
-        # 手动设置编码别名列表
-        response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
-        # 确保defaults字段被包含在响应中
-        if hasattr(material, 'defaults'):
-            response.defaults = material.defaults
+        resp_data = _material_to_response_data(material)
+        resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+        response = MaterialResponse.model_validate(resp_data)
         
         # 发送 Inngest 事件，触发 AI 建议工作流（异步处理）
         try:
@@ -770,16 +808,9 @@ class MaterialService:
                 tenant_id=tenant_id,
                 material_id=variant.id
             )
-            # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
-            response = MaterialResponse.model_validate(
-                variant,
-                from_attributes=True,
-                exclude={'code_aliases'}  # 排除 code_aliases，手动设置
-            )
-            response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
-            if hasattr(variant, 'defaults'):
-                response.defaults = variant.defaults
-            result.append(response)
+            resp_data = _material_to_response_data(variant)
+            resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+            result.append(MaterialResponse.model_validate(resp_data))
         
         return result
     
@@ -818,18 +849,9 @@ class MaterialService:
         
         # 构建响应
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
-        # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
-        response = MaterialResponse.model_validate(
-            material,
-            from_attributes=True,
-            exclude={'code_aliases'}  # 排除 code_aliases，手动设置
-        )
-        response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
-        # 确保defaults字段被包含在响应中
-        if hasattr(material, 'defaults'):
-            response.defaults = material.defaults
-        
-        return response
+        resp_data = _material_to_response_data(material)
+        resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+        return MaterialResponse.model_validate(resp_data)
     
     @staticmethod
     async def list_materials(
@@ -955,63 +977,16 @@ class MaterialService:
         # 预加载关联关系（优化，修复500错误）
         materials = await query.prefetch_related("group", "process_route").offset(skip).limit(limit).order_by("main_code").all()
         
-        # 构建响应数据（包含process_route_id和process_route_name）
+        # 构建响应数据（用 _material_to_response_data 避免 ReverseRelation 的 code_aliases；列表不加载别名）
         result = []
         for m in materials:
             try:
-                material_data = MaterialResponse.model_validate(m)
-                # 安全地添加process_route_id和process_route_name
-                # 优先使用模型的process_route_id字段（如果存在），否则从关联对象获取
-                if hasattr(m, 'process_route_id'):
-                    material_data.process_route_id = getattr(m, 'process_route_id', None)
-                elif hasattr(m, 'process_route') and m.process_route:
-                    material_data.process_route_id = getattr(m.process_route, 'id', None)
-                else:
-                    material_data.process_route_id = None
-                
-                if hasattr(m, 'process_route') and m.process_route:
-                    material_data.process_route_name = getattr(m.process_route, 'name', None)
-                else:
-                    material_data.process_route_name = None
-                result.append(material_data)
+                resp_data = _material_to_response_data(m)
+                resp_data["code_aliases"] = []
+                result.append(MaterialResponse.model_validate(resp_data))
             except Exception as e:
-                # 如果序列化失败，记录错误并尝试手动构建
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(f"序列化物料 {m.id if hasattr(m, 'id') else 'unknown'} 失败: {str(e)}")
-                # 尝试手动构建响应数据
-                try:
-                    material_dict = {
-                        "id": m.id,
-                        "uuid": str(m.uuid),
-                        "tenant_id": m.tenant_id,
-                        "main_code": getattr(m, 'main_code', getattr(m, 'code', '')),
-                        "code": getattr(m, 'code', None),  # 向后兼容
-                        "name": m.name,
-                        "material_type": getattr(m, 'material_type', 'RAW'),
-                        "group_id": m.group_id,
-                        "specification": getattr(m, 'specification', None),
-                        "base_unit": m.base_unit,
-                        "units": getattr(m, 'units', None),
-                        "batch_managed": getattr(m, 'batch_managed', False),
-                        "variant_managed": getattr(m, 'variant_managed', False),
-                        "variant_attributes": getattr(m, 'variant_attributes', None),
-                        "description": getattr(m, 'description', None),
-                        "brand": getattr(m, 'brand', None),
-                        "model": getattr(m, 'model', None),
-                        "is_active": getattr(m, 'is_active', True),
-                        "created_at": m.created_at,
-                        "updated_at": m.updated_at,
-                        "deleted_at": getattr(m, 'deleted_at', None),
-                        "process_route_id": getattr(m.process_route, 'id', None) if hasattr(m, 'process_route') and m.process_route else None,
-                        "process_route_name": getattr(m.process_route, 'name', None) if hasattr(m, 'process_route') and m.process_route else None,
-                    }
-                    material_data = MaterialResponse.model_validate(material_dict)
-                    result.append(material_data)
-                except Exception as e2:
-                    logger.error(f"手动构建物料 {m.id if hasattr(m, 'id') else 'unknown'} 响应数据失败: {str(e2)}")
-                    # 跳过该物料，继续处理下一个
-                    continue
+                continue
         
         return result
     
@@ -1221,15 +1196,9 @@ class MaterialService:
         
         # 构建响应
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
-        # 使用 model_validate 时排除 code_aliases 字段，避免 ReverseRelation 对象导致验证错误
-        response = MaterialResponse.model_validate(
-            material,
-            from_attributes=True,
-            exclude={'code_aliases'}  # 排除 code_aliases，手动设置
-        )
-        response.code_aliases = [MaterialCodeAliasResponse.model_validate(alias) for alias in aliases]
-        
-        return response
+        resp_data = _material_to_response_data(material)
+        resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
+        return MaterialResponse.model_validate(resp_data)
     
     @staticmethod
     async def delete_material(
@@ -1801,61 +1770,14 @@ class MaterialService:
             group_id = material.group_id
             if group_id not in material_map:
                 material_map[group_id] = []
-            # 构建物料响应数据（包含process_route_id和process_route_name）
+            # 构建物料响应数据（用 _material_to_response_data 避免 ReverseRelation；树形接口不加载 code_aliases）
             try:
-                material_data = MaterialTreeResponse.model_validate(material)
-                # 安全地设置process_route字段
-                # 优先使用模型的process_route_id字段（如果存在），否则从关联对象获取
-                if hasattr(material, 'process_route_id'):
-                    material_data.process_route_id = getattr(material, 'process_route_id', None)
-                elif hasattr(material, 'process_route') and material.process_route:
-                    material_data.process_route_id = getattr(material.process_route, 'id', None)
-                else:
-                    material_data.process_route_id = None
-                
-                if hasattr(material, 'process_route') and material.process_route:
-                    material_data.process_route_name = getattr(material.process_route, 'name', None)
-                else:
-                    material_data.process_route_name = None
-                material_map[group_id].append(material_data)
+                resp_data = _material_to_response_data(material)
+                resp_data["code_aliases"] = []
+                material_map[group_id].append(MaterialTreeResponse.model_validate(resp_data))
             except Exception as e:
-                # 如果序列化失败，记录错误并尝试手动构建
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.warning(f"序列化物料 {material.id if hasattr(material, 'id') else 'unknown'} 失败: {str(e)}")
-                # 尝试手动构建响应数据
-                try:
-                    material_dict = {
-                        "id": material.id,
-                        "uuid": str(material.uuid),
-                        "tenant_id": material.tenant_id,
-                        "main_code": getattr(material, 'main_code', getattr(material, 'code', '')),
-                        "code": getattr(material, 'code', None),  # 向后兼容
-                        "material_type": getattr(material, 'material_type', 'RAW'),
-                        "name": material.name,
-                        "group_id": material.group_id,
-                        "specification": getattr(material, 'specification', None),
-                        "base_unit": material.base_unit,
-                        "units": getattr(material, 'units', None),
-                        "batch_managed": getattr(material, 'batch_managed', False),
-                        "variant_managed": getattr(material, 'variant_managed', False),
-                        "variant_attributes": getattr(material, 'variant_attributes', None),
-                        "description": getattr(material, 'description', None),
-                        "brand": getattr(material, 'brand', None),
-                        "model": getattr(material, 'model', None),
-                        "is_active": getattr(material, 'is_active', True),
-                        "created_at": material.created_at,
-                        "updated_at": material.updated_at,
-                        "deleted_at": getattr(material, 'deleted_at', None),
-                        "process_route_id": getattr(material.process_route, 'id', None) if hasattr(material, 'process_route') and material.process_route else None,
-                        "process_route_name": getattr(material.process_route, 'name', None) if hasattr(material, 'process_route') and material.process_route else None,
-                    }
-                    material_data = MaterialTreeResponse.model_validate(material_dict)
-                    material_map[group_id].append(material_data)
-                except Exception as e2:
-                    logger.error(f"手动构建物料 {material.id if hasattr(material, 'id') else 'unknown'} 响应数据失败: {str(e2)}")
-                    # 跳过该物料，继续处理下一个
-                    continue
+                continue
         
         # 构建分组映射（按父分组ID分组）
         group_map: dict[Optional[int], List[MaterialGroupTreeResponse]] = {}

@@ -100,7 +100,7 @@
                 "title": "工艺数据",
                 "icon": "workflow",
                 "sort_order": 4,
-                "children": [                    {
+                "children": [{
                         "title": "不良品类型",
                         "path": "/apps/master-data/process/defect-types",
                         "permission": "master-data:process:defect-type:view",
@@ -154,7 +154,7 @@
                 "title": "绩效数据",
                 "icon": "analytics",
                 "sort_order": 6,
-                "children": [                    {
+                "children": [{
                         "title": "假期设置",
                         "path": "/apps/master-data/performance/holidays",
                         "permission": "master-data:performance:holiday:view",
@@ -252,8 +252,7 @@
         "riveredge-backend": ">=1.0.0",
         "riveredge-frontend": ">=1.0.0"
     },
-    "code_rule_pages": [
-        {
+    "code_rule_pages": [{
             "page_code": "master-data-factory-plant",
             "page_name": "厂区管理",
             "page_path": "/apps/master-data/factory/plants",
@@ -343,8 +342,7 @@
             "module_icon": "database",
             "auto_generate": true,
             "rule_code": "MATERIAL_CODE",
-            "available_fields": [
-                {
+            "available_fields": [{
                     "field_name": "group_code",
                     "field_label": "物料分组编码",
                     "field_type": "string",
@@ -378,7 +376,8 @@
             "code_field_label": "工序编码",
             "module": "主数据管理",
             "module_icon": "database",
-            "auto_generate": false
+            "auto_generate": false,
+            "rule_code": "OPERATION_CODE"
         },
         {
             "page_code": "master-data-process-route",
@@ -389,6 +388,17 @@
             "module": "主数据管理",
             "module_icon": "database",
             "auto_generate": false
+        },
+        {
+            "page_code": "master-data-defect-type",
+            "page_name": "不良品项",
+            "page_path": "/apps/master-data/process/defect-types",
+            "code_field": "code",
+            "code_field_label": "不良品编码",
+            "module": "主数据管理",
+            "module_icon": "database",
+            "auto_generate": false,
+            "rule_code": "DEFECT_TYPE_CODE"
         },
         {
             "page_code": "master-data-supply-chain-customer",
@@ -421,8 +431,7 @@
             "auto_generate": false
         }
     ],
-    "custom_field_pages": [
-        {
+    "custom_field_pages": [{
             "page_code": "master-data-factory-workshop",
             "page_name": "车间管理",
             "page_path": "/apps/master-data/factory/workshops",

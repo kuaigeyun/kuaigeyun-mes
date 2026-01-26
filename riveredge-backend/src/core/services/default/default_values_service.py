@@ -312,6 +312,7 @@ class DefaultValuesService:
         # 主数据管理 - 工艺管理
         "master-data-process-operation": "OP",
         "master-data-process-route": "PR",
+        "master-data-defect-type": "DF",
         # 主数据管理 - 供应链
         "master-data-supply-chain-customer": "CUST",
         "master-data-supply-chain-supplier": "SUP",

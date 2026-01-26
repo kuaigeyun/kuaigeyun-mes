@@ -155,6 +155,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: false,
+    ruleCode: 'OPERATION_CODE',
   },
   {
     pageCode: 'master-data-process-route',
@@ -165,6 +166,17 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     module: '主数据管理',
     moduleIcon: 'database',
     autoGenerate: false,
+  },
+  {
+    pageCode: 'master-data-defect-type',
+    pageName: '不良品项',
+    pagePath: '/apps/master-data/process/defect-types',
+    codeField: 'code',
+    codeFieldLabel: '不良品编码',
+    module: '主数据管理',
+    moduleIcon: 'database',
+    autoGenerate: false,
+    ruleCode: 'DEFECT_TYPE_CODE',
   },
   // 主数据管理 - 供应链
   {

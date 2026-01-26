@@ -200,9 +200,9 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   };
 
   /**
-   * 处理下拉菜单渲染
+   * 处理下拉菜单渲染（使用 popupRender，dropdownRender 已废弃）
    */
-  const dropdownRender = (menu: React.ReactElement) => {
+  const popupRender = (menu: React.ReactElement) => {
     return (
       <>
         {menu}
@@ -260,7 +260,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
           allowClear: true,
           filterOption: false, // 禁用默认过滤，使用自定义过滤
           onSearch: handleSearch,
-          dropdownRender,
+          popupRender,
         }}
       />
 
