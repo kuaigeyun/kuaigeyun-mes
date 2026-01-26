@@ -25,6 +25,9 @@ const useProTableSearch = () => {
 };
 import { UniImport } from '../uni-import';
 
+/** Ant Design 表格默认行高（px），用于预估内容高度，仅当超出可用高度时启用 scroll.y */
+const TABLE_ROW_HEIGHT = 55;
+
 /**
  * 从 columns 自动生成导入配置
  * 
@@ -1551,9 +1554,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               scrollConfig.x = 'max-content';
             }
             
-            // 如果在两栏布局中且有计算出的高度，设置垂直滚动
-            // 注意：只有当有数据时才设置y，避免空数据时显示滚动条
-            if (tableScrollY !== undefined && tableData.length > 0) {
+            // 在两栏布局中且预估内容超出可用高度时，才设置 scroll.y，避免内容未溢出时出现垂直滚动条
+            const estimatedHeight = tableData.length * TABLE_ROW_HEIGHT;
+            if (tableScrollY !== undefined && tableData.length > 0 && estimatedHeight > tableScrollY) {
               scrollConfig.y = tableScrollY;
             }
             

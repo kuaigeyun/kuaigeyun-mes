@@ -4,7 +4,7 @@
 定义工艺数据的 Pydantic Schema（不良品、工序、工艺路线、作业程序），用于数据验证和序列化。
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, validator, ConfigDict
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -16,17 +16,21 @@ class DefectTypeBase(BaseModel):
     name: str = Field(..., max_length=200, description="不良品名称")
     category: Optional[str] = Field(None, max_length=50, description="分类")
     description: Optional[str] = Field(None, description="描述")
-    is_active: bool = Field(True, description="是否启用")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    @validator("code")
-    def validate_code(cls, v):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
         """验证编码格式"""
         if not v or not v.strip():
             raise ValueError("不良品编码不能为空")
         return v.strip().upper()
     
-    @validator("name")
-    def validate_name(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
         """验证名称格式"""
         if not v or not v.strip():
             raise ValueError("不良品名称不能为空")
@@ -45,17 +49,21 @@ class DefectTypeUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="不良品名称")
     category: Optional[str] = Field(None, max_length=50, description="分类")
     description: Optional[str] = Field(None, description="描述")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
     
-    @validator("code")
-    def validate_code(cls, v):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
         """验证编码格式"""
         if v is not None and (not v or not v.strip()):
             raise ValueError("不良品编码不能为空")
         return v.strip().upper() if v else None
     
-    @validator("name")
-    def validate_name(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
         """验证名称格式"""
         if v is not None and (not v or not v.strip()):
             raise ValueError("不良品名称不能为空")
@@ -72,8 +80,14 @@ class DefectTypeResponse(DefectTypeBase):
     updated_at: datetime = Field(..., description="更新时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class DefectTypeMinimal(BaseModel):
+    """不良品项简要（工序绑定用）"""
+    uuid: str = Field(..., description="UUID")
+    code: str = Field(..., description="编码")
+    name: str = Field(..., description="名称")
 
 
 class OperationBase(BaseModel):
@@ -82,9 +96,9 @@ class OperationBase(BaseModel):
     code: str = Field(..., max_length=50, description="工序编码")
     name: str = Field(..., max_length=200, description="工序名称")
     description: Optional[str] = Field(None, description="描述")
-    reporting_type: str = Field("quantity", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
-    allow_jump: bool = Field(False, description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
-    is_active: bool = Field(True, description="是否启用")
+    reporting_type: str = Field("quantity", alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
+    allow_jump: bool = Field(False, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
     
     @validator("reporting_type")
     def validate_reporting_type(cls, v):
@@ -111,7 +125,9 @@ class OperationBase(BaseModel):
 
 class OperationCreate(OperationBase):
     """创建工序 Schema"""
-    pass
+    defect_type_uuids: Optional[List[str]] = Field(None, alias="defectTypeUuids", description="允许绑定的不良品项 UUID 列表")
+    default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class OperationUpdate(BaseModel):
@@ -120,9 +136,12 @@ class OperationUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=50, description="工序编码")
     name: Optional[str] = Field(None, max_length=200, description="工序名称")
     description: Optional[str] = Field(None, description="描述")
-    reporting_type: Optional[str] = Field(None, max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
-    allow_jump: Optional[bool] = Field(None, description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    reporting_type: Optional[str] = Field(None, alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
+    allow_jump: Optional[bool] = Field(None, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
+    is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+    defect_type_uuids: Optional[List[str]] = Field(None, alias="defectTypeUuids", description="允许绑定的不良品项 UUID 列表")
+    default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("reporting_type")
     def validate_reporting_type(cls, v):
@@ -157,9 +176,12 @@ class OperationResponse(OperationBase):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    defect_types: List[DefectTypeMinimal] = Field(default_factory=list, description="允许绑定的不良品项")
+    default_operator_ids: List[int] = Field(default_factory=list, description="默认生产人员（用户ID列表）")
+    default_operator_uuids: List[str] = Field(default_factory=list, description="默认生产人员 UUID列表")
+    default_operator_names: List[str] = Field(default_factory=list, description="默认生产人员姓名列表")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ProcessRouteBase(BaseModel):

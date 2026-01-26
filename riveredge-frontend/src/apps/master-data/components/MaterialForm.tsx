@@ -634,13 +634,17 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         onCancel={onClose}
         footer={null}
         width={1000}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm
         formRef={formRef}
         loading={loading}
         onFinish={handleSubmit}
-        initialValues={initialValues}
+        initialValues={
+          !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
+            ? { ...initialValues, baseUnit: 'PC' }
+            : initialValues
+        }
         layout="vertical"
         grid={true}
         rowProps={{ gutter: 16 }}
@@ -1311,7 +1315,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           rules={[{ max: 100, message: '型号不能超过100个字符' }]}
         />
       </Col>
-      {/* 7. 基础单位 */}
+      {/* 7. 基础单位（默认 PC 通过 ProForm initialValues 设置，避免 Field 与 Form initialValues 冲突） */}
       <Col span={12}>
         <DictionarySelect
           dictionaryCode="MATERIAL_UNIT"
@@ -1320,7 +1324,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           placeholder="请选择基础单位（如：个、件、kg等）"
           required
           formRef={formRef}
-          initialValue="PC"
         />
       </Col>
       {/* 8. 品牌 */}

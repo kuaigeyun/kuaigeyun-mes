@@ -507,12 +507,12 @@ const MaterialsManagementPage: React.FC = () => {
         await materialApi.update(currentMaterial.uuid, values as MaterialUpdate);
         messageApi.success('更新成功');
       } else {
-        // 新建物料时，如果启用了自动编码，不传递 mainCode，让后端自动生成
-        // 这样序号只在真正创建成功时才更新
+        // 新建物料时，如果启用了自动编码，不传递编码，让后端自动生成
+        // 这样序号只在真正创建成功时才更新（表单可能传 mainCode 或 main_code）
         const submitValues = { ...values };
         if (isAutoGenerateEnabled('master-data-material')) {
-          // 移除预览的编码，让后端在创建时自动生成
           delete submitValues.mainCode;
+          delete submitValues.main_code;
         }
         await materialApi.create(submitValues as MaterialCreate);
         messageApi.success('创建成功');
@@ -542,9 +542,10 @@ const MaterialsManagementPage: React.FC = () => {
   const columns: ProColumns<Material>[] = [
     {
       title: '物料编码',
-      dataIndex: 'code',
+      dataIndex: ['mainCode', 'code'],
       width: 150,
       fixed: 'left',
+      render: (_, record) => (record as any).mainCode || (record as any).code || '-',
     },
     {
       title: '物料名称',

@@ -11,11 +11,14 @@ import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
-import { operationApi } from '../../../services/process';
+import { operationApi, defectTypeApi } from '../../../services/process';
+import { getUserList } from '../../../../../services/user';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
-import type { Operation, OperationCreate, OperationUpdate } from '../../../types/process';
+import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal } from '../../../types/process';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 工序信息管理列表页面组件
@@ -37,6 +40,33 @@ const OperationsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  /** 预览编码（自动编码时使用，提交时若未修改则正式生成） */
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  /** 不良品项、用户选项（表单用） */
+  const [defectTypeOptions, setDefectTypeOptions] = useState<{ label: string; value: string }[]>([]);
+  const [userOptions, setUserOptions] = useState<{ label: string; value: string }[]>([]);
+
+  /** 加载不良品项、用户选项（Modal 打开时） */
+  const loadFormOptions = async () => {
+    try {
+      const [defects, usersRes] = await Promise.all([
+        defectTypeApi.list({ limit: 500, is_active: true }),
+        getUserList({ is_active: true, page_size: 100 }),
+      ]);
+      setDefectTypeOptions(
+        (defects || []).map((d) => ({ label: `${d.code} ${d.name}`, value: d.uuid }))
+      );
+      const items = usersRes?.items || [];
+      setUserOptions(
+        items.map((u: any) => ({
+          label: (u.full_name || u.username || u.uuid) as string,
+          value: u.uuid as string,
+        }))
+      );
+    } catch (e) {
+      console.warn('加载不良品项/用户选项失败:', e);
+    }
+  };
 
   /**
    * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
@@ -57,14 +87,51 @@ const OperationsPage: React.FC = () => {
   /**
    * 处理新建工序
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentOperationUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+    loadFormOptions();
+
+    if (isAutoGenerateEnabled('master-data-process-operation')) {
+      const ruleCode = getPageRuleCode('master-data-process-operation');
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const previewCodeValue = codeResponse.code;
+          setPreviewCode(previewCodeValue);
+          formRef.current?.setFieldsValue({
+            code: previewCodeValue,
+            isActive: true,
+            reportingType: 'quantity',
+            allowJump: false,
+          });
+        } catch (error: any) {
+          console.warn('自动生成编码失败:', error);
+          setPreviewCode(null);
+          formRef.current?.setFieldsValue({
+            isActive: true,
+            reportingType: 'quantity',
+            allowJump: false,
+          });
+        }
+      } else {
+        setPreviewCode(null);
+        formRef.current?.setFieldsValue({
+          isActive: true,
+          reportingType: 'quantity',
+          allowJump: false,
+        });
+      }
+    } else {
+      setPreviewCode(null);
+      formRef.current?.setFieldsValue({
+        isActive: true,
+        reportingType: 'quantity',
+        allowJump: false,
+      });
+    }
   };
 
   /**
@@ -74,10 +141,15 @@ const OperationsPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentOperationUuid(record.uuid);
+      setPreviewCode(null);
       setModalVisible(true);
-      
-      // 获取工序详情
+      loadFormOptions();
+
       const detail = await operationApi.get(record.uuid);
+      const dts = (detail as any).defect_types ?? (detail as any).defectTypes ?? [];
+      const defectTypeUuids = Array.isArray(dts) ? dts.map((d: DefectTypeMinimal) => d.uuid) : [];
+      const defaultOperatorUuids = (detail as any).default_operator_uuids ?? (detail as any).defaultOperatorUuids ?? [];
+      const defaultOperatorUuidsArr = Array.isArray(defaultOperatorUuids) ? defaultOperatorUuids : [];
       formRef.current?.setFieldsValue({
         code: detail.code,
         name: detail.name,
@@ -85,6 +157,8 @@ const OperationsPage: React.FC = () => {
         reportingType: detail.reportingType || 'quantity',
         allowJump: detail.allowJump || false,
         isActive: detail.isActive,
+        defectTypeUuids: defectTypeUuids.length ? defectTypeUuids : undefined,
+        defaultOperatorUuids: defaultOperatorUuidsArr.length ? defaultOperatorUuidsArr : undefined,
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取工序详情失败');
@@ -231,18 +305,29 @@ const OperationsPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
+
       if (isEdit && currentOperationUuid) {
-        // 更新工序
         await operationApi.update(currentOperationUuid, values as OperationUpdate);
         messageApi.success('更新成功');
       } else {
-        // 创建工序
+        if (isAutoGenerateEnabled('master-data-process-operation')) {
+          const ruleCode = getPageRuleCode('master-data-process-operation');
+          const currentCode = values.code;
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成编码失败，使用预览编码:', error);
+            }
+          }
+        }
         await operationApi.create(values as OperationCreate);
         messageApi.success('创建成功');
       }
-      
+
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -257,6 +342,7 @@ const OperationsPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -325,6 +411,46 @@ const OperationsPage: React.FC = () => {
           {record.isActive ? '启用' : '禁用'}
         </Tag>
       ),
+    },
+    {
+      title: '绑定不良品项',
+      dataIndex: ['defect_types', 'defectTypes'],
+      width: 180,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record: Operation) => {
+        const dts = (record as any).defect_types ?? (record as any).defectTypes ?? [];
+        const arr = Array.isArray(dts) ? dts : [];
+        if (!arr.length) return '-';
+        return (
+          <Space size={[0, 4]} wrap>
+            {arr.slice(0, 3).map((d: DefectTypeMinimal) => (
+              <Tag key={d.uuid}>{d.code}</Tag>
+            ))}
+            {arr.length > 3 && <Tag>+{arr.length - 3}</Tag>}
+          </Space>
+        );
+      },
+    },
+    {
+      title: '默认生产人员',
+      dataIndex: ['default_operator_names', 'defaultOperatorNames'],
+      width: 180,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record: Operation) => {
+        const names = (record as any).default_operator_names ?? (record as any).defaultOperatorNames ?? [];
+        const arr = Array.isArray(names) ? names : [];
+        if (!arr.length) return '-';
+        return (
+          <Space size={[0, 4]} wrap>
+            {arr.slice(0, 3).map((name: string, idx: number) => (
+              <Tag key={idx}>{name}</Tag>
+            ))}
+            {arr.length > 3 && <Tag>+{arr.length - 3}</Tag>}
+          </Space>
+        );
+      },
     },
     {
       title: '创建时间',
@@ -473,6 +599,40 @@ const OperationsPage: React.FC = () => {
                     </Tag>
                   ),
                 },
+                {
+                  title: '绑定不良品项',
+                  dataIndex: 'defect_types',
+                  span: 2,
+                  render: (_, record) => {
+                    const dts = (record as any).defect_types ?? (record as any).defectTypes ?? [];
+                    const arr = Array.isArray(dts) ? dts : [];
+                    if (!arr.length) return '-';
+                    return (
+                      <Space size={[0, 4]} wrap>
+                        {arr.map((d: DefectTypeMinimal) => (
+                          <Tag key={d.uuid}>{d.code} {d.name}</Tag>
+                        ))}
+                      </Space>
+                    );
+                  },
+                },
+                {
+                  title: '默认生产人员',
+                  dataIndex: 'default_operator_names',
+                  span: 2,
+                  render: (_, record) => {
+                    const names = (record as any).default_operator_names ?? (record as any).defaultOperatorNames ?? [];
+                    const arr = Array.isArray(names) ? names : [];
+                    if (!arr.length) return '-';
+                    return (
+                      <Space size={[0, 4]} wrap>
+                        {arr.map((name: string, idx: number) => (
+                          <Tag key={idx}>{name}</Tag>
+                        ))}
+                      </Space>
+                    );
+                  },
+                },
                 { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
                 { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
               ]}
@@ -512,7 +672,7 @@ const OperationsPage: React.FC = () => {
         <ProFormText
           name="code"
           label="工序编码"
-          placeholder="请输入工序编码"
+          placeholder={isAutoGenerateEnabled('master-data-process-operation') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入工序编码'}
           colProps={{ span: 12 }}
           rules={[
             { required: true, message: '请输入工序编码' },
@@ -531,6 +691,24 @@ const OperationsPage: React.FC = () => {
             { required: true, message: '请输入工序名称' },
             { max: 200, message: '工序名称不能超过200个字符' },
           ]}
+        />
+        <ProFormSelect
+          name="defectTypeUuids"
+          label="绑定不良品项"
+          placeholder="请选择允许绑定的不良品项（可多选）"
+          colProps={{ span: 24 }}
+          mode="multiple"
+          options={defectTypeOptions}
+          fieldProps={{ showSearch: true, optionFilterProp: 'label' }}
+        />
+        <ProFormSelect
+          name="defaultOperatorUuids"
+          label="默认生产人员"
+          placeholder="请选择默认生产人员（可多选）"
+          colProps={{ span: 24 }}
+          mode="multiple"
+          options={userOptions}
+          fieldProps={{ showSearch: true, optionFilterProp: 'label', allowClear: true }}
         />
         <ProFormTextArea
           name="description"
@@ -552,7 +730,6 @@ const OperationsPage: React.FC = () => {
             { label: '按状态报工', value: 'status' },
           ]}
           rules={[{ required: true, message: '请选择报工类型' }]}
-          initialValue="quantity"
           extra="按数量报工：需要输入完成数量、合格数量（如：注塑、组装、包装）。按状态报工：只有完成/未完成状态，无数量概念（如：检验、测试、审批）"
         />
         <ProFormSwitch

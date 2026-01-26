@@ -180,7 +180,7 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
       onOk={handleSave}
       onCancel={onCancel}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <ProForm
         form={form}
