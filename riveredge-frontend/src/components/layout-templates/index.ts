@@ -13,6 +13,7 @@
  * - WizardTemplate: 向导布局模板（步骤式向导）
  * - KanbanViewTemplate: 看板视图布局模板（工单看板、任务看板）
  * - TouchScreenTemplate: 工位机触屏模式布局模板（大按钮、大字体、全屏）
+ * - CanvasPageTemplate: 画板页布局模板（操作条 + 画板 + 右侧面板，流程设计、BOM 设计等）
  *
  * Author: Luigi Lu
  * Date: 2025-12-26
@@ -84,6 +85,13 @@ export type {
   CalculationResultTemplateProps,
   CalculationExplanation,
 } from './CalculationResultTemplate';
+
+// 画板页布局模板
+export { CanvasPageTemplate } from './CanvasPageTemplate';
+export type {
+  CanvasPageTemplateProps,
+  CanvasPageRightPanelConfig,
+} from './CanvasPageTemplate';
 
 // 布局常量配置
 export * from './constants';

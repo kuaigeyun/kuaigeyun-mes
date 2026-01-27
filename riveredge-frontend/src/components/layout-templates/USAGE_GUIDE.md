@@ -109,7 +109,32 @@ import { TwoColumnLayout } from '@/components/layout-templates';
 
 ---
 
-### 5. DashboardTemplate - 工作台布局模板
+### 5. CanvasPageTemplate - 画板页布局模板
+
+**使用场景**: 流程设计、工程 BOM 设计、思维导图等带画布的设计器页面（操作条 + 画板 + 右侧面板）
+
+**示例**:
+```tsx
+import { CanvasPageTemplate } from '@/components/layout-templates';
+
+<CanvasPageTemplate
+  toolbar={
+    <Space>
+      <Button type="primary" icon={<SaveOutlined />}>保存</Button>
+      <Button icon={<CloseOutlined />}>返回</Button>
+    </Space>
+  }
+  canvas={<MindMap {...config} />}
+  rightPanel={{
+    title: '节点配置',
+    children: <Form>...</Form>,
+  }}
+/>
+```
+
+---
+
+### 6. DashboardTemplate - 工作台布局模板
 
 **使用场景**: 工作台首页（快捷操作、待办事项、数据看板）
 
@@ -132,7 +157,7 @@ import { DashboardTemplate } from '@/components/layout-templates';
 
 ---
 
-### 6. WizardTemplate - 向导布局模板
+### 7. WizardTemplate - 向导布局模板
 
 **使用场景**: 多步骤流程（快速初始化向导、审批流程等）
 
@@ -154,7 +179,7 @@ import { WizardTemplate } from '@/components/layout-templates';
 
 ---
 
-### 7. KanbanViewTemplate - 看板视图布局模板
+### 8. KanbanViewTemplate - 看板视图布局模板
 
 **使用场景**: 工单看板、任务看板等
 
@@ -180,7 +205,7 @@ import { KanbanViewTemplate } from '@/components/layout-templates';
 
 ---
 
-### 8. TouchScreenTemplate - 工位机触屏模式布局模板
+### 9. TouchScreenTemplate - 工位机触屏模式布局模板
 
 **使用场景**: 工位机触屏模式（现场报工、SOP查看等）
 
@@ -200,7 +225,7 @@ import { TouchScreenTemplate } from '@/components/layout-templates';
 
 ---
 
-### 9. CompareViewTemplate - 对比视图布局模板
+### 10. CompareViewTemplate - 对比视图布局模板
 
 **使用场景**: 重复物料对比、版本对比等
 
@@ -228,7 +253,7 @@ import { CompareViewTemplate } from '@/components/layout-templates';
 
 ---
 
-### 10. ParameterConfigTemplate - 参数配置布局模板
+### 11. ParameterConfigTemplate - 参数配置布局模板
 
 **使用场景**: MRP/LRP参数配置等
 
@@ -251,7 +276,7 @@ import { ParameterConfigTemplate } from '@/components/layout-templates';
 
 ---
 
-### 11. CalculationResultTemplate - 计算结果显示布局模板
+### 12. CalculationResultTemplate - 计算结果显示布局模板
 
 **使用场景**: MRP/LRP运算结果展示
 

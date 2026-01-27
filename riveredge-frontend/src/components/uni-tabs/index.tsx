@@ -68,11 +68,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   });
 
   /**
-   * 根据路径获取标签标题（使用统一的翻译逻辑）
+   * 根据路径或完整 tabKey 获取标签标题（key 可能含 query，标题按 pathname 查找）
    */
   const getTabTitle = useCallback(
-    (path: string): string => {
-      return findMenuTitleWithTranslation(path, menuConfig, t);
+    (pathOrKey: string): string => {
+      const pathname = (pathOrKey || '').split('?')[0];
+      return findMenuTitleWithTranslation(pathname, menuConfig, t);
     },
     [menuConfig, t]
   );
@@ -484,11 +485,24 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (location.pathname) {
       // 确保工作台标签始终存在（固定第一个）
       addTab('/system/dashboard/workplace');
-      // 添加当前页面标签
-      addTab(location.pathname);
-      setActiveKey(location.pathname);
+      // 使用 pathname+search 作为 tabKey，切换回来时保留 query（如 designer?materialId=xxx）
+      const tabKey = location.pathname + (location.search || '');
+      addTab(tabKey);
+      setActiveKey(tabKey);
     }
-  }, [location.pathname, addTab, isInitialized]);
+  }, [location.pathname, location.search, addTab, isInitialized]);
+
+  /**
+   * 返回时关闭当前标签：当通过 state.closeTab 指定要关闭的标签时，移除该标签并清除 state
+   */
+  useEffect(() => {
+    const state = location.state as { closeTab?: string } | null;
+    if (state?.closeTab) {
+      removeTab(state.closeTab);
+      const search = location.search ? location.search : '';
+      navigate(location.pathname + search, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.search, location.state, removeTab, navigate]);
 
   /**
    * 监听 refresh 参数，实现局部刷新

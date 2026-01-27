@@ -273,14 +273,6 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理打开图形化BOM设计器（新建）
-   */
-  const handleOpenDesigner = () => {
-    // 跳转到BOM设计器页面（新建模式，不传materialId）
-    navigate('/apps/master-data/process/engineering-bom/designer');
-  };
-
-  /**
    * 处理编辑BOM（按主料+版本加载完整 BOM 结构，支持增删改子件）
    * @param record 任意一条该 BOM 下的记录（含 materialId、version），用于定位整份 BOM
    */
@@ -1161,7 +1153,7 @@ const BOMPage: React.FC = () => {
           const p = new URLSearchParams();
           p.set('materialId', String(r.materialId));
           if (r.version) p.set('version', r.version);
-          navigate(`/apps/master-data/materials/bom/designer?${p}`);
+          navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
         };
         const moreItems: MenuProps['items'] = [
           { key: 'detail', icon: <DiffOutlined />, label: '详情', onClick: () => handleOpenDetail(r) },
@@ -1390,12 +1382,6 @@ const BOMPage: React.FC = () => {
               onClick={handleCreate}
             >
               新建BOM
-            </Button>
-            <Button
-              icon={<ApartmentOutlined />}
-              onClick={handleOpenDesigner}
-            >
-              图形化设计
             </Button>
             <Button
               danger
