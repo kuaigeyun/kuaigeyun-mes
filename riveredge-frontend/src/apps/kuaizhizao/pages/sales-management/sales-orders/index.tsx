@@ -10,7 +10,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select, Row, Col } from 'antd';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select, Row, Col, Form as AntForm, DatePicker } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -51,10 +51,6 @@ const SalesOrdersPage: React.FC = () => {
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
   
-  // 订单明细状态
-  const [orderItems, setOrderItems] = useState<SalesOrderItem[]>([]);
-  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
-  
   // 物料列表（用于物料选择器）
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -87,8 +83,6 @@ const SalesOrdersPage: React.FC = () => {
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
-    setOrderItems([]);
-    setEditingItemIndex(null);
     setModalVisible(true);
     formRef.current?.resetFields();
     if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
@@ -122,31 +116,25 @@ const SalesOrdersPage: React.FC = () => {
       setModalVisible(true);
       try {
         const data = await getSalesOrder(id, true);  // includeItems=true
-        formRef.current?.setFieldsValue(data);
-        // 加载订单明细，如果material_id不存在，尝试通过物料编码或名称匹配
-        const items = (data.items || []).map(item => {
-          // 如果已经有material_id，直接使用
-          if (item.material_id) {
-            return item;
-          }
-          // 否则尝试从物料列表中查找匹配的物料
-          const matchedMaterial = materials.find(m => 
+        // 明细中若缺少 material_id，用物料列表按编码/名称匹配后填入，再一起写入表单
+        const items = (data.items || []).map((item: SalesOrderItem) => {
+          if (item.material_id) return item;
+          const matched = materials.find(m =>
             (m.mainCode || m.code) === item.material_code || m.name === item.material_name
           );
-          if (matchedMaterial) {
+          if (matched) {
             return {
               ...item,
-              material_id: matchedMaterial.id,
-              material_code: matchedMaterial.mainCode || matchedMaterial.code || item.material_code,
-              material_name: matchedMaterial.name || item.material_name,
-              material_spec: matchedMaterial.specification || item.material_spec,
-              material_unit: matchedMaterial.baseUnit || item.material_unit,
+              material_id: matched.id,
+              material_code: matched.mainCode || matched.code || item.material_code,
+              material_name: matched.name || item.material_name,
+              material_spec: matched.specification || item.material_spec,
+              material_unit: matched.baseUnit || item.material_unit,
             };
           }
           return item;
         });
-        setOrderItems(items);
-        setEditingItemIndex(null);
+        formRef.current?.setFieldsValue({ ...data, items });
       } catch (error: any) {
         messageApi.error('获取销售订单详情失败');
       }
@@ -193,12 +181,16 @@ const SalesOrdersPage: React.FC = () => {
    */
   const handleSubmit = async (values: any) => {
     try {
-      // 验证明细
-      if (!orderItems || orderItems.length === 0) {
+      const items = values.items ?? [];
+      if (!items.length) {
         messageApi.warning('请至少添加一条订单明细');
         return;
       }
-      values.items = orderItems;
+      // 按数量×单价计算金额后提交（与表单联动由 Form 管理，此处保证落库一致）
+      values.items = items.map((it: SalesOrderItem) => ({
+        ...it,
+        item_amount: (Number(it.required_quantity) || 0) * (Number(it.unit_price) || 0),
+      }));
       if (isEdit && currentId) {
         await updateSalesOrder(currentId, values);
         messageApi.success('销售订单更新成功');
@@ -220,8 +212,6 @@ const SalesOrdersPage: React.FC = () => {
       }
       setModalVisible(false);
       setPreviewCode(null);
-      setOrderItems([]);
-      setEditingItemIndex(null);
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
@@ -230,73 +220,22 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /**
-   * 添加订单明细
+   * 物料选择时回填编码、名称、规格、单位（Form.List 内明细由表单托管，通过 setFieldsValue 更新）
    */
-  const handleAddItem = () => {
-    const newItem: SalesOrderItem = {
-      material_id: undefined,
-      material_code: '',
-      material_name: '',
-      material_spec: '',
-      material_unit: '',
-      required_quantity: 0,
-      delivery_date: '',
-      unit_price: 0,
-      item_amount: 0,
-    };
-    setOrderItems([...orderItems, newItem]);
-    setEditingItemIndex(orderItems.length);
-  };
-
-  /**
-   * 删除订单明细
-   */
-  const handleDeleteItem = (index: number) => {
-    const newItems = orderItems.filter((_, i) => i !== index);
-    setOrderItems(newItems);
-    if (editingItemIndex === index) {
-      setEditingItemIndex(null);
-    } else if (editingItemIndex !== null && editingItemIndex > index) {
-      setEditingItemIndex(editingItemIndex - 1);
-    }
-  };
-
-  /**
-   * 更新订单明细
-   */
-  const handleUpdateItem = (index: number, field: keyof SalesOrderItem, value: any) => {
-    const newItems = [...orderItems];
-    newItems[index] = {
-      ...newItems[index],
-      [field]: value,
-    };
-    
-    // 自动计算金额
-    if (field === 'required_quantity' || field === 'unit_price') {
-      const quantity = field === 'required_quantity' ? value : (newItems[index].required_quantity || 0);
-      const price = field === 'unit_price' ? value : (newItems[index].unit_price || 0);
-      newItems[index].item_amount = quantity * price;
-    }
-    
-    setOrderItems(newItems);
-  };
-
-  /**
-   * 处理物料选择
-   */
-  const handleMaterialSelect = (index: number, materialUuid: string) => {
-    const material = materials.find(m => m.uuid === materialUuid);
-    if (material) {
-      const newItems = [...orderItems];
-      newItems[index] = {
-        ...newItems[index],
-        material_id: material.id,
-        material_code: material.mainCode || material.code || '',
-        material_name: material.name || '',
-        material_spec: material.specification || '',
-        material_unit: material.baseUnit || '',
+  const handleMaterialSelectForForm = (index: number, materialId: number | undefined) => {
+    const items = formRef.current?.getFieldValue('items') ?? [];
+    const next = [...items];
+    if (next[index]) {
+      const m = materials.find(mo => mo.id === materialId);
+      next[index] = {
+        ...next[index],
+        material_id: materialId,
+        material_code: m ? (m.mainCode || m.code || '') : '',
+        material_name: m ? m.name || '' : '',
+        material_spec: m ? (m.specification || '') : '',
+        material_unit: m ? (m.baseUnit || '') : '',
       };
-      setOrderItems(newItems);
+      formRef.current?.setFieldsValue({ items: next });
     }
   };
 
@@ -686,7 +625,7 @@ const SalesOrdersPage: React.FC = () => {
           setPreviewCode(null);
         }}
         title={isEdit ? '编辑销售订单' : '新建销售订单'}
-        width={900}
+        width={1200}
         footer={null}
         destroyOnHidden
       >
@@ -717,21 +656,23 @@ const SalesOrdersPage: React.FC = () => {
                 fieldProps={{ disabled: isEdit }}
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormDatePicker
                 name="order_date"
                 label="订单日期"
                 rules={[{ required: true, message: '请选择订单日期' }]}
+                fieldProps={{ style: { width: '100%' } }}
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormDatePicker
                 name="delivery_date"
                 label="交货日期"
                 rules={[{ required: true, message: '请选择交货日期' }]}
+                fieldProps={{ style: { width: '100%' } }}
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormText
                 name="customer_name"
                 label="客户名称"
@@ -739,259 +680,205 @@ const SalesOrdersPage: React.FC = () => {
                 placeholder="请输入客户名称"
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormText
                 name="customer_contact"
                 label="客户联系人"
                 placeholder="请输入客户联系人"
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormText
                 name="customer_phone"
                 label="客户电话"
                 placeholder="请输入客户电话"
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormText
                 name="salesman_name"
                 label="销售员姓名"
                 placeholder="请输入销售员姓名"
               />
             </Col>
-            <Col span={24}>
+            <Col span={12}>
               <ProFormText
                 name="shipping_address"
                 label="收货地址"
                 placeholder="请输入收货地址"
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormText
                 name="shipping_method"
                 label="发货方式"
                 placeholder="请输入发货方式"
               />
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <ProFormText
                 name="payment_terms"
                 label="付款条件"
                 placeholder="请输入付款条件"
               />
             </Col>
-            <Col span={24}>
-              <ProFormTextArea
-                name="notes"
-                label="备注"
-                placeholder="请输入备注"
-              />
-            </Col>
           </Row>
 
-          {/* 订单明细 */}
-          <div style={{ marginTop: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h4 style={{ margin: 0 }}>订单明细</h4>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddItem}>
-                添加明细
-              </Button>
-            </div>
-            <Table<SalesOrderItem>
-              size="small"
-              dataSource={orderItems}
-              rowKey={(record, index) => `item-${index}`}
-              pagination={false}
-              bordered
-              columns={[
-                {
-                  title: '物料',
-                  dataIndex: 'material_id',
-                  width: 200,
-                  render: (materialId: number, record: SalesOrderItem, index: number) => {
-                    if (editingItemIndex === index) {
-                      // 查找当前选中的物料
-                      const selectedMaterial = materials.find(m => m.id === materialId);
-                      const materialUuid = selectedMaterial?.uuid || '';
-                      
-                      return (
-                        <Select
-                          value={materialUuid}
-                          onChange={(value) => {
-                            const material = materials.find(m => m.uuid === value);
-                            if (material) {
-                              handleMaterialSelect(index, value);
-                            }
-                          }}
-                          placeholder="请选择物料"
-                          showSearch
-                          allowClear
-                          style={{ width: '100%' }}
-                          loading={materialsLoading}
-                          filterOption={(input, option) => {
-                            const label = option?.label as string || '';
-                            return label.toLowerCase().includes(input.toLowerCase());
-                          }}
-                          options={materials.map(m => ({
-                            label: `${m.mainCode || m.code || ''} - ${m.name || ''}`,
-                            value: m.uuid,
-                          }))}
+          {/* 订单明细：Form.List + Table footer，与 BOM 子物料列表结构一致；超出宽度时横向滚动 */}
+          <ProForm.Item
+            label="订单明细"
+            required
+            style={{ width: '100%', minWidth: 0 }}
+          >
+            <ProForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条订单明细' }]}>
+              <AntForm.List name="items">
+                {(fields, { add, remove }) => {
+                  const orderDetailColumns = [
+                      {
+                        title: '物料',
+                        dataIndex: 'material_id',
+                        width: 200,
+                        render: (_, __, index) => (
+                          <AntForm.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
+                            <Select
+                              placeholder="请选择物料"
+                              showSearch
+                              allowClear
+                              size="small"
+                              style={{ width: '100%' }}
+                              loading={materialsLoading}
+                              filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
+                              options={materials.map(m => ({ label: `${m.mainCode || m.code || ''} - ${m.name || ''}`, value: m.id }))}
+                              onChange={(id) => handleMaterialSelectForForm(index, id as number)}
+                            />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '规格',
+                        dataIndex: 'material_spec',
+                        width: 120,
+                        render: (_, __, index) => (
+                          <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                            <Input placeholder="规格" size="small" />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '单位',
+                        dataIndex: 'material_unit',
+                        width: 80,
+                        render: (_, __, index) => (
+                          <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                            <Input placeholder="单位" size="small" />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '数量',
+                        dataIndex: 'required_quantity',
+                        width: 100,
+                        align: 'right',
+                        render: (_, __, index) => (
+                          <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                            <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '单价',
+                        dataIndex: 'unit_price',
+                        width: 100,
+                        align: 'right',
+                        render: (_, __, index) => (
+                          <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                            <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '金额',
+                        width: 110,
+                        align: 'right',
+                        render: (_, __, index) => (
+                          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                            {({ getFieldValue }: any) => {
+                              const items = getFieldValue('items') ?? [];
+                              const row = items[index];
+                              const amt = (Number(row?.required_quantity) || 0) * (Number(row?.unit_price) || 0);
+                              return <span>{amt ? `¥${amt.toLocaleString()}` : '-'}</span>;
+                            }}
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '交货日期',
+                        dataIndex: 'delivery_date',
+                        width: 120,
+                        render: (_, __, index) => (
+                          <AntForm.Item name={[index, 'delivery_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
+                            <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '操作',
+                        width: 70,
+                        fixed: 'right',
+                        render: (_, __, index) => (
+                          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                            删除
+                          </Button>
+                        ),
+                      },
+                    ];
+                  const totalWidth = orderDetailColumns.reduce((s, c) => s + (c.width as number || 0), 0);
+                  return (
+                    <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+                      <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                        <Table
+                          size="small"
+                          dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                          rowKey="key"
+                          pagination={false}
+                          bordered
+                          columns={orderDetailColumns}
+                          scroll={{ x: totalWidth }}
+                          style={{ width: totalWidth, margin: 0 }}
+                        footer={() => (
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            onClick={() => add({
+                              material_id: undefined,
+                              material_code: '',
+                              material_name: '',
+                              material_spec: '',
+                              material_unit: '',
+                              required_quantity: 0,
+                              delivery_date: '',
+                              unit_price: 0,
+                              item_amount: 0,
+                            })}
+                            block
+                          >
+                            添加明细
+                          </Button>
+                        )}
                         />
-                      );
-                    } else {
-                      // 显示模式：物料编码 - 物料名称
-                      const material = materials.find(m => m.id === materialId);
-                      if (material) {
-                        return `${material.mainCode || material.code || ''} - ${material.name || ''}`;
-                      }
-                      return record.material_code && record.material_name 
-                        ? `${record.material_code} - ${record.material_name}`
-                        : '-';
-                    }
-                  },
-                },
-                {
-                  title: '规格',
-                  dataIndex: 'material_spec',
-                  width: 120,
-                  render: (text: string, record: SalesOrderItem, index: number) => (
-                    editingItemIndex === index ? (
-                      <Input
-                        value={text}
-                        onChange={(e) => handleUpdateItem(index, 'material_spec', e.target.value)}
-                        placeholder="规格"
-                      />
-                    ) : (
-                      text || '-'
-                    )
-                  ),
-                },
-                {
-                  title: '单位',
-                  dataIndex: 'material_unit',
-                  width: 80,
-                  render: (text: string, record: SalesOrderItem, index: number) => (
-                    editingItemIndex === index ? (
-                      <Input
-                        value={text}
-                        onChange={(e) => handleUpdateItem(index, 'material_unit', e.target.value)}
-                        placeholder="单位"
-                      />
-                    ) : (
-                      text || '-'
-                    )
-                  ),
-                },
-                {
-                  title: '数量',
-                  dataIndex: 'required_quantity',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (text: number, record: SalesOrderItem, index: number) => (
-                    editingItemIndex === index ? (
-                      <InputNumber
-                        value={text}
-                        onChange={(value) => handleUpdateItem(index, 'required_quantity', value || 0)}
-                        min={0}
-                        precision={2}
-                        style={{ width: '100%' }}
-                      />
-                    ) : (
-                      text || 0
-                    )
-                  ),
-                },
-                {
-                  title: '单价',
-                  dataIndex: 'unit_price',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (text: number, record: SalesOrderItem, index: number) => (
-                    editingItemIndex === index ? (
-                      <InputNumber
-                        value={text}
-                        onChange={(value) => handleUpdateItem(index, 'unit_price', value || 0)}
-                        min={0}
-                        precision={2}
-                        style={{ width: '100%' }}
-                        prefix="¥"
-                      />
-                    ) : (
-                      text ? `¥${Number(text).toLocaleString()}` : '-'
-                    )
-                  ),
-                },
-                {
-                  title: '金额',
-                  dataIndex: 'item_amount',
-                  width: 120,
-                  align: 'right' as const,
-                  render: (text: number) => text ? `¥${Number(text).toLocaleString()}` : '-',
-                },
-                {
-                  title: '交货日期',
-                  dataIndex: 'delivery_date',
-                  width: 120,
-                  render: (text: string, record: SalesOrderItem, index: number) => (
-                    editingItemIndex === index ? (
-                      <Input
-                        type="date"
-                        value={text}
-                        onChange={(e) => handleUpdateItem(index, 'delivery_date', e.target.value)}
-                      />
-                    ) : (
-                      text || '-'
-                    )
-                  ),
-                },
-                {
-                  title: '操作',
-                  width: 100,
-                  fixed: 'right' as const,
-                  render: (_: any, record: SalesOrderItem, index: number) => (
-                    <Space>
-                      {editingItemIndex === index ? (
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => setEditingItemIndex(null)}
-                        >
-                          完成
-                        </Button>
-                      ) : (
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => setEditingItemIndex(index)}
-                        >
-                          编辑
-                        </Button>
-                      )}
-                      <Popconfirm
-                        title="确定删除这条明细吗？"
-                        onConfirm={() => handleDeleteItem(index)}
-                      >
-                        <Button
-                          type="link"
-                          size="small"
-                          danger
-                          icon={<DeleteOutlined />}
-                        >
-                          删除
-                        </Button>
-                      </Popconfirm>
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-            {orderItems.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
-                暂无订单明细，请点击"添加明细"按钮添加
-              </div>
-            )}
-          </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              </AntForm.List>
+            </ProForm.Item>
+          </ProForm.Item>
+
+          <ProFormTextArea
+            name="notes"
+            label="备注"
+            placeholder="请输入备注"
+          />
         </ProForm>
       </Modal>
       
