@@ -608,8 +608,8 @@ class SOP(BaseModel):
     # eSOP 流程配置（ProFlow）
     flow_config = fields.JSONField(null=True, description="流程配置（ProFlow JSON格式，包含 nodes 和 edges）")
     
-    # eSOP 表单配置（Formily）
-    form_config = fields.JSONField(null=True, description="表单配置（Formily Schema格式，每个步骤的表单定义）")
+    # eSOP 表单配置（Formily）— 业务含义为「报工数据采集项」
+    form_config = fields.JSONField(null=True, description="报工数据采集项（Formily Schema，类型：数字/选择/文本/日期时间，含必填与校验）")
     
     # 关联关系（ForeignKeyField 会自动创建 operation_id 字段）
     operation = fields.ForeignKeyField(
@@ -618,6 +618,17 @@ class SOP(BaseModel):
         null=True,
         description="关联工序"
     )
+    
+    # 制造SOP 阶段一：绑定与融合（工艺路线+BOM 融合，不改造工艺路线表）
+    material_group_uuids = fields.JSONField(null=True, description="绑定的物料组 UUID 列表（JSON 数组）")
+    material_uuids = fields.JSONField(null=True, description="绑定的具体物料 UUID 列表（JSON 数组），匹配时优先于物料组")
+    route_uuids = fields.JSONField(null=True, description="载入的工艺路线 UUID 列表（JSON 数组），作为融合输入")
+    bom_load_mode = fields.CharField(
+        max_length=32,
+        default="by_material",
+        description="BOM 载入方式：by_material=按关联物料, by_material_group=按关联物料组, specific_bom=指定BOM"
+    )
+    specific_bom_uuid = fields.CharField(max_length=36, null=True, description="指定 BOM 的 UUID（当 bom_load_mode 为 specific_bom 时使用）")
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")

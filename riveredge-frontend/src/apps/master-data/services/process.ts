@@ -321,6 +321,18 @@ export const sopApi = {
   },
 
   /**
+   * 按物料匹配 SOP（供工单/报工「以 SOP 为依据」使用，具体物料优先于物料组）
+   */
+  getForMaterial: async (
+    materialUuid: string,
+    operationUuid?: string
+  ): Promise<SOP | null> => {
+    return api.get('/apps/master-data/process/sop/for-material', {
+      params: { material_uuid: materialUuid, operation_uuid: operationUuid },
+    });
+  },
+
+  /**
    * 获取SOP详情
    */
   get: async (uuid: string): Promise<SOP> => {

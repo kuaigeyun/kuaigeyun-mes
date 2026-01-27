@@ -1032,11 +1032,12 @@ class ProcessService:
         if existing:
             raise ValidationError(f"SOP编码 {data.code} 已存在")
         
-        # 创建SOP
+        # 创建SOP（仅传模型字段；dict 已包含 schema 中定义的绑定与融合字段）
+        create_data = data.model_dump() if hasattr(data, "model_dump") else data.dict()
         try:
             sop = await SOP.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
@@ -1081,7 +1082,10 @@ class ProcessService:
         skip: int = 0,
         limit: int = 100,
         operation_id: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        material_uuid: Optional[str] = None,
+        material_group_uuid: Optional[str] = None,
+        route_uuid: Optional[str] = None,
     ) -> List[SOPResponse]:
         """
         获取作业程序（SOP）列表
@@ -1092,6 +1096,9 @@ class ProcessService:
             limit: 限制数量
             operation_id: 工序ID（可选，用于过滤）
             is_active: 是否启用（可选）
+            material_uuid: 物料UUID（可选，筛选绑定该物料的 SOP，JSONB 数组包含）
+            material_group_uuid: 物料组UUID（可选，筛选绑定该物料组的 SOP）
+            route_uuid: 工艺路线UUID（可选，筛选载入该工艺路线的 SOP）
             
         Returns:
             List[SOPResponse]: SOP列表
@@ -1107,7 +1114,14 @@ class ProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        sops = await query.offset(skip).limit(limit).order_by("code").all()
+        if material_uuid:
+            query = query.filter(material_uuids__contains=[material_uuid])
+        if material_group_uuid:
+            query = query.filter(material_group_uuids__contains=[material_group_uuid])
+        if route_uuid:
+            query = query.filter(route_uuids__contains=[route_uuid])
+        
+        sops = await query.offset(skip).limit(limit).order_by("code").prefetch_related("operation").all()
         
         return [SOPResponse.model_validate(s) for s in sops]
     
@@ -1164,8 +1178,8 @@ class ProcessService:
             if existing:
                 raise ValidationError(f"SOP编码 {data.code} 已存在")
         
-        # 更新字段
-        update_data = data.dict(exclude_unset=True)
+        # 更新字段（含绑定与融合字段）
+        update_data = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(sop, key, value)
         
@@ -1207,7 +1221,61 @@ class ProcessService:
         from tortoise import timezone
         sop.deleted_at = timezone.now()
         await sop.save()
-    
+
+    @staticmethod
+    async def get_sop_for_material(
+        tenant_id: int,
+        material_uuid: str,
+        operation_uuid: Optional[str] = None,
+    ) -> Optional[SOPResponse]:
+        """
+        按物料匹配 SOP，供工单/报工「以 SOP 为依据生成流程单据」使用。
+        匹配规则：具体物料优先于物料组。
+        """
+        # 1) 优先：绑定该具体物料的 SOP
+        q = SOP.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            material_uuids__contains=[material_uuid],
+        )
+        if operation_uuid:
+            op = await Operation.filter(
+                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
+            ).first()
+            if op:
+                q = q.filter(operation_id=op.id)
+        sop = await q.order_by("code").prefetch_related("operation").first()
+        if sop:
+            return SOPResponse.model_validate(sop)
+        # 2) 其次：绑定该物料所属物料组的 SOP
+        from apps.master_data.models.material import Material, MaterialGroup
+        material = await Material.filter(
+            tenant_id=tenant_id, uuid=material_uuid, deleted_at__isnull=True
+        ).first()
+        if not material or not getattr(material, "group_id", None):
+            return None
+        group = await MaterialGroup.filter(
+            id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
+        ).first()
+        if not group:
+            return None
+        group_uuid = str(group.uuid)
+        q2 = SOP.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+            material_group_uuids__contains=[group_uuid],
+        )
+        if operation_uuid:
+            op = await Operation.filter(
+                tenant_id=tenant_id, uuid=operation_uuid, deleted_at__isnull=True
+            ).first()
+            if op:
+                q2 = q2.filter(operation_id=op.id)
+        sop2 = await q2.order_by("code").prefetch_related("operation").first()
+        return SOPResponse.model_validate(sop2) if sop2 else None
+
     # ==================== 工艺路线版本管理相关方法 ====================
     
     @staticmethod

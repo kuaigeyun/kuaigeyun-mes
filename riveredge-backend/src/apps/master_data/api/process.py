@@ -814,17 +814,45 @@ async def list_sops(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     operation_id: Optional[int] = Query(None, description="工序ID（过滤）"),
-    is_active: Optional[bool] = Query(None, description="是否启用")
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    material_uuid: Optional[str] = Query(None, description="物料UUID（筛选绑定该物料的SOP）"),
+    material_group_uuid: Optional[str] = Query(None, description="物料组UUID（筛选绑定该物料组的SOP）"),
+    route_uuid: Optional[str] = Query(None, description="工艺路线UUID（筛选载入该工艺路线的SOP）"),
 ):
     """
     获取作业程序（SOP）列表
     
-    - **skip**: 跳过数量（默认：0）
-    - **limit**: 限制数量（默认：100，最大：1000）
-    - **operation_id**: 工序ID（可选，用于过滤）
-    - **is_active**: 是否启用（可选）
+    - **operation_id**: 工序ID（可选）
+    - **material_uuid** / **material_group_uuid** / **route_uuid**: 按绑定与载入关系筛选
     """
-    return await ProcessService.list_sops(tenant_id, skip, limit, operation_id, is_active)
+    return await ProcessService.list_sops(
+        tenant_id, skip, limit,
+        operation_id=operation_id,
+        is_active=is_active,
+        material_uuid=material_uuid,
+        material_group_uuid=material_group_uuid,
+        route_uuid=route_uuid,
+    )
+
+
+@router.get(
+    "/sop/for-material",
+    response_model=Optional[SOPResponse],
+    summary="按物料匹配 SOP（工单/报工依据）",
+)
+async def get_sop_for_material(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    material_uuid: str = Query(..., description="物料UUID"),
+    operation_uuid: Optional[str] = Query(None, description="工序UUID（可选，进一步限定）"),
+):
+    """
+    按物料匹配 SOP，供开工单时「以 SOP 为依据产生流程单据」使用。
+    匹配规则：具体物料优先于物料组；无匹配时返回 null。
+    """
+    return await ProcessService.get_sop_for_material(
+        tenant_id, material_uuid, operation_uuid=operation_uuid
+    )
 
 
 @router.get("/sop/{sop_uuid}", response_model=SOPResponse, summary="获取作业程序（SOP）详情")
