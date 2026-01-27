@@ -12,7 +12,8 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined, FormOutl
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
-import { sopApi, operationApi } from '../../../services/process';
+import { sopApi, operationApi, processRouteApi } from '../../../services/process';
+import { materialApi, materialGroupApi } from '../../../services/material';
 import type { SOP, SOPCreate, SOPUpdate, Operation } from '../../../types/process';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import FormSchemaEditor from './FormSchemaEditor';
@@ -44,23 +45,35 @@ const SOPPage: React.FC = () => {
   // 工序列表（用于下拉选择）
   const [operations, setOperations] = useState<Operation[]>([]);
   const [operationsLoading, setOperationsLoading] = useState(false);
+  // 物料组/物料/工艺路线（绑定与载入用）
+  const [materialGroups, setMaterialGroups] = useState<{ uuid: string; code: string; name: string }[]>([]);
+  const [materials, setMaterials] = useState<{ uuid: string; code: string; name: string }[]>([]);
+  const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
 
   /**
-   * 加载工序列表
+   * 加载工序、物料组、物料、工艺路线列表
    */
   useEffect(() => {
-    const loadOperations = async () => {
+    const load = async () => {
       try {
         setOperationsLoading(true);
-        const result = await operationApi.list({ limit: 1000, isActive: true });
-        setOperations(result);
-      } catch (error: any) {
-        console.error('加载工序列表失败:', error);
+        const [opRes, mgRes, matRes, routeRes] = await Promise.all([
+          operationApi.list({ limit: 1000, isActive: true }),
+          materialGroupApi.list({ limit: 1000 }).catch(() => []),
+          materialApi.list({ limit: 2000, isActive: true }).catch(() => []),
+          processRouteApi.list({ limit: 500, is_active: true }).catch(() => []),
+        ]);
+        setOperations(opRes);
+        setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
+        setMaterials(Array.isArray(matRes) ? matRes : []);
+        setRoutes(Array.isArray(routeRes) ? routeRes : []);
+      } catch (e) {
+        console.error('加载基础数据失败:', e);
       } finally {
         setOperationsLoading(false);
       }
     };
-    loadOperations();
+    load();
   }, []);
 
   /**
@@ -89,6 +102,7 @@ const SOPPage: React.FC = () => {
       
       // 获取SOP详情
       const detail = await sopApi.get(record.uuid);
+      const d = detail as any;
       formRef.current?.setFieldsValue({
         code: detail.code,
         name: detail.name,
@@ -96,9 +110,14 @@ const SOPPage: React.FC = () => {
         version: detail.version,
         content: detail.content,
         isActive: detail.isActive,
+        material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
+        material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
+        route_uuids: d.route_uuids ?? d.routeUuids ?? undefined,
+        bom_load_mode: d.bom_load_mode ?? d.bomLoadMode ?? 'by_material',
+        specific_bom_uuid: d.specific_bom_uuid ?? d.specificBomUuid ?? undefined,
       });
-      // 加载form_config配置（SOP参数收集表单配置）
-      setFormConfig(detail.formConfig || undefined);
+      // 加载报工数据采集项（form_config）
+      setFormConfig(detail.formConfig || (d as any).form_config || undefined);
       setActiveTab('basic');
       // 注意：attachments 是 JSON 字段，这里暂时不处理，后续可以扩展为文件上传组件
     } catch (error: any) {
@@ -200,19 +219,24 @@ const SOPPage: React.FC = () => {
     try {
       setFormLoading(true);
       
-      // 合并form_config到提交数据
-      const submitData = {
+      // 合并 form_config 与绑定/载入字段，按后端字段名提交
+      const payload: Record<string, unknown> = {
         ...values,
         formConfig: formConfig || null,
+        material_group_uuids: values.material_group_uuids ?? values.materialGroupUuids ?? null,
+        material_uuids: values.material_uuids ?? values.materialUuids ?? null,
+        route_uuids: values.route_uuids ?? values.routeUuids ?? null,
+        bom_load_mode: values.bom_load_mode ?? values.bomLoadMode ?? 'by_material',
+        specific_bom_uuid: values.specific_bom_uuid ?? values.specificBomUuid ?? null,
       };
       
       if (isEdit && currentSOPUuid) {
         // 更新SOP
-        await sopApi.update(currentSOPUuid, submitData as SOPUpdate);
+        await sopApi.update(currentSOPUuid, payload as SOPUpdate);
         messageApi.success('更新成功');
       } else {
         // 创建SOP
-        await sopApi.create(submitData as SOPCreate);
+        await sopApi.create(payload as SOPCreate);
         messageApi.success('创建成功');
       }
       
@@ -268,6 +292,55 @@ const SOPPage: React.FC = () => {
       width: 200,
       hideInSearch: true,
       render: (_, record) => getOperationName(record.operationId),
+    },
+    {
+      title: '绑定/载入',
+      dataIndex: '_binding',
+      width: 140,
+      hideInSearch: true,
+      render: (_, record: any) => {
+        const ma = record.material_uuids ?? record.materialUuids ?? [];
+        const mg = record.material_group_uuids ?? record.materialGroupUuids ?? [];
+        const rt = record.route_uuids ?? record.routeUuids ?? [];
+        const parts = [];
+        if (ma?.length) parts.push(`物料×${ma.length}`);
+        if (mg?.length) parts.push(`物料组×${mg.length}`);
+        if (rt?.length) parts.push(`路线×${rt.length}`);
+        return parts.length ? parts.join(' ') : '-';
+      },
+    },
+    {
+      title: '按物料',
+      dataIndex: 'material_uuid',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '筛选绑定该物料的SOP',
+        options: materials.map((m: any) => ({ label: `${m.mainCode ?? m.code ?? ''} - ${m.name ?? ''}`, value: m.uuid })),
+        showSearch: true,
+      },
+    },
+    {
+      title: '按物料组',
+      dataIndex: 'material_group_uuid',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '筛选绑定该物料组的SOP',
+        options: materialGroups.map((g: any) => ({ label: `${g.code ?? ''} - ${g.name ?? ''}`, value: g.uuid })),
+        showSearch: true,
+      },
+    },
+    {
+      title: '按工艺路线',
+      dataIndex: 'route_uuid',
+      hideInTable: true,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '筛选载入该工艺路线的SOP',
+        options: routes.map((r: any) => ({ label: `${r.code ?? ''} - ${r.name ?? ''}`, value: r.uuid })),
+        showSearch: true,
+      },
     },
     {
       title: '版本号',
@@ -374,7 +447,11 @@ const SOPPage: React.FC = () => {
           if (searchFormValues?.operationId !== undefined && searchFormValues.operationId !== '' && searchFormValues.operationId !== null) {
             apiParams.operationId = searchFormValues.operationId;
           }
-          
+          // 绑定/载入筛选（制造SOP 阶段一）
+          if (searchFormValues?.material_uuid) apiParams.material_uuid = searchFormValues.material_uuid;
+          if (searchFormValues?.material_group_uuid) apiParams.material_group_uuid = searchFormValues.material_group_uuid;
+          if (searchFormValues?.route_uuid) apiParams.route_uuid = searchFormValues.route_uuid;
+
           try {
             const result = await sopApi.list(apiParams);
             return {
@@ -539,6 +616,50 @@ const SOPPage: React.FC = () => {
                     label="是否启用"
                     colProps={{ span: 12 }}
                   />
+                  <SafeProFormSelect
+                    name="material_group_uuids"
+                    label="绑定物料组"
+                    placeholder="请选择物料组（可选，可多选）"
+                    colProps={{ span: 12 }}
+                    mode="multiple"
+                    options={materialGroups.map(g => ({ label: `${g.code} - ${g.name}`, value: g.uuid }))}
+                    fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                  />
+                  <SafeProFormSelect
+                    name="material_uuids"
+                    label="绑定物料"
+                    placeholder="请选择物料（可选，可多选；匹配时优先于物料组）"
+                    colProps={{ span: 12 }}
+                    mode="multiple"
+                    options={materials.map(m => ({ label: `${(m as any).mainCode ?? (m as any).code ?? ''} - ${(m as any).name}`, value: m.uuid }))}
+                    fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                  />
+                  <SafeProFormSelect
+                    name="route_uuids"
+                    label="载入工艺路线"
+                    placeholder="请选择工艺路线（可选，可多选，作为融合输入）"
+                    colProps={{ span: 12 }}
+                    mode="multiple"
+                    options={routes.map(r => ({ label: `${(r as any).code ?? r.code} - ${(r as any).name ?? r.name}`, value: r.uuid }))}
+                    fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
+                  />
+                  <SafeProFormSelect
+                    name="bom_load_mode"
+                    label="BOM 载入方式"
+                    placeholder="按关联物料"
+                    colProps={{ span: 12 }}
+                    options={[
+                      { label: '按关联物料', value: 'by_material' },
+                      { label: '按关联物料组', value: 'by_material_group' },
+                      { label: '指定 BOM', value: 'specific_bom' },
+                    ]}
+                  />
+                  <ProFormText
+                    name="specific_bom_uuid"
+                    label="指定 BOM UUID"
+                    placeholder="当 BOM 载入方式为「指定 BOM」时填写"
+                    colProps={{ span: 12 }}
+                  />
                   <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 4, gridColumn: '1 / -1' }}>
                     <div style={{ color: '#666', fontSize: 12 }}>
                       提示：附件（attachments）字段为 JSON 格式，可在编辑页面中通过文件上传组件进行配置。
@@ -551,7 +672,7 @@ const SOPPage: React.FC = () => {
               key: 'formConfig',
               label: (
                 <span>
-                  <FormOutlined /> 报工参数收集配置
+                  <FormOutlined /> 报工数据采集项
                 </span>
               ),
               children: (
@@ -560,10 +681,10 @@ const SOPPage: React.FC = () => {
                     <div style={{ color: '#1890ff', fontSize: 13, lineHeight: 1.6 }}>
                       <strong>说明：</strong>
                       <div style={{ marginTop: 8 }}>
-                        配置报工时需要收集的参数表单。当工序关联了此SOP时，报工界面会自动显示配置的参数收集表单。
+                        配置报工时需要收集的数据项（参数收集器）。开工单以 SOP 为依据时，报工界面将按此处配置渲染表单并校验。
                       </div>
                       <div style={{ marginTop: 8 }}>
-                        支持的参数类型：数字（带单位、范围验证）、文本（单行/多行）、选择（单选/多选）、日期、布尔值等。
+                        支持类型：数字（单位、范围、默认值）、选择、文本、日期时间；可配置必填与校验。
                       </div>
                     </div>
                   </div>

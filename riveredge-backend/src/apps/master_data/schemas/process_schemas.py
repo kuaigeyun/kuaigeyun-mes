@@ -408,7 +408,7 @@ class ProcessRouteVersionCompareResult(BaseModel):
 
 
 class SOPBase(BaseModel):
-    """作业程序（SOP）基础 Schema"""
+    """作业程序（SOP）基础 Schema — 工艺路线与 BOM 融合主数据，产出作业指导书与报工数据采集项"""
     
     code: str = Field(..., max_length=50, description="SOP编码")
     name: str = Field(..., max_length=200, description="SOP名称")
@@ -416,9 +416,15 @@ class SOPBase(BaseModel):
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
     attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
-    flow_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（ProFlow JSON格式，包含 nodes 和 edges）")
-    form_config: Optional[Dict[str, Any]] = Field(None, description="表单配置（Formily Schema格式，每个步骤的表单定义）")
+    flow_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（ProFlow JSON格式，作业指导步骤与顺序）")
+    form_config: Optional[Dict[str, Any]] = Field(None, description="报工数据采集项（Formily Schema，数字/选择/文本/日期时间及必填与校验）")
     is_active: bool = Field(True, description="是否启用")
+    # 阶段一：绑定与融合
+    material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组 UUID 列表")
+    material_uuids: Optional[List[str]] = Field(None, description="绑定的具体物料 UUID 列表，匹配时优先于物料组")
+    route_uuids: Optional[List[str]] = Field(None, description="载入的工艺路线 UUID 列表，作为融合输入")
+    bom_load_mode: Optional[str] = Field("by_material", max_length=32, description="BOM载入方式：by_material/by_material_group/specific_bom")
+    specific_bom_uuid: Optional[str] = Field(None, max_length=36, description="指定BOM的UUID（bom_load_mode=specific_bom时使用）")
     
     @validator("code")
     def validate_code(cls, v):
@@ -433,6 +439,13 @@ class SOPBase(BaseModel):
         if not v or not v.strip():
             raise ValueError("SOP名称不能为空")
         return v.strip()
+    
+    @validator("bom_load_mode")
+    def validate_bom_load_mode(cls, v):
+        """验证 BOM 载入方式"""
+        if v is not None and v not in ("by_material", "by_material_group", "specific_bom"):
+            raise ValueError("bom_load_mode 必须是 by_material、by_material_group 或 specific_bom")
+        return v or "by_material"
 
 
 class SOPCreate(SOPBase):
@@ -449,9 +462,20 @@ class SOPUpdate(BaseModel):
     version: Optional[str] = Field(None, max_length=20, description="版本号")
     content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
     attachments: Optional[Dict[str, Any]] = Field(None, description="附件列表（JSON格式）")
-    flow_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（ProFlow JSON格式，包含 nodes 和 edges）")
-    form_config: Optional[Dict[str, Any]] = Field(None, description="表单配置（Formily Schema格式，每个步骤的表单定义）")
+    flow_config: Optional[Dict[str, Any]] = Field(None, description="流程配置（ProFlow JSON格式）")
+    form_config: Optional[Dict[str, Any]] = Field(None, description="报工数据采集项（Formily Schema）")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组 UUID 列表")
+    material_uuids: Optional[List[str]] = Field(None, description="绑定的具体物料 UUID 列表")
+    route_uuids: Optional[List[str]] = Field(None, description="载入的工艺路线 UUID 列表")
+    bom_load_mode: Optional[str] = Field(None, max_length=32, description="BOM载入方式")
+    specific_bom_uuid: Optional[str] = Field(None, max_length=36, description="指定BOM的UUID")
+    
+    @validator("bom_load_mode")
+    def validate_bom_load_mode_update(cls, v):
+        if v is not None and v not in ("by_material", "by_material_group", "specific_bom"):
+            raise ValueError("bom_load_mode 必须是 by_material、by_material_group 或 specific_bom")
+        return v
     
     @validator("code")
     def validate_code(cls, v):

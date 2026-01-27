@@ -189,9 +189,19 @@ export interface SOP {
   version?: string;
   content?: string;
   attachments?: Record<string, any>;
-  flowConfig?: Record<string, any>; // ProFlow 流程配置（包含 nodes 和 edges）
-  formConfig?: Record<string, any>; // Formily 表单配置（每个步骤的表单定义）
+  flowConfig?: Record<string, any>; // ProFlow 流程配置（作业指导步骤与顺序）
+  formConfig?: Record<string, any>; // 报工数据采集项（Formily Schema）
   isActive: boolean;
+  /** 绑定的物料组 UUID 列表 */
+  materialGroupUuids?: string[];
+  /** 绑定的具体物料 UUID 列表，匹配时优先于物料组 */
+  materialUuids?: string[];
+  /** 载入的工艺路线 UUID 列表，作为融合输入 */
+  routeUuids?: string[];
+  /** BOM 载入方式：by_material / by_material_group / specific_bom */
+  bomLoadMode?: string;
+  /** 指定 BOM 的 UUID（bom_load_mode=specific_bom 时使用） */
+  specificBomUuid?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -204,9 +214,14 @@ export interface SOPCreate {
   version?: string;
   content?: string;
   attachments?: Record<string, any>;
-  flowConfig?: Record<string, any>; // ProFlow 流程配置
-  formConfig?: Record<string, any>; // Formily 表单配置
+  flowConfig?: Record<string, any>;
+  formConfig?: Record<string, any>; // 报工数据采集项
   isActive?: boolean;
+  materialGroupUuids?: string[];
+  materialUuids?: string[];
+  routeUuids?: string[];
+  bomLoadMode?: string;
+  specificBomUuid?: string | null;
 }
 
 export interface SOPUpdate {
@@ -216,9 +231,14 @@ export interface SOPUpdate {
   version?: string;
   content?: string;
   attachments?: Record<string, any>;
-  flowConfig?: Record<string, any>; // ProFlow 流程配置
-  formConfig?: Record<string, any>; // Formily 表单配置
+  flowConfig?: Record<string, any>;
+  formConfig?: Record<string, any>;
   isActive?: boolean;
+  materialGroupUuids?: string[];
+  materialUuids?: string[];
+  routeUuids?: string[];
+  bomLoadMode?: string;
+  specificBomUuid?: string | null;
 }
 
 export interface SOPListParams {
@@ -226,6 +246,9 @@ export interface SOPListParams {
   limit?: number;
   operationId?: number;
   isActive?: boolean;
+  material_uuid?: string;
+  material_group_uuid?: string;
+  route_uuid?: string;
 }
 
 export interface SOPExecution {
