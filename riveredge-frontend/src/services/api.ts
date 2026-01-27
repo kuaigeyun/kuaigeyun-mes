@@ -343,12 +343,29 @@ export async function apiRequest<T = any>(
           throw error;
         } else {
           // 其他接口返回 401，可能是 Token 过期或无效
-          // 清除过期的 Token，路由守卫会自动处理重定向到登录页
-          console.warn('⚠️ API 返回 401，Token 已过期或无效，清除 Token');
+          // 清除过期的 Token，并跳转到登录页
+          console.warn('⚠️ API 返回 401，Token 已过期或无效，清除 Token 并跳转到登录页');
           clearAuth();
           
-          // ⚠️ 关键修复：不在这里直接跳转，由路由守卫自动处理重定向，避免页面刷新
-          // 路由守卫会在检测到没有 token 时自动重定向到登录页
+          // 清除全局状态中的用户信息
+          try {
+            const { useGlobalStore } = await import('../stores/globalStore');
+            const store = useGlobalStore.getState();
+            store.setCurrentUser(undefined);
+          } catch (e) {
+            // 忽略导入错误
+          }
+          
+          // 跳转到登录页
+          // 判断当前路径，决定跳转到哪个登录页
+          const currentPath = window.location.pathname;
+          if (currentPath.startsWith('/infra')) {
+            // 平台级路由跳转到平台登录页
+            window.location.href = '/infra/login';
+          } else {
+            // 系统级路由跳转到用户登录页
+            window.location.href = '/login';
+          }
           
           const error = new Error('认证已过期，请重新登录') as any;
           error.response = { data, status: response.status };

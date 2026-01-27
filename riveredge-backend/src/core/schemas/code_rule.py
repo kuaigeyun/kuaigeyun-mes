@@ -222,7 +222,7 @@ class AutoCounterComponent(CodeRuleComponentBase):
     """
     自动计数组件
     
-    必选组件，不可重复添加。
+    可选组件，不可重复添加。
     """
     type: Literal["auto_counter"] = "auto_counter"
     digits: int = Field(default=5, ge=2, le=12, description="计数位数（2-12）")
@@ -293,12 +293,7 @@ class CodeRuleComponentsConfig(BaseModel):
         if not v:
             raise ValueError("规则组件列表不能为空")
         
-        # 检查是否包含必选的自动计数组件
-        has_counter = any(comp.get("type") == "auto_counter" for comp in v)
-        if not has_counter:
-            raise ValueError("规则组件列表必须包含至少一个自动计数组件")
-        
-        # 检查自动计数组件是否重复
+        # 检查自动计数组件是否重复（如果存在）
         counter_count = sum(1 for comp in v if comp.get("type") == "auto_counter")
         if counter_count > 1:
             raise ValueError("自动计数组件只能添加一个")

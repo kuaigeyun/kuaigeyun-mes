@@ -11,7 +11,7 @@ export type CodeRuleComponentType = 'auto_counter' | 'date' | 'fixed_text' | 'fo
 
 /**
  * 自动计数组件配置
- * 必选组件，不可重复添加
+ * 可选组件，不可重复添加
  */
 export interface AutoCounterComponent {
   type: 'auto_counter';
@@ -90,7 +90,7 @@ export const CODE_RULE_COMPONENT_DISPLAY_INFO: Record<CodeRuleComponentType, Cod
     type: 'auto_counter',
     label: '自动计数',
     description: '自动递增的数字部分',
-    required: true,
+    required: false,
     repeatable: false,
   },
   date: {

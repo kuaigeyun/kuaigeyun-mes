@@ -183,6 +183,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
     const ruleCode = getPageRuleCode('master-data-material');
     if (!ruleCode) {
+      console.warn('物料编码规则未配置');
+      return;
+    }
+    
+    // 调试信息：检查规则代码是否正确
+    if (ruleCode === 'PROCESS_ROUTE_CODE') {
+      console.error('错误：物料页面使用了工艺路线的编码规则！请检查 localStorage 中的 codeRulePageConfigs 配置。');
+      messageApi.error('编码规则配置错误：物料页面不应使用工艺路线的编码规则。请清除浏览器缓存或联系管理员。');
       return;
     }
 

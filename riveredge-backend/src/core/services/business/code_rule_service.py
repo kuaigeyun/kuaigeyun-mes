@@ -199,11 +199,10 @@ class CodeRuleService:
                 # 空列表被验证器转换为None，表示不更新rule_components
                 update_data.pop("rule_components", None)
             else:
-                # 验证rule_components是否有效（必须包含自动计数组件）
+                # 验证rule_components是否有效
                 if isinstance(rule_components, list):
-                    has_counter = any(comp.get("type") == "auto_counter" for comp in rule_components)
-                    if not has_counter:
-                        raise ValidationError("规则组件列表必须包含至少一个自动计数组件")
+                    # 允许没有自动计数组件的规则（如BOM使用物料号+版本号区分）
+                    pass
                 
                 expression = CodeRuleComponentService.components_to_expression(rule_components)
                 # 如果生成的表达式为空，抛出错误

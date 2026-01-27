@@ -54,6 +54,13 @@ class CodeGenerationService:
         if components:
             counter_config = CodeRuleComponentService.get_counter_component_config(components)
         
+        # 如果没有自动计数组件，直接生成编码（不递增序号）
+        if not counter_config and components:
+            # 使用新格式（组件），序号传0（不会被使用）
+            return CodeRuleComponentService.render_components(
+                components, 0, context
+            )
+        
         # 获取序号配置（优先从组件读取，否则使用旧字段）
         if counter_config:
             seq_start = counter_config.get("initial_value", 1)
@@ -140,6 +147,26 @@ class CodeGenerationService:
         counter_config = None
         if components:
             counter_config = CodeRuleComponentService.get_counter_component_config(components)
+        
+        # 如果没有自动计数组件，直接生成编码（不递增序号）
+        if not counter_config and components:
+            # 使用新格式（组件），序号传0（不会被使用）
+            test_code = CodeRuleComponentService.render_components(
+                components, 0, context
+            )
+            # 如果没有自动计数组件，仍然检查重复（如果设置了check_duplicate）
+            # 因为编码可能基于上下文（如物料号+版本号），需要确保唯一性
+            if check_duplicate and entity_type:
+                is_duplicate = await CodeGenerationService._check_code_exists(
+                    tenant_id=tenant_id,
+                    code=test_code,
+                    entity_type=entity_type
+                )
+                if is_duplicate:
+                    # 如果编码已存在，返回空字符串（表示无法生成唯一编码）
+                    # 这种情况应该由业务层处理（如提示用户修改版本号）
+                    return ""
+            return test_code
         
         # 获取序号配置（优先从组件读取，否则使用旧字段）
         if counter_config:
@@ -239,6 +266,16 @@ class CodeGenerationService:
             existing = await ProcessRoute.filter(
                 tenant_id=tenant_id,
                 code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
+        
+        if entity_type == 'bom':
+            from apps.master_data.models.material import BOM
+            # 检查BOM编码是否已存在
+            existing = await BOM.filter(
+                tenant_id=tenant_id,
+                bom_code=code,
                 deleted_at__isnull=True
             ).first()
             return existing is not None
