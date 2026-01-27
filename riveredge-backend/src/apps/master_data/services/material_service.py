@@ -2167,50 +2167,65 @@ class MaterialService:
             }
         
         # 构建层级结构
-        async def build_tree(parent_id: int, level: int = 0, path: str = "") -> List[Dict[str, Any]]:
+        async def build_tree(parent_id: int, level: int = 0, path: str = "", use_version: Optional[str] = None) -> List[Dict[str, Any]]:
             """递归构建BOM树"""
             result = []
             
             # 查找所有以parent_id为父件的BOM项
-            for bom in bom_items:
-                if bom.material_id == parent_id:
-                    # 使用预加载的component，避免重复查询
-                    component = bom.component
-                    if not component:
-                        # 如果预加载失败，则查询
-                        component = await Material.get(id=bom.component_id)
-                    current_path = f"{path}/{bom.component_id}" if path else str(bom.component_id)
-                    
-                    item_data = {
-                        "component_id": bom.component_id,
-                        "component_code": component.main_code,
-                        "component_name": component.name,
-                        "quantity": float(bom.quantity),
-                        "unit": bom.unit,
-                        "waste_rate": float(bom.waste_rate),
-                        "is_required": bom.is_required,
-                        "level": level,
-                        "path": current_path,
-                        "children": []
-                    }
-                    
-                    # 递归查找子件
-                    child_items = await BOM.filter(
-                        tenant_id=tenant_id,
-                        material_id=bom.component_id,
-                        version=version or bom.version,
-                        deleted_at__isnull=True,
-                        is_active=True
-                    ).prefetch_related("component").all()
-                    
-                    if child_items:
-                        item_data["children"] = await build_tree(
-                            bom.component_id,
-                            level + 1,
-                            current_path
-                        )
-                    
-                    result.append(item_data)
+            # 第一层使用预加载的 bom_items，后续层级需要重新查询
+            if level == 0:
+                # 第一层：使用预加载的 bom_items
+                current_bom_items = [b for b in bom_items if b.material_id == parent_id]
+            else:
+                # 后续层级：查询子物料的BOM
+                current_bom_items = await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=parent_id,
+                    version=use_version or version,
+                    deleted_at__isnull=True,
+                    is_active=True
+                ).prefetch_related("component").all()
+            
+            for bom in current_bom_items:
+                # 使用预加载的component，避免重复查询
+                component = bom.component
+                if not component:
+                    # 如果预加载失败，则查询
+                    component = await Material.get(id=bom.component_id)
+                current_path = f"{path}/{bom.component_id}" if path else str(bom.component_id)
+                
+                item_data = {
+                    "component_id": bom.component_id,
+                    "component_code": component.main_code,
+                    "component_name": component.name,
+                    "quantity": float(bom.quantity),
+                    "unit": bom.unit,
+                    "waste_rate": float(bom.waste_rate),
+                    "is_required": bom.is_required,
+                    "level": level,
+                    "path": current_path,
+                    "children": []
+                }
+                
+                # 递归查找子件：查询子物料是否有自己的BOM
+                child_bom_items = await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=bom.component_id,
+                    version=use_version or version or bom.version,
+                    deleted_at__isnull=True,
+                    is_active=True
+                ).prefetch_related("component").all()
+                
+                if child_bom_items:
+                    # 递归构建子树
+                    item_data["children"] = await build_tree(
+                        bom.component_id,
+                        level + 1,
+                        current_path,
+                        use_version or version or bom.version
+                    )
+                
+                result.append(item_data)
             
             return result
         

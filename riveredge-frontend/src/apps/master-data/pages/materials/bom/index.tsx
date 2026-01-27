@@ -5,10 +5,10 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProDescriptions, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Tabs } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -59,6 +59,7 @@ const BOMPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentBOMUuid, setCurrentBOMUuid] = useState<string | null>(null);
   const [bomDetail, setBomDetail] = useState<BOM | null>(null);
+  const [bomItems, setBomItems] = useState<BOM[]>([]); // 所有子物料列表
   const [detailLoading, setDetailLoading] = useState(false);
   
   // Modal 相关状态（创建/编辑BOM）
@@ -88,8 +89,7 @@ const BOMPage: React.FC = () => {
   const [selectedVersions, setSelectedVersions] = useState<{ version1: string; version2: string } | null>(null);
   const [versionCompareResult, setVersionCompareResult] = useState<any>(null);
   
-  // 层级结构Modal状态
-  const [hierarchyModalVisible, setHierarchyModalVisible] = useState(false);
+  // 层级结构状态（整合到详情中）
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierarchyData, setHierarchyData] = useState<any>(null);
   const [hierarchyTreeData, setHierarchyTreeData] = useState<DataNode[]>([]);
@@ -508,13 +508,97 @@ const BOMPage: React.FC = () => {
       setCurrentBOMUuid(record.uuid);
       setDrawerVisible(true);
       setDetailLoading(true);
+      setHierarchyLoading(true);
       
-      const detail = await bomApi.get(record.uuid);
-      setBomDetail(detail);
+      // 获取整个BOM结构（所有子物料）
+      const allBomItems = await bomApi.getByMaterial(record.materialId, record.version, false);
+      
+      if (!allBomItems || allBomItems.length === 0) {
+        messageApi.error('未找到BOM数据');
+        return;
+      }
+      
+      // 使用第一条记录作为基本信息（包含BOM编码、版本等）
+      const firstItem = allBomItems[0]!;
+      setBomDetail(firstItem);
+      setBomItems(allBomItems);
+      
+      // 并行加载层级结构
+      const hierarchy = await bomApi.getHierarchy(record.materialId, record.version).catch(() => null);
+      
+      // 处理层级结构数据
+      if (hierarchy) {
+        console.log('层级结构原始数据:', hierarchy);
+        console.log('层级结构items:', hierarchy.items);
+        setHierarchyData(hierarchy);
+        
+        // 转换为Tree组件需要的格式
+        const convertToTreeData = (items: BOMHierarchyItem[], parentPath: string = ''): DataNode[] => {
+          return items.map((item, index) => {
+            const currentPath = parentPath ? `${parentPath}/${index}` : `${index}`;
+            // 直接使用后端返回的 componentCode 和 componentName，如果不存在则尝试从 materials 中查找
+            let materialName = '';
+            if (item.componentCode && item.componentName) {
+              materialName = `${item.componentCode} - ${item.componentName}`;
+            } else if (item.componentId) {
+              const material = materials.find(m => m.id === item.componentId);
+              materialName = material ? `${material.code} - ${material.name}` : `物料ID: ${item.componentId}`;
+            } else {
+              materialName = '物料ID: 未知';
+            }
+            
+            // 构建节点标题
+            const title = (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontWeight: 500 }}>{materialName}</span>
+                <Tag color="blue">{item.quantity} {item.unit || ''}</Tag>
+                {item.wasteRate > 0 && (
+                  <Tag color="orange">损耗率: {item.wasteRate}%</Tag>
+                )}
+                {!item.isRequired && (
+                  <Tag color="default">可选</Tag>
+                )}
+                <span style={{ color: '#999', fontSize: '12px' }}>
+                  层级: {item.level}
+                </span>
+              </div>
+            );
+            
+            return {
+              title,
+              key: currentPath,
+              children: item.children && item.children.length > 0 ? convertToTreeData(item.children, currentPath) : undefined,
+              isLeaf: !item.children || item.children.length === 0,
+              data: item,
+            };
+          });
+        };
+        
+        const treeData = convertToTreeData(hierarchy.items || []);
+        setHierarchyTreeData(treeData);
+        
+        // 默认展开所有节点
+        const getAllKeys = (nodes: DataNode[]): React.Key[] => {
+          let keys: React.Key[] = [];
+          nodes.forEach(node => {
+            keys.push(node.key);
+            if (node.children && node.children.length > 0) {
+              keys = keys.concat(getAllKeys(node.children));
+            }
+          });
+          return keys;
+        };
+        setExpandedKeys(getAllKeys(treeData));
+      } else {
+        setHierarchyData(null);
+        setHierarchyTreeData([]);
+        setExpandedKeys([]);
+      }
     } catch (error: any) {
       messageApi.error(error.message || '获取BOM详情失败');
     } finally {
       setDetailLoading(false);
+      setHierarchyLoading(false);
     }
   };
 
@@ -525,6 +609,10 @@ const BOMPage: React.FC = () => {
     setDrawerVisible(false);
     setCurrentBOMUuid(null);
     setBomDetail(null);
+    setBomItems([]);
+    setHierarchyData(null);
+    setHierarchyTreeData([]);
+    setExpandedKeys([]);
   };
 
   /**
@@ -919,75 +1007,6 @@ const BOMPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理查看层级结构
-   */
-  const handleViewHierarchy = async (record: BOM) => {
-    try {
-      setHierarchyLoading(true);
-      setHierarchyModalVisible(true);
-      setCurrentMaterialId(record.materialId);
-      
-      // 获取层级结构数据
-      const hierarchy = await bomApi.getHierarchy(record.materialId, record.version);
-      setHierarchyData(hierarchy);
-      
-      // 转换为Tree组件需要的格式
-      const convertToTreeData = (items: BOMHierarchyItem[], parentPath: string = ''): DataNode[] => {
-        return items.map((item, index) => {
-          const currentPath = parentPath ? `${parentPath}/${index}` : `${index}`;
-          const material = materials.find(m => m.id === item.componentId);
-          const materialName = material ? `${material.code} - ${material.name}` : `物料ID: ${item.componentId}`;
-          
-          // 构建节点标题
-          const title = (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: 500 }}>{materialName}</span>
-              <Tag color="blue">{item.quantity} {item.unit || ''}</Tag>
-              {item.wasteRate > 0 && (
-                <Tag color="orange">损耗率: {item.wasteRate}%</Tag>
-              )}
-              {!item.isRequired && (
-                <Tag color="default">可选</Tag>
-              )}
-              <span style={{ color: '#999', fontSize: '12px' }}>
-                层级: {item.level}
-              </span>
-            </div>
-          );
-          
-          return {
-            title,
-            key: currentPath,
-            children: item.children && item.children.length > 0 ? convertToTreeData(item.children, currentPath) : undefined,
-            isLeaf: !item.children || item.children.length === 0,
-            data: item,
-          };
-        });
-      };
-      
-      const treeData = convertToTreeData(hierarchy.items || []);
-      setHierarchyTreeData(treeData);
-      
-      // 默认展开所有节点
-      const getAllKeys = (nodes: DataNode[]): React.Key[] => {
-        let keys: React.Key[] = [];
-        nodes.forEach(node => {
-          keys.push(node.key);
-          if (node.children && node.children.length > 0) {
-            keys = keys.concat(getAllKeys(node.children));
-          }
-        });
-        return keys;
-      };
-      setExpandedKeys(getAllKeys(treeData));
-    } catch (error: any) {
-      messageApi.error(error.message || '获取层级结构失败');
-      setHierarchyModalVisible(false);
-    } finally {
-      setHierarchyLoading(false);
-    }
-  };
 
   /**
    * 处理查看用量计算
@@ -1157,7 +1176,6 @@ const BOMPage: React.FC = () => {
         return (
           <Space wrap size="small">
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
-            <Button type="link" size="small" icon={<BranchesOutlined />} onClick={() => handleViewHierarchy(r)}>层级结构</Button>
             <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner}>图形化设计</Button>
             <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteGroup(record)}>删除</Button>
             <Dropdown menu={{ items: moreItems }} trigger={['click']}>
@@ -1417,7 +1435,150 @@ const BOMPage: React.FC = () => {
         dataSource={bomDetail || undefined}
         columns={detailColumns}
         loading={detailLoading}
-        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        width={DRAWER_CONFIG.LARGE_WIDTH}
+        customContent={
+          <Tabs
+            items={[
+              {
+                key: 'detail',
+                label: '基本信息',
+                children: (
+                  <div style={{ paddingTop: 16 }}>
+                    {/* BOM基本信息 */}
+                    <ProDescriptions<BOM>
+                      dataSource={bomDetail || undefined}
+                      column={2}
+                      columns={detailColumns.filter(col => 
+                        // 只显示基本信息，不显示子物料相关字段
+                        col.dataIndex !== 'componentId' && 
+                        col.dataIndex !== 'quantity' && 
+                        col.dataIndex !== 'unit' && 
+                        col.dataIndex !== 'wasteRate' &&
+                        col.dataIndex !== 'isRequired' &&
+                        col.dataIndex !== 'level' &&
+                        col.dataIndex !== 'path' &&
+                        // 不显示替代料、优先级、备注
+                        col.dataIndex !== 'isAlternative' &&
+                        col.dataIndex !== 'priority' &&
+                        col.dataIndex !== 'remark'
+                      )}
+                    />
+                    
+                    {/* 子物料列表 */}
+                    {bomItems.length > 0 && (
+                      <div style={{ marginTop: 24 }}>
+                        <h4 style={{ marginBottom: 16, fontWeight: 500 }}>子物料列表（{bomItems.length}项）</h4>
+                        <Table<BOM>
+                          dataSource={bomItems}
+                          rowKey="uuid"
+                          pagination={false}
+                          size="small"
+                          columns={[
+                            {
+                              title: '序号',
+                              key: 'index',
+                              width: 60,
+                              render: (_, __, index) => index + 1,
+                            },
+                            {
+                              title: '子物料',
+                              dataIndex: 'componentId',
+                              render: (_, record) => getMaterialName(record.componentId),
+                            },
+                            {
+                              title: '用量',
+                              dataIndex: 'quantity',
+                              width: 100,
+                              align: 'right',
+                            },
+                            {
+                              title: '单位',
+                              dataIndex: 'unit',
+                              width: 80,
+                              render: (_, record) => {
+                                const unitValue = record.unit;
+                                const unitLabel = unitValueToLabel[unitValue || ''] || unitValue || '-';
+                                return unitLabel;
+                              },
+                            },
+                            {
+                              title: '损耗率',
+                              dataIndex: 'wasteRate',
+                              width: 100,
+                              align: 'right',
+                              render: (_, record) => record.wasteRate ? `${record.wasteRate}%` : '0%',
+                            },
+                            {
+                              title: '是否必选',
+                              dataIndex: 'isRequired',
+                              width: 100,
+                              render: (_, record) => (
+                                <Tag color={record.isRequired !== false ? 'success' : 'default'}>
+                                  {record.isRequired !== false ? '是' : '否'}
+                                </Tag>
+                              ),
+                            },
+                            {
+                              title: '层级',
+                              dataIndex: 'level',
+                              width: 80,
+                              render: (_, record) => record.level ?? 0,
+                            },
+                            {
+                              title: '描述',
+                              dataIndex: 'description',
+                              ellipsis: true,
+                              render: (_, record) => record.description || '-',
+                            },
+                          ]}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'hierarchy',
+                label: '层级结构',
+                children: (
+                  <div style={{ paddingTop: 16 }}>
+                    <Spin spinning={hierarchyLoading}>
+                      {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                          暂无层级结构数据
+                        </div>
+                      ) : (
+                        <div>
+                          {hierarchyData && (
+                            <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', border: '1px solid #91d5ff' }}>
+                              <Space>
+                                <span style={{ fontWeight: 500 }}>主物料：</span>
+                                <span>
+                                  {hierarchyData.materialCode && hierarchyData.materialName 
+                                    ? `${hierarchyData.materialCode} - ${hierarchyData.materialName}`
+                                    : hierarchyData.materialCode || hierarchyData.materialName || getMaterialName(hierarchyData.materialId) || '-'}
+                                </span>
+                                <span style={{ color: '#999' }}>版本：{hierarchyData.version || ''}</span>
+                              </Space>
+                            </div>
+                          )}
+                          <Tree
+                            treeData={hierarchyTreeData}
+                            expandedKeys={expandedKeys}
+                            onExpand={setExpandedKeys}
+                            blockNode
+                            showLine={{ showLeafIcon: false }}
+                            defaultExpandAll={false}
+                          />
+                        </div>
+                      )}
+                    </Spin>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        }
       />
 
       {/* 创建/编辑BOM Modal */}
@@ -2117,56 +2278,6 @@ const BOMPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* 层级结构展示Modal */}
-      <Modal
-        title={`BOM层级结构${hierarchyData ? ` - ${hierarchyData.materialCode || hierarchyData.materialName || ''} (版本: ${hierarchyData.version || ''})` : ''}`}
-        open={hierarchyModalVisible}
-        onCancel={() => {
-          setHierarchyModalVisible(false);
-          setHierarchyData(null);
-          setHierarchyTreeData([]);
-          setExpandedKeys([]);
-        }}
-        footer={[
-          <Button key="close" onClick={() => {
-            setHierarchyModalVisible(false);
-            setHierarchyData(null);
-            setHierarchyTreeData([]);
-            setExpandedKeys([]);
-          }}>
-            关闭
-          </Button>,
-        ]}
-        width={1000}
-      >
-        <Spin spinning={hierarchyLoading}>
-          {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-              暂无层级结构数据
-            </div>
-          ) : (
-            <div style={{ marginTop: 16 }}>
-              {hierarchyData && (
-                <div style={{ marginBottom: 16, padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', border: '1px solid #91d5ff' }}>
-                  <Space>
-                    <span style={{ fontWeight: 500 }}>主物料：</span>
-                    <span>{hierarchyData.materialCode || ''} - {hierarchyData.materialName || ''}</span>
-                    <span style={{ color: '#999' }}>版本：{hierarchyData.version || ''}</span>
-                  </Space>
-                </div>
-              )}
-              <Tree
-                treeData={hierarchyTreeData}
-                expandedKeys={expandedKeys}
-                onExpand={setExpandedKeys}
-                blockNode
-                showLine={{ showLeafIcon: false }}
-                defaultExpandAll={false}
-              />
-            </div>
-          )}
-        </Spin>
-      </Modal>
 
       {/* 用量计算Modal */}
       <Modal

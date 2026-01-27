@@ -20,6 +20,7 @@ import type {
   BOMListParams,
   BOMBatchImport,
   BOMHierarchy,
+  BOMHierarchyItem,
   BOMQuantityResult,
   BOMVersionCreate,
   BOMVersionCompare,
@@ -68,6 +69,47 @@ function mapBomFromApi(raw: Record<string, unknown>): BOM {
     createdAt: (raw.created_at ?? raw.createdAt) as string,
     updatedAt: (raw.updated_at ?? raw.updatedAt) as string,
     deletedAt: (raw.deleted_at ?? raw.deletedAt) as string | undefined,
+  };
+}
+
+/**
+ * 后端 BOM 层级结构响应为 snake_case，统一转为前端 camelCase
+ */
+function mapBomHierarchyItemFromApi(raw: Record<string, unknown>): BOMHierarchyItem {
+  const children = raw.children as Record<string, unknown>[] | undefined;
+  const componentId = raw.component_id ?? raw.componentId;
+  const componentCode = raw.component_code ?? raw.componentCode;
+  const componentName = raw.component_name ?? raw.componentName;
+  
+  return {
+    componentId: componentId ? Number(componentId) : 0,
+    componentCode: componentCode ? String(componentCode) : '',
+    componentName: componentName ? String(componentName) : '',
+    quantity: Number(raw.quantity ?? 0),
+    unit: raw.unit ? String(raw.unit) : undefined,
+    wasteRate: Number(raw.waste_rate ?? raw.wasteRate ?? 0),
+    isRequired: (raw.is_required ?? raw.isRequired) !== false,
+    level: Number(raw.level ?? 0),
+    path: raw.path ? String(raw.path) : '',
+    children: children ? children.map(item => mapBomHierarchyItemFromApi(item)) : [],
+  };
+}
+
+/**
+ * 后端 BOM 层级结构响应为 snake_case，统一转为前端 camelCase
+ */
+function mapBomHierarchyFromApi(raw: Record<string, unknown>): BOMHierarchy {
+  const items = raw.items as Record<string, unknown>[] | undefined;
+  const materialId = raw.material_id ?? raw.materialId;
+  const materialCode = raw.material_code ?? raw.materialCode;
+  const materialName = raw.material_name ?? raw.materialName;
+  
+  return {
+    materialId: materialId ? Number(materialId) : 0,
+    materialCode: materialCode ? String(materialCode) : '',
+    materialName: materialName ? String(materialName) : '',
+    version: raw.version ? String(raw.version) : '1.0',
+    items: items ? items.map(item => mapBomHierarchyItemFromApi(item)) : [],
   };
 }
 
@@ -300,9 +342,10 @@ export const bomApi = {
     materialId: number,
     version?: string
   ): Promise<BOMHierarchy> => {
-    return api.get(`/apps/master-data/materials/bom/material/${materialId}/hierarchy`, {
+    const raw = await api.get<Record<string, unknown>>(`/apps/master-data/materials/bom/material/${materialId}/hierarchy`, {
       params: { version },
     });
+    return mapBomHierarchyFromApi(raw ?? {});
   },
   
   /**
