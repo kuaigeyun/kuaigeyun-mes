@@ -10,7 +10,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select } from 'antd';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select, Row, Col } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -32,7 +32,8 @@ import DocumentRelationDisplay from '../../../../../components/document-relation
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
-import CodeField from '../../../../../components/code-field';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 
 const SalesOrdersPage: React.FC = () => {
@@ -57,6 +58,8 @@ const SalesOrdersPage: React.FC = () => {
   // 物料列表（用于物料选择器）
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  // 新建时预览的订单编码（用于提交时判断是否需正式占号）
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
 
   /**
    * 加载物料列表
@@ -79,14 +82,33 @@ const SalesOrdersPage: React.FC = () => {
 
   /**
    * 处理新建销售订单
+   * 若启用编码规则，用 testGenerateCode 预填订单编码（不占用序号）
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentId(null);
     setOrderItems([]);
     setEditingItemIndex(null);
     setModalVisible(true);
     formRef.current?.resetFields();
+    if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
+      const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          const preview = codeResponse.code;
+          setPreviewCode(preview ?? null);
+          formRef.current?.setFieldsValue({ order_code: preview ?? '' });
+        } catch (error: any) {
+          console.warn('销售订单编码预生成失败:', error);
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
   /**
@@ -167,6 +189,7 @@ const SalesOrdersPage: React.FC = () => {
 
   /**
    * 处理提交表单
+   * 新建且启用编码规则时：若订单编码未改或为空，则正式生成编码再创建
    */
   const handleSubmit = async (values: any) => {
     try {
@@ -175,17 +198,28 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.warning('请至少添加一条订单明细');
         return;
       }
-      
-      values.items = orderItems;  // 包含订单明细
-      
+      values.items = orderItems;
       if (isEdit && currentId) {
         await updateSalesOrder(currentId, values);
         messageApi.success('销售订单更新成功');
       } else {
+        if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
+          const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
+          const currentCode = values.order_code;
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.order_code = codeResponse.code;
+            } catch (error: any) {
+              console.warn('正式生成订单编码失败，使用预览编码:', error);
+            }
+          }
+        }
         await createSalesOrder(values);
         messageApi.success('销售订单创建成功');
       }
       setModalVisible(false);
+      setPreviewCode(null);
       setOrderItems([]);
       setEditingItemIndex(null);
       actionRef.current?.reload();
@@ -337,9 +371,8 @@ const SalesOrdersPage: React.FC = () => {
       const headers = data[0];
       const rows = data.slice(1);
 
-      // 字段映射（表头名称 -> 字段名）
+      // 字段映射（表头名称 -> 字段名）（订单名称已去掉，不填时后端以订单编码作为展示名）
       const fieldMap: Record<string, string> = {
-        '订单名称': 'order_name',
         '订单日期': 'order_date',
         '交货日期': 'delivery_date',
         '客户ID': 'customer_id',
@@ -452,12 +485,6 @@ const SalesOrdersPage: React.FC = () => {
       dataIndex: 'order_code',
       width: 150,
       fixed: 'left',
-      ellipsis: true,
-    },
-    {
-      title: '订单名称',
-      dataIndex: 'order_name',
-      width: 200,
       ellipsis: true,
     },
     {
@@ -621,7 +648,6 @@ const SalesOrdersPage: React.FC = () => {
           showImportButton={true}
           onImport={handleImport}
           importHeaders={[
-            '订单名称',
             '订单日期',
             '交货日期',
             '客户ID',
@@ -636,7 +662,6 @@ const SalesOrdersPage: React.FC = () => {
             '备注',
           ]}
           importExampleRow={[
-            '2026年1月销售订单',
             '2026-01-01',
             '2026-01-31',
             '',
@@ -656,7 +681,10 @@ const SalesOrdersPage: React.FC = () => {
       {/* 新建/编辑 Modal */}
       <Modal
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          setModalVisible(false);
+          setPreviewCode(null);
+        }}
         title={isEdit ? '编辑销售订单' : '新建销售订单'}
         width={900}
         footer={null}
@@ -679,72 +707,89 @@ const SalesOrdersPage: React.FC = () => {
             ),
           }}
         >
-          <CodeField
-            pageCode="kuaizhizao-sales-order"
-            name="order_code"
-            label="订单编码"
-            required={true}
-            autoGenerateOnCreate={!isEdit}
-            context={{}}
-          />
-          <ProFormText
-            name="order_name"
-            label="订单名称"
-            rules={[{ required: true, message: '请输入订单名称' }]}
-            placeholder="请输入订单名称"
-          />
-          <ProFormDatePicker
-            name="order_date"
-            label="订单日期"
-            rules={[{ required: true, message: '请选择订单日期' }]}
-          />
-          <ProFormDatePicker
-            name="delivery_date"
-            label="交货日期"
-            rules={[{ required: true, message: '请选择交货日期' }]}
-          />
-          <ProFormText
-            name="customer_name"
-            label="客户名称"
-            rules={[{ required: true, message: '请输入客户名称' }]}
-            placeholder="请输入客户名称"
-          />
-          <ProFormText
-            name="customer_contact"
-            label="客户联系人"
-            placeholder="请输入客户联系人"
-          />
-          <ProFormText
-            name="customer_phone"
-            label="客户电话"
-            placeholder="请输入客户电话"
-          />
-          <ProFormText
-            name="salesman_name"
-            label="销售员姓名"
-            placeholder="请输入销售员姓名"
-          />
-          <ProFormText
-            name="shipping_address"
-            label="收货地址"
-            placeholder="请输入收货地址"
-          />
-          <ProFormText
-            name="shipping_method"
-            label="发货方式"
-            placeholder="请输入发货方式"
-          />
-          <ProFormText
-            name="payment_terms"
-            label="付款条件"
-            placeholder="请输入付款条件"
-          />
-          <ProFormTextArea
-            name="notes"
-            label="备注"
-            placeholder="请输入备注"
-          />
-          
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormText
+                name="order_code"
+                label="订单编码"
+                placeholder={isAutoGenerateEnabled('kuaizhizao-sales-order') ? '编码将根据编码规则自动生成，可修改' : '请输入订单编码'}
+                rules={[{ required: true, message: '请输入订单编码' }]}
+                fieldProps={{ disabled: isEdit }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDatePicker
+                name="order_date"
+                label="订单日期"
+                rules={[{ required: true, message: '请选择订单日期' }]}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDatePicker
+                name="delivery_date"
+                label="交货日期"
+                rules={[{ required: true, message: '请选择交货日期' }]}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="customer_name"
+                label="客户名称"
+                rules={[{ required: true, message: '请输入客户名称' }]}
+                placeholder="请输入客户名称"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="customer_contact"
+                label="客户联系人"
+                placeholder="请输入客户联系人"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="customer_phone"
+                label="客户电话"
+                placeholder="请输入客户电话"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="salesman_name"
+                label="销售员姓名"
+                placeholder="请输入销售员姓名"
+              />
+            </Col>
+            <Col span={24}>
+              <ProFormText
+                name="shipping_address"
+                label="收货地址"
+                placeholder="请输入收货地址"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="shipping_method"
+                label="发货方式"
+                placeholder="请输入发货方式"
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormText
+                name="payment_terms"
+                label="付款条件"
+                placeholder="请输入付款条件"
+              />
+            </Col>
+            <Col span={24}>
+              <ProFormTextArea
+                name="notes"
+                label="备注"
+                placeholder="请输入备注"
+              />
+            </Col>
+          </Row>
+
           {/* 订单明细 */}
           <div style={{ marginTop: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -966,10 +1011,6 @@ const SalesOrdersPage: React.FC = () => {
                 {
                   title: '订单编号',
                   dataIndex: 'order_code',
-                },
-                {
-                  title: '订单名称',
-                  dataIndex: 'order_name',
                 },
                 {
                   title: '订单日期',

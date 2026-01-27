@@ -74,7 +74,7 @@ class SalesOrderItemResponse(SalesOrderItemBase):
 class SalesOrderBase(BaseSchema):
     """销售订单基础schema"""
     order_code: Optional[str] = Field(None, max_length=50, description="订单编码（自动生成，无需填写）")
-    order_name: str = Field(..., max_length=200, description="订单名称")
+    order_name: Optional[str] = Field(None, max_length=200, description="订单名称（选填，不填时以订单编码作为展示名）")
     order_date: date = Field(..., description="订单日期")
     delivery_date: date = Field(..., description="交货日期")
     

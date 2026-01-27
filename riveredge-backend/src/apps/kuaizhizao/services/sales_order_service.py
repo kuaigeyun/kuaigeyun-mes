@@ -41,11 +41,13 @@ class SalesOrderService:
         if not sales_order_data.order_code:
             raise ValidationError("订单编码不能为空，请检查编码生成规则配置")
         
+        # 订单名称选填：不填时用订单编码作为需求名称（Demand.demand_name 非空）
+        demand_name = (sales_order_data.order_name or "").strip() or sales_order_data.order_code
         return DemandCreate(
             demand_type="sales_order",
             business_mode="MTO",
             demand_code=sales_order_data.order_code,
-            demand_name=sales_order_data.order_name,
+            demand_name=demand_name,
             start_date=sales_order_data.order_date,
             end_date=sales_order_data.delivery_date,
             customer_id=sales_order_data.customer_id,
@@ -163,18 +165,38 @@ class SalesOrderService:
         Returns:
             SalesOrderResponse: 创建的销售订单响应
         """
-        # 如果没有提供订单编码，自动生成
+        # 如果没有提供订单编码，按编码规则或回退逻辑自动生成
         if not sales_order_data.order_code:
-            # 生成订单编码（SO-YYYYMMDD-序号）
-            from datetime import datetime
-            today = datetime.now().strftime("%Y%m%d")
-            prefix = f"SO-{today}"
-            # 使用需求服务的编码生成方法
-            order_code = await self.demand_service._generate_demand_code(
-                tenant_id=tenant_id,
-                demand_type="sales_order"
+            from core.config.code_rule_pages import CODE_RULE_PAGES
+            from core.services.business.code_generation_service import CodeGenerationService
+
+            rule_code = next(
+                (p.get("rule_code") for p in CODE_RULE_PAGES if p.get("page_code") == "kuaizhizao-sales-order"),
+                None
             )
-            # 更新订单编码
+            context = {}
+            if sales_order_data.order_date:
+                context["order_date"] = (
+                    sales_order_data.order_date.isoformat()
+                    if hasattr(sales_order_data.order_date, "isoformat")
+                    else str(sales_order_data.order_date)
+                )
+            order_code = None
+            if rule_code:
+                try:
+                    order_code = await CodeGenerationService.generate_code(
+                        tenant_id=tenant_id,
+                        rule_code=rule_code,
+                        context=context or None,
+                    )
+                    logger.debug("销售订单编码由编码规则生成: %s", order_code)
+                except (ValidationError, Exception) as e:
+                    logger.warning("编码规则生成销售订单编码失败，回退到默认生成: %s", e)
+            if not order_code:
+                order_code = await self.demand_service._generate_demand_code(
+                    tenant_id=tenant_id,
+                    demand_type="sales_order",
+                )
             sales_order_data.order_code = order_code
         
         # 转换为需求数据
@@ -299,27 +321,26 @@ class SalesOrderService:
         Returns:
             SalesOrderResponse: 更新后的销售订单响应
         """
-        # 转换为需求更新数据
-        demand_update = DemandUpdate(
-            demand_name=sales_order_data.order_name,
-            start_date=sales_order_data.order_date,
-            end_date=sales_order_data.delivery_date,
-            customer_id=sales_order_data.customer_id,
-            customer_name=sales_order_data.customer_name,
-            customer_contact=sales_order_data.customer_contact,
-            customer_phone=sales_order_data.customer_phone,
-            order_date=sales_order_data.order_date,
-            delivery_date=sales_order_data.delivery_date,
-            total_quantity=sales_order_data.total_quantity,
-            total_amount=sales_order_data.total_amount,
-            status=sales_order_data.status,
-            salesman_id=sales_order_data.salesman_id,
-            salesman_name=sales_order_data.salesman_name,
-            shipping_address=sales_order_data.shipping_address,
-            shipping_method=sales_order_data.shipping_method,
-            payment_terms=sales_order_data.payment_terms,
-            notes=sales_order_data.notes,
-            items=[
+        # 转换为需求更新数据（订单名称未传时不更新 demand_name，避免覆盖为 None）
+        update_kw: Dict[str, Any] = {
+            "start_date": sales_order_data.order_date,
+            "end_date": sales_order_data.delivery_date,
+            "customer_id": sales_order_data.customer_id,
+            "customer_name": sales_order_data.customer_name,
+            "customer_contact": sales_order_data.customer_contact,
+            "customer_phone": sales_order_data.customer_phone,
+            "order_date": sales_order_data.order_date,
+            "delivery_date": sales_order_data.delivery_date,
+            "total_quantity": sales_order_data.total_quantity,
+            "total_amount": sales_order_data.total_amount,
+            "status": sales_order_data.status,
+            "salesman_id": sales_order_data.salesman_id,
+            "salesman_name": sales_order_data.salesman_name,
+            "shipping_address": sales_order_data.shipping_address,
+            "shipping_method": sales_order_data.shipping_method,
+            "payment_terms": sales_order_data.payment_terms,
+            "notes": sales_order_data.notes,
+            "items": [
                 DemandItemCreate(
                     material_id=item.material_id,
                     material_code=item.material_code,
@@ -334,7 +355,10 @@ class SalesOrderService:
                 )
                 for item in (sales_order_data.items or [])
             ] if sales_order_data.items else None,
-        )
+        }
+        if sales_order_data.order_name is not None:
+            update_kw["demand_name"] = sales_order_data.order_name
+        demand_update = DemandUpdate(**update_kw)
         
         # 调用需求服务更新
         demand = await self.demand_service.update_demand(
