@@ -24,6 +24,7 @@
     },
     "dependencies": {
         "@ant-design/charts": "^2.1.0",
+        "@ant-design/graphs": "^2.1.0",
         "@ant-design/icons": "^6.1.0",
         "@ant-design/pro-components": "^2.8.2",
         "@ant-design/pro-flow": "^1.3.12",
