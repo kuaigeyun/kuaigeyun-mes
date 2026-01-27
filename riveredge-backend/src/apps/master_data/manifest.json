@@ -125,7 +125,7 @@
                         "sort_order": 4
                     },
                     {
-                        "title": "制造BOM",
+                        "title": "制造SOP",
                         "path": "/apps/master-data/process/sop",
                         "permission": "master-data:process:sop:view",
                         "sort_order": 5
@@ -541,10 +541,10 @@
         },
         {
             "page_code": "master-data-manufacturing-bom",
-            "page_name": "制造BOM",
+            "page_name": "制造SOP",
             "page_path": "/apps/master-data/process/sop",
             "table_name": "master_data_sops",
-            "table_name_label": "制造BOM表",
+            "table_name_label": "制造SOP表",
             "module": "主数据管理",
             "module_icon": "database"
         },

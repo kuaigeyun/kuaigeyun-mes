@@ -327,7 +327,7 @@ export function translatePathTitle(path: string, t: TFunction): string {
     'operations': '工序',
     'routes': '工艺路线',
     'engineering-bom': '工程BOM',
-    'sop': '制造BOM',
+    'sop': '制造SOP',
     'customers': '客户',
     'suppliers': '供应商',
     'holidays': '假期设置',
