@@ -8,10 +8,11 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import CodeField from '../../../../../components/code-field';
-import { App, Popconfirm, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown } from 'antd';
+import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, BranchesOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, EllipsisOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -20,6 +21,29 @@ import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+
+/**
+ * 单位列展示：接收 Form 的 value（单位 code），渲染字典标签，表格渲染前已映射
+ */
+const UnitDisplayCell: React.FC<{
+  value?: string;
+  onChange?: (v: string) => void;
+  unitValueToLabel: Record<string, string>;
+}> = ({ value, unitValueToLabel }) => (
+  <span>{value && unitValueToLabel[value] ? unitValueToLabel[value] : (value || '-')}</span>
+);
+
+/** 同一 BOM 编码（bomCode + materialId + version）分组后的行，用于树形表格展示 */
+interface BOMGroupRow {
+  groupKey: string;
+  bomCode: string;
+  version: string;
+  materialId: number;
+  approvalStatus: BOM['approvalStatus'];
+  firstItem: BOM;
+  items: BOM[];
+  children?: BOM[]; // 树形数据的子节点
+}
 
 /**
  * 工程BOM管理列表页面组件
@@ -41,6 +65,8 @@ const BOMPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  /** 编辑时：按主料+版本定位整份 BOM，保存时先删后批量创建 */
+  const [editContext, setEditContext] = useState<{ materialId: number; version: string; uuidsToReplace: string[] } | null>(null);
   
   // 审核Modal状态
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
@@ -82,6 +108,9 @@ const BOMPage: React.FC = () => {
   
   // 单位字典映射（value -> label）
   const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
+
+  /** 分组行 groupKey -> 该组内所有 BOM 的 uuid，用于批量删除时解析 */
+  const groupKeyToUuidsRef = useRef<Map<string, string[]>>(new Map());
 
   /**
    * 加载物料列表
@@ -184,6 +213,7 @@ const BOMPage: React.FC = () => {
    */
   const handleCreate = async () => {
     setIsEdit(false);
+    setEditContext(null);
     setCurrentBOMUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
@@ -251,42 +281,68 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理编辑BOM
+   * 处理编辑BOM（按主料+版本加载完整 BOM 结构，支持增删改子件）
+   * @param record 任意一条该 BOM 下的记录（含 materialId、version），用于定位整份 BOM
    */
   const handleEdit = async (record: BOM) => {
     try {
-      setIsEdit(true);
-      setCurrentBOMUuid(record.uuid);
-      setModalVisible(true);
-      
-      // 获取BOM详情
-      const detail = await bomApi.get(record.uuid);
-      // 编辑时使用单个BOM项格式
-      formRef.current?.setFieldsValue({
-        materialId: detail.materialId,
-        version: detail.version,
-        bomCode: detail.bomCode,
-        effectiveDate: detail.effectiveDate,
-        expiryDate: detail.expiryDate,
-        approvalStatus: detail.approvalStatus,
-        items: [{
-          componentId: detail.componentId,
-          quantity: detail.quantity,
-          unit: detail.unit,
-          wasteRate: detail.wasteRate ?? 0,
-          isRequired: detail.isRequired !== false,
-          isAlternative: detail.isAlternative,
-          alternativeGroupId: detail.alternativeGroupId,
-          priority: detail.priority,
-          description: detail.description,
-          remark: detail.remark,
-        }],
-        description: detail.description,
-        remark: detail.remark,
-        isActive: detail.isActive,
+      const list = await bomApi.getByMaterial(record.materialId, record.version, false);
+      if (!list?.length) {
+        messageApi.error('未找到该主物料+版本的 BOM 数据');
+        return;
+      }
+      const first = list[0]!;
+      console.log('编辑BOM - 获取到的数据:', { 
+        bomCode: first.bomCode, 
+        materialId: first.materialId, 
+        version: first.version,
+        allBomCodes: list.map(b => b.bomCode)
       });
+      setIsEdit(true);
+      setEditContext({
+        materialId: first.materialId,
+        version: first.version ?? '1.0',
+        uuidsToReplace: list.map((b) => b.uuid),
+      });
+      // 确保 BOM 编码正确设置：优先使用第一个记录的 bomCode，如果不存在则尝试从其他记录中获取
+      const bomCodeValue = first.bomCode ?? list.find(b => b.bomCode)?.bomCode ?? '';
+      const itemsData = list.map((b) => ({
+        componentId: b.componentId,
+        quantity: b.quantity,
+        unit: b.unit,
+        wasteRate: b.wasteRate ?? 0,
+        isRequired: b.isRequired !== false,
+        isAlternative: b.isAlternative,
+        alternativeGroupId: b.alternativeGroupId,
+        priority: b.priority,
+        description: b.description,
+        remark: b.remark,
+      }));
+      
+      setModalVisible(true);
+      // 使用 setTimeout 确保 Modal 和表单完全渲染后再设置值
+      // 对于 AntForm.List，需要更长的延迟确保组件已完全初始化
+      setTimeout(() => {
+        if (formRef.current) {
+          formRef.current.setFieldsValue({
+            materialId: first.materialId,
+            version: first.version ?? '1.0',
+            bomCode: bomCodeValue,
+            effectiveDate: first.effectiveDate,
+            expiryDate: first.expiryDate,
+            approvalStatus: first.approvalStatus,
+            description: first.description,
+            remark: first.remark,
+            isActive: first.isActive,
+          });
+          // 单独设置 items，确保 AntForm.List 能正确接收数据
+          setTimeout(() => {
+            formRef.current?.setFieldValue('items', itemsData);
+          }, 50);
+        }
+      }, 150);
     } catch (error: any) {
-      messageApi.error(error.message || '获取BOM详情失败');
+      messageApi.error(error?.message || '获取BOM失败');
     }
   };
   
@@ -352,7 +408,7 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理删除BOM
+   * 处理删除单条BOM（子件级，保留供批量删除等场景）
    */
   const handleDelete = async (record: BOM) => {
     try {
@@ -365,7 +421,31 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 处理批量删除BOM
+   * 删除整份BOM（主件下全部子件）
+   */
+  const handleDeleteGroup = (record: BOMGroupRow) => {
+    const uuids = record.items.map((i) => i.uuid);
+    if (!uuids.length) return;
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除该 BOM（共 ${uuids.length} 项子件）吗？此操作不可恢复。`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          for (const uuid of uuids) await bomApi.delete(uuid);
+          messageApi.success('删除成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.message || '删除失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理批量删除BOM（支持分组行：groupKey 解析为该组所有 uuid 并删除）
    */
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
@@ -373,9 +453,25 @@ const BOMPage: React.FC = () => {
       return;
     }
 
+    const toDelete: string[] = [];
+    for (const key of selectedRowKeys) {
+      const k = String(key);
+      if (k.startsWith('group:')) {
+        const uuids = groupKeyToUuidsRef.current.get(k);
+        if (uuids?.length) toDelete.push(...uuids);
+      } else {
+        toDelete.push(k);
+      }
+    }
+    const count = toDelete.length;
+    if (count === 0) {
+      messageApi.warning('没有可删除的记录');
+      return;
+    }
+
     Modal.confirm({
       title: '确认批量删除',
-      content: `确定要删除选中的 ${selectedRowKeys.length} 条记录吗？此操作不可恢复。`,
+      content: `确定要删除选中的 ${count} 条BOM记录吗？此操作不可恢复。`,
       okText: '确定',
       cancelText: '取消',
       okType: 'danger',
@@ -384,24 +480,17 @@ const BOMPage: React.FC = () => {
           let successCount = 0;
           let failCount = 0;
           const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
+          for (const uuid of toDelete) {
             try {
-              await bomApi.delete(key.toString());
+              await bomApi.delete(uuid);
               successCount++;
             } catch (error: any) {
               failCount++;
               errors.push(error.message || '删除失败');
             }
           }
-
-          if (successCount > 0) {
-            messageApi.success(`成功删除 ${successCount} 条记录`);
-          }
-          if (failCount > 0) {
-            messageApi.error(`删除失败 ${failCount} 条记录${errors.length > 0 ? '：' + errors.join('; ') : ''}`);
-          }
-
+          if (successCount > 0) messageApi.success(`成功删除 ${successCount} 条记录`);
+          if (failCount > 0) messageApi.error(`删除失败 ${failCount} 条${errors.length ? '：' + errors.join('; ') : ''}`);
           setSelectedRowKeys([]);
           actionRef.current?.reload();
         } catch (error: any) {
@@ -440,73 +529,31 @@ const BOMPage: React.FC = () => {
 
   /**
    * 处理提交表单（创建/更新BOM）
+   * 编辑时：先删除原主料+版本下全部 BOM 记录，再按表单批量创建，形成完整主料–子件关系
    */
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
-      if (isEdit && currentBOMUuid) {
-        // 更新BOM（单个）- 从items中取第一个
-        if (!values.items || values.items.length === 0) {
-          messageApi.error('请至少添加一个子物料');
-          return;
-        }
-        
-        const firstItem = values.items[0];
-        const updateData: BOMUpdate = {
-          materialId: values.materialId,
-          componentId: firstItem.componentId,
-          quantity: firstItem.quantity,
-          unit: firstItem.unit,
-          wasteRate: firstItem.wasteRate ?? 0,
-          isRequired: firstItem.isRequired !== false,
-          version: values.version,
-          bomCode: values.bomCode,
-          effectiveDate: values.effectiveDate,
-          expiryDate: values.expiryDate,
-          approvalStatus: values.approvalStatus,
-          isAlternative: firstItem.isAlternative,
-          alternativeGroupId: firstItem.alternativeGroupId,
-          priority: firstItem.priority,
-          description: values.description || firstItem.description,
-          remark: values.remark || firstItem.remark,
-          isActive: values.isActive,
-        };
-        
-        await bomApi.update(currentBOMUuid, updateData);
-        messageApi.success('更新成功');
-      } else {
-        // 批量创建BOM
-        if (!values.materialId) {
-          messageApi.error('请选择主物料');
-          return;
-        }
-        
-        if (!values.items || values.items.length === 0) {
-          messageApi.error('请至少添加一个子物料');
-          return;
-        }
-        
-        // 转换为后端期望的snake_case格式
-        const batchData = {
+      if (!values.items || values.items.length === 0) {
+        messageApi.error('请至少添加一个子物料');
+        return;
+      }
+      if (!values.materialId) {
+        messageApi.error('请选择主物料');
+        return;
+      }
+
+      const buildBatch = () => {
+        return {
           material_id: values.materialId,
           items: values.items.map((item: any) => {
-            // 验证必填字段
-            if (!item.componentId) {
-              throw new Error('请选择子物料');
-            }
-            if (!item.quantity || item.quantity <= 0) {
-              throw new Error('用量必须大于0');
-            }
-            
-            // 处理unit字段：确保字段总是存在，如果为空则传null（后端Optional字段）
-            // 注意：必须显式包含unit字段，即使值为null，否则Pydantic可能认为它是必填的
+            if (!item.componentId) throw new Error('请选择子物料');
+            if (!item.quantity || item.quantity <= 0) throw new Error('用量必须大于0');
             const unitValue = (item.unit && item.unit.trim()) ? item.unit.trim() : null;
-            
             return {
               component_id: item.componentId,
               quantity: item.quantity,
-              unit: unitValue, // 显式包含unit字段，值为null或trim后的字符串
+              unit: unitValue,
               waste_rate: item.wasteRate ?? 0,
               is_required: item.isRequired !== false,
               is_alternative: item.isAlternative || false,
@@ -525,16 +572,27 @@ const BOMPage: React.FC = () => {
           remark: values.remark,
           is_active: values.isActive !== false,
         };
-        
+      };
+
+      if (isEdit && editContext) {
+        for (const uuid of editContext.uuidsToReplace) {
+          await bomApi.delete(uuid);
+        }
+        const batchData = buildBatch();
+        await bomApi.create(batchData as any);
+        messageApi.success(`已更新 BOM 结构，共 ${batchData.items.length} 项子件`);
+        setEditContext(null);
+      } else {
+        const batchData = buildBatch();
         await bomApi.create(batchData as any);
         messageApi.success(`成功创建 ${batchData.items.length} 个BOM项`);
       }
-      
+
       setModalVisible(false);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || (isEdit ? '更新失败' : '创建失败'));
+      messageApi.error(error?.message || (isEdit ? '更新失败' : '创建失败'));
     } finally {
       setFormLoading(false);
     }
@@ -545,13 +603,15 @@ const BOMPage: React.FC = () => {
    */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setEditContext(null);
     formRef.current?.resetFields();
   };
 
   /**
-   * 获取物料名称
+   * 获取物料名称（用于列表主物料/子物料列展示）
    */
-  const getMaterialName = (materialId: number): string => {
+  const getMaterialName = (materialId: number | undefined | null): string => {
+    if (materialId == null) return '-';
     const material = materials.find(m => m.id === materialId);
     if (!material) return `物料ID: ${materialId}`;
     const code = material.code || material.mainCode || '';
@@ -566,6 +626,57 @@ const BOMPage: React.FC = () => {
     const code = material.code || material.mainCode || '';
     const spec = material.specification ? ` (${material.specification})` : '';
     return `${code} - ${material.name}${spec}`;
+  };
+
+  /**
+   * 子物料选择/更新时：根据物料 baseUnit 回填单位，表单存 value，表格展示用字典标签
+   * 使用回调的 componentId 更新，避免覆盖 Form 尚未写入的选项
+   */
+  const handleSubMaterialChange = (index: number, componentId: number | undefined) => {
+    const unit = componentId ? (materials.find(m => m.id === componentId)?.baseUnit ?? '') : '';
+    const items = formRef.current?.getFieldValue('items') ?? [];
+    const next = [...items];
+    if (next[index]) {
+      const patch: Record<string, unknown> = { unit };
+      if (componentId !== undefined) patch.componentId = componentId;
+      next[index] = { ...next[index], ...patch };
+      formRef.current?.setFieldsValue({ items: next });
+    }
+  };
+
+  /**
+   * 按 bomCode + materialId + version 分组，转换为树形数据结构
+   */
+  const groupBomsByCode = (list: BOM[]): { groupRows: BOMGroupRow[]; keyToUuids: Map<string, string[]> } => {
+    const keyToUuids = new Map<string, string[]>();
+    const map = new Map<string, BOM[]>();
+    for (const b of list) {
+      const k = `${b.bomCode ?? '-'}|${b.materialId}|${b.version ?? '1.0'}`;
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(b);
+    }
+    const groupRows: BOMGroupRow[] = [];
+    map.forEach((items, k) => {
+      const first = items[0]!;
+      const uuids = items.map((i) => i.uuid);
+      keyToUuids.set(`group:${k}`, uuids);
+      // 将子物料作为 children，每个子物料添加唯一 key
+      const children = items.map((item, idx) => ({
+        ...item,
+        key: `${item.uuid}-child-${idx}`, // 树形数据需要唯一 key
+      }));
+      groupRows.push({
+        groupKey: `group:${k}`,
+        bomCode: first.bomCode ?? '-',
+        version: first.version ?? '1.0',
+        materialId: first.materialId,
+        approvalStatus: first.approvalStatus,
+        firstItem: first,
+        items,
+        children: children.length > 0 ? children : undefined,
+      });
+    });
+    return { groupRows, keyToUuids };
   };
 
   /**
@@ -924,248 +1035,140 @@ const BOMPage: React.FC = () => {
   };
 
   /**
-   * 表格列定义
+   * 分组行表格列（同一 BOM 编码折叠为一行）
    */
-  const columns: ProColumns<BOM>[] = [
-    {
-      title: 'BOM编码',
-      dataIndex: 'bomCode',
-      width: 150,
-      hideInSearch: true,
-      render: (_, record) => record.bomCode || '-',
+  const groupColumns: ProColumns<BOMGroupRow>[] = [
+    { 
+      title: 'BOM编码', 
+      dataIndex: 'bomCode', 
+      width: 150, 
+      hideInSearch: true, 
+      render: (_, r: any) => {
+        // 判断是主行还是子行
+        if ('groupKey' in r) {
+          return r.bomCode || '-';
+        }
+        return '-'; // 子行不显示 BOM 编码
+      }
     },
-    {
-      title: '版本',
-      dataIndex: 'version',
-      width: 80,
-      hideInSearch: true,
-      render: (_, record) => <Tag>{record.version}</Tag>,
+    { 
+      title: '版本', 
+      dataIndex: 'version', 
+      width: 80, 
+      hideInSearch: true, 
+      render: (_, r: any) => {
+        if ('groupKey' in r) {
+          return <Tag>{r.version}</Tag>;
+        }
+        return '-';
+      }
     },
     {
       title: '审核状态',
       dataIndex: 'approvalStatus',
       width: 120,
       valueType: 'select',
-      valueEnum: {
-        draft: { text: '草稿', status: 'Default' },
-        pending: { text: '待审核', status: 'Processing' },
-        approved: { text: '已审核', status: 'Success' },
-        rejected: { text: '已拒绝', status: 'Error' },
-      },
-      render: (_, record) => getApprovalStatusTag(record.approvalStatus),
+      valueEnum: { draft: { text: '草稿', status: 'Default' }, pending: { text: '待审核', status: 'Processing' }, approved: { text: '已审核', status: 'Success' }, rejected: { text: '已拒绝', status: 'Error' } },
+      render: (_, r: any) => {
+        if ('groupKey' in r) {
+          return getApprovalStatusTag(r.approvalStatus);
+        }
+        return '-';
+      }
     },
-    {
-      title: '主物料',
-      dataIndex: 'materialId',
-      width: 200,
+    { 
+      title: '物料', 
+      dataIndex: 'materialId', 
+      width: 200, 
+      hideInSearch: true, 
+      render: (_, r: any) => {
+        if ('groupKey' in r) {
+          // 主行：显示主物料
+          return getMaterialName(r.materialId);
+        } else {
+          // 子行：显示子物料
+          return getMaterialName(r.componentId);
+        }
+      }
+    },
+    { 
+      title: '用量', 
+      dataIndex: 'quantity', 
+      width: 100, 
       hideInSearch: true,
-      render: (_, record) => getMaterialName(record.materialId),
+      render: (_, r: any) => {
+        if ('groupKey' in r) {
+          return '-';
+        }
+        return `${r.quantity} ${r.unit || ''}`;
+      }
     },
-    {
-      title: '子物料',
-      dataIndex: 'componentId',
-      width: 200,
+    { 
+      title: '单位', 
+      dataIndex: 'unit', 
+      width: 80, 
       hideInSearch: true,
-      render: (_, record) => getMaterialName(record.componentId),
+      render: (_, r: any) => {
+        if ('groupKey' in r) {
+          return '-';
+        }
+        return (r.unit && unitValueToLabel[r.unit]) ? unitValueToLabel[r.unit] : (r.unit || '-');
+      }
     },
-    {
-      title: '用量',
-      dataIndex: 'quantity',
-      width: 100,
+    { 
+      title: '损耗率', 
+      dataIndex: 'wasteRate', 
+      width: 90, 
       hideInSearch: true,
-      render: (_, record) => `${record.quantity} ${record.unit || ''}`,
-    },
-    {
-      title: '单位',
-      dataIndex: 'unit',
-      width: 80,
-      hideInSearch: true,
-    },
-    {
-      title: '损耗率',
-      dataIndex: 'wasteRate',
-      width: 100,
-      hideInSearch: true,
-      render: (_, record) => record.wasteRate ? `${record.wasteRate}%` : '0%',
-    },
-    {
-      title: '是否必选',
-      dataIndex: 'isRequired',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '是', status: 'Success' },
-        false: { text: '否', status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.isRequired !== false ? 'success' : 'default'}>
-          {record.isRequired !== false ? '是' : '否'}
-        </Tag>
-      ),
-    },
-    {
-      title: '层级',
-      dataIndex: 'level',
-      width: 80,
-      hideInSearch: true,
-      sorter: true,
-      render: (_, record) => record.level ?? 0,
-    },
-    {
-      title: '替代料',
-      dataIndex: 'isAlternative',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '是', status: 'Warning' },
-        false: { text: '否', status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.isAlternative ? 'orange' : 'default'}>
-          {record.isAlternative ? '是' : '否'}
-        </Tag>
-      ),
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      width: 100,
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-      ellipsis: true,
-      hideInSearch: true,
-    },
-    {
-      title: '启用状态',
-      dataIndex: 'isActive',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
-      },
-      render: (_, record) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
+      render: (_, r: any) => {
+        if ('groupKey' in r) {
+          return '-';
+        }
+        return r.wasteRate ? `${r.wasteRate}%` : '0%';
+      }
     },
     {
       title: '操作',
       valueType: 'option',
-      width: 250,
+      width: 320,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            onClick={() => handleOpenDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={() => handleCopy(record)}
-          >
-            复制
-          </Button>
-          {record.approvalStatus !== 'approved' && (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => handleOpenApproval(record)}
-            >
-              审核
-            </Button>
-          )}
-          <Button
-            type="link"
-            size="small"
-            icon={<BranchesOutlined />}
-            onClick={() => handleCreateVersion(record)}
-          >
-            新版本
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<HistoryOutlined />}
-            onClick={() => handleViewVersionHistory(record)}
-          >
-            版本历史
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<BranchesOutlined />}
-            onClick={() => handleViewHierarchy(record)}
-          >
-            层级结构
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ApartmentOutlined />}
-            onClick={() => {
-              // 跳转到图形化设计器，编辑指定物料的BOM
-              const params = new URLSearchParams();
-              params.set('materialId', record.materialId.toString());
-              if (record.version) {
-                params.set('version', record.version);
-              }
-              navigate(`/apps/master-data/materials/bom/designer?${params.toString()}`);
-            }}
-          >
-            图形化设计
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<CalculatorOutlined />}
-            onClick={() => handleCalculateQuantity(record)}
-          >
-            用量计算
-          </Button>
-          <Popconfirm
-            title="确定要删除这个BOM项吗？"
-            onConfirm={() => handleDelete(record)}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_, record: any) => {
+        // 子行不显示操作
+        if (!('groupKey' in record)) {
+          return null;
+        }
+        const r = record.firstItem;
+        const goDesigner = () => {
+          const p = new URLSearchParams();
+          p.set('materialId', String(r.materialId));
+          if (r.version) p.set('version', r.version);
+          navigate(`/apps/master-data/materials/bom/designer?${p}`);
+        };
+        const moreItems: MenuProps['items'] = [
+          { key: 'detail', icon: <DiffOutlined />, label: '详情', onClick: () => handleOpenDetail(r) },
+          { key: 'copy', icon: <CopyOutlined />, label: '复制', onClick: () => handleCopy(r) },
+          ...(r.approvalStatus !== 'approved'
+            ? [{ key: 'approve', icon: <CheckCircleOutlined />, label: '审核', onClick: () => handleOpenApproval(r) } as MenuProps['items'][0]]
+            : []),
+          { key: 'newVersion', icon: <BranchesOutlined />, label: '新版本', onClick: () => handleCreateVersion(r) },
+          { key: 'versionHistory', icon: <HistoryOutlined />, label: '版本历史', onClick: () => handleViewVersionHistory(r) },
+          { key: 'calculateQuantity', icon: <CalculatorOutlined />, label: '用量计算', onClick: () => handleCalculateQuantity(r) },
+        ];
+        return (
+          <Space wrap size="small">
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
+            <Button type="link" size="small" icon={<BranchesOutlined />} onClick={() => handleViewHierarchy(r)}>层级结构</Button>
+            <Button type="link" size="small" icon={<ApartmentOutlined />} onClick={goDesigner}>图形化设计</Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteGroup(record)}>删除</Button>
+            <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+              <Button type="link" size="small" icon={<EllipsisOutlined />}>更多</Button>
+            </Dropdown>
+          </Space>
+        );
+      },
     },
   ];
+
 
   /**
    * 详情 Drawer 的列定义
@@ -1305,9 +1308,9 @@ const BOMPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
-        <UniTable<BOM>
+        <UniTable<BOMGroupRow>
         actionRef={actionRef}
-        columns={columns}
+        columns={groupColumns}
         request={async (params, sort, _filter, searchFormValues) => {
           // 处理搜索参数
           const apiParams: any = {
@@ -1337,10 +1340,12 @@ const BOMPage: React.FC = () => {
           
           try {
             const result = await bomApi.list(apiParams);
+            const { groupRows, keyToUuids } = groupBomsByCode(result);
+            groupKeyToUuidsRef.current = keyToUuids;
             return {
-              data: result,
+              data: groupRows,
               success: true,
-              total: result.length,
+              total: groupRows.length,
             };
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);
@@ -1352,7 +1357,8 @@ const BOMPage: React.FC = () => {
             };
           }
         }}
-        rowKey="uuid"
+        rowKey="groupKey"
+        defaultExpandAllRows={true}
         showAdvancedSearch={true}
         pagination={{
           defaultPageSize: 20,
@@ -1424,7 +1430,7 @@ const BOMPage: React.FC = () => {
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef}
-        initialValues={{
+        initialValues={isEdit ? undefined : {
           isActive: true,
           version: '1.0',
           approvalStatus: 'draft',
@@ -1493,6 +1499,7 @@ const BOMPage: React.FC = () => {
               { required: true, message: '请选择主物料' },
             ]}
             fieldProps={{
+              disabled: isEdit,
               loading: materialsLoading,
               showSearch: true,
               filterOption: (input, option) => {
@@ -1500,10 +1507,8 @@ const BOMPage: React.FC = () => {
                 return label.toLowerCase().includes(input.toLowerCase());
               },
               onChange: () => {
-                // 当主物料变化时，延迟重新生成编码
-                setTimeout(() => {
-                  regenerateBOMCode();
-                }, 300);
+                if (isEdit) return;
+                setTimeout(() => regenerateBOMCode(), 300);
               },
             }}
           />
@@ -1517,14 +1522,11 @@ const BOMPage: React.FC = () => {
               { max: 50, message: '版本号不能超过50个字符' },
             ]}
             fieldProps={{
+              disabled: isEdit,
               onChange: (e) => {
-                // 当版本号变化时，延迟重新生成编码预览
+                if (isEdit) return;
                 const newVersion = e.target.value;
-                if (newVersion) {
-                  setTimeout(() => {
-                    regenerateBOMCode();
-                  }, 300);
-                }
+                if (newVersion) setTimeout(() => regenerateBOMCode(), 300);
               },
             }}
           />
@@ -1591,7 +1593,7 @@ const BOMPage: React.FC = () => {
                               label: formatMaterialLabel(m),
                               value: m.id,
                             }))}
-                            onChange={() => {}}
+                            onChange={(val) => handleSubMaterialChange(index, val)}
                           />
                         </AntForm.Item>
                       ),
@@ -1629,15 +1631,7 @@ const BOMPage: React.FC = () => {
                           rules={[{ max: 20, message: '单位不能超过20个字符' }]}
                           style={{ margin: 0 }}
                         >
-                          <Input
-                            placeholder="单位（自动填充）"
-                            size="small"
-                            readOnly
-                            style={{ 
-                              backgroundColor: '#f5f5f5',
-                              cursor: 'not-allowed',
-                            }}
-                          />
+                          <UnitDisplayCell unitValueToLabel={unitValueToLabel} />
                         </AntForm.Item>
                       ),
                     },

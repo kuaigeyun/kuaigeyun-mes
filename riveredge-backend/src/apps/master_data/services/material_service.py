@@ -1290,12 +1290,21 @@ class MaterialService:
         if data.material_id == data.component_id:
             raise ValidationError("主物料和子物料不能相同")
         
-        # 创建BOM
-        bom = await BOM.create(
-            tenant_id=tenant_id,
-            **data.dict()
+        # 循环依赖检测（PLM 最佳实践：禁止成环）
+        has_cycle = await MaterialService.detect_bom_cycle(
+            tenant_id, data.material_id, data.component_id
         )
+        if has_cycle:
+            raise ValidationError(
+                f"添加子物料 {data.component_id} 将导致 BOM 循环依赖，请检查层级关系"
+            )
         
+        # 显式设置层级：直接子件 level 1，path 父/子
+        payload = data.dict()
+        payload["level"] = 1
+        payload["path"] = f"{data.material_id}/{data.component_id}"
+        
+        bom = await BOM.create(tenant_id=tenant_id, **payload)
         return BOMResponse.model_validate(bom)
     
     @staticmethod
@@ -1343,6 +1352,16 @@ class MaterialService:
         if data.material_id in component_ids:
             raise ValidationError("主物料和子物料不能相同")
         
+        # 循环依赖检测（PLM 最佳实践：禁止成环）
+        for item in data.items:
+            has_cycle = await MaterialService.detect_bom_cycle(
+                tenant_id, data.material_id, item.component_id
+            )
+            if has_cycle:
+                raise ValidationError(
+                    f"添加子物料 {item.component_id} 将导致 BOM 循环依赖，请检查层级关系"
+                )
+        
         # 获取主物料信息（用于编码生成上下文）
         material = await Material.filter(
             tenant_id=tenant_id,
@@ -1382,7 +1401,7 @@ class MaterialService:
                 material_code = material.main_code or material.code or "UNKNOWN"
                 data.bom_code = f"BOM-{material_code}-{timestamp}"
         
-        # 批量创建BOM
+        # 批量创建BOM（PLM 层级：根主料 level 0，直接子件 level 1；path 为 父/子 路径）
         bom_list = []
         for item in data.items:
             bom = await BOM.create(
@@ -1393,8 +1412,8 @@ class MaterialService:
                 unit=item.unit,
                 waste_rate=item.waste_rate if hasattr(item, 'waste_rate') else Decimal("0.00"),
                 is_required=item.is_required if hasattr(item, 'is_required') else True,
-                level=0,  # 默认层级，后续可以根据实际需求优化
-                path=f"{data.material_id}/{item.component_id}",  # 默认路径
+                level=1,  # 直接子件深度 1（根主料为 0）
+                path=f"{data.material_id}/{item.component_id}",
                 version=data.version,
                 bom_code=data.bom_code,
                 effective_date=data.effective_date,
@@ -1472,7 +1491,9 @@ class MaterialService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
-        bom_list = await query.offset(skip).limit(limit).order_by("priority", "id").all()
+        bom_list = await query.offset(skip).limit(limit).order_by(
+            "level", "path", "priority", "id"
+        ).all()
         
         return [BOMResponse.model_validate(b) for b in bom_list]
     
@@ -2021,11 +2042,10 @@ class MaterialService:
             else:
                 bom_code = data.bom_code
             
-            # 计算层级和路径（简化版，实际应该递归计算）
-            level = 0  # 默认层级，后续可以根据实际需求优化
+            # 层级与路径：直接子件 level 1，path 父/子（与 create_bom_batch 一致）
+            level = 1
             path = f"{parent_id}/{component_id}"
             
-            # 创建BOM
             bom = await BOM.create(
                 tenant_id=tenant_id,
                 material_id=parent_id,

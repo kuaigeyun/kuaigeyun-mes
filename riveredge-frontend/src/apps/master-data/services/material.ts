@@ -36,6 +36,42 @@ import type {
 } from '../types/material';
 
 /**
+ * 后端 BOM 响应为 snake_case，统一转为前端 camelCase
+ */
+function mapBomFromApi(raw: Record<string, unknown>): BOM {
+  return {
+    id: raw.id as number,
+    uuid: raw.uuid as string,
+    tenantId: (raw.tenant_id ?? raw.tenantId) as number,
+    materialId: (raw.material_id ?? raw.materialId) as number,
+    componentId: (raw.component_id ?? raw.componentId) as number,
+    quantity: Number(raw.quantity),
+    unit: (raw.unit as string) ?? undefined,
+    wasteRate: Number(raw.waste_rate ?? raw.wasteRate ?? 0),
+    isRequired: (raw.is_required ?? raw.isRequired) !== false,
+    level: Number(raw.level ?? 0),
+    path: (raw.path as string) ?? undefined,
+    version: (raw.version as string) ?? '1.0',
+    bomCode: (raw.bom_code ?? raw.bomCode) as string | undefined,
+    effectiveDate: (raw.effective_date ?? raw.effectiveDate) as string | undefined,
+    expiryDate: (raw.expiry_date ?? raw.expiryDate) as string | undefined,
+    approvalStatus: (raw.approval_status ?? raw.approvalStatus) as BOM['approvalStatus'],
+    approvedBy: (raw.approved_by ?? raw.approvedBy) as number | undefined,
+    approvedAt: (raw.approved_at ?? raw.approvedAt) as string | undefined,
+    approvalComment: (raw.approval_comment ?? raw.approvalComment) as string | undefined,
+    isAlternative: (raw.is_alternative ?? raw.isAlternative) === true,
+    alternativeGroupId: (raw.alternative_group_id ?? raw.alternativeGroupId) as number | undefined,
+    priority: Number(raw.priority ?? 0),
+    description: (raw.description as string) ?? undefined,
+    remark: (raw.remark as string) ?? undefined,
+    isActive: (raw.is_active ?? raw.isActive) !== false,
+    createdAt: (raw.created_at ?? raw.createdAt) as string,
+    updatedAt: (raw.updated_at ?? raw.updatedAt) as string,
+    deletedAt: (raw.deleted_at ?? raw.deletedAt) as string | undefined,
+  };
+}
+
+/**
  * 物料分组 API 服务
  */
 export const materialGroupApi = {
@@ -142,14 +178,15 @@ export const bomApi = {
    * 创建BOM（支持批量创建）
    */
   create: async (data: BOMBatchCreate): Promise<BOM[]> => {
-    return api.post('/apps/master-data/materials/bom', data);
+    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom', data);
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
   
   /**
    * 创建单个BOM（兼容旧接口）
    */
   createSingle: async (data: BOMCreate): Promise<BOM> => {
-    // 转换为批量创建格式
     const batchData: BOMBatchCreate = {
       materialId: data.materialId,
       items: [{
@@ -163,29 +200,33 @@ export const bomApi = {
       }],
       isActive: data.isActive,
     };
-    const result = await api.post('/apps/master-data/materials/bom', batchData);
-    return result[0];
+    const list = await bomApi.create(batchData);
+    return list[0]!;
   },
 
   /**
    * 获取BOM列表
    */
   list: async (params?: BOMListParams): Promise<BOM[]> => {
-    return api.get('/apps/master-data/materials/bom', { params });
+    const raw = await api.get<unknown[]>('/apps/master-data/materials/bom', { params });
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
 
   /**
    * 获取BOM详情
    */
   get: async (uuid: string): Promise<BOM> => {
-    return api.get(`/apps/master-data/materials/bom/${uuid}`);
+    const raw = await api.get<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}`);
+    return mapBomFromApi(raw ?? {});
   },
 
   /**
    * 更新BOM
    */
   update: async (uuid: string, data: BOMUpdate): Promise<BOM> => {
-    return api.put(`/apps/master-data/materials/bom/${uuid}`, data);
+    const raw = await api.put<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}`, data);
+    return mapBomFromApi(raw ?? {});
   },
 
   /**
@@ -203,7 +244,8 @@ export const bomApi = {
     if (approvalComment) {
       params.approval_comment = approvalComment;
     }
-    return api.post(`/apps/master-data/materials/bom/${uuid}/approve`, null, { params });
+    const raw = await api.post<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}/approve`, null, { params });
+    return mapBomFromApi(raw ?? {});
   },
   
   /**
@@ -214,32 +256,39 @@ export const bomApi = {
     if (newVersion) {
       params.new_version = newVersion;
     }
-    return api.post(`/apps/master-data/materials/bom/${uuid}/copy`, null, { params });
+    const raw = await api.post<Record<string, unknown>>(`/apps/master-data/materials/bom/${uuid}/copy`, null, { params });
+    return mapBomFromApi(raw ?? {});
   },
   
   /**
    * 根据主物料获取BOM列表
    */
   getByMaterial: async (materialId: number, version?: string, onlyActive?: boolean): Promise<BOM[]> => {
-    return api.get(`/apps/master-data/materials/bom/material/${materialId}`, {
+    const raw = await api.get<unknown[]>(`/apps/master-data/materials/bom/material/${materialId}`, {
       params: { version, only_active: onlyActive },
     });
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
-  
+
   /**
    * 获取BOM所有版本
    */
   getVersions: async (bomCode: string): Promise<BOM[]> => {
-    return api.get(`/apps/master-data/materials/bom/versions/${bomCode}`);
+    const raw = await api.get<unknown[]>(`/apps/master-data/materials/bom/versions/${bomCode}`);
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
-  
+
   /**
    * 批量导入BOM（支持部门编码）
    * 
    * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
    */
   batchImport: async (data: BOMBatchImport): Promise<BOM[]> => {
-    return api.post('/apps/master-data/materials/bom/batch-import', data);
+    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', data);
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
   
   /**
