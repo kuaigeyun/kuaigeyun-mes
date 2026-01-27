@@ -79,6 +79,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
         'master-data-material': 'material',
         'master-data-process-route': 'process_route',
         'master-data-engineering-bom': 'bom',
+        'kuaizhizao-sales-order': 'sales_order',
       };
       const entityType = entityTypeMap[pageCode];
       
@@ -116,13 +117,12 @@ const CodeField: React.FC<CodeFieldProps> = ({
       'master-data-material': 'material',
       'master-data-process-route': 'process_route',
       'master-data-engineering-bom': 'bom',
+      'kuaizhizao-sales-order': 'sales_order',
     };
     const entityType = entityTypeMap[pageCode];
     
-    // 如果没有对应的实体类型映射，不调用 API
-    if (!entityType) {
-      return;
-    }
+    // 若无实体类型映射，仍可调用生成接口（不传 entity_type，仅预生成不校验重复）
+    // 有映射时传 entity_type 以做重复校验
     
     try {
       const response = await testGenerateCode({

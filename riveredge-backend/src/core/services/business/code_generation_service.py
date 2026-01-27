@@ -279,6 +279,17 @@ class CodeGenerationService:
                 deleted_at__isnull=True
             ).first()
             return existing is not None
+
+        if entity_type == 'sales_order':
+            from apps.kuaizhizao.models.demand import Demand
+            # 检查销售订单（需求类型为 sales_order）编码是否已存在
+            existing = await Demand.filter(
+                tenant_id=tenant_id,
+                demand_type='sales_order',
+                demand_code=code,
+                deleted_at__isnull=True
+            ).first()
+            return existing is not None
         
         # 其他实体类型的检查可以在这里扩展
         return False
