@@ -134,6 +134,7 @@ export default {
   'path.materials': '物料',
   'path.material': '物料数据',
   'path.engineering-bom': '工程BOM',
+  'path.apps.master-data.process.engineering-bom.designer': 'BOM图形化设计',
   'path.defect-types': '不良品类型',
   'path.operations': '工序',
   'path.routes': '工艺路线',

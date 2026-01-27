@@ -165,6 +165,36 @@ import { TwoColumnLayout } from '@/components/layout-templates';
 
 ---
 
+### 5. CanvasPageTemplate - 画板页布局模板
+
+用于带画板的页面统一布局：**操作条 + 画板 + 右侧面板**。主内容区仅包含上述三块，边距 16px。
+
+**使用场景**: 流程设计、工程 BOM 设计、思维导图等以画布为核心的设计器页面
+
+**示例**:
+```typescript
+import { CanvasPageTemplate } from '@/components/layout-templates';
+
+<CanvasPageTemplate
+  toolbar={
+    <Space>
+      <Button type="primary" icon={<SaveOutlined />}>保存</Button>
+      <Button icon={<CloseOutlined />}>返回</Button>
+      <Button icon={<PlusOutlined />}>添加子节点</Button>
+    </Space>
+  }
+  canvas={<MindMap {...config} />}
+  rightPanel={{
+    title: '节点配置',
+    children: <Form>...</Form>,
+  }}
+  rightPanelWidth={400}
+  canvasMinHeight={600}
+/>
+```
+
+---
+
 ## 📐 布局常量配置
 
 所有布局相关的常量都统一在 `constants.ts` 中管理，包括：
@@ -175,6 +205,7 @@ import { TwoColumnLayout } from '@/components/layout-templates';
 - **STAT_CARD_CONFIG**: 统计卡片配置（间距、响应式列数等）
 - **PAGE_SPACING**: 页面间距配置（内边距、区块间距等）
 - **TWO_COLUMN_LAYOUT**: 两栏布局配置（左侧面板宽度等）
+- **CANVAS_PAGE_LAYOUT**: 画板页布局配置（右侧面板宽度、画板最小高度）
 - **TABLE_CONFIG**: 表格配置（分页大小、操作列宽度等）
 - **BUTTON_CONFIG**: 按钮配置（间距等）
 - **STATUS_COLORS**: 状态标签颜色映射
@@ -325,22 +356,23 @@ import { MODAL_CONFIG, DRAWER_CONFIG } from '@/components/layout-templates';
 
 ## 📦 完整模板列表
 
-### 基础布局模板（8个）
+### 基础布局模板（9个）
 
 1. **ListPageTemplate** - 列表页面模板
 2. **FormModalTemplate** - 表单 Modal 模板
 3. **DetailDrawerTemplate** - 详情 Drawer 模板
 4. **TwoColumnLayout** - 两栏布局模板
-5. **DashboardTemplate** - 工作台布局模板
-6. **WizardTemplate** - 向导布局模板
-7. **KanbanViewTemplate** - 看板视图布局模板
-8. **TouchScreenTemplate** - 工位机触屏模式布局模板
+5. **CanvasPageTemplate** - 画板页布局模板（操作条 + 画板 + 右侧面板，流程设计、BOM 设计等）
+6. **DashboardTemplate** - 工作台布局模板
+7. **WizardTemplate** - 向导布局模板
+8. **KanbanViewTemplate** - 看板视图布局模板
+9. **TouchScreenTemplate** - 工位机触屏模式布局模板
 
 ### 视图组件模板（3个）
 
-9. **CompareViewTemplate** - 对比视图布局模板
-10. **ParameterConfigTemplate** - 参数配置布局模板
-11. **CalculationResultTemplate** - 计算结果显示布局模板
+10. **CompareViewTemplate** - 对比视图布局模板
+11. **ParameterConfigTemplate** - 参数配置布局模板
+12. **CalculationResultTemplate** - 计算结果显示布局模板
 
 ---
 
@@ -366,6 +398,7 @@ import { MODAL_CONFIG, DRAWER_CONFIG } from '@/components/layout-templates';
 - **STAT_CARD_CONFIG**: 统计卡片配置
 - **PAGE_SPACING**: 页面间距配置
 - **TWO_COLUMN_LAYOUT**: 两栏布局配置
+- **CANVAS_PAGE_LAYOUT**: 画板页布局配置
 - **ANT_DESIGN_TOKENS**: Ant Design 设计规范常量
 - **TOUCH_SCREEN_CONFIG**: 工位机触屏模式配置
 - **DASHBOARD_CONFIG**: 工作台配置

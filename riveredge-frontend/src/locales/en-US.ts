@@ -134,6 +134,7 @@ export default {
   'path.materials': 'Materials',
   'path.material': 'Material Data',
   'path.bom': 'BOM',
+  'path.apps.master-data.process.engineering-bom.designer': 'BOM Graphical Design',
   'path.defect-types': 'Defect Types',
   'path.operations': 'Operations',
   'path.routes': 'Process Routes',
