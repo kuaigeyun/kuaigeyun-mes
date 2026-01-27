@@ -151,7 +151,49 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_field_label": "路线编码",
         "module": "主数据管理",
         "module_icon": "database",
-        "auto_generate": False,
+        "auto_generate": True,
+        "rule_code": "PROCESS_ROUTE_CODE",
+        "allow_manual_edit": True,
+        "available_fields": [
+            {
+                "field_name": "name",
+                "field_label": "工艺路线名称",
+                "field_type": "string",
+                "description": "工艺路线名称"
+            }
+        ]
+    },
+    {
+        "page_code": "master-data-engineering-bom",
+        "page_name": "工程BOM",
+        "page_path": "/apps/master-data/process/engineering-bom",
+        "code_field": "bom_code",
+        "code_field_label": "BOM编码",
+        "module": "主数据管理",
+        "module_icon": "database",
+        "auto_generate": True,
+        "rule_code": "ENGINEERING_BOM_CODE",
+        "allow_manual_edit": True,
+        "available_fields": [
+            {
+                "field_name": "material_code",
+                "field_label": "主物料编码",
+                "field_type": "string",
+                "description": "BOM主物料的编码"
+            },
+            {
+                "field_name": "material_name",
+                "field_label": "主物料名称",
+                "field_type": "string",
+                "description": "BOM主物料的名称"
+            },
+            {
+                "field_name": "version",
+                "field_label": "版本号",
+                "field_type": "string",
+                "description": "BOM版本号"
+            }
+        ]
     },
     {
         "page_code": "master-data-defect-type",

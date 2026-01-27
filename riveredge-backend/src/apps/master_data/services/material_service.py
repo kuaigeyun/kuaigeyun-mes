@@ -1343,18 +1343,44 @@ class MaterialService:
         if data.material_id in component_ids:
             raise ValidationError("主物料和子物料不能相同")
         
+        # 获取主物料信息（用于编码生成上下文）
+        material = await Material.filter(
+            tenant_id=tenant_id,
+            id=data.material_id,
+            deleted_at__isnull=True
+        ).first()
+        if not material:
+            raise ValidationError("主物料不存在")
+        
         # 自动生成BOM编码（如果未提供）
         if not data.bom_code:
-            material = await Material.filter(
-                tenant_id=tenant_id,
-                id=data.material_id,
-                deleted_at__isnull=True
-            ).first()
-            if material:
-                # 使用物料编码作为BOM编码前缀
+            try:
+                # 构建编码规则的上下文
+                context: Dict[str, Any] = {
+                    "version": data.version or "1.0",
+                }
+                
+                # 添加主物料信息到上下文
+                if material.main_code:
+                    context["material_code"] = material.main_code
+                elif material.code:
+                    context["material_code"] = material.code
+                if material.name:
+                    context["material_name"] = material.name
+                
+                # 使用编码规则服务生成BOM编码
+                data.bom_code = await CodeGenerationService.generate_code(
+                    tenant_id=tenant_id,
+                    rule_code="ENGINEERING_BOM_CODE",
+                    context=context
+                )
+            except ValidationError as e:
+                # 如果编码规则不存在或未启用，使用备用方案
+                logger.warning(f"BOM编码规则生成失败，使用备用方案: {e}")
                 from datetime import datetime
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                data.bom_code = f"BOM-{material.code}-{timestamp}"
+                material_code = material.main_code or material.code or "UNKNOWN"
+                data.bom_code = f"BOM-{material_code}-{timestamp}"
         
         # 批量创建BOM
         bom_list = []

@@ -7,6 +7,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemType, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+import CodeField from '../../../../../components/code-field';
 import { App, Popconfirm, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -16,6 +17,9 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
+import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 
 /**
  * 工程BOM管理列表页面组件
@@ -75,6 +79,9 @@ const BOMPage: React.FC = () => {
   // 物料列表（用于下拉选择）
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  
+  // 单位字典映射（value -> label）
+  const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
   /**
    * 加载物料列表
@@ -95,9 +102,87 @@ const BOMPage: React.FC = () => {
   }, []);
 
   /**
+   * 加载单位字典
+   */
+  useEffect(() => {
+    const loadUnitDictionary = async () => {
+      try {
+        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
+        const items = await getDictionaryItemList(dictionary.uuid, true);
+        
+        // 创建value到label的映射
+        const valueToLabelMap: Record<string, string> = {};
+        items.forEach(item => {
+          valueToLabelMap[item.value] = item.label;
+        });
+        setUnitValueToLabel(valueToLabelMap);
+      } catch (error: any) {
+        console.error('加载单位字典失败:', error);
+      }
+    };
+    loadUnitDictionary();
+  }, []);
+
+  /**
+   * 重新生成BOM编码（根据当前表单值）
+   */
+  const regenerateBOMCode = async () => {
+    if (isEdit) {
+      return;
+    }
+
+    // 直接从后端API获取配置，而不是使用本地配置
+    try {
+      const config = await getCodeRulePageConfig('master-data-engineering-bom');
+      
+      if (!config?.autoGenerate || !config?.ruleCode) {
+        console.warn('BOM编码自动生成未启用或规则代码不存在:', config);
+        return;
+      }
+
+      const ruleCode = config.ruleCode;
+
+      // 获取当前表单值
+      const formValues = formRef.current?.getFieldsValue();
+      const materialId = formValues?.materialId;
+      const version = formValues?.version || '1.0';
+      
+      // 构建编码规则的上下文
+      const context: Record<string, any> = {
+        version,
+      };
+      
+      // 如果选择了主物料，添加物料信息到上下文
+      if (materialId) {
+        const selectedMaterial = materials.find(m => m.id === materialId);
+        if (selectedMaterial) {
+          context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
+          context.material_name = selectedMaterial.name;
+        }
+      }
+      
+      const codeResponse = await testGenerateCode({ 
+        rule_code: ruleCode,
+        context,
+        check_duplicate: true,
+        entity_type: 'bom',
+      });
+      
+      // 如果返回的编码不为空，更新表单字段（总是更新预览）
+      if (codeResponse.code) {
+        formRef.current?.setFieldsValue({
+          bomCode: codeResponse.code,
+        });
+      }
+    } catch (error: any) {
+      console.error('获取编码规则配置或生成编码失败:', error?.message || error);
+    }
+  };
+
+  /**
    * 处理新建BOM
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentBOMUuid(null);
     setModalVisible(true);
@@ -107,6 +192,54 @@ const BOMPage: React.FC = () => {
       isAlternative: false,
       priority: 0,
     });
+
+    // 如果启用了自动编码，获取预览编码
+    // 直接从后端API获取配置，确保配置是最新的
+    try {
+      const config = await getCodeRulePageConfig('master-data-engineering-bom');
+      
+      console.log('BOM编码自动生成检查 - 后端配置:', config);
+      
+      if (config?.autoGenerate && config?.ruleCode) {
+        const ruleCode = config.ruleCode;
+        
+        try {
+          // 构建基础context（版本号默认值）
+          const context: Record<string, any> = {
+            version: '1.0',
+          };
+          
+          console.log('调用testGenerateCode:', { rule_code: ruleCode, context, entity_type: 'bom' });
+          
+          const codeResponse = await testGenerateCode({ 
+            rule_code: ruleCode,
+            context,
+            check_duplicate: true,
+            entity_type: 'bom',
+          });
+          
+          console.log('testGenerateCode响应:', codeResponse);
+          
+          // 如果返回的编码为空，说明规则不存在或未启用，静默处理
+          if (codeResponse.code) {
+            formRef.current?.setFieldsValue({
+              bomCode: codeResponse.code,
+            });
+          } else {
+            console.warn(`编码规则 ${ruleCode} 不存在或未启用，跳过自动生成。响应:`, codeResponse);
+            messageApi.warning(`编码规则 ${ruleCode} 不存在或未启用，请检查编码规则配置`);
+          }
+        } catch (error: any) {
+          // 处理其他错误（网络错误等）
+          console.error('自动生成编码失败:', error?.message || error, error);
+          messageApi.error(`自动生成编码失败: ${error?.message || error}`);
+        }
+      } else {
+        console.warn('BOM编码自动生成未启用或规则代码不存在:', config);
+      }
+    } catch (error: any) {
+      console.error('获取编码规则配置失败:', error);
+    }
   };
 
   /**
@@ -420,7 +553,19 @@ const BOMPage: React.FC = () => {
    */
   const getMaterialName = (materialId: number): string => {
     const material = materials.find(m => m.id === materialId);
-    return material ? `${material.code} - ${material.name}` : `物料ID: ${materialId}`;
+    if (!material) return `物料ID: ${materialId}`;
+    const code = material.code || material.mainCode || '';
+    const spec = material.specification ? ` (${material.specification})` : '';
+    return `${code} - ${material.name}${spec}`;
+  };
+
+  /**
+   * 格式化物料显示文本（用于下拉选择器）
+   */
+  const formatMaterialLabel = (material: Material): string => {
+    const code = material.code || material.mainCode || '';
+    const spec = material.specification ? ` (${material.specification})` : '';
+    return `${code} - ${material.name}${spec}`;
   };
 
   /**
@@ -1283,16 +1428,65 @@ const BOMPage: React.FC = () => {
           isActive: true,
           version: '1.0',
           approvalStatus: 'draft',
-          items: [{ isAlternative: false, priority: 0 }],
+          items: [{ 
+            isAlternative: false, 
+            priority: 0,
+            wasteRate: 0,
+            isRequired: true,
+          }],
         }}
+        className="bom-form-modal"
       >
+        <style>{`
+          /* 子物料列表标题添加左右8px padding */
+          .bom-form-modal .bom-items-list-form-item .ant-form-item-label {
+            padding-left: 8px;
+            padding-right: 8px;
+          }
+        `}</style>
+          <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
+            {({ getFieldValue }) => {
+              const materialId = getFieldValue('materialId');
+              const version = getFieldValue('version') || '1.0';
+              
+              // 构建编码规则的上下文
+              const context: Record<string, any> = {
+                version,
+              };
+              
+              // 如果选择了主物料，添加物料信息到上下文
+              if (materialId) {
+                const selectedMaterial = materials.find(m => m.id === materialId);
+                if (selectedMaterial) {
+                  // 优先使用mainCode，如果没有则使用code（向后兼容）
+                  context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
+                  context.material_name = selectedMaterial.name;
+                }
+              }
+              
+              return (
+                <CodeField
+                  pageCode="master-data-engineering-bom"
+                  name="bomCode"
+                  label="BOM编码"
+                  colProps={{ span: 12 }}
+                  autoGenerateOnCreate={!isEdit}
+                  showGenerateButton={false}
+                  context={context}
+                  fieldProps={{
+                    maxLength: 100,
+                  }}
+                />
+              );
+            }}
+          </ProForm.Item>
           <SafeProFormSelect
             name="materialId"
             label="主物料"
             placeholder="请选择主物料"
             colProps={{ span: 12 }}
             options={materials.map(m => ({
-              label: `${m.code} - ${m.name}`,
+              label: formatMaterialLabel(m),
               value: m.id,
             }))}
             rules={[
@@ -1305,15 +1499,12 @@ const BOMPage: React.FC = () => {
                 const label = option?.label as string || '';
                 return label.toLowerCase().includes(input.toLowerCase());
               },
-            }}
-          />
-          <ProFormText
-            name="bomCode"
-            label="BOM编码"
-            placeholder="留空则自动生成"
-            colProps={{ span: 12 }}
-            fieldProps={{
-              maxLength: 100,
+              onChange: () => {
+                // 当主物料变化时，延迟重新生成编码
+                setTimeout(() => {
+                  regenerateBOMCode();
+                }, 300);
+              },
             }}
           />
           <ProFormText
@@ -1325,7 +1516,17 @@ const BOMPage: React.FC = () => {
               { required: true, message: '请输入版本号' },
               { max: 50, message: '版本号不能超过50个字符' },
             ]}
-            initialValue="1.0"
+            fieldProps={{
+              onChange: (e) => {
+                // 当版本号变化时，延迟重新生成编码预览
+                const newVersion = e.target.value;
+                if (newVersion) {
+                  setTimeout(() => {
+                    regenerateBOMCode();
+                  }, 300);
+                }
+              },
+            }}
           />
           <ProFormSelect
             name="approvalStatus"
@@ -1337,7 +1538,6 @@ const BOMPage: React.FC = () => {
               { label: '已审核', value: 'approved' },
               { label: '已拒绝', value: 'rejected' },
             ]}
-            initialValue="draft"
           />
           <ProFormDateTimePicker
             name="effectiveDate"
@@ -1355,26 +1555,6 @@ const BOMPage: React.FC = () => {
               style: { width: '100%' },
             }}
           />
-          <ProFormTextArea
-            name="description"
-            label="BOM描述"
-            placeholder="请输入BOM描述（可选）"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 2,
-              maxLength: 500,
-            }}
-          />
-          <ProFormTextArea
-            name="remark"
-            label="备注"
-            placeholder="请输入备注（可选）"
-            colProps={{ span: 24 }}
-            fieldProps={{
-              rows: 2,
-              maxLength: 500,
-            }}
-          />
           
           <ProForm.Item
             label="子物料列表"
@@ -1382,6 +1562,7 @@ const BOMPage: React.FC = () => {
               { required: true, message: '请至少添加一个子物料' },
             ]}
             style={{ width: '100%' }}
+            className="bom-items-list-form-item"
           >
             <ProForm.Item name="items" noStyle style={{ width: '100%' }}>
               <AntForm.List name="items">
@@ -1390,7 +1571,7 @@ const BOMPage: React.FC = () => {
                     {
                       title: '子物料',
                       dataIndex: 'componentId',
-                      width: 180,
+                      width: 210,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'componentId']}
@@ -1407,17 +1588,10 @@ const BOMPage: React.FC = () => {
                               return label.toLowerCase().includes(input.toLowerCase());
                             }}
                             options={materials.map(m => ({
-                              label: `${m.code || m.mainCode} - ${m.name}`,
+                              label: formatMaterialLabel(m),
                               value: m.id,
                             }))}
-                            onChange={(value) => {
-                              // 当选择物料时，自动填充该物料的基础单位
-                              const selectedMaterial = materials.find(m => m.id === value);
-                              if (selectedMaterial && selectedMaterial.baseUnit) {
-                                // 使用formRef来设置字段值
-                                formRef.current?.setFieldValue(['items', index, 'unit'], selectedMaterial.baseUnit);
-                              }
-                            }}
+                            onChange={() => {}}
                           />
                         </AntForm.Item>
                       ),
@@ -1451,42 +1625,19 @@ const BOMPage: React.FC = () => {
                       width: 80,
                       render: (_, record, index) => (
                         <AntForm.Item
-                          noStyle
-                          dependencies={[[index, 'componentId']]}
+                          name={[index, 'unit']}
+                          rules={[{ max: 20, message: '单位不能超过20个字符' }]}
+                          style={{ margin: 0 }}
                         >
-                          {({ getFieldValue }) => {
-                            const componentId = getFieldValue(['items', index, 'componentId']);
-                            const selectedMaterial = materials.find(m => m.id === componentId);
-                            const baseUnit = selectedMaterial?.baseUnit || '';
-                            const currentUnit = getFieldValue(['items', index, 'unit']);
-                            
-                            // 如果componentId变化了且unit字段为空或与baseUnit不同，自动更新
-                            if (componentId && baseUnit && currentUnit !== baseUnit) {
-                              // 使用setTimeout避免在render中直接调用setFieldValue
-                              setTimeout(() => {
-                                formRef.current?.setFieldValue(['items', index, 'unit'], baseUnit);
-                              }, 0);
-                            }
-                            
-                            return (
-                              <AntForm.Item
-                                name={[index, 'unit']}
-                                rules={[{ max: 20, message: '单位不能超过20个字符' }]}
-                                style={{ margin: 0 }}
-                              >
-                                <Input
-                                  placeholder={baseUnit || "单位（自动填充）"}
-                                  size="small"
-                                  maxLength={20}
-                                  readOnly
-                                  style={{ 
-                                    backgroundColor: '#f5f5f5',
-                                    cursor: 'not-allowed',
-                                  }}
-                                />
-                              </AntForm.Item>
-                            );
-                          }}
+                          <Input
+                            placeholder="单位（自动填充）"
+                            size="small"
+                            readOnly
+                            style={{ 
+                              backgroundColor: '#f5f5f5',
+                              cursor: 'not-allowed',
+                            }}
+                          />
                         </AntForm.Item>
                       ),
                     },
@@ -1500,7 +1651,6 @@ const BOMPage: React.FC = () => {
                           rules={[
                             { type: 'number', min: 0, max: 100, message: '损耗率必须在0-100之间' },
                           ]}
-                          initialValue={0}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
@@ -1522,7 +1672,6 @@ const BOMPage: React.FC = () => {
                         <AntForm.Item
                           name={[index, 'isRequired']}
                           valuePropName="checked"
-                          initialValue={true}
                           style={{ margin: 0 }}
                         >
                           <Switch size="small" />
@@ -1537,7 +1686,6 @@ const BOMPage: React.FC = () => {
                         <AntForm.Item
                           name={[index, 'isAlternative']}
                           valuePropName="checked"
-                          initialValue={false}
                           style={{ margin: 0 }}
                         >
                           <Switch size="small" />
@@ -1554,7 +1702,6 @@ const BOMPage: React.FC = () => {
                           rules={[
                             { type: 'number', min: 0, message: '优先级必须大于等于0' },
                           ]}
-                          initialValue={0}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
@@ -1570,7 +1717,7 @@ const BOMPage: React.FC = () => {
                     {
                       title: '描述',
                       dataIndex: 'description',
-                      width: 120,
+                      width: 150,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'description']}
@@ -1578,25 +1725,6 @@ const BOMPage: React.FC = () => {
                         >
                           <Input.TextArea
                             placeholder="描述（可选）"
-                            rows={1}
-                            size="small"
-                            maxLength={500}
-                            autoSize={{ minRows: 1, maxRows: 2 }}
-                          />
-                        </AntForm.Item>
-                      ),
-                    },
-                    {
-                      title: '备注',
-                      dataIndex: 'remark',
-                      width: 120,
-                      render: (_, record, index) => (
-                        <AntForm.Item
-                          name={[index, 'remark']}
-                          style={{ margin: 0 }}
-                        >
-                          <Input.TextArea
-                            placeholder="备注（可选）"
                             rows={1}
                             size="small"
                             maxLength={500}
@@ -1633,6 +1761,9 @@ const BOMPage: React.FC = () => {
                         width: '100%',
                         overflow: 'hidden',
                         position: 'relative',
+                        paddingLeft: '8px',
+                        paddingRight: '8px',
+                        boxSizing: 'border-box',
                       }}
                     >
                       <div 
@@ -1679,6 +1810,18 @@ const BOMPage: React.FC = () => {
               </AntForm.List>
             </ProForm.Item>
           </ProForm.Item>
+          
+          <ProFormTextArea
+            name="description"
+            label="描述"
+            placeholder="请输入描述（可选）"
+            colProps={{ span: 24 }}
+            fieldProps={{
+              rows: 3,
+              maxLength: 500,
+              showCount: true,
+            }}
+          />
           
           <ProFormSwitch
             name="isActive"

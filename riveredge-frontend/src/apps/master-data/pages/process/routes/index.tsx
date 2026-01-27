@@ -20,6 +20,8 @@ import type { Material, MaterialGroup } from '../../../types/material';
 import { ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import CodeField from '../../../../../components/code-field';
+import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 
 /**
  * 工序项接口
@@ -949,6 +951,8 @@ const ProcessRoutesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
+  /** 预览编码（自动编码时使用，提交时若未修改则正式生成） */
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   
   // 版本管理相关状态
   const [versionModalVisible, setVersionModalVisible] = useState(false);
@@ -1006,7 +1010,7 @@ const ProcessRoutesPage: React.FC = () => {
   /**
    * 处理新建工艺路线
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentProcessRouteUuid(null);
     setOperationSequence([]);
@@ -1015,6 +1019,32 @@ const ProcessRoutesPage: React.FC = () => {
     formRef.current?.setFieldsValue({
       isActive: true,
     });
+
+    // 如果启用了自动编码，获取预览编码
+    if (isAutoGenerateEnabled('master-data-process-route')) {
+      const ruleCode = getPageRuleCode('master-data-process-route');
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          // 如果返回的编码为空，说明规则不存在或未启用，静默处理
+          if (codeResponse.code) {
+            setPreviewCode(codeResponse.code);
+            formRef.current?.setFieldsValue({
+              code: codeResponse.code,
+            });
+          } else {
+            console.info(`编码规则 ${ruleCode} 不存在或未启用，跳过自动生成`);
+            setPreviewCode(null);
+          }
+        } catch (error: any) {
+          // 处理其他错误（网络错误等）
+          console.warn('自动生成编码失败:', error?.message || error);
+          setPreviewCode(null);
+        }
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
   /**
@@ -1580,8 +1610,25 @@ const ProcessRoutesPage: React.FC = () => {
           }
         : null;
 
+      let finalCode = values.code.trim();
+
+      // 如果是新建且启用了自动编码，且编码是预览编码或为空，则正式生成编码
+      if (!isEdit && isAutoGenerateEnabled('master-data-process-route')) {
+        const ruleCode = getPageRuleCode('master-data-process-route');
+        const currentCode = values.code?.trim();
+        if (ruleCode && (currentCode === previewCode || !currentCode)) {
+          try {
+            const codeResponse = await generateCode({ rule_code: ruleCode });
+            finalCode = codeResponse.code;
+          } catch (error: any) {
+            console.warn('正式生成编码失败，使用预览编码:', error);
+            // 如果正式生成失败，继续使用预览编码
+          }
+        }
+      }
+
       const submitData = {
-        code: values.code.trim(),
+        code: finalCode,
         name: values.name.trim(),
         description: values.description?.trim() || null,
         is_active: values.isActive ?? true,
@@ -1600,6 +1647,7 @@ const ProcessRoutesPage: React.FC = () => {
 
       setModalVisible(false);
       setOperationSequence([]);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -1617,6 +1665,7 @@ const ProcessRoutesPage: React.FC = () => {
   const handleCloseModal = () => {
     setModalVisible(false);
     setOperationSequence([]);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -1947,6 +1996,7 @@ const ProcessRoutesPage: React.FC = () => {
             style: { textTransform: 'uppercase' },
           }}
           autoGenerateOnCreate={!isEdit}
+          showGenerateButton={false}
         />
         <ProFormText
           name="name"

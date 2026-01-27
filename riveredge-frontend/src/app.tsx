@@ -12,7 +12,7 @@ import { useLocation, Navigate } from 'react-router-dom';
 import { App as AntdApp, Spin, ConfigProvider, theme, message } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
-import { getToken, clearAuth, getUserInfo, setUserInfo } from './utils/auth';
+import { getToken, clearAuth, getUserInfo, setUserInfo, isTokenExpired } from './utils/auth';
 import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
@@ -153,6 +153,62 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => {
     setLoading(isLoading);
   }, [isLoading, setLoading]);
+
+  // TOKEN 过期检测：定期检查 TOKEN 是否过期
+  React.useEffect(() => {
+    // 如果是公开页面，不需要检测 TOKEN
+    if (isPublicPath) {
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      return;
+    }
+
+    // 检查 TOKEN 是否过期
+    if (isTokenExpired(token)) {
+      console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
+      clearAuth();
+      setCurrentUser(undefined);
+      
+      // 跳转到登录页
+      if (location.pathname.startsWith('/infra')) {
+        window.location.href = '/infra/login';
+      } else {
+        window.location.href = '/login';
+      }
+      return;
+    }
+
+    // 设置定时器，每分钟检查一次 TOKEN 是否过期
+    const checkInterval = setInterval(() => {
+      const currentToken = getToken();
+      if (!currentToken) {
+        clearInterval(checkInterval);
+        return;
+      }
+
+      if (isTokenExpired(currentToken)) {
+        console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
+        clearAuth();
+        setCurrentUser(undefined);
+        clearInterval(checkInterval);
+        
+        // 跳转到登录页
+        if (location.pathname.startsWith('/infra')) {
+          window.location.href = '/infra/login';
+        } else {
+          window.location.href = '/login';
+        }
+      }
+    }, 60000); // 每60秒检查一次
+
+    // 清理定时器
+    return () => {
+      clearInterval(checkInterval);
+    };
+  }, [isPublicPath, location.pathname, setCurrentUser]);
 
   // 检查是否有 token（这是判断是否登录的唯一标准）
   const token = getToken();

@@ -152,8 +152,12 @@ async def get_page_config(
                 # 使用规则中的 allow_manual_edit 覆盖页面配置
                 page_config["allow_manual_edit"] = rule.allow_manual_edit
                 page_config["auto_generate"] = rule.is_active  # 规则启用时自动生成
+            else:
+                # 规则不存在或未启用，保持页面配置的默认值（auto_generate 可能为 True）
+                # 这样前端可以尝试生成编码，如果规则不存在，后端会返回空编码
+                pass
         except Exception:
-            # 如果规则不存在，使用页面配置的默认值
+            # 如果获取规则时出错，使用页面配置的默认值
             pass
     
     return CodeRulePageConfigResponse(**page_config)
@@ -319,16 +323,14 @@ async def test_generate_code(
     测试生成编码（不更新序号）
     
     根据编码规则测试生成编码，不更新序号。
+    如果规则不存在或未启用，返回空编码，不抛出错误（用于预览功能）。
     
     Args:
         request: 编码生成请求数据
         tenant_id: 当前组织ID（依赖注入）
         
     Returns:
-        CodeGenerationResponse: 生成的编码（测试用）
-        
-    Raises:
-        HTTPException: 当规则不存在或未启用时抛出
+        CodeGenerationResponse: 生成的编码（测试用），如果规则不存在则返回空编码
     """
     try:
         code = await CodeGenerationService.test_generate_code(
@@ -348,8 +350,18 @@ async def test_generate_code(
             rule_name=rule_name
         )
     except ValidationError as e:
+        # 对于 test-generate，如果规则不存在或未启用，返回空编码而不是抛出错误
+        # 这样前端可以优雅地处理（规则可能还未创建）
+        error_message = str(e)
+        if "不存在" in error_message or "未启用" in error_message:
+            # 规则不存在或未启用，返回空编码
+            return CodeGenerationResponse(
+                code="",
+                rule_name=request.rule_code
+            )
+        # 其他验证错误，仍然抛出
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+            detail=error_message
         )
 
