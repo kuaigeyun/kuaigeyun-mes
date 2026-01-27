@@ -306,7 +306,7 @@ export default {
   'app.master-data.menu.process.operations': 'Operations',
   'app.master-data.menu.process.routes': 'Process Routes',
   'app.master-data.menu.process.engineering-bom': 'Engineering BOM',
-  'app.master-data.menu.process.sop': 'Manufacturing BOM',
+  'app.master-data.menu.process.sop': 'Manufacturing SOP',
   'app.master-data.menu.supply-chain': 'Supply Chain',
   'app.master-data.menu.supply-chain.customers': 'Customers',
   'app.master-data.menu.supply-chain.suppliers': 'Suppliers',

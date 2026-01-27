@@ -139,10 +139,10 @@ export const CUSTOM_FIELD_PAGES: CustomFieldPageConfig[] = [
     module: '主数据管理',
     moduleIcon: 'database',
     pageCode: 'master-data-manufacturing-bom',
-    pageName: '制造BOM',
+    pageName: '制造SOP',
     pagePath: '/apps/master-data/process/sop',
     tableName: 'master_data_sops',
-    tableNameLabel: '制造BOM表',
+    tableNameLabel: '制造SOP表',
   },
   // 主数据管理 - 供应链
   {
