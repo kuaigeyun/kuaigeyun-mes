@@ -8,13 +8,13 @@
  * @date 2026-01-27
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select, Row, Col, Form as AntForm, DatePicker } from 'antd';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select, Row, Col, Form as AntForm, DatePicker, Spin } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { 
+import {
   listSalesOrders,
   getSalesOrder,
   createSalesOrder,
@@ -32,28 +32,101 @@ import DocumentRelationDisplay from '../../../../../components/document-relation
 import type { DocumentRelationData } from '../../../../../components/document-relation-display';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
+import { customerApi } from '../../../../master-data/services/supply-chain';
+import type { Customer } from '../../../../master-data/types/supply-chain';
+import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+
+/** 展开行：订单明细子表格 */
+const OrderItemsExpandedRow: React.FC<{ orderId: number }> = ({ orderId }) => {
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<SalesOrderItem[]>([]);
+  useEffect(() => {
+    setLoading(true);
+    getSalesOrder(orderId, true)
+      .then((res) => {
+        setItems(res?.items || []);
+      })
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [orderId]);
+  if (loading) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <Spin size="small" />
+      </div>
+    );
+  }
+  const itemColumns = [
+    { title: '物料编码', dataIndex: 'material_code', key: 'material_code', width: 120, ellipsis: true },
+    { title: '物料名称', dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
+    { title: '规格', dataIndex: 'material_spec', key: 'material_spec', width: 100, ellipsis: true },
+    { title: '单位', dataIndex: 'material_unit', key: 'material_unit', width: 60 },
+    { title: '需求数量', dataIndex: 'required_quantity', key: 'required_quantity', width: 90, align: 'right' as const },
+    { title: '单价', dataIndex: 'unit_price', key: 'unit_price', width: 90, align: 'right' as const },
+    { title: '金额', dataIndex: 'item_amount', key: 'item_amount', width: 100, align: 'right' as const },
+    { title: '交货日期', dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
+  ];
+  return (
+    <div
+      className="sales-order-items-subtable"
+      style={{
+        padding: '0',
+        overflow: 'hidden'
+      }}
+    >
+      <style>{`
+        .sales-order-items-subtable .ant-table-cell {
+          margin-inline: 0 !important;
+        }
+        .sales-order-items-subtable .ant-table-wrapper {
+          overflow-x: hidden !important;
+        }
+        .sales-order-items-subtable .ant-table-thead > tr > th {
+          background-color: var(--ant-color-fill-alter) !important;
+          font-weight: 600;
+        }
+        .sales-order-items-subtable .ant-table {
+          border-top: 1px solid var(--ant-color-border);
+        }
+        .sales-order-items-subtable .ant-table-tbody > tr > td {
+          border-bottom: 1px solid var(--ant-color-border);
+        }
+      `}</style>
+      <Table
+        size="small"
+        columns={itemColumns}
+        dataSource={items}
+        rowKey={(r) => r.id ?? r.material_id ?? String(Math.random())}
+        pagination={false}
+      />
+    </div>
+  );
+};
 
 const SalesOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
-  
+
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
-  
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentSalesOrder, setCurrentSalesOrder] = useState<SalesOrder | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
-  
+
   // 物料列表（用于物料选择器）
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  // 客户列表（对接技术数据管理-供应链-客户）
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   // 新建时预览的订单编码（用于提交时判断是否需正式占号）
   const [previewCode, setPreviewCode] = useState<string | null>(null);
 
@@ -75,6 +148,37 @@ const SalesOrdersPage: React.FC = () => {
     };
     loadMaterials();
   }, [messageApi]);
+
+  /**
+   * 加载客户列表（技术数据管理 - 供应链 - 客户）
+   */
+  React.useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        setCustomersLoading(true);
+        const result = await customerApi.list({ limit: 1000, isActive: true });
+        setCustomers(result);
+      } catch (error: any) {
+        console.error('加载客户列表失败:', error);
+        messageApi.error('加载客户列表失败');
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+    loadCustomers();
+  }, [messageApi]);
+
+  /**
+   * 新建弹窗打开后，等表单挂载完成再设置订单日期默认当天；交货日期由用户自行输入
+   */
+  useEffect(() => {
+    if (modalVisible && !isEdit) {
+      const timer = setTimeout(() => {
+        formRef.current?.setFieldsValue({ order_date: dayjs() });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [modalVisible, isEdit]);
 
   /**
    * 处理新建销售订单
@@ -118,7 +222,13 @@ const SalesOrdersPage: React.FC = () => {
         const data = await getSalesOrder(id, true);  // includeItems=true
         // 明细中若缺少 material_id，用物料列表按编码/名称匹配后填入，再一起写入表单
         const items = (data.items || []).map((item: SalesOrderItem) => {
-          if (item.material_id) return item;
+          if (item.material_id) {
+            // 转换明细中的日期字段
+            return {
+              ...item,
+              delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
+            };
+          }
           const matched = materials.find(m =>
             (m.mainCode || m.code) === item.material_code || m.name === item.material_name
           );
@@ -130,13 +240,29 @@ const SalesOrdersPage: React.FC = () => {
               material_name: matched.name || item.material_name,
               material_spec: matched.specification || item.material_spec,
               material_unit: matched.baseUnit || item.material_unit,
+              delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
             };
           }
-          return item;
+          return {
+            ...item,
+            delivery_date: item.delivery_date ? dayjs(item.delivery_date) : undefined,
+          };
         });
-        formRef.current?.setFieldsValue({ ...data, items });
+        const customerId = data.customer_id ?? customers.find(c => c.name === data.customer_name)?.id;
+
+        // 转换主表单的日期字段为 dayjs 对象
+        const formData = {
+          ...data,
+          items,
+          customer_id: customerId,
+          order_date: data.order_date ? dayjs(data.order_date) : undefined,
+          delivery_date: data.delivery_date ? dayjs(data.delivery_date) : undefined,
+        };
+
+        formRef.current?.setFieldsValue(formData);
       } catch (error: any) {
         messageApi.error('获取销售订单详情失败');
+        console.error('编辑销售订单错误:', error);
       }
     }
   };
@@ -150,7 +276,7 @@ const SalesOrdersPage: React.FC = () => {
       try {
         const data = await getSalesOrder(id, true, true);  // includeItems=true, includeDuration=true
         setCurrentSalesOrder(data);
-        
+
         // 获取单据关联关系（使用 sales_order 作为文档类型）
         try {
           const relations = await getDocumentRelations('sales_order', id);
@@ -159,7 +285,7 @@ const SalesOrdersPage: React.FC = () => {
           console.error('获取单据关联关系失败:', error);
           setDocumentRelations(null);
         }
-        
+
         setDrawerVisible(true);
       } catch (error: any) {
         messageApi.error('获取销售订单详情失败');
@@ -186,11 +312,27 @@ const SalesOrdersPage: React.FC = () => {
         messageApi.warning('请至少添加一条订单明细');
         return;
       }
-      // 按数量×单价计算金额后提交（与表单联动由 Form 管理，此处保证落库一致）
-      values.items = items.map((it: SalesOrderItem) => ({
-        ...it,
-        item_amount: (Number(it.required_quantity) || 0) * (Number(it.unit_price) || 0),
-      }));
+      // 从已选客户回写 customer_name（对接技术数据管理-客户）
+      if (values.customer_id != null && customers.length) {
+        const c = customers.find(x => x.id === values.customer_id);
+        if (c) values.customer_name = c.name;
+      }
+      // 按数量×单价计算金额后提交；兼容 production 路由的 sales  schema（order_quantity/remaining_quantity/total_amount）
+      const q = (it: SalesOrderItem) => Number((it as any).required_quantity) || 0;
+      const p = (it: SalesOrderItem) => Number((it as any).unit_price) || 0;
+      values.items = items.map((it: SalesOrderItem) => {
+        const amt = q(it) * p(it);
+        const d = (it as any).delivery_date;
+        const deliveryDateStr = d != null ? (typeof d === 'string' ? d.slice(0, 10) : dayjs(d).format('YYYY-MM-DD')) : undefined;
+        return {
+          ...it,
+          delivery_date: deliveryDateStr ?? (values.delivery_date != null ? dayjs(values.delivery_date).format('YYYY-MM-DD') : undefined),
+          item_amount: amt,
+          order_quantity: q(it),
+          remaining_quantity: (it as any).remaining_quantity != null ? Number((it as any).remaining_quantity) : q(it),
+          total_amount: amt,
+        };
+      });
       if (isEdit && currentId) {
         await updateSalesOrder(currentId, values);
         messageApi.success('销售订单更新成功');
@@ -343,7 +485,7 @@ const SalesOrdersPage: React.FC = () => {
         for (let j = 0; j < headers.length && j < row.length; j++) {
           const header = headers[j]?.toString().trim();
           const value = row[j]?.toString().trim();
-          
+
           if (!header || !value) continue;
 
           const fieldName = fieldMap[header];
@@ -375,7 +517,7 @@ const SalesOrdersPage: React.FC = () => {
       let successCount = 0;
       let failureCount = 0;
       const errors: Array<{ row: number; error: string }> = [];
-      
+
       for (let i = 0; i < salesOrders.length; i++) {
         const order = salesOrders[i];
         try {
@@ -390,7 +532,7 @@ const SalesOrdersPage: React.FC = () => {
           console.error('创建销售订单失败:', error);
         }
       }
-      
+
       if (failureCount === 0) {
         messageApi.success(`批量导入成功！成功导入 ${successCount} 条销售订单`);
         actionRef.current?.reload();
@@ -417,33 +559,12 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
-  // 定义表格列
+  // 表格列（仅订单行，明细在展开行中显示）
   const columns: ProColumns<SalesOrder>[] = [
-    {
-      title: '订单编号',
-      dataIndex: 'order_code',
-      width: 150,
-      fixed: 'left',
-      ellipsis: true,
-    },
-    {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: '订单日期',
-      dataIndex: 'order_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '交货日期',
-      dataIndex: 'delivery_date',
-      valueType: 'date',
-      width: 120,
-    },
+    { title: '订单编号', dataIndex: 'order_code', width: 150, fixed: 'left', ellipsis: true },
+    { title: '客户名称', dataIndex: 'customer_name', width: 150, ellipsis: true },
+    { title: '订单日期', dataIndex: 'order_date', valueType: 'date', width: 120 },
+    { title: '交货日期', dataIndex: 'delivery_date', valueType: 'date', width: 120 },
     {
       title: '状态',
       dataIndex: 'status',
@@ -474,51 +595,26 @@ const SalesOrdersPage: React.FC = () => {
       valueType: 'option',
       render: (_: any, record: SalesOrder) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail([record.id!])}
-          >
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             详情
           </Button>
           {record.status === '草稿' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit([record.id!])}
-            >
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
               编辑
             </Button>
           )}
           {record.status === '草稿' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<SendOutlined />}
-              onClick={() => handleSubmitDemand(record.id!)}
-            >
+            <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitDemand(record.id!)}>
               提交
             </Button>
           )}
           {record.review_status === '待审核' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleApprove(record.id!)}
-            >
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.id!)}>
               审核
             </Button>
           )}
           {record.review_status === '审核通过' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<ArrowDownOutlined />}
-              onClick={() => handlePushToComputation(record.id!)}
-            >
+            <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handlePushToComputation(record.id!)}>
               下推
             </Button>
           )}
@@ -538,19 +634,9 @@ const SalesOrdersPage: React.FC = () => {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
             };
-            
-            // 处理搜索参数
-            if (searchFormValues?.status) {
-              apiParams.status = searchFormValues.status;
-            }
-            if (searchFormValues?.review_status) {
-              apiParams.review_status = searchFormValues.review_status;
-            }
-            if (searchFormValues?.customer_name) {
-              apiParams.customer_name = searchFormValues.customer_name;
-            }
-            
-            // 处理排序
+            if (searchFormValues?.status) apiParams.status = searchFormValues.status;
+            if (searchFormValues?.review_status) apiParams.review_status = searchFormValues.review_status;
+            if (searchFormValues?.customer_name) apiParams.customer_name = searchFormValues.customer_name;
             if (sort) {
               const sortKeys = Object.keys(sort);
               if (sortKeys.length > 0) {
@@ -558,30 +644,34 @@ const SalesOrdersPage: React.FC = () => {
                 apiParams.order_by = sort[key] === 'ascend' ? key : `-${key}`;
               }
             }
-            
             try {
               const response = await listSalesOrders(apiParams);
+              if (Array.isArray(response)) {
+                return { data: response, success: true, total: response.length };
+              }
               return {
-                data: response.data || [],
-                success: response.success !== false,
-                total: response.total || 0,
+                data: (response as any).data || [],
+                success: (response as any).success !== false,
+                total: (response as any).total ?? 0,
               };
             } catch (error: any) {
               messageApi.error(error?.message || '获取列表失败');
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              };
+              return { data: [], success: false, total: 0 };
             }
           }}
           rowKey="id"
           showAdvancedSearch={true}
+          enableRowSelection={true}
+          expandable={{
+            expandedRowRender: (record) =>
+              record.id != null ? <OrderItemsExpandedRow orderId={record.id} /> : null,
+            rowExpandable: (record) => record.id != null,
+          }}
           showCreateButton={true}
           onCreate={handleCreate}
-          showEditButton={true}
-          onEdit={handleEdit}
+          showEditButton={false}
           showDeleteButton={true}
+          deleteButtonText="批量删除"
           onDelete={handleDelete}
           onDetail={handleDetail}
           showImportButton={true}
@@ -616,7 +706,7 @@ const SalesOrdersPage: React.FC = () => {
           ]}
         />
       </ListPageTemplate>
-      
+
       {/* 新建/编辑 Modal */}
       <Modal
         open={modalVisible}
@@ -635,7 +725,7 @@ const SalesOrdersPage: React.FC = () => {
           layout="vertical"
           submitter={{
             render: () => (
-              <div style={{ textAlign: 'right', marginTop: 16 }}>
+              <div style={{ textAlign: 'left', marginTop: 16 }}>
                 <Space>
                   <Button onClick={() => setModalVisible(false)}>取消</Button>
                   <Button type="primary" onClick={() => formRef.current?.submit()}>
@@ -669,15 +759,44 @@ const SalesOrdersPage: React.FC = () => {
                 name="delivery_date"
                 label="交货日期"
                 rules={[{ required: true, message: '请选择交货日期' }]}
-                fieldProps={{ style: { width: '100%' } }}
+                fieldProps={{
+                  style: { width: '100%' },
+                  onChange: (val: any) => {
+                    const items = formRef.current?.getFieldValue('items') ?? [];
+                    if (items.length && val != null) {
+                      const next = items.map((it: any) => ({ ...it, delivery_date: val }));
+                      formRef.current?.setFieldsValue({ items: next });
+                    }
+                  },
+                }}
               />
             </Col>
             <Col span={6}>
-              <ProFormText
-                name="customer_name"
+              <ProFormSelect
+                name="customer_id"
                 label="客户名称"
-                rules={[{ required: true, message: '请输入客户名称' }]}
-                placeholder="请输入客户名称"
+                rules={[{ required: true, message: '请选择客户' }]}
+                placeholder="请选择客户"
+                fieldProps={{
+                  showSearch: true,
+                  allowClear: true,
+                  loading: customersLoading,
+                  style: { width: '100%' },
+                  options: customers.map((c) => ({
+                    label: (c.code ? `${c.code} - ` : '') + c.name,
+                    value: c.id,
+                  })),
+                  filterOption: (input: string, option?: { label?: string }) =>
+                    (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()),
+                  onChange: (id: number | undefined) => {
+                    const c = id ? customers.find((x) => x.id === id) : null;
+                    formRef.current?.setFieldsValue({
+                      customer_name: c?.name ?? undefined,
+                      customer_contact: c?.contactPerson ?? undefined,
+                      customer_phone: c?.phone ?? undefined,
+                    });
+                  },
+                }}
               />
             </Col>
             <Col span={6}>
@@ -734,137 +853,153 @@ const SalesOrdersPage: React.FC = () => {
               <AntForm.List name="items">
                 {(fields, { add, remove }) => {
                   const orderDetailColumns = [
-                      {
-                        title: '物料',
-                        dataIndex: 'material_id',
-                        width: 200,
-                        render: (_, __, index) => (
-                          <AntForm.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
-                            <Select
-                              placeholder="请选择物料"
-                              showSearch
-                              allowClear
-                              size="small"
-                              style={{ width: '100%' }}
-                              loading={materialsLoading}
-                              filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
-                              options={materials.map(m => ({ label: `${m.mainCode || m.code || ''} - ${m.name || ''}`, value: m.id }))}
-                              onChange={(id) => handleMaterialSelectForForm(index, id as number)}
-                            />
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '规格',
-                        dataIndex: 'material_spec',
-                        width: 120,
-                        render: (_, __, index) => (
-                          <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                            <Input placeholder="规格" size="small" />
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '单位',
-                        dataIndex: 'material_unit',
-                        width: 80,
-                        render: (_, __, index) => (
-                          <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                            <Input placeholder="单位" size="small" />
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '数量',
-                        dataIndex: 'required_quantity',
-                        width: 100,
-                        align: 'right',
-                        render: (_, __, index) => (
-                          <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                            <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '单价',
-                        dataIndex: 'unit_price',
-                        width: 100,
-                        align: 'right',
-                        render: (_, __, index) => (
-                          <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                            <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '金额',
-                        width: 110,
-                        align: 'right',
-                        render: (_, __, index) => (
-                          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
-                            {({ getFieldValue }: any) => {
-                              const items = getFieldValue('items') ?? [];
-                              const row = items[index];
-                              const amt = (Number(row?.required_quantity) || 0) * (Number(row?.unit_price) || 0);
-                              return <span>{amt ? `¥${amt.toLocaleString()}` : '-'}</span>;
-                            }}
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '交货日期',
-                        dataIndex: 'delivery_date',
-                        width: 120,
-                        render: (_, __, index) => (
-                          <AntForm.Item name={[index, 'delivery_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
-                            <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
-                          </AntForm.Item>
-                        ),
-                      },
-                      {
-                        title: '操作',
-                        width: 70,
-                        fixed: 'right',
-                        render: (_, __, index) => (
-                          <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
-                            删除
-                          </Button>
-                        ),
-                      },
-                    ];
+                    {
+                      title: '物料',
+                      dataIndex: 'material_id',
+                      width: 200,
+                      render: (_, __, index) => (
+                        <AntForm.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
+                          <Select
+                            placeholder="请选择物料"
+                            showSearch
+                            allowClear
+                            size="small"
+                            style={{ width: '100%' }}
+                            loading={materialsLoading}
+                            filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
+                            options={materials.map(m => ({ label: `${m.mainCode || m.code || ''} - ${m.name || ''}`, value: m.id }))}
+                            onChange={(id) => handleMaterialSelectForForm(index, id as number)}
+                          />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '规格',
+                      dataIndex: 'material_spec',
+                      width: 120,
+                      render: (_, __, index) => (
+                        <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+                          <Input placeholder="规格" size="small" />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '单位',
+                      dataIndex: 'material_unit',
+                      width: 80,
+                      render: (_, __, index) => (
+                        <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                          <Input placeholder="单位" size="small" />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '数量',
+                      dataIndex: 'required_quantity',
+                      width: 100,
+                      align: 'right',
+                      render: (_, __, index) => (
+                        <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                          <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '单价',
+                      dataIndex: 'unit_price',
+                      width: 100,
+                      align: 'right',
+                      render: (_, __, index) => (
+                        <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                          <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '金额',
+                      width: 110,
+                      align: 'right',
+                      render: (_, __, index) => (
+                        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+                          {({ getFieldValue }: any) => {
+                            const items = getFieldValue('items') ?? [];
+                            const row = items[index];
+                            const amt = (Number(row?.required_quantity) || 0) * (Number(row?.unit_price) || 0);
+                            return <span>{amt ? `¥${amt.toLocaleString()}` : '-'}</span>;
+                          }}
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '交货日期',
+                      dataIndex: 'delivery_date',
+                      width: 120,
+                      render: (_, __, index) => (
+                        <AntForm.Item name={[index, 'delivery_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
+                          <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+                        </AntForm.Item>
+                      ),
+                    },
+                    {
+                      title: '操作',
+                      width: 70,
+                      fixed: 'right',
+                      render: (_, __, index) => (
+                        <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
+                          删除
+                        </Button>
+                      ),
+                    },
+                  ];
                   const totalWidth = orderDetailColumns.reduce((s, c) => s + (c.width as number || 0), 0);
                   return (
                     <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+                      <style>{`
+                        .sales-order-detail-table .ant-table-thead > tr > th {
+                          background-color: var(--ant-color-fill-alter) !important;
+                          font-weight: 600;
+                        }
+                        .sales-order-detail-table .ant-table {
+                          border-top: 1px solid var(--ant-color-border);
+                        }
+                        .sales-order-detail-table .ant-table-tbody > tr > td {
+                          border-bottom: 1px solid var(--ant-color-border);
+                        }
+                      `}</style>
                       <div style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
                         <Table
+                          className="sales-order-detail-table"
                           size="small"
                           dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
                           rowKey="key"
                           pagination={false}
-                          bordered
                           columns={orderDetailColumns}
                           scroll={{ x: totalWidth }}
                           style={{ width: totalWidth, margin: 0 }}
-                        footer={() => (
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            onClick={() => add({
-                              material_id: undefined,
-                              material_code: '',
-                              material_name: '',
-                              material_spec: '',
-                              material_unit: '',
-                              required_quantity: 0,
-                              delivery_date: '',
-                              unit_price: 0,
-                              item_amount: 0,
-                            })}
-                            block
-                          >
-                            添加明细
-                          </Button>
-                        )}
+                          footer={() => (
+                            <Button
+                              type="dashed"
+                              icon={<PlusOutlined />}
+                              onClick={() => {
+                                const mainDelivery = formRef.current?.getFieldValue('delivery_date');
+                                const defaultDelivery = mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+                                add({
+                                  material_id: undefined,
+                                  material_code: '',
+                                  material_name: '',
+                                  material_spec: '',
+                                  material_unit: '',
+                                  required_quantity: 0,
+                                  delivery_date: defaultDelivery,
+                                  unit_price: 0,
+                                  item_amount: 0,
+                                });
+                              }}
+                              block
+                            >
+                              添加明细
+                            </Button>
+                          )}
                         />
                       </div>
                     </div>
@@ -881,7 +1016,7 @@ const SalesOrdersPage: React.FC = () => {
           />
         </ProForm>
       </Modal>
-      
+
       {/* 详情 Drawer */}
       <Drawer
         title="销售订单详情"
@@ -963,7 +1098,7 @@ const SalesOrdersPage: React.FC = () => {
                 },
               ]}
             />
-            
+
             {/* 订单明细 */}
             {currentSalesOrder.items && currentSalesOrder.items.length > 0 && (
               <div style={{ marginTop: 24 }}>
@@ -989,7 +1124,7 @@ const SalesOrdersPage: React.FC = () => {
                 />
               </div>
             )}
-            
+
             {/* 单据关联 */}
             {documentRelations && (
               <div style={{ marginTop: 24 }}>

@@ -493,33 +493,66 @@ class SalesOrderService(AppBaseService[SalesOrder]):
                 **order_dict
             )
             
-            # 创建订单明细
+            # 创建订单明细（仅传入模型字段，required_quantity/item_amount 映射为 order_quantity/total_amount）
             if items_data:
                 for item_data in items_data:
-                    # 处理quantity字段（可能是quantity或order_quantity）
-                    order_quantity = item_data.get('order_quantity') or item_data.get('quantity', 0)
-                    delivered_quantity = item_data.get('delivered_quantity', 0)
-                    remaining_quantity = order_quantity - delivered_quantity
-                    
-                    # 创建订单明细，排除items字段
-                    item_dict = {k: v for k, v in item_data.items() if k not in ['created_by', 'items']}
-                    item_dict['order_quantity'] = order_quantity
-                    item_dict['remaining_quantity'] = remaining_quantity
-                    
+                    order_quantity = item_data.get('order_quantity') or item_data.get('required_quantity') or item_data.get('quantity') or 0
+                    order_quantity = float(order_quantity) if order_quantity is not None else 0
+                    delivered_quantity = float(item_data.get('delivered_quantity') or 0)
+                    remaining_quantity = item_data.get('remaining_quantity')
+                    if remaining_quantity is not None:
+                        remaining_quantity = float(remaining_quantity)
+                    else:
+                        remaining_quantity = order_quantity - delivered_quantity
+                    total_amt = item_data.get('total_amount') if item_data.get('total_amount') is not None else item_data.get('item_amount')
+                    total_amt = float(total_amt) if total_amt is not None else (order_quantity * float(item_data.get('unit_price') or 0))
+                    delivery_date = item_data.get('delivery_date')
+                    if delivery_date is None:
+                        delivery_date = order_dict.get('delivery_date')
+                    if hasattr(delivery_date, 'isoformat'):
+                        delivery_date = date.fromisoformat(delivery_date.isoformat()[:10]) if delivery_date else date.today()
+                    elif isinstance(delivery_date, str) and len(delivery_date) >= 10:
+                        delivery_date = date.fromisoformat(delivery_date[:10])
+                    elif isinstance(delivery_date, date):
+                        pass
+                    else:
+                        delivery_date = date.today()
                     await SalesOrderItem.create(
                         tenant_id=tenant_id,
                         sales_order_id=order.id,
-                        **item_dict
+                        material_id=item_data.get('material_id') or 0,
+                        material_code=(item_data.get('material_code') or '')[:50],
+                        material_name=(item_data.get('material_name') or '')[:200],
+                        material_spec=(item_data.get('material_spec') or '')[:200] or None,
+                        material_unit=(item_data.get('material_unit') or '')[:20],
+                        order_quantity=order_quantity,
+                        delivered_quantity=delivered_quantity,
+                        remaining_quantity=remaining_quantity,
+                        unit_price=float(item_data.get('unit_price') or 0),
+                        total_amount=total_amt,
+                        delivery_date=delivery_date,
+                        delivery_status=item_data.get('delivery_status') or '待交货',
+                        work_order_id=item_data.get('work_order_id'),
+                        work_order_code=(item_data.get('work_order_code') or '')[:50] or None,
+                        notes=item_data.get('notes'),
                     )
             
             return SalesOrderResponse.model_validate(order)
 
-    async def get_sales_order_by_id(self, tenant_id: int, order_id: int) -> SalesOrderResponse:
-        """根据ID获取销售订单"""
+    async def get_sales_order_by_id(
+        self, tenant_id: int, order_id: int, include_items: bool = False
+    ) -> SalesOrderResponse:
+        """根据ID获取销售订单，可选包含订单明细"""
         order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order:
             raise NotFoundError(f"销售订单不存在: {order_id}")
-        return SalesOrderResponse.model_validate(order)
+        resp = SalesOrderResponse.model_validate(order)
+        if include_items:
+            items = await SalesOrderItem.filter(
+                tenant_id=tenant_id, sales_order_id=order_id
+            ).order_by("id")
+            resp = resp.model_copy(update={"items": [SalesOrderItemResponse.model_validate(it) for it in items]})
+        return resp
 
     async def list_sales_orders(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[SalesOrderListResponse]:
         """

@@ -144,6 +144,7 @@ class SalesOrderResponse(SalesOrderBase):
     tenant_id: int = Field(..., description="租户ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    items: Optional[List["SalesOrderItemResponse"]] = Field(None, description="订单明细")
 
     class Config:
         from_attributes = True
@@ -195,3 +196,7 @@ class SalesOrderItemResponse(SalesOrderItemBase):
 
     class Config:
         from_attributes = True
+
+
+# 解析前向引用，使 SalesOrderResponse.items 的 List[SalesOrderItemResponse] 生效
+SalesOrderResponse.model_rebuild()

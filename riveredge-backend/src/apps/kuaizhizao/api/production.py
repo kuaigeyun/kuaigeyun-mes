@@ -5031,6 +5031,7 @@ async def list_sales_orders(
 @router.get("/sales-orders/{order_id}", response_model=SalesOrderResponse, summary="获取销售订单详情")
 async def get_sales_order(
     order_id: int,
+    include_items: bool = Query(False, description="是否包含订单明细"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesOrderResponse:
@@ -5038,13 +5039,15 @@ async def get_sales_order(
     根据ID获取销售订单详情
 
     - **order_id**: 销售订单ID
+    - **include_items**: 是否返回订单明细
     """
     from apps.kuaizhizao.services.sales_service import SalesOrderService
     
     service = SalesOrderService()
     return await service.get_sales_order_by_id(
         tenant_id=tenant_id,
-        order_id=order_id
+        order_id=order_id,
+        include_items=include_items,
     )
 
 

@@ -226,6 +226,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onRowSelectionChange?: (selectedRowKeys: React.Key[]) => void;
   /**
+   * 行选择 checkbox 的 getCheckboxProps（用于树形表禁止勾选子行等）
+   */
+  rowSelectionGetCheckboxProps?: (record: T) => { disabled?: boolean };
+  /**
    * 是否启用行编辑（默认：false）
    */
   enableRowEdit?: boolean;
@@ -320,6 +324,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * @param selectedRowKeys - 选中的行键数组
    */
   onDelete?: (selectedRowKeys: React.Key[]) => void;
+  /**
+   * 删除按钮文案（默认：'删除'，可设为 '批量删除' 等）
+   */
+  deleteButtonText?: string;
   /**
    * 默认分页大小（默认：20）
    */
@@ -431,6 +439,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   afterSearchButtons,
   enableRowSelection = false,
   onRowSelectionChange,
+  rowSelectionGetCheckboxProps,
   enableRowEdit = false,
   onRowEditSave,
   onRowEditDelete,
@@ -450,6 +459,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onEdit,
   showDeleteButton = false,
   onDelete,
+  deleteButtonText = '删除',
   defaultPageSize = 20,
   showQuickJumper = true,
   viewTypes = ['table', 'card', 'kanban', 'stats'],
@@ -998,7 +1008,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       );
     }
 
-    // 删除按钮（需要选中至少一行）
+    // 删除按钮（需要选中至少一行，文案可配置为「批量删除」等）
     if (showDeleteButton && onDelete) {
       actions.push(
         <Button
@@ -1012,7 +1022,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           }}
           disabled={selectedRowKeys.length === 0}
         >
-          删除
+          {deleteButtonText}
         </Button>
       );
     }
@@ -1507,6 +1517,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             ? {
                 type: 'checkbox',
                 onChange: handleRowSelectionChange,
+                ...(rowSelectionGetCheckboxProps
+                  ? { getCheckboxProps: rowSelectionGetCheckboxProps }
+                  : {}),
               }
             : undefined
         }
