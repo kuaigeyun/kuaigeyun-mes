@@ -1,0 +1,147 @@
+/**
+ * 智能建议悬浮面板样式
+ * 置于 Modal 右侧，卡片式设计，带淡入淡出
+ */
+
+.smart-suggestion-float-panel {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  z-index: 1100;
+  max-width: 400px;
+  opacity: 0;
+  transform: translateX(12px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 0.35s ease-out, transform 0.35s ease-out;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+
+  /* 位置就绪后优雅弹出 */
+  &.smart-suggestion-float-panel--ready {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    pointer-events: auto;
+  }
+}
+
+.smart-suggestion-float-panel__card {
+  position: relative;
+  border-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 8px));
+  overflow: visible;
+  background: linear-gradient(
+    145deg,
+    rgba(248, 252, 255, 0.9) 0%,
+    rgba(240, 248, 255, 0.85) 50%,
+    rgba(245, 250, 255, 0.9) 100%
+  );
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(24, 144, 255, 0.18);
+  box-shadow:
+    0 8px 32px rgba(24, 144, 255, 0.06),
+    0 0 1px rgba(24, 144, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  .ant-card-body {
+    padding: 16px 18px;
+  }
+}
+
+.smart-suggestion-float-panel__body {
+  position: relative;
+  min-height: 72px;
+  min-width: 72px;
+}
+
+/* 机器人：左侧装饰 */
+.smart-suggestion-float-panel__robot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 64px;
+  height: 64px;
+0  pointer-events: none;
+  opacity: 0.9;
+}
+
+.smart-suggestion-float-panel__conversation {
+  max-height: 600px;
+  overflow-y: auto;
+  padding-left: 76px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 144, 255, 0.25) transparent;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(24, 144, 255, 0.25);
+    border-radius: 2px;
+  }
+}
+
+.smart-suggestion-float-panel__block {
+  margin-bottom: 16px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.smart-suggestion-float-panel__block-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ant-colorTextSecondary, rgba(0, 0, 0, 0.45));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.smart-suggestion-float-panel__bubble {
+  margin-bottom: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(0, 0, 0, 0.8);
+  word-break: break-word;
+  white-space: pre-wrap;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: var(--ant-borderRadius, 6px);
+  border: 1px solid rgba(24, 144, 255, 0.12);
+  box-shadow: 0 1px 2px rgba(24, 144, 255, 0.04);
+  animation: smart-suggestion-bubble-reveal 0.25s ease-out both;
+}
+
+/* 后续对话框仅淡入，避免每个块都弹出一次 */
+.smart-suggestion-float-panel__block--subsequent .smart-suggestion-float-panel__bubble {
+  animation: smart-suggestion-bubble-fade-in 0.2s ease-out both;
+}
+
+.smart-suggestion-float-panel__block-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@keyframes smart-suggestion-bubble-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes smart-suggestion-bubble-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

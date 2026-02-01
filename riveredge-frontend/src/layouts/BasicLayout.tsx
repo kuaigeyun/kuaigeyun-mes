@@ -2628,6 +2628,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           --ant-colorBgLayout: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')};
           --ant-colorBorder: ${token.colorBorder};
           --ant-borderRadius: ${token.borderRadius}px;
+          --ant-borderRadiusLG: ${token.borderRadiusLG ?? token.borderRadius + 2}px;
         }
         /* ==================== PageContainer 相关 ==================== */
         .ant-pro-page-container .ant-page-header .ant-page-header-breadcrumb,

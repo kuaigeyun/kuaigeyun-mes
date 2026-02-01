@@ -20,6 +20,7 @@ from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_MAKE, SOURCE_TYPE_BUY, SOURCE_TYPE_PHANTOM,
     SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE,
+    MANUFACTURING_MODE_FABRICATION, MANUFACTURING_MODE_ASSEMBLY,
     VALID_SOURCE_TYPES,
     validate_material_source_config,
 )
@@ -398,12 +399,31 @@ class MaterialSourceSuggestionService:
         # 选择置信度最高的建议
         if suggestions:
             best_suggestion = max(suggestions, key=lambda x: x["confidence"])
-            return {
+            reasons = [s["reason"] for s in suggestions if s["source_type"] == best_suggestion["source_type"]]
+            result = {
                 "suggested_type": best_suggestion["source_type"],
                 "confidence": best_suggestion["confidence"],
-                "reasons": [s["reason"] for s in suggestions if s["source_type"] == best_suggestion["source_type"]],
+                "reasons": reasons,
                 "all_suggestions": suggestions,
             }
+            # 若建议自制件，可进一步建议制造模式（加工型/装配型）
+            if best_suggestion["source_type"] == SOURCE_TYPE_MAKE:
+                bom_count = await BOM.filter(
+                    tenant_id=tenant_id,
+                    material_id=material.id,
+                    approval_status="approved",
+                    deleted_at__isnull=True
+                ).count()
+                has_process_route = bool(material.process_route_id)
+                if bom_count > 1 and not has_process_route:
+                    result["suggested_manufacturing_mode"] = MANUFACTURING_MODE_ASSEMBLY
+                    result["manufacturing_mode_reason"] = "已配置多组件BOM，建议选择装配型"
+                    result["reasons"] = reasons + [result["manufacturing_mode_reason"]]
+                elif has_process_route and bom_count <= 1:
+                    result["suggested_manufacturing_mode"] = MANUFACTURING_MODE_FABRICATION
+                    result["manufacturing_mode_reason"] = "已配置工艺路线且BOM较简单，建议选择加工型"
+                    result["reasons"] = reasons + [result["manufacturing_mode_reason"]]
+            return result
         else:
             return {
                 "suggested_type": None,
@@ -447,19 +467,32 @@ class MaterialSourceSuggestionService:
             source_config = material.source_config or {}
             
             if material.source_type == SOURCE_TYPE_MAKE:
-                # 自制件需要BOM和工艺路线
+                # 自制件根据制造模式区分：加工型工艺路线必填、BOM可选；装配型BOM必填、工艺路线可选
+                manufacturing_mode = source_config.get("manufacturing_mode")
                 bom_count = await BOM.filter(
                     tenant_id=tenant_id,
                     material_id=material.id,
                     approval_status="approved",
                     deleted_at__isnull=True
                 ).count()
-                
-                if bom_count == 0:
-                    missing_configs.append("BOM配置")
-                
-                if not material.process_route_id:
-                    missing_configs.append("工艺路线配置")
+                has_process_route = bool(material.process_route_id)
+
+                if manufacturing_mode == MANUFACTURING_MODE_FABRICATION:
+                    if not has_process_route:
+                        missing_configs.append("工艺路线配置")
+                    if bom_count == 0:
+                        warnings.append("加工型建议配置BOM（材料清单）")
+                elif manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY:
+                    if bom_count == 0:
+                        missing_configs.append("BOM配置")
+                    if not has_process_route:
+                        warnings.append("装配型建议配置工艺路线（装配工序）")
+                else:
+                    # 未设置制造模式：沿用原逻辑
+                    if bom_count == 0:
+                        missing_configs.append("BOM配置")
+                    if not has_process_route:
+                        missing_configs.append("工艺路线配置")
             
             elif material.source_type == SOURCE_TYPE_BUY:
                 # 采购件建议配置默认供应商
