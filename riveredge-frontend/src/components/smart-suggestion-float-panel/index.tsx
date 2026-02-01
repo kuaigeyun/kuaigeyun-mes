@@ -304,7 +304,7 @@ const SmartSuggestionFloatPanel: React.FC<SmartSuggestionFloatPanelProps> = ({
       className={`smart-suggestion-float-panel ${isPositionReady ? 'smart-suggestion-float-panel--ready' : ''}`}
       style={inlineStyle}
     >
-      <Card className="smart-suggestion-float-panel__card" bordered={false}>
+      <Card className="smart-suggestion-float-panel__card" variant="borderless">
         <div className="smart-suggestion-float-panel__body">
           <div className="smart-suggestion-float-panel__robot">
             <Lottie animationData={animationData} loop={true} style={{ width: 64, height: 64 }} />

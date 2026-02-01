@@ -791,8 +791,9 @@ class ProductionPlanningService(BaseService):
                 # 生成工单
                 if generate_work_orders and is_self_made and mrp_result.suggested_work_orders > 0:
                     try:
-                        # 工单code由服务自动生成，不需要提供
+                        # 工单code由编码规则自动生成
                         work_order_data = WorkOrderCreate(
+                            code_rule="WORK_ORDER_CODE",
                             name=f"{material.name}-MRP工单",
                             product_id=material.id,
                             product_code=material.code,
@@ -970,6 +971,7 @@ class ProductionPlanningService(BaseService):
                 if generate_work_orders and lrp_result.planned_production > 0:
                     try:
                         work_order_data = WorkOrderCreate(
+                            code_rule="WORK_ORDER_CODE",
                             name=f"{material.material_name}-LRP工单",
                             product_id=material.id,
                             product_code=material.material_code,

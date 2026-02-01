@@ -71,7 +71,7 @@ class PurchaseOrderResponse(PurchaseOrderBase):
 
 class PurchaseOrderListResponse(PurchaseOrderResponse):
     """采购订单列表响应Schema"""
-    pass
+    items_count: Optional[int] = Field(None, description="订单明细条数（列表用）")
 
 
 # === 采购订单明细 ===

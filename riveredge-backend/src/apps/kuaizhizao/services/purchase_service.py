@@ -198,12 +198,25 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         orders = await query.offset(skip).limit(limit).order_by('-created_at')
 
         # 为每个订单加载明细（简化版，只返回基本信息）
+        # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
         result = []
         for order in orders:
             items_count = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).count()
-            order_dict = order.__dict__
-            order_dict['items_count'] = items_count
-            result.append(PurchaseOrderListResponse.model_validate(order))
+            order_data = order.__dict__.copy()
+            order_data.pop('items', None)
+            order_data['items_count'] = items_count
+            # #region agent log
+            try:
+                import json
+                _log = {"hypothesisId": "H3", "location": "purchase_service.list_purchase_orders", "message": "post-fix build list item", "data": {"order_id": order.id, "items_count": items_count}, "timestamp": __import__("time").time()}
+                open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            resp = PurchaseOrderListResponse.model_construct(**order_data)
+            resp.items = []
+            resp.items_count = items_count
+            result.append(resp)
 
         # 返回前端期望的格式 { data, total, success }
         return {

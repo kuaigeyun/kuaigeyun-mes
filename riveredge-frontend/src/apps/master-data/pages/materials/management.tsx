@@ -564,6 +564,13 @@ const MaterialsManagementPage: React.FC = () => {
       render: (_, record) => getMaterialGroupName(record.groupId),
     },
     {
+      title: '工艺路线',
+      dataIndex: ['processRouteName', 'process_route_name'],
+      width: 140,
+      hideInSearch: true,
+      render: (_, record) => (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
+    },
+    {
       title: '物料类型',
       dataIndex: 'materialType',
       width: 120,
@@ -1067,6 +1074,11 @@ const MaterialsManagementPage: React.FC = () => {
                   title: '物料分组',
                   dataIndex: 'groupId',
                   render: (_, record) => getMaterialGroupName(record.groupId),
+                },
+                {
+                  title: '工艺路线',
+                  dataIndex: ['processRouteName', 'process_route_name'],
+                  render: (_, record) => (record as any).processRouteName ?? (record as any).process_route_name ?? '-',
                 },
                 {
                   title: '规格',

@@ -21,6 +21,7 @@ import {
   getDemandComputation,
   createDemandComputation,
   executeDemandComputation,
+  recomputeDemandComputation,
   generateOrdersFromComputation,
   validateMaterialSources,
   getMaterialSources,
@@ -30,7 +31,7 @@ import {
 import { listDemands, Demand, DemandStatus, ReviewStatus } from '../../../services/demand';
 
 const DemandComputationPage: React.FC = () => {
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
 
@@ -112,7 +113,7 @@ const DemandComputationPage: React.FC = () => {
    * 处理执行计算
    */
   const handleExecute = async (record: DemandComputation) => {
-    Modal.confirm({
+    modalApi.confirm({
       title: '执行需求计算',
       content: `确认要执行计算 ${record.computation_code} 吗？`,
       onOk: async () => {
@@ -122,6 +123,25 @@ const DemandComputationPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error('计算执行失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理重新计算（仅对已完成或失败的计算）
+   */
+  const handleRecompute = async (record: DemandComputation) => {
+    modalApi.confirm({
+      title: '重新计算',
+      content: `确认要对计算 ${record.computation_code} 重新执行吗？将清空当前结果并按原需求重新计算。`,
+      onOk: async () => {
+        try {
+          await recomputeDemandComputation(record.id!);
+          messageApi.success('重新计算已提交，请稍后刷新查看结果');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.response?.data?.detail || '重新计算失败');
         }
       },
     });
@@ -142,7 +162,7 @@ const DemandComputationPage: React.FC = () => {
           .map((r: any) => `物料 ${r.material_code} (${r.material_name}): ${r.errors.join(', ')}`)
           .join('\n');
 
-        Modal.warning({
+        modalApi.warning({
           title: '物料来源验证失败',
           width: 600,
           content: (
@@ -190,7 +210,7 @@ const DemandComputationPage: React.FC = () => {
         })
         .join(', ');
 
-      Modal.confirm({
+      modalApi.confirm({
         title: '一键生成工单和采购单',
         width: 600,
         content: (
@@ -330,6 +350,16 @@ const DemandComputationPage: React.FC = () => {
               onClick={() => handleExecute(record)}
             >
               执行
+            </Button>
+          )}
+          {(record.computation_status === '完成' || record.computation_status === '失败') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => handleRecompute(record)}
+            >
+              重新计算
             </Button>
           )}
           {record.computation_status === '完成' && (

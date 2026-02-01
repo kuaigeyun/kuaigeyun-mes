@@ -342,6 +342,37 @@ class DemandComputationService:
             
             return await self.get_computation_by_id(tenant_id, computation_id)
     
+    async def recompute_computation(
+        self,
+        tenant_id: int,
+        computation_id: int
+    ) -> DemandComputationResponse:
+        """
+        重新计算：仅允许对「完成」或「失败」的计算重新执行。
+        先删除原明细、重置状态与错误信息，再执行计算逻辑。
+        """
+        async with in_transaction():
+            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+            if not computation:
+                raise NotFoundError(f"需求计算不存在: {computation_id}")
+            if computation.computation_status not in ("完成", "失败"):
+                raise BusinessLogicError(
+                    f"只能对已完成或失败的计算执行重新计算，当前状态: {computation.computation_status}"
+                )
+            # 删除原计算结果明细
+            await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id
+            ).delete()
+            # 重置状态与错误信息，便于走执行逻辑
+            await DemandComputation.filter(tenant_id=tenant_id, id=computation_id).update(
+                computation_status="进行中",
+                computation_end_time=None,
+                error_message=None,
+                computation_summary=None,
+            )
+        return await self.execute_computation(tenant_id=tenant_id, computation_id=computation_id)
+    
     async def compare_computations(
         self,
         tenant_id: int,
@@ -1012,157 +1043,157 @@ class DemandComputationService:
         Returns:
             Dict: 包含生成的工单和采购单信息
         """
-        async with in_transaction():
-            # 获取计算详情
-            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
-            if not computation:
-                raise NotFoundError(f"需求计算不存在: {computation_id}")
+        # 不使用外层 in_transaction，避免与 create_work_order/create_purchase_order 内部事务嵌套，
+        # 导致内层失败后 PostgreSQL 报「当前事务被终止, 事务块结束之前的查询被忽略」
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        
+        # 只能从已完成的计算生成
+        if computation.computation_status != "完成":
+            raise BusinessLogicError(f"只能从已完成的计算生成工单和采购单，当前状态: {computation.computation_status}")
+        
+        # 获取计算结果明细
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        ).all()
+        
+        if not items:
+            raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
+        
+        # 生成工单和采购单（根据物料来源类型智能生成）
+        work_orders = []
+        purchase_orders = []
+        validation_errors = []
+        
+        # 按供应商分组采购件（物料来源控制增强）
+        purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
+        
+        for item in items:
+            source_type = item.material_source_type
             
-            # 只能从已完成的计算生成
-            if computation.computation_status != "完成":
-                raise BusinessLogicError(f"只能从已完成的计算生成工单和采购单，当前状态: {computation.computation_status}")
+            # 跳过虚拟件（虚拟件不生成工单和采购单）
+            if source_type == SOURCE_TYPE_PHANTOM:
+                logger.debug(f"跳过虚拟件，不生成工单和采购单，物料ID: {item.material_id}")
+                continue
             
-            # 获取计算结果明细
-            items = await DemandComputationItem.filter(
-                tenant_id=tenant_id,
-                computation_id=computation_id
-            ).all()
-            
-            if not items:
-                raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
-            
-            # 生成工单和采购单（根据物料来源类型智能生成）
-            work_orders = []
-            purchase_orders = []
-            validation_errors = []
-            
-            # 按供应商分组采购件（物料来源控制增强）
-            purchase_items_by_supplier: Dict[int, List[DemandComputationItem]] = {}
-            
-            for item in items:
-                source_type = item.material_source_type
+            # 验证物料来源配置（验证失败时不允许生成）
+            if source_type:
+                validation_passed, errors = await validate_material_source_config(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    source_type=source_type
+                )
                 
-                # 跳过虚拟件（虚拟件不生成工单和采购单）
-                if source_type == SOURCE_TYPE_PHANTOM:
-                    logger.debug(f"跳过虚拟件，不生成工单和采购单，物料ID: {item.material_id}")
+                if not validation_passed:
+                    validation_errors.extend([f"物料 {item.material_code} ({item.material_name}): {err}" for err in errors])
+                    logger.warning(f"物料来源验证失败，跳过生成，物料ID: {item.material_id}, 错误: {errors}")
                     continue
-                
-                # 验证物料来源配置（验证失败时不允许生成）
-                if source_type:
-                    validation_passed, errors = await validate_material_source_config(
-                        tenant_id=tenant_id,
-                        material_id=item.material_id,
-                        source_type=source_type
-                    )
-                    
-                    if not validation_passed:
-                        validation_errors.extend([f"物料 {item.material_code} ({item.material_name}): {err}" for err in errors])
-                        logger.warning(f"物料来源验证失败，跳过生成，物料ID: {item.material_id}, 错误: {errors}")
-                        continue
-                
-                # 根据物料来源类型生成相应的单据
-                if source_type == SOURCE_TYPE_MAKE:
-                    # 自制件：生成生产工单
-                    if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                        work_order = await self._create_work_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=item,
-                            created_by=created_by
-                        )
-                        work_orders.append(work_order)
-                        
-                elif source_type == SOURCE_TYPE_BUY:
-                    # 采购件：按供应商分组（物料来源控制增强）
-                    if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                        # 获取供应商ID
-                        supplier_id = None
-                        if item.material_source_config:
-                            source_config = item.material_source_config.get("source_config", {})
-                            supplier_id = source_config.get("default_supplier_id")
-                        
-                        # 如果没有供应商ID，使用默认值1（后续需要手动指定）
-                        if not supplier_id:
-                            supplier_id = 1
-                        
-                        # 按供应商分组
-                        if supplier_id not in purchase_items_by_supplier:
-                            purchase_items_by_supplier[supplier_id] = []
-                        purchase_items_by_supplier[supplier_id].append(item)
-                        
-                elif source_type == SOURCE_TYPE_OUTSOURCE:
-                    # 委外件：生成委外工单（TODO: 后续实现委外工单，暂时生成普通工单）
-                    if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                        work_order = await self._create_work_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=item,
-                            created_by=created_by,
-                            is_outsource=True  # 标记为委外工单
-                        )
-                        work_orders.append(work_order)
-                        
-                elif source_type == SOURCE_TYPE_CONFIGURE:
-                    # 配置件：按变体生成生产工单（TODO: 后续支持变体选择）
-                    if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                        work_order = await self._create_work_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=item,
-                            created_by=created_by
-                        )
-                        work_orders.append(work_order)
-                
-                # 兼容旧逻辑：如果没有物料来源类型，根据建议数量生成（向后兼容）
-                elif not source_type:
-                    # 如果有建议工单数量，生成工单
-                    if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                        work_order = await self._create_work_order_from_item(
-                            tenant_id=tenant_id,
-                            computation=computation,
-                            item=item,
-                            created_by=created_by
-                        )
-                        work_orders.append(work_order)
-                    
-                    # 如果有建议采购订单数量，按供应商分组（物料来源控制增强）
-                    if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                        # 获取供应商ID（从物料主数据获取）
-                        supplier_id = 1  # 默认值，需要手动指定
-                        if item.material_source_config:
-                            source_config = item.material_source_config.get("source_config", {})
-                            supplier_id = source_config.get("default_supplier_id", 1)
-                        
-                        # 按供应商分组
-                        if supplier_id not in purchase_items_by_supplier:
-                            purchase_items_by_supplier[supplier_id] = []
-                        purchase_items_by_supplier[supplier_id].append(item)
             
-            # 按供应商分组生成采购订单（物料来源控制增强）
-            for supplier_id, items_for_supplier in purchase_items_by_supplier.items():
-                if items_for_supplier:
-                    purchase_order = await self._create_purchase_order_from_items(
+            # 根据物料来源类型生成相应的单据
+            if source_type == SOURCE_TYPE_MAKE:
+                # 自制件：生成生产工单
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    work_order = await self._create_work_order_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
-                        items=items_for_supplier,
-                        supplier_id=supplier_id,
+                        item=item,
                         created_by=created_by
                     )
-                    purchase_orders.append(purchase_order)
+                    work_orders.append(work_order)
+                    
+            elif source_type == SOURCE_TYPE_BUY:
+                # 采购件：按供应商分组（物料来源控制增强）
+                if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    # 获取供应商ID
+                    supplier_id = None
+                    if item.material_source_config:
+                        source_config = item.material_source_config.get("source_config", {})
+                        supplier_id = source_config.get("default_supplier_id")
+                    
+                    # 如果没有供应商ID，使用默认值1（后续需要手动指定）
+                    if not supplier_id:
+                        supplier_id = 1
+                    
+                    # 按供应商分组
+                    if supplier_id not in purchase_items_by_supplier:
+                        purchase_items_by_supplier[supplier_id] = []
+                    purchase_items_by_supplier[supplier_id].append(item)
+                    
+            elif source_type == SOURCE_TYPE_OUTSOURCE:
+                # 委外件：生成委外工单（TODO: 后续实现委外工单，暂时生成普通工单）
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    work_order = await self._create_work_order_from_item(
+                        tenant_id=tenant_id,
+                        computation=computation,
+                        item=item,
+                        created_by=created_by,
+                        is_outsource=True  # 标记为委外工单
+                    )
+                    work_orders.append(work_order)
+                    
+            elif source_type == SOURCE_TYPE_CONFIGURE:
+                # 配置件：按变体生成生产工单（TODO: 后续支持变体选择）
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    work_order = await self._create_work_order_from_item(
+                        tenant_id=tenant_id,
+                        computation=computation,
+                        item=item,
+                        created_by=created_by
+                    )
+                    work_orders.append(work_order)
             
-            # 如果有验证错误，抛出异常
-            if validation_errors:
-                error_msg = "物料来源验证失败，无法生成工单和采购单：\n" + "\n".join(validation_errors)
-                raise BusinessLogicError(error_msg)
-            
-            return {
-                "computation_id": computation_id,
-                "computation_code": computation.computation_code,
-                "work_orders": work_orders,
-                "purchase_orders": purchase_orders,
-                "work_order_count": len(work_orders),
-                "purchase_order_count": len(purchase_orders),
-            }
+            # 兼容旧逻辑：如果没有物料来源类型，根据建议数量生成（向后兼容）
+            elif not source_type:
+                # 如果有建议工单数量，生成工单
+                if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
+                    work_order = await self._create_work_order_from_item(
+                        tenant_id=tenant_id,
+                        computation=computation,
+                        item=item,
+                        created_by=created_by
+                    )
+                    work_orders.append(work_order)
+                
+                # 如果有建议采购订单数量，按供应商分组（物料来源控制增强）
+                if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
+                    # 获取供应商ID（从物料主数据获取）
+                    supplier_id = 1  # 默认值，需要手动指定
+                    if item.material_source_config:
+                        source_config = item.material_source_config.get("source_config", {})
+                        supplier_id = source_config.get("default_supplier_id", 1)
+                    
+                    # 按供应商分组
+                    if supplier_id not in purchase_items_by_supplier:
+                        purchase_items_by_supplier[supplier_id] = []
+                    purchase_items_by_supplier[supplier_id].append(item)
+        
+        # 按供应商分组生成采购订单（物料来源控制增强）
+        for supplier_id, items_for_supplier in purchase_items_by_supplier.items():
+            if items_for_supplier:
+                purchase_order = await self._create_purchase_order_from_items(
+                    tenant_id=tenant_id,
+                    computation=computation,
+                    items=items_for_supplier,
+                    supplier_id=supplier_id,
+                    created_by=created_by
+                )
+                purchase_orders.append(purchase_order)
+        
+        # 如果有验证错误，抛出异常
+        if validation_errors:
+            error_msg = "物料来源验证失败，无法生成工单和采购单：\n" + "\n".join(validation_errors)
+            raise BusinessLogicError(error_msg)
+        
+        return {
+            "computation_id": computation_id,
+            "computation_code": computation.computation_code,
+            "work_orders": work_orders,
+            "purchase_orders": purchase_orders,
+            "work_order_count": len(work_orders),
+            "purchase_order_count": len(purchase_orders),
+        }
     
     async def _create_work_order_from_item(
         self,
@@ -1194,6 +1225,13 @@ class DemandComputationService:
             # 确定生产模式
             production_mode = "MTO" if computation.business_mode == "MTO" else "MTS"
             
+            # MTO 时解析销售订单ID：工单表外键指向 sales_orders，需用需求的 source_id（销售订单ID），而非 demand_id（需求ID）
+            sales_order_id = None
+            if production_mode == "MTO":
+                demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation.demand_id)
+                if demand and getattr(demand, "demand_type", None) == "sales_order" and getattr(demand, "source_type", None) == "sales_order" and getattr(demand, "source_id", None):
+                    sales_order_id = demand.source_id
+            
             # 确定计划时间（如果有LRP的日期信息）
             planned_start_date = None
             planned_end_date = None
@@ -1208,10 +1246,11 @@ class DemandComputationService:
                 remarks += "（委外工单）"
             
             work_order_data = WorkOrderCreate(
+                code_rule="WORK_ORDER_CODE",
                 product_id=item.material_id,
                 quantity=float(item.suggested_work_order_quantity or 0),
                 production_mode=production_mode,
-                sales_order_id=computation.demand_id if production_mode == "MTO" else None,
+                sales_order_id=sales_order_id,
                 planned_start_date=planned_start_date,
                 planned_end_date=planned_end_date,
                 remarks=remarks,
