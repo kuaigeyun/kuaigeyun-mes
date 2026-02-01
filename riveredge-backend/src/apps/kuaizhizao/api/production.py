@@ -7,7 +7,7 @@
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
-from fastapi import APIRouter, Depends, Query, status, Path, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
 
@@ -574,7 +574,7 @@ async def delete_work_order(
 
     return JSONResponse(
         content={"message": "工单删除成功"},
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -829,7 +829,7 @@ async def delete_rework_order(
 
     return JSONResponse(
         content={"message": "返工单删除成功"},
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -966,7 +966,7 @@ async def delete_outsource_order(
 
     return JSONResponse(
         content={"message": "工序委外删除成功"},
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -1106,7 +1106,7 @@ async def get_delayed_work_orders(
             "total": len(delayed_orders),
             "delayed_orders": delayed_orders
         },
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -1129,7 +1129,7 @@ async def analyze_delay_reasons(
     )
     return JSONResponse(
         content=result,
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -1242,7 +1242,7 @@ async def get_reporting_statistics(
 
     return JSONResponse(
         content=statistics,
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -1328,7 +1328,7 @@ async def delete_reporting_record(
 
     return JSONResponse(
         content={"message": "报工记录删除成功"},
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -1700,7 +1700,7 @@ async def delete_material_binding(
 
     return JSONResponse(
         content={"message": "物料绑定记录删除成功"},
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -2503,7 +2503,7 @@ async def delete_packing_binding_old(
 
     return JSONResponse(
         content={"message": "装箱绑定记录删除成功"},
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -2908,13 +2908,13 @@ async def import_sales_deliveries(
                 
     except ValidationError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
     except Exception as e:
         logger.error(f"导入销售出库单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导入失败: {str(e)}"
         )
 
@@ -2957,7 +2957,7 @@ async def export_sales_deliveries(
     except Exception as e:
         logger.error(f"导出销售出库单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -3062,7 +3062,7 @@ async def print_sales_delivery(
     except Exception as e:
         logger.error(f"打印销售出库单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"打印失败: {str(e)}"
         )
 
@@ -3280,13 +3280,13 @@ async def import_purchase_receipts(
                 
     except ValidationError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
     except Exception as e:
         logger.error(f"导入采购入库单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导入失败: {str(e)}"
         )
 
@@ -3329,7 +3329,7 @@ async def export_purchase_receipts(
     except Exception as e:
         logger.error(f"导出采购入库单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -3717,7 +3717,7 @@ async def export_incoming_inspections(
     except Exception as e:
         logger.error(f"导出来料检验单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -3904,7 +3904,7 @@ async def export_process_inspections(
     except Exception as e:
         logger.error(f"导出过程检验单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -4111,7 +4111,7 @@ async def export_finished_goods_inspections(
     except Exception as e:
         logger.error(f"导出成品检验单失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -4178,7 +4178,7 @@ async def get_quality_anomalies(
             "total": len(anomalies),
             "anomalies": anomalies
         },
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -4308,7 +4308,7 @@ async def delete_quality_standard(
         )
         return JSONResponse(
             content={"message": "质检标准删除成功"},
-            status_code=status.HTTP_200_OK
+            status_code=http_status.HTTP_200_OK
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -4371,7 +4371,7 @@ async def get_quality_statistics(
     )
     return JSONResponse(
         content=stats,
-        status_code=status.HTTP_200_OK
+        status_code=http_status.HTTP_200_OK
     )
 
 
@@ -4812,7 +4812,7 @@ async def push_sales_forecast_to_mrp(
         time_bucket=time_bucket,
         user_id=current_user.id
     )
-    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+    return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
 
 
 @router.put("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="更新销售预测")
@@ -4863,9 +4863,9 @@ async def delete_sales_forecast(
     from apps.kuaizhizao.models.sales_forecast import SalesForecast
     deleted = await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).delete()
     if deleted:
-        return JSONResponse(content={"message": "销售预测删除成功"}, status_code=status.HTTP_200_OK)
+        return JSONResponse(content={"message": "销售预测删除成功"}, status_code=http_status.HTTP_200_OK)
     else:
-        return JSONResponse(content={"message": "销售预测删除失败"}, status_code=status.HTTP_400_BAD_REQUEST)
+        return JSONResponse(content={"message": "销售预测删除失败"}, status_code=http_status.HTTP_400_BAD_REQUEST)
 
 
 @router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="提交销售预测")
@@ -4950,302 +4950,7 @@ async def get_sales_forecast_items(
     )
 
 
-# ============ 销售订单管理 API ============
 
-@router.post("/sales-orders", response_model=SalesOrderResponse, summary="创建销售订单")
-async def create_sales_order(
-    order: SalesOrderCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderResponse:
-    """
-    创建销售订单
-
-    - **order**: 销售订单创建数据
-    - **current_user**: 当前用户
-    - **tenant_id**: 当前组织ID
-
-    返回创建的销售订单信息。
-    """
-    service = SalesOrderService()
-    return await service.create_sales_order(
-        tenant_id=tenant_id,
-        order_data=order,
-        created_by=current_user.id
-    )
-
-
-@router.get("/sales-orders", response_model=List[SalesOrderListResponse], summary="获取销售订单列表")
-async def list_sales_orders(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
-    status: Optional[str] = Query(None, description="订单状态"),
-    customer_id: Optional[int] = Query(None, description="客户ID"),
-    order_type: Optional[str] = Query(None, description="订单类型"),
-    delivery_date_start: Optional[str] = Query(None, description="交货日期开始（ISO格式）"),
-    delivery_date_end: Optional[str] = Query(None, description="交货日期结束（ISO格式）"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[SalesOrderListResponse]:
-    """
-    获取销售订单列表
-
-    支持多种筛选条件的高级搜索。
-    
-    注意：返回数组格式，与基础数据管理APP保持一致
-    前端在 request 函数中手动包装为 { data, total, success } 格式
-    """
-    from datetime import date
-
-    # 转换日期参数
-    delivery_date_start_dt = None
-    delivery_date_end_dt = None
-
-    if delivery_date_start:
-        try:
-            delivery_date_start_dt = date.fromisoformat(delivery_date_start)
-        except ValueError:
-            pass
-
-    if delivery_date_end:
-        try:
-            delivery_date_end_dt = date.fromisoformat(delivery_date_end)
-        except ValueError:
-            pass
-
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.list_sales_orders(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        status=status,
-        customer_id=customer_id,
-        order_type=order_type,
-        delivery_date_start=delivery_date_start_dt,
-        delivery_date_end=delivery_date_end_dt,
-    )
-
-
-@router.get("/sales-orders/{order_id}", response_model=SalesOrderResponse, summary="获取销售订单详情")
-async def get_sales_order(
-    order_id: int,
-    include_items: bool = Query(False, description="是否包含订单明细"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderResponse:
-    """
-    根据ID获取销售订单详情
-
-    - **order_id**: 销售订单ID
-    - **include_items**: 是否返回订单明细
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.get_sales_order_by_id(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        include_items=include_items,
-    )
-
-
-@router.post("/sales-orders/{order_id}/submit", response_model=SalesOrderResponse, summary="提交销售订单")
-async def submit_sales_order(
-    order_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderResponse:
-    """
-    提交销售订单
-
-    将草稿状态的销售订单提交为待审核状态
-
-    - **order_id**: 销售订单ID
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.submit_order(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        submitted_by=current_user.id
-    )
-
-
-@router.post("/sales-orders/{order_id}/approve", response_model=SalesOrderResponse, summary="审核销售订单")
-async def approve_sales_order(
-    order_id: int,
-    rejection_reason: Optional[str] = Query(None, description="驳回原因"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderResponse:
-    """
-    审核销售订单
-
-    - **order_id**: 销售订单ID
-    - **rejection_reason**: 驳回原因（可选，不填则通过）
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.approve_order(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        approved_by=current_user.id,
-        rejection_reason=rejection_reason
-    )
-
-
-@router.post("/sales-orders/{order_id}/push-to-lrp", summary="下推到LRP运算")
-async def push_sales_order_to_lrp(
-    order_id: int = Path(..., description="销售订单ID"),
-    planning_horizon: int = Query(3, ge=1, le=12, description="计划周期（月数）"),
-    consider_capacity: bool = Query(False, description="是否考虑产能"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    从销售订单下推到LRP运算
-    
-    自动执行LRP计算，生成详细的生产和采购计划
-    
-    - **order_id**: 销售订单ID
-    - **planning_horizon**: 计划周期（月数，默认3个月）
-    - **consider_capacity**: 是否考虑产能（默认：False）
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    result = await service.push_to_lrp(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        planning_horizon=planning_horizon,
-        consider_capacity=consider_capacity,
-        user_id=current_user.id
-    )
-    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
-
-
-@router.post("/sales-orders/{order_id}/confirm", response_model=SalesOrderResponse, summary="确认销售订单")
-async def confirm_sales_order(
-    order_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderResponse:
-    """
-    确认销售订单（转为MTO模式执行）
-
-    - **order_id**: 销售订单ID
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.confirm_order(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        confirmed_by=current_user.id
-    )
-
-
-@router.post("/sales-orders/{order_id}/items", response_model=SalesOrderItemResponse, summary="添加销售订单明细")
-async def add_sales_order_item(
-    order_id: int,
-    item: SalesOrderItemCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderItemResponse:
-    """
-    添加销售订单明细
-
-    - **order_id**: 销售订单ID
-    - **item**: 订单明细数据
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.add_order_item(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        item_data=item
-    )
-
-
-@router.get("/sales-orders/{order_id}/items", response_model=List[SalesOrderItemResponse], summary="获取销售订单明细")
-async def get_sales_order_items(
-    order_id: int,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> List[SalesOrderItemResponse]:
-    """
-    获取销售订单明细列表
-
-    - **order_id**: 销售订单ID
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.get_order_items(
-        tenant_id=tenant_id,
-        order_id=order_id
-    )
-
-
-@router.post("/sales-orders/{order_id}/push-to-delivery", summary="下推到销售出库")
-async def push_sales_order_to_delivery(
-    order_id: int = Path(..., description="销售订单ID"),
-    delivery_quantities: Optional[dict] = None,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    从销售订单下推到销售出库
-    
-    自动生成销售出库单，支持指定出库数量
-    
-    - **order_id**: 销售订单ID
-    - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选，如果不提供则使用订单未出库数量）
-    """
-    from fastapi import status
-    from fastapi.responses import JSONResponse
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    result = await service.push_to_delivery(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        created_by=current_user.id,
-        delivery_quantities=delivery_quantities
-    )
-    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
-
-
-@router.post("/sales-orders/{order_id}/items/{item_id}/delivery", response_model=SalesOrderItemResponse, summary="更新交货状态")
-async def update_delivery_status(
-    order_id: int,
-    item_id: int,
-    delivered_quantity: float = Query(..., gt=0, description="交货数量"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SalesOrderItemResponse:
-    """
-    更新销售订单明细的交货状态
-
-    - **order_id**: 销售订单ID
-    - **item_id**: 订单明细ID
-    - **delivered_quantity**: 本次交货数量
-    """
-    from apps.kuaizhizao.services.sales_service import SalesOrderService
-    
-    service = SalesOrderService()
-    return await service.update_delivery_status(
-        tenant_id=tenant_id,
-        order_id=order_id,
-        item_id=item_id,
-        delivered_quantity=delivered_quantity,
-        updated_by=current_user.id
-    )
 
 
 # ============ BOM物料清单管理 API ============
@@ -5665,13 +5370,13 @@ async def import_sales_forecasts(
                 
     except ValidationError as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
     except Exception as e:
         logger.error(f"导入销售预测失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导入失败: {str(e)}"
         )
 
@@ -5709,7 +5414,7 @@ async def export_sales_forecasts(
         
         if not os.path.exists(file_path):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="导出文件生成失败"
             )
         
@@ -5722,177 +5427,15 @@ async def export_sales_forecasts(
     except Exception as e:
         logger.error(f"导出销售预测失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
 
-@router.post("/sales-orders/import", summary="批量导入销售订单")
-async def import_sales_orders(
-    request: Dict[str, Any],
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    批量导入销售订单
-    
-    接收前端 uni_import 组件传递的二维数组数据，批量创建销售订单。
-    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
-    
-    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
-    
-    Args:
-        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        dict: 导入结果（成功数、失败数、错误列表）
-    """
-    from fastapi import HTTPException
-    
-    try:
-        # 获取二维数组数据
-        data = request.get("data", [])
-        if not data:
-            raise ValidationError("导入数据为空")
-        
-        from apps.kuaizhizao.services.sales_service import SalesOrderService
-        service = SalesOrderService()
-        result = await service.import_from_data(
-            tenant_id=tenant_id,
-            data=data,
-            created_by=current_user.id
-        )
-        
-        return result
-                
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"导入销售订单失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入失败: {str(e)}"
-        )
 
 
-@router.get("/sales-orders/export", response_class=FileResponse, summary="批量导出销售订单")
-async def export_sales_orders(
-    status: Optional[str] = Query(None, description="订单状态筛选"),
-    order_type: Optional[str] = Query(None, description="订单类型筛选"),
-    customer_id: Optional[int] = Query(None, description="客户ID筛选"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    批量导出销售订单到Excel文件
-    
-    Args:
-        status: 订单状态筛选
-        order_type: 订单类型筛选
-        customer_id: 客户ID筛选
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        FileResponse: Excel文件
-    """
-    from fastapi import HTTPException
-    from fastapi.responses import FileResponse
-    import os
-    
-    try:
-        from apps.kuaizhizao.services.sales_service import SalesOrderService
-        service = SalesOrderService()
-        file_path = await service.export_to_excel(
-            tenant_id=tenant_id,
-            status=status,
-            order_type=order_type,
-            customer_id=customer_id,
-        )
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    except Exception as e:
-        logger.error(f"导出销售订单失败: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
-        )
 
 
-@router.post("/sales-orders/batch-create", response_model=BatchResponse, summary="批量创建销售订单")
-async def batch_create_sales_orders(
-    request: BatchCreateRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> BatchResponse:
-    """
-    批量创建销售订单
-
-    - **items**: 销售订单创建数据列表（最多100条）
-    """
-    from apps.kuaizhizao.schemas.sales import SalesOrderCreate
-    
-    # 验证数据格式
-    validated_items = []
-    for item in request.items:
-        try:
-            validated_item = SalesOrderCreate(**item).model_dump()
-            validated_items.append(validated_item)
-        except Exception as e:
-            logger.error(f"销售订单数据验证失败: {e}")
-    
-    result = await BatchOperationService().batch_create(
-        tenant_id=tenant_id,
-        model_class=SalesOrder,
-        create_data_list=validated_items,
-        created_by=current_user.id
-    )
-    
-    return BatchResponse(
-        success=result["failed_count"] == 0,
-        message=f"成功创建 {result['success_count']} 个销售订单，失败 {result['failed_count']} 个",
-        data=result
-    )
-
-
-@router.delete("/sales-orders/batch-delete", response_model=BatchResponse, summary="批量删除销售订单")
-async def batch_delete_sales_orders(
-    request: BatchDeleteRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> BatchResponse:
-    """
-    批量删除销售订单
-
-    - **ids**: 要删除的销售订单ID列表（最多100条）
-    
-    注意：只能删除草稿状态的销售订单
-    """
-    def validate_sales_order(order):
-        """验证销售订单是否可以删除"""
-        if order.status != "草稿":
-            raise BusinessLogicError(f"销售订单 {order.id} 状态为 {order.status}，无法删除。只有草稿状态的销售订单才能删除。")
-    
-    result = await BatchOperationService().batch_delete(
-        tenant_id=tenant_id,
-        model_class=SalesOrder,
-        record_ids=request.ids,
-        validate_func=validate_sales_order
-    )
-    
-    return BatchResponse(
-        success=result["failed_count"] == 0,
-        message=f"成功删除 {result['success_count']} 个销售订单，失败 {result['failed_count']} 个",
-        data=result
-    )
 
 
 # ============ 生产计划管理 API ============
@@ -6015,7 +5558,7 @@ async def export_mrp_results(
         
         if not os.path.exists(file_path):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="导出文件生成失败"
             )
         
@@ -6028,7 +5571,7 @@ async def export_mrp_results(
     except Exception as e:
         logger.error(f"导出MRP运算结果失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -6065,7 +5608,7 @@ async def export_mrp_result_by_id(
         
         if not os.path.exists(file_path):
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="导出文件生成失败"
             )
         
@@ -6078,7 +5621,7 @@ async def export_mrp_result_by_id(
     except Exception as e:
         logger.error(f"导出MRP运算结果失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -6147,7 +5690,7 @@ async def export_lrp_results(
     except Exception as e:
         logger.error(f"导出LRP运算结果失败: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导出失败: {str(e)}"
         )
 
@@ -6718,7 +6261,7 @@ async def trigger_exception_detection(
     except Exception as e:
         logger.error(f"触发异常检测失败: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"触发异常检测失败: {str(e)}"
         )
 
@@ -7946,7 +7489,7 @@ async def send_purchase_order_to_supplier(
             purchase_order_id=purchase_order_id,
             send_by=current_user.id
         )
-        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+        return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -7976,7 +7519,7 @@ async def update_purchase_order_progress(
             progress_data=progress_data.model_dump(),
             updated_by=current_user.id
         )
-        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+        return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -8006,7 +7549,7 @@ async def submit_delivery_notice(
             delivery_data=delivery_data.model_dump(),
             submitted_by=current_user.id
         )
-        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+        return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
@@ -8035,7 +7578,7 @@ async def get_supplier_purchase_orders(
             supplier_id=supplier_id,
             status=status
         )
-        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+        return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -8064,7 +7607,7 @@ async def get_customer_sales_orders(
             customer_id=customer_id,
             status=status
         )
-        return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+        return JSONResponse(content=result, status_code=http_status.HTTP_200_OK)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

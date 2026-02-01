@@ -9,7 +9,7 @@ Date: 2026-01-19
 
 from typing import Optional, Dict, Any, List
 from datetime import date
-from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -53,10 +53,10 @@ async def create_sales_order(
         )
         return result
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         logger.error(f"创建销售订单失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建销售订单失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建销售订单失败")
 
 
 @router.get("", response_model=SalesOrderListResponse, summary="获取销售订单列表")
@@ -88,7 +88,7 @@ async def list_sales_orders(
         return result
     except Exception as e:
         logger.error(f"获取销售订单列表失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单列表失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单列表失败")
 
 
 @router.get("/{sales_order_id}", response_model=SalesOrderResponse, summary="获取销售订单详情")
@@ -114,10 +114,10 @@ async def get_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(f"获取销售订单详情失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单详情失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取销售订单详情失败")
 
 
 @router.put("/{sales_order_id}", response_model=SalesOrderResponse, summary="更新销售订单")
@@ -141,14 +141,14 @@ async def update_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"更新销售订单失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新销售订单失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新销售订单失败")
 
 
 @router.post("/{sales_order_id}/submit", response_model=SalesOrderResponse, summary="提交销售订单")
@@ -170,12 +170,12 @@ async def submit_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"提交销售订单失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提交销售订单失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提交销售订单失败")
 
 
 @router.post("/{sales_order_id}/approve", response_model=SalesOrderResponse, summary="审核通过销售订单")
@@ -197,12 +197,39 @@ async def approve_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"审核通过销售订单失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="审核通过销售订单失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="审核通过销售订单失败")
+
+
+@router.post("/{sales_order_id}/unapprove", response_model=SalesOrderResponse, summary="反审核销售订单")
+async def unapprove_sales_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    反审核销售订单
+    
+    将销售订单状态从"已审核"或"已驳回"恢复为"待审核"状态。
+    """
+    try:
+        result = await sales_order_service.unapprove_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            unapproved_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"反审核销售订单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="反审核销售订单失败")
 
 
 @router.post("/{sales_order_id}/reject", response_model=SalesOrderResponse, summary="驳回销售订单")
@@ -226,12 +253,12 @@ async def reject_sales_order(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"驳回销售订单失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回销售订单失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回销售订单失败")
 
 
 @router.post("/{sales_order_id}/push-to-computation", response_model=Dict[str, Any], summary="下推销售订单到需求计算")
@@ -253,9 +280,137 @@ async def push_sales_order_to_computation(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"下推销售订单到需求计算失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售订单到需求计算失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售订单到需求计算失败")
+
+
+@router.post("/{sales_order_id}/confirm", response_model=SalesOrderResponse, summary="确认销售订单")
+async def confirm_sales_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    确认销售订单（转为执行模式）
+    """
+    try:
+        result = await sales_order_service.confirm_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            confirmed_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"确认销售订单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认销售订单失败")
+
+
+@router.post("/{sales_order_id}/push-to-delivery", summary="下推到销售出库")
+async def push_sales_order_to_delivery(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    delivery_quantities: Optional[Dict[int, float]] = Body(None, description="出库数量字典 {item_id: quantity}"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售订单下推到销售出库
+    """
+    try:
+        result = await sales_order_service.push_sales_order_to_delivery(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+            delivery_quantities=delivery_quantities
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"下推销售出库失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推销售出库失败")
+
+
+
+@router.post("/{sales_order_id}/withdraw", response_model=SalesOrderResponse, summary="撤回已提交的销售订单")
+async def withdraw_sales_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    撤回已提交的销售订单
+    
+    只有“待审核”状态的订单可以撤回，撤回后恢复为“草稿”状态。
+    """
+    try:
+        result = await sales_order_service.withdraw_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            withdrawn_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"撤回销售订单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="撤回销售订单失败")
+
+
+@router.delete("/{sales_order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="删除销售订单")
+async def delete_sales_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除销售订单
+    
+    只有“草稿”状态的订单可以删除。
+    """
+    try:
+        await sales_order_service.delete_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"删除销售订单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除销售订单失败")
+
+
+@router.post("/batch-delete", response_model=Dict[str, Any], summary="批量删除销售订单")
+async def bulk_delete_sales_orders(
+    ids: List[int] = Body(..., description="要删除的销售订单ID列表"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量删除销售订单
+    
+    只有“草稿”状态的订单可以删除。
+    返回成功删除的数量和失败的详情。
+    """
+    try:
+        result = await sales_order_service.bulk_delete_sales_orders(
+            tenant_id=tenant_id,
+            sales_order_ids=ids
+        )
+        return result
+    except Exception as e:
+        logger.error(f"批量删除销售订单失败: {e}")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="批量删除销售订单失败")

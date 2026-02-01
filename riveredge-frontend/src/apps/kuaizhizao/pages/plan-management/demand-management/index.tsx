@@ -16,18 +16,20 @@ import { App, Button, Tag, Space, Modal, Drawer, Table, Input } from 'antd';
 import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { 
-  listDemands, 
-  getDemand, 
-  createDemand, 
-  updateDemand, 
-  submitDemand, 
-  approveDemand, 
+import {
+  listDemands,
+  getDemand,
+  createDemand,
+  updateDemand,
+  submitDemand,
+  approveDemand,
   rejectDemand,
   batchCreateDemands,
   pushDemandToComputation,
   Demand,
-  DemandItem 
+  DemandItem,
+  DemandStatus,
+  ReviewStatus,
 } from '../../../services/demand';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
@@ -38,17 +40,17 @@ const DemandManagementPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [searchParams] = useSearchParams();
-  
+
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
-  
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelationData | null>(null);
-  
+
   // 需求类型选择（销售预测/销售订单），支持从 URL 参数读取
   const urlDemandType = searchParams.get('demand_type') as 'sales_forecast' | 'sales_order' | null;
   const [demandType, setDemandType] = useState<'sales_forecast' | 'sales_order'>(
@@ -100,7 +102,7 @@ const DemandManagementPage: React.FC = () => {
       try {
         const data = await getDemand(id, true, true);  // includeItems=true, includeDuration=true
         setCurrentDemand(data);
-        
+
         // 获取单据关联关系
         try {
           const relations = await getDocumentRelations('demand', id);
@@ -109,7 +111,7 @@ const DemandManagementPage: React.FC = () => {
           console.error('获取单据关联关系失败:', error);
           setDocumentRelations(null);
         }
-        
+
         setDrawerVisible(true);
       } catch (error: any) {
         messageApi.error('获取需求详情失败');
@@ -132,7 +134,7 @@ const DemandManagementPage: React.FC = () => {
     try {
       values.demand_type = demandType;
       values.business_mode = demandType === 'sales_forecast' ? 'MTS' : 'MTO';
-      
+
       if (isEdit && currentId) {
         await updateDemand(currentId, values);
         messageApi.success('需求更新成功');
@@ -231,15 +233,15 @@ const DemandManagementPage: React.FC = () => {
         }
 
         const demand: any = {
-          status: '草稿',
-          review_status: '待审核',
+          status: DemandStatus.DRAFT,
+          review_status: ReviewStatus.PENDING,
         };
 
         // 映射字段
         for (let j = 0; j < headers.length && j < row.length; j++) {
           const header = headers[j]?.toString().trim();
           const value = row[j]?.toString().trim();
-          
+
           if (!header || !value) continue;
 
           const fieldName = fieldMap[header];
@@ -254,8 +256,8 @@ const DemandManagementPage: React.FC = () => {
             }
             // 处理枚举字段
             else if (fieldName === 'demand_type') {
-              demand[fieldName] = value === '销售预测' ? 'sales_forecast' : 
-                                 value === '销售订单' ? 'sales_order' : value;
+              demand[fieldName] = value === '销售预测' ? 'sales_forecast' :
+                value === '销售订单' ? 'sales_order' : value;
             }
             else if (fieldName === 'business_mode') {
               demand[fieldName] = value.toUpperCase();
@@ -284,7 +286,7 @@ const DemandManagementPage: React.FC = () => {
 
       // 调用批量创建API
       const result = await batchCreateDemands(demands);
-      
+
       if (result.failure_count === 0) {
         messageApi.success(`批量导入成功！成功导入 ${result.success_count} 条需求`);
         actionRef.current?.reload();
@@ -439,10 +441,10 @@ const DemandManagementPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        '草稿': { text: '草稿', status: 'Default' },
-        '待审核': { text: '待审核', status: 'Processing' },
-        '已审核': { text: '已审核', status: 'Success' },
-        '已驳回': { text: '已驳回', status: 'Error' },
+        [DemandStatus.DRAFT]: { text: '草稿', status: 'Default' },
+        [DemandStatus.PENDING_REVIEW]: { text: '待审核', status: 'Processing' },
+        [DemandStatus.AUDITED]: { text: '已审核', status: 'Success' },
+        [DemandStatus.REJECTED]: { text: '已驳回', status: 'Error' },
       },
     },
     {
@@ -450,9 +452,9 @@ const DemandManagementPage: React.FC = () => {
       dataIndex: 'review_status',
       width: 100,
       valueEnum: {
-        '待审核': { text: '待审核', status: 'Default' },
-        '通过': { text: '通过', status: 'Success' },
-        '驳回': { text: '驳回', status: 'Error' },
+        [ReviewStatus.PENDING]: { text: '待审核', status: 'Default' },
+        [ReviewStatus.APPROVED]: { text: '审核通过', status: 'Success' },
+        [ReviewStatus.REJECTED]: { text: '审核驳回', status: 'Error' },
       },
     },
     {
@@ -475,7 +477,7 @@ const DemandManagementPage: React.FC = () => {
           >
             详情
           </Button>
-          {record.status === '草稿' && (
+          {record.status === DemandStatus.DRAFT && (
             <>
               <Button
                 type="link"
@@ -496,7 +498,7 @@ const DemandManagementPage: React.FC = () => {
               </Button>
             </>
           )}
-          {record.status === '待审核' && (
+          {record.status === DemandStatus.PENDING_REVIEW && (
             <>
               <Button
                 type="link"
@@ -518,19 +520,19 @@ const DemandManagementPage: React.FC = () => {
               </Button>
             </>
           )}
-          {record.status === '已审核' && 
-           record.review_status === '通过' && 
-           !record.pushed_to_computation && (
-            <Button
-              type="link"
-              size="small"
-              icon={<ArrowDownOutlined />}
-              onClick={() => handlePushToComputation(record.id!)}
-              style={{ color: '#1890ff' }}
-            >
-              下推
-            </Button>
-          )}
+          {record.status === DemandStatus.AUDITED &&
+            record.review_status === ReviewStatus.APPROVED &&
+            !record.pushed_to_computation && (
+              <Button
+                type="link"
+                size="small"
+                icon={<ArrowDownOutlined />}
+                onClick={() => handlePushToComputation(record.id!)}
+                style={{ color: '#1890ff' }}
+              >
+                下推
+              </Button>
+            )}
         </Space>
       ),
     },
@@ -547,7 +549,7 @@ const DemandManagementPage: React.FC = () => {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
             };
-            
+
             // 处理搜索参数，优先使用搜索表单的值，如果没有则使用 URL 参数的值
             if (searchFormValues?.demand_type) {
               apiParams.demand_type = searchFormValues.demand_type;
@@ -563,7 +565,7 @@ const DemandManagementPage: React.FC = () => {
             if (searchFormValues?.review_status) {
               apiParams.review_status = searchFormValues.review_status;
             }
-            
+
             // 处理排序
             if (sort) {
               const sortKeys = Object.keys(sort);
@@ -572,7 +574,7 @@ const DemandManagementPage: React.FC = () => {
                 apiParams.order_by = sort[key] === 'ascend' ? key : `-${key}`;
               }
             }
-            
+
             try {
               const response = await listDemands(apiParams);
               return {
@@ -641,7 +643,7 @@ const DemandManagementPage: React.FC = () => {
           ]}
         />
       </ListPageTemplate>
-      
+
       {/* 新建/编辑 Modal */}
       <Modal
         open={modalVisible}
@@ -772,7 +774,7 @@ const DemandManagementPage: React.FC = () => {
           />
         </ProForm>
       </Modal>
-      
+
       {/* 详情 Drawer */}
       <Drawer
         open={drawerVisible}
@@ -782,7 +784,7 @@ const DemandManagementPage: React.FC = () => {
         extra={
           currentDemand && (
             <Space>
-              {currentDemand.status === '草稿' && (
+              {currentDemand.status === DemandStatus.DRAFT && (
                 <>
                   <Button
                     type="primary"
@@ -821,17 +823,17 @@ const DemandManagementPage: React.FC = () => {
                   </Button>
                 </>
               )}
-              {currentDemand.status === '已审核' && 
-               currentDemand.review_status === '通过' && 
-               !currentDemand.pushed_to_computation && (
-                <Button
-                  type="primary"
-                  icon={<ArrowDownOutlined />}
-                  onClick={() => handlePushToComputation(currentDemand.id!)}
-                >
-                  下推到物料需求运算
-                </Button>
-              )}
+              {currentDemand.status === '已审核' &&
+                currentDemand.review_status === '通过' &&
+                !currentDemand.pushed_to_computation && (
+                  <Button
+                    type="primary"
+                    icon={<ArrowDownOutlined />}
+                    onClick={() => handlePushToComputation(currentDemand.id!)}
+                  >
+                    下推到物料需求运算
+                  </Button>
+                )}
             </Space>
           )
         }
@@ -885,8 +887,8 @@ const DemandManagementPage: React.FC = () => {
                 <Tag
                   color={
                     currentDemand.status === '已审核' ? 'success' :
-                    currentDemand.status === '待审核' ? 'processing' :
-                    currentDemand.status === '已驳回' ? 'error' : 'default'
+                      currentDemand.status === '待审核' ? 'processing' :
+                        currentDemand.status === '已驳回' ? 'error' : 'default'
                   }
                 >
                   {currentDemand.status}
@@ -896,7 +898,7 @@ const DemandManagementPage: React.FC = () => {
                 <Tag
                   color={
                     currentDemand.review_status === '通过' ? 'success' :
-                    currentDemand.review_status === '驳回' ? 'error' : 'default'
+                      currentDemand.review_status === '驳回' ? 'error' : 'default'
                   }
                 >
                   {currentDemand.review_status}
@@ -932,12 +934,12 @@ const DemandManagementPage: React.FC = () => {
                     <>
                       <ProDescriptions.Item label="提交时间" dataIndex="submit_time" valueType="dateTime" />
                       {(currentDemand as any).duration_info?.duration_to_submit !== null && (
-                        <ProDescriptions.Item 
-                          label="创建到提交耗时" 
+                        <ProDescriptions.Item
+                          label="创建到提交耗时"
                           dataIndex="duration_to_submit"
                         >
-                          {(currentDemand as any).duration_info?.duration_to_submit 
-                            ? `${(currentDemand as any).duration_info.duration_to_submit} 小时` 
+                          {(currentDemand as any).duration_info?.duration_to_submit
+                            ? `${(currentDemand as any).duration_info.duration_to_submit} 小时`
                             : '-'}
                         </ProDescriptions.Item>
                       )}
@@ -947,22 +949,22 @@ const DemandManagementPage: React.FC = () => {
                     <>
                       <ProDescriptions.Item label="审核时间" dataIndex="review_time" valueType="dateTime" />
                       {(currentDemand as any).duration_info?.duration_to_review !== null && (
-                        <ProDescriptions.Item 
-                          label="创建到审核耗时" 
+                        <ProDescriptions.Item
+                          label="创建到审核耗时"
                           dataIndex="duration_to_review"
                         >
-                          {(currentDemand as any).duration_info?.duration_to_review 
-                            ? `${(currentDemand as any).duration_info.duration_to_review} 小时` 
+                          {(currentDemand as any).duration_info?.duration_to_review
+                            ? `${(currentDemand as any).duration_info.duration_to_review} 小时`
                             : '-'}
                         </ProDescriptions.Item>
                       )}
                       {(currentDemand as any).duration_info?.duration_submit_to_review !== null && (
-                        <ProDescriptions.Item 
-                          label="提交到审核耗时" 
+                        <ProDescriptions.Item
+                          label="提交到审核耗时"
                           dataIndex="duration_submit_to_review"
                         >
-                          {(currentDemand as any).duration_info?.duration_submit_to_review 
-                            ? `${(currentDemand as any).duration_info.duration_submit_to_review} 小时` 
+                          {(currentDemand as any).duration_info?.duration_submit_to_review
+                            ? `${(currentDemand as any).duration_info.duration_submit_to_review} 小时`
                             : '-'}
                         </ProDescriptions.Item>
                       )}

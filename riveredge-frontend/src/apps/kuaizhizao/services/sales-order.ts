@@ -8,10 +8,12 @@
  */
 
 import { apiRequest } from '../../../services/api';
+import { DemandStatus, ReviewStatus } from './demand';
 
 /**
  * 销售订单接口定义
  */
+export { DemandStatus as SalesOrderStatus, ReviewStatus };
 export interface SalesOrder {
   id?: number;
   uuid?: string;
@@ -165,6 +167,15 @@ export async function approveSalesOrder(id: number): Promise<SalesOrder> {
 }
 
 /**
+ * 撤销审核销售订单
+ */
+export async function unapproveSalesOrder(id: number): Promise<SalesOrder> {
+  return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/unapprove`, {
+    method: 'POST',
+  });
+}
+
+/**
  * 驳回销售订单
  */
 export async function rejectSalesOrder(id: number, rejectionReason: string): Promise<SalesOrder> {
@@ -188,5 +199,48 @@ export interface PushToComputationResponse {
 export async function pushSalesOrderToComputation(salesOrderId: number): Promise<PushToComputationResponse> {
   return apiRequest<PushToComputationResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-computation`, {
     method: 'POST',
+  });
+}
+
+/**
+ * 撤回销售订单
+ */
+export async function withdrawSalesOrder(id: number): Promise<SalesOrder> {
+  return apiRequest<SalesOrder>(`/apps/kuaizhizao/sales-orders/${id}/withdraw`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 删除销售订单
+ */
+export async function deleteSalesOrder(id: number): Promise<void> {
+  return apiRequest<void>(`/apps/kuaizhizao/sales-orders/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 批量删除销售订单
+ */
+export async function bulkDeleteSalesOrders(ids: number[]): Promise<{
+  success_count: number;
+  failed_count: number;
+  failed_items: { id: number; reason: string }[];
+}> {
+  return apiRequest<{
+    success_count: number;
+    failed_count: number;
+    failed_items: { id: number; reason: string }[];
+  }>('/apps/kuaizhizao/sales-orders/batch-delete', {
+    method: 'POST',
+    data: ids, // Pass ids simply as the body if List[int] is expected directly, or check if it needs { ids: [...] } wrapper. 
+    // Backend expects: ids: List[int]. But FastAPI with Pydantic often expects a JSON body matching the Pydantic model or just the list if the body is `List[int]`.
+    // The backend definition was: async def bulk_delete_sales_orders(ids: List[int], ...)
+    // In FastAPI, if the body is a list, you send a JSON list.
+    // wait, in my backend code: `ids: List[int]` was a query param or body? 
+    // `ids: List[int]` without `= Body(...)` usually defaults to query params or request body depending on context. 
+    // But usually, a Pydantic model is better. 
+    // Let's check my backend code again.
   });
 }

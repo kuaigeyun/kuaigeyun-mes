@@ -12,6 +12,7 @@ Date: 2025-01-14
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 
 
 class Demand(BaseModel):
@@ -25,8 +26,9 @@ class Demand(BaseModel):
     - sales_forecast: 销售预测（MTS模式）
     - sales_order: 销售订单（MTO模式）
     
-    注意：继承自BaseModel，自动获得id、uuid、tenant_id、created_at、updated_at字段
+    attention: 继承自BaseModel，自动获得id、uuid、tenant_id、created_at、updated_at字段
     """
+    id = fields.IntField(pk=True, description="主键ID")
     demand_code = fields.CharField(max_length=50, description="需求编码")
     
     # 需求类型（sales_forecast 或 sales_order）
@@ -60,7 +62,7 @@ class Demand(BaseModel):
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
     
     # 状态（通用）
-    status = fields.CharField(max_length=20, default="草稿", description="需求状态")
+    status = fields.CharField(max_length=20, default=DemandStatus.DRAFT, description="需求状态")
     
     # 时间节点记录（用于耗时统计）
     submit_time = fields.DatetimeField(null=True, description="提交时间")
@@ -69,7 +71,7 @@ class Demand(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING, description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
     
     # 销售信息（销售订单专用）

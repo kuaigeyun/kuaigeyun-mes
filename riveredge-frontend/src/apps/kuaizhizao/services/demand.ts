@@ -12,6 +12,20 @@ import { apiRequest } from '../../../services/api';
 /**
  * 统一需求接口定义
  */
+export enum DemandStatus {
+  DRAFT = 'DRAFT',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  AUDITED = 'AUDITED',
+  REJECTED = 'REJECTED',
+  CONFIRMED = 'CONFIRMED'
+}
+
+export enum ReviewStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
 export interface Demand {
   id?: number;
   uuid?: string;

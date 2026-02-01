@@ -10,7 +10,7 @@ Date: 2025-01-14
 """
 
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, Query, status, Path, HTTPException
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -58,10 +58,10 @@ async def create_demand(
         )
         return result
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         logger.error(f"创建需求失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求失败")
 
 
 @router.post("/batch", response_model=Dict[str, Any], summary="批量创建需求")
@@ -110,7 +110,7 @@ async def batch_create_demands(
     except Exception as e:
         logger.error(f"批量创建需求异常: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"批量创建需求失败: {str(e)}",
         )
 
@@ -151,7 +151,7 @@ async def list_demands(
         return result
     except Exception as e:
         logger.error(f"获取需求列表失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求列表失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求列表失败")
 
 
 @router.get("/{demand_id}", response_model=DemandResponse, summary="获取需求详情")
@@ -190,10 +190,10 @@ async def get_demand(
         
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(f"获取需求详情失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求详情失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取需求详情失败")
 
 
 @router.put("/{demand_id}", response_model=DemandResponse, summary="更新需求")
@@ -217,12 +217,12 @@ async def update_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"更新需求失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求失败")
 
 
 @router.post("/{demand_id}/submit", response_model=DemandResponse, summary="提交需求")
@@ -244,12 +244,12 @@ async def submit_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"提交需求失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提交需求失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提交需求失败")
 
 
 @router.post("/{demand_id}/approve", response_model=DemandResponse, summary="审核通过需求")
@@ -272,12 +272,12 @@ async def approve_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"审核需求失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="审核需求失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="审核需求失败")
 
 
 @router.post("/{demand_id}/reject", response_model=DemandResponse, summary="驳回需求")
@@ -301,12 +301,12 @@ async def reject_demand(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"驳回需求失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回需求失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="驳回需求失败")
 
 
 # ==================== 需求明细管理 ====================
@@ -333,12 +333,12 @@ async def add_demand_item(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         logger.error(f"添加需求明细失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="添加需求明细失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="添加需求明细失败")
 
 
 @router.put("/{demand_id}/items/{item_id}", response_model=DemandItemResponse, summary="更新需求明细")
@@ -363,12 +363,12 @@ async def update_demand_item(
         )
         return result
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         logger.error(f"更新需求明细失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求明细失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求明细失败")
 
 
 @router.delete("/{demand_id}/items/{item_id}", summary="删除需求明细")
@@ -391,10 +391,10 @@ async def delete_demand_item(
         )
         return {"success": True, "message": "删除成功"}
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(f"删除需求明细失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求明细失败")
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除需求明细失败")
 
 
 @router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="下推需求到物料需求运算")

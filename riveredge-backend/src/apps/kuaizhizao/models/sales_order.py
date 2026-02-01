@@ -9,6 +9,7 @@ Date: 2025-12-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 
 
 class SalesOrder(BaseModel):
@@ -36,13 +37,13 @@ class SalesOrder(BaseModel):
     total_amount = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="总金额")
 
     # 状态
-    status = fields.CharField(max_length=20, default="草稿", description="订单状态")
+    status = fields.CharField(max_length=20, default=DemandStatus.DRAFT, description="订单状态")
 
     # 审核信息
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
+    review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING, description="审核状态")
     review_remarks = fields.TextField(null=True, description="审核备注")
 
     # 销售信息
