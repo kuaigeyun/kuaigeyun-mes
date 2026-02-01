@@ -39,6 +39,11 @@ VALID_SOURCE_TYPES = [
     SOURCE_TYPE_CONFIGURE,
 ]
 
+# 自制件制造模式（存于 source_config.manufacturing_mode）
+MANUFACTURING_MODE_FABRICATION = "fabrication"  # 加工型：材料+工艺→零件
+MANUFACTURING_MODE_ASSEMBLY = "assembly"  # 装配型：原材料组装→成品/半成品
+VALID_MANUFACTURING_MODES = [MANUFACTURING_MODE_FABRICATION, MANUFACTURING_MODE_ASSEMBLY]
+
 
 async def get_material_source_type(
     tenant_id: int,
@@ -86,20 +91,33 @@ async def validate_material_source_config(
     source_config = material.source_config or {}
     
     if source_type == SOURCE_TYPE_MAKE:
-        # 自制件必须有BOM和工艺路线
+        # 自制件根据制造模式区分校验：加工型工艺路线必填、BOM可选；装配型BOM必填、工艺路线可选
         from apps.master_data.models.material import BOM
+        manufacturing_mode = source_config.get("manufacturing_mode")
         bom_count = await BOM.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             approval_status="approved",
             deleted_at__isnull=True
         ).count()
-        
-        if bom_count == 0:
-            errors.append(f"自制件必须有BOM配置，物料: {material.main_code} ({material.name})")
-        
-        if not material.process_route_id:
-            errors.append(f"自制件必须有工艺路线配置，物料: {material.main_code} ({material.name})")
+        has_process_route = bool(material.process_route_id)
+
+        if manufacturing_mode == MANUFACTURING_MODE_FABRICATION:
+            # 加工型：工艺路线必填，BOM 可选（不强制）
+            if not has_process_route:
+                errors.append(f"加工型自制件必须有工艺路线配置，物料: {material.main_code} ({material.name})")
+        elif manufacturing_mode == MANUFACTURING_MODE_ASSEMBLY:
+            # 装配型：BOM 必填，工艺路线可选
+            if bom_count == 0:
+                errors.append(f"装配型自制件必须有BOM配置，物料: {material.main_code} ({material.name})")
+            if not has_process_route:
+                errors.append(f"装配型自制件建议配置工艺路线（装配工序），物料: {material.main_code} ({material.name})")
+        else:
+            # 未设置制造模式：沿用原逻辑，BOM 和工艺路线都建议配置
+            if bom_count == 0:
+                errors.append(f"自制件建议配置BOM，物料: {material.main_code} ({material.name})")
+            if not has_process_route:
+                errors.append(f"自制件建议配置工艺路线，物料: {material.main_code} ({material.name})")
             
     elif source_type == SOURCE_TYPE_BUY:
         # 采购件建议配置默认供应商和采购价格（警告，不阻止）
@@ -403,8 +421,9 @@ async def get_material_source_config(
     }
     
     if source_type == SOURCE_TYPE_MAKE:
-        # 自制件配置
+        # 自制件配置（含制造模式：fabrication 加工型 / assembly 装配型）
         config.update({
+            "manufacturing_mode": source_config.get("manufacturing_mode"),
             "process_route_id": material.process_route_id,
             "production_lead_time": source_config.get("production_lead_time"),
             "min_production_batch": source_config.get("min_production_batch"),

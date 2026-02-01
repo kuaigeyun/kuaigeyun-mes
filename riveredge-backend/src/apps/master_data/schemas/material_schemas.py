@@ -125,7 +125,7 @@ class MaterialBase(BaseModel):
     
     # 物料来源控制（核心功能，新增）
     source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）：Make(自制件)、Buy(采购件)、Phantom(虚拟件)、Outsource(委外件)、Configure(配置件)")
-    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），包含：BOM、工艺路线、供应商、委外供应商、委外工序、变体属性等")
+    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式），自制件含 manufacturing_mode（fabrication加工型/assembly装配型）、工艺路线、BOM等；采购件含供应商；委外件含委外供应商/工序；配置件含变体属性等")
     
     model_config = ConfigDict(
         populate_by_name=True,  # 允许同时使用字段名和别名
@@ -167,6 +167,7 @@ class MaterialUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=50, description="物料编码")
     name: Optional[str] = Field(None, max_length=200, description="物料名称")
     group_id: Optional[int] = Field(None, description="物料分组ID")
+    process_route_id: Optional[int] = Field(None, alias="processRouteId", description="默认工艺路线ID（自制件时使用）")
     material_type: Optional[str] = Field(None, max_length=20, description="物料类型（FIN/SEMI/RAW/PACK/AUX）")
     specification: Optional[str] = Field(None, max_length=500, description="规格")
     base_unit: Optional[str] = Field(None, max_length=20, description="基础单位")

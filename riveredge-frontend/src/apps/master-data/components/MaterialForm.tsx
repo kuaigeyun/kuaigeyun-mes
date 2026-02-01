@@ -11,7 +11,7 @@
  * Date: 2026-01-08
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency } from '@ant-design/pro-components';
@@ -32,8 +32,24 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import { testGenerateCode } from '../../../services/codeRule';
 import DictionarySelect from '../../../components/dictionary-select';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../services/dataDictionary';
+import SmartSuggestionFloatPanel from '../../../components/smart-suggestion-float-panel';
 
 const { Panel } = Collapse;
+
+/** 物料来源类型选项（共享常量） */
+const SOURCE_TYPE_OPTIONS = [
+  { label: '自制件 (Make)', value: 'Make' },
+  { label: '采购件 (Buy)', value: 'Buy' },
+  { label: '虚拟件 (Phantom)', value: 'Phantom' },
+  { label: '委外件 (Outsource)', value: 'Outsource' },
+  { label: '配置件 (Configure)', value: 'Configure' },
+];
+
+/** 自制件制造模式选项（存于 sourceConfig.manufacturing_mode） */
+const MANUFACTURING_MODE_OPTIONS = [
+  { label: '加工型（材料+工艺→零件）', value: 'fabrication' },
+  { label: '装配型（原材料组装→成品/半成品）', value: 'assembly' },
+];
 
 /**
  * 物料表单组件属性
@@ -92,6 +108,33 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [externalSystemCodes, setExternalSystemCodes] = useState<MaterialCodeMapping[]>([]);
   const [externalSystemCodesLoading, setExternalSystemCodesLoading] = useState(false);
 
+  // 智能建议状态（用于物料来源标签页，悬浮面板展示）
+  const [suggestionResult, setSuggestionResult] = useState<{
+    suggested_type: string | null;
+    confidence: number;
+    reasons: string[];
+  } | null>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const materialSourceTabRef = useRef<{
+    applySuggestion: (type: string, manufacturingMode?: string) => void;
+  } | null>(null);
+
+  // 验证与完整性检查状态（用于物料来源标签页，悬浮面板展示）
+  const [validationResult, setValidationResult] = useState<{
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
+  const [completenessResult, setCompletenessResult] = useState<{
+    is_complete: boolean;
+    missing_configs: string[];
+    warnings: string[];
+  } | null>(null);
+  const [loadingValidation, setLoadingValidation] = useState(false);
+  const [loadingCompleteness, setLoadingCompleteness] = useState(false);
+
+  // 多单位管理提示（用于多单位管理标签页，悬浮面板展示）
+  const [unitMessages, setUnitMessages] = useState<Array<{ text: string; title?: string }>>([]);
 
   /**
    * 加载客户列表
@@ -167,6 +210,60 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       setExternalSystemCodesLoading(false);
     }
   };
+
+  /**
+   * 加载物料来源智能建议
+   */
+  const loadSuggestion = useCallback(async () => {
+    if (!material?.uuid) return;
+    try {
+      setLoadingSuggestion(true);
+      const result = await materialSourceApi.suggest(material.uuid);
+      setSuggestionResult(result);
+    } catch (error: any) {
+      messageApi.error(`获取建议失败: ${error.message || '未知错误'}`);
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  }, [material?.uuid, messageApi]);
+
+  const validateSourceConfig = useCallback(async () => {
+    if (!material?.uuid) return;
+    try {
+      setLoadingValidation(true);
+      const result = await materialSourceApi.validate(material.uuid);
+      setValidationResult(result);
+    } catch (error: any) {
+      messageApi.error(`验证失败: ${error.message || '未知错误'}`);
+    } finally {
+      setLoadingValidation(false);
+    }
+  }, [material?.uuid, messageApi]);
+
+  const checkCompleteness = useCallback(async () => {
+    if (!material?.uuid) return;
+    try {
+      setLoadingCompleteness(true);
+      const result = await materialSourceApi.checkCompleteness(material.uuid);
+      setCompletenessResult(result);
+    } catch (error: any) {
+      messageApi.error(`检查失败: ${error.message || '未知错误'}`);
+    } finally {
+      setLoadingCompleteness(false);
+    }
+  }, [material?.uuid, messageApi]);
+
+  useEffect(() => {
+    if (open && activeTab === 'source' && material?.uuid) {
+      loadSuggestion();
+      validateSourceConfig();
+      checkCompleteness();
+    } else if (!open || activeTab !== 'source') {
+      setSuggestionResult(null);
+      setValidationResult(null);
+      setCompletenessResult(null);
+    }
+  }, [open, activeTab, material?.uuid, loadSuggestion, validateSourceConfig, checkCompleteness]);
 
   /**
    * 生成编码的辅助函数
@@ -318,29 +415,34 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         // 加载默认值（兼容处理：后端可能返回 snake_case 或 camelCase）
         // 将默认值转换为表单字段格式（对象数组转换为 ID 数组）
         const materialDefaults = (material as any).defaults;
+        const routeId = (material as any).process_route_id ?? (material as any).processRouteId;
+        const formDefaults: any = materialDefaults ? { ...materialDefaults } : {};
+        
         if (materialDefaults) {
-          const formDefaults: any = { ...materialDefaults };
-          
           // 将对象数组转换为 ID 数组
           if (materialDefaults.defaultSuppliers && Array.isArray(materialDefaults.defaultSuppliers)) {
             formDefaults.defaultSupplierIds = materialDefaults.defaultSuppliers.map((s: any) => s.supplierId || s.supplier_id);
           }
-          
           if (materialDefaults.defaultCustomers && Array.isArray(materialDefaults.defaultCustomers)) {
             formDefaults.defaultCustomerIds = materialDefaults.defaultCustomers.map((c: any) => c.customerId || c.customer_id);
           }
-          
           if (materialDefaults.defaultWarehouses && Array.isArray(materialDefaults.defaultWarehouses)) {
             formDefaults.defaultWarehouseIds = materialDefaults.defaultWarehouses.map((w: any) => w.warehouseId || w.warehouse_id);
           }
-          
-          // 移除对象数组字段（已转换为 ID 数组）
           delete formDefaults.defaultSuppliers;
           delete formDefaults.defaultCustomers;
           delete formDefaults.defaultWarehouses;
-          delete formDefaults.defaultProcessRoute; // 只保留 UUID
-          
-          // 设置到表单
+          delete formDefaults.defaultProcessRoute;
+        }
+        
+        // 工艺路线存在物料主表 process_route_id，需在 processRoutes 加载后由另一 useEffect 回填 UUID；
+        // 若此处已有 processRoutes，则直接写入 defaultProcessRouteUuid，避免依赖时序
+        if (routeId != null && processRoutes.length > 0) {
+          const route = processRoutes.find((pr: { id: number }) => pr.id === routeId);
+          if (route) formDefaults.defaultProcessRouteUuid = route.uuid;
+        }
+        
+        if (Object.keys(formDefaults).length > 0) {
           setTimeout(() => {
             formRef.current?.setFieldsValue({
               defaults: formDefaults,
@@ -369,8 +471,29 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         setSupplierCodes([]);
       }
     }
-  }, [open, isEdit, material, generateCode, initialValues]);
-  
+  }, [open, isEdit, material, generateCode, initialValues, processRoutes]);
+
+  /**
+   * 编辑时：工艺路线列表加载完成后，用物料的 process_route_id 回填「默认工艺路线」
+   * 延后 150ms 执行，避免被主 useEffect 中 100ms 的 defaults 设置覆盖
+   */
+  useEffect(() => {
+    if (!isEdit || !material || processRoutes.length === 0) return;
+    const routeId = (material as any).process_route_id ?? (material as any).processRouteId;
+    if (routeId == null) return;
+    const route = processRoutes.find(pr => pr.id === routeId);
+    if (!route) return;
+    const timer = setTimeout(() => {
+      if (formRef.current) {
+        const currentDefaults = formRef.current.getFieldValue('defaults') || {};
+        if (currentDefaults.defaultProcessRouteUuid !== route.uuid) {
+          formRef.current.setFieldsValue({ defaults: { ...currentDefaults, defaultProcessRouteUuid: route.uuid } });
+        }
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isEdit, material, processRoutes]);
+
   /**
    * 当客户列表加载完成后，更新客户编码映射中的名称
    */
@@ -434,11 +557,28 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     try {
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
       const sourceType = values.sourceType || values.source_type;
-      const sourceConfig = values.sourceConfig || values.source_config;
+      const existingSourceConfig = (material as any)?.source_config || (material as any)?.sourceConfig || {};
+      const formSourceConfig = values.sourceConfig || values.source_config || {};
+      const sourceConfig = { ...existingSourceConfig, ...formSourceConfig };
+      // 同步名称字段，便于后端与下游使用
+      if (sourceConfig.default_supplier_id && suppliers.length > 0) {
+        const supplier = suppliers.find(s => s.id === sourceConfig.default_supplier_id);
+        if (supplier) sourceConfig.default_supplier_name = supplier.name;
+      }
+      if (sourceConfig.outsource_supplier_id && suppliers.length > 0) {
+        const supplier = suppliers.find(s => s.id === sourceConfig.outsource_supplier_id);
+        if (supplier) sourceConfig.outsource_supplier_name = supplier.name;
+      }
       
-      // 处理默认值数据转换
-      const formDefaults = values.defaults || {};
-      const processedDefaults: any = { ...formDefaults };
+      // 处理默认值数据转换（合并已有 defaults，避免只改物料来源时覆盖其他默认值）
+      const existingDefaults = (material as any)?.defaults || {};
+      const formDefaultsRaw = values.defaults || {};
+      // ProForm 可能用扁平 key 存储嵌套字段，兼容 values['defaults.defaultProcessRouteUuid']
+      const formDefaults = {
+        ...formDefaultsRaw,
+        ...(values['defaults.defaultProcessRouteUuid'] !== undefined && { defaultProcessRouteUuid: values['defaults.defaultProcessRouteUuid'] }),
+      };
+      const processedDefaults: any = { ...existingDefaults, ...formDefaults };
       
       // 将 ID 数组转换为对象数组
       if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
@@ -479,12 +619,15 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         delete processedDefaults.defaultWarehouseIds;
       }
       
-      // 处理默认工艺路线
-      if (formDefaults.defaultProcessRouteUuid && processRoutes.length > 0) {
-        const route = processRoutes.find(pr => pr.uuid === formDefaults.defaultProcessRouteUuid);
+      // 处理默认工艺路线：写入 defaults 供展示，并准备 process_route_id 供后端物料表保存
+      let processRouteIdForSubmit: number | undefined;
+      const defaultProcessRouteUuid = formDefaults.defaultProcessRouteUuid;
+      if (defaultProcessRouteUuid && processRoutes.length > 0) {
+        const route = processRoutes.find(pr => pr.uuid === defaultProcessRouteUuid);
         if (route) {
           processedDefaults.defaultProcessRoute = route.id;
           processedDefaults.defaultProcessRouteUuid = route.uuid;
+          processRouteIdForSubmit = route.id;
         }
       }
       
@@ -504,6 +647,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         main_code: restValues.mainCode,
         name: restValues.name,
         group_id: restValues.groupId,
+        process_route_id: sourceType === 'Make' ? (processRouteIdForSubmit ?? (material as any)?.process_route_id ?? (material as any)?.processRouteId ?? null) : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
         material_type: restValues.materialType,
         specification: restValues.specification,
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
@@ -574,8 +718,96 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     }
   };
 
+  const handleApplySuggestion = useCallback(() => {
+    if (suggestionResult?.suggested_type) {
+      const manufacturingMode = (suggestionResult as any).suggested_manufacturing_mode;
+      materialSourceTabRef.current?.applySuggestion(
+        suggestionResult.suggested_type,
+        manufacturingMode
+      );
+    }
+  }, [suggestionResult]);
+
+  const suggestionForPanel = useMemo(
+    () =>
+      suggestionResult?.suggested_type
+        ? {
+            suggested_type: suggestionResult.suggested_type,
+            confidence: suggestionResult.confidence,
+            reasons: suggestionResult.reasons || [],
+          }
+        : null,
+    [suggestionResult]
+  );
+
+  const showSourcePanel =
+    open &&
+    activeTab === 'source' &&
+    !!material?.uuid &&
+    (loadingSuggestion ||
+      loadingValidation ||
+      loadingCompleteness ||
+      !!(suggestionResult?.suggested_type) ||
+      !!validationResult ||
+      (!!completenessResult && !completenessResult.is_complete));
+
+  const showUnitsPanel = open && activeTab === 'units' && unitMessages.length > 0;
+
+  // #region agent log
+  React.useEffect(() => {
+    if (activeTab === 'source') {
+      fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'MaterialForm.tsx:showSourcePanel',
+          message: 'showSourcePanel / loading state',
+          data: {
+            showSourcePanel,
+            loadingSuggestion,
+            loadingValidation,
+            loadingCompleteness,
+            hasSuggestion: !!(suggestionResult?.suggested_type),
+            hasValidation: !!validationResult,
+            hasCompleteness: !!(completenessResult && !completenessResult.is_complete),
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          hypothesisId: 'A',
+        }),
+      }).catch(() => {});
+    }
+  }, [
+    activeTab,
+    showSourcePanel,
+    loadingSuggestion,
+    loadingValidation,
+    loadingCompleteness,
+    suggestionResult,
+    validationResult,
+    completenessResult,
+  ]);
+  // #endregion
+
   return (
     <>
+      <SmartSuggestionFloatPanel
+        visible={showSourcePanel || showUnitsPanel}
+        loading={
+          activeTab === 'source'
+            ? loadingSuggestion || loadingValidation || loadingCompleteness
+            : false
+        }
+        anchorSelector="[data-smart-suggestion-anchor='material-form']"
+        suggestion={activeTab === 'source' ? suggestionForPanel : null}
+        validationResult={activeTab === 'source' ? validationResult : null}
+        completenessResult={activeTab === 'source' ? completenessResult : null}
+        messages={activeTab === 'units' ? unitMessages : undefined}
+        sourceTypeOptions={SOURCE_TYPE_OPTIONS}
+        onApply={activeTab === 'source' ? handleApplySuggestion : undefined}
+        onRevalidate={activeTab === 'source' ? validateSourceConfig : undefined}
+        loadingValidation={activeTab === 'source' ? loadingValidation : false}
+      />
       <style>{`
         /* ==================== MaterialForm Modal 样式 - 完全重写（按 Ant Design 最佳实践） ==================== */
         /* 备份说明：原样式已移除，以下为按 Ant Design 最佳实践完全重写的样式 */
@@ -643,6 +875,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         footer={null}
         width={1000}
         destroyOnHidden
+        modalRender={(modal) => (
+          <div data-smart-suggestion-anchor="material-form">
+            {modal}
+          </div>
+        )}
       >
         <ProForm
         formRef={formRef}
@@ -716,7 +953,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               key: 'units',
               label: '多单位管理',
               children: (
-                <MaterialUnitsManager formRef={formRef} />
+                <MaterialUnitsManager formRef={formRef} onMessagesChange={setUnitMessages} />
               ),
             },
             {
@@ -763,12 +1000,15 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               label: '物料来源',
               children: (
                 <MaterialSourceTab
+                  ref={materialSourceTabRef}
                   formRef={formRef}
                   material={material}
                   suppliers={suppliers}
                   processRoutes={processRoutes}
                   suppliersLoading={suppliersLoading}
                   processRoutesLoading={processRoutesLoading}
+                  onValidate={validateSourceConfig}
+                  onCheckCompleteness={checkCompleteness}
                 />
               ),
             },
@@ -785,9 +1025,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
  */
 interface MaterialUnitsManagerProps {
   formRef: React.RefObject<ProFormInstance>;
+  onMessagesChange?: (messages: Array<{ text: string; title?: string }>) => void;
 }
 
-const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) => {
+const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, onMessagesChange }) => {
   const [units, setUnits] = useState<MaterialUnit[]>([]);
   const [scenarios, setScenarios] = useState<{
     purchase?: string;
@@ -1038,6 +1279,50 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
   const validationErrors = validateUnits();
   const hasErrors = validationErrors.length > 0;
 
+  useEffect(() => {
+    if (!onMessagesChange) return;
+    const messages: Array<{ text: string; title?: string }> = [];
+
+    if (!baseUnit) {
+      messages.push({ text: '请先在「基本信息」标签页设置基础单位', title: '基础设置' });
+    }
+
+    messages.push({
+      text: '换算关系设置：使用分子/分母表示，避免精度丢失。例如1吨=1000kg，则分子=1000，分母=1。\n\n换算公式：1个辅助单位 = (分子/分母) × 1个基础单位',
+      title: '换算说明',
+    });
+
+    if (hasErrors) {
+      messages.push({
+        text: `配置错误：\n${validationErrors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`,
+        title: '配置验证',
+      });
+    } else if (units.length > 0 && baseUnit) {
+      const baseLabel = unitValueToLabel[baseUnit] || baseUnit;
+      const unitLines = units
+        .map((unit, i) => {
+          const n = unit.numerator || 1;
+          const d = unit.denominator || 1;
+          const rate = n / d;
+          const isInt = Number.isInteger(rate);
+          const ul = unit.unit ? unitValueToLabel[unit.unit] || unit.unit : unit.unit;
+          return `• ${ul}：1 ${ul} = ${isInt ? rate : `${n}/${d}`} ${baseLabel}`;
+        })
+        .join('\n');
+      let configText = `多单位配置正确\n\n基础单位：${baseLabel}（库存单位）\n\n辅助单位配置：\n${unitLines}`;
+      if (scenarios.purchase || scenarios.sale || scenarios.production) {
+        configText += '\n\n场景单位映射：';
+        if (scenarios.purchase) configText += `\n• 采购单位：${unitValueToLabel[scenarios.purchase] || scenarios.purchase}`;
+        if (scenarios.sale) configText += `\n• 销售单位：${unitValueToLabel[scenarios.sale] || scenarios.sale}`;
+        if (scenarios.production) configText += `\n• 生产单位：${unitValueToLabel[scenarios.production] || scenarios.production}`;
+        configText += `\n• 库存单位：${baseLabel}（基础单位）`;
+      }
+      messages.push({ text: configText, title: '配置概览' });
+    }
+
+    onMessagesChange(messages);
+  }, [baseUnit, units, scenarios, hasErrors, validationErrors, unitValueToLabel, onMessagesChange]);
+
   return (
     <div style={{ width: '100%', display: 'block', boxSizing: 'border-box' }}>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1055,93 +1340,6 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef }) 
           </div>
         )}
       </div>
-      {!baseUnit && (
-        <Alert
-          message='请先在"基本信息"标签页设置基础单位'
-          type="warning"
-          showIcon
-          style={{ marginBottom: 8 }}
-        />
-      )}
-      <Alert
-        message="使用说明"
-        description={
-          <>
-            <div style={{ marginBottom: 4 }}>
-              <strong>换算关系设置：</strong>使用"分子/分母"的方式表示换算关系，避免精度丢失。例如：1吨 = 1000kg，则分子=1000，分母=1（即 1000/1）。
-            </div>
-            <div>
-              <strong>换算公式：</strong>1个辅助单位 = (分子/分母) × 1个基础单位
-            </div>
-          </>
-        }
-        type="info"
-        showIcon
-        style={{ marginBottom: 8 }}
-      />
-      {hasErrors && (
-        <Alert
-          message="配置错误"
-          description={
-            <ul style={{ margin: 0, paddingLeft: 20 }}>
-              {validationErrors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-          }
-          type="error"
-          showIcon
-          style={{ marginBottom: 8 }}
-        />
-      )}
-      {units.length > 0 && !hasErrors && baseUnit && (
-        <Alert
-          message="多单位配置正确"
-          description={
-            <>
-              <div style={{ marginBottom: 4 }}>
-                <strong>基础单位：</strong>{unitValueToLabel[baseUnit] || baseUnit}（库存单位）
-              </div>
-              <div style={{ marginBottom: 4 }}>
-                <strong>辅助单位配置：</strong>
-              </div>
-              {units.map((unit, index) => {
-                const numerator = unit.numerator || 1;
-                const denominator = unit.denominator || 1;
-                const conversionRate = numerator / denominator;
-                const isInteger = Number.isInteger(conversionRate);
-                const unitLabel = unit.unit ? unitValueToLabel[unit.unit] : unit.unit;
-                const baseUnitLabel = baseUnit ? unitValueToLabel[baseUnit] : baseUnit;
-                return (
-                  <div key={index} style={{ marginLeft: 16, marginBottom: 2 }}>
-                    • {unitLabel || unit.unit}：1 {unitLabel || unit.unit} = {isInteger ? conversionRate : `${numerator}/${denominator}`} {baseUnitLabel || baseUnit}
-                  </div>
-                );
-              })}
-              {(scenarios.purchase || scenarios.sale || scenarios.production) && (
-                <>
-                  <div style={{ marginTop: 8, marginBottom: 4 }}>
-                    <strong>场景单位映射：</strong>
-                  </div>
-                  {scenarios.purchase && (
-                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 采购单位：{unitValueToLabel[scenarios.purchase] || scenarios.purchase}</div>
-                  )}
-                  {scenarios.sale && (
-                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 销售单位：{unitValueToLabel[scenarios.sale] || scenarios.sale}</div>
-                  )}
-                  {scenarios.production && (
-                    <div style={{ marginLeft: 16, marginBottom: 2 }}>• 生产单位：{unitValueToLabel[scenarios.production] || scenarios.production}</div>
-                  )}
-                  <div style={{ marginLeft: 16 }}>• 库存单位：{unitValueToLabel[baseUnit] || baseUnit}（基础单位）</div>
-                </>
-              )}
-            </>
-          }
-          type="success"
-          showIcon
-          style={{ marginBottom: 8 }}
-        />
-      )}
       <Table
         columns={columns}
         dataSource={units}
@@ -2457,51 +2655,25 @@ interface MaterialSourceTabProps {
   processRoutes: ProcessRoute[];
   suppliersLoading: boolean;
   processRoutesLoading: boolean;
+  onValidate?: () => void;
+  onCheckCompleteness?: () => void;
 }
 
-const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
-  formRef,
-  material,
-  suppliers,
-  processRoutes,
-  suppliersLoading,
-  processRoutesLoading,
-}) => {
-  const { message: messageApi } = App.useApp();
-  const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
-  const [validationResult, setValidationResult] = useState<{
-    is_valid: boolean;
-    errors: string[];
-    warnings: string[];
-  } | null>(null);
-  const [suggestionResult, setSuggestionResult] = useState<{
-    suggested_type: string | null;
-    confidence: number;
-    reasons: string[];
-  } | null>(null);
-  const [completenessResult, setCompletenessResult] = useState<{
-    is_complete: boolean;
-    missing_configs: string[];
-    warnings: string[];
-  } | null>(null);
-  const [loadingValidation, setLoadingValidation] = useState(false);
-  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+const MaterialSourceTab = forwardRef<
+  { applySuggestion: (type: string, manufacturingMode?: string) => void },
+  MaterialSourceTabProps
+>(
+  ({ formRef, material, suppliers, processRoutes, suppliersLoading, processRoutesLoading, onValidate, onCheckCompleteness }, ref) => {
+    const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
 
-  /**
-   * 物料来源类型选项
-   */
-  const sourceTypeOptions = [
-    { label: '自制件 (Make)', value: 'Make' },
-    { label: '采购件 (Buy)', value: 'Buy' },
-    { label: '虚拟件 (Phantom)', value: 'Phantom' },
-    { label: '委外件 (Outsource)', value: 'Outsource' },
-    { label: '配置件 (Configure)', value: 'Configure' },
-  ];
+    const sourceTypeOptions = SOURCE_TYPE_OPTIONS;
 
   /**
    * 处理物料来源类型变化
+   * @param value 来源类型
+   * @param manufacturingMode 制造模式（仅 Make 时有效，应用建议时可选传入）
    */
-  const handleSourceTypeChange = (value: string) => {
+  const handleSourceTypeChange = (value: string, manufacturingMode?: string) => {
     setSourceType(value);
     formRef.current?.setFieldsValue({
       sourceType: value,
@@ -2513,9 +2685,10 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
     let newConfig = { ...currentConfig };
     
     if (value === 'Make') {
-      // 自制件：保留BOM和工艺路线配置
+      // 自制件：保留BOM和工艺路线配置，支持制造模式（加工型/装配型）
       newConfig = {
         ...newConfig,
+        manufacturing_mode: manufacturingMode ?? newConfig.manufacturing_mode,
         production_lead_time: newConfig.production_lead_time,
         min_production_batch: newConfig.min_production_batch,
         production_waste_rate: newConfig.production_waste_rate,
@@ -2552,194 +2725,20 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       sourceConfig: newConfig,
       source_config: newConfig, // 向后兼容
     });
-    
-    // 验证配置
+
     if (material?.uuid) {
-      validateSourceConfig();
+      onValidate?.();
+      onCheckCompleteness?.();
     }
   };
 
-  /**
-   * 验证物料来源配置
-   */
-  const validateSourceConfig = async () => {
-    if (!material?.uuid) return;
-    
-    try {
-      setLoadingValidation(true);
-      const result = await materialSourceApi.validate(material.uuid);
-      setValidationResult(result);
-    } catch (error: any) {
-      messageApi.error(`验证失败: ${error.message || '未知错误'}`);
-    } finally {
-      setLoadingValidation(false);
-    }
-  };
-
-  /**
-   * 获取智能建议
-   */
-  const loadSuggestion = async () => {
-    if (!material?.uuid) return;
-    
-    try {
-      setLoadingSuggestion(true);
-      const result = await materialSourceApi.suggest(material.uuid);
-      setSuggestionResult(result);
-    } catch (error: any) {
-      messageApi.error(`获取建议失败: ${error.message || '未知错误'}`);
-    } finally {
-      setLoadingSuggestion(false);
-    }
-  };
-
-  /**
-   * 检查配置完整性
-   */
-  const checkCompleteness = async () => {
-    if (!material?.uuid) return;
-    
-    try {
-      const result = await materialSourceApi.checkCompleteness(material.uuid);
-      setCompletenessResult(result);
-    } catch (error: any) {
-      messageApi.error(`检查失败: ${error.message || '未知错误'}`);
-    }
-  };
-
-  /**
-   * 初始化时加载建议和验证
-   */
-  useEffect(() => {
-    if (material?.uuid) {
-      loadSuggestion();
-      validateSourceConfig();
-      checkCompleteness();
-    }
-  }, [material?.uuid]);
-
-  /**
-   * 监听来源类型变化，重新验证
-   */
-  useEffect(() => {
-    if (sourceType && material?.uuid) {
-      validateSourceConfig();
-      checkCompleteness();
-    }
-  }, [sourceType]);
+  useImperativeHandle(ref, () => ({
+    applySuggestion: (type: string, manufacturingMode?: string) =>
+      handleSourceTypeChange(type, manufacturingMode),
+  }));
 
   return (
     <div>
-      {/* 智能建议 */}
-      {suggestionResult && suggestionResult.suggested_type && (
-        <Alert
-          message={`智能建议：${sourceTypeOptions.find(opt => opt.value === suggestionResult.suggested_type)?.label || suggestionResult.suggested_type}`}
-          description={
-            <div>
-              <div>置信度：{(suggestionResult.confidence * 100).toFixed(0)}%</div>
-              <div style={{ marginTop: 8 }}>
-                <strong>建议原因：</strong>
-                <ul style={{ marginTop: 4, marginBottom: 0 }}>
-                  {suggestionResult.reasons.map((reason, index) => (
-                    <li key={index}>{reason}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          }
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button
-              size="small"
-              onClick={() => {
-                if (suggestionResult.suggested_type) {
-                  handleSourceTypeChange(suggestionResult.suggested_type);
-                }
-              }}
-            >
-              应用建议
-            </Button>
-          }
-        />
-      )}
-
-      {/* 验证结果 */}
-      {validationResult && (
-        <Alert
-          message={validationResult.is_valid ? '验证通过' : '验证失败'}
-          description={
-            <div>
-              {validationResult.errors.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <strong style={{ color: '#ff4d4f' }}>错误：</strong>
-                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
-                    {validationResult.errors.map((error, index) => (
-                      <li key={index}>{error}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {validationResult.warnings.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <strong style={{ color: '#faad14' }}>警告：</strong>
-                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
-                    {validationResult.warnings.map((warning, index) => (
-                      <li key={index}>{warning}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          }
-          type={validationResult.is_valid ? 'success' : 'error'}
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button
-              size="small"
-              loading={loadingValidation}
-              onClick={validateSourceConfig}
-            >
-              重新验证
-            </Button>
-          }
-        />
-      )}
-
-      {/* 配置完整性检查 */}
-      {completenessResult && !completenessResult.is_complete && (
-        <Alert
-          message="配置不完整"
-          description={
-            <div>
-              <div style={{ marginTop: 8 }}>
-                <strong>缺失配置：</strong>
-                <ul style={{ marginTop: 4, marginBottom: 0 }}>
-                  {completenessResult.missing_configs.map((config, index) => (
-                    <li key={index}>{config}</li>
-                  ))}
-                </ul>
-              </div>
-              {completenessResult.warnings.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <strong>建议：</strong>
-                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
-                    {completenessResult.warnings.map((warning, index) => (
-                      <li key={index}>{warning}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          }
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-      )}
-
       {/* 物料来源类型选择 */}
       <ProFormSelect
         name="sourceType"
@@ -2759,9 +2758,19 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
           const config = sourceConfig || {};
           
           if (currentSourceType === 'Make') {
-            // 自制件配置
+            // 自制件配置（含制造模式：加工型/装配型）
             return (
               <div>
+                <ProFormSelect
+                  name="sourceConfig.manufacturing_mode"
+                  label="制造模式"
+                  placeholder="请选择制造模式"
+                  options={MANUFACTURING_MODE_OPTIONS}
+                  fieldProps={{
+                    allowClear: true,
+                  }}
+                  extra="加工型：材料经工艺制成零件，工艺路线必填；装配型：原材料组装成成品/半成品，BOM必填"
+                />
                 <ProFormSelect
                   name="defaults.defaultProcessRouteUuid"
                   label="默认工艺路线"
@@ -2931,6 +2940,6 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       </ProFormDependency>
     </div>
   );
-};
+});
 
 export default MaterialForm;
