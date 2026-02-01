@@ -138,6 +138,15 @@ export async function executeDemandComputation(id: number): Promise<DemandComput
 }
 
 /**
+ * 重新计算（仅适用于已完成或失败的计算）
+ */
+export async function recomputeDemandComputation(id: number): Promise<DemandComputation> {
+  return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}/recompute`, {
+    method: 'POST',
+  });
+}
+
+/**
  * 更新需求计算
  */
 export async function updateDemandComputation(id: number, data: Partial<DemandComputation>): Promise<DemandComputation> {

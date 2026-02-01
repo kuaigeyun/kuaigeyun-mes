@@ -20,6 +20,13 @@ const { TextNode } = RCNode;
 
 const DEFAULT_EXPAND_LEVEL = 5;
 
+/** 节点固定宽度（文本在此宽度内换行），与 getVGap/getHGap 匹配使布局更自然 */
+const NODE_WIDTH = 168;
+/** 同级节点垂直间距，加大以缓解二级节点（如定子下硅钢片/漆包线、转子与外壳之间）拥挤 */
+const NODE_V_GAP = 24;
+/** 层级间水平间距 */
+const NODE_H_GAP = 128;
+
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, Material, BOMHierarchy, BOMHierarchyItem } from '../../../types/material';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
@@ -83,20 +90,22 @@ const BOMDesignerPage: React.FC = () => {
 
   /**
    * 将 BOM 层级数据转换为 MindMap 树形数据
+   * 节点 id 使用路径（path）保证唯一：同一物料在多处出现时不会重复（如硅钢片在定子/转子下各出现一次）
    */
   const convertToMindMapData = useCallback((
     rootMaterial: Material,
     items: BOMHierarchyItem[]
   ): MindMapData => {
-    const convertItem = (item: BOMHierarchyItem): MindMapNode => {
+    const convertItem = (item: BOMHierarchyItem, path: number[]): MindMapNode => {
       const material = materials.find(m => m.id === item.componentId) || {
         id: item.componentId,
         code: item.componentCode,
         name: item.componentName,
       };
+      const pathKey = path.join('-');
       
       const node: MindMapNode = {
-        id: `material_${item.componentId}_${item.level}`,
+        id: `material_${item.componentId}_${pathKey}`,
         value: `${material.code} - ${material.name}`,
         material,
         quantity: item.quantity,
@@ -107,7 +116,9 @@ const BOMDesignerPage: React.FC = () => {
       };
       
       if (item.children && item.children.length > 0) {
-        node.children = item.children.map(convertItem);
+        node.children = item.children.map((child, index) =>
+          convertItem(child, [...path, index])
+        );
       }
       
       return node;
@@ -117,7 +128,7 @@ const BOMDesignerPage: React.FC = () => {
       id: 'root',
       value: `${rootMaterial.code} - ${rootMaterial.name}`,
       material: rootMaterial,
-      children: items.map(convertItem),
+      children: items.map((item, index) => convertItem(item, [index])),
     };
     
     return rootNode;
@@ -578,15 +589,15 @@ const BOMDesignerPage: React.FC = () => {
     return strip(mindMapData as MindMapNode);
   }, [mindMapData]);
 
-  // MindMap 配置：数据变化时传完整新 config，与初次加载同路径，保证布局与父子关系正确
+  // MindMap 配置：固定节点宽度 + 换行，与间距匹配使布局自然
   const mindMapConfig = useMemo(() => {
     if (!mindMapDataSafe) return null;
     return {
       data: mindMapDataSafe,
       direction: 'right' as const,
       type: 'boxed' as const,
-      nodeMinWidth: 120,
-      nodeMaxWidth: 300,
+      nodeMinWidth: NODE_WIDTH,
+      nodeMaxWidth: NODE_WIDTH,
       defaultExpandLevel: DEFAULT_EXPAND_LEVEL,
       theme: 'dark' as const,
       labelField: (d: { id?: string; value?: string; data?: { value?: string } }) => {
@@ -602,13 +613,12 @@ const BOMDesignerPage: React.FC = () => {
               const v = data.value ?? (data.data && data.data.value);
               return v != null && String(v).trim() !== '' ? String(v) : (data.id ?? '');
             })();
-            const maxW = 300;
-            const font = { fontWeight: depth <= 1 ? 600 : 400, fontSize: depth === 0 ? 24 : 16 };
+            const font = { fontWeight: depth <= 1 ? 600 : 400, fontSize: depth === 0 ? 20 : 13 };
             const isSelected = (data.states || []).includes('selected');
             const props: any = {
               text: label,
               color,
-              maxWidth: maxW,
+              maxWidth: NODE_WIDTH,
               font,
               isSelected,
               borderWidth: 2,
@@ -622,7 +632,13 @@ const BOMDesignerPage: React.FC = () => {
           },
         },
       },
-      layout: { type: 'mindmap', direction: 'H' as const, getSide: () => 'right' },
+      layout: {
+        type: 'mindmap',
+        direction: 'H' as const,
+        getSide: () => 'right',
+        getVGap: () => NODE_V_GAP,
+        getHGap: () => NODE_H_GAP,
+      },
       onReady: (graph: any) => {
         mindMapInstanceRef.current = graph;
         graph.on('node:click', (e: any) => {

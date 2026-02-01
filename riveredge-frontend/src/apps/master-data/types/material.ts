@@ -101,6 +101,10 @@ export interface Material {
   source_type?: string; // 物料来源类型（向后兼容）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
   source_config?: Record<string, any>; // 物料来源相关配置（向后兼容）
+  processRouteId?: number; // 默认工艺路线ID（自制件）
+  processRouteName?: string; // 默认工艺路线名称
+  process_route_id?: number;
+  process_route_name?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;

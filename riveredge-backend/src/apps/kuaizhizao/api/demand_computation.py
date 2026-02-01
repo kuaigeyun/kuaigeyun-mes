@@ -162,6 +162,31 @@ async def execute_computation(
         # #endregion
 
 
+@router.post("/{computation_id}/recompute", response_model=DemandComputationResponse, summary="重新计算")
+async def recompute_computation(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    对已完成或失败的需求计算重新执行计算。
+    会清空原计算结果明细后按原需求重新跑 MRP/LRP。
+    """
+    try:
+        return await computation_service.recompute_computation(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"重新计算失败: {e}")
+        err_msg = f"{type(e).__name__}: {str(e)}"
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
+
+
 @router.put("/{computation_id}", response_model=DemandComputationResponse, summary="更新需求计算")
 async def update_computation(
     computation_id: int = Path(..., description="计算ID"),
@@ -213,8 +238,11 @@ async def generate_orders(
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error(f"生成工单和采购单失败: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="生成工单和采购单失败")
+        logger.exception("生成工单和采购单失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生成工单和采购单失败: {str(e)}",
+        )
 
 
 @router.get("/history", summary="查询需求计算历史记录")

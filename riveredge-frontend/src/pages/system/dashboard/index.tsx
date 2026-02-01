@@ -54,6 +54,7 @@ import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   AppstoreOutlined,
+  BulbOutlined,
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -178,6 +179,24 @@ interface QuickActionItem {
 }
 
 /**
+ * 工作台系统操作小 TIPS（随机展示一条）
+ */
+const WORKPLACE_TIPS = [
+  '物料管理中配置好「物料来源」和默认工艺路线/供应商，需求计算与工单生成会更顺畅。',
+  '需求计算完成后可一键生成工单与采购单，建议先做「物料来源验证」再生成。',
+  '工单报工可在「生产执行-报工」快速录入，支持扫码与批量报工。',
+  '消息通知会推送物料变更、审批等，请留意右上角铃铛图标。',
+  '工作台日期切换可查看不同时间段（今天/近7天/近30天）的工单与产量统计。',
+  '左侧快捷入口可拖拽排序，把常用功能放在前面更方便。',
+  '销售订单审核通过后，在需求管理中创建需求并执行需求计算，再生成工单与采购。',
+  '工艺路线与 BOM 配置完整后，工单排产与用料计算会更准确。',
+  '自定义字段在「系统-自定义字段」中配置，可扩展各单据的显示与录入项。',
+  '多单位物料在物料管理中维护换算关系，下单与库存会按单位自动换算。',
+  '物料变更后会触发下游提示，可在「消息通知」中查看影响范围与建议操作。',
+  '需求计算支持 MRP/LRP，MTS 用 MRP、MTO 用 LRP，创建时系统会按需求类型推荐。',
+];
+
+/**
  * 获取问候语（精细时间段划分，按北京时间）
  */
 const getGreeting = () => {
@@ -218,6 +237,24 @@ export default function DashboardPage() {
   // 时间范围筛选器状态
   const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'last7days' | 'last30days' | 'custom'>('today');
   const [customDateRange, setCustomDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+
+  // 工作台小 TIPS：每 10 秒随机换一条（避免与当前相同）
+  const [tipIndex, setTipIndex] = useState(() =>
+    Math.floor(Math.random() * WORKPLACE_TIPS.length),
+  );
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTipIndex((prev) => {
+        let next = Math.floor(Math.random() * WORKPLACE_TIPS.length);
+        if (WORKPLACE_TIPS.length > 1) {
+          while (next === prev) next = Math.floor(Math.random() * WORKPLACE_TIPS.length);
+        }
+        return next;
+      });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+  const currentTip = WORKPLACE_TIPS[tipIndex];
   
   // 实时更新时间
   useEffect(() => {
@@ -667,8 +704,31 @@ export default function DashboardPage() {
 
       {/* 生产指标 - 参考设计 */}
       <div style={{ marginBottom: 24 }}>
-        {/* 时间范围筛选器 */}
-        <Row justify="end" align="middle" style={{ marginBottom: 16 }}>
+        {/* 左侧 TIPS + 右侧时间范围筛选器 */}
+        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+          <Col flex="1" style={{ minWidth: 0 }}>
+            <Space size="small" style={{ color: token.colorTextSecondary, fontSize: 13 }} align="start">
+              <BulbOutlined style={{ color: token.colorWarning, marginTop: 2 }} />
+              <span
+                key={tipIndex}
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  animation: 'workplace-tip-in 0.4s ease-out',
+                }}
+              >
+                <Text type="secondary" ellipsis style={{ maxWidth: '100%', display: 'block' }}>
+                  {currentTip}
+                </Text>
+              </span>
+            </Space>
+            <style>{`
+              @keyframes workplace-tip-in {
+                from { opacity: 0; transform: translateY(6px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
+          </Col>
           <Col>
             <Space>
               <Segmented

@@ -22,10 +22,10 @@ import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { customerApi } from '../services/supply-chain';
 import { supplierApi } from '../services/supply-chain';
 import { warehouseApi } from '../services/warehouse';
-import { processRouteApi } from '../services/process';
+import { processRouteApi, operationApi } from '../services/process';
 import { materialSourceApi, materialCodeMappingApi } from '../services/material';
 import type { Warehouse } from '../types/warehouse';
-import type { ProcessRoute } from '../types/process';
+import type { ProcessRoute, Operation } from '../types/process';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
 import { variantAttributeApi } from '../services/variant-attribute';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
@@ -49,7 +49,7 @@ const SOURCE_TYPE_OPTIONS = [
 const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
   Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
-  Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch'],
+  Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
   Phantom: [],
   Configure: [],
 };
@@ -105,10 +105,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [processRoutes, setProcessRoutes] = useState<ProcessRoute[]>([]);
+  const [operations, setOperations] = useState<Operation[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
   const [processRoutesLoading, setProcessRoutesLoading] = useState(false);
+  const [operationsLoading, setOperationsLoading] = useState(false);
 
   // 编码映射数据
   const [departmentCodes, setDepartmentCodes] = useState<DepartmentCodeMapping[]>([]);
@@ -202,6 +204,21 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       console.error('加载工艺路线列表失败:', error);
     } finally {
       setProcessRoutesLoading(false);
+    }
+  };
+
+  /**
+   * 加载工序列表（委外工序下拉用）
+   */
+  const loadOperations = async () => {
+    try {
+      setOperationsLoading(true);
+      const result = await operationApi.list({ limit: 1000, is_active: true });
+      setOperations(result);
+    } catch (error: any) {
+      console.error('加载工序列表失败:', error);
+    } finally {
+      setOperationsLoading(false);
     }
   };
 
@@ -353,6 +370,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       loadSuppliers();
       loadWarehouses();
       loadProcessRoutes();
+      loadOperations();
 
       // 如果是新建模式且启用了自动编码，生成编码
       if (!isEdit) {
@@ -1036,8 +1054,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   material={material}
                   suppliers={suppliers}
                   processRoutes={processRoutes}
+                  operations={operations}
                   suppliersLoading={suppliersLoading}
                   processRoutesLoading={processRoutesLoading}
+                  operationsLoading={operationsLoading}
                   onValidate={validateSourceConfig}
                   onCheckCompleteness={checkCompleteness}
                 />
@@ -2671,8 +2691,10 @@ interface MaterialSourceTabProps {
   material?: Material;
   suppliers: Supplier[];
   processRoutes: ProcessRoute[];
+  operations: Operation[];
   suppliersLoading: boolean;
   processRoutesLoading: boolean;
+  operationsLoading: boolean;
   onValidate?: () => void;
   onCheckCompleteness?: () => void;
 }
@@ -2681,7 +2703,7 @@ const MaterialSourceTab = forwardRef<
   { applySuggestion: (type: string, manufacturingMode?: string) => void },
   MaterialSourceTabProps
 >(
-  ({ formRef, material, suppliers, processRoutes, suppliersLoading, processRoutesLoading, onValidate, onCheckCompleteness }, ref) => {
+  ({ formRef, material, suppliers, processRoutes, operations, suppliersLoading, processRoutesLoading, operationsLoading, onValidate, onCheckCompleteness }, ref) => {
     const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
 
     const sourceTypeOptions = SOURCE_TYPE_OPTIONS;
@@ -2880,11 +2902,18 @@ const MaterialSourceTab = forwardRef<
                       (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
                   }}
                 />
-                <ProFormText
+                <SafeProFormSelect
                   name="sourceConfig.outsource_operation"
                   label="委外工序"
-                  placeholder="请输入委外工序"
-                  rules={[{ required: true, message: '请输入委外工序' }]}
+                  placeholder="请选择委外工序"
+                  rules={[{ required: true, message: '请选择委外工序' }]}
+                  options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                  fieldProps={{
+                    loading: operationsLoading,
+                    showSearch: true,
+                    filterOption: (input: string, option: any) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                  }}
                 />
                 <ProFormDigit
                   name="sourceConfig.outsource_lead_time"

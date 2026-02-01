@@ -248,7 +248,7 @@ class DemandService(AppBaseService[Demand]):
                 raise NotFoundError("需求", str(demand_id))
             
             # 只能更新草稿状态的需求
-            if demand.status != "草稿":
+            if demand.status != DemandStatus.DRAFT:
                 raise BusinessLogicError(f"只能更新草稿状态的需求，当前状态: {demand.status}")
             
             # 准备更新数据
@@ -288,7 +288,7 @@ class DemandService(AppBaseService[Demand]):
                 raise NotFoundError("需求", str(demand_id))
             
             # 只能提交草稿状态的需求
-            if demand.status != "草稿":
+            if demand.status != DemandStatus.DRAFT:
                 raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {demand.status}")
             
             # 使用状态流转服务更新状态
