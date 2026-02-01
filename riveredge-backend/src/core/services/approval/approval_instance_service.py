@@ -86,8 +86,8 @@ class ApprovalInstanceService:
             from inngest import Event
             
             try:
-                await inngest_client.send_event(
-                    event=Event(
+                await inngest_client.send(
+                    Event(
                         name="approval/submit",
                         data={
                             "tenant_id": tenant_id,
@@ -346,8 +346,8 @@ class ApprovalInstanceService:
             if action.transfer_to_user_id:
                 event_data["transfer_to_user_id"] = action.transfer_to_user_id
             
-            await inngest_client.send_event(
-                event=Event(
+            await inngest_client.send(
+                Event(
                     name="approval/action",
                     data=event_data
                 )

@@ -190,6 +190,12 @@ class MaterialUpdate(BaseModel):
     
     # 默认值设置（用于更新时输入）
     defaults: Optional[Dict[str, Any]] = Field(None, description="默认值设置（JSON格式）")
+
+    # 物料来源控制（与 MaterialBase 一致，支持更新时保存）
+    source_type: Optional[str] = Field(None, alias="sourceType", max_length=20, description="物料来源类型（Make/Buy/Phantom/Outsource/Configure）")
+    source_config: Optional[Dict[str, Any]] = Field(None, alias="sourceConfig", description="物料来源相关配置（JSON格式）")
+
+    model_config = ConfigDict(populate_by_name=True)
     
     @validator("code")
     def validate_code(cls, v):

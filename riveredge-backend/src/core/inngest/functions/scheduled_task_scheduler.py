@@ -49,8 +49,8 @@ async def scheduled_task_scheduler_function(*args, **kwargs) -> Dict[str, Any]:
                 
                 if should_execute:
                     # 发送事件触发任务执行
-                    await inngest_client.send_event(
-                        event=InngestEvent(
+                    await inngest_client.send(
+                        InngestEvent(
                             name="scheduled-task/execute",
                             data={
                                 "tenant_id": task.tenant_id,

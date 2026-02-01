@@ -39,7 +39,15 @@ def with_tenant_isolation(func: Callable) -> Callable:
             # ... 业务逻辑
     """
     @wraps(func)
-    async def wrapper(event: Event) -> Any:
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        # Inngest Python SDK 使用 handler(ctx=ctx, step=step) 调用，事件在 ctx.event
+        ctx = (args[0] if args else None) or kwargs.get("ctx")
+        event = getattr(ctx, "event", None) if ctx is not None else None
+        if not event:
+            event = kwargs.get("event")
+        if not event:
+            logger.error(f"Inngest 函数 {func.__name__} 缺少 event 参数")
+            return {"success": False, "error": "缺少必要参数：event"}
         data = event.data or {}
         tenant_id = data.get("tenant_id")
         
@@ -90,8 +98,9 @@ def with_tenant_isolation(func: Callable) -> Callable:
         set_current_tenant_id(tenant_id)
         
         try:
-            # 执行函数
-            result = await func(event)
+            # 执行函数：只传 event；过滤掉 Inngest 传入的 ctx/step，避免只接受 (event) 的 handler 报错
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ("ctx", "step")}
+            result = await func(event, **filtered_kwargs)
             return result
         except Exception as e:
             logger.error(f"Inngest 函数 {func.__name__} 执行失败: [租户 {tenant_id}] {e}")
@@ -129,7 +138,15 @@ def with_tenant_isolation_optional(func: Callable) -> Callable:
             # ... 业务逻辑
     """
     @wraps(func)
-    async def wrapper(event: Event) -> Any:
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        # Inngest Python SDK 使用 handler(ctx=ctx, step=step) 调用，事件在 ctx.event
+        ctx = (args[0] if args else None) or kwargs.get("ctx")
+        event = getattr(ctx, "event", None) if ctx is not None else None
+        if not event:
+            event = kwargs.get("event")
+        if not event:
+            logger.error(f"Inngest 函数 {func.__name__} 缺少 event 参数")
+            return {"success": False, "error": "缺少必要参数：event"}
         data = event.data or {}
         tenant_id = data.get("tenant_id")
         
@@ -174,8 +191,9 @@ def with_tenant_isolation_optional(func: Callable) -> Callable:
                 }
         
         try:
-            # 执行函数
-            result = await func(event)
+            # 执行函数：只传 event；过滤掉 Inngest 传入的 ctx/step
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ("ctx", "step")}
+            result = await func(event, **filtered_kwargs)
             return result
         except Exception as e:
             logger.error(f"Inngest 函数 {func.__name__} 执行失败: [租户 {tenant_id}] {e}")

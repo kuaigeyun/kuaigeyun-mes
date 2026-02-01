@@ -716,8 +716,8 @@ class MaterialService:
             from core.inngest.client import inngest_client
             from inngest import Event
             
-            await inngest_client.send_event(
-                event=Event(
+            await inngest_client.send(
+                Event(
                     name="material/created",
                     data={
                         "tenant_id": tenant_id,
@@ -994,7 +994,8 @@ class MaterialService:
     async def update_material(
         tenant_id: int,
         material_uuid: str,
-        data: MaterialUpdate
+        data: MaterialUpdate,
+        updated_by: Optional[int] = None,
     ) -> MaterialResponse:
         """
         更新物料
@@ -1198,8 +1199,32 @@ class MaterialService:
         from apps.master_data.schemas.material_schemas import MaterialCodeAliasResponse
         resp_data = _material_to_response_data(material)
         resp_data["code_aliases"] = [MaterialCodeAliasResponse.model_validate(a) for a in aliases]
-        return MaterialResponse.model_validate(resp_data)
-    
+        response = MaterialResponse.model_validate(resp_data)
+
+        # 发送 Inngest 事件，触发物料变更通知工作流（下游单据提示）
+        try:
+            from core.inngest.client import inngest_client
+            from inngest import Event
+
+            await inngest_client.send(
+                Event(
+                    name="material/updated",
+                    data={
+                        "tenant_id": tenant_id,
+                        "material_id": material.id,
+                        "material_uuid": str(material.uuid),
+                        "material_name": material.name,
+                        "main_code": material.main_code,
+                        "updated_by": updated_by,
+                    },
+                )
+            )
+            logger.info(f"已发送物料更新事件到 Inngest: material_id={material.id}")
+        except Exception as e:
+            logger.warning(f"发送物料更新事件到 Inngest 失败: {e}")
+
+        return response
+
     @staticmethod
     async def delete_material(
         tenant_id: int,

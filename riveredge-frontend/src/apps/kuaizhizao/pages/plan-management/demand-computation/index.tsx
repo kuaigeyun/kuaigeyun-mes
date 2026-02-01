@@ -27,7 +27,7 @@ import {
   DemandComputation,
   DemandComputationItem
 } from '../../../services/demand-computation';
-import { listDemands, Demand } from '../../../services/demand';
+import { listDemands, Demand, DemandStatus, ReviewStatus } from '../../../services/demand';
 
 const DemandComputationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -54,12 +54,20 @@ const DemandComputationPage: React.FC = () => {
    */
   const handleCreate = async () => {
     try {
-      // 加载已审核通过的需求列表
-      const demands = await listDemands({ status: '已审核', review_status: '审核通过', limit: 100 });
-      setDemandList(demands.data || []);
+      // 加载已审核通过的需求列表（使用与后端存储一致的枚举值）
+      const demands = await listDemands({
+        status: DemandStatus.AUDITED,
+        review_status: ReviewStatus.APPROVED,
+        limit: 100,
+      });
+      const list = demands.data || [];
+      setDemandList(list);
       setSelectedDemandId(null);
       setModalVisible(true);
       formRef.current?.resetFields();
+      if (list.length === 0) {
+        messageApi.info('暂无已审核通过的需求，请先在需求管理中提交并审核需求');
+      }
     } catch (error: any) {
       messageApi.error('加载需求列表失败');
     }
@@ -477,7 +485,7 @@ const DemandComputationPage: React.FC = () => {
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         title="计算详情"
-        width={800}
+        size="large"
       >
         {currentComputation && (
           <>

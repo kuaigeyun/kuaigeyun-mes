@@ -116,8 +116,8 @@ class ExceptionProcessService(AppBaseService[ExceptionProcessRecord]):
         )
 
         # 发送Inngest事件启动工作流
-        await inngest_client.send_event(
-            event=Event(
+        await inngest_client.send(
+            Event(
                 name="exception/process/start",
                 data={
                     "tenant_id": tenant_id,

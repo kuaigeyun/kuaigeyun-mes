@@ -43,8 +43,8 @@ async def exception_detection_scheduler_function(*args, **kwargs) -> Dict[str, A
         # 这里先实现单租户版本，后续可以扩展为多租户
         
         # 发送异常检测事件（不指定tenant_id，由检测函数处理所有租户）
-        await inngest_client.send_event(
-            event=Event(
+        await inngest_client.send(
+            Event(
                 name="exception/detect-all",
                 data={
                     "timestamp": now.isoformat(),

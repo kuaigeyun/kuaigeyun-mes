@@ -19,6 +19,7 @@ except ImportError:
     approval_action_workflow_function = None
     sop_execution_workflow_function = None
     sop_node_complete_workflow_function = None
+    material_change_notification_workflow = None
 
 # 只有在inngest可用时才导入函数
 if INNGEST_AVAILABLE:
@@ -67,6 +68,13 @@ if INNGEST_AVAILABLE:
         )
     except ImportError:
         material_ai_suggestion_workflow = None
+
+    try:
+        from apps.master_data.inngest.functions.material_change_notification_workflow import (
+            material_change_notification_workflow
+        )
+    except ImportError:
+        material_change_notification_workflow = None
     
     try:
         from apps.kuaizhizao.inngest.functions.exception_detection_workflow import (
@@ -107,6 +115,7 @@ __all__ = [
     "sop_execution_workflow_function",
     "sop_node_complete_workflow_function",
     "material_ai_suggestion_workflow",
+    "material_change_notification_workflow",
     "exception_detection_scheduler_function",
     "exception_detection_worker_function",
     "exception_detection_by_tenant_function",
