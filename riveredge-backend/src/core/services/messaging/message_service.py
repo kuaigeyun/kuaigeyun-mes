@@ -89,8 +89,8 @@ class MessageService:
         
         try:
             # 发送 Inngest 事件
-            event_response = await inngest_client.send_event(
-                event=Event(
+            event_response = await inngest_client.send(
+                Event(
                     name="message/send",
                     data={
                         "tenant_id": tenant_id,
@@ -104,10 +104,8 @@ class MessageService:
                 )
             )
             
-            # 从 Inngest 响应中获取 run_id（如果有）
-            inngest_run_id = None
-            if hasattr(event_response, 'ids') and event_response.ids:
-                inngest_run_id = event_response.ids[0] if isinstance(event_response.ids, list) else str(event_response.ids)
+            # 从 Inngest 响应中获取 run_id（send 返回 list[str] 事件 ID 列表）
+            inngest_run_id = event_response[0] if isinstance(event_response, list) and event_response else None
             
             # 更新消息日志的 Inngest run_id
             if inngest_run_id:

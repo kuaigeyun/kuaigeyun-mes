@@ -15,6 +15,7 @@ from decimal import Decimal
 from tortoise.transactions import in_transaction
 from loguru import logger
 
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
@@ -66,7 +67,7 @@ class DemandComputationService:
                 raise NotFoundError(f"需求不存在: {computation_data.demand_id}")
             
             # 验证需求状态（必须是已审核通过）
-            if demand.status != "已审核" or demand.review_status != "通过":
+            if demand.status != DemandStatus.AUDITED or demand.review_status != ReviewStatus.APPROVED:
                 raise BusinessLogicError(f"只能对已审核通过的需求进行计算，当前状态: {demand.status}")
             
             # 生成计算编码
@@ -230,7 +231,14 @@ class DemandComputationService:
         from tortoise.expressions import Q
         from datetime import datetime
         
-        query = DemandComputation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        # #region agent log
+        try:
+            with open(r"f:\dev\riveredge\.cursor\debug.log", "a", encoding="utf-8") as _f:
+                _f.write('{"location":"demand_computation_service.py:list_computations","message":"before_filter","data":{"tenant_id":%s},"timestamp":%d,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"H1"}\n' % (repr(tenant_id), __import__("time").time() * 1000))
+        except Exception:
+            pass
+        # #endregion
+        query = DemandComputation.filter(tenant_id=tenant_id)
         
         if demand_id:
             query = query.filter(demand_id=demand_id)
@@ -468,7 +476,7 @@ class DemandComputationService:
             tenant_id: 租户ID
             computation: 计算对象
         """
-        from apps.kuaizhizao.models.demand import DemandItem
+        from apps.kuaizhizao.models.demand_item import DemandItem
         from apps.master_data.models.material import Material
         
         logger.info(f"执行MRP计算: {computation.computation_code}")
@@ -493,7 +501,7 @@ class DemandComputationService:
         # 4. 处理每个需求明细
         for demand_item in demand_items:
             material_id = demand_item.material_id
-            required_quantity = float(demand_item.quantity or 0)
+            required_quantity = float(demand_item.required_quantity or 0)
             
             if required_quantity <= 0:
                 continue
@@ -702,7 +710,7 @@ class DemandComputationService:
             tenant_id: 租户ID
             computation: 计算对象
         """
-        from apps.kuaizhizao.models.demand import DemandItem
+        from apps.kuaizhizao.models.demand_item import DemandItem
         from apps.master_data.models.material import Material
         
         logger.info(f"执行LRP计算: {computation.computation_code}")
@@ -726,7 +734,7 @@ class DemandComputationService:
         # 4. 处理每个需求明细
         for demand_item in demand_items:
             material_id = demand_item.material_id
-            required_quantity = float(demand_item.quantity or 0)
+            required_quantity = float(demand_item.required_quantity or 0)
             delivery_date = getattr(demand_item, 'delivery_date', None)  # 销售订单的交货日期
             
             if required_quantity <= 0:

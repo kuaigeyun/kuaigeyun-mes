@@ -6243,8 +6243,8 @@ async def trigger_exception_detection(
         from inngest import Event
         
         # 发送异常检测事件
-        await inngest_client.send_event(
-            event=Event(
+        await inngest_client.send(
+            Event(
                 name="exception/detect",
                 data={
                     "tenant_id": tenant_id,

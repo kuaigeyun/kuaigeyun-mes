@@ -1163,7 +1163,9 @@ async def update_material(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await MaterialService.update_material(tenant_id, material_uuid, data)
+        return await MaterialService.update_material(
+            tenant_id, material_uuid, data, updated_by=current_user.id
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

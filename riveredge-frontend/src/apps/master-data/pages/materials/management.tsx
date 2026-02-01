@@ -505,7 +505,7 @@ const MaterialsManagementPage: React.FC = () => {
 
       if (materialIsEdit && currentMaterial) {
         await materialApi.update(currentMaterial.uuid, values as MaterialUpdate);
-        messageApi.success('更新成功');
+        messageApi.success('更新成功，可在右上角「消息通知」或「个人中心-消息」中查看物料变更提示');
       } else {
         // 新建物料时，如果启用了自动编码，不传递编码，让后端自动生成
         // 这样序号只在真正创建成功时才更新（表单可能传 mainCode 或 main_code）
@@ -1015,19 +1015,20 @@ const MaterialsManagementPage: React.FC = () => {
         initialValues={
           materialIsEdit && currentMaterial
             ? {
-                mainCode: currentMaterial.mainCode,
+                // 兼容后端 snake_case：编辑时 API 返回 main_code 等，表单需要 mainCode
+                mainCode: currentMaterial.mainCode ?? (currentMaterial as any).main_code,
                 name: currentMaterial.name,
-                groupId: currentMaterial.groupId,
-                materialType: (currentMaterial as any).materialType || 'RAW',
+                groupId: currentMaterial.groupId ?? (currentMaterial as any).group_id,
+                materialType: ((currentMaterial as any).materialType ?? (currentMaterial as any).material_type) || 'RAW',
                 specification: currentMaterial.specification,
-                baseUnit: currentMaterial.baseUnit,
-                batchManaged: currentMaterial.batchManaged,
-                variantManaged: currentMaterial.variantManaged,
-                variantAttributes: currentMaterial.variantAttributes,
+                baseUnit: currentMaterial.baseUnit ?? (currentMaterial as any).base_unit,
+                batchManaged: currentMaterial.batchManaged ?? (currentMaterial as any).batch_managed,
+                variantManaged: currentMaterial.variantManaged ?? (currentMaterial as any).variant_managed,
+                variantAttributes: currentMaterial.variantAttributes ?? (currentMaterial as any).variant_attributes,
                 description: currentMaterial.description,
                 brand: currentMaterial.brand,
                 model: currentMaterial.model,
-                isActive: currentMaterial.isActive,
+                isActive: currentMaterial.isActive ?? (currentMaterial as any).is_active,
               }
             : {
                 groupId: selectedGroupId || undefined,

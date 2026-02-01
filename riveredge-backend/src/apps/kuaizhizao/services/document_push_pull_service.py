@@ -12,6 +12,7 @@ from datetime import datetime
 from tortoise.transactions import in_transaction
 from loguru import logger
 
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.work_order import WorkOrder
@@ -183,7 +184,7 @@ class DocumentPushPullService:
             raise NotFoundError(f"需求不存在: {demand_id}")
         
         # 验证需求状态
-        if demand.status != "已审核" or demand.review_status != "审核通过":
+        if demand.status != DemandStatus.AUDITED or demand.review_status != ReviewStatus.APPROVED:
             raise BusinessLogicError("只能下推已审核通过的需求")
         
         # 检查是否已经下推过
@@ -522,7 +523,7 @@ class DocumentPushPullService:
     def _validate_source_status(self, source_doc: Any, source_type: str) -> bool:
         """验证源单据状态"""
         if source_type == "demand":
-            return source_doc.status == "已审核" and source_doc.review_status == "审核通过"
+            return source_doc.status == DemandStatus.AUDITED and source_doc.review_status == ReviewStatus.APPROVED
         elif source_type == "demand_computation":
             return source_doc.computation_status == "已完成"
         else:

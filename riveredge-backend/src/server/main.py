@@ -281,16 +281,16 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # 注意：函数导入已在__init__.py中处理导入错误和可用性检查
 if INNGEST_AVAILABLE:
     try:
+        # 定时任务调度器/执行器已从 Inngest 注册中移除（系统定时任务功能保留，仅不再通过 Inngest 自动执行）
         from core.inngest.functions import (
             test_integration_function,
             message_sender_function,
-            scheduled_task_executor_function,
-            scheduled_task_scheduler_function,
             approval_workflow_function,
             approval_action_workflow_function,
             sop_execution_workflow_function,
             sop_node_complete_workflow_function,
             material_ai_suggestion_workflow,
+            material_change_notification_workflow,
         )
         
         # 准备所有 Inngest 函数列表（过滤掉 None 值）
@@ -298,13 +298,12 @@ if INNGEST_AVAILABLE:
             func for func in [
                 test_integration_function,
                 message_sender_function,
-                scheduled_task_executor_function,
-                scheduled_task_scheduler_function,
                 approval_workflow_function,
                 approval_action_workflow_function,
                 sop_execution_workflow_function,
                 sop_node_complete_workflow_function,
                 material_ai_suggestion_workflow,
+                material_change_notification_workflow,
             ] if func is not None
         ]
         

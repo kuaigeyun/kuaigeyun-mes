@@ -39,8 +39,8 @@ async def maintenance_reminder_scheduler_function(*args, **kwargs) -> Dict[str, 
     
     try:
         # 发送维护提醒检查事件
-        await inngest_client.send_event(
-            event=Event(
+        await inngest_client.send(
+            Event(
                 name="maintenance-reminder/check",
                 data={
                     "timestamp": now.isoformat(),

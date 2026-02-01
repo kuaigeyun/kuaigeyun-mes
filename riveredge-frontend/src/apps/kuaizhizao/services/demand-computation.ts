@@ -102,8 +102,7 @@ export interface DemandComputationListResponse {
  * 创建需求计算
  */
 export async function createDemandComputation(data: Partial<DemandComputation>): Promise<DemandComputation> {
-  return apiRequest<DemandComputation>({
-    url: '/apps/kuaizhizao/demand-computations',
+  return apiRequest<DemandComputation>('/apps/kuaizhizao/demand-computations', {
     method: 'POST',
     data,
   });
@@ -113,8 +112,7 @@ export async function createDemandComputation(data: Partial<DemandComputation>):
  * 获取需求计算列表
  */
 export async function listDemandComputations(params?: DemandComputationListParams): Promise<DemandComputationListResponse> {
-  return apiRequest<DemandComputationListResponse>({
-    url: '/apps/kuaizhizao/demand-computations',
+  return apiRequest<DemandComputationListResponse>('/apps/kuaizhizao/demand-computations', {
     method: 'GET',
     params,
   });
@@ -124,8 +122,7 @@ export async function listDemandComputations(params?: DemandComputationListParam
  * 获取需求计算详情
  */
 export async function getDemandComputation(id: number, includeItems: boolean = true): Promise<DemandComputation> {
-  return apiRequest<DemandComputation>({
-    url: `/apps/kuaizhizao/demand-computations/${id}`,
+  return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}`, {
     method: 'GET',
     params: { include_items: includeItems },
   });
@@ -135,8 +132,7 @@ export async function getDemandComputation(id: number, includeItems: boolean = t
  * 执行需求计算
  */
 export async function executeDemandComputation(id: number): Promise<DemandComputation> {
-  return apiRequest<DemandComputation>({
-    url: `/apps/kuaizhizao/demand-computations/${id}/execute`,
+  return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}/execute`, {
     method: 'POST',
   });
 }
@@ -145,8 +141,7 @@ export async function executeDemandComputation(id: number): Promise<DemandComput
  * 更新需求计算
  */
 export async function updateDemandComputation(id: number, data: Partial<DemandComputation>): Promise<DemandComputation> {
-  return apiRequest<DemandComputation>({
-    url: `/apps/kuaizhizao/demand-computations/${id}`,
+  return apiRequest<DemandComputation>(`/apps/kuaizhizao/demand-computations/${id}`, {
     method: 'PUT',
     data,
   });
@@ -180,8 +175,7 @@ export interface GenerateOrdersResponse {
  * 一键生成工单和采购单
  */
 export async function generateOrdersFromComputation(id: number): Promise<GenerateOrdersResponse> {
-  return apiRequest<GenerateOrdersResponse>({
-    url: `/apps/kuaizhizao/demand-computations/${id}/generate-orders`,
+  return apiRequest<GenerateOrdersResponse>(`/apps/kuaizhizao/demand-computations/${id}/generate-orders`, {
     method: 'POST',
   });
 }
@@ -202,8 +196,7 @@ export interface ComputationHistoryParams {
  * 查询需求计算历史记录
  */
 export async function listComputationHistory(params?: ComputationHistoryParams): Promise<DemandComputationListResponse> {
-  return apiRequest<DemandComputationListResponse>({
-    url: '/apps/kuaizhizao/demand-computations/history',
+  return apiRequest<DemandComputationListResponse>('/apps/kuaizhizao/demand-computations/history', {
     method: 'GET',
     params,
   });
@@ -261,8 +254,7 @@ export interface ComputationCompareResult {
  * 对比两个需求计算结果
  */
 export async function compareComputations(id1: number, id2: number): Promise<ComputationCompareResult> {
-  return apiRequest<ComputationCompareResult>({
-    url: '/apps/kuaizhizao/demand-computations/compare',
+  return apiRequest<ComputationCompareResult>('/apps/kuaizhizao/demand-computations/compare', {
     method: 'GET',
     params: {
       computation_id1: id1,
@@ -298,8 +290,7 @@ export interface MaterialSourcesResponse {
  * 获取需求计算的物料来源信息
  */
 export async function getMaterialSources(computationId: number): Promise<MaterialSourcesResponse> {
-  return apiRequest<MaterialSourcesResponse>({
-    url: `/apps/kuaizhizao/demand-computations/${computationId}/material-sources`,
+  return apiRequest<MaterialSourcesResponse>(`/apps/kuaizhizao/demand-computations/${computationId}/material-sources`, {
     method: 'GET',
   });
 }
@@ -333,8 +324,7 @@ export interface MaterialSourceValidationResponse {
  * 验证需求计算的物料来源配置
  */
 export async function validateMaterialSources(computationId: number): Promise<MaterialSourceValidationResponse> {
-  return apiRequest<MaterialSourceValidationResponse>({
-    url: `/apps/kuaizhizao/demand-computations/${computationId}/validate-material-sources`,
+  return apiRequest<MaterialSourceValidationResponse>(`/apps/kuaizhizao/demand-computations/${computationId}/validate-material-sources`, {
     method: 'POST',
   });
 }
