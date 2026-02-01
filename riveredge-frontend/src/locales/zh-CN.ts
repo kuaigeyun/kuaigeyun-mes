@@ -21,6 +21,7 @@ export default {
   'menu.system.applications': '应用中心',
   'menu.system.menus': '菜单管理',
   'menu.system.site-settings': '站点设置',
+  'menu.system.business-config': '业务配置',
   'menu.system.system-parameters': '参数设置',
   'menu.system.data-dictionaries': '数据字典',
   'menu.system.code-rules': '编码规则',
@@ -63,7 +64,7 @@ export default {
   'menu.system.roles-permissions': '角色权限',
   'menu.system.data-center': '数据中心',
   'menu.system.process-management': '流程管理',
-  
+
   // UI 文本翻译
   'ui.sidebar.expand': '展开侧边栏',
   'ui.sidebar.collapse': '收起侧边栏',
@@ -76,20 +77,20 @@ export default {
   'ui.copyright': '版权声明',
   'ui.logout': '退出登录',
   'ui.current.language': '当前语言',
-  
+
   'pages.login.title': '登录',
   'pages.login.username': '用户名',
   'pages.login.password': '密码',
   'pages.login.submit': '登录',
   'pages.login.success': '登录成功',
   'pages.login.error': '登录失败',
-  
+
   'pages.dashboard.title': '仪表盘',
   'pages.dashboard.totalUsers': '总用户数',
   'pages.dashboard.totalTenants': '总组织数',
   'pages.dashboard.totalData': '数据总量',
   'pages.dashboard.installedPlugins': '已安装插件',
-  
+
   // 权限资源名称翻译
   'permission.resource.user': '用户',
   'permission.resource.role': '角色',
@@ -120,7 +121,7 @@ export default {
   'permission.resource.site_setting': '站点设置',
   'permission.resource.language': '语言',
   'permission.resource.integration_config': '集成配置',
-  
+
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.workshops': '车间管理',
   'path.production-lines': '产线管理',
@@ -188,7 +189,7 @@ export default {
   'path.master-data': '基础数据管理',
   'path.apps': '应用',
   'path.list': '列表',
-  
+
   // 通用翻译
   'common.unnamedPage': '未命名页面',
   'common.switchLanguageFailed': '切换语言失败，请重试',
@@ -200,7 +201,7 @@ export default {
   'common.updateFailed': '更新失败',
   'common.noSubject': '(无主题)',
   'common.noMessages': '暂无消息',
-  
+
   // 标签栏操作翻译
   'tabs.refresh': '刷新',
   'tabs.pin': '固定',
@@ -211,11 +212,11 @@ export default {
   'tabs.closeAll': '全部关闭',
   'tabs.fullscreen': '全屏',
   'tabs.exitFullscreen': '退出全屏',
-  
+
   // 应用名称翻译（符合中国中小企业叫法）
   'app.kuaizhizao.name': '快格轻制造',
   'app.master-data.name': '基础数据',
-  
+
   // 快格轻制造应用菜单翻译
   'app.kuaizhizao.menu.plan-management': '计划管理',
   'app.kuaizhizao.menu.plan-management.demand-management': '需求管理',
@@ -269,7 +270,7 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.barcode-mapping-rules': '条码映射规则',
   'app.kuaizhizao.menu.warehouse-management.document-timing': '单据时效',
   'app.kuaizhizao.menu.warehouse-management.document-efficiency': '单据效率',
-  
+
   // 基础数据应用菜单翻译
   'app.master-data.menu.factory': '工厂建模',
   'app.master-data.menu.factory.plants': '厂区管理',

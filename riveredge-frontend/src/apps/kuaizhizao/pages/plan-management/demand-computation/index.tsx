@@ -33,19 +33,19 @@ const DemandComputationPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
-  
+
   // Modal 相关状态（新建计算）
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDemandId, setSelectedDemandId] = useState<number | null>(null);
-  
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentComputation, setCurrentComputation] = useState<DemandComputation | null>(null);
-  
+
   // 物料来源信息状态
   const [materialSources, setMaterialSources] = useState<any[]>([]);
   const [validationResults, setValidationResults] = useState<any>(null);
-  
+
   // 需求列表（用于选择需求）
   const [demandList, setDemandList] = useState<Demand[]>([]);
 
@@ -55,7 +55,7 @@ const DemandComputationPage: React.FC = () => {
   const handleCreate = async () => {
     try {
       // 加载已审核通过的需求列表
-      const demands = await listDemands({ status: '已审核', review_status: '通过', limit: 100 });
+      const demands = await listDemands({ status: '已审核', review_status: '审核通过', limit: 100 });
       setDemandList(demands.data || []);
       setSelectedDemandId(null);
       setModalVisible(true);
@@ -74,7 +74,7 @@ const DemandComputationPage: React.FC = () => {
       try {
         const data = await getDemandComputation(id, true);
         setCurrentComputation(data);
-        
+
         // 获取物料来源信息
         try {
           const sources = await getMaterialSources(id);
@@ -83,7 +83,7 @@ const DemandComputationPage: React.FC = () => {
           console.error('获取物料来源信息失败:', error);
           setMaterialSources([]);
         }
-        
+
         // 获取验证结果
         try {
           const validation = await validateMaterialSources(id);
@@ -92,7 +92,7 @@ const DemandComputationPage: React.FC = () => {
           console.error('获取验证结果失败:', error);
           setValidationResults(null);
         }
-        
+
         setDrawerVisible(true);
       } catch (error: any) {
         messageApi.error('获取计算详情失败');
@@ -126,23 +126,23 @@ const DemandComputationPage: React.FC = () => {
     // 先验证物料来源配置
     try {
       const validation = await validateMaterialSources(record.id!);
-      
+
       if (!validation.all_passed) {
         // 有验证失败，显示详细错误信息
         const errorMessages = validation.validation_results
           .filter((r: any) => !r.validation_passed)
           .map((r: any) => `物料 ${r.material_code} (${r.material_name}): ${r.errors.join(', ')}`)
           .join('\n');
-        
+
         Modal.warning({
           title: '物料来源验证失败',
           width: 600,
           content: (
             <div>
               <p>以下物料的来源配置验证失败，无法生成工单和采购单：</p>
-              <pre style={{ 
-                background: '#f5f5f5', 
-                padding: '12px', 
+              <pre style={{
+                background: '#f5f5f5',
+                padding: '12px',
                 borderRadius: '4px',
                 maxHeight: '300px',
                 overflow: 'auto',
@@ -159,7 +159,7 @@ const DemandComputationPage: React.FC = () => {
         });
         return;
       }
-      
+
       // 获取物料来源统计信息
       const sources = await getMaterialSources(record.id!);
       const sourceTypeCounts: Record<string, number> = {};
@@ -167,7 +167,7 @@ const DemandComputationPage: React.FC = () => {
         const type = s.source_type || '未设置';
         sourceTypeCounts[type] = (sourceTypeCounts[type] || 0) + 1;
       });
-      
+
       const sourceInfo = Object.entries(sourceTypeCounts)
         .map(([type, count]) => {
           const typeNames: Record<string, string> = {
@@ -181,7 +181,7 @@ const DemandComputationPage: React.FC = () => {
           return `${typeNames[type] || type}: ${count}`;
         })
         .join(', ');
-      
+
       Modal.confirm({
         title: '一键生成工单和采购单',
         width: 600,
@@ -356,7 +356,7 @@ const DemandComputationPage: React.FC = () => {
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize!,
           };
-          
+
           // 处理搜索参数
           if (searchFormValues?.computation_code) {
             apiParams.computation_code = searchFormValues.computation_code;
@@ -376,7 +376,7 @@ const DemandComputationPage: React.FC = () => {
           if (searchFormValues?.demand_id) {
             apiParams.demand_id = searchFormValues.demand_id;
           }
-          
+
           // 处理时间范围搜索
           if (searchFormValues?.computation_start_time) {
             if (Array.isArray(searchFormValues.computation_start_time)) {
@@ -391,7 +391,7 @@ const DemandComputationPage: React.FC = () => {
               apiParams.start_date = dayjs(searchFormValues.computation_start_time).format('YYYY-MM-DD');
             }
           }
-          
+
           const result = await listDemandComputations(apiParams);
           return {
             data: result.data || [],
@@ -428,17 +428,17 @@ const DemandComputationPage: React.FC = () => {
               messageApi.error('请选择需求');
               return;
             }
-            
+
             // 根据需求类型确定计算类型
             const computationType = selectedDemand.business_mode === 'MTS' ? 'MRP' : 'LRP';
-            
+
             await createDemandComputation({
               demand_id: selectedDemandId!,
               computation_type: computationType,
               computation_params: values.computation_params || {},
               notes: values.notes,
             });
-            
+
             messageApi.success('创建成功');
             setModalVisible(false);
             actionRef.current?.reload();
@@ -492,7 +492,7 @@ const DemandComputationPage: React.FC = () => {
                 { title: '结束时间', dataIndex: 'computation_end_time', valueType: 'dateTime' },
               ]}
             />
-            
+
             {/* 物料来源验证结果 */}
             {validationResults && (
               <div style={{ marginTop: 24, marginBottom: 24 }}>
@@ -507,8 +507,8 @@ const DemandComputationPage: React.FC = () => {
                     total_count: validationResults.total_count,
                   }}
                   columns={[
-                    { 
-                      title: '验证状态', 
+                    {
+                      title: '验证状态',
                       dataIndex: 'all_passed',
                       render: (text: string) => (
                         <Tag color={text === '全部通过' ? 'success' : 'error'}>{text}</Tag>
@@ -519,7 +519,7 @@ const DemandComputationPage: React.FC = () => {
                     { title: '总数量', dataIndex: 'total_count' },
                   ]}
                 />
-                
+
                 {validationResults.failed_count > 0 && (
                   <div style={{ marginTop: 12 }}>
                     <p style={{ fontWeight: 'bold', color: '#ff4d4f' }}>验证失败的物料：</p>
@@ -536,7 +536,7 @@ const DemandComputationPage: React.FC = () => {
                 )}
               </div>
             )}
-            
+
             {currentComputation.items && currentComputation.items.length > 0 && (
               <>
                 <h3 style={{ marginTop: 24, marginBottom: 16 }}>计算结果明细</h3>
@@ -546,8 +546,8 @@ const DemandComputationPage: React.FC = () => {
                   columns={[
                     { title: '物料编码', dataIndex: 'material_code', width: 120 },
                     { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                    { 
-                      title: '物料来源', 
+                    {
+                      title: '物料来源',
                       dataIndex: 'material_source_type',
                       width: 100,
                       render: (type: string) => {
@@ -562,8 +562,8 @@ const DemandComputationPage: React.FC = () => {
                         return <Tag color={info.color}>{info.label}</Tag>;
                       }
                     },
-                    { 
-                      title: '验证状态', 
+                    {
+                      title: '验证状态',
                       dataIndex: 'source_validation_passed',
                       width: 100,
                       render: (passed: boolean, record: DemandComputationItem) => {

@@ -16,6 +16,7 @@ from typing import Optional, List, Literal
 from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 
 
 # === 统一需求 ===
@@ -47,7 +48,7 @@ class DemandBase(BaseSchema):
     total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
     
     # 状态（通用）
-    status: str = Field("草稿", max_length=20, description="需求状态")
+    status: DemandStatus = Field(DemandStatus.DRAFT, description="需求状态")
     
     # 时间节点记录（用于耗时统计）
     submit_time: Optional[datetime] = Field(None, description="提交时间")
@@ -56,7 +57,7 @@ class DemandBase(BaseSchema):
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")
-    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_status: ReviewStatus = Field(ReviewStatus.PENDING, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     
     # 销售信息（销售订单专用）
@@ -171,6 +172,9 @@ class DemandResponse(DemandBase):
     # 关联明细
     items: Optional[List["DemandItemResponse"]] = Field(None, description="需求明细列表")
     
+    # 耗时统计（可选）
+    duration_info: Optional[dict] = Field(None, description="耗时统计信息")
+    
     class Config:
         from_attributes = True
 
@@ -187,13 +191,18 @@ class DemandListResponse(BaseSchema):
     start_date: date = Field(..., description="开始日期")
     end_date: Optional[date] = Field(None, description="结束日期")
     delivery_date: Optional[date] = Field(None, description="交货日期")
+    customer_id: Optional[int] = Field(None, description="客户ID")
     customer_name: Optional[str] = Field(None, description="客户名称")
+    forecast_period: Optional[str] = Field(None, description="预测周期")
+    order_date: Optional[date] = Field(None, description="订单日期")
     total_quantity: Decimal = Field(..., description="总数量")
     total_amount: Decimal = Field(..., description="总金额")
     status: str = Field(..., description="需求状态")
     review_status: str = Field(..., description="审核状态")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
     
     class Config:
         from_attributes = True

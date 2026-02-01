@@ -8,10 +8,11 @@
  * @date 2026-01-27
  */
 
+import { getBusinessConfig } from '../../../../../services/businessConfig';
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Popconfirm, Select, Row, Col, Form as AntForm, DatePicker, Spin } from 'antd';
-import { EyeOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Drawer, Table, Input, InputNumber, Select, Row, Col, Form as AntForm, DatePicker, Spin } from 'antd';
+import { EyeOutlined, EditOutlined, CheckCircleOutlined, SendOutlined, ArrowDownOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
@@ -21,11 +22,13 @@ import {
   updateSalesOrder,
   submitSalesOrder,
   approveSalesOrder,
-  rejectSalesOrder,
+  unapproveSalesOrder,
   pushSalesOrderToComputation,
+  bulkDeleteSalesOrders,
   SalesOrder,
   SalesOrderItem,
-  type PushToComputationResponse
+  SalesOrderStatus,
+  ReviewStatus,
 } from '../../../services/sales-order';
 import { getDocumentRelations } from '../../../services/document-relation';
 import DocumentRelationDisplay from '../../../../../components/document-relation-display';
@@ -37,7 +40,8 @@ import type { Customer } from '../../../../master-data/types/supply-chain';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+
+
 
 /** 展开行：订单明细子表格 */
 const OrderItemsExpandedRow: React.FC<{ orderId: number }> = ({ orderId }) => {
@@ -107,9 +111,31 @@ const OrderItemsExpandedRow: React.FC<{ orderId: number }> = ({ orderId }) => {
 };
 
 const SalesOrdersPage: React.FC = () => {
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+
+  // 销售订单审核开关（从业务配置加载）
+  const [auditEnabled, setAuditEnabled] = useState(true);
+
+  /**
+   * 加载业务配置，判断是否开启审核
+   */
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await getBusinessConfig();
+        // 默认为关闭，与配置页面 Switch 组件行为一致（undefined 为 false）
+        // 只有明确设置为 true 时才开启
+        const enabled = config.parameters?.sales?.audit_enabled === true;
+        setAuditEnabled(enabled);
+      } catch (error) {
+        console.error('加载业务配置失败:', error);
+        setAuditEnabled(true);
+      }
+    };
+    loadConfig();
+  }, []);
 
   // Modal 相关状态（新建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -296,30 +322,82 @@ const SalesOrdersPage: React.FC = () => {
   /**
    * 处理删除销售订单
    */
-  const handleDelete = async (_keys: React.Key[]) => {
-    // TODO: 实现删除功能
-    messageApi.info('删除功能待实现');
+  /**
+   * 处理删除销售订单
+   */
+  const handleDelete = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请选择要删除的记录');
+      return;
+    }
+
+    modalApi.confirm({
+      title: '确认删除',
+      content: `确定要删除选中 ${keys.length} 个销售订单吗？此操作不可恢复。`,
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const ids = keys.map(k => Number(k));
+          const res = await bulkDeleteSalesOrders(ids);
+
+          if (res.failed_count === 0) {
+            messageApi.success(`成功删除 ${res.success_count} 个销售订单`);
+          } else {
+            messageApi.warning(`删除完成：成功 ${res.success_count} 个，失败 ${res.failed_count} 个`);
+            if (res.failed_items && res.failed_items.length > 0) {
+              const errorMsg = res.failed_items.map(item => `订单ID ${item.id}: ${item.reason}`).join('\n');
+              console.error('删除失败详情:', errorMsg);
+              // 可以选择显示更详细的错误弹窗
+            }
+          }
+          actionRef.current?.reload();
+          // 清除选中项
+          if (actionRef.current?.clearSelected) {
+            actionRef.current.clearSelected();
+          }
+        } catch (error: any) {
+          messageApi.error(error.message || '删除失败');
+        }
+      },
+    });
   };
 
   /**
    * 处理提交表单
    * 新建且启用编码规则时：若订单编码未改或为空，则正式生成编码再创建
    */
-  const handleSubmit = async (values: any) => {
+  /**
+   * 通用保存逻辑（内部使用）
+   * @param values 表单数据
+   * @param isDraft 是否为草稿（true=保存草稿，false=直接提交）
+   */
+  const handleSaveInternal = async (values: any, isDraft: boolean) => {
     try {
       const items = values.items ?? [];
       if (!items.length) {
         messageApi.warning('请至少添加一条订单明细');
         return;
       }
-      // 从已选客户回写 customer_name（对接技术数据管理-客户）
+
+      // 数据处理：回写客户名称、计算金额
       if (values.customer_id != null && customers.length) {
         const c = customers.find(x => x.id === values.customer_id);
         if (c) values.customer_name = c.name;
       }
-      // 按数量×单价计算金额后提交；兼容 production 路由的 sales  schema（order_quantity/remaining_quantity/total_amount）
+
       const q = (it: SalesOrderItem) => Number((it as any).required_quantity) || 0;
       const p = (it: SalesOrderItem) => Number((it as any).unit_price) || 0;
+
+      // 格式化主表日期字段，避免后端报错
+      if (values.order_date) {
+        values.order_date = dayjs(values.order_date).format('YYYY-MM-DD');
+      }
+      if (values.delivery_date) {
+        values.delivery_date = dayjs(values.delivery_date).format('YYYY-MM-DD');
+      }
+
       values.items = items.map((it: SalesOrderItem) => {
         const amt = q(it) * p(it);
         const d = (it as any).delivery_date;
@@ -333,31 +411,70 @@ const SalesOrdersPage: React.FC = () => {
           total_amount: amt,
         };
       });
-      if (isEdit && currentId) {
-        await updateSalesOrder(currentId, values);
-        messageApi.success('销售订单更新成功');
-      } else {
-        if (isAutoGenerateEnabled('kuaizhizao-sales-order')) {
-          const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
-          const currentCode = values.order_code;
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
-            try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.order_code = codeResponse.code;
-            } catch (error: any) {
-              console.warn('正式生成订单编码失败，使用预览编码:', error);
-            }
+
+      // 如果是直接提交，先生成正式编码（如果配置了规则）
+      if (!isDraft && !isEdit && isAutoGenerateEnabled('kuaizhizao-sales-order')) {
+        const ruleCode = getPageRuleCode('kuaizhizao-sales-order');
+        const currentCode = values.order_code;
+        if (ruleCode && (currentCode === previewCode || !currentCode)) {
+          try {
+            const codeResponse = await generateCode({ rule_code: ruleCode });
+            values.order_code = codeResponse.code;
+          } catch (error: any) {
+            console.warn('正式生成订单编码失败，使用预览编码:', error);
           }
         }
-        await createSalesOrder(values);
-        messageApi.success('销售订单创建成功');
       }
+
+      let orderId = currentId;
+
+      // 1. 创建或更新订单
+      if (isEdit && currentId) {
+        await updateSalesOrder(currentId, values);
+        if (isDraft) messageApi.success('销售订单已更新');
+      } else {
+        const res = await createSalesOrder(values);
+        // 假设 createSalesOrder 返回创建的对象或ID，如果返回void则需修改Service适配
+        // 这里假设 res 包含 id，或者我们需要重新查询。为保险起见，如果 res 中没有 id，可能需要调整。
+        // 通常 list 或 get 接口返回 id。假设 res 是 SalesOrder 对象。
+        orderId = (res as any)?.id;
+      }
+
+      // 2. 如果不是草稿（即点击了“提交订单”），则执行后续流程
+      if (!isDraft && orderId) {
+        await submitSalesOrder(orderId);
+
+        // 检查审核配置
+        let currentAuditEnabled = auditEnabled;
+        try {
+          // 再次确认配置
+          const config = await getBusinessConfig();
+          currentAuditEnabled = config.parameters?.sales?.audit_enabled === true;
+        } catch (e) {/* ignore */ }
+
+        if (!currentAuditEnabled) {
+          await approveSalesOrder(orderId);
+          messageApi.success('订单已创建并自动通过审核');
+        } else {
+          messageApi.success('订单已创建并提交，请等待审核');
+        }
+      } else {
+        if (!isEdit) messageApi.success('订单已保存为草稿');
+      }
+
       setModalVisible(false);
       setPreviewCode(null);
       actionRef.current?.reload();
     } catch (error: any) {
+      console.error(error);
       messageApi.error(error.message || '操作失败');
-      throw error;
+    }
+  };
+
+  const onModalSubmit = async (isDraft: boolean) => {
+    const values = await formRef.current?.validateFields();
+    if (values) {
+      await handleSaveInternal(values, isDraft);
     }
   };
 
@@ -384,14 +501,45 @@ const SalesOrdersPage: React.FC = () => {
   /**
    * 处理提交销售订单
    */
+  /**
+   * 处理提交销售订单
+   */
+  /**
+   * 处理提交销售订单
+   */
   const handleSubmitDemand = async (id: number) => {
-    Modal.confirm({
+    // 提交前重新获取最新的业务配置（以防用户修改了配置但未刷新页面）
+    let currentAuditEnabled = auditEnabled;
+    try {
+      const config = await getBusinessConfig();
+      // 默认为关闭，与配置页面 Switch 组件行为一致
+      currentAuditEnabled = config.parameters?.sales?.audit_enabled === true;
+      setAuditEnabled(currentAuditEnabled);
+    } catch (e) {
+      console.warn('获取最新提交配置失败，将使用当前页面缓存的配置状态', e);
+    }
+
+    modalApi.confirm({
       title: '提交销售订单',
-      content: '确定要提交此销售订单吗？提交后将进入审核流程。',
+      content: currentAuditEnabled
+        ? '确定要提交此销售订单吗？提交后将进入审核流程。'
+        : '确定要提交此销售订单吗？提交后将自动通过审核。',
       onOk: async () => {
         try {
           await submitSalesOrder(id);
-          messageApi.success('销售订单提交成功');
+
+          if (!currentAuditEnabled) {
+            // 如果审核功能关闭，提交后直接调用审核通过接口
+            try {
+              await approveSalesOrder(id);
+              messageApi.success('销售订单提交成功并已自动通过审核');
+            } catch (approveError: any) {
+              messageApi.warning('订单已提交，但自动审核失败: ' + (approveError.message || '未知错误'));
+            }
+          } else {
+            messageApi.success('销售订单提交成功');
+          }
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '提交失败');
@@ -404,7 +552,7 @@ const SalesOrdersPage: React.FC = () => {
    * 处理审核通过
    */
   const handleApprove = async (id: number) => {
-    Modal.confirm({
+    modalApi.confirm({
       title: '审核通过',
       content: '确定要审核通过此销售订单吗？',
       onOk: async () => {
@@ -420,10 +568,29 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /**
+   * 处理撤销审核
+   */
+  const handleRevokeAudit = async (id: number) => {
+    modalApi.confirm({
+      title: '撤销审核',
+      content: '确定要撤销此销售订单的审核吗？撤销后状态将回退到待审核。',
+      onOk: async () => {
+        try {
+          await unapproveSalesOrder(id);
+          messageApi.success('撤销审核成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤销审核失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理下推到需求计算
    */
   const handlePushToComputation = async (id: number) => {
-    Modal.confirm({
+    modalApi.confirm({
       title: '下推到需求计算',
       content: '确定要将此销售订单下推到需求计算吗？',
       onOk: async () => {
@@ -437,6 +604,8 @@ const SalesOrdersPage: React.FC = () => {
       },
     });
   };
+
+
 
   /**
    * 处理批量导入
@@ -477,8 +646,8 @@ const SalesOrdersPage: React.FC = () => {
         }
 
         const salesOrder: any = {
-          status: '草稿',
-          review_status: '待审核',
+          status: SalesOrderStatus.DRAFT,
+          review_status: ReviewStatus.PENDING,
         };
 
         // 映射字段
@@ -546,7 +715,7 @@ const SalesOrdersPage: React.FC = () => {
             .slice(0, 10) // 只显示前10个错误
             .map(err => `第 ${err.row} 行: ${err.error}`)
             .join('\n');
-          Modal.error({
+          modalApi.error({
             title: '导入错误详情',
             content: <pre style={{ whiteSpace: 'pre-wrap' }}>{errorMessages}</pre>,
             width: 600,
@@ -561,7 +730,7 @@ const SalesOrdersPage: React.FC = () => {
 
   // 表格列（仅订单行，明细在展开行中显示）
   const columns: ProColumns<SalesOrder>[] = [
-    { title: '订单编号', dataIndex: 'order_code', width: 150, fixed: 'left', ellipsis: true },
+    { title: '订单编号', dataIndex: 'order_code', width: 150, fixed: 'left' as const, ellipsis: true },
     { title: '客户名称', dataIndex: 'customer_name', width: 150, ellipsis: true },
     { title: '订单日期', dataIndex: 'order_date', valueType: 'date', width: 120 },
     { title: '交货日期', dataIndex: 'delivery_date', valueType: 'date', width: 120 },
@@ -570,10 +739,10 @@ const SalesOrdersPage: React.FC = () => {
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        '草稿': { text: '草稿', status: 'Default' },
-        '已提交': { text: '已提交', status: 'Processing' },
-        '已审核': { text: '已审核', status: 'Success' },
-        '已生效': { text: '已生效', status: 'Success' },
+        [SalesOrderStatus.DRAFT]: { text: '草稿', status: 'Default' },
+        '已提交': { text: '已提交', status: 'Processing' }, // TBD if this state exists in backend
+        [SalesOrderStatus.AUDITED]: { text: '已审核', status: 'Success' },
+        [SalesOrderStatus.CONFIRMED]: { text: '已生效', status: 'Success' },
         '已完成': { text: '已完成', status: 'Success' },
         '已取消': { text: '已取消', status: 'Error' },
       },
@@ -583,39 +752,60 @@ const SalesOrdersPage: React.FC = () => {
       dataIndex: 'review_status',
       width: 100,
       valueEnum: {
-        '待审核': { text: '待审核', status: 'Processing' },
-        '审核通过': { text: '审核通过', status: 'Success' },
-        '审核驳回': { text: '审核驳回', status: 'Error' },
+        [ReviewStatus.PENDING]: { text: '待审核', status: 'Processing' },
+        [ReviewStatus.APPROVED]: { text: '审核通过', status: 'Success' },
+        [ReviewStatus.REJECTED]: { text: '审核驳回', status: 'Error' },
       },
     },
     {
       title: '操作',
       width: 200,
-      fixed: 'right',
+      fixed: 'right' as const,
       valueType: 'option',
       render: (_: any, record: SalesOrder) => (
         <Space>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             详情
           </Button>
-          {record.status === '草稿' && (
+          {record.status === SalesOrderStatus.DRAFT && (
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit([record.id!])}>
               编辑
             </Button>
           )}
-          {record.status === '草稿' && (
+          {record.status === SalesOrderStatus.DRAFT && (
             <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitDemand(record.id!)}>
               提交
             </Button>
           )}
-          {record.review_status === '待审核' && (
+          {record.status === SalesOrderStatus.DRAFT && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete([record.id!])}
+            >
+              删除
+            </Button>
+          )}
+          {record.review_status === ReviewStatus.PENDING && (
             <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record.id!)}>
               审核
             </Button>
           )}
-          {record.review_status === '审核通过' && (
+          {(record.review_status === ReviewStatus.APPROVED) && (
             <Button type="link" size="small" icon={<ArrowDownOutlined />} onClick={() => handlePushToComputation(record.id!)}>
               下推
+            </Button>
+          )}
+          {(record.status === '已审核' || record.status === '已驳回') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<RollbackOutlined />}
+              onClick={() => handleRevokeAudit(record.id!)}
+            >
+              撤销审核
             </Button>
           )}
         </Space>
@@ -673,7 +863,6 @@ const SalesOrdersPage: React.FC = () => {
           showDeleteButton={true}
           deleteButtonText="批量删除"
           onDelete={handleDelete}
-          onDetail={handleDetail}
           showImportButton={true}
           onImport={handleImport}
           importHeaders={[
@@ -721,15 +910,20 @@ const SalesOrdersPage: React.FC = () => {
       >
         <ProForm
           formRef={formRef}
-          onFinish={handleSubmit}
+          onFinish={async () => true} // Prevent default submission
           layout="vertical"
           submitter={{
             render: () => (
               <div style={{ textAlign: 'left', marginTop: 16 }}>
                 <Space>
                   <Button onClick={() => setModalVisible(false)}>取消</Button>
-                  <Button type="primary" onClick={() => formRef.current?.submit()}>
-                    {isEdit ? '更新' : '创建'}
+                  {!isEdit && (
+                    <Button onClick={() => onModalSubmit(true)}>
+                      保存为草稿
+                    </Button>
+                  )}
+                  <Button type="primary" onClick={() => onModalSubmit(false)}>
+                    {isEdit ? '更新' : '提交订单'}
                   </Button>
                 </Space>
               </div>
@@ -897,7 +1091,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '数量',
                       dataIndex: 'required_quantity',
                       width: 100,
-                      align: 'right',
+                      align: 'right' as const,
                       render: (_, __, index) => (
                         <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
                           <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
@@ -908,7 +1102,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '单价',
                       dataIndex: 'unit_price',
                       width: 100,
-                      align: 'right',
+                      align: 'right' as const,
                       render: (_, __, index) => (
                         <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
                           <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
@@ -918,7 +1112,7 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: '金额',
                       width: 110,
-                      align: 'right',
+                      align: 'right' as const,
                       render: (_, __, index) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                           {({ getFieldValue }: any) => {
@@ -943,7 +1137,7 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title: '操作',
                       width: 70,
-                      fixed: 'right',
+                      fixed: 'right' as const,
                       render: (_, __, index) => (
                         <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
                           删除

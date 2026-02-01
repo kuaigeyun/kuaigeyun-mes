@@ -18,8 +18,13 @@ import {
   batchUpdateProcessParameters,
   getProFeaturesList,
   checkProFeatureAccess,
+  getConfigTemplates,
+  saveConfigTemplate,
+  applyConfigTemplate,
+  deleteConfigTemplate,
   type BusinessConfig,
   type ProFeaturesList,
+  type ConfigTemplate,
 } from '../../../services/businessConfig';
 
 const { Title, Text, Paragraph } = Typography;
@@ -78,6 +83,12 @@ const PARAMETER_CONFIG = {
       defect_handling: { name: '不合格品处理', description: '是否启用不合格品处理' },
     },
   },
+  sales: {
+    name: '销售管理参数',
+    params: {
+      audit_enabled: { name: '销售订单审核', description: '是否启用销售订单审核流程。若关闭，订单提交后将自动通过/生效。' },
+    },
+  },
 };
 
 /**
@@ -108,11 +119,11 @@ const BusinessConfigPage: React.FC = () => {
         modules: data.modules,
         parameters: data.parameters,
       });
-      
+
       // 加载PRO版功能列表
       const proFeaturesData = await getProFeaturesList();
       setProFeatures(proFeaturesData);
-      
+
       // 加载配置模板列表
       const templatesData = await getConfigTemplates();
       setTemplates(templatesData);
@@ -126,7 +137,7 @@ const BusinessConfigPage: React.FC = () => {
   useEffect(() => {
     loadConfig();
   }, []);
-  
+
   /**
    * 处理PRO版功能点击
    */
@@ -153,7 +164,7 @@ const BusinessConfigPage: React.FC = () => {
       return false;
     }
   };
-  
+
   /**
    * 保存配置模板
    */
@@ -176,7 +187,7 @@ const BusinessConfigPage: React.FC = () => {
       messageApi.error(error.message || '保存配置模板失败');
     }
   };
-  
+
   /**
    * 应用配置模板
    */
@@ -189,7 +200,7 @@ const BusinessConfigPage: React.FC = () => {
       messageApi.error(error.message || '应用配置模板失败');
     }
   };
-  
+
   /**
    * 删除配置模板
    */
@@ -202,7 +213,7 @@ const BusinessConfigPage: React.FC = () => {
       messageApi.error(error.message || '删除配置模板失败');
     }
   };
-  
+
   /**
    * 导出配置模板（JSON格式）
    */
@@ -217,7 +228,7 @@ const BusinessConfigPage: React.FC = () => {
     URL.revokeObjectURL(url);
     messageApi.success('配置模板已导出');
   };
-  
+
   /**
    * 导入配置模板
    */
@@ -228,11 +239,11 @@ const BusinessConfigPage: React.FC = () => {
     input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
-      
+
       try {
         const text = await file.text();
         const importedConfig = JSON.parse(text);
-        
+
         // 应用导入的配置
         await batchUpdateProcessParameters({ parameters: importedConfig.parameters || {} });
         messageApi.success('配置模板已导入并应用');
@@ -243,7 +254,7 @@ const BusinessConfigPage: React.FC = () => {
     };
     input.click();
   };
-  
+
   /**
    * 渲染配置模板管理
    */
@@ -273,7 +284,7 @@ const BusinessConfigPage: React.FC = () => {
               </Space>
             </Space>
           </div>
-          
+
           <List
             dataSource={templates}
             locale={{ emptyText: '暂无配置模板' }}
@@ -360,7 +371,7 @@ const BusinessConfigPage: React.FC = () => {
         return;
       }
     }
-    
+
     try {
       await updateModuleSwitch({
         module_code: moduleCode,
@@ -380,7 +391,7 @@ const BusinessConfigPage: React.FC = () => {
     try {
       const values = form.getFieldsValue();
       const parameters = values.parameters || {};
-      
+
       setSaving(true);
       await batchUpdateProcessParameters({ parameters });
       messageApi.success('流程参数配置已保存');
@@ -397,7 +408,7 @@ const BusinessConfigPage: React.FC = () => {
    */
   const renderModeConfig = () => {
     const currentMode = config?.running_mode || 'simple';
-    
+
     return (
       <Card>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -407,7 +418,7 @@ const BusinessConfigPage: React.FC = () => {
               选择适合您业务的运行模式。切换模式时，系统会自动应用对应的默认配置。
             </Paragraph>
           </div>
-          
+
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Card
               hoverable
@@ -427,7 +438,7 @@ const BusinessConfigPage: React.FC = () => {
                 </Text>
               </Space>
             </Card>
-            
+
             <Card
               hoverable
               style={{
@@ -457,7 +468,7 @@ const BusinessConfigPage: React.FC = () => {
    */
   const renderModuleConfig = () => {
     const modules = config?.modules || {};
-    
+
     return (
       <Card>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -467,13 +478,13 @@ const BusinessConfigPage: React.FC = () => {
               独立开启/关闭每个流程模块。关闭的模块将自动隐藏菜单和功能入口。核心模块（生产管理、仓储管理）不可关闭。
             </Paragraph>
           </div>
-          
+
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             {Object.entries(MODULE_CONFIG).map(([code, module]) => {
               const enabled = modules[code] ?? false;
               const isCore = module.core;
               const isProFeature = proFeatures?.pro_modules.includes(code) ?? false;
-              
+
               return (
                 <Card key={code} size="small">
                   <Space style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -517,7 +528,7 @@ const BusinessConfigPage: React.FC = () => {
               配置各流程模块的参数，控制功能的启用和关闭。
             </Paragraph>
           </div>
-          
+
           {Object.entries(PARAMETER_CONFIG).map(([category, categoryConfig]) => (
             <Card key={category} title={categoryConfig.name} size="small">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -541,7 +552,7 @@ const BusinessConfigPage: React.FC = () => {
               </Space>
             </Card>
           ))}
-          
+
           <Button
             type="primary"
             icon={<SaveOutlined />}
@@ -614,7 +625,7 @@ const BusinessConfigPage: React.FC = () => {
         items={tabItems}
         size="large"
       />
-      
+
       {/* 保存配置模板Modal */}
       <Modal
         title="保存配置模板"

@@ -14,6 +14,7 @@ from typing import Optional, List
 from decimal import Decimal
 from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 
 
 # === 销售订单明细 ===
@@ -89,7 +90,7 @@ class SalesOrderBase(BaseSchema):
     total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
     
     # 状态
-    status: str = Field("草稿", max_length=20, description="订单状态")
+    status: DemandStatus = Field(DemandStatus.DRAFT, description="订单状态")
     
     # 时间节点记录（用于耗时统计）
     submit_time: Optional[datetime] = Field(None, description="提交时间")
@@ -98,7 +99,7 @@ class SalesOrderBase(BaseSchema):
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")
-    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_status: ReviewStatus = Field(ReviewStatus.PENDING, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     
     # 销售信息
@@ -155,7 +156,7 @@ class SalesOrderResponse(SalesOrderBase):
     computation_id: Optional[int] = Field(None, description="需求计算ID")
     computation_code: Optional[str] = Field(None, max_length=50, description="需求计算编码")
     is_active: bool = Field(True, description="是否启用")
-    created_by: int
+    created_by: Optional[int] = None
     updated_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime

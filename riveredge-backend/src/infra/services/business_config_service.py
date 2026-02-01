@@ -64,6 +64,9 @@ class BusinessConfigService:
                 "finished_inspection": False,
                 "defect_handling": False,
             },
+            "sales": {
+                "audit_enabled": False,
+            },
         },
     }
     
@@ -103,6 +106,9 @@ class BusinessConfigService:
                 "process_inspection": True,
                 "finished_inspection": True,
                 "defect_handling": True,
+            },
+            "sales": {
+                "audit_enabled": True,
             },
         },
     }
@@ -161,6 +167,35 @@ class BusinessConfigService:
                 "running_mode": self.RUNNING_MODE_SIMPLE,
                 **self.SIMPLE_MODE_CONFIG,
             }
+        else:
+            # 确保必需字段存在（处理旧数据或不完整数据）
+            if "running_mode" not in business_config:
+                business_config["running_mode"] = self.RUNNING_MODE_SIMPLE
+                
+            # 确保 default modules 和 parameters 存在
+            # 使用 setdefault 确保一级 key 存在
+            business_config.setdefault("modules", {})
+            business_config.setdefault("parameters", {})
+            
+            # 递归合并缺少的配置项（例如 sales.audit_enabled）
+            # 根据当前模式（默认为 simple）获取对应的默认配置作为参考
+            current_mode = business_config.get("running_mode", self.RUNNING_MODE_SIMPLE)
+            default_config = self.SIMPLE_MODE_CONFIG if current_mode == self.RUNNING_MODE_SIMPLE else self.FULL_MODE_CONFIG
+            
+            # 补全缺失的 modules
+            for mod, enabled in default_config["modules"].items():
+                if mod not in business_config["modules"]:
+                    business_config["modules"][mod] = enabled
+            
+            # 补全缺失的 parameters
+            for cat, params in default_config["parameters"].items():
+                if cat not in business_config["parameters"]:
+                    business_config["parameters"][cat] = params
+                else:
+                    # 如果分类存在，检查分类下的具体参数
+                    for key, val in params.items():
+                        if key not in business_config["parameters"][cat]:
+                            business_config["parameters"][cat][key] = val
         
         return business_config
     
@@ -431,4 +466,145 @@ class BusinessConfigService:
             "current_plan": tenant.plan.value,
             "pro_modules": self.PRO_FEATURES["modules"],
             "pro_parameters": self.PRO_FEATURES["parameters"],
+        }
+
+    async def get_config_templates(self, tenant_id: int) -> List[Dict[str, Any]]:
+        """
+        获取配置模板列表
+        
+        Args:
+            tenant_id: 组织ID
+            
+        Returns:
+            List[Dict[str, Any]]: 配置模板列表
+        """
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError(f"组织不存在: {tenant_id}")
+        
+        settings = tenant.settings or {}
+        return settings.get("config_templates", [])
+
+    async def save_config_template(
+        self,
+        tenant_id: int,
+        template_name: str,
+        template_description: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        保存配置模板
+        
+        Args:
+            tenant_id: 组织ID
+            template_name: 模板名称
+            template_description: 模板描述
+            
+        Returns:
+            Dict[str, Any]: 保存结果
+        """
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError(f"组织不存在: {tenant_id}")
+        
+        settings = tenant.settings or {}
+        templates = settings.get("config_templates", [])
+        
+        # 获取当前配置
+        current_config = await self.get_business_config(tenant_id)
+        
+        # 生成新模板
+        new_template = {
+            "id": int(datetime.now().timestamp() * 1000),  # 使用毫秒级时间戳作为ID
+            "name": template_name,
+            "description": template_description,
+            "config": current_config,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        templates.append(new_template)
+        settings["config_templates"] = templates
+        
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+        
+        return {
+            "success": True,
+            "message": "配置模板已保存",
+            "template": new_template
+        }
+
+    async def apply_config_template(
+        self,
+        tenant_id: int,
+        template_id: int
+    ) -> Dict[str, Any]:
+        """
+        应用配置模板
+        
+        Args:
+            tenant_id: 组织ID
+            template_id: 模板ID
+            
+        Returns:
+            Dict[str, Any]: 应用结果
+        """
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError(f"组织不存在: {tenant_id}")
+        
+        settings = tenant.settings or {}
+        templates = settings.get("config_templates", [])
+        
+        # 查找模板
+        template = next((t for t in templates if t["id"] == template_id), None)
+        if not template:
+            raise NotFoundError(f"配置模板不存在: {template_id}")
+        
+        # 应用模板配置
+        business_config = template["config"]
+        # 更新模式切换时间
+        business_config["mode_switched_at"] = datetime.now().isoformat()
+        
+        settings["business_config"] = business_config
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+        
+        return {
+            "success": True,
+            "message": f"已应用配置模板: {template['name']}",
+            "template": template
+        }
+
+    async def delete_config_template(
+        self,
+        tenant_id: int,
+        template_id: int
+    ) -> Dict[str, Any]:
+        """
+        删除配置模板
+        
+        Args:
+            tenant_id: 组织ID
+            template_id: 模板ID
+            
+        Returns:
+            Dict[str, Any]: 删除结果
+        """
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError(f"组织不存在: {tenant_id}")
+        
+        settings = tenant.settings or {}
+        templates = settings.get("config_templates", [])
+        
+        # 过滤掉要删除的模板
+        new_templates = [t for t in templates if t["id"] != template_id]
+        
+        if len(new_templates) == len(templates):
+             raise NotFoundError(f"配置模板不存在: {template_id}")
+             
+        settings["config_templates"] = new_templates
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+        
+        return {
+            "success": True,
+            "message": "配置模板已删除"
         }

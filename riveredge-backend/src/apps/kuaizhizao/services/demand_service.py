@@ -23,6 +23,7 @@ from apps.kuaizhizao.schemas.demand import (
     DemandCreate, DemandUpdate, DemandResponse, DemandListResponse,
     DemandItemCreate, DemandItemUpdate, DemandItemResponse,
 )
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -126,7 +127,8 @@ class DemandService(AppBaseService[Demand]):
         self, 
         tenant_id: int, 
         demand_id: int,
-        include_items: bool = False
+        include_items: bool = False,
+        include_duration: bool = False
     ) -> DemandResponse:
         """
         根据ID获取需求
@@ -135,6 +137,7 @@ class DemandService(AppBaseService[Demand]):
             tenant_id: 租户ID
             demand_id: 需求ID
             include_items: 是否包含明细
+            include_duration: 是否包含耗时统计
             
         Returns:
             DemandResponse: 需求响应
@@ -142,9 +145,9 @@ class DemandService(AppBaseService[Demand]):
         Raises:
             NotFoundError: 需求不存在
         """
-        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
         if not demand:
-            raise NotFoundError(f"需求不存在: {demand_id}")
+            raise NotFoundError("需求", str(demand_id))
         
         response = DemandResponse.model_validate(demand)
         
@@ -156,6 +159,15 @@ class DemandService(AppBaseService[Demand]):
             ).all()
             response.items = [DemandItemResponse.model_validate(item) for item in items]
         
+        # 如果需要耗时统计
+        if include_duration:
+            duration_info = {}
+            if demand.created_at and demand.submit_time:
+                duration_info["draft_to_submit"] = (demand.submit_time - demand.created_at).total_seconds()
+            if demand.submit_time and demand.review_time:
+                duration_info["submit_to_review"] = (demand.review_time - demand.submit_time).total_seconds()
+            response.duration_info = duration_info
+            
         return response
 
     async def list_demands(
@@ -177,7 +189,7 @@ class DemandService(AppBaseService[Demand]):
         Returns:
             Dict: 包含data、total、success的字典
         """
-        query = Demand.filter(tenant_id=tenant_id)
+        query = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         # 应用过滤条件
         if filters.get('demand_type'):
@@ -231,9 +243,9 @@ class DemandService(AppBaseService[Demand]):
         """
         async with in_transaction():
             # 验证需求存在
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
             if not demand:
-                raise NotFoundError(f"需求不存在: {demand_id}")
+                raise NotFoundError("需求", str(demand_id))
             
             # 只能更新草稿状态的需求
             if demand.status != "草稿":
@@ -271,9 +283,9 @@ class DemandService(AppBaseService[Demand]):
             BusinessLogicError: 需求状态不允许提交
         """
         async with in_transaction():
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
             if not demand:
-                raise NotFoundError(f"需求不存在: {demand_id}")
+                raise NotFoundError("需求", str(demand_id))
             
             # 只能提交草稿状态的需求
             if demand.status != "草稿":
@@ -290,7 +302,7 @@ class DemandService(AppBaseService[Demand]):
                     entity_type="demand",
                     entity_id=demand_id,
                     from_state=demand.status,
-                    to_state="待审核",
+                    to_state=DemandStatus.PENDING_REVIEW,
                     operator_id=submitted_by,
                     operator_name=submitter_name,
                     transition_reason="提交审核"
@@ -300,8 +312,8 @@ class DemandService(AppBaseService[Demand]):
             
             # 更新状态为待审核，记录提交时间
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
-                status="待审核",
-                review_status="待审核",
+                status=DemandStatus.PENDING_REVIEW,
+                review_status=ReviewStatus.PENDING,
                 submit_time=datetime.now(),
                 updated_by=submitted_by
             )
@@ -350,12 +362,12 @@ class DemandService(AppBaseService[Demand]):
             BusinessLogicError: 需求状态不允许审核
         """
         async with in_transaction():
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id)
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
             if not demand:
-                raise NotFoundError(f"需求不存在: {demand_id}")
+                raise NotFoundError("需求", str(demand_id))
             
             # 只能审核待审核状态的需求
-            if demand.review_status != "待审核":
+            if demand.review_status != ReviewStatus.PENDING:
                 raise BusinessLogicError(f"只能审核待审核状态的需求，当前审核状态: {demand.review_status}")
             
             # 获取审核人信息
@@ -388,24 +400,24 @@ class DemandService(AppBaseService[Demand]):
                     
                     # 根据审核流程结果更新需求状态
                     if result.get("flow_rejected"):
-                        review_status = "驳回"
-                        status = "已驳回"
+                        review_status = ReviewStatus.REJECTED
+                        status = DemandStatus.REJECTED
                     elif result.get("flow_completed"):
-                        review_status = "通过"
-                        status = "已审核"
+                        review_status = ReviewStatus.APPROVED
+                        status = DemandStatus.AUDITED
                     else:
                         # 流程进行中，保持待审核状态
-                        review_status = "待审核"
-                        status = "待审核"
+                        review_status = ReviewStatus.PENDING
+                        status = DemandStatus.PENDING_REVIEW
                 else:
                     # 没有审核流程，使用简单审核模式
-                    review_status = "驳回" if rejection_reason else "通过"
-                    status = "已驳回" if rejection_reason else "已审核"
+                    review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
+                    status = DemandStatus.REJECTED if rejection_reason else DemandStatus.AUDITED
             except Exception as e:
                 logger.warning(f"使用审核流程服务失败: {e}，回退到简单审核模式")
                 # 回退到简单审核模式
-                review_status = "驳回" if rejection_reason else "通过"
-                status = "已驳回" if rejection_reason else "已审核"
+                review_status = ReviewStatus.REJECTED if rejection_reason else ReviewStatus.APPROVED
+                status = DemandStatus.REJECTED if rejection_reason else DemandStatus.AUDITED
             
             # 使用状态流转服务更新状态
             try:
@@ -435,6 +447,75 @@ class DemandService(AppBaseService[Demand]):
                 review_remarks=rejection_reason,
                 status=status,
                 updated_by=approved_by
+            )
+            
+            return await self.get_demand_by_id(tenant_id, demand_id)
+
+    async def unapprove_demand(
+        self, 
+        tenant_id: int, 
+        demand_id: int, 
+        unapproved_by: int
+    ) -> DemandResponse:
+        """
+        撤销审核需求
+        
+        只有“已审核”或“已驳回”状态的需求可以撤销审核。撤销审核后状态恢复为“待审核”。
+        
+        Args:
+            tenant_id: 租户ID
+            demand_id: 需求ID
+            unapproved_by: 操作人ID
+            
+        Returns:
+            DemandResponse: 撤销审核后的需求响应
+            
+        Raises:
+            NotFoundError: 需求不存在
+            BusinessLogicError: 需求状态不允许撤销审核
+        """
+        async with in_transaction():
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+            if not demand:
+                raise NotFoundError("需求", str(demand_id))
+            
+            # 只能撤销审核已审核或已驳回状态的需求
+            if demand.status not in [DemandStatus.AUDITED, DemandStatus.REJECTED]:
+                raise BusinessLogicError(f"只能撤销审核已审核或已驳回状态的需求，当前状态: {demand.status}")
+            
+            # 如果已经下推到运算，不允许撤销审核
+            if demand.pushed_to_computation:
+                raise BusinessLogicError("需求已下推到运算，不允许撤销审核")
+
+            # 使用状态流转服务记录
+            try:
+                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
+                state_service = StateTransitionService()
+                operator_name = await self.get_user_name(unapproved_by)
+                
+                await state_service.transition_state(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id,
+                    from_state=demand.status,
+                    to_state=DemandStatus.PENDING_REVIEW,
+                    operator_id=unapproved_by,
+                    operator_name=operator_name,
+                    transition_reason="撤销审核"
+                )
+            except Exception as e:
+                logger.warning(f"发送状态流转失败: {e}")
+            
+            # 更新状态为待审核，重置审核信息
+            await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+                status=DemandStatus.PENDING_REVIEW,
+                review_status=ReviewStatus.PENDING,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                updated_by=unapproved_by,
+                updated_at=datetime.now()
             )
             
             return await self.get_demand_by_id(tenant_id, demand_id)
@@ -554,7 +635,7 @@ class DemandService(AppBaseService[Demand]):
                 id=item_id
             )
             if not item:
-                raise NotFoundError(f"需求明细不存在: {item_id}")
+                raise NotFoundError("需求明细", str(item_id))
             
             # 更新明细
             update_data = item_data.model_dump(exclude_unset=True)
@@ -613,7 +694,7 @@ class DemandService(AppBaseService[Demand]):
                 id=item_id
             )
             if not item:
-                raise NotFoundError(f"需求明细不存在: {item_id}")
+                raise NotFoundError("需求明细", str(item_id))
             
             # 删除明细
             await DemandItem.filter(
@@ -624,6 +705,98 @@ class DemandService(AppBaseService[Demand]):
             
             # 更新需求总数量和总金额
             await self._update_demand_totals(tenant_id, demand_id)
+
+    async def delete_demand(
+        self,
+        tenant_id: int,
+        demand_id: int
+    ) -> None:
+        """
+        删除需求
+        
+        Args:
+            tenant_id: 租户ID
+            demand_id: 需求ID
+            
+        Raises:
+            NotFoundError: 需求不存在
+            BusinessLogicError: 需求状态不允许删除
+        """
+        async with in_transaction():
+            logger.info(f"DEBUG: delete_demand call with demand_id={demand_id} (type={type(demand_id)}), tenant_id={tenant_id}")
+            logger.info(f"DEBUG: Demand model table name: {Demand._meta.db_table}")
+            
+            # 查询时需要排除已软删除的记录
+            demand = await Demand.get_or_none(id=demand_id, deleted_at__isnull=True)
+            
+            if not demand:
+                # 再次尝试通过 filter 查找，看看是不是 get_or_none 的问题
+                filter_res = await Demand.filter(id=demand_id).first()
+                logger.info(f"DEBUG: get_or_none failed. filter(...).first() result: {filter_res}")
+                
+                # 打印所有存在的ID（仅调试用，生产环境慎用，但在当前问题场景下需要）
+                all_ids = await Demand.all().values_list('id', flat=True)
+                logger.info(f"DEBUG: All existing demand IDs in DB: {all_ids[:20]}... (Total: {len(all_ids)})")
+                
+                # 尝试查询特定租户的所有记录
+                tenant_demands = await Demand.filter(tenant_id=tenant_id).values_list('id', flat=True)
+                logger.info(f"DEBUG: Demand IDs for tenant_id={tenant_id}: {tenant_demands[:20]}... (Total: {len(tenant_demands)})")
+                
+                # 尝试原始SQL查询来验证
+                from tortoise import Tortoise
+                conn = Tortoise.get_connection("default")
+                raw_result = await conn.execute_query_dict(f"SELECT id FROM {Demand._meta.db_table} WHERE id = {demand_id}")
+                logger.info(f"DEBUG: Raw SQL query result for id={demand_id}: {raw_result}")
+                
+                raise NotFoundError("需求", str(demand_id))
+            
+            if demand.tenant_id != tenant_id:
+                logger.warning(f"删除需求失败：租户ID不匹配。请求租户ID: {tenant_id}, 需求ID: {demand_id}, 需求所属租户ID: {demand.tenant_id}")
+                raise NotFoundError("需求", str(demand_id))
+            
+            # 只能删除草稿状态的需求
+            if demand.status != DemandStatus.DRAFT:
+                raise BusinessLogicError(f"只能删除草稿状态的需求，当前状态: {demand.status}")
+            
+            # 删除需求明细
+            await DemandItem.filter(tenant_id=tenant_id, demand_id=demand_id).delete()
+            
+            # 删除需求
+            await Demand.filter(tenant_id=tenant_id, id=demand_id).delete()
+
+    async def bulk_delete_demands(
+        self,
+        tenant_id: int,
+        demand_ids: List[int]
+    ) -> Dict[str, Any]:
+        """
+        批量删除需求
+        
+        Args:
+            tenant_id: 租户ID
+            demand_ids: 需求ID列表
+            
+        Returns:
+            Dict: 删除结果，包含成功数量和失败详情
+        """
+        success_count = 0
+        failed_items = []
+        
+        for demand_id in demand_ids:
+            try:
+                await self.delete_demand(tenant_id, demand_id)
+                success_count += 1
+            except Exception as e:
+                failed_items.append({
+                    "id": demand_id,
+                    "reason": str(e)
+                })
+        
+        return {
+            "success_count": success_count,
+            "failed_count": len(failed_items),
+            "failed_items": failed_items
+        }
 
     async def _update_demand_totals(
         self, 
@@ -688,10 +861,10 @@ class DemandService(AppBaseService[Demand]):
             demand = await self.get_demand_by_id(tenant_id, demand_id)
             
             # 验证需求状态：只能下推已审核的需求
-            if demand.status != "已审核":
+            if demand.status != DemandStatus.AUDITED:
                 raise ValidationError(f"只能下推已审核的需求，当前状态：{demand.status}")
             
-            if demand.review_status != "通过":
+            if demand.review_status != ReviewStatus.APPROVED:
                 raise ValidationError(f"只能下推审核通过的需求，当前审核状态：{demand.review_status}")
             
             # 检查是否已经下推过
@@ -722,3 +895,77 @@ class DemandService(AppBaseService[Demand]):
                 "computation_code": computation_code,
                 "note": "需求计算任务将在统一需求计算服务实现后自动创建"
             }
+
+    async def withdraw_demand(
+        self, 
+        tenant_id: int, 
+        demand_id: int, 
+        withdrawn_by: int
+    ) -> DemandResponse:
+        """
+        撤回已提交的需求
+        
+        只有“待审核”状态的需求可以撤回。撤回后状态恢复为“草稿”。
+        
+        Args:
+            tenant_id: 租户ID
+            demand_id: 需求ID
+            withdrawn_by: 撤回人ID
+            
+        Returns:
+            DemandResponse: 撤回后的需求响应
+            
+        Raises:
+            NotFoundError: 需求不存在
+            BusinessLogicError: 需求状态不允许撤回
+        """
+        async with in_transaction():
+            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+            if not demand:
+                raise NotFoundError(f"需求不存在: {demand_id}")
+            
+            # 只能撤回待审核状态的需求
+            if demand.status != DemandStatus.PENDING_REVIEW:
+                raise BusinessLogicError(f"只能撤回待审核状态的需求，当前状态: {demand.status}")
+            
+            # 检查是否有正在运行的审核流程，如果有则取消
+            try:
+                from apps.kuaizhizao.services.approval_flow_service import ApprovalFlowService
+                approval_service = ApprovalFlowService()
+                await approval_service.cancel_approval_flow(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id,
+                    operator_id=withdrawn_by
+                )
+            except Exception as e:
+                logger.warning(f"取消审核流程失败或无需取消: {e}")
+            
+            # 使用状态流转服务记录
+            try:
+                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
+                state_service = StateTransitionService()
+                operator_name = await self.get_user_name(withdrawn_by)
+                
+                await state_service.transition_state(
+                    tenant_id=tenant_id,
+                    entity_type="demand",
+                    entity_id=demand_id,
+                    from_state=demand.status,
+                    to_state=DemandStatus.DRAFT,
+                    operator_id=withdrawn_by,
+                    operator_name=operator_name,
+                    transition_reason="用户撤回"
+                )
+            except Exception as e:
+                logger.warning(f"发送状态流转失败: {e}")
+            
+            # 更新状态为草稿，重置审核状态
+            await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+                status=DemandStatus.DRAFT,
+                review_status=ReviewStatus.PENDING, # 这里保持待审核可能不太对，应该重置为初始状态，但 DemandResponse 中默认为待审核
+                updated_by=withdrawn_by,
+                updated_at=datetime.now()
+            )
+            
+            return await self.get_demand_by_id(tenant_id, demand_id)

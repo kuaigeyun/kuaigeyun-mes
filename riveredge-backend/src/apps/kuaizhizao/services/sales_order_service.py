@@ -21,6 +21,7 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderCreate, SalesOrderUpdate, SalesOrderResponse, SalesOrderListResponse,
     SalesOrderItemCreate, SalesOrderItemUpdate, SalesOrderItemResponse,
 )
+from apps.kuaizhizao.constants import DemandStatus
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
 
@@ -447,6 +448,30 @@ class SalesOrderService:
         )
         return self._convert_demand_to_sales_order(demand)
 
+    async def unapprove_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        unapproved_by: int
+    ) -> SalesOrderResponse:
+        """
+        反审核销售订单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+            unapproved_by: 操作人ID
+            
+        Returns:
+            SalesOrderResponse: 反审核后的销售订单响应
+        """
+        demand = await self.demand_service.unapprove_demand(
+            tenant_id=tenant_id,
+            demand_id=sales_order_id,
+            unapproved_by=unapproved_by
+        )
+        return self._convert_demand_to_sales_order(demand)
+
     async def push_sales_order_to_computation(
         self,
         tenant_id: int,
@@ -469,3 +494,122 @@ class SalesOrderService:
             demand_id=sales_order_id,
             created_by=created_by
         )
+
+    async def withdraw_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        withdrawn_by: int
+    ) -> SalesOrderResponse:
+        """
+        撤回销售订单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+            withdrawn_by: 撤回人ID
+            
+        Returns:
+            SalesOrderResponse: 撤回后的销售订单响应
+        """
+        demand = await self.demand_service.withdraw_demand(
+            tenant_id=tenant_id,
+            demand_id=sales_order_id,
+            withdrawn_by=withdrawn_by
+        )
+        return self._convert_demand_to_sales_order(demand)
+
+    async def delete_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int
+    ) -> None:
+        """
+        删除销售订单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_id: 销售订单ID
+            
+        Raises:
+            NotFoundError: 销售订单不存在
+            BusinessLogicError: 销售订单状态不允许删除
+        """
+        # 调用需求服务删除
+        await self.demand_service.delete_demand(
+            tenant_id=tenant_id,
+            demand_id=sales_order_id
+        )
+
+    async def bulk_delete_sales_orders(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int]
+    ) -> Dict[str, Any]:
+        """
+        批量删除销售订单
+        
+        Args:
+            tenant_id: 租户ID
+            sales_order_ids: 销售订单ID列表
+            
+        Returns:
+            Dict: 删除结果
+        """
+        return await self.demand_service.bulk_delete_demands(
+            tenant_id=tenant_id,
+            demand_ids=sales_order_ids
+        )
+
+    async def confirm_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        confirmed_by: int
+    ) -> SalesOrderResponse:
+        """
+        确认销售订单（转为执行模式）
+        """
+        from apps.kuaizhizao.models.demand import Demand
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            # 获取需求
+            demand_obj = await self.demand_service.get_demand_by_id(tenant_id, sales_order_id)
+            if demand_obj.status != DemandStatus.AUDITED:
+                raise BusinessLogicError("只有已审核状态的销售订单才能确认")
+
+            await Demand.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                status=DemandStatus.CONFIRMED,
+                updated_by=confirmed_by,
+                updated_at=datetime.now()
+            )
+            
+            # 重新获取更新后的数据
+            updated_demand = await self.demand_service.get_demand_by_id(tenant_id, sales_order_id)
+            return self._convert_demand_to_sales_order(updated_demand)
+
+    async def push_sales_order_to_delivery(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None
+    ) -> Dict[str, Any]:
+        """
+        下推销售订单到销售出库
+        """
+        from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
+        
+        # 兼容性处理：SalesDeliveryService 可能还依赖旧的 SalesOrder 模型
+        # 但我们这里传入的是 demand_id。如果 SalesDeliveryService 内部是通过 ID 查询 SalesOrder，那它会报错。
+        # 我们需要检查 SalesDeliveryService 是否支持 Demand。
+        
+        # 暂时调用旧服务的逻辑，但传入 demand 映射
+        # 注意：这里可能需要更多的适配
+        
+        # TODO: 适配 SalesDeliveryService 以支持 Demand 模型
+        # 目前先抛出待实现错误，或者尝试调用（如果它只依赖 ID 且表名相同，那倒是能跑，但表名不同！）
+        
+        raise BusinessLogicError("销售出库下推功能正在适配统一需求模型，请稍后再试")
+

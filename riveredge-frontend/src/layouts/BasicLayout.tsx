@@ -116,7 +116,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // 重定向到infra登录页
     return <Navigate to="/infra/login" replace />;
   }
-  
+
   // 如果 currentUser 已存在且信息完整，不需要重新获取
   // 只有在以下情况才需要获取用户信息：
   // 1. 有 token 但没有 currentUser
@@ -284,7 +284,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
   // 根据菜单路径和名称映射到制造业图标
   // 优先使用路径匹配（路径是固定的，不受翻译影响）
   // 路径映射作为主要方式，名称映射作为后备方案（为了向后兼容）
-  
+
   // 路径映射（优先使用，因为路径是固定的，不受翻译影响）
   if (menuPath) {
     const pathMap: Record<string, React.ComponentType<any>> = {
@@ -299,6 +299,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/applications': ManufacturingIcons.factory, // 应用中心 - 使用工厂图标
       '/system/menus': ManufacturingIcons.checklist, // 菜单管理 - 使用清单图标
       '/system/site-settings': ManufacturingIcons.mdSettings, // 站点设置 - 使用设置图标
+      '/system/business-config': ManufacturingIcons.systemConfig, // 业务配置 - 使用系统配置图标
       '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 使用配置图标
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
       '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
@@ -332,7 +333,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/monitoring': ManufacturingIcons.monitor, // 系统监控 - 使用显示器图标
       '/infra/inngest': ManufacturingIcons.workflow, // Inngest工作流 - 使用工作流图标
       '/infra/admin': ManufacturingIcons.shield, // 平台管理 - 使用盾牌图标
-      
+
       // 应用菜单路径图标映射（使用前缀匹配，支持 /apps/{app-code}/... 格式）
       '/apps/kuaizhizao/plan-management': ManufacturingIcons.calendar, // 计划管理 - 使用日历图标
       '/apps/kuaizhizao/production-execution': ManufacturingIcons.activity, // 生产执行 - 使用活动/执行图标
@@ -347,13 +348,13 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/master-data': ManufacturingIcons.database, // 基础数据管理 - 使用数据库图标
       '/apps/master-data/warehouse': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标（区别于仓储管理）
     };
-    
+
     // 精确路径匹配
     if (pathMap[menuPath]) {
       const IconComponent = pathMap[menuPath];
       return React.createElement(IconComponent, { size: 16 });
     }
-    
+
     // 前缀路径匹配（用于父级菜单）
     const matchedPath = Object.keys(pathMap).find(path => menuPath.startsWith(path));
     if (matchedPath) {
@@ -361,7 +362,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       return React.createElement(IconComponent, { size: 16 });
     }
   }
-  
+
   // 名称映射（后备方案，为了向后兼容，支持中英文）
   // 注意：由于菜单名称可能已翻译，这里作为最后的后备方案
   const nameMap: Record<string, React.ComponentType<any>> = {
@@ -389,12 +390,12 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'Warehouse Data': ManufacturingIcons.archive, // 基础数据管理-仓库数据（英文）
     // ... 其他常见的英文名称可以在这里添加
   };
-  
+
   if (nameMap[menuName]) {
     const IconComponent = nameMap[menuName];
     return React.createElement(IconComponent, { size: 16 });
   }
-  
+
   // 如果找不到匹配的图标，返回默认的 Lucide 图标
   return React.createElement(ManufacturingIcons.dashboard, { size: 16 });
 };
@@ -505,6 +506,11 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/site-settings',
             name: t('menu.system.site-settings'),
             icon: getMenuIcon(t('menu.system.site-settings'), '/system/site-settings'),
+          },
+          {
+            path: '/system/business-config',
+            name: t('menu.system.business-config'),
+            icon: getMenuIcon(t('menu.system.business-config'), '/system/business-config'),
           },
           {
             path: '/system/system-parameters',
@@ -742,13 +748,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const { currentUser, logout, isLocked, lockScreen } = useGlobalStore();
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
-  
+
   // 获取用户头像 URL（如果有 UUID）
   useEffect(() => {
     const loadAvatarUrl = async () => {
       const userInfo = getUserInfo();
       const avatarUuid = (currentUser as any)?.avatar || userInfo?.avatar;
-      
+
       if (avatarUuid) {
         try {
           const url = await getAvatarUrl(avatarUuid);
@@ -779,28 +785,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             // 静默失败，不影响其他功能
           }
         }
-        
+
         // 只有在确实没有找到头像时才清空
         if (!foundAvatar) {
           setAvatarUrl(undefined);
         }
       }
     };
-    
+
     if (currentUser) {
       loadAvatarUrl();
     }
   }, [currentUser]);
-  
+
   // 获取可用语言列表
   const { data: languageListData } = useQuery({
     queryKey: ['availableLanguages'],
     queryFn: () => getLanguageList({ is_active: true }),
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
   });
-  
+
   const queryClient = useQueryClient();
-  
+
   // 获取站点设置
   const { data: siteSetting } = useQuery({
     queryKey: ['siteSetting'],
@@ -831,7 +837,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 未读消息数量
   const unreadCount = messageStats?.unread || 0;
-  
+
   // 判断字符串是否是UUID格式
   const isUUID = (str: string): boolean => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -840,11 +846,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 获取站点名称（如果未配置或为空字符串则使用默认值）
   const siteName = (siteSetting?.settings?.site_name?.trim() || '') || 'RiverEdge SaaS';
-  
+
   // 获取站点LOGO（支持UUID和URL格式）
   const [siteLogoUrl, setSiteLogoUrl] = useState<string>('/img/logo.png');
   const siteLogoValue = siteSetting?.settings?.site_logo?.trim() || '';
-  
+
   // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
   useEffect(() => {
     const loadSiteLogo = async () => {
@@ -852,7 +858,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         setSiteLogoUrl('/img/logo.png');
         return;
       }
-      
+
       // 如果是UUID格式，获取文件预览URL
       if (isUUID(siteLogoValue)) {
         try {
@@ -867,24 +873,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         setSiteLogoUrl(siteLogoValue);
       }
     };
-    
+
     loadSiteLogo();
   }, [siteLogoValue]);
-  
+
   const siteLogo = siteLogoUrl;
-  
+
   // 监听站点设置更新事件，刷新站点设置查询
   useEffect(() => {
     const handleSiteSettingUpdate = () => {
       queryClient.invalidateQueries({ queryKey: ['siteSetting'] });
     };
-    
+
     window.addEventListener('siteThemeUpdated', handleSiteSettingUpdate);
     return () => {
       window.removeEventListener('siteThemeUpdated', handleSiteSettingUpdate);
     };
   }, [queryClient]);
-  
+
   // 获取应用菜单（仅获取已安装且启用的应用的菜单）
   // 优化缓存策略：使用 localStorage 缓存，避免每次刷新都重新加载
   const { data: applicationMenus, isLoading: applicationMenusLoading, refetch: refetchApplicationMenus } = useQuery({
@@ -894,7 +900,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const menuData = await getMenuTree({ is_active: true });
       // 只返回应用菜单（application_uuid 不为空）
       const appMenus = menuData.filter(menu => menu.application_uuid);
-      
+
       // 更新 localStorage 缓存（包含时间戳，用于判断是否过期）
       try {
         const cacheData = {
@@ -907,7 +913,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 忽略存储错误（localStorage 可能已满或被禁用）
         console.warn('保存应用菜单缓存失败:', error);
       }
-      
+
       return appMenus;
     },
     enabled: !!currentUser, // 只在用户登录后加载
@@ -922,7 +928,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       if (!query.state.data || query.isStale()) {
         return true;
       }
-      
+
       // 如果有缓存数据且未过期，不刷新
       // 租户ID匹配检查在 useEffect 中处理，避免闭包问题
       return false;
@@ -938,7 +944,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           const cacheAge = Date.now() - (cached.timestamp || 0);
           const isExpired = cacheAge > 5 * 60 * 1000;
           const isTenantMatch = cached.tenantId === currentUser?.tenant_id;
-          
+
           if (!isExpired && isTenantMatch && cached.data) {
             return cached.data;
           }
@@ -949,7 +955,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       return undefined;
     },
   });
-  
+
   // 监听用户登录事件，清除菜单缓存并触发菜单查询（确保重新登录时获取最新菜单）
   useEffect(() => {
     const handleUserLogin = () => {
@@ -982,18 +988,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 使用 ref 记录 previous currentUser，用于检测用户从无到有的变化
   const prevCurrentUserRef = useRef(currentUser);
-  
+
   // 监听 currentUser 变化，当用户从无到有时主动触发菜单查询
   // 这解决了登录后菜单不显示的问题
   useEffect(() => {
     const prevUser = prevCurrentUserRef.current;
-    
+
     // 检测用户从无到有的变化（登录场景）
     const userJustLoggedIn = !prevUser && currentUser;
-    
+
     // 更新 ref
     prevCurrentUserRef.current = currentUser;
-    
+
     if (userJustLoggedIn) {
       console.log('🔄 检测到用户登录（从无到有），主动触发菜单加载...');
       // 清除可能存在的旧缓存
@@ -1063,7 +1069,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       window.removeEventListener('application-status-changed', handleApplicationStatusChange);
     };
   }, [refetchApplicationMenus]);
-  
+
   /**
    * 将 MenuTree 转换为 MenuDataItem
    * 支持应用菜单的国际化翻译
@@ -1072,7 +1078,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     // 处理图标：左侧菜单全部使用 Lucide 图标
     // 统一图标大小：16px
     let iconElement: React.ReactNode = undefined;
-    
+
     // 优先使用 menu.icon 字段（如果存在）
     if (menu.icon) {
       // 首先尝试从预定义的 ManufacturingIcons 中获取
@@ -1086,7 +1092,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 注意：这里使用同步方式，因为 convertMenuTreeToMenuDataItem 是同步函数
         // 实际上，由于 manufacturingIcons.tsx 已经全量导入了，我们可以直接使用
         // 但为了更好的性能，这里先尝试从预定义映射获取，失败后再尝试直接访问
-        
+
         // 尝试映射 Ant Design 图标名称
         const lucideIconMap: Record<string, React.ComponentType<any>> = {
           'DashboardOutlined': ManufacturingIcons.industrialDashboard,
@@ -1129,10 +1135,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           // 如果预定义映射和 Ant Design 映射都没有，尝试直接从 Lucide Icons 中获取
           // 支持 PascalCase 图标名（如 "Factory", "Home"）或 kebab-case（如 "factory", "home"）
           const iconName = menu.icon as string;
-          
+
           // 尝试直接访问（PascalCase）
           let DirectIcon = (LucideIcons as any)[iconName];
-          
+
           // 如果直接访问失败，尝试转换为 PascalCase
           if (!DirectIcon) {
             const pascalCaseName = iconName
@@ -1141,7 +1147,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               .join('');
             DirectIcon = (LucideIcons as any)[pascalCaseName];
           }
-          
+
           if (DirectIcon && DirectIcon !== React.Fragment && typeof DirectIcon === 'function') {
             iconElement = React.createElement(DirectIcon, { size: 16 });
           } else if (process.env.NODE_ENV === 'development') {
@@ -1150,7 +1156,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
       }
     }
-    
+
     // 如果 menu.icon 不存在或未匹配到图标，再尝试根据菜单名称和路径获取图标
     if (!iconElement) {
       if (menu.name) {
@@ -1159,7 +1165,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         iconElement = getMenuIcon('', menu.path);
       }
     }
-    
+
     // 如果还是没有图标，使用默认的 Lucide 图标
     if (!iconElement) {
       iconElement = React.createElement(ManufacturingIcons.dashboard, { size: 16 });
@@ -1196,10 +1202,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     return menuItem;
   }, [t]); // 添加 t 作为依赖项，确保翻译函数是最新的
-  
+
   // 当前语言代码
   const currentLanguage = i18nInstance.language || 'zh-CN';
-  
+
   /**
    * 计算颜色的亮度值
    * @param color - 颜色值（十六进制或 rgb/rgba 格式）
@@ -1207,12 +1213,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   const calculateColorBrightness = (color: string): number => {
     if (!color || typeof color !== 'string') return 255; // 默认返回浅色
-    
+
     // 处理十六进制颜色
     if (color.startsWith('#')) {
       const hex = color.slice(1);
       // 处理 3 位十六进制（如 #fff）
-      const fullHex = hex.length === 3 
+      const fullHex = hex.length === 3
         ? hex.split('').map(c => c + c).join('')
         : hex;
       const r = parseInt(fullHex.slice(0, 2), 16);
@@ -1221,7 +1227,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 计算亮度 (使用相对亮度公式)
       return (r * 299 + g * 587 + b * 114) / 1000;
     }
-    
+
     // 处理 rgb/rgba 格式
     if (color.startsWith('rgb')) {
       const match = color.match(/\d+/g);
@@ -1232,7 +1238,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         return (r * 299 + g * 587 + b * 114) / 1000;
       }
     }
-    
+
     return 255; // 默认返回浅色
   };
 
@@ -1265,7 +1271,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         const customHeaderBgColor = (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
         setSiderBgColorState(customSiderBgColor);
         setHeaderBgColorState(customHeaderBgColor);
-        
+
         // 固定使用 MIX 布局模式
         (window as any).__RIVEREDGE_LAYOUT_MODE__ = 'mix';
       }, 0);
@@ -1305,10 +1311,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (isDarkMode) {
       return 'var(--ant-colorText)';
     }
-    
+
     // 浅色模式下，检查是否有自定义背景色
     const customBgColor = headerBgColorState || (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
-    
+
     if (customBgColor) {
       // 如果有自定义背景色，根据背景色亮度计算文字颜色
       const brightness = calculateColorBrightness(customBgColor);
@@ -1331,10 +1337,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (isDarkMode) {
       return 'var(--ant-colorText)';
     }
-    
+
     // 浅色模式下，检查是否有自定义背景色
     const customBgColor = siderBgColorState || (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
-    
+
     if (customBgColor) {
       // 如果有自定义背景色，根据背景色亮度计算文字颜色
       const brightness = calculateColorBrightness(customBgColor);
@@ -1396,14 +1402,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         setBreadcrumbVisible(true);
         return;
       }
-      
+
       const breadcrumbElement = breadcrumbRef.current;
       const olElement = breadcrumbElement.querySelector('ol') || breadcrumbElement.querySelector('ul');
       if (!olElement) {
         setBreadcrumbVisible(true);
         return;
       }
-      
+
       // 检测第一个和最后一个元素是否在同一行
       const firstItem = olElement.querySelector('.ant-breadcrumb-item:first-child');
       const lastItem = olElement.querySelector('.ant-breadcrumb-item:last-child');
@@ -1423,7 +1429,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 监听窗口大小变化
     window.addEventListener('resize', checkBreadcrumbWrap);
-    
+
     // 使用 MutationObserver 监听 DOM 变化
     const observer = new MutationObserver(() => {
       setTimeout(checkBreadcrumbWrap, 50);
@@ -1488,10 +1494,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     const updateLogoTitleColor = () => {
       // 计算应该使用的文字颜色
-      const logoTitleColor = isDarkMode 
-        ? 'var(--ant-colorText)' 
+      const logoTitleColor = isDarkMode
+        ? 'var(--ant-colorText)'
         : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)');
-      
+
       // 直接查找 h1 元素（LOGO 后的标题文字）
       const h1Selectors = [
         '.ant-pro-global-header-logo h1',
@@ -1544,28 +1550,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 根据当前路径和菜单配置生成面包屑
    */
   const generateBreadcrumb = useMemo(() => {
-    const breadcrumbItems: { 
-      title: string; 
-      path?: string; 
+    const breadcrumbItems: {
+      title: string;
+      path?: string;
       icon?: React.ReactNode;
       menu?: { items: Array<{ key: string; label: string; onClick: () => void }> };
     }[] = [];
-    
+
     // 查找当前路径对应的菜单项及其父级菜单
     const findMenuPath = (items: MenuDataItem[] | undefined, targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
       // 防御性检查：如果 items 为空或未定义，直接返回 null
       if (!items || !Array.isArray(items) || items.length === 0) {
         return null;
       }
-      
+
       for (const item of items) {
         const currentPath = [...path, item];
-        
+
         // 精确匹配
         if (item.path === targetPath) {
           return currentPath;
         }
-        
+
         // 子菜单递归查找
         if (item.children) {
           const found = findMenuPath(item.children, targetPath, currentPath);
@@ -1574,7 +1580,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
       return null;
     };
-    
+
     // 查找父级菜单项，用于获取同级菜单
     const findParentMenu = (items: MenuDataItem[], targetPath: string, parent: MenuDataItem | null = null): { item: MenuDataItem; parent: MenuDataItem | null } | null => {
       for (const item of items) {
@@ -1588,41 +1594,41 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
       return null;
     };
-    
+
     const menuPath = findMenuPath(menuConfig, location.pathname);
-    
+
     // 查找菜单组下每层第一组的第一个实际菜单项（有 path 的）
     // 规则：只查找每层第一组的第一个菜单项，不遍历所有项
     const findFirstActualMenuItem = (items: MenuDataItem[] | undefined): MenuDataItem | null => {
       if (!items || !Array.isArray(items) || items.length === 0) return null;
-      
+
       // 只处理第一项（第一组）
       const firstItem = items[0];
-      
+
       // 如果第一项是菜单组，递归查找其子项的第一组
       if (firstItem.type === 'group' && firstItem.children) {
         return findFirstActualMenuItem(firstItem.children);
       }
-      
+
       // 如果第一项是实际菜单项（有 path），返回它
       if (firstItem.path && firstItem.name) {
         return firstItem;
       }
-      
+
       // 如果第一项有子项（但不是菜单组），递归查找其子项的第一组
       if (firstItem.children) {
         return findFirstActualMenuItem(firstItem.children);
       }
-      
+
       return null;
     };
-    
+
     if (menuPath) {
       menuPath.forEach((item, index) => {
         if (item.name && item.path) {
           // 检查是否有同级菜单（父级菜单有多个子项）
           let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-          
+
           // 检查第一级菜单项：如果第一个子项是菜单组，找到该菜单组下的第一个实际菜单项
           let actualPath = item.path;
           if (index === 0 && item.children && item.children.length > 0) {
@@ -1635,7 +1641,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }
             }
           }
-          
+
           if (index > 0) {
             // 获取父级菜单项
             const parentItem = menuPath[index - 1];
@@ -1680,7 +1686,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           if (firstMenuItem && firstMenuItem.path) {
             // 检查是否有同级菜单组（父级菜单有多个子项，包括菜单组）
             let menu: { items: Array<{ key: string; label: string; onClick: () => void }> } | undefined;
-            
+
             if (index > 0) {
               const parentItem = menuPath[index - 1];
               if (parentItem.children && parentItem.children.length > 1) {
@@ -1695,7 +1701,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                         if (firstItem && firstItem.path) {
                           // 检查是否是应用菜单（通过路径判断）
                           const isAppMenu = firstItem.path.startsWith('/apps/');
-                          const label = isAppMenu 
+                          const label = isAppMenu
                             ? translateAppMenuName(child.name as string, firstItem.path, undefined, t)
                             : translateMenuName(child.name as string, t);
                           return {
@@ -1726,7 +1732,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 };
               }
             }
-            
+
             // 检查是否是应用菜单（通过路径判断）
             const isAppMenu = firstMenuItem.path?.startsWith('/apps/');
             const breadcrumbTitle = isAppMenu
@@ -1754,7 +1760,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         });
       });
     }
-    
+
     return breadcrumbItems;
   }, [location.pathname, menuConfig, navigate, t]);
 
@@ -1769,10 +1775,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 获取当前页面的标题
     const pageTitle = findMenuTitleWithTranslation(location.pathname, menuConfig, t);
-    
+
     // 获取站点名称（优先使用 siteSetting，如果未加载则尝试从缓存读取，最后使用默认值）
     let currentSiteName = 'RiverEdge SaaS';
-    
+
     if (siteSetting?.settings?.site_name?.trim()) {
       // 如果 siteSetting 已加载且有站点名称，使用它并缓存
       currentSiteName = siteSetting.settings.site_name.trim();
@@ -1792,7 +1798,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 忽略读取错误
       }
     }
-    
+
     // 设置文档标题
     if (pageTitle && pageTitle !== t('common.unnamedPage')) {
       document.title = `${pageTitle} - ${currentSiteName}`;
@@ -1810,14 +1816,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         setBreadcrumbVisible(true);
         return;
       }
-      
+
       const breadcrumbElement = breadcrumbRef.current;
       const olElement = breadcrumbElement.querySelector('ol') || breadcrumbElement.querySelector('ul');
       if (!olElement) {
         setBreadcrumbVisible(true);
         return;
       }
-      
+
       // 检测第一个和最后一个元素是否在同一行
       const firstItem = olElement.querySelector('.ant-breadcrumb-item:first-child');
       const lastItem = olElement.querySelector('.ant-breadcrumb-item:last-child');
@@ -1837,7 +1843,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 监听窗口大小变化
     window.addEventListener('resize', checkBreadcrumbWrap);
-    
+
     // 使用 MutationObserver 监听 DOM 变化
     const observer = new MutationObserver(() => {
       setTimeout(checkBreadcrumbWrap, 50);
@@ -1921,7 +1927,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   const calculateOpenKeys = React.useCallback((menuItems: MenuDataItem[], currentPath: string): string[] => {
     const openKeys: string[] = [];
-    
+
     /**
      * 递归查找包含当前路径的菜单项
      * 
@@ -1934,14 +1940,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       for (const item of items) {
         const itemKey = item.key || item.path;
         if (!itemKey) continue;
-        
+
         // 如果当前路径完全匹配菜单项的 path，说明找到了目标菜单
         if (item.path === path) {
           // 将父菜单的 key 添加到 openKeys（不包括当前菜单本身）
           openKeys.push(...parentKeys);
           return true;
         }
-        
+
         // 如果菜单项有子菜单，检查当前路径是否在该菜单项的子菜单中
         if (item.children && item.children.length > 0) {
           // 检查子菜单中是否有匹配的路径
@@ -1953,7 +1959,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
       return false;
     };
-    
+
     findParentMenu(menuItems, currentPath);
     return openKeys;
   }, []);
@@ -1970,7 +1976,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (applicationMenus && applicationMenus.length > 0) {
       // 收集所有应用菜单项（分组标题 + 子菜单）
       const appMenuItems: MenuDataItem[] = [];
-      
+
       // 遍历每个应用，将应用的子菜单提升到主菜单级别
       applicationMenus.forEach(appMenu => {
         if (appMenu.children && appMenu.children.length > 0) {
@@ -1984,7 +1990,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             // 这样可以确保无论数据库中的名称是什么（中文或英文），都能正确翻译
             const firstChildPath = appMenu.children[0]?.path;
             let translatedAppName = appMenu.name; // 默认使用数据库中的名称
-            
+
             // 优先从路径提取应用 code 并使用翻译 key
             if (firstChildPath && firstChildPath.startsWith('/apps/')) {
               const appCode = extractAppCodeFromPath(firstChildPath);
@@ -1998,12 +2004,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 }
               }
             }
-            
+
             // 如果路径提取失败，使用 translateAppMenuName 作为后备方案
             if (translatedAppName === appMenu.name) {
               translatedAppName = translateAppMenuName(appMenu.name, firstChildPath, appMenu.application_uuid, t);
             }
-            
+
             const groupTitle: MenuDataItem = {
               name: translatedAppName,
               label: translatedAppName, // Ant Design Menu 使用 label 显示分组标题
@@ -2023,7 +2029,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             };
             appMenuItems.push(groupTitle);
           }
-          
+
           // 2. 将应用的子菜单提升到主菜单级别，并添加应用菜单容器的 className
           appMenu.children.forEach(childMenu => {
             // 传递 isAppMenu=true 标记这是应用菜单，使用应用菜单翻译逻辑
@@ -2039,7 +2045,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           });
         }
       });
-      
+
       // 插入到第二组位置（在仪表盘之后，系统菜单之前）
       // 注意：分割线通过 CSS 添加，不通过菜单项
       menuItems.splice(1, 0, ...appMenuItems);
@@ -2052,8 +2058,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menuItems = menuItems.filter(item => {
         // 如果菜单有子菜单，检查是否包含运营中心相关的路径
         if (item.children) {
-          const hasInfraOperation = item.children.some(child => 
-            child.path?.startsWith('/infra/operation') || 
+          const hasInfraOperation = item.children.some(child =>
+            child.path?.startsWith('/infra/operation') ||
             child.path?.startsWith('/infra/tenants') ||
             child.path?.startsWith('/infra/packages') ||
             child.path?.startsWith('/infra/monitoring') ||
@@ -2097,7 +2103,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   const calculateSelectedKeys = React.useCallback((menuItems: MenuDataItem[], currentPath: string): string[] => {
     const selectedKeys: string[] = [];
-    
+
     /**
      * 递归查找精确匹配当前路径的菜单项
      * 
@@ -2109,13 +2115,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       for (const item of items) {
         const itemKey = item.key || item.path;
         if (!itemKey) continue;
-        
+
         // 精确匹配：只有路径完全相等时才选中
         if (item.path === path) {
           selectedKeys.push(itemKey as string);
           return true;
         }
-        
+
         // 如果菜单项有子菜单，递归查找
         if (item.children && item.children.length > 0) {
           const hasMatch = findExactMatch(item.children, path);
@@ -2126,7 +2132,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
       return false;
     };
-    
+
     findExactMatch(menuItems, currentPath);
     return selectedKeys;
   }, []);
@@ -2172,10 +2178,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     try {
       // 切换到新语言
       await i18n.changeLanguage(languageCode);
-      
+
       // 从后端加载翻译内容
       await refreshTranslations();
-      
+
       // 更新用户偏好设置
       try {
         await updateUserPreference({
@@ -2187,21 +2193,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 如果更新偏好设置失败，不影响语言切换
         console.warn('更新用户偏好设置失败:', error);
       }
-      
+
       message.success(`已切换到${LANGUAGE_MAP[languageCode] || languageCode}`);
     } catch (error: any) {
       console.error('切换语言失败:', error);
       message.error(error?.message || t('common.switchLanguageFailed'));
     }
   }, []);
-  
+
   /**
    * 构建语言切换下拉菜单
    */
   const languageMenuItems: MenuProps['items'] = React.useMemo(() => {
     // 从后端获取的语言列表
     const backendLanguages = languageListData?.items || [];
-    
+
     // 如果后端有语言列表，优先使用后端的
     if (backendLanguages.length > 0) {
       return backendLanguages
@@ -2212,7 +2218,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           onClick: () => handleLanguageChange(lang.code),
         }));
     }
-    
+
     // 如果没有后端语言列表，使用默认的语言映射
     return Object.entries(LANGUAGE_MAP).map(([code, name]) => ({
       key: code,
@@ -2269,7 +2275,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 退出全屏：移除 class 并恢复布局
       html.classList.remove(fullscreenClass);
       body.classList.remove(fullscreenClass);
-      
+
       // 退出全屏时，需要确保 ProLayout 重新计算布局
       // 使用多重延迟确保 DOM 更新、样式应用和 props 变化都完成
       // 注意：移除 class 后，所有全屏 CSS 样式会自动失效
@@ -2277,11 +2283,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       const timer1 = requestAnimationFrame(() => {
         // 第一次：触发 resize 事件，让 ProLayout 开始重新计算布局
         window.dispatchEvent(new Event('resize'));
-        
+
         const timer2 = requestAnimationFrame(() => {
           // 第二次：再次触发 resize，确保布局计算完成
           window.dispatchEvent(new Event('resize'));
-          
+
           const timer3 = setTimeout(() => {
             // 第三次：延迟触发，确保所有状态都已恢复
             window.dispatchEvent(new Event('resize'));
@@ -2290,17 +2296,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               window.dispatchEvent(new Event('resize'));
             }, 50);
           }, 150);
-          
+
           return () => {
             if (timer3) clearTimeout(timer3);
           };
         });
-        
+
         return () => {
           if (timer2) cancelAnimationFrame(timer2);
         };
       });
-      
+
       return () => {
         if (timer1) cancelAnimationFrame(timer1);
       };
@@ -2327,7 +2333,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         open={techStackModalOpen}
         onCancel={() => setTechStackModalOpen(false)}
       />
-      
+
       {/* 动态设置全局背景色，确保浅色和深色模式下都正确应用 */}
       <style>{`
         html, body {
@@ -2818,31 +2824,31 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           width: 20px !important;
           height: 20px !important;
           background: ${(() => {
-            // 将主题色转换为 rgba，使用 0.15 的透明度（更淡但可见）
-            const primaryColor = String(token.colorPrimary || '#1890ff');
-            // 如果是十六进制颜色，转换为 rgba
-            if (primaryColor.startsWith('#')) {
-              const hex = primaryColor.slice(1);
-              // 处理 3 位或 6 位十六进制
-              const r = hex.length === 3 
-                ? parseInt(hex[0] + hex[0], 16)
-                : parseInt(hex.slice(0, 2), 16);
-              const g = hex.length === 3
-                ? parseInt(hex[1] + hex[1], 16)
-                : parseInt(hex.slice(2, 4), 16);
-              const b = hex.length === 3
-                ? parseInt(hex[2] + hex[2], 16)
-                : parseInt(hex.slice(4, 6), 16);
-              return `rgba(${r}, ${g}, ${b}, 0.15)`;
-            }
-            // 如果已经是 rgba 格式，提取颜色并降低透明度
-            const rgbaMatch = primaryColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-            if (rgbaMatch) {
-              return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, 0.15)`;
-            }
-            // 默认使用主题色但更淡
-            return 'rgba(24, 144, 255, 0.15)';
-          })()} !important;
+          // 将主题色转换为 rgba，使用 0.15 的透明度（更淡但可见）
+          const primaryColor = String(token.colorPrimary || '#1890ff');
+          // 如果是十六进制颜色，转换为 rgba
+          if (primaryColor.startsWith('#')) {
+            const hex = primaryColor.slice(1);
+            // 处理 3 位或 6 位十六进制
+            const r = hex.length === 3
+              ? parseInt(hex[0] + hex[0], 16)
+              : parseInt(hex.slice(0, 2), 16);
+            const g = hex.length === 3
+              ? parseInt(hex[1] + hex[1], 16)
+              : parseInt(hex.slice(2, 4), 16);
+            const b = hex.length === 3
+              ? parseInt(hex[2] + hex[2], 16)
+              : parseInt(hex.slice(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, 0.15)`;
+          }
+          // 如果已经是 rgba 格式，提取颜色并降低透明度
+          const rgbaMatch = primaryColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          if (rgbaMatch) {
+            return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, 0.15)`;
+          }
+          // 默认使用主题色但更淡
+          return 'rgba(24, 144, 255, 0.15)';
+        })()} !important;
           border-radius: 4px !important;
           z-index: 0 !important;
           pointer-events: none !important;
@@ -3019,9 +3025,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 覆盖 collapsedButtonRender 返回的 div */
         .ant-pro-layout .ant-pro-sider-footer > div,
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div {
-          border-top: 1px solid ${siderTextColor === '#ffffff' 
-            ? 'rgba(255, 255, 255, 0.15)' 
-            : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)')} !important;
+          border-top: 1px solid ${siderTextColor === '#ffffff'
+          ? 'rgba(255, 255, 255, 0.15)'
+          : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)')} !important;
         }
         /* 侧边栏底部收起按钮样式 - 根据菜单栏背景色自动适配 */
         .ant-pro-layout .ant-pro-sider-footer .ant-btn,
@@ -3905,10 +3911,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         collapsedButtonRender={(collapsed) => {
           // 根据菜单栏文字颜色计算分割线颜色
           // 如果是浅色文字（深色背景），使用浅色分割线；否则使用深色分割线
-          const dividerColor = siderTextColor === '#ffffff' 
-            ? 'rgba(255, 255, 255, 0.15)' 
+          const dividerColor = siderTextColor === '#ffffff'
+            ? 'rgba(255, 255, 255, 0.15)'
             : (isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.12)');
-          
+
           return (
             <div
               style={{
@@ -3965,15 +3971,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         headerContentRender={() => (
           <div style={{ display: 'flex', alignItems: 'center', height: '100%', gap: 12 }}>
             {/* 分割线 */}
-            <Divider 
-              orientation="vertical" 
-              style={{ 
-                height: '20px', 
+            <Divider
+              orientation="vertical"
+              style={{
+                height: '20px',
                 margin: '4px 0 0 2px',
                 borderColor: isLightModeLightBg ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.25)',
                 alignSelf: 'center',
                 verticalAlign: 'middle',
-              }} 
+              }}
             />
             {/* 面包屑 */}
             <div ref={breadcrumbRef} style={{ flex: 1, overflow: 'visible', paddingLeft: 8 }}>
@@ -3986,33 +3992,33 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   overflow: 'visible',
                 }}
                 items={generateBreadcrumb.map((item, index) => ({
-                title: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
-                    {index === generateBreadcrumb.length - 1 ? (
-                      <span style={{ color: 'var(--ant-colorText)', fontWeight: 500, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
-                    ) : (
-                      <a
-                        onClick={() => {
-                          if (item.path) {
-                            navigate(item.path);
-                          }
-                        }}
-                        style={{ cursor: 'pointer', lineHeight: '1.5', verticalAlign: 'middle' }}
-                      >
-                        {item.title}
-                      </a>
-                    )}
-                  </span>
-                ),
-                menu: item.menu,
-              }))}
+                  title: (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, lineHeight: '1.5', verticalAlign: 'middle' }}>
+                      {index === generateBreadcrumb.length - 1 ? (
+                        <span style={{ color: 'var(--ant-colorText)', fontWeight: 500, lineHeight: '1.5', verticalAlign: 'middle' }}>{item.title}</span>
+                      ) : (
+                        <a
+                          onClick={() => {
+                            if (item.path) {
+                              navigate(item.path);
+                            }
+                          }}
+                          style={{ cursor: 'pointer', lineHeight: '1.5', verticalAlign: 'middle' }}
+                        >
+                          {item.title}
+                        </a>
+                      )}
+                    </span>
+                  ),
+                  menu: item.menu,
+                }))}
               />
             </div>
           </div>
         )}
         actionsRender={() => {
           const actions = [];
-          
+
           // 搜索框（始终展开）
           actions.push(
             <Input
@@ -4050,7 +4056,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               }}
               popupRender={() => {
                 const messages = recentMessages?.items || [];
-                const isUnread = (msg: UserMessage) => 
+                const isUnread = (msg: UserMessage) =>
                   msg.status === 'pending' || msg.status === 'sending' || msg.status === 'success';
 
                 return (
@@ -4124,7 +4130,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                                   // 点击消息，跳转到消息详情页面
                                   setMessageDropdownOpen(false);
                                   navigate('/personal/messages');
-                                  
+
                                   // 如果是未读消息，自动标记为已读
                                   if (unread) {
                                     try {
@@ -4211,7 +4217,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </Badge>
             </Dropdown>
           );
-          
+
           // 语言切换下拉菜单
           actions.push(
             <Dropdown
@@ -4227,7 +4233,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 setLanguageDropdownOpen(open);
               }}
             >
-              <Tooltip 
+              <Tooltip
                 title={`${t('ui.current.language')}: ${LANGUAGE_MAP[currentLanguage] || currentLanguage}`}
                 trigger={['hover']}
                 mouseEnterDelay={0.5}
@@ -4289,7 +4295,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </div>
             );
           }
-          
+
           // 用户头像和下拉菜单
           if (currentUser) {
             actions.push(
@@ -4371,213 +4377,213 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               />
             </Tooltip>
           );
-          
+
           return actions;
         }}
-      menuDataRender={() => {
-        return filteredMenuData;
-      }}
-      menuProps={{
-        mode: 'inline',
-        openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
-        selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
-        // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
-        // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为
-        onClick: (info) => {
-          // 如果菜单项有 path，阻止默认的链接跳转行为
-          const menuItem = info.item;
-          if (menuItem && menuItem.props && menuItem.props.path) {
-            const path = menuItem.props.path;
-            // 外部链接已经在 menuItemRender 中处理，这里只阻止内部路由的默认行为
-            if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
-              // 完全阻止默认行为，让 Link 组件处理路由
-              // React Router 的 Link 组件会阻止默认行为并使用 navigate() 进行路由跳转
-              info.domEvent.preventDefault();
-              info.domEvent.stopPropagation();
-            }
-          }
-        },
-        onOpenChange: (keys) => {
-          // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单
-          // 1. 计算哪些菜单被收起了（从 requiredOpenKeys 中移除的）
-          const closedKeys = requiredOpenKeys.filter(key => !keys.includes(key));
-          if (closedKeys.length > 0) {
-            // 用户手动收起了某些菜单，记录这些菜单
-            setUserClosedKeys(prev => [...new Set([...prev, ...closedKeys])]);
-          }
-          
-          // 2. 计算哪些菜单被展开了（不在 requiredOpenKeys 中的）
-          const manuallyOpenedKeys = keys.filter(key => !requiredOpenKeys.includes(key));
-          setUserOpenKeys(manuallyOpenedKeys);
-          
-          // 3. 如果用户重新展开了之前手动收起的菜单，从 userClosedKeys 中移除
-          const reopenedKeys = userClosedKeys.filter(key => keys.includes(key));
-          if (reopenedKeys.length > 0) {
-            setUserClosedKeys(prev => prev.filter(key => !reopenedKeys.includes(key)));
-          }
-        },
-      }}
-      onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
-      menuItemRender={(item: any, dom) => {
-        // 处理外部链接
-        if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
-          return (
-            <a href={item.path} target={item.target || '_blank'} rel="noopener noreferrer">
-              {dom}
-            </a>
-          );
-        }
-        // 如果是应用级菜单的分组标题（只有应用级菜单才需要特殊处理）
-        // 系统级菜单的分组标题（type: 'group'）由 Ant Design Menu 原生处理，不需要自定义渲染
-        // 检查条件：path 以 #app-group- 开头，或者有 menu-group-title-app className
-        if (item.className && (item.className.includes('menu-group-title-app') || item.className.includes('app-menu-container-start'))) {
-          // 确保应用菜单分组标题使用最新的翻译（在渲染时重新翻译，确保语言切换后能正确显示）
-          // 从第一个子菜单的路径中提取应用 code，然后直接使用翻译 key
-          const firstChildPath = item.children?.[0]?.path;
-          let groupTitle = item.name || item.label || '';
-          
-          // 如果第一个子菜单路径存在且是应用菜单路径，直接从路径提取应用 code 并使用翻译 key
-          if (firstChildPath && firstChildPath.startsWith('/apps/')) {
-            const appCode = extractAppCodeFromPath(firstChildPath);
-            if (appCode) {
-              // 直接使用翻译 key app.{app-code}.name 进行翻译，不依赖 item.name 的值
-              // 这样可以确保无论 item.name 是什么值（中文或英文），都能根据当前语言正确翻译
-              const appNameKey = `app.${appCode}.name`;
-              const appNameTranslated = t(appNameKey, { defaultValue: groupTitle });
-              if (appNameTranslated && appNameTranslated !== appNameKey) {
-                groupTitle = appNameTranslated;
+        menuDataRender={() => {
+          return filteredMenuData;
+        }}
+        menuProps={{
+          mode: 'inline',
+          openKeys: openKeys, // 受控的 openKeys，合并用户手动展开的菜单和当前路径的父菜单
+          selectedKeys: selectedKeys, // 受控的 selectedKeys，只选中精确匹配的路径
+          // ⚠️ 关键修复：阻止 Ant Design Menu 的默认链接行为，防止整页刷新
+          // Menu 会为有 path 的菜单项自动创建 <a> 标签，需要阻止默认行为
+          onClick: (info) => {
+            // 如果菜单项有 path，阻止默认的链接跳转行为
+            const menuItem = info.item;
+            if (menuItem && menuItem.props && menuItem.props.path) {
+              const path = menuItem.props.path;
+              // 外部链接已经在 menuItemRender 中处理，这里只阻止内部路由的默认行为
+              if (path && !path.startsWith('http://') && !path.startsWith('https://')) {
+                // 完全阻止默认行为，让 Link 组件处理路由
+                // React Router 的 Link 组件会阻止默认行为并使用 navigate() 进行路由跳转
+                info.domEvent.preventDefault();
+                info.domEvent.stopPropagation();
               }
             }
-          }
-          
-          return (
-            <div
-              className="menu-group-title-app"
-              style={{
-                fontSize: '12px',
-                color: 'var(--ant-colorPrimary)',
-                fontWeight: 500,
-                padding: '0', // 减小上下 padding
-                margin: 0,
-                lineHeight: '1.2',
-                height: '16px',
-                minHeight: '16px',
-                maxHeight: '16px',
-                cursor: 'default',
-                userSelect: 'none',
-                pointerEvents: 'none',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              onMouseEnter={(e) => {
-                // 阻止hover效果传播到父元素
-                e.stopPropagation();
-                const parent = e.currentTarget.closest('.ant-menu-item') as HTMLElement;
-                if (parent) {
-                  parent.style.backgroundColor = 'transparent';
-                }
-              }}
-              onMouseLeave={(e) => {
-                const parent = e.currentTarget.closest('.ant-menu-item') as HTMLElement;
-                if (parent) {
-                  parent.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
-              {groupTitle}
-            </div>
-          );
-        }
-        
-        // 如果是系统级菜单的分组标题（type: 'group'），确保使用翻译后的名称
-        // 注意：系统级菜单的分组标题在菜单配置中已经使用 t() 函数翻译，但 dom 参数可能还未翻译
-        if (item.type === 'group' && item.name) {
-          // 检查是否是应用菜单（通过路径判断）
-          const firstChildPath = item.children?.[0]?.path;
-          const isAppMenu = firstChildPath?.startsWith('/apps/');
-          const translatedName = isAppMenu
-            ? translateAppMenuName(item.name as string, firstChildPath, undefined, t)
-            : translateMenuName(item.name as string, t);
-          // 如果翻译后的名称与 dom 不一致，返回翻译后的名称
-          // 否则直接返回 dom（因为 dom 可能已经是翻译后的）
-          if (translatedName !== item.name && translatedName !== dom) {
+          },
+          onOpenChange: (keys) => {
+            // 遵循 Ant Design Pro Layout 原生行为：允许用户手动收起任何菜单
+            // 1. 计算哪些菜单被收起了（从 requiredOpenKeys 中移除的）
+            const closedKeys = requiredOpenKeys.filter(key => !keys.includes(key));
+            if (closedKeys.length > 0) {
+              // 用户手动收起了某些菜单，记录这些菜单
+              setUserClosedKeys(prev => [...new Set([...prev, ...closedKeys])]);
+            }
+
+            // 2. 计算哪些菜单被展开了（不在 requiredOpenKeys 中的）
+            const manuallyOpenedKeys = keys.filter(key => !requiredOpenKeys.includes(key));
+            setUserOpenKeys(manuallyOpenedKeys);
+
+            // 3. 如果用户重新展开了之前手动收起的菜单，从 userClosedKeys 中移除
+            const reopenedKeys = userClosedKeys.filter(key => keys.includes(key));
+            if (reopenedKeys.length > 0) {
+              setUserClosedKeys(prev => prev.filter(key => !reopenedKeys.includes(key)));
+            }
+          },
+        }}
+        onMenuHeaderClick={() => navigate('/system/dashboard/workplace')}
+        menuItemRender={(item: any, dom) => {
+          // 处理外部链接
+          if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
             return (
-              <span>
-                {translatedName}
-              </span>
+              <a href={item.path} target={item.target || '_blank'} rel="noopener noreferrer">
+                {dom}
+              </a>
             );
           }
-        }
-        
-        // ⚠️ 关键修复：使用 ProLayout 原生方式，返回 React Router 的 Link 组件
-        // Link 组件会自动处理 SPA 路由，不会整页刷新
-        if (item.path && !item.disabled) {
-          // 内部路由：使用 Link 组件进行 SPA 路由跳转
-          // 确保应用菜单的子菜单项使用翻译后的名称
-          // item.name 已经在 convertMenuTreeToMenuDataItem 中翻译过，但 Ant Design Menu 可能使用原始的 dom
-          // 如果是应用菜单项，确保使用翻译后的名称
-          let finalDom = dom;
-          if (item.path.startsWith('/apps/') && item.name) {
-            // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
-            const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
-            // 如果翻译成功且与 dom 不一致，使用翻译后的名称
-            if (translatedName && translatedName !== item.name) {
-              // 如果 dom 是 React 元素，需要重新构建；如果是字符串，直接替换
-              if (typeof dom === 'string') {
-                finalDom = translatedName;
-              } else if (dom && typeof dom === 'object' && 'props' in dom) {
-                // 如果是 React 元素，尝试替换其中的文本内容
-                // 这里我们直接使用翻译后的名称创建一个新的元素
-                finalDom = <span>{translatedName}</span>;
-              } else {
-                finalDom = translatedName;
+          // 如果是应用级菜单的分组标题（只有应用级菜单才需要特殊处理）
+          // 系统级菜单的分组标题（type: 'group'）由 Ant Design Menu 原生处理，不需要自定义渲染
+          // 检查条件：path 以 #app-group- 开头，或者有 menu-group-title-app className
+          if (item.className && (item.className.includes('menu-group-title-app') || item.className.includes('app-menu-container-start'))) {
+            // 确保应用菜单分组标题使用最新的翻译（在渲染时重新翻译，确保语言切换后能正确显示）
+            // 从第一个子菜单的路径中提取应用 code，然后直接使用翻译 key
+            const firstChildPath = item.children?.[0]?.path;
+            let groupTitle = item.name || item.label || '';
+
+            // 如果第一个子菜单路径存在且是应用菜单路径，直接从路径提取应用 code 并使用翻译 key
+            if (firstChildPath && firstChildPath.startsWith('/apps/')) {
+              const appCode = extractAppCodeFromPath(firstChildPath);
+              if (appCode) {
+                // 直接使用翻译 key app.{app-code}.name 进行翻译，不依赖 item.name 的值
+                // 这样可以确保无论 item.name 是什么值（中文或英文），都能根据当前语言正确翻译
+                const appNameKey = `app.${appCode}.name`;
+                const appNameTranslated = t(appNameKey, { defaultValue: groupTitle });
+                if (appNameTranslated && appNameTranslated !== appNameKey) {
+                  groupTitle = appNameTranslated;
+                }
               }
             }
+
+            return (
+              <div
+                className="menu-group-title-app"
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--ant-colorPrimary)',
+                  fontWeight: 500,
+                  padding: '0', // 减小上下 padding
+                  margin: 0,
+                  lineHeight: '1.2',
+                  height: '16px',
+                  minHeight: '16px',
+                  maxHeight: '16px',
+                  cursor: 'default',
+                  userSelect: 'none',
+                  pointerEvents: 'none',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                onMouseEnter={(e) => {
+                  // 阻止hover效果传播到父元素
+                  e.stopPropagation();
+                  const parent = e.currentTarget.closest('.ant-menu-item') as HTMLElement;
+                  if (parent) {
+                    parent.style.backgroundColor = 'transparent';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const parent = e.currentTarget.closest('.ant-menu-item') as HTMLElement;
+                  if (parent) {
+                    parent.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                {groupTitle}
+              </div>
+            );
           }
-          
-          // 包装在 div 中并阻止事件冒泡，防止 Menu 的默认行为
-          return (
-            <div
-              onClick={(e) => {
-                // 阻止事件冒泡到 Menu，防止 Menu 的默认链接行为
-                e.stopPropagation();
-              }}
-              style={{ display: 'block', width: '100%' }}
-            >
-              <Link to={item.path} style={{ display: 'block', width: '100%' }}>
-                {finalDom}
-              </Link>
-            </div>
-          );
-        }
-        // 没有 path 或 disabled 的菜单项：直接返回 dom
-        return dom;
-      }}
-    >
-      <UniTabs
-        menuConfig={menuConfig}
-        isFullscreen={isFullscreen}
-        onToggleFullscreen={handleToggleFullscreen}
+
+          // 如果是系统级菜单的分组标题（type: 'group'），确保使用翻译后的名称
+          // 注意：系统级菜单的分组标题在菜单配置中已经使用 t() 函数翻译，但 dom 参数可能还未翻译
+          if (item.type === 'group' && item.name) {
+            // 检查是否是应用菜单（通过路径判断）
+            const firstChildPath = item.children?.[0]?.path;
+            const isAppMenu = firstChildPath?.startsWith('/apps/');
+            const translatedName = isAppMenu
+              ? translateAppMenuName(item.name as string, firstChildPath, undefined, t)
+              : translateMenuName(item.name as string, t);
+            // 如果翻译后的名称与 dom 不一致，返回翻译后的名称
+            // 否则直接返回 dom（因为 dom 可能已经是翻译后的）
+            if (translatedName !== item.name && translatedName !== dom) {
+              return (
+                <span>
+                  {translatedName}
+                </span>
+              );
+            }
+          }
+
+          // ⚠️ 关键修复：使用 ProLayout 原生方式，返回 React Router 的 Link 组件
+          // Link 组件会自动处理 SPA 路由，不会整页刷新
+          if (item.path && !item.disabled) {
+            // 内部路由：使用 Link 组件进行 SPA 路由跳转
+            // 确保应用菜单的子菜单项使用翻译后的名称
+            // item.name 已经在 convertMenuTreeToMenuDataItem 中翻译过，但 Ant Design Menu 可能使用原始的 dom
+            // 如果是应用菜单项，确保使用翻译后的名称
+            let finalDom = dom;
+            if (item.path.startsWith('/apps/') && item.name) {
+              // 再次翻译，确保使用最新的翻译函数（因为 t 可能已经更新）
+              const translatedName = translateAppMenuItemName(item.name as string, item.path, t);
+              // 如果翻译成功且与 dom 不一致，使用翻译后的名称
+              if (translatedName && translatedName !== item.name) {
+                // 如果 dom 是 React 元素，需要重新构建；如果是字符串，直接替换
+                if (typeof dom === 'string') {
+                  finalDom = translatedName;
+                } else if (dom && typeof dom === 'object' && 'props' in dom) {
+                  // 如果是 React 元素，尝试替换其中的文本内容
+                  // 这里我们直接使用翻译后的名称创建一个新的元素
+                  finalDom = <span>{translatedName}</span>;
+                } else {
+                  finalDom = translatedName;
+                }
+              }
+            }
+
+            // 包装在 div 中并阻止事件冒泡，防止 Menu 的默认行为
+            return (
+              <div
+                onClick={(e) => {
+                  // 阻止事件冒泡到 Menu，防止 Menu 的默认链接行为
+                  e.stopPropagation();
+                }}
+                style={{ display: 'block', width: '100%' }}
+              >
+                <Link to={item.path} style={{ display: 'block', width: '100%' }}>
+                  {finalDom}
+                </Link>
+              </div>
+            );
+          }
+          // 没有 path 或 disabled 的菜单项：直接返回 dom
+          return dom;
+        }}
       >
-        {children}
-      </UniTabs>
-    </ProLayout>
-    
-    {/* 技术栈信息弹窗 */}
-    <TechStackModal
-      open={techStackModalOpen}
-      onCancel={() => setTechStackModalOpen(false)}
-    />
-    
-    {/* 主题编辑面板 */}
-    <ThemeEditor
-      open={themeEditorOpen}
-      onClose={() => setThemeEditorOpen(false)}
-      onThemeUpdate={(themeConfig) => {
-        // 主题更新回调（可选）
-      }}
-    />
+        <UniTabs
+          menuConfig={menuConfig}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={handleToggleFullscreen}
+        >
+          {children}
+        </UniTabs>
+      </ProLayout>
+
+      {/* 技术栈信息弹窗 */}
+      <TechStackModal
+        open={techStackModalOpen}
+        onCancel={() => setTechStackModalOpen(false)}
+      />
+
+      {/* 主题编辑面板 */}
+      <ThemeEditor
+        open={themeEditorOpen}
+        onClose={() => setThemeEditorOpen(false)}
+        onThemeUpdate={(themeConfig) => {
+          // 主题更新回调（可选）
+        }}
+      />
     </>
   );
 }
