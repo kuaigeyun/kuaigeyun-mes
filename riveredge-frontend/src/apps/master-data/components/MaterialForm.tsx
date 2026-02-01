@@ -45,6 +45,15 @@ const SOURCE_TYPE_OPTIONS = [
   { label: '配置件 (Configure)', value: 'Configure' },
 ];
 
+/** 每种物料来源类型的合法字段白名单（用于过滤混合字段） */
+const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
+  Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch', 'production_waste_rate'],
+  Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
+  Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch'],
+  Phantom: [],
+  Configure: [],
+};
+
 /** 自制件制造模式选项（存于 sourceConfig.manufacturing_mode） */
 const MANUFACTURING_MODE_OPTIONS = [
   { label: '加工型（材料+工艺→零件）', value: 'fabrication' },
@@ -435,8 +444,8 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           delete formDefaults.defaultProcessRoute;
         }
         
-        // 工艺路线存在物料主表 process_route_id，需在 processRoutes 加载后由另一 useEffect 回填 UUID；
-        // 若此处已有 processRoutes，则直接写入 defaultProcessRouteUuid，避免依赖时序
+        // 工艺路线回填由下方独立 useEffect（150ms 延后）在 processRoutes 加载完成后写入 defaultProcessRouteUuid，
+        // 此处不再依赖 processRoutes，避免 processRoutes 入 deps 导致 effect 反复执行、循环调用 loadProcessRoutes
         if (routeId != null && processRoutes.length > 0) {
           const route = processRoutes.find((pr: { id: number }) => pr.id === routeId);
           if (route) formDefaults.defaultProcessRouteUuid = route.uuid;
@@ -444,9 +453,12 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         
         if (Object.keys(formDefaults).length > 0) {
           setTimeout(() => {
-            formRef.current?.setFieldsValue({
-              defaults: formDefaults,
-            });
+            const fieldsToSet: any = { defaults: formDefaults };
+            // ProForm 的 name="defaults.defaultProcessRouteUuid" 需要扁平 key 才能正确显示
+            if (formDefaults.defaultProcessRouteUuid != null) {
+              fieldsToSet['defaults.defaultProcessRouteUuid'] = formDefaults.defaultProcessRouteUuid;
+            }
+            formRef.current?.setFieldsValue(fieldsToSet);
           }, 100);
         }
         
@@ -456,12 +468,22 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         
         if (materialSourceType || materialSourceConfig) {
           setTimeout(() => {
-            formRef.current?.setFieldsValue({
+            // 关键修复：ProForm 的条件渲染字段使用扁平 key，需要同时设置嵌套对象和扁平 key
+            const fieldsToSet: any = {
               sourceType: materialSourceType,
               source_type: materialSourceType, // 向后兼容
               sourceConfig: materialSourceConfig,
               source_config: materialSourceConfig, // 向后兼容
-            });
+            };
+            
+            // 将 sourceConfig 的每个字段展开为扁平 key（如 sourceConfig.manufacturing_mode）
+            if (materialSourceConfig && typeof materialSourceConfig === 'object') {
+              Object.keys(materialSourceConfig).forEach(key => {
+                fieldsToSet[`sourceConfig.${key}`] = materialSourceConfig[key];
+              });
+            }
+            
+            formRef.current?.setFieldsValue(fieldsToSet);
           }, 100);
         }
       } else {
@@ -471,11 +493,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         setSupplierCodes([]);
       }
     }
-  }, [open, isEdit, material, generateCode, initialValues, processRoutes]);
+    // 不将 processRoutes 放入 deps：processRoutes 更新会触发本 effect 重跑并再次调用 loadProcessRoutes，
+    // 导致循环重新加载。工艺路线回填由下方独立 useEffect（依赖 processRoutes）在 150ms 后完成。
+  }, [open, isEdit, material, generateCode, initialValues]);
 
   /**
    * 编辑时：工艺路线列表加载完成后，用物料的 process_route_id 回填「默认工艺路线」
    * 延后 150ms 执行，避免被主 useEffect 中 100ms 的 defaults 设置覆盖
+   * 关键：ProForm 的 name="defaults.defaultProcessRouteUuid" 需要同时设置扁平 key 才能正确显示
    */
   useEffect(() => {
     if (!isEdit || !material || processRoutes.length === 0) return;
@@ -487,7 +512,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       if (formRef.current) {
         const currentDefaults = formRef.current.getFieldValue('defaults') || {};
         if (currentDefaults.defaultProcessRouteUuid !== route.uuid) {
-          formRef.current.setFieldsValue({ defaults: { ...currentDefaults, defaultProcessRouteUuid: route.uuid } });
+          // 同时设置嵌套对象和扁平 key，确保 ProFormSelect（name="defaults.defaultProcessRouteUuid"）能正确显示
+          formRef.current.setFieldsValue({
+            defaults: { ...currentDefaults, defaultProcessRouteUuid: route.uuid },
+            'defaults.defaultProcessRouteUuid': route.uuid,
+          });
         }
       }
     }, 150);
@@ -557,9 +586,41 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     try {
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
       const sourceType = values.sourceType || values.source_type;
-      const existingSourceConfig = (material as any)?.source_config || (material as any)?.sourceConfig || {};
-      const formSourceConfig = values.sourceConfig || values.source_config || {};
+      const originalSourceType = (material as any)?.source_type || (material as any)?.sourceType;
+      // 关键修复：仅当 sourceType 未改变时才合并 existingSourceConfig，避免不同类型字段混合
+      const existingSourceConfig = (sourceType === originalSourceType) 
+        ? ((material as any)?.source_config || (material as any)?.sourceConfig || {})
+        : {};
+      let formSourceConfig = values.sourceConfig || values.source_config || {};
+      // 兼容 ProForm 扁平 key：从 values 中收集 sourceConfig.xxx 构建对象（条件渲染字段常只出现在扁平 key 中）
+      if (Object.keys(formSourceConfig).length === 0 && typeof values === 'object') {
+        const flat: Record<string, any> = {};
+        for (const key of Object.keys(values)) {
+          if (key === 'sourceConfig' || key === 'source_config') continue;
+          if (key.startsWith('sourceConfig.') && values[key] !== undefined && values[key] !== '') {
+            const subKey = key.slice('sourceConfig.'.length);
+            flat[subKey] = values[key];
+          }
+        }
+        if (Object.keys(flat).length > 0) formSourceConfig = flat;
+      }
+      if (Object.keys(formSourceConfig).length === 0 && formRef.current) {
+        const directSourceConfig = formRef.current.getFieldValue('sourceConfig');
+        if (directSourceConfig && Object.keys(directSourceConfig).length > 0) {
+          formSourceConfig = directSourceConfig;
+        }
+      }
+      
       const sourceConfig = { ...existingSourceConfig, ...formSourceConfig };
+      
+      // 关键修复：过滤掉不属于当前 sourceType 的字段（避免不同类型字段混合）
+      const allowedFields = SOURCE_CONFIG_FIELDS[sourceType] || [];
+      const filteredSourceConfig: Record<string, any> = {};
+      for (const key of Object.keys(sourceConfig)) {
+        if (allowedFields.includes(key)) {
+          filteredSourceConfig[key] = sourceConfig[key];
+        }
+      }
       // 同步名称字段，便于后端与下游使用
       if (sourceConfig.default_supplier_id && suppliers.length > 0) {
         const supplier = suppliers.find(s => s.id === sourceConfig.default_supplier_id);
@@ -572,7 +633,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       
       // 处理默认值数据转换（合并已有 defaults，避免只改物料来源时覆盖其他默认值）
       const existingDefaults = (material as any)?.defaults || {};
-      const formDefaultsRaw = values.defaults || {};
+      let formDefaultsRaw = values.defaults || {};
+      // 兼容：若 values 中没有 defaults，尝试从 formRef 直接读取（处理条件渲染字段）
+      if (Object.keys(formDefaultsRaw).length === 0 && formRef.current) {
+        const directDefaults = formRef.current.getFieldValue('defaults');
+        if (directDefaults && Object.keys(directDefaults).length > 0) {
+          formDefaultsRaw = directDefaults;
+        }
+      }
       // ProForm 可能用扁平 key 存储嵌套字段，兼容 values['defaults.defaultProcessRouteUuid']
       const formDefaults = {
         ...formDefaultsRaw,
@@ -682,7 +750,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
         // 物料来源控制
         source_type: sourceType,
-        source_config: sourceConfig,
+        source_config: filteredSourceConfig,
       };
       
       // 移除 undefined 值
@@ -752,42 +820,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       (!!completenessResult && !completenessResult.is_complete));
 
   const showUnitsPanel = open && activeTab === 'units' && unitMessages.length > 0;
-
-  // #region agent log
-  React.useEffect(() => {
-    if (activeTab === 'source') {
-      fetch('http://127.0.0.1:7242/ingest/14723169-35ed-4ca8-9cad-d93c6c16c078', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'MaterialForm.tsx:showSourcePanel',
-          message: 'showSourcePanel / loading state',
-          data: {
-            showSourcePanel,
-            loadingSuggestion,
-            loadingValidation,
-            loadingCompleteness,
-            hasSuggestion: !!(suggestionResult?.suggested_type),
-            hasValidation: !!validationResult,
-            hasCompleteness: !!(completenessResult && !completenessResult.is_complete),
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          hypothesisId: 'A',
-        }),
-      }).catch(() => {});
-    }
-  }, [
-    activeTab,
-    showSourcePanel,
-    loadingSuggestion,
-    loadingValidation,
-    loadingCompleteness,
-    suggestionResult,
-    validationResult,
-    completenessResult,
-  ]);
-  // #endregion
 
   return (
     <>
@@ -927,6 +959,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
+          destroyInactiveTabPane={false}
           items={[
             {
               key: 'basic',
@@ -987,11 +1020,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   suppliers={suppliers}
                   customers={customers}
                   warehouses={warehouses}
-                  processRoutes={processRoutes}
                   suppliersLoading={suppliersLoading}
                   customersLoading={customersLoading}
                   warehousesLoading={warehousesLoading}
-                  processRoutesLoading={processRoutesLoading}
                 />
               ),
             },
@@ -2441,22 +2472,18 @@ interface DefaultsTabProps {
   suppliers: Supplier[];
   customers: Customer[];
   warehouses: Warehouse[];
-  processRoutes: ProcessRoute[];
   suppliersLoading: boolean;
   customersLoading: boolean;
   warehousesLoading: boolean;
-  processRoutesLoading: boolean;
 }
 
 const DefaultsTab: React.FC<DefaultsTabProps> = ({
   suppliers,
   customers,
   warehouses,
-  processRoutes,
   suppliersLoading,
   customersLoading,
   warehousesLoading,
-  processRoutesLoading,
 }) => {
   return (
     <Collapse defaultActiveKey={['finance', 'purchase', 'sale', 'inventory', 'production']}>
@@ -2484,6 +2511,12 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
 
         {/* 采购默认值 */}
         <Panel header="采购默认值" key="purchase">
+          <Alert
+            message="采购件的主默认供应商请在【物料来源】标签页配置；此处为采购默认值列表（多选），用于扩展用途。"
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
           <Row gutter={16}>
             <Col span={12}>
               <ProFormSelect
@@ -2614,24 +2647,9 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           </Row>
         </Panel>
 
-        {/* 生产默认值 */}
+        {/* 生产默认值：默认工艺路线仅在【物料来源】标签页（自制件时）配置，此处仅保留默认生产单位 */}
         <Panel header="生产默认值" key="production">
           <Row gutter={16}>
-            <Col span={12}>
-              <ProFormSelect
-                name="defaults.defaultProcessRouteUuid"
-                label="默认工艺路线"
-                placeholder="请选择默认工艺路线"
-                options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
-                fieldProps={{
-                  loading: processRoutesLoading,
-                  showSearch: true,
-                  filterOption: (input: string, option: any) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                  allowClear: true,
-                }}
-              />
-            </Col>
             <Col span={12}>
               <ProFormText
                 name="defaults.defaultProductionUnit"

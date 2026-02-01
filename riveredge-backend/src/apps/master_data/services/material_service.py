@@ -836,7 +836,7 @@ class MaterialService:
             tenant_id=tenant_id,
             uuid=material_uuid,
             deleted_at__isnull=True
-        ).prefetch_related("group").first()
+        ).prefetch_related("group", "process_route").first()
         
         if not material:
             raise NotFoundError(f"物料 {material_uuid} 不存在")
@@ -1091,6 +1091,10 @@ class MaterialService:
         
         for key, value in update_data.items():
             setattr(material, key, value)
+        
+        # 仅当请求体显式包含 process_route_id 时才更新（避免未传时误清空）
+        if "process_route_id" in update_data:
+            material.process_route_id = data.process_route_id
         
         # 处理默认值
         if data.defaults is not None:
