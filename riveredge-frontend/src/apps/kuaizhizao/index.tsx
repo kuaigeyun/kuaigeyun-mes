@@ -144,6 +144,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/incoming-inspection" element={<IncomingInspectionPage />} />
       <Route path="quality-management/process-inspection" element={<ProcessInspectionPage />} />
       <Route path="quality-management/finished-goods-inspection" element={<FinishedGoodsInspectionPage />} />
+      <Route path="quality-management/traceability" element={<TraceabilityPage />} />
 
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
