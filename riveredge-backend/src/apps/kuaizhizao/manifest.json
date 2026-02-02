@@ -249,6 +249,12 @@
                         "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
                         "permission": "kuaizhizao:finished-goods-inspection:view",
                         "sort_order": 3
+                    },
+                    {
+                        "title": "追溯管理",
+                        "path": "/apps/kuaizhizao/quality-management/traceability",
+                        "permission": "kuaizhizao:traceability:view",
+                        "sort_order": 4
                     }
                 ]
             },
@@ -604,6 +610,7 @@
         "kuaizhizao:finished-goods-inspection:delete",
         "kuaizhizao:finished-goods-inspection:conduct",
         "kuaizhizao:finished-goods-inspection:certificate",
+        "kuaizhizao:traceability:view",
         "kuaizhizao:accounts-payable:view",
         "kuaizhizao:accounts-payable:create",
         "kuaizhizao:accounts-payable:update",
