@@ -9,8 +9,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, Row, Col, Table, Modal } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, EditOutlined, PlusOutlined, UploadOutlined, DownloadOutlined, FileAddOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Table, Card, Row, Col } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, FileAddOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -79,7 +79,7 @@ const IncomingInspectionPage: React.FC = () => {
   const defectFormRef = useRef<any>(null);
 
   // 统计数据状态
-  const [stats, setStats] = useState({
+  const [stats] = useState({
     pendingCount: 12,
     qualifiedCount: 45,
     unqualifiedCount: 3,
@@ -125,7 +125,7 @@ const IncomingInspectionPage: React.FC = () => {
       const detail = await qualityApi.incomingInspection.get(record.id!.toString());
       setInspectionDetail(detail);
       setDetailVisible(true);
-      
+
       // 获取单据关联
       const relations = await getDocumentRelations('incoming_inspection', record.id!);
       setDocumentRelations(relations);
@@ -332,7 +332,7 @@ const IncomingInspectionPage: React.FC = () => {
               >
                 详情
               </Button>
-              {record.quality_status === '不合格' && record.unqualified_quantity > 0 && (
+              {record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0 && (
                 <Button
                   size="small"
                   type="link"
@@ -379,67 +379,67 @@ const IncomingInspectionPage: React.FC = () => {
       ]}
     >
       <UniTable<IncomingInspection>
-          headerTitle="来料检验管理"
-          actionRef={actionRef}
-          rowKey="id"
-          columns={columns}
-          showAdvancedSearch={true}
-          request={async (params) => {
-            try {
-              const response = await qualityApi.incomingInspection.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                status: params.status,
-                quality_status: params.quality_status,
-                supplier_id: params.supplier_id,
-                material_id: params.material_id,
-              });
-              // 后端返回的是数组
-              const data = Array.isArray(response) ? response : (response.data || []);
-              return {
-                data: data,
-                success: true,
-                total: data.length,
-              };
-            } catch (error) {
-              messageApi.error('获取来料检验列表失败');
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              };
-            }
-          }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
-          toolBarRender={() => [
-            <Button
-              key="create-from-receipt"
-              type="primary"
-              icon={<FileAddOutlined />}
-              onClick={handleCreateFromReceipt}
-            >
-              从采购入库单创建
-            </Button>,
-            <Button
-              key="import"
-              icon={<UploadOutlined />}
-              onClick={() => setImportVisible(true)}
-            >
-              批量导入
-            </Button>,
-            <Button
-              key="export"
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-            >
-              批量导出
-            </Button>,
-          ]}
-          scroll={{ x: 1400 }}
-        />
+        headerTitle="来料检验"
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        showAdvancedSearch={true}
+        request={async (params: any) => {
+          try {
+            const response = await qualityApi.incomingInspection.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              status: params.status,
+              quality_status: params.quality_status,
+              supplier_id: params.supplier_id,
+              material_id: params.material_id,
+            });
+            // 后端返回的是数组
+            const data = Array.isArray(response) ? response : (response.data || []);
+            return {
+              data: data,
+              success: true,
+              total: data.length,
+            };
+          } catch (error) {
+            messageApi.error('获取来料检验列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        toolBarRender={() => [
+          <Button
+            key="create-from-receipt"
+            type="primary"
+            icon={<FileAddOutlined />}
+            onClick={handleCreateFromReceipt}
+          >
+            从采购入库单创建
+          </Button>,
+          <Button
+            key="import"
+            icon={<UploadOutlined />}
+            onClick={() => setImportVisible(true)}
+          >
+            批量导入
+          </Button>,
+          <Button
+            key="export"
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+          >
+            批量导出
+          </Button>,
+        ]}
+        scroll={{ x: 1400 }}
+      />
 
       <FormModalTemplate
         title={`来料检验 - ${currentInspection?.inspection_code || ''}`}
@@ -480,8 +480,8 @@ const IncomingInspectionPage: React.FC = () => {
           rules={[
             { required: true, message: '请输入合格数量' },
             { type: 'number', min: 0, message: '合格数量不能小于0' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
+            ({ getFieldValue }: any) => ({
+              validator(_: any, value: any) {
                 if (!currentInspection) return Promise.resolve();
                 const unqualifiedQuantity = getFieldValue('unqualified_quantity') || 0;
                 if (value + unqualifiedQuantity > (currentInspection.inspection_quantity || 0)) {
@@ -500,8 +500,8 @@ const IncomingInspectionPage: React.FC = () => {
           rules={[
             { required: true, message: '请输入不合格数量' },
             { type: 'number', min: 0, message: '不合格数量不能小于0' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
+            ({ getFieldValue }: any) => ({
+              validator(_: any, value: any) {
                 if (!currentInspection) return Promise.resolve();
                 const qualifiedQuantity = getFieldValue('qualified_quantity') || 0;
                 if (qualifiedQuantity + value > (currentInspection.inspection_quantity || 0)) {
@@ -618,8 +618,8 @@ const IncomingInspectionPage: React.FC = () => {
                     <strong>检验状态：</strong>
                     <Tag color={
                       inspectionDetail.status === '已完成' ? 'success' :
-                      inspectionDetail.status === '已审核' ? 'processing' :
-                      inspectionDetail.status === '已取消' ? 'error' : 'default'
+                        inspectionDetail.status === '已审核' ? 'processing' :
+                          inspectionDetail.status === '已取消' ? 'error' : 'default'
                     }>
                       {inspectionDetail.status}
                     </Tag>
@@ -701,15 +701,15 @@ const IncomingInspectionPage: React.FC = () => {
       {/* 批量导入 */}
       <UniImport
         visible={importVisible}
-        onClose={() => setImportVisible(false)}
-        onImport={handleImport}
-        columns={[
-          { title: '采购入库单号', dataIndex: 'purchase_receipt_code', required: true },
-          { title: '物料编码', dataIndex: 'material_code', required: true },
-          { title: '检验数量', dataIndex: 'inspection_quantity', required: true },
-          { title: '合格数量', dataIndex: 'qualified_quantity' },
-          { title: '不合格数量', dataIndex: 'unqualified_quantity' },
-          { title: '备注', dataIndex: 'notes' },
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        headers={[
+          '采购入库单号',
+          '物料编码',
+          '检验数量',
+          '合格数量',
+          '不合格数量',
+          '备注',
         ]}
       />
 
@@ -722,7 +722,7 @@ const IncomingInspectionPage: React.FC = () => {
           defectFormRef.current?.resetFields();
         }}
         onFinish={handleCreateDefectSubmit}
-        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={defectFormRef}
       >
         {currentDefectInspection && (
@@ -749,8 +749,8 @@ const IncomingInspectionPage: React.FC = () => {
           rules={[
             { required: true, message: '请输入不合格品数量' },
             { type: 'number', min: 0, message: '不合格品数量不能小于0' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
+            () => ({
+              validator(_: any, value: any) {
                 if (!currentDefectInspection) return Promise.resolve();
                 if (value > (currentDefectInspection.unqualified_quantity || 0)) {
                   return Promise.reject('不合格品数量不能超过检验单的不合格数量');

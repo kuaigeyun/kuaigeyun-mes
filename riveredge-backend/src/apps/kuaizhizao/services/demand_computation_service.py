@@ -61,24 +61,47 @@ class DemandComputationService:
             DemandComputationResponse: 创建的计算响应
         """
         async with in_transaction():
-            # 验证需求存在
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=computation_data.demand_id)
-            if not demand:
-                raise NotFoundError(f"需求不存在: {computation_data.demand_id}")
-            
-            # 验证需求状态（必须是已审核通过）
-            if demand.status != DemandStatus.AUDITED or demand.review_status != ReviewStatus.APPROVED:
-                raise BusinessLogicError(f"只能对已审核通过的需求进行计算，当前状态: {demand.status}")
-            
+            # 解析需求列表（支持 demand_id 或 demand_ids）
+            demand_id_list = (
+                computation_data.demand_ids
+                if computation_data.demand_ids
+                else ([computation_data.demand_id] if computation_data.demand_id else [])
+            )
+            if not demand_id_list:
+                raise BusinessLogicError("必须提供 demand_id 或 demand_ids")
+
+            # 验证需求存在且已审核
+            demands = []
+            for did in demand_id_list:
+                d = await Demand.get_or_none(tenant_id=tenant_id, id=did)
+                if not d:
+                    raise NotFoundError(f"需求不存在: {did}")
+                if d.status != DemandStatus.AUDITED or d.review_status != ReviewStatus.APPROVED:
+                    raise BusinessLogicError(f"只能对已审核通过的需求进行计算，需求 {d.demand_code} 状态: {d.status}")
+                demands.append(d)
+
+            # 使用第一个需求作为主需求（向后兼容）
+            demand = demands[0]
+            demand_codes = ",".join(d.demand_code for d in demands[:3])
+            if len(demands) > 3:
+                demand_codes += f"等{len(demands)}个"
+
+            # 推断计算类型（多需求时：有订单则 LRP，全预测则 MRP）
+            computation_type = computation_data.computation_type
+            if len(demands) > 1:
+                has_mto = any(getattr(d, "business_mode", None) == "MTO" for d in demands)
+                computation_type = "LRP" if has_mto else "MRP"
+
             # 生成计算编码
-            computation_code = await self._generate_computation_code(tenant_id, computation_data.computation_type)
-            
+            computation_code = await self._generate_computation_code(tenant_id, computation_type)
+
             # 创建需求计算
             computation = await DemandComputation.create(
                 tenant_id=tenant_id,
                 computation_code=computation_code,
-                demand_id=computation_data.demand_id,
-                demand_code=demand.demand_code,
+                demand_id=demand.id,
+                demand_ids=demand_id_list,
+                demand_code=demand_codes,
                 demand_type=demand.demand_type,
                 business_mode=demand.business_mode,
                 computation_type=computation_data.computation_type,
@@ -512,11 +535,15 @@ class DemandComputationService:
         
         logger.info(f"执行MRP计算: {computation.computation_code}")
         
-        # 1. 获取需求明细
-        demand_items = await DemandItem.filter(
-            tenant_id=tenant_id,
-            demand_id=computation.demand_id
-        ).all()
+        # 1. 获取需求明细（支持多需求合并）
+        demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+        demand_items = []
+        for demand_id in demand_id_list:
+            items = await DemandItem.filter(
+                tenant_id=tenant_id,
+                demand_id=demand_id
+            ).all()
+            demand_items.extend(items)
         
         if not demand_items:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
@@ -656,6 +683,11 @@ class DemandComputationService:
                                 "unit": req.get("unit"),
                             }
                         all_material_requirements[req_material_id]["required_quantity"] += req["required_quantity"]
+                        # 记录需求明细ID用于追溯
+                        if "demand_item_ids" not in all_material_requirements[req_material_id]:
+                            all_material_requirements[req_material_id]["demand_item_ids"] = []
+                        if demand_item.id not in all_material_requirements[req_material_id]["demand_item_ids"]:
+                            all_material_requirements[req_material_id]["demand_item_ids"].append(demand_item.id)
         
         # 5. 生成计算结果明细
         for material_id, req_info in all_material_requirements.items():
@@ -700,7 +732,7 @@ class DemandComputationService:
                     suggested_work_order_quantity = Decimal(str(net_requirement))  # 暂时使用工单表示
             # Phantom和Configure已经在BOM展开时处理，不需要单独生成工单或采购单
             
-            # 创建计算结果明细
+            # 创建计算结果明细（包含需求明细追溯）
             await DemandComputationItem.create(
                 tenant_id=tenant_id,
                 computation_id=computation.id,
@@ -720,6 +752,7 @@ class DemandComputationService:
                 material_source_config=source_config,
                 source_validation_passed=validation_passed,
                 source_validation_errors=validation_errors if not validation_passed else None,
+                demand_item_ids=req_info.get("demand_item_ids"),  # 多需求追溯
             )
     
     async def _execute_lrp_computation(
@@ -746,11 +779,15 @@ class DemandComputationService:
         
         logger.info(f"执行LRP计算: {computation.computation_code}")
         
-        # 1. 获取需求明细
-        demand_items = await DemandItem.filter(
-            tenant_id=tenant_id,
-            demand_id=computation.demand_id
-        ).all()
+        # 1. 获取需求明细（支持多需求合并）
+        demand_id_list = computation.demand_ids if computation.demand_ids else [computation.demand_id]
+        demand_items = []
+        for demand_id in demand_id_list:
+            items = await DemandItem.filter(
+                tenant_id=tenant_id,
+                demand_id=demand_id
+            ).all()
+            demand_items.extend(items)
         
         if not demand_items:
             logger.warning(f"需求明细为空，计算ID: {computation.id}")
@@ -979,6 +1016,7 @@ class DemandComputationService:
                 material_source_config=source_config,
                 source_validation_passed=validation_passed,
                 source_validation_errors=validation_errors if not validation_passed else None,
+                demand_item_ids=req_info.get("demand_item_ids"),  # 多需求追溯
             )
     
     async def update_computation(
@@ -1030,7 +1068,8 @@ class DemandComputationService:
         self,
         tenant_id: int,
         computation_id: int,
-        created_by: int
+        created_by: int,
+        generate_mode: str = "all"
     ) -> Dict[str, Any]:
         """
         从需求计算结果一键生成工单和采购单
@@ -1039,6 +1078,7 @@ class DemandComputationService:
             tenant_id: 租户ID
             computation_id: 计算ID
             created_by: 创建人ID
+            generate_mode: 生成粒度，all=全部，work_order_only=仅工单，purchase_only=仅采购
             
         Returns:
             Dict: 包含生成的工单和采购单信息
@@ -1091,6 +1131,12 @@ class DemandComputationService:
                     logger.warning(f"物料来源验证失败，跳过生成，物料ID: {item.material_id}, 错误: {errors}")
                     continue
             
+            # 根据 generate_mode 决定是否生成
+            if generate_mode == "purchase_only" and source_type in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
+                continue
+            if generate_mode == "work_order_only" and source_type == SOURCE_TYPE_BUY:
+                continue
+
             # 根据物料来源类型生成相应的单据
             if source_type == SOURCE_TYPE_MAKE:
                 # 自制件：生成生产工单
@@ -1122,14 +1168,13 @@ class DemandComputationService:
                     purchase_items_by_supplier[supplier_id].append(item)
                     
             elif source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件：生成委外工单（TODO: 后续实现委外工单，暂时生成普通工单）
+                # 委外件：生成委外工单（OutsourceWorkOrder）
                 if item.suggested_work_order_quantity and item.suggested_work_order_quantity > 0:
-                    work_order = await self._create_work_order_from_item(
+                    work_order = await self._create_outsource_work_order_from_item(
                         tenant_id=tenant_id,
                         computation=computation,
                         item=item,
-                        created_by=created_by,
-                        is_outsource=True  # 标记为委外工单
+                        created_by=created_by
                     )
                     work_orders.append(work_order)
                     
@@ -1272,6 +1317,107 @@ class DemandComputationService:
         except Exception as e:
             logger.error(f"创建工单失败: {e}")
             raise BusinessLogicError(f"创建工单失败: {str(e)}")
+    
+    async def _create_outsource_work_order_from_item(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        item: DemandComputationItem,
+        created_by: int
+    ) -> Dict[str, Any]:
+        """
+        从计算结果明细创建委外工单（OutsourceWorkOrder）
+        
+        委外件必须配置 outsource_supplier_id 和 outsource_operation。
+        
+        Args:
+            tenant_id: 租户ID
+            computation: 计算对象
+            item: 计算结果明细（物料来源类型为 Outsource）
+            created_by: 创建人ID
+            
+        Returns:
+            Dict: 创建的委外工单信息
+        """
+        try:
+            from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
+            from apps.kuaizhizao.schemas.outsource_work_order import OutsourceWorkOrderCreate
+            from apps.master_data.models.supplier import Supplier
+            
+            # 从物料来源配置获取委外供应商信息（get_material_source_config 返回的结构）
+            mc = item.material_source_config or {}
+            source_config = mc.get("source_config", mc)
+            outsource_supplier_id = mc.get("outsource_supplier_id") or source_config.get("outsource_supplier_id")
+            outsource_operation = mc.get("outsource_operation") or source_config.get("outsource_operation", "")
+            
+            if not outsource_supplier_id:
+                raise BusinessLogicError(
+                    f"委外件 {item.material_code} ({item.material_name}) 未配置委外供应商，"
+                    "请在物料主数据中配置 source_config.outsource_supplier_id"
+                )
+            
+            # 查询供应商信息
+            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=outsource_supplier_id)
+            if not supplier:
+                raise BusinessLogicError(
+                    f"委外供应商 ID {outsource_supplier_id} 不存在，物料: {item.material_code}"
+                )
+            
+            supplier_code = getattr(supplier, "code", None) or str(outsource_supplier_id)
+            supplier_name = getattr(supplier, "name", None) or source_config.get("outsource_supplier_name", "待指定")
+            
+            quantity = float(item.suggested_work_order_quantity or 0)
+            unit_price = Decimal(str(mc.get("outsource_price") or source_config.get("outsource_price", 0)))
+            total_amount = Decimal(str(quantity)) * unit_price
+            
+            planned_start_date = None
+            planned_end_date = None
+            if item.production_start_date:
+                planned_start_date = datetime.combine(
+                    item.production_start_date,
+                    datetime.min.time()
+                )
+            if item.production_completion_date:
+                planned_end_date = datetime.combine(
+                    item.production_completion_date,
+                    datetime.min.time()
+                )
+            
+            work_order_data = OutsourceWorkOrderCreate(
+                product_id=item.material_id,
+                product_code=item.material_code,
+                product_name=item.material_name,
+                quantity=Decimal(str(quantity)),
+                supplier_id=supplier.id,
+                supplier_code=supplier_code,
+                supplier_name=supplier_name,
+                outsource_operation=outsource_operation or None,
+                unit_price=unit_price,
+                total_amount=total_amount,
+                planned_start_date=planned_start_date,
+                planned_end_date=planned_end_date,
+                remarks=f"从需求计算 {computation.computation_code} 自动生成",
+            )
+            
+            outsource_service = OutsourceWorkOrderService()
+            wo = await outsource_service.create_outsource_work_order(
+                tenant_id=tenant_id,
+                work_order_data=work_order_data,
+                created_by=created_by
+            )
+            
+            return {
+                "id": wo.id,
+                "code": wo.code,
+                "product_code": item.material_code,
+                "product_name": item.material_name,
+                "quantity": float(quantity),
+            }
+        except BusinessLogicError:
+            raise
+        except Exception as e:
+            logger.error(f"创建委外工单失败: {e}")
+            raise BusinessLogicError(f"创建委外工单失败: {str(e)}")
     
     async def _create_purchase_order_from_item(
         self,

@@ -340,7 +340,21 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             # 创建入库单明细
             if items:
                 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
+                from apps.master_data.models.material import Material
+                
                 for item_data in items:
+                    # 验证批号管理
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id
+                    )
+                    if material and material.batch_managed:
+                        batch_number = getattr(item_data, 'batch_number', None)
+                        if not batch_number:
+                            raise ValidationError(
+                                f"物料 {material.name}（{material.main_code}）启用了批号管理，必须提供批号"
+                            )
+                    
                     await FinishedGoodsReceiptItem.create(
                         tenant_id=tenant_id,
                         receipt_id=receipt.id,
@@ -640,7 +654,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             
             # 创建出库单明细
             if items:
+                from apps.master_data.models.material import Material
+                
                 for item_data in items:
+                    # 验证批号和序列号管理
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id
+                    )
+                    
+                    # 验证批号
+                    batch_number = getattr(item_data, 'batch_number', None)
+                    if material and material.batch_managed and not batch_number:
+                        raise ValidationError(
+                            f"物料 {material.name}（{material.main_code}）启用了批号管理，必须提供批号"
+                        )
+                    
                     # 序列号信息（批号和序列号选择功能增强）
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
                     # 如果serial_numbers是列表，转换为JSON格式存储

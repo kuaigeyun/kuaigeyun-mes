@@ -10,7 +10,7 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, PlayCircleOutlined, BarChartOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, PlayCircleOutlined, BarChartOutlined, ExportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 
@@ -81,8 +81,8 @@ const ProductionPlansPage: React.FC = () => {
       width: 100,
       render: (type) => {
         const typeMap = {
-          'MRP': { text: 'MRP计划', color: 'processing' },
-          'LRP': { text: 'LRP计划', color: 'success' },
+          'MRP': { text: '按预测计划', color: 'processing' },
+          'LRP': { text: '按订单计划', color: 'success' },
         };
         const config = typeMap[type as keyof typeof typeMap] || { text: type, color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -154,6 +154,17 @@ const ProductionPlansPage: React.FC = () => {
               审核
             </Button>
           )}
+          {(record.status === '草稿' || record.status === '已审核') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<ExportOutlined />}
+              onClick={() => handlePushToWorkOrders(record)}
+              style={{ color: '#722ed1' }}
+            >
+              转工单
+            </Button>
+          )}
           {record.status === '已审核' && (
             <Button
               type="link"
@@ -197,6 +208,24 @@ const ProductionPlansPage: React.FC = () => {
     });
   };
 
+  // 处理转工单
+  const handlePushToWorkOrders = async (record: ProductionPlan) => {
+    Modal.confirm({
+      title: '转工单',
+      content: `确定要将生产计划 "${record.plan_name}" 转为工单吗？仅「建议行动=生产」的明细会生成工单。`,
+      onOk: async () => {
+        try {
+          const { planningApi } = await import('../../../services/production');
+          const result = await planningApi.productionPlan.pushToWorkOrders(record.id!);
+          messageApi.success(result?.message || '转工单成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.response?.data?.detail || '转工单失败');
+        }
+      },
+    });
+  };
+
   // 处理执行
   const handleExecute = async (record: ProductionPlan) => {
     Modal.confirm({
@@ -228,13 +257,13 @@ const ProductionPlansPage: React.FC = () => {
           valueStyle: { color: '#1890ff' },
         },
         {
-          title: 'MRP计划',
+          title: '按预测计划',
           value: 8,
           suffix: '个',
           valueStyle: { color: '#52c41a' },
         },
         {
-          title: 'LRP计划',
+          title: '按订单计划',
           value: 4,
           suffix: '个',
           valueStyle: { color: '#722ed1' },
@@ -334,7 +363,7 @@ const ProductionPlansPage: React.FC = () => {
                   <Col span={8}>
                     <strong>计划类型：</strong>
                     <Tag color={currentPlan.plan_type === 'MRP' ? 'processing' : 'success'}>
-                      {currentPlan.plan_type === 'MRP' ? 'MRP计划' : 'LRP计划'}
+                      {currentPlan.plan_type === 'MRP' ? '按预测计划' : '按订单计划'}
                     </Tag>
                   </Col>
                   <Col span={8}>

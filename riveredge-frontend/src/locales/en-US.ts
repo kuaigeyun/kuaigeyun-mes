@@ -63,7 +63,7 @@ export default {
   'menu.system.roles-permissions': 'Roles & Permissions',
   'menu.system.data-center': 'Data Center',
   'menu.system.process-management': 'Process Management',
-  
+
   // UI text translations
   'ui.sidebar.expand': 'Expand Sidebar',
   'ui.sidebar.collapse': 'Collapse Sidebar',
@@ -76,20 +76,20 @@ export default {
   'ui.copyright': 'Copyright',
   'ui.logout': 'Logout',
   'ui.current.language': 'Current Language',
-  
+
   'pages.login.title': 'Login',
   'pages.login.username': 'Username',
   'pages.login.password': 'Password',
   'pages.login.submit': 'Login',
   'pages.login.success': 'Login successful',
   'pages.login.error': 'Login failed',
-  
+
   'pages.dashboard.title': 'Dashboard',
   'pages.dashboard.totalUsers': 'Total Users',
   'pages.dashboard.totalTenants': 'Total Tenants',
   'pages.dashboard.totalData': 'Total Data',
   'pages.dashboard.installedPlugins': 'Installed Plugins',
-  
+
   // Permission resource name translations
   'permission.resource.user': 'User',
   'permission.resource.role': 'Role',
@@ -120,7 +120,7 @@ export default {
   'permission.resource.site_setting': 'Site Setting',
   'permission.resource.language': 'Language',
   'permission.resource.integration_config': 'Integration Config',
-  
+
   // Path translations (fallback for breadcrumb and tabs)
   'path.workshops': 'Workshops',
   'path.production-lines': 'Production Lines',
@@ -161,6 +161,14 @@ export default {
   'path.work-orders-kiosk': 'Work Order Kiosk',
   'path.sales-management': 'Sales Management',
   'path.sales-orders': 'Sales Orders',
+  'path.sales-returns': 'Sales Returns',
+  'path.purchase-returns': 'Purchase Returns',
+  'path.demand-computation': 'Demand Computation',
+  'path.batch-inventory-query': 'Batch Inventory Query',
+  'path.line-side-warehouse': 'Line-Side Warehouse',
+  'path.backflush-records': 'Backflush Records',
+  'path.replenishment-suggestions': 'Replenishment Suggestions',
+  'path.outsource-management': 'Outsource Management',
   'path.quality-management': 'Quality Management',
   'path.incoming-inspection': 'Incoming Inspection',
   'path.process-inspection': 'Process Inspection',
@@ -182,13 +190,20 @@ export default {
   'path.barcode-mapping-rules': 'Barcode Mapping Rules',
   'path.document-timing': 'Document Timing',
   'path.document-efficiency': 'Document Efficiency',
+  'path.tools': 'Tooling Management',
+  'path.tool-ledger': 'Tool Ledger',
+  'path.tool-usage': 'Tool Usage',
+  'path.tool-maintenance': 'Tool Maint.',
+  'path.tool-calibration': 'Tool Calibration',
+  'path.mold-calibration': 'Mold Calibration',
+  'path.equipment-calibration': 'Equip. Calibration',
   'path.common': 'Common Functions',
   'path.data-import-export': 'Data Import/Export',
   'path.system-settings': 'System Settings',
   'path.master-data': 'Master Data Management',
   'path.apps': 'Applications',
   'path.list': 'List',
-  
+
   // Common translations
   'common.unnamedPage': 'Unnamed Page',
   'common.switchLanguageFailed': 'Failed to switch language, please try again',
@@ -200,7 +215,7 @@ export default {
   'common.updateFailed': 'Update failed',
   'common.noSubject': '(No Subject)',
   'common.noMessages': 'No Messages',
-  
+
   // Tabs operation translations
   'tabs.refresh': 'Refresh',
   'tabs.pin': 'Pin',
@@ -211,11 +226,11 @@ export default {
   'tabs.closeAll': 'Close All',
   'tabs.fullscreen': 'Fullscreen',
   'tabs.exitFullscreen': 'Exit Fullscreen',
-  
+
   // Application name translations (best practices)
   'app.kuaizhizao.name': 'Fast Light Manufacturing',
   'app.master-data.name': 'Master Data',
-  
+
   // Fast Light Manufacturing application menu translations
   'app.kuaizhizao.menu.plan-management': 'Plan Management',
   'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Management',
@@ -228,6 +243,7 @@ export default {
   'app.kuaizhizao.menu.production-execution.reporting.statistics': 'Work Stats',
   'app.kuaizhizao.menu.production-execution.rework-orders': 'Rework Orders',
   'app.kuaizhizao.menu.production-execution.outsource-orders': 'Outsource Orders',
+  'app.kuaizhizao.menu.production-execution.exception-management': 'Exceptions',
   'app.kuaizhizao.menu.production-execution.outsource-work-orders': 'Outsource WOs',
   'app.kuaizhizao.menu.production-execution.work-orders.kiosk': 'Work Order Kiosk',
   'app.kuaizhizao.menu.production-execution.material-shortage-exceptions': 'Material Shortage',
@@ -235,9 +251,11 @@ export default {
   'app.kuaizhizao.menu.production-execution.quality-exceptions': 'Quality Exceptions',
   'app.kuaizhizao.menu.production-execution.exception-statistics': 'Exception Stats',
   'app.kuaizhizao.menu.production-execution.exception-process': 'Exception Process',
+  'app.kuaizhizao.menu.production-execution.outsource-management': 'Outsource Management',
   'app.kuaizhizao.menu.purchase-management': 'Purchase Management',
   'app.kuaizhizao.menu.purchase-management.purchase-orders': 'Purchase Orders',
   'app.kuaizhizao.menu.purchase-management.purchase-receipts': 'Purchase Receipts',
+  'app.kuaizhizao.menu.purchase-management.purchase-requisitions': 'Purchase Requisitions',
   'app.kuaizhizao.menu.purchase-management.purchase-returns': 'Purchase Returns',
   'app.kuaizhizao.menu.sales-management': 'Sales Management',
   'app.kuaizhizao.menu.sales-management.sales-forecasts': 'Sales Forecasts',
@@ -262,17 +280,39 @@ export default {
   'app.kuaizhizao.menu.equipment-management.equipment': 'Equipment',
   'app.kuaizhizao.menu.equipment-management.equipment-faults': 'Equipment Faults',
   'app.kuaizhizao.menu.equipment-management.maintenance-plans': 'Maintenance Plans',
-  'app.kuaizhizao.menu.equipment-management.molds': 'Mold Management',
-  'app.kuaizhizao.menu.equipment-management.equipment-status': 'Equipment Status',
   'app.kuaizhizao.menu.equipment-management.maintenance-reminders': 'Maint. Reminders',
+  'app.kuaizhizao.menu.equipment-management.molds': 'Mold Ledger',
+  'app.kuaizhizao.menu.equipment-management.molds-calibration': 'Mold Calibration',
+  'app.kuaizhizao.menu.equipment-management.equipment-calibration': 'Equip. Calibration',
+  'app.kuaizhizao.menu.equipment-management.equipment-status': 'Equip. Status',
+  'app.kuaizhizao.menu.equipment-management.asset-ledger': 'Asset Ledger',
+  'app.kuaizhizao.menu.equipment-management.ops-maintenance': 'Operations & Maint.',
+  'app.kuaizhizao.menu.equipment-management.calibration-management': 'Calibration Management',
+  'app.kuaizhizao.menu.tooling-management': 'Tooling Management',
+  'app.kuaizhizao.menu.tooling-management.ledger': 'Tool Ledger',
+  'app.kuaizhizao.menu.tooling-management.usage': 'Checkout/Check-in',
+  'app.kuaizhizao.menu.tooling-management.maintenance': 'Tool Maint.',
+  'app.kuaizhizao.menu.tooling-management.calibration': 'Tool Calibration',
   'app.kuaizhizao.menu.finance-management': 'Finance Management',
-  'app.kuaizhizao.menu.finance-management.accounts-payable': 'Payables',
-  'app.kuaizhizao.menu.finance-management.accounts-receivable': 'Receivables',
+  'app.kuaizhizao.menu.finance-management.receivables-management': 'AR Management',
+  'app.kuaizhizao.menu.finance-management.receivables': 'AR Reconciliation',
+  'app.kuaizhizao.menu.finance-management.sales-invoices': 'Sales Invoices',
+  'app.kuaizhizao.menu.finance-management.receipt-records': 'Receipt Records',
+  'app.kuaizhizao.menu.finance-management.payables-management': 'AP Management',
+  'app.kuaizhizao.menu.finance-management.payables': 'AP Reconciliation',
+  'app.kuaizhizao.menu.finance-management.purchase-invoices': 'Purchase Invoices',
+  'app.kuaizhizao.menu.finance-management.payment-records': 'Payment Records',
+  'app.kuaizhizao.menu.finance-management.invoice-library': 'Invoice Ledger',
+  'app.kuaizhizao.menu.finance-management.invoice-list': 'Invoice List',
   'app.kuaizhizao.menu.reports': 'Reports',
   'app.kuaizhizao.menu.reports.inventory-report': 'Inventory Report',
   'app.kuaizhizao.menu.reports.production-report': 'Production Report',
   'app.kuaizhizao.menu.reports.quality-report': 'Quality Report',
   'app.kuaizhizao.menu.warehouse-management': 'Warehouse Management',
+  'app.kuaizhizao.menu.warehouse-management.inbound-group': 'Inbound Operations',
+  'app.kuaizhizao.menu.warehouse-management.outbound-group': 'Outbound Operations',
+  'app.kuaizhizao.menu.warehouse-management.inventory-group': 'Inventory Management',
+  'app.kuaizhizao.menu.warehouse-management.analysis-group': 'Statistical Analysis',
   'app.kuaizhizao.menu.warehouse-management.inventory': 'Inventory',
   'app.kuaizhizao.menu.warehouse-management.inbound': 'Inbound',
   'app.kuaizhizao.menu.warehouse-management.finished-goods-inventory': 'FG Inventory',
@@ -284,7 +324,10 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.document-timing': 'Document Timing',
   'app.kuaizhizao.menu.warehouse-management.document-efficiency': 'Doc Efficiency',
   'app.kuaizhizao.menu.warehouse-management.replenishment-suggestions': 'Replenishment',
-  
+  'app.kuaizhizao.menu.warehouse-management.batch-inventory-query': 'Batch Inventory Query',
+  'app.kuaizhizao.menu.warehouse-management.line-side-warehouse': 'Line-Side Warehouse',
+  'app.kuaizhizao.menu.warehouse-management.backflush-records': 'Backflush Records',
+
   // Master Data application menu translations
   'app.master-data.menu.factory': 'Factory Modeling',
   'app.master-data.menu.factory.plants': 'Plants',

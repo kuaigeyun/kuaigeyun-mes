@@ -11,8 +11,8 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDigit, ProFormTextArea, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Drawer, Table, message } from 'antd';
-import { PlayCircleOutlined, EyeOutlined, ReloadOutlined, FileAddOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Drawer, Table, message, Dropdown } from 'antd';
+import { PlayCircleOutlined, EyeOutlined, ReloadOutlined, FileAddOutlined, DownOutlined, ProjectOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -23,6 +23,8 @@ import {
   executeDemandComputation,
   recomputeDemandComputation,
   generateOrdersFromComputation,
+  pushToProductionPlan,
+  pushToPurchaseRequisition,
   validateMaterialSources,
   getMaterialSources,
   DemandComputation,
@@ -37,7 +39,7 @@ const DemandComputationPage: React.FC = () => {
 
   // Modal 相关状态（新建计算）
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedDemandId, setSelectedDemandId] = useState<number | null>(null);
+  const [selectedDemandIds, setSelectedDemandIds] = useState<number[]>([]);
 
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -63,7 +65,7 @@ const DemandComputationPage: React.FC = () => {
       });
       const list = demands.data || [];
       setDemandList(list);
-      setSelectedDemandId(null);
+      setSelectedDemandIds([]);
       setModalVisible(true);
       formRef.current?.resetFields();
       if (list.length === 0) {
@@ -147,10 +149,49 @@ const DemandComputationPage: React.FC = () => {
     });
   };
 
+  const handlePushToPurchaseRequisition = async (record: DemandComputation) => {
+    modalApi.confirm({
+      title: '转采购申请',
+      content: `确定要将计算 ${record.computation_code} 下推到采购申请吗？仅采购件会生成采购申请。`,
+      onOk: async () => {
+        try {
+          const result = await pushToPurchaseRequisition(record.id!);
+          messageApi.success(result.message || '下推成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.response?.data?.detail || '下推失败');
+        }
+      },
+    });
+  };
+
+  /**
+   * 处理转生产计划
+   */
+  const handlePushToProductionPlan = async (record: DemandComputation) => {
+    modalApi.confirm({
+      title: '转生产计划',
+      content: `确定要将计算 ${record.computation_code} 下推到生产计划吗？`,
+      onOk: async () => {
+        try {
+          const result = await pushToProductionPlan(record.id!);
+          messageApi.success(result.message || '下推成功');
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error?.response?.data?.detail || '下推失败');
+        }
+      },
+    });
+  };
+
   /**
    * 处理一键生成工单和采购单（物料来源控制增强）
+   * @param generateMode 生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购
    */
-  const handleGenerateOrders = async (record: DemandComputation) => {
+  const handleGenerateOrders = async (
+    record: DemandComputation,
+    generateMode: 'all' | 'work_order_only' | 'purchase_only' = 'all'
+  ) => {
     // 先验证物料来源配置
     try {
       const validation = await validateMaterialSources(record.id!);
@@ -210,27 +251,33 @@ const DemandComputationPage: React.FC = () => {
         })
         .join(', ');
 
+      const modeLabel = generateMode === 'all' ? '工单和采购单' : generateMode === 'work_order_only' ? '工单' : '采购单';
       modalApi.confirm({
-        title: '一键生成工单和采购单',
+        title: `一键生成${modeLabel}`,
         width: 600,
         content: (
           <div>
-            <p>确认要从计算结果 <strong>{record.computation_code}</strong> 生成工单和采购单吗？</p>
+            <p>确认要从计算结果 <strong>{record.computation_code}</strong> 生成{modeLabel}吗？</p>
             <div style={{ marginTop: '12px', padding: '12px', background: '#f0f5ff', borderRadius: '4px' }}>
               <p style={{ margin: 0, fontWeight: 'bold' }}>物料来源统计：</p>
               <p style={{ margin: '8px 0 0 0' }}>{sourceInfo}</p>
             </div>
             <p style={{ marginTop: '12px', fontSize: '12px', color: '#666' }}>
-              系统将根据物料来源类型智能生成：自制件生成生产工单，采购件生成采购订单，虚拟件自动跳过
+              {generateMode === 'all'
+                ? '系统将根据物料来源类型智能生成：自制件/委外件生成工单，采购件生成采购订单，虚拟件自动跳过'
+                : generateMode === 'work_order_only'
+                  ? '将仅生成自制件、委外件、配置件的工单，采购件跳过'
+                  : '将仅生成采购件的采购订单，自制件/委外件跳过'}
             </p>
           </div>
         ),
         onOk: async () => {
           try {
-            const result = await generateOrdersFromComputation(record.id!);
-            messageApi.success(
-              `生成成功！工单 ${result.work_order_count} 个，采购单 ${result.purchase_order_count} 个`
-            );
+            const result = await generateOrdersFromComputation(record.id!, generateMode);
+            const parts = [];
+            if (result.work_order_count > 0) parts.push(`工单 ${result.work_order_count} 个`);
+            if (result.purchase_order_count > 0) parts.push(`采购单 ${result.purchase_order_count} 个`);
+            messageApi.success(`生成成功！${parts.join('，')}`);
             actionRef.current?.reload();
           } catch (error: any) {
             messageApi.error(error?.response?.data?.detail || '生成工单和采购单失败');
@@ -260,17 +307,17 @@ const DemandComputationPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: '计算类型',
+      title: '计算模式',
       dataIndex: 'computation_type',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        'MRP': { text: 'MRP' },
-        'LRP': { text: 'LRP' },
+        'MRP': { text: '按预测' },
+        'LRP': { text: '按订单' },
       },
-      hideInSearch: false,
+      hideInSearch: true,  // 隐藏 MRP/LRP 术语，按需求来源自动推断
       render: (text: string) => (
-        <Tag color={text === 'MRP' ? 'blue' : 'green'}>{text}</Tag>
+        <Tag color={text === 'MRP' ? 'blue' : 'green'}>{text === 'MRP' ? '按预测' : '按订单'}</Tag>
       ),
     },
     {
@@ -301,12 +348,12 @@ const DemandComputationPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       valueEnum: {
-        'MTS': { text: 'MTS' },
-        'MTO': { text: 'MTO' },
+        'MTS': { text: '按库存生产' },
+        'MTO': { text: '按订单生产' },
       },
       hideInSearch: false,
       render: (text: string) => (
-        <Tag color={text === 'MTS' ? 'cyan' : 'purple'}>{text}</Tag>
+        <Tag color={text === 'MTS' ? 'cyan' : 'purple'}>{text === 'MTS' ? '按库存生产' : '按订单生产'}</Tag>
       ),
     },
     {
@@ -363,14 +410,37 @@ const DemandComputationPage: React.FC = () => {
             </Button>
           )}
           {record.computation_status === '完成' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<FileAddOutlined />}
-              onClick={() => handleGenerateOrders(record)}
-            >
-              生成工单/采购单
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<ProjectOutlined />}
+                onClick={() => handlePushToProductionPlan(record)}
+              >
+                转生产计划
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<ShoppingCartOutlined />}
+                onClick={() => handlePushToPurchaseRequisition(record)}
+              >
+                转采购申请
+              </Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'all', label: '全部（工单+采购单）', onClick: () => handleGenerateOrders(record, 'all') },
+                    { key: 'work_order_only', label: '仅工单', onClick: () => handleGenerateOrders(record, 'work_order_only') },
+                    { key: 'purchase_only', label: '仅采购单', onClick: () => handleGenerateOrders(record, 'purchase_only') },
+                  ],
+                }}
+              >
+                <Button type="link" size="small" icon={<FileAddOutlined />}>
+                  生成工单/采购单 <DownOutlined />
+                </Button>
+              </Dropdown>
+            </>
           )}
         </Space>
       ),
@@ -383,7 +453,7 @@ const DemandComputationPage: React.FC = () => {
   return (
     <ListPageTemplate
       title="统一需求计算"
-      description="支持MRP和LRP两种计算类型，统一管理需求计算结果"
+      description="按需求来源自动选择计算模式（按预测/按订单），统一管理需求计算结果"
     >
       <UniTable<DemandComputation>
         actionRef={actionRef}
@@ -461,27 +531,36 @@ const DemandComputationPage: React.FC = () => {
         onOk={async () => {
           try {
             const values = await formRef.current?.validateFields();
-            const selectedDemand = demandList.find(d => d.id === selectedDemandId);
-            if (!selectedDemand) {
-              messageApi.error('请选择需求');
+            if (!selectedDemandIds || selectedDemandIds.length === 0) {
+              messageApi.error('请至少选择一个需求');
               return;
             }
 
-            // 根据需求类型确定计算类型
-            const computationType = selectedDemand.business_mode === 'MTS' ? 'MRP' : 'LRP';
+            // 根据需求类型确定计算类型（多需求时：有订单则 LRP，全预测则 MRP）
+            const selectedDemands = demandList.filter(d => selectedDemandIds.includes(d.id!));
+            const hasMTO = selectedDemands.some(d => d.business_mode === 'MTO');
+            const computationType = hasMTO ? 'LRP' : 'MRP';
 
-            await createDemandComputation({
-              demand_id: selectedDemandId!,
+            // 多需求时使用 demand_ids，单需求时使用 demand_id（向后兼容）
+            const createData: any = {
               computation_type: computationType,
               computation_params: values.computation_params || {},
               notes: values.notes,
-            });
+            };
 
-            messageApi.success('创建成功');
+            if (selectedDemandIds.length === 1) {
+              createData.demand_id = selectedDemandIds[0];
+            } else {
+              createData.demand_ids = selectedDemandIds;
+            }
+
+            await createDemandComputation(createData);
+
+            messageApi.success(`创建成功，已合并 ${selectedDemandIds.length} 个需求`);
             setModalVisible(false);
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error('创建失败');
+            messageApi.error(error?.response?.data?.detail || '创建失败');
           }
         }}
       >
@@ -491,16 +570,19 @@ const DemandComputationPage: React.FC = () => {
           layout="vertical"
         >
           <ProFormSelect
-            name="demand_id"
-            label="选择需求"
+            name="demand_ids"
+            label="选择需求（可多选）"
+            mode="multiple"
             options={demandList.map(d => ({
-              label: `${d.demand_code} - ${d.demand_name || ''}`,
+              label: `${d.demand_code} - ${d.demand_name || ''} (${d.business_mode === 'MTS' ? '按库存' : '按订单'})`,
               value: d.id,
             }))}
             fieldProps={{
-              onChange: (value) => setSelectedDemandId(value),
+              onChange: (value) => setSelectedDemandIds(value),
+              placeholder: '支持多选需求合并计算',
             }}
-            rules={[{ required: true, message: '请选择需求' }]}
+            rules={[{ required: true, message: '请至少选择一个需求' }]}
+            tooltip="多需求合并时，相同物料的需求数量会自动汇总；有订单需求时自动选择「按订单计算」模式"
           />
           <ProFormTextArea
             name="notes"
@@ -524,7 +606,7 @@ const DemandComputationPage: React.FC = () => {
               columns={[
                 { title: '计算编码', dataIndex: 'computation_code' },
                 { title: '需求编码', dataIndex: 'demand_code' },
-                { title: '计算类型', dataIndex: 'computation_type' },
+                { title: '计算模式', dataIndex: 'computation_type', render: (t: string) => t === 'MRP' ? '按预测' : '按订单' },
                 { title: '计算状态', dataIndex: 'computation_status' },
                 { title: '开始时间', dataIndex: 'computation_start_time', valueType: 'dateTime' },
                 { title: '结束时间', dataIndex: 'computation_end_time', valueType: 'dateTime' },

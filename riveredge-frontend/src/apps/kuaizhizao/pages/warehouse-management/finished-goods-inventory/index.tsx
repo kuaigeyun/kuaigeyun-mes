@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
+import { App, Button, Modal } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -41,7 +41,7 @@ const FinishedGoodsInboundPage: React.FC = () => {
   const formRef = useRef<any>(null);
 
   // 统计数据状态
-  const [stats, setStats] = useState({
+  const [stats] = useState({
     todayInbound: 0,
     totalInbound: 0,
     pendingCount: 0,
@@ -73,7 +73,7 @@ const FinishedGoodsInboundPage: React.FC = () => {
   /**
    * 处理入库单提交
    */
-  const handleInboundSubmit = async (values: any) => {
+  const handleInboundSubmit = async (_values: any) => {
     try {
       // 模拟API调用
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -223,12 +223,12 @@ const FinishedGoodsInboundPage: React.FC = () => {
       ]}
     >
       <UniTable
-        headerTitle="产品入库管理"
+        headerTitle="产品入库"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        request={async (_params: any) => {
           // 模拟数据
           const mockData: FinishedGoodsInbound[] = [
             {

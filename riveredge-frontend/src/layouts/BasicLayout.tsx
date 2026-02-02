@@ -1183,7 +1183,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }
 
     const menuItem: MenuDataItem = {
-      path: menu.path,
+      path: menu.path == null ? undefined : menu.path, // 确保 path 不为 null，避免 @umijs/route-utils mergePath 报错
       name: menuName,
       icon: iconElement,
       key: menu.uuid || menu.path, // 添加 key 字段，ProLayout 需要

@@ -9,12 +9,11 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Card, Table, InputNumber, Popconfirm } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, EditOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { stocktakingApi } from '../../../services/stocktaking';
-import { warehouseApi } from '../../../services/production';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 
@@ -443,7 +442,7 @@ const StocktakingPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="库存盘点管理"
+        headerTitle="成品盘点"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -483,7 +482,7 @@ const StocktakingPage: React.FC = () => {
       <FormModalTemplate
         title="创建盘点单"
         open={createModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setCreateModalVisible(false);
           formRef.current?.resetFields();
         }}
@@ -531,7 +530,7 @@ const StocktakingPage: React.FC = () => {
       <FormModalTemplate
         title="添加盘点明细"
         open={itemModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setItemModalVisible(false);
           setCurrentStocktakingId(null);
           itemFormRef.current?.resetFields();
@@ -592,7 +591,7 @@ const StocktakingPage: React.FC = () => {
       <FormModalTemplate
         title="执行盘点明细"
         open={executeModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setExecuteModalVisible(false);
           setCurrentItemId(null);
           executeFormRef.current?.resetFields();
@@ -681,98 +680,99 @@ const StocktakingPage: React.FC = () => {
             dataIndex: 'remarks',
           },
         ]}
-      >
-        {currentStocktaking && currentStocktaking.items && currentStocktaking.items.length > 0 && (
-          <Card title="盘点明细" style={{ marginTop: 16 }}>
-            <Table
-              columns={[
-                {
-                  title: '物料编码',
-                  dataIndex: 'material_code',
-                  width: 120,
-                },
-                {
-                  title: '物料名称',
-                  dataIndex: 'material_name',
-                  width: 150,
-                },
-                {
-                  title: '账面数量',
-                  dataIndex: 'book_quantity',
-                  width: 100,
-                  align: 'right',
-                },
-                {
-                  title: '实际数量',
-                  dataIndex: 'actual_quantity',
-                  width: 100,
-                  align: 'right',
-                },
-                {
-                  title: '差异数量',
-                  dataIndex: 'difference_quantity',
-                  width: 100,
-                  align: 'right',
-                  render: (value: number) => (
-                    <span style={{ color: value > 0 ? '#ff4d4f' : value < 0 ? '#1890ff' : '#52c41a' }}>
-                      {value > 0 ? '+' : ''}{value?.toFixed(2) || '0.00'}
-                    </span>
-                  ),
-                },
-                {
-                  title: '差异金额',
-                  dataIndex: 'difference_amount',
-                  width: 100,
-                  align: 'right',
-                  render: (value: number) => (
-                    <span style={{ color: value > 0 ? '#ff4d4f' : value < 0 ? '#1890ff' : '#52c41a' }}>
-                      ¥{value?.toFixed(2) || '0.00'}
-                    </span>
-                  ),
-                },
-                {
-                  title: '状态',
-                  dataIndex: 'status',
-                  width: 100,
-                  render: (status: string) => {
-                    const statusMap: Record<string, { text: string; color: string }> = {
-                      pending: { text: '待盘点', color: 'default' },
-                      counted: { text: '已盘点', color: 'processing' },
-                      adjusted: { text: '已调整', color: 'success' },
-                    };
-                    const statusInfo = statusMap[status] || { text: status, color: 'default' };
-                    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+        customContent={
+          currentStocktaking && currentStocktaking.items && currentStocktaking.items.length > 0 && (
+            <Card title="盘点明细" style={{ marginTop: 16 }}>
+              <Table
+                columns={[
+                  {
+                    title: '物料编码',
+                    dataIndex: 'material_code',
+                    width: 120,
                   },
-                },
-                {
-                  title: '操作',
-                  width: 150,
-                  render: (_: any, item: StocktakingItem) => (
-                    <Space>
-                      {currentStocktaking.status === 'in_progress' && item.status === 'pending' && (
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => {
-                            setCurrentStocktaking(currentStocktaking);
-                            handleExecuteItem(item);
-                          }}
-                        >
-                          执行盘点
-                        </Button>
-                      )}
-                    </Space>
-                  ),
-                },
-              ]}
-              dataSource={currentStocktaking.items}
-              rowKey="id"
-              pagination={false}
-              size="small"
-            />
-          </Card>
-        )}
-      </DetailDrawerTemplate>
+                  {
+                    title: '物料名称',
+                    dataIndex: 'material_name',
+                    width: 150,
+                  },
+                  {
+                    title: '账面数量',
+                    dataIndex: 'book_quantity',
+                    width: 100,
+                    align: 'right',
+                  },
+                  {
+                    title: '实际数量',
+                    dataIndex: 'actual_quantity',
+                    width: 100,
+                    align: 'right',
+                  },
+                  {
+                    title: '差异数量',
+                    dataIndex: 'difference_quantity',
+                    width: 100,
+                    align: 'right',
+                    render: (value: number) => (
+                      <span style={{ color: value > 0 ? '#ff4d4f' : value < 0 ? '#1890ff' : '#52c41a' }}>
+                        {value > 0 ? '+' : ''}{value?.toFixed(2) || '0.00'}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '差异金额',
+                    dataIndex: 'difference_amount',
+                    width: 100,
+                    align: 'right',
+                    render: (value: number) => (
+                      <span style={{ color: value > 0 ? '#ff4d4f' : value < 0 ? '#1890ff' : '#52c41a' }}>
+                        ¥{value?.toFixed(2) || '0.00'}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: '状态',
+                    dataIndex: 'status',
+                    width: 100,
+                    render: (status: string) => {
+                      const statusMap: Record<string, { text: string; color: string }> = {
+                        pending: { text: '待盘点', color: 'default' },
+                        counted: { text: '已盘点', color: 'processing' },
+                        adjusted: { text: '已调整', color: 'success' },
+                      };
+                      const statusInfo = statusMap[status] || { text: status, color: 'default' };
+                      return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+                    },
+                  },
+                  {
+                    title: '操作',
+                    width: 150,
+                    render: (_: any, item: StocktakingItem) => (
+                      <Space>
+                        {currentStocktaking.status === 'in_progress' && item.status === 'pending' && (
+                          <Button
+                            type="link"
+                            size="small"
+                            onClick={() => {
+                              setCurrentStocktaking(currentStocktaking);
+                              handleExecuteItem(item);
+                            }}
+                          >
+                            执行盘点
+                          </Button>
+                        )}
+                      </Space>
+                    ),
+                  },
+                ]}
+                dataSource={currentStocktaking.items}
+                rowKey="id"
+                pagination={false}
+                size="small"
+              />
+            </Card>
+          )
+        }
+      />
     </ListPageTemplate>
   );
 };

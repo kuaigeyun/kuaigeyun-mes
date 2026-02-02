@@ -672,3 +672,79 @@ class ReportService:
             "items": [],
         }
 
+
+    async def query_batch_inventory(
+        self,
+        tenant_id: int,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+        batch_number: Optional[str] = None,
+        include_expired: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        批次库存查询
+        
+        Args:
+            tenant_id: 租户ID
+            material_id: 物料ID（可选）
+            warehouse_id: 仓库ID（可选）
+            batch_number: 批号（可选）
+            include_expired: 是否包含过期批次（默认：否）
+            
+        Returns:
+            Dict[str, Any]: 批次库存列表
+        """
+        from apps.master_data.models.material_batch import MaterialBatch
+        from apps.master_data.models.material import Material
+        from datetime import date
+        
+        # 构建查询
+        query = MaterialBatch.filter(tenant_id=tenant_id)
+        
+        if material_id:
+            query = query.filter(material_id=material_id)
+        
+        if batch_number:
+            query = query.filter(batch_no__icontains=batch_number)
+        
+        # 如果不包含过期批次，过滤掉已过期的
+        if not include_expired:
+            today = date.today()
+            query = query.filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+            )
+        
+        # 获取批次列表
+        batches = await query.prefetch_related('material').all()
+        
+        # 构建返回数据
+        items = []
+        for batch in batches:
+            material = await batch.material
+            
+            # 判断状态
+            status = batch.status
+            if batch.expiry_date and batch.expiry_date < date.today():
+                status = "已过期"
+            elif batch.quantity <= 0:
+                status = "无库存"
+            
+            items.append({
+                "id": batch.id,
+                "material_id": material.id,
+                "material_code": material.main_code or material.code,
+                "material_name": material.name,
+                "batch_no": batch.batch_no,
+                "production_date": batch.production_date.isoformat() if batch.production_date else None,
+                "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else None,
+                "quantity": float(batch.quantity),
+                "supplier_batch_no": batch.supplier_batch_no,
+                "status": status,
+                "warehouse_id": warehouse_id,  # TODO: 从实际库存记录获取
+                "warehouse_name": None,  # TODO: 从实际库存记录获取
+            })
+        
+        return {
+            "total": len(items),
+            "items": items,
+        }

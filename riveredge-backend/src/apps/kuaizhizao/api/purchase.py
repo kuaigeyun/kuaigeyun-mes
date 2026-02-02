@@ -24,7 +24,10 @@ from apps.kuaizhizao.schemas.purchase import (
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.services.print_service import DocumentPrintService
+from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from fastapi.responses import HTMLResponse
+from fastapi import HTTPException, status as http_status
+from loguru import logger
 
 
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
@@ -100,6 +103,30 @@ async def get_purchase_order(
     - **order_id**: 采购订单ID
     """
     return await PurchaseService().get_purchase_order_by_id(tenant_id, order_id)
+
+
+@router.get("/purchase-orders/{order_id}/demand-source-chain", summary="获取采购单需求来源链路")
+async def get_purchase_order_demand_chain(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    """
+    获取采购单的需求来源追溯链路
+    
+    追溯路径：PurchaseOrder → DemandComputation → Demand → SalesOrder/SalesForecast
+    """
+    try:
+        service = DemandSourceChainService()
+        return await service.get_purchase_order_demand_chain(tenant_id, order_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception("获取采购单需求来源链路失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取需求来源链路失败: {str(e)}",
+        )
 
 
 @router.put("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="更新采购订单")

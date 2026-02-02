@@ -5,8 +5,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col } from 'antd';
+import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormSelect, ProFormTextArea, ProFormDatePicker, ProFormDependency } from '@ant-design/pro-components';
+import { App, Button, Tag, Modal } from 'antd';
 import { PlusOutlined, CheckCircleOutlined, TruckOutlined, ExclamationCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -48,7 +48,7 @@ const SalesOutboundPage: React.FC = () => {
   const [outboundDetail, setOutboundDetail] = useState<SalesOutbound | null>(null);
 
   // 统计数据状态
-  const [stats, setStats] = useState({
+  const [stats] = useState({
     todayOutbound: 0,
     totalOutbound: 0,
     pendingCount: 0,
@@ -107,7 +107,7 @@ const SalesOutboundPage: React.FC = () => {
   /**
    * 处理出库单提交
    */
-  const handleOutboundSubmit = async (values: any) => {
+  const handleOutboundSubmit = async (_values: any) => {
     try {
       // 模拟API调用
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -290,12 +290,12 @@ const SalesOutboundPage: React.FC = () => {
       ]}
     >
       <UniTable
-        headerTitle="销售出库管理"
+        headerTitle="销售出库"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        request={async (params) => {
+        request={async (_params: any) => {
           // 模拟数据
           const mockData: SalesOutbound[] = [
             {
@@ -339,6 +339,7 @@ const SalesOutboundPage: React.FC = () => {
             {
               id: 3,
               outboundCode: 'OUT20241201003',
+              orderType: 'MTO',
               salesOrderCode: 'SO20241201003',
               salesOrderName: '客户C订单',
               customerName: '客户C',
@@ -415,25 +416,25 @@ const SalesOutboundPage: React.FC = () => {
           ]}
           colProps={{ span: 12 }}
         />
-        <ProFormSelect
-          name="salesOrderCode"
-          label="销售订单"
-          placeholder="请选择销售订单"
-          dependencies={['orderType']}
-          rules={[
-            ({ getFieldValue }) => ({
-              required: getFieldValue('orderType') === 'MTO',
-              message: 'MTO模式必须选择销售订单',
-            }),
-          ]}
-          request={async () => [
-            { label: 'SO20241201001 - 客户A订单 (MTO)', value: 'SO20241201001' },
-            { label: 'SO20241201002 - 客户B订单 (MTO)', value: 'SO20241201002' },
-            { label: 'SO20241201003 - 客户C订单 (MTO)', value: 'SO20241201003' },
-          ]}
-          colProps={{ span: 12 }}
-          hidden={({ orderType }) => orderType !== 'MTO'}
-        />
+        <ProFormDependency name={['orderType']}>
+          {({ orderType }) => {
+            if (orderType !== 'MTO') return null;
+            return (
+              <ProFormSelect
+                name="salesOrderCode"
+                label="销售订单"
+                placeholder="请选择销售订单"
+                rules={[{ required: true, message: 'MTO模式必须选择销售订单' }]}
+                request={async () => [
+                  { label: 'SO20241201001 - 客户A订单 (MTO)', value: 'SO20241201001' },
+                  { label: 'SO20241201002 - 客户B订单 (MTO)', value: 'SO20241201002' },
+                  { label: 'SO20241201003 - 客户C订单 (MTO)', value: 'SO20241201003' },
+                ]}
+                colProps={{ span: 12 }}
+              />
+            );
+          }}
+        </ProFormDependency>
         <ProFormSelect
           name="customerName"
           label="客户"
@@ -478,9 +479,17 @@ const SalesOutboundPage: React.FC = () => {
         <ProFormText
           name="batchNo"
           label="批次号"
-          placeholder="请输入批次号"
-          rules={[{ required: true, message: '请输入批次号' }]}
+          placeholder="请输入批次号（批号管理物料必填）"
+          tooltip="如果所选物料启用了批号管理，此字段为必填"
           colProps={{ span: 8 }}
+        />
+        <ProFormTextArea
+          name="serialNumbers"
+          label="序列号"
+          placeholder="请输入序列号，多个序列号用逗号分隔（序列号管理物料必填）"
+          tooltip="如果所选物料启用了序列号管理，此字段为必填"
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
         />
         <ProFormDatePicker
           name="outboundDate"

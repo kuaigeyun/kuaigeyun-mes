@@ -9,10 +9,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, message, Popconfirm } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
+import { App, Button, Space, Popconfirm } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import dayjs from 'dayjs';
 
@@ -292,14 +292,14 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="客户来料登记管理"
+        headerTitle="客户来料登记"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={true}
         onCreate={handleCreate}
-        request={async (params) => {
+        request={async (params: any) => {
           try {
             const result = await customerMaterialRegistrationApi.list({
               skip: (params.current! - 1) * params.pageSize!,
@@ -332,7 +332,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       <FormModalTemplate
         title="客户来料登记"
         open={createModalVisible}
-        onCancel={() => {
+        onClose={() => {
           setCreateModalVisible(false);
           formRef.current?.resetFields();
         }}
@@ -358,7 +358,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           placeholder="请扫描或输入客户条码（一维码或二维码）"
           rules={[{ required: true, message: '请输入客户条码' }]}
           fieldProps={{
-            onBlur: (e) => {
+            onBlur: (e: any) => {
               if (e.target.value) {
                 handleBarcodeChange(e.target.value);
               }

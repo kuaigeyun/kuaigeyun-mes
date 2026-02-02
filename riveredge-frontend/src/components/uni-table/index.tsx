@@ -8,7 +8,7 @@
 import React, { useRef, useLayoutEffect, ReactNode, useState, useEffect } from 'react';
 import { ProTable, ActionType, ProColumns, ProFormInstance, ProTableProps } from '@ant-design/pro-components';
 import { Button, Space, Radio, Dropdown, MenuProps, App, Input, theme, Empty } from 'antd';
-import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined, SearchOutlined, TabletOutlined } from '@ant-design/icons';
+import { DownloadOutlined, UploadOutlined, PlusOutlined, EditOutlined, DeleteOutlined, TableOutlined, AppstoreOutlined, BarsOutlined, BarChartOutlined, DownOutlined, TabletOutlined } from '@ant-design/icons';
 import { QuerySearchButton } from '../riveredge-query';
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
 // 内联的 useProTableSearch hook（简化实现）
@@ -60,21 +60,21 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
   const importableColumns = columns.filter((col) => {
     const dataIndex = col.dataIndex;
     if (!dataIndex) return false;
-    
+
     const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex);
-    
+
     // 排除字段
     if (excludeFields.includes(fieldName)) return false;
-    
+
     // 如果指定了包含字段，只包含这些字段
     if (includeFields && !includeFields.includes(fieldName)) return false;
-    
+
     // 排除隐藏的列（hideInTable）
     if (col.hideInTable) return false;
-    
+
     // 排除操作列（通常没有 dataIndex 或 dataIndex 为 'option'）
     if (fieldName === 'option' || fieldName === 'action') return false;
-    
+
     return true;
   });
 
@@ -83,14 +83,14 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
     const dataIndex = col.dataIndex;
     const fieldName = Array.isArray(dataIndex) ? dataIndex.join('.') : String(dataIndex);
     const title = col.title as string || fieldName;
-    
+
     // 生成表头（支持必填标识）
     // 检查是否必填：通过 required 属性或 fieldProps.required
-    const isRequired = (col as any).required === true || 
-                      ((col.fieldProps as any)?.required === true);
+    const isRequired = (col as any).required === true ||
+      ((col.fieldProps as any)?.required === true);
     const headerTitle = isRequired ? `*${title}` : title;
     headers.push(headerTitle);
-    
+
     // 生成示例数据
     let exampleValue = '';
     if (col.valueType === 'select' || col.valueEnum) {
@@ -104,7 +104,7 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
       }
     } else if (col.valueType === 'date' || col.valueType === 'dateTime') {
       exampleValue = '2024-01-01';
-    } else if (col.valueType === 'digit' || col.valueType === 'number') {
+    } else if (col.valueType === 'digit') {
       exampleValue = '0';
     } else if (col.valueType === 'switch' || col.valueType === 'checkbox') {
       exampleValue = '是';
@@ -112,33 +112,33 @@ function generateImportConfigFromColumns<T extends Record<string, any>>(
       exampleValue = `示例${title}`;
     }
     exampleRow.push(exampleValue);
-    
+
     // 生成字段映射（支持多种表头名称映射到同一个字段）
     const normalizedTitle = title.trim();
     const normalizedHeaderTitle = headerTitle.trim();
-    
+
     // 支持多种映射方式
     fieldMap[normalizedTitle] = fieldName;
     fieldMap[normalizedHeaderTitle] = fieldName;
     fieldMap[fieldName] = fieldName; // 直接使用字段名也可以
-    
+
     // 如果字段名和标题不同，也建立映射
     if (fieldName !== normalizedTitle) {
       fieldMap[fieldName] = fieldName;
     }
-    
+
     // 生成验证规则
     if (!fieldRules[fieldName]) {
       fieldRules[fieldName] = {};
     }
-    
+
     // 检查是否必填
     if (isRequired || (col as any).required === true) {
       fieldRules[fieldName].required = true;
     }
-    
+
     // 添加类型验证
-    if (col.valueType === 'digit' || col.valueType === 'number') {
+    if (col.valueType === 'digit') {
       fieldRules[fieldName].validator = (value: any) => {
         if (value && isNaN(Number(value))) {
           return `${title}必须是数字`;
@@ -204,7 +204,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
   /**
    * 行主键字段名（默认：'id'）
    */
-  rowKey?: string;
+  rowKey?: string | ((record: T, index?: number) => string);
   /**
    * 是否显示高级搜索按钮（默认：true）
    */
@@ -477,56 +477,56 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const { token } = theme.useToken();
   // 导入弹窗状态
   const [importModalVisible, setImportModalVisible] = useState(false);
-  
+
   // 表格容器高度（用于两栏布局中的滚动）
   const [tableScrollY, setTableScrollY] = useState<number | undefined>(undefined);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  
+
   // 检测是否在两栏布局中，并计算表格高度
   useEffect(() => {
     if (!tableContainerRef.current) return;
-    
+
     // 检查是否在两栏布局中
     const isInTwoColumnLayout = tableContainerRef.current.closest('.two-column-layout-content') !== null;
-    
+
     if (!isInTwoColumnLayout) {
       setTableScrollY(undefined);
       return;
     }
-    
+
     // 计算表格可用高度
     const calculateHeight = () => {
       if (!tableContainerRef.current) return;
-      
+
       const container = tableContainerRef.current.closest('.two-column-layout-content');
       if (!container) return;
-      
+
       // 方法1：直接使用容器高度减去固定元素高度
       // 获取容器高度（clientHeight 已经减去了 padding 和 border）
       const containerHeight = container.clientHeight;
-      
+
       // 查找表格相关的固定高度元素
       const proTable = tableContainerRef.current.querySelector('.ant-pro-table');
       if (!proTable) return;
-      
+
       // 查找按钮容器（模糊搜索框等）
       const buttonContainer = tableContainerRef.current.querySelector('.pro-table-button-container');
-      
+
       // 查找工具栏（ProTable 的工具栏，包含密度、列设置等）
       const toolbar = proTable.querySelector('.ant-pro-table-list-toolbar');
-      
+
       // 查找 headerTitle（如果有）
       const headerTitle = proTable.querySelector('.ant-pro-table-list-toolbar-title');
-      
+
       // 查找分页器
       const pagination = proTable.querySelector('.ant-pagination');
-      
+
       // 查找 ProCard 的 padding（如果有）
       const proCard = proTable.closest('.ant-pro-card');
       const proCardBody = proCard?.querySelector('.ant-pro-card-body');
-      
+
       let fixedHeight = 0;
-      
+
       // 按钮容器高度
       if (buttonContainer) {
         const buttonStyle = window.getComputedStyle(buttonContainer);
@@ -535,17 +535,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const marginBottom = parseInt(buttonStyle.marginBottom) || 0;
         fixedHeight += marginBottom;
       }
-      
+
       // 工具栏高度
       if (toolbar) {
         fixedHeight += toolbar.clientHeight;
       }
-      
+
       // headerTitle 高度（如果单独存在）
       if (headerTitle && !toolbar?.contains(headerTitle)) {
         fixedHeight += headerTitle.clientHeight;
       }
-      
+
       // 分页器高度
       if (pagination) {
         const paginationStyle = window.getComputedStyle(pagination);
@@ -554,7 +554,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const marginTop = parseInt(paginationStyle.marginTop) || 0;
         fixedHeight += marginTop;
       }
-      
+
       // ProCard 的 padding（上下各 24px，但可能被覆盖）
       if (proCardBody) {
         const cardBodyStyle = window.getComputedStyle(proCardBody);
@@ -562,65 +562,65 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const paddingBottom = parseInt(cardBodyStyle.paddingBottom) || 0;
         fixedHeight += paddingTop + paddingBottom;
       }
-      
+
       // 方法2：直接测量表格容器到分页器之间的高度（更准确）
       // 查找表格容器（.ant-table-wrapper）
       const tableWrapper = proTable.querySelector('.ant-table-wrapper');
       let measuredHeight = 0;
-      
+
       if (tableWrapper) {
         // 获取表格容器的实际可用高度
         const tableWrapperRect = tableWrapper.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
-        
+
         // 计算表格容器在内容区内的实际高度
         // 需要考虑表格容器上方和下方的元素
         const tableTop = tableWrapperRect.top;
         const containerTop = containerRect.top;
         const containerBottom = containerRect.bottom;
-        
+
         // 表格容器上方的高度（按钮容器、工具栏等）
         const topOffset = tableTop - containerTop;
-        
+
         // 表格容器下方的高度（分页器等）
         let bottomOffset = 0;
         if (pagination) {
           const paginationRect = pagination.getBoundingClientRect();
           bottomOffset = containerBottom - paginationRect.bottom;
         }
-        
+
         // 计算表格主体可用高度
         measuredHeight = containerHeight - topOffset - bottomOffset;
       }
-      
+
       // 使用两种方法中更准确的一个（优先使用方法2，如果不可用则使用方法1）
       const availableHeight = measuredHeight > 0 ? measuredHeight : (containerHeight - fixedHeight);
-      
+
       if (availableHeight > 100) {
         setTableScrollY(availableHeight);
       } else {
         setTableScrollY(undefined);
       }
     };
-    
+
     // 初始计算（延迟一下，确保 DOM 已渲染）
     setTimeout(calculateHeight, 100);
-    
+
     // 使用 ResizeObserver 监听容器大小变化
     const resizeObserver = new ResizeObserver(() => {
       calculateHeight();
     });
-    
+
     const container = tableContainerRef.current.closest('.two-column-layout-content');
     if (container) {
       resizeObserver.observe(container);
     }
-    
+
     return () => {
       resizeObserver.disconnect();
     };
   }, []);
-  
+
   // 预加载拼音库（组件挂载时）
   useEffect(() => {
     import('../../utils/pinyin').then(({ preloadPinyinLib }) => {
@@ -629,7 +629,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       });
     });
   }, []);
-  
+
   // 自动生成导入配置（如果启用且未手动提供）
   const autoImportConfig = React.useMemo(() => {
     if (!autoGenerateImportConfig || (importHeaders && importExampleRow)) {
@@ -640,13 +640,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       fieldRules: importFieldRules,
     });
   }, [columns, autoGenerateImportConfig, importHeaders, importExampleRow, importFieldMap, importFieldRules]);
-  
+
   // 使用自动生成的配置或手动提供的配置
   const finalImportHeaders = importHeaders || autoImportConfig?.headers;
   const finalImportExampleRow = importExampleRow || autoImportConfig?.exampleRow;
-  const finalImportFieldMap = importFieldMap || autoImportConfig?.fieldMap || {};
-  const finalImportFieldRules = importFieldRules || autoImportConfig?.fieldRules || {};
-  
+
   // 检测是否有操作列（用于决定scroll配置）
   // 没有操作列的表格，ProTable的scroll配置会导致不必要的滚动条
   const hasActionColumn = React.useMemo(() => {
@@ -662,7 +660,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       );
     });
   }, [columns]);
-  
+
   // 视图类型状态
   const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats' | 'touch'>(defaultViewType);
   // 表格数据状态（用于其他视图）
@@ -673,18 +671,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('');
   // 防抖定时器引用
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const internalActionRef = useRef<ActionType>();
   const internalFormRef = useRef<ProFormInstance>();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonContainerRef = useRef<HTMLDivElement>(null);
-  
+
 
 
   // 使用外部传入的 ref 或内部创建的 ref（优先使用外部传入的）
-  const actionRef = externalActionRef || hookActionRef || internalActionRef;
-  const formRef = externalFormRef || hookFormRef || internalFormRef;
-  
+  const actionRef = (externalActionRef || hookActionRef || internalActionRef) as React.MutableRefObject<ActionType | undefined>;
+  const formRef = (externalFormRef || hookFormRef || internalFormRef) as React.MutableRefObject<ProFormInstance | undefined>;
+
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -702,24 +700,24 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
       return false; // 未找到 ProTable 或已经移动
     };
-    
+
     // 立即尝试移动
     if (moveButtonContainer()) {
       return;
     }
-    
+
     // 如果立即移动失败，使用多次重试（适用于 TwoColumnLayout 等复杂布局）
     let retryCount = 0;
     const maxRetries = 10; // 最多重试 10 次
     const retryInterval = 50; // 每次重试间隔 50ms
-    
+
     const retryTimer = setInterval(() => {
       retryCount++;
       if (moveButtonContainer() || retryCount >= maxRetries) {
         clearInterval(retryTimer);
       }
     }, retryInterval);
-    
+
     return () => {
       clearInterval(retryTimer);
     };
@@ -748,12 +746,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
    */
   const handleFuzzySearch = (value: string) => {
     setFuzzySearchKeyword(value);
-    
+
     // 清除之前的防抖定时器
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
-    
+
     // 设置防抖定时器（300ms）
     debounceTimerRef.current = setTimeout(() => {
       // 更新搜索参数
@@ -764,29 +762,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           keyword: value.trim() || undefined,
         };
       }
-      
+
       // 触发表格重新加载
       if (actionRef?.current) {
         actionRef.current.reload();
       }
     }, 300);
-  };
-
-  /**
-   * 清除模糊搜索
-   */
-  const handleClearFuzzySearch = () => {
-    setFuzzySearchKeyword('');
-    
-    // 清除搜索参数
-    if (searchParamsRef.current) {
-      delete searchParamsRef.current.keyword;
-    }
-    
-    // 触发表格重新加载
-    if (actionRef?.current) {
-      actionRef.current.reload();
-    }
   };
 
   /**
@@ -814,21 +795,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     // searchParamsRef.current 可能为空对象 {}（表示清空搜索条件），这是有效的
     // 只有当 searchParamsRef.current 是 undefined 时，才回退到 formValues
     const searchFormValues = searchParamsRef.current !== undefined ? searchParamsRef.current : formValues;
-    
+
     // 调用用户提供的 request 函数，传递搜索表单值
     const result = await request(params, sort, filter, searchFormValues);
-    
+
     // 支持拼音搜索：如果关键词是拼音格式，在前端对返回的数据进行二次过滤
     const keyword = searchFormValues?.keyword;
     if (keyword && isPinyinKeyword(keyword) && result.data && Array.isArray(result.data)) {
       const keywordUpper = keyword.toUpperCase();
-      
+
       // 使用 Promise.all 进行异步拼音匹配
       const filteredDataPromises = result.data.map(async (record: any) => {
         // 遍历所有列，检查是否有匹配的字段
         for (const column of columns) {
           if (!column.dataIndex) continue;
-          
+
           // 获取字段值（支持嵌套字段，如 'user.name'）
           const getFieldValue = (obj: any, path: string | string[] | number): any => {
             if (Array.isArray(path)) {
@@ -840,28 +821,28 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             const keys = String(path).split('.');
             return keys.reduce((acc, key) => acc?.[key], obj);
           };
-          
+
           const fieldValue = getFieldValue(record, column.dataIndex as string | string[] | number);
           if (!fieldValue) continue;
-          
+
           // 将字段值转换为字符串进行匹配
           const valueStr = String(fieldValue);
-          
+
           // 1. 文本匹配
           const textMatch = valueStr.toLowerCase().includes(keyword.toLowerCase());
           if (textMatch) return record;
-          
+
           // 2. 拼音首字母匹配（异步）
           const pinyinMatch = await matchPinyinInitialsAsync(valueStr, keywordUpper);
           if (pinyinMatch) return record;
         }
         return null;
       });
-      
+
       // 等待所有匹配完成
       const filteredResults = await Promise.all(filteredDataPromises);
       const filteredData = filteredResults.filter(item => item !== null);
-      
+
       // 更新结果数据
       result.data = filteredData;
       // 更新总数（如果前端过滤，总数可能不准确，但至少显示过滤后的数量）
@@ -869,12 +850,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         result.total = filteredData.length;
       }
     }
-    
+
     // 保存数据到 state（用于其他视图）
     if (result.data) {
       setTableData(result.data);
     }
-    
+
     return result;
   };
 
@@ -965,8 +946,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     // 处理用户自定义的toolBarRender（当作左侧按钮）
     if (restProps.toolBarRender) {
       // 这里需要模拟toolBarRender的参数
-      const mockAction = { reload: actionRef.current?.reload };
-      const mockSelectedRowKeys = selectedRowKeys;
+      const mockAction = { reload: actionRef.current?.reload } as any;
+      const mockSelectedRowKeys = selectedRowKeys as any;
       const userResult = restProps.toolBarRender(mockAction, { selectedRowKeys: mockSelectedRowKeys });
 
       if (Array.isArray(userResult)) {
@@ -1091,7 +1072,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           message.warning('请配置 onExport 回调函数来处理导出数据');
           return;
         }
-        
+
         switch (key) {
           case 'selected':
             onExport('selected', selectedRowKeys || []);
@@ -1112,7 +1093,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}
           trigger={['click']}
         >
-          <Button 
+          <Button
             icon={<DownloadOutlined />}
             style={{
               backgroundColor: token.colorPrimaryBg || token.colorFillTertiary,
@@ -1150,14 +1131,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (onRowSelectionChange) {
       onRowSelectionChange(keys);
     }
-  };
-
-  /**
-   * 构建工具栏按钮（仅自定义按钮，导入导出已移至右侧工具栏）
-   */
-  const buildToolBarActions = (selectedRowKeys?: React.Key[]) => {
-    // 只返回自定义工具栏按钮
-    return toolBarActions && toolBarActions.length > 0 ? toolBarActions : [];
   };
 
   return (
@@ -1431,366 +1404,364 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           border-radius: ${token.borderRadius}px !important;
         }
       `}</style>
-      <div 
-        ref={containerRef} 
+      <div
+        ref={containerRef}
         className="uni-table-container"
-        style={{ 
+        style={{
           position: 'relative',
           padding: 0,
           margin: 0,
           width: '100%',
         }}
       >
-      <div ref={tableContainerRef} style={{ width: '100%', height: '100%' }}>
-      {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
-      {/* 模糊搜索框始终显示，其他按钮根据条件显示 */}
-      <div
-        ref={buttonContainerRef}
-        className="pro-table-button-container"
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {beforeSearchButtons}
-          {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
-          <Input
-            className="uni-table-fuzzy-search"
-            placeholder="模糊搜索"
-            allowClear
-            value={fuzzySearchKeyword}
-            onChange={(e) => handleFuzzySearch(e.target.value)}
-            onPressEnter={(e) => handleFuzzySearch((e.target as HTMLInputElement).value)}
-            style={{
-              width: 160,
-              height: '32px',
-            }}
-          />
-          {showAdvancedSearch && (
-            <QuerySearchButton
-              columns={columns}
-              formRef={formRef as React.MutableRefObject<ProFormInstance>}
-              actionRef={actionRef as React.MutableRefObject<ActionType>}
-              searchParamsRef={searchParamsRef}
-            />
-          )}
-          {afterSearchButtons}
-        </div>
-        {/* 视图切换按钮（右侧） */}
-        {(viewTypes && viewTypes.length > 1) && buildViewTypeButtons()}
-      </div>
-
-      {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
-      <div style={{ display: currentViewType === 'table' ? 'block' : 'none' }}>
-        <ProTable<T>
-          headerTitle={buildHeaderActions() || headerTitle || undefined}
-          actionRef={actionRef}
-          formRef={formRef}
-          columns={columns}
-          request={handleRequest}
-          rowKey={rowKey}
-          search={false}
-          className="uni-table-pro-table"
-          style={{ margin: 0, padding: 0 }}
-          bordered={false}
-          cardBordered={true}
-          toolbar={{
-            // 合并自定义 actions 和用户传入的 actions
-            actions: [
-              ...(buildRightActions() ? [buildRightActions()] : []),
-              ...(restProps.toolbar?.actions 
-                ? (Array.isArray(restProps.toolbar.actions) 
-                    ? restProps.toolbar.actions 
-                    : [restProps.toolbar.actions])
-                : []),
-            ],
-            // 恢复 ProTable 原生的密度和列设置功能
-            options: {
-              density: true,
-              setting: true,
-              reload: true,
-              fullScreen: true,
-              // 如果用户传入了 toolbar.options，则合并用户配置
-              ...(restProps.toolbar?.options || {}),
-            },
-          }}
-        rowSelection={
-          enableRowSelection
-            ? {
-                type: 'checkbox',
-                onChange: handleRowSelectionChange,
-                ...(rowSelectionGetCheckboxProps
-                  ? { getCheckboxProps: rowSelectionGetCheckboxProps }
-                  : {}),
-              }
-            : undefined
-        }
-        editable={
-          enableRowEdit
-            ? {
-                type: 'multiple',
-                onSave: onRowEditSave as any,
-                onDelete: onRowEditDelete as any,
-              }
-            : undefined
-        }
-        toolBarRender={(_action, { selectedRowKeys: toolBarSelectedRowKeys }) => {
-          // 同步工具栏的选中行键到 state（用于头部按钮状态）
-          // 使用 useLayoutEffect 在渲染后更新，避免在渲染过程中更新状态
-          if (toolBarSelectedRowKeys) {
-            const currentKeys = selectedRowKeys;
-            const newKeys = toolBarSelectedRowKeys;
-            if (currentKeys.length !== newKeys.length || 
-                currentKeys.some((key, index) => key !== newKeys[index])) {
-              // 使用 requestAnimationFrame 延迟更新，避免在渲染过程中更新
-              requestAnimationFrame(() => {
-                setSelectedRowKeys(newKeys);
-              });
-            }
-          }
-
-          // 只返回系统按钮（导入导出），用户自定义按钮在headerTitle中处理
-          const rightActions = buildRightActions();
-          return rightActions ? [rightActions] : [];
-        }}
-        pagination={{
-          defaultPageSize,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
-        }}
-        scroll={
-          (() => {
-            const scrollConfig: { x?: string | number; y?: number } = {};
-            
-            // 如果有操作列，设置水平滚动
-            if (hasActionColumn) {
-              scrollConfig.x = 'max-content';
-            }
-            
-            // 在两栏布局中且预估内容超出可用高度时，才设置 scroll.y，避免内容未溢出时出现垂直滚动条
-            const estimatedHeight = tableData.length * TABLE_ROW_HEIGHT;
-            if (tableScrollY !== undefined && tableData.length > 0 && estimatedHeight > tableScrollY) {
-              scrollConfig.y = tableScrollY;
-            }
-            
-            return Object.keys(scrollConfig).length > 0 ? scrollConfig : undefined;
-          })()
-        }
-        {...(() => {
-          // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
-          // toolBarRender 已经在左侧处理了
-          // search 中的 showAdvancedSearch 会传递到DOM，导致React警告
-          const { toolBarRender, search, ...otherProps } = restProps;
-          return otherProps;
-        })()}
-        />
-      </div>
-
-      {/* 卡片视图 */}
-      {currentViewType === 'card' && viewTypes.includes('card') && (
-        <div style={{ padding: '16px', minHeight: '400px' }}>
-          {cardViewConfig?.renderCard ? (
-            tableData.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                {tableData.map((item, index) => cardViewConfig.renderCard!(item, index))}
-              </div>
-            ) : (
-              <Empty 
-                description="暂无应用数据" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                style={{ marginTop: '60px' }}
+        <div ref={tableContainerRef} style={{ width: '100%', height: '100%' }}>
+          {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
+          {/* 模糊搜索框始终显示，其他按钮根据条件显示 */}
+          <div
+            ref={buttonContainerRef}
+            className="pro-table-button-container"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {beforeSearchButtons}
+              {/* 模糊搜索框 - 去掉放大镜按钮，高度与高级搜索按钮一致（32px） */}
+              <Input
+                className="uni-table-fuzzy-search"
+                placeholder="模糊搜索"
+                allowClear
+                value={fuzzySearchKeyword}
+                onChange={(e) => handleFuzzySearch(e.target.value)}
+                onPressEnter={(e) => handleFuzzySearch((e.target as HTMLInputElement).value)}
+                style={{
+                  width: 160,
+                  height: '32px',
+                }}
               />
-            )
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '60px 20px', 
-              color: '#999',
-              background: '#fafafa',
-              borderRadius: '4px',
-              border: '1px dashed #d9d9d9'
-            }}>
-              <AppstoreOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
-              <div style={{ fontSize: '16px', marginBottom: '8px' }}>卡片视图</div>
-              <div style={{ fontSize: '14px', color: '#999' }}>
-                请配置 <code>cardViewConfig.renderCard</code> 来自定义卡片渲染
-              </div>
+              {showAdvancedSearch && (
+                <QuerySearchButton
+                  columns={columns}
+                  formRef={formRef as React.MutableRefObject<ProFormInstance>}
+                  actionRef={actionRef as React.MutableRefObject<ActionType>}
+                  searchParamsRef={searchParamsRef}
+                />
+              )}
+              {afterSearchButtons}
             </div>
-          )}
-        </div>
-      )}
+            {/* 视图切换按钮（右侧） */}
+            {(viewTypes && viewTypes.length > 1) && buildViewTypeButtons()}
+          </div>
 
-      {/* 看板视图 */}
-      {currentViewType === 'kanban' && viewTypes.includes('kanban') && (
-        <div style={{ padding: '16px', minHeight: '400px' }}>
-          {kanbanViewConfig?.renderCard && kanbanViewConfig.statusGroups ? (
-            <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', minHeight: '400px' }}>
-              {Object.entries(kanbanViewConfig.statusGroups).map(([status, config]) => {
-                const statusData = tableData.filter(item => (item as any)[kanbanViewConfig?.statusField || 'status'] === status);
-                return (
-                  <div 
-                    key={status} 
-                    style={{ 
-                      flex: '0 0 300px', 
-                      border: '1px solid #d9d9d9', 
-                      borderRadius: '4px', 
-                      padding: '16px',
-                      background: '#fafafa',
-                      minHeight: '400px'
-                    }}
-                  >
-                    <div style={{ 
-                      fontSize: '16px', 
-                      fontWeight: 'bold', 
-                      marginBottom: '16px',
-                      paddingBottom: '12px',
-                      borderBottom: '2px solid #d9d9d9'
-                    }}>
-                      {config.title}
-                      <span style={{ 
-                        marginLeft: '8px', 
-                        fontSize: '12px', 
-                        color: '#999',
-                        fontWeight: 'normal'
-                      }}>
-                        ({statusData.length})
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {statusData.map((item) => kanbanViewConfig.renderCard!(item, status))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '60px 20px', 
-              color: '#999',
-              background: '#fafafa',
-              borderRadius: '4px',
-              border: '1px dashed #d9d9d9'
-            }}>
-              <BarsOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
-              <div style={{ fontSize: '16px', marginBottom: '8px' }}>看板视图</div>
-              <div style={{ fontSize: '14px', color: '#999' }}>
-                请配置 <code>kanbanViewConfig</code> 来启用看板视图
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+          {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
+          <div style={{ display: currentViewType === 'table' ? 'block' : 'none' }}>
+            <ProTable<T>
+              headerTitle={buildHeaderActions() || headerTitle || undefined}
+              actionRef={actionRef}
+              formRef={formRef}
+              columns={columns}
+              request={handleRequest}
+              rowKey={rowKey}
+              search={false}
+              className="uni-table-pro-table"
+              style={{ margin: 0, padding: 0 }}
+              bordered={false}
+              cardBordered={true}
+              options={{
+                density: true,
+                setting: true,
+                reload: true,
+                fullScreen: true,
+                ...((restProps.options || (restProps.toolbar as any)?.options || {}) as any),
+              }}
+              toolbar={{
+                // 合并自定义 actions 和用户传入的 actions
+                actions: [
+                  ...(buildRightActions() ? [buildRightActions()] : []),
+                  ...(restProps.toolbar?.actions
+                    ? (Array.isArray(restProps.toolbar.actions)
+                      ? restProps.toolbar.actions
+                      : [restProps.toolbar.actions])
+                    : []),
+                ],
+              }}
+              rowSelection={
+                enableRowSelection
+                  ? {
+                    type: 'checkbox',
+                    onChange: handleRowSelectionChange,
+                    ...(rowSelectionGetCheckboxProps
+                      ? { getCheckboxProps: rowSelectionGetCheckboxProps }
+                      : {}),
+                  }
+                  : undefined
+              }
+              editable={
+                enableRowEdit
+                  ? {
+                    type: 'multiple',
+                    onSave: onRowEditSave as any,
+                    onDelete: onRowEditDelete as any,
+                  }
+                  : undefined
+              }
+              toolBarRender={(_action, { selectedRowKeys: toolBarSelectedRowKeys }) => {
+                // 同步工具栏的选中行键到 state（用于头部按钮状态）
+                // 使用 useLayoutEffect 在渲染后更新，避免在渲染过程中更新状态
+                if (toolBarSelectedRowKeys) {
+                  const currentKeys = selectedRowKeys;
+                  const newKeys = toolBarSelectedRowKeys;
+                  if (currentKeys.length !== newKeys.length ||
+                    currentKeys.some((key, index) => key !== newKeys[index])) {
+                    // 使用 requestAnimationFrame 延迟更新，避免在渲染过程中更新
+                    requestAnimationFrame(() => {
+                      setSelectedRowKeys(newKeys);
+                    });
+                  }
+                }
 
-      {/* 统计视图 */}
-      {currentViewType === 'stats' && viewTypes.includes('stats') && (
-        <div style={{ padding: '16px', minHeight: '400px' }}>
-          {statsViewConfig?.metrics ? (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                {statsViewConfig.metrics.map((metric) => (
-                  <div 
-                    key={metric.key} 
-                    style={{ 
-                      padding: '20px', 
-                      border: '1px solid #d9d9d9', 
-                      borderRadius: '4px',
-                      background: '#fff',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{metric.label}</div>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1890ff' }}>
-                      {metric.formatter ? metric.formatter(metric.value(tableData)) : metric.value(tableData)}
-                    </div>
+                // 只返回系统按钮（导入导出），用户自定义按钮在headerTitle中处理
+                const rightActions = buildRightActions();
+                return rightActions ? [rightActions] : [];
+              }}
+              pagination={{
+                defaultPageSize,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                showTotal: (total, range) => `共 ${total} 条记录，显示 ${range[0]}-${range[1]} 条`,
+              }}
+              scroll={
+                (() => {
+                  const scrollConfig: { x?: string | number; y?: number } = {};
+
+                  // 如果有操作列，设置水平滚动
+                  if (hasActionColumn) {
+                    scrollConfig.x = 'max-content';
+                  }
+
+                  // 在两栏布局中且预估内容超出可用高度时，才设置 scroll.y，避免内容未溢出时出现垂直滚动条
+                  const estimatedHeight = tableData.length * TABLE_ROW_HEIGHT;
+                  if (tableScrollY !== undefined && tableData.length > 0 && estimatedHeight > tableScrollY) {
+                    scrollConfig.y = tableScrollY;
+                  }
+
+                  return Object.keys(scrollConfig).length > 0 ? scrollConfig : undefined;
+                })()
+              }
+              {...(() => {
+                // 过滤掉toolBarRender和search，避免重复渲染和DOM警告
+                // toolBarRender 已经在左侧处理了
+                // search 中的 showAdvancedSearch 会传递到DOM，导致React警告
+                const { toolBarRender, search, ...otherProps } = restProps;
+                return otherProps;
+              })()}
+            />
+          </div>
+
+          {/* 卡片视图 */}
+          {currentViewType === 'card' && viewTypes.includes('card') && (
+            <div style={{ padding: '16px', minHeight: '400px' }}>
+              {cardViewConfig?.renderCard ? (
+                tableData.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                    {tableData.map((item, index) => cardViewConfig.renderCard!(item, index))}
                   </div>
-                ))}
-              </div>
-              {statsViewConfig.charts && statsViewConfig.charts.length > 0 && (
-                <div style={{ marginTop: '24px' }}>
-                  {/* TODO: 实现图表渲染 */}
-                  <div style={{ textAlign: 'center', padding: '40px', color: '#999', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
-                    图表功能开发中...
+                ) : (
+                  <Empty
+                    description="暂无应用数据"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    style={{ marginTop: '60px' }}
+                  />
+                )
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  color: '#999',
+                  background: '#fafafa',
+                  borderRadius: '4px',
+                  border: '1px dashed #d9d9d9'
+                }}>
+                  <AppstoreOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>卡片视图</div>
+                  <div style={{ fontSize: '14px', color: '#999' }}>
+                    请配置 <code>cardViewConfig.renderCard</code> 来自定义卡片渲染
                   </div>
                 </div>
               )}
             </div>
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '60px 20px', 
-              color: '#999',
-              background: '#fafafa',
-              borderRadius: '4px',
-              border: '1px dashed #d9d9d9'
-            }}>
-              <BarChartOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
-              <div style={{ fontSize: '16px', marginBottom: '8px' }}>统计视图</div>
-              <div style={{ fontSize: '14px', color: '#999' }}>
-                请配置 <code>statsViewConfig.metrics</code> 来启用统计视图
-              </div>
-            </div>
           )}
-        </div>
-      )}
 
-      {/* 触屏视图 */}
-      {currentViewType === 'touch' && viewTypes.includes('touch') && (
-        <div style={{ 
-          padding: '20px', 
-          minHeight: '400px',
-          fontSize: '24px', // 触屏模式大字体
-        }}>
-          {touchViewConfig?.renderCard ? (
-            tableData.length > 0 ? (
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '20px' // 触屏模式大间距
-              }}>
-                {tableData.map((item, index) => (
-                  <div key={index}>
-                    {touchViewConfig.renderCard!(item, index)}
+          {/* 看板视图 */}
+          {currentViewType === 'kanban' && viewTypes.includes('kanban') && (
+            <div style={{ padding: '16px', minHeight: '400px' }}>
+              {kanbanViewConfig?.renderCard && kanbanViewConfig.statusGroups ? (
+                <div style={{ display: 'flex', gap: '16px', overflowX: 'auto', minHeight: '400px' }}>
+                  {Object.entries(kanbanViewConfig.statusGroups).map(([status, config]) => {
+                    const statusData = tableData.filter(item => (item as any)[kanbanViewConfig?.statusField || 'status'] === status);
+                    return (
+                      <div
+                        key={status}
+                        style={{
+                          flex: '0 0 300px',
+                          border: '1px solid #d9d9d9',
+                          borderRadius: '4px',
+                          padding: '16px',
+                          background: '#fafafa',
+                          minHeight: '400px'
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '16px',
+                          fontWeight: 'bold',
+                          marginBottom: '16px',
+                          paddingBottom: '12px',
+                          borderBottom: '2px solid #d9d9d9'
+                        }}>
+                          {config.title}
+                          <span style={{
+                            marginLeft: '8px',
+                            fontSize: '12px',
+                            color: '#999',
+                            fontWeight: 'normal'
+                          }}>
+                            ({statusData.length})
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {statusData.map((item) => kanbanViewConfig.renderCard!(item, status))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  color: '#999',
+                  background: '#fafafa',
+                  borderRadius: '4px',
+                  border: '1px dashed #d9d9d9'
+                }}>
+                  <BarsOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>看板视图</div>
+                  <div style={{ fontSize: '14px', color: '#999' }}>
+                    请配置 <code>kanbanViewConfig</code> 来启用看板视图
                   </div>
-                ))}
-              </div>
-            ) : (
-              <Empty 
-                description="暂无数据" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                style={{ marginTop: '60px' }}
-              />
-            )
-          ) : (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '60px 20px', 
-              color: '#999',
-              background: '#fafafa',
-              borderRadius: '4px',
-              border: '1px dashed #d9d9d9'
-            }}>
-              <TabletOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>触屏视图</div>
-              <div style={{ fontSize: '20px', color: '#999' }}>
-                请配置 <code>touchViewConfig.renderCard</code> 来启用触屏视图
-              </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* 导入弹窗 */}
-      {showImportButton && (
-        <UniImport
-          visible={importModalVisible}
-          onCancel={() => setImportModalVisible(false)}
-          onConfirm={handleImportConfirm}
-          headers={finalImportHeaders}
-          exampleRow={finalImportExampleRow}
-        />
-      )}
-      </div>
+          {/* 统计视图 */}
+          {currentViewType === 'stats' && viewTypes.includes('stats') && (
+            <div style={{ padding: '16px', minHeight: '400px' }}>
+              {statsViewConfig?.metrics ? (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                    {statsViewConfig.metrics.map((metric) => (
+                      <div
+                        key={metric.key}
+                        style={{
+                          padding: '20px',
+                          border: '1px solid #d9d9d9',
+                          borderRadius: '4px',
+                          background: '#fff',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>{metric.label}</div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1890ff' }}>
+                          {metric.formatter ? metric.formatter(metric.value(tableData)) : metric.value(tableData)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {statsViewConfig.charts && statsViewConfig.charts.length > 0 && (
+                    <div style={{ marginTop: '24px' }}>
+                      {/* TODO: 实现图表渲染 */}
+                      <div style={{ textAlign: 'center', padding: '40px', color: '#999', border: '1px dashed #d9d9d9', borderRadius: '4px' }}>
+                        图表功能开发中...
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  color: '#999',
+                  background: '#fafafa',
+                  borderRadius: '4px',
+                  border: '1px dashed #d9d9d9'
+                }}>
+                  <BarChartOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>统计视图</div>
+                  <div style={{ fontSize: '14px', color: '#999' }}>
+                    请配置 <code>statsViewConfig.metrics</code> 来启用统计视图
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 触屏视图 */}
+          {currentViewType === 'touch' && viewTypes.includes('touch') && (
+            <div style={{
+              padding: '20px',
+              minHeight: '400px',
+              fontSize: '24px', // 触屏模式大字体
+            }}>
+              {touchViewConfig?.renderCard ? (
+                tableData.length > 0 ? (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '20px' // 触屏模式大间距
+                  }}>
+                    {tableData.map((item, index) => (
+                      <div key={index}>
+                        {touchViewConfig.renderCard!(item, index)}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty
+                    description="暂无数据"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    style={{ marginTop: '60px' }}
+                  />
+                )
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  color: '#999',
+                  background: '#fafafa',
+                  borderRadius: '4px',
+                  border: '1px dashed #d9d9d9'
+                }}>
+                  <TabletOutlined style={{ fontSize: '48px', marginBottom: '16px', color: '#d9d9d9' }} />
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>触屏视图</div>
+                  <div style={{ fontSize: '20px', color: '#999' }}>
+                    请配置 <code>touchViewConfig.renderCard</code> 来启用触屏视图
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 导入弹窗 */}
+          {showImportButton && (
+            <UniImport
+              visible={importModalVisible}
+              onCancel={() => setImportModalVisible(false)}
+              onConfirm={handleImportConfirm}
+              headers={finalImportHeaders}
+              exampleRow={finalImportExampleRow}
+            />
+          )}
+        </div>
       </div>
     </>
   );

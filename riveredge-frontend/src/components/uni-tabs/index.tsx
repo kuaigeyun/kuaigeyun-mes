@@ -486,7 +486,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       // 确保工作台标签始终存在（固定第一个）
       addTab('/system/dashboard/workplace');
       // 使用 pathname+search 作为 tabKey，切换回来时保留 query（如 designer?materialId=xxx）
-      const tabKey = location.pathname + (location.search || '');
+      // 排除 _refresh 参数，避免右键刷新时因 URL 变化而新建标签
+      const searchParams = new URLSearchParams(location.search || '');
+      searchParams.delete('_refresh');
+      const cleanSearch = searchParams.toString();
+      const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
       addTab(tabKey);
       setActiveKey(tabKey);
     }
@@ -653,8 +657,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 处理标签刷新 - 局部刷新当前标签页
    */
   const handleTabRefresh = useCallback((tabKey: string) => {
+    // 计算当前逻辑 tabKey（排除 _refresh），用于判断是否已在目标标签
+    const searchParams = new URLSearchParams(location.search || '');
+    searchParams.delete('_refresh');
+    const cleanSearch = searchParams.toString();
+    const currentTabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
     // 如果当前路径就是目标路径，通过添加 refresh 参数来触发局部刷新
-    if (location.pathname === tabKey) {
+    if (currentTabKey === tabKey) {
       // 添加 refresh 参数，触发路由变化，从而触发组件重新渲染
       const separator = location.search ? '&' : '?';
       navigate(`${tabKey}${separator}_refresh=${Date.now()}`, { replace: true });

@@ -93,6 +93,18 @@ class DocumentPushPullService:
                 return await self._push_computation_to_purchase_order(
                     tenant_id, source_id, push_params, created_by
                 )
+            elif source_type == "demand_computation" and target_type == "production_plan":
+                return await self._push_computation_to_production_plan(
+                    tenant_id, source_id, push_params, created_by
+                )
+            elif source_type == "demand_computation" and target_type == "purchase_requisition":
+                return await self._push_computation_to_purchase_requisition(
+                    tenant_id, source_id, push_params, created_by
+                )
+            elif source_type == "production_plan" and target_type == "work_order":
+                return await self._push_production_plan_to_work_order(
+                    tenant_id, source_id, push_params, created_by
+                )
             else:
                 raise BusinessLogicError(f"不支持的下推场景: {source_type} -> {target_type}")
     
@@ -269,7 +281,7 @@ class DocumentPushPullService:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
         
         # 验证计算状态（必须是已完成）
-        if computation.computation_status != "已完成":
+        if computation.computation_status != "完成":
             raise BusinessLogicError("只能下推已完成的需求计算")
         
         # 获取计算明细
@@ -353,19 +365,321 @@ class DocumentPushPullService:
             "success": True,
             "message": f"下推成功，共生成{len(work_orders)}个工单",
             "target_documents": [
-                {
-                    "type": "work_order",
-                    "id": wo.id if hasattr(wo, 'id') else wo.model_dump().get('id'),
-                    "code": wo.code if hasattr(wo, 'code') else wo.model_dump().get('code'),
-                }
+                {"type": "work_order", "id": wo.id if hasattr(wo, 'id') else wo.get('id'), "code": wo.code if hasattr(wo, 'code') else wo.get('code')}
                 for wo in work_orders
             ],
-            "relations": [
-                r.model_dump() if hasattr(r, "model_dump") else r
-                for r in relations
-            ],
+            "relations": [r.model_dump() if hasattr(r, "model_dump") else r for r in relations],
         }
-    
+
+    async def _push_computation_to_production_plan(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        push_params: Optional[Dict[str, Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """从需求计算下推到生产计划"""
+        from datetime import date
+        from decimal import Decimal
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
+        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        from core.services.business.code_generation_service import CodeGenerationService
+        
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        
+        if computation.computation_status != "完成":
+            raise BusinessLogicError("只能下推已完成的需求计算")
+        
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id
+        ).all()
+        
+        if not items:
+            raise BusinessLogicError("需求计算没有明细，无法下推")
+        
+        # 生成计划编码
+        plan_type = computation.computation_type
+        try:
+            plan_code = await CodeGenerationService.generate_code(
+                tenant_id=tenant_id,
+                rule_code="PRODUCTION_PLAN_CODE",
+                context={"prefix": f"{plan_type}-"}
+            )
+        except Exception:
+            from datetime import datetime
+            plan_code = f"{plan_type}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        # 确定计划日期范围
+        dates = [i.delivery_date for i in items if i.delivery_date]
+        plan_start = min(dates) if dates else date.today()
+        plan_end = max(dates) if dates else date.today()
+        if hasattr(plan_start, 'date'):
+            plan_start = plan_start.date()
+        if hasattr(plan_end, 'date'):
+            plan_end = plan_end.date()
+        
+        plan = await ProductionPlan.create(
+            tenant_id=tenant_id,
+            plan_code=plan_code,
+            plan_name=f"生产计划-{computation.computation_code}",
+            plan_type=plan_type,
+            source_type="DemandComputation",
+            source_id=computation_id,
+            source_code=computation.computation_code,
+            plan_start_date=plan_start,
+            plan_end_date=plan_end,
+            status="草稿",
+            created_by=created_by,
+        )
+        
+        for item in items:
+            if item.material_source_type in ("Phantom",):
+                continue
+            suggested_action = "生产" if item.material_source_type in ("Make", "Outsource", "Configure") else "采购"
+            planned_date = item.delivery_date or plan_start
+            await ProductionPlanItem.create(
+                tenant_id=tenant_id,
+                plan_id=plan.id,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_type="成品",
+                planned_quantity=item.required_quantity or item.net_requirement,
+                planned_date=planned_date,
+                available_inventory=item.available_inventory or 0,
+                safety_stock=0,
+                gross_requirement=item.gross_requirement or item.required_quantity,
+                net_requirement=item.net_requirement or item.required_quantity,
+                suggested_action=suggested_action,
+                work_order_quantity=item.suggested_work_order_quantity or 0,
+                purchase_order_quantity=item.suggested_purchase_order_quantity or 0,
+            )
+        
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        relation_data = DocumentRelationCreate(
+            source_type="demand_computation",
+            source_id=computation_id,
+            source_code=computation.computation_code,
+            source_name=None,
+            target_type="production_plan",
+            target_id=plan.id,
+            target_code=plan.plan_code,
+            target_name=plan.plan_name,
+            relation_type="source",
+            relation_mode="push",
+            relation_desc="从需求计算下推到生产计划",
+            business_mode=computation.business_mode,
+            demand_id=computation.demand_id,
+        )
+        relation = await self.relation_service.create_relation(
+            tenant_id=tenant_id,
+            relation_data=relation_data,
+            created_by=created_by
+        )
+        
+        return {
+            "success": True,
+            "message": "下推成功，已生成生产计划",
+            "target_document": {"type": "production_plan", "id": plan.id, "code": plan.plan_code},
+            "relation": relation.model_dump() if hasattr(relation, "model_dump") else relation,
+        }
+
+    async def _push_computation_to_purchase_requisition(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        push_params: Optional[Dict[str, Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """从需求计算下推到采购申请（仅采购件）"""
+        from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
+        from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+        from apps.kuaizhizao.schemas.purchase_requisition import PurchaseRequisitionCreate, PurchaseRequisitionItemCreate
+        from apps.kuaizhizao.utils.material_source_helper import SOURCE_TYPE_BUY
+
+        computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
+        if not computation:
+            raise NotFoundError(f"需求计算不存在: {computation_id}")
+        if computation.computation_status != "完成":
+            raise BusinessLogicError("只能下推已完成的需求计算")
+
+        items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+            material_source_type=SOURCE_TYPE_BUY,
+        ).all()
+
+        buy_items = [i for i in items if i.suggested_purchase_order_quantity and i.suggested_purchase_order_quantity > 0]
+        if not buy_items:
+            raise BusinessLogicError("需求计算中无采购件，无法下推采购申请")
+
+        req_items = []
+        for item in buy_items:
+            supplier_id = None
+            if item.material_source_config:
+                src_config = item.material_source_config.get("source_config", {})
+                supplier_id = src_config.get("default_supplier_id")
+
+            req_items.append(PurchaseRequisitionItemCreate(
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec,
+                unit=item.material_unit or "件",
+                quantity=item.suggested_purchase_order_quantity,
+                suggested_unit_price=0,
+                required_date=item.procurement_completion_date,
+                demand_computation_item_id=item.id,
+                supplier_id=supplier_id,
+            ))
+
+        dates = [i.procurement_completion_date for i in buy_items if i.procurement_completion_date]
+        req_data = PurchaseRequisitionCreate(
+            required_date=min(dates) if dates else None,
+            source_type="DemandComputation",
+            source_id=computation_id,
+            source_code=computation.computation_code,
+            items=req_items,
+        )
+
+        pr_service = PurchaseRequisitionService()
+        req = await pr_service.create_requisition(
+            tenant_id=tenant_id,
+            data=req_data,
+            created_by=created_by,
+        )
+
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        relation_data = DocumentRelationCreate(
+            source_type="demand_computation",
+            source_id=computation_id,
+            source_code=computation.computation_code,
+            source_name=None,
+            target_type="purchase_requisition",
+            target_id=req.id,
+            target_code=req.requisition_code,
+            target_name=req.requisition_name,
+            relation_type="source",
+            relation_mode="push",
+            relation_desc="从需求计算下推到采购申请",
+            business_mode=computation.business_mode,
+            demand_id=computation.demand_id,
+        )
+        relation = await self.relation_service.create_relation(
+            tenant_id=tenant_id,
+            relation_data=relation_data,
+            created_by=created_by
+        )
+
+        return {
+            "success": True,
+            "message": "下推成功，已生成采购申请",
+            "target_document": {"type": "purchase_requisition", "id": req.id, "code": req.requisition_code},
+            "relation": relation.model_dump() if hasattr(relation, "model_dump") else relation,
+        }
+
+    async def _push_production_plan_to_work_order(
+        self,
+        tenant_id: int,
+        plan_id: int,
+        push_params: Optional[Dict[str, Any]],
+        created_by: int
+    ) -> Dict[str, Any]:
+        """从生产计划下推到工单（仅生产类明细）"""
+        from apps.kuaizhizao.models.production_plan import ProductionPlan
+        from apps.kuaizhizao.models.production_plan_item import ProductionPlanItem
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from datetime import datetime
+
+        plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id)
+        if not plan:
+            raise NotFoundError(f"生产计划不存在: {plan_id}")
+
+        items = await ProductionPlanItem.filter(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            suggested_action="生产",
+        ).all()
+
+        prod_items = [i for i in items if i.work_order_quantity and float(i.work_order_quantity) > 0]
+        if not prod_items:
+            raise BusinessLogicError("生产计划中无需要生产的明细，无法转工单")
+
+        work_order_service = WorkOrderService()
+        work_orders = []
+        relations = []
+
+        production_mode = "MTO" if getattr(plan, "plan_type", "") == "LRP" else "MTS"
+
+        for item in prod_items:
+            qty = float(item.work_order_quantity or 0)
+            if qty <= 0:
+                continue
+            wo_data = WorkOrderCreate(
+                code_rule="WORK_ORDER_CODE",
+                product_id=item.material_id,
+                product_code=item.material_code,
+                product_name=item.material_name,
+                quantity=qty,
+                production_mode=production_mode,
+                planned_start_date=datetime.combine(
+                    item.planned_date,
+                    datetime.min.time()
+                ) if item.planned_date else None,
+                planned_end_date=datetime.combine(
+                    item.planned_date,
+                    datetime.min.time()
+                ) if item.planned_date else None,
+                remarks=f"从生产计划 {plan.plan_code} 转工单",
+            )
+            wo = await work_order_service.create_work_order(
+                tenant_id=tenant_id,
+                work_order_data=wo_data,
+                created_by=created_by
+            )
+            wo_id = wo.id if hasattr(wo, "id") else wo.get("id")
+            wo_code = wo.code if hasattr(wo, "code") else wo.get("code")
+            work_orders.append(wo)
+
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            relation_data = DocumentRelationCreate(
+                source_type="production_plan",
+                source_id=plan_id,
+                source_code=plan.plan_code,
+                source_name=plan.plan_name,
+                target_type="work_order",
+                target_id=wo_id,
+                target_code=wo_code,
+                target_name=getattr(wo, "name", None),
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="从生产计划转工单",
+                business_mode=None,
+                demand_id=None,
+            )
+            rel = await self.relation_service.create_relation(
+                tenant_id=tenant_id,
+                relation_data=relation_data,
+                created_by=created_by
+            )
+            relations.append(rel)
+
+        return {
+            "success": True,
+            "message": f"下推成功，共生成 {len(work_orders)} 个工单",
+            "target_documents": [
+                {"type": "work_order", "id": w.id if hasattr(w, "id") else w.get("id"), "code": w.code if hasattr(w, "code") else w.get("code")}
+                for w in work_orders
+            ],
+            "relations": [r.model_dump() if hasattr(r, "model_dump") else r for r in relations],
+        }
+
     async def _push_computation_to_purchase_order(
         self,
         tenant_id: int,
@@ -380,7 +694,7 @@ class DocumentPushPullService:
             raise NotFoundError(f"需求计算不存在: {computation_id}")
         
         # 验证计算状态（必须是已完成）
-        if computation.computation_status != "已完成":
+        if computation.computation_status != "完成":
             raise BusinessLogicError("只能下推已完成的需求计算")
         
         # 获取计算明细
@@ -517,6 +831,9 @@ class DocumentPushPullService:
             return await WorkOrder.get_or_none(tenant_id=tenant_id, id=document_id)
         elif document_type == "purchase_order":
             return await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=document_id)
+        elif document_type == "production_plan":
+            from apps.kuaizhizao.models.production_plan import ProductionPlan
+            return await ProductionPlan.get_or_none(tenant_id=tenant_id, id=document_id)
         else:
             return None
     
@@ -525,7 +842,9 @@ class DocumentPushPullService:
         if source_type == "demand":
             return source_doc.status == DemandStatus.AUDITED and source_doc.review_status == ReviewStatus.APPROVED
         elif source_type == "demand_computation":
-            return source_doc.computation_status == "已完成"
+            return source_doc.computation_status == "完成"
+        elif source_type == "production_plan":
+            return getattr(source_doc, "status", None) in ("草稿", "已审核")
         else:
             return True
     
@@ -539,6 +858,8 @@ class DocumentPushPullService:
             return doc.code
         elif doc_type == "purchase_order":
             return doc.order_code
+        elif doc_type == "production_plan":
+            return getattr(doc, "plan_code", None)
         else:
             return None
     
@@ -552,6 +873,8 @@ class DocumentPushPullService:
             return doc.name
         elif doc_type == "purchase_order":
             return doc.order_name
+        elif doc_type == "production_plan":
+            return getattr(doc, "plan_name", None)
         else:
             return None
     
@@ -561,5 +884,7 @@ class DocumentPushPullService:
             return doc.id
         elif doc_type == "demand_computation":
             return doc.demand_id
+        elif doc_type == "production_plan":
+            return None  # 生产计划无直接 demand_id，可追溯到 demand_computation
         else:
             return None

@@ -29,7 +29,8 @@ class DemandComputation(BaseModel):
     computation_code = fields.CharField(max_length=50, description="计算编码")
     
     # 关联需求
-    demand_id = fields.IntField(description="需求ID（关联统一需求表）")
+    demand_id = fields.IntField(description="需求ID（关联统一需求表，单需求时使用）")
+    demand_ids = fields.JSONField(null=True, description="参与计算的需求ID列表，多需求合并时使用")
     demand_code = fields.CharField(max_length=50, description="需求编码")
     demand_type = fields.CharField(max_length=20, description="需求类型（sales_forecast/sales_order）")
     business_mode = fields.CharField(max_length=20, description="业务模式（MTS/MTO）")

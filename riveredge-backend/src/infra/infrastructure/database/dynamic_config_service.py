@@ -279,6 +279,9 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.stocktaking",  # 库存盘点
                 f"apps.{module_code}.models.packing_binding",  # 装箱绑定
                 f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
+                # 线边仓与倒冲模块
+                f"apps.{module_code}.models.line_side_inventory",  # 线边仓库存
+                f"apps.{module_code}.models.backflush_record",  # 物料倒冲记录
                 # 上线倒计时模块
                 f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
             ]
@@ -459,6 +462,9 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.stocktaking",  # 库存盘点
                 f"apps.{module_code}.models.packing_binding",  # 装箱绑定
                 f"apps.{module_code}.models.replenishment_suggestion",  # 补货建议
+                # 线边仓与倒冲模块
+                f"apps.{module_code}.models.line_side_inventory",  # 线边仓库存
+                f"apps.{module_code}.models.backflush_record",  # 物料倒冲记录
                 # 上线倒计时模块
                 f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
             ]

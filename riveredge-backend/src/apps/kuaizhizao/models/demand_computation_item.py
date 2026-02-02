@@ -59,6 +59,9 @@ class DemandComputationItem(BaseModel):
     bom_id = fields.IntField(null=True, description="使用的BOM ID")
     bom_version = fields.CharField(max_length=20, null=True, description="BOM版本")
     
+    # 多需求追溯
+    demand_item_ids = fields.JSONField(null=True, description="该计算行由哪些 DemandItem 汇总而来，用于追溯")
+
     # 建议行动
     suggested_work_order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="建议工单数量")
     suggested_purchase_order_quantity = fields.DecimalField(max_digits=10, decimal_places=2, null=True, description="建议采购订单数量")

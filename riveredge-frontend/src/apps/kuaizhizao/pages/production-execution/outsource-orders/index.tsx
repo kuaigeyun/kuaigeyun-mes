@@ -59,7 +59,7 @@ interface Supplier {
   isActive: boolean;
 }
 
-const OutsourceOrdersPage: React.FC = () => {
+export const OutsourceOrdersTable: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -510,7 +510,7 @@ const OutsourceOrdersPage: React.FC = () => {
   };
 
   return (
-    <ListPageTemplate>
+    <>
       <UniTable<OutsourceOrder>
         actionRef={actionRef}
         columns={columns}
@@ -650,6 +650,14 @@ const OutsourceOrdersPage: React.FC = () => {
         columns={detailColumns}
         {...DRAWER_CONFIG}
       />
+    </>
+  );
+};
+
+const OutsourceOrdersPage: React.FC = () => {
+  return (
+    <ListPageTemplate>
+      <OutsourceOrdersTable />
     </ListPageTemplate>
   );
 };

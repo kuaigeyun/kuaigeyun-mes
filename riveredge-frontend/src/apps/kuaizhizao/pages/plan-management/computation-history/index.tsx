@@ -90,12 +90,12 @@ const ComputationHistoryPage: React.FC = () => {
       dataIndex: 'computation_type',
       width: 100,
       valueEnum: {
-        MRP: { text: 'MRP', status: 'Processing' },
-        LRP: { text: 'LRP', status: 'Success' },
+        MRP: { text: '按预测', status: 'Processing' },
+        LRP: { text: '按订单', status: 'Success' },
       },
       render: (_, record) => (
         <Tag color={record.computation_type === 'MRP' ? 'processing' : 'success'}>
-          {record.computation_type}
+          {record.computation_type === 'MRP' ? '按预测' : '按订单'}
         </Tag>
       ),
     },

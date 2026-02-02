@@ -455,7 +455,7 @@ const ReworkOrdersPage: React.FC = () => {
       messageApi.warning('请选择要删除的返工单');
       return;
     }
-    
+
     Modal.confirm({
       title: '确认删除',
       content: `确定要删除选中的 ${keys.length} 个返工单吗？`,
@@ -478,6 +478,7 @@ const ReworkOrdersPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<ReworkOrder>
+        headerTitle="返工单"
         actionRef={actionRef}
         columns={columns}
         request={handleRequest}

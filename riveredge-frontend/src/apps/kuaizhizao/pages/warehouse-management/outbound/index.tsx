@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Card } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -372,6 +372,19 @@ const OutboundPage: React.FC = () => {
           label="关联工单"
           placeholder="选择工单"
         />
+        <ProFormText
+          name="batch_number"
+          label="批号"
+          placeholder="请输入批号（批号管理物料必填）"
+          tooltip="如果所选物料启用了批号管理，此字段为必填"
+        />
+        <ProFormTextArea
+          name="serial_numbers"
+          label="序列号"
+          placeholder="请输入序列号，多个序列号用逗号分隔（序列号管理物料必填）"
+          tooltip="如果所选物料启用了序列号管理，此字段为必填"
+          fieldProps={{ rows: 2 }}
+        />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -395,8 +408,8 @@ const OutboundPage: React.FC = () => {
                 <p><strong>状态：</strong>
                   <Tag color={
                     currentOrder.status === '已完成' ? 'success' :
-                    currentOrder.status === '已确认' ? 'processing' :
-                    currentOrder.status === '已取消' ? 'error' : 'default'
+                      currentOrder.status === '已确认' ? 'processing' :
+                        currentOrder.status === '已取消' ? 'error' : 'default'
                   }>
                     {currentOrder.status}
                   </Tag>

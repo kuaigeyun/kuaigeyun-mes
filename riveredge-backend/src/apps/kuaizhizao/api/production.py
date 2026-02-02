@@ -18,6 +18,7 @@ from infra.exceptions.exceptions import ValidationError, BusinessLogicError
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
 from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
@@ -470,6 +471,31 @@ async def get_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id
     )
+
+
+@router.get("/work-orders/{work_order_id}/demand-source-chain", summary="获取工单需求来源链路")
+async def get_work_order_demand_chain(
+    work_order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取工单的需求来源追溯链路
+    
+    追溯路径：WorkOrder → DemandComputation → Demand → SalesOrder/SalesForecast
+    """
+    try:
+        service = DemandSourceChainService()
+        return await service.get_work_order_demand_chain(tenant_id, work_order_id)
+    except Exception as e:
+        from infra.exceptions.exceptions import NotFoundError
+        if isinstance(e, NotFoundError):
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.exception("获取工单需求来源链路失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取需求来源链路失败: {str(e)}",
+        )
 
 
 @router.get("/work-orders/{work_order_id}/operations", response_model=List[WorkOrderOperationResponse], summary="获取工单工序列表")
@@ -5846,6 +5872,43 @@ async def execute_production_plan(
         plan_id=plan_id,
         executed_by=current_user.id
     )
+
+
+@router.post("/production-plans/{plan_id}/push-to-work-orders", summary="生产计划转工单")
+async def push_production_plan_to_work_orders(
+    plan_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从生产计划下推到工单
+
+    将生产计划中「建议行动=生产」的明细转为工单。
+    设计文档约定：POST /apps/kuaizhizao/production-plans/{id}/push-to-work-orders
+    """
+    try:
+        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+        service = DocumentPushPullService()
+        result = await service.push_document(
+            tenant_id=tenant_id,
+            source_type="production_plan",
+            source_id=plan_id,
+            target_type="work_order",
+            push_params=None,
+            created_by=current_user.id,
+        )
+        return result
+    except Exception as e:
+        from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+        if isinstance(e, NotFoundError):
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+        if isinstance(e, BusinessLogicError):
+            raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.exception("生产计划转工单失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"生产计划转工单失败: {str(e)}",
+        )
 
 
 # ============ 高级排产 API ============

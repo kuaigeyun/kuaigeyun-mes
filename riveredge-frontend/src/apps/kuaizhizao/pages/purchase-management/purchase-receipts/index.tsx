@@ -8,12 +8,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, SendOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 import { downloadFile } from '../../../services/common';
@@ -69,12 +69,6 @@ const PurchaseReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  // Modal 相关状态
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentReceipt, setCurrentReceipt] = useState<PurchaseReceipt | null>(null);
-  const formRef = useRef<any>(null);
-
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [receiptDetail, setReceiptDetail] = useState<PurchaseReceiptDetail | null>(null);
@@ -114,7 +108,7 @@ const PurchaseReceiptsPage: React.FC = () => {
       title: '入库状态',
       dataIndex: 'status',
       width: 100,
-      render: (status) => {
+      render: (status: any) => {
         const statusMap = {
           '待入库': { text: '待入库', color: 'default' },
           '已入库': { text: '已入库', color: 'success' },
@@ -128,7 +122,7 @@ const PurchaseReceiptsPage: React.FC = () => {
       title: '审核状态',
       dataIndex: 'review_status',
       width: 100,
-      render: (status) => {
+      render: (status: any) => {
         const statusMap = {
           '待审核': { text: '待审核', color: 'default' },
           '审核通过': { text: '审核通过', color: 'success' },
@@ -149,7 +143,7 @@ const PurchaseReceiptsPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text: any) => `¥${text?.toLocaleString() || 0}`,
     },
     {
       title: '入库时间',
@@ -198,7 +192,7 @@ const PurchaseReceiptsPage: React.FC = () => {
     try {
       const detail = await warehouseApi.purchaseReceipt.get(record.id!.toString());
       setReceiptDetail(detail as PurchaseReceiptDetail);
-      
+
       // 获取单据关联关系
       try {
         const relations = await getDocumentRelations('purchase_receipt', record.id!);
@@ -207,7 +201,7 @@ const PurchaseReceiptsPage: React.FC = () => {
         console.error('获取单据关联关系失败:', error);
         setDocumentRelations(null);
       }
-      
+
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取采购入库单详情失败');
@@ -261,8 +255,8 @@ const PurchaseReceiptsPage: React.FC = () => {
     }
   };
 
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemType<PurchaseReceiptDetail>[] = [
+  // 详情列 definition
+  const detailColumns: ProDescriptionsItemProps<PurchaseReceiptDetail>[] = [
     {
       title: '入库单编号',
       dataIndex: 'receipt_code',
@@ -282,7 +276,7 @@ const PurchaseReceiptsPage: React.FC = () => {
     {
       title: '入库状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (status: any) => {
         const statusMap: Record<string, { text: string; color: string }> = {
           '待入库': { text: '待入库', color: 'default' },
           '已入库': { text: '已入库', color: 'success' },
@@ -295,7 +289,7 @@ const PurchaseReceiptsPage: React.FC = () => {
     {
       title: '审核状态',
       dataIndex: 'review_status',
-      render: (status) => {
+      render: (status: any) => {
         const statusMap: Record<string, { text: string; color: string }> = {
           '待审核': { text: '待审核', color: 'default' },
           '审核通过': { text: '审核通过', color: 'success' },
@@ -312,7 +306,7 @@ const PurchaseReceiptsPage: React.FC = () => {
     {
       title: '总金额',
       dataIndex: 'total_amount',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text: any) => `¥${text?.toLocaleString() || 0}`,
     },
     {
       title: '入库时间',
@@ -335,7 +329,7 @@ const PurchaseReceiptsPage: React.FC = () => {
       title: '备注',
       dataIndex: 'notes',
       span: 2,
-      render: (text) => text || '-',
+      render: (text: any) => text || '-',
     },
   ];
 
@@ -364,7 +358,7 @@ const PurchaseReceiptsPage: React.FC = () => {
         ]}
       >
         <UniTable
-          headerTitle="采购入库单"
+          headerTitle="采购入库"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -426,7 +420,7 @@ const PurchaseReceiptsPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={detailColumns}
-        dataSource={receiptDetail}
+        dataSource={receiptDetail || undefined}
         customContent={
           receiptDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -469,9 +463,9 @@ const PurchaseReceiptsPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },
@@ -494,9 +488,9 @@ const PurchaseReceiptsPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },
@@ -533,8 +527,8 @@ const PurchaseReceiptsPage: React.FC = () => {
           '入库时间',
           '备注',
         ]}
-        sampleData={[
-          ['PO20250115001', '供应商A', '主仓库', '2025-01-15 10:00:00', '备注信息'],
+        exampleRow={[
+          'PO20250115001', '供应商A', '主仓库', '2025-01-15 10:00:00', '备注信息'
         ]}
       />
     </>
