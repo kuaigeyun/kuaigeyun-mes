@@ -172,6 +172,11 @@
                         "title": "成品检验",
                         "path": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
                         "sort_order": 3
+                    },
+                    {
+                        "title": "追溯管理",
+                        "path": "/apps/kuaizhizao/quality-management/traceability",
+                        "sort_order": 4
                     }
                 ]
             },

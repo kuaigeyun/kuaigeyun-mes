@@ -45,6 +45,7 @@ import SalesReturnsPage from './pages/sales-management/sales-returns';
 import IncomingInspectionPage from './pages/quality-management/incoming-inspection';
 import ProcessInspectionPage from './pages/quality-management/process-inspection';
 import FinishedGoodsInspectionPage from './pages/quality-management/finished-goods-inspection';
+import TraceabilityPage from './pages/quality-management/traceability';
 
 // 成本管理页面
 import CostRulesPage from './pages/cost-management/cost-rules';
