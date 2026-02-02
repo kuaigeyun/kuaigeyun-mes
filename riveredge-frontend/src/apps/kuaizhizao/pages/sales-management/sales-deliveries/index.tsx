@@ -8,9 +8,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Input, InputNumber } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined, SwapOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, UploadOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -118,7 +118,7 @@ const SalesDeliveriesPage: React.FC = () => {
       title: '出库状态',
       dataIndex: 'status',
       width: 100,
-      render: (status) => {
+      render: (status: any) => {
         const statusMap = {
           '待出库': { text: '待出库', color: 'default' },
           '已出库': { text: '已出库', color: 'success' },
@@ -132,7 +132,7 @@ const SalesDeliveriesPage: React.FC = () => {
       title: '审核状态',
       dataIndex: 'review_status',
       width: 100,
-      render: (status) => {
+      render: (status: any) => {
         const statusMap = {
           '待审核': { text: '待审核', color: 'default' },
           '审核通过': { text: '审核通过', color: 'success' },
@@ -153,7 +153,7 @@ const SalesDeliveriesPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text: any) => `¥${text?.toLocaleString() || 0}`,
     },
     {
       title: '出库时间',
@@ -224,7 +224,7 @@ const SalesDeliveriesPage: React.FC = () => {
     try {
       const detail = await warehouseApi.salesDelivery.get(record.id!.toString());
       setDeliveryDetail(detail as SalesDeliveryDetail);
-      
+
       // 获取单据关联关系
       try {
         const relations = await getDocumentRelations('sales_delivery', record.id!);
@@ -233,7 +233,7 @@ const SalesDeliveriesPage: React.FC = () => {
         console.error('获取单据关联关系失败:', error);
         setDocumentRelations(null);
       }
-      
+
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取销售出库单详情失败');
@@ -261,7 +261,7 @@ const SalesDeliveriesPage: React.FC = () => {
   const handlePrint = async (record: SalesDelivery) => {
     try {
       const result = await warehouseApi.salesDelivery.print(record.id!.toString());
-      
+
       if (result.success) {
         // 如果有渲染后的内容，使用新窗口打印
         if (result.content) {
@@ -368,8 +368,8 @@ const SalesDeliveriesPage: React.FC = () => {
     }
   };
 
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemType<SalesDeliveryDetail>[] = [
+  // 详情列 definition
+  const detailColumns: ProDescriptionsItemProps<SalesDeliveryDetail>[] = [
     {
       title: '出库单编号',
       dataIndex: 'delivery_code',
@@ -389,7 +389,7 @@ const SalesDeliveriesPage: React.FC = () => {
     {
       title: '出库状态',
       dataIndex: 'status',
-      render: (status) => {
+      render: (status: any) => {
         const statusMap: Record<string, { text: string; color: string }> = {
           '待出库': { text: '待出库', color: 'default' },
           '已出库': { text: '已出库', color: 'success' },
@@ -402,7 +402,7 @@ const SalesDeliveriesPage: React.FC = () => {
     {
       title: '审核状态',
       dataIndex: 'review_status',
-      render: (status) => {
+      render: (status: any) => {
         const statusMap: Record<string, { text: string; color: string }> = {
           '待审核': { text: '待审核', color: 'default' },
           '审核通过': { text: '审核通过', color: 'success' },
@@ -419,7 +419,7 @@ const SalesDeliveriesPage: React.FC = () => {
     {
       title: '总金额',
       dataIndex: 'total_amount',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text: any) => `¥${text?.toLocaleString() || 0}`,
     },
     {
       title: '出库时间',
@@ -447,7 +447,7 @@ const SalesDeliveriesPage: React.FC = () => {
       title: '备注',
       dataIndex: 'notes',
       span: 2,
-      render: (text) => text || '-',
+      render: (text: any) => text || '-',
     },
   ];
 
@@ -476,7 +476,7 @@ const SalesDeliveriesPage: React.FC = () => {
         ]}
       >
         <UniTable
-          headerTitle="销售出库单"
+          headerTitle="销售出库"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -564,7 +564,7 @@ const SalesDeliveriesPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={detailColumns}
-        dataSource={deliveryDetail}
+        dataSource={deliveryDetail || undefined}
         customContent={
           deliveryDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -604,9 +604,9 @@ const SalesDeliveriesPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },
@@ -629,9 +629,9 @@ const SalesDeliveriesPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },
@@ -752,7 +752,7 @@ const SalesDeliveriesPage: React.FC = () => {
         }}
         onFinish={handlePullFromOrder}
         isEdit={false}
-        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={pullFormRef}
       >
         <ProFormDigit
@@ -789,7 +789,7 @@ const SalesDeliveriesPage: React.FC = () => {
         }}
         onFinish={handlePullFromForecast}
         isEdit={false}
-        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={pullFormRef}
       >
         <ProFormDigit
@@ -832,8 +832,8 @@ const SalesDeliveriesPage: React.FC = () => {
           '收货地址',
           '备注',
         ]}
-        sampleData={[
-          ['SO20250115001', '客户A', '主仓库', '2025-01-15 10:00:00', '快递', 'SF1234567890', '北京市朝阳区xxx', '备注信息'],
+        exampleRow={[
+          'SO20250115001', '客户A', '主仓库', '2025-01-15 10:00:00', '快递', 'SF1234567890', '北京市朝阳区xxx', '备注信息',
         ]}
       />
     </>

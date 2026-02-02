@@ -8,9 +8,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormRadio, ProFormSelect, ProFormTextArea, ProFormText, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, Table } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ScanOutlined, UploadOutlined, DownloadOutlined, FileAddOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns, ProFormSelect, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Card, Row, Col, Table, Modal } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, UploadOutlined, DownloadOutlined, FileAddOutlined, ScanOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniImport } from '../../../../../components/uni-import';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -73,21 +73,21 @@ const ProcessInspectionPage: React.FC = () => {
 
   // 从工单创建Modal状态
   const [createFromWorkOrderModalVisible, setCreateFromWorkOrderModalVisible] = useState(false);
-  const createFromWorkOrderFormRef = useRef<any>(null);
+  const createFromWorkOrderFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
 
   // 批量导入状态
   const [importVisible, setImportVisible] = useState(false);
 
   // 扫码检验Modal状态
-  const [scanModalVisible, setScanModalVisible] = useState(false);
+  // const [scanModalVisible, setScanModalVisible] = useState(false);
 
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
   const [currentDefectInspection, setCurrentDefectInspection] = useState<ProcessInspection | null>(null);
-  const defectFormRef = useRef<any>(null);
+  const defectFormRef = useRef<any>(null); // Ant Design ProForm instances often have 'any' type due to dynamic nature
 
   // 统计数据状态
-  const [stats, setStats] = useState({
+  const [stats] = useState({
     pendingCount: 8,
     qualifiedCount: 32,
     unqualifiedCount: 2,
@@ -100,7 +100,7 @@ const ProcessInspectionPage: React.FC = () => {
       const detail = await qualityApi.processInspection.get(record.id!.toString());
       setInspectionDetail(detail);
       setDetailDrawerVisible(true);
-      
+
       // 获取单据关联
       const relations = await getDocumentRelations('process_inspection', record.id!);
       setDocumentRelations(relations);
@@ -109,10 +109,12 @@ const ProcessInspectionPage: React.FC = () => {
     }
   };
 
-  // 处理扫码报工
-  const handleScanInspection = () => {
+  /*
+  // 处理扫码报工 (TODO: Add button to trigger this)
+  const _handleScanInspection = () => {
     setScanModalVisible(true);
   };
+  */
 
   // 处理检验
   const handleInspect = (record: ProcessInspection) => {
@@ -344,7 +346,7 @@ const ProcessInspectionPage: React.FC = () => {
               >
                 详情
               </Button>
-              {record.quality_status === '不合格' && record.unqualified_quantity > 0 && (
+              {record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0 && (
                 <Button
                   size="small"
                   type="link"
@@ -391,67 +393,67 @@ const ProcessInspectionPage: React.FC = () => {
       ]}
     >
       <UniTable<ProcessInspection>
-          headerTitle="过程检验管理"
-          actionRef={actionRef}
-          rowKey="id"
-          columns={columns}
-          showAdvancedSearch={true}
-          request={async (params) => {
-            try {
-              const response = await qualityApi.processInspection.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                status: params.status,
-                quality_status: params.quality_status,
-                work_order_id: params.work_order_id,
-                operation_id: params.operation_id,
-              });
-              // 后端返回的是数组
-              const data = Array.isArray(response) ? response : (response.data || []);
-              return {
-                data: data,
-                success: true,
-                total: data.length,
-              };
-            } catch (error) {
-              messageApi.error('获取过程检验列表失败');
-              return {
-                data: [],
-                success: false,
-                total: 0,
-              };
-            }
-          }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
-          toolBarRender={() => [
-            <Button
-              key="create-from-work-order"
-              type="primary"
-              icon={<FileAddOutlined />}
-              onClick={handleCreateFromWorkOrder}
-            >
-              从工单创建
-            </Button>,
-            <Button
-              key="import"
-              icon={<UploadOutlined />}
-              onClick={() => setImportVisible(true)}
-            >
-              批量导入
-            </Button>,
-            <Button
-              key="export"
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-            >
-              批量导出
-            </Button>,
-          ]}
-          scroll={{ x: 1400 }}
-        />
+        headerTitle="过程检验"
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        showAdvancedSearch={true}
+        request={async (params: any) => {
+          try {
+            const response = await qualityApi.processInspection.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              status: params.status,
+              quality_status: params.quality_status,
+              work_order_id: params.work_order_id,
+              operation_id: params.operation_id,
+            });
+            // 后端返回的是数组
+            const data = Array.isArray(response) ? response : (response.data || []);
+            return {
+              data: data,
+              success: true,
+              total: data.length,
+            };
+          } catch (error) {
+            messageApi.error('获取过程检验列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        toolBarRender={() => [
+          <Button
+            key="create-from-work-order"
+            type="primary"
+            icon={<FileAddOutlined />}
+            onClick={handleCreateFromWorkOrder}
+          >
+            从工单创建
+          </Button>,
+          <Button
+            key="import"
+            icon={<UploadOutlined />}
+            onClick={() => setImportVisible(true)}
+          >
+            批量导入
+          </Button>,
+          <Button
+            key="export"
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+          >
+            批量导出
+          </Button>,
+        ]}
+        scroll={{ x: 1400 }}
+      />
 
       <FormModalTemplate
         title={`过程检验 - ${currentInspection?.inspection_code || ''}`}
@@ -499,8 +501,8 @@ const ProcessInspectionPage: React.FC = () => {
           rules={[
             { required: true, message: '请输入合格数量' },
             { type: 'number', min: 0, message: '合格数量不能小于0' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
+            ({ getFieldValue }: any) => ({
+              validator(_: any, value: any) {
                 if (!currentInspection) return Promise.resolve();
                 const unqualifiedQuantity = getFieldValue('unqualified_quantity') || 0;
                 if (value + unqualifiedQuantity > (currentInspection.inspection_quantity || 0)) {
@@ -519,8 +521,8 @@ const ProcessInspectionPage: React.FC = () => {
           rules={[
             { required: true, message: '请输入不合格数量' },
             { type: 'number', min: 0, message: '不合格数量不能小于0' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
+            ({ getFieldValue }: any) => ({
+              validator(_: any, value: any) {
                 if (!currentInspection) return Promise.resolve();
                 const qualifiedQuantity = getFieldValue('qualified_quantity') || 0;
                 if (qualifiedQuantity + value > (currentInspection.inspection_quantity || 0)) {
@@ -586,7 +588,7 @@ const ProcessInspectionPage: React.FC = () => {
             try {
               // 获取工单的工艺路线，然后获取工序列表
               const { workOrderApi } = await import('../../../services/production');
-              const workOrder = await workOrderApi.get(params.work_order_id.toString());
+              await workOrderApi.get(params.work_order_id.toString());
               // TODO: 根据工艺路线获取工序列表
               return [];
             } catch (error) {
@@ -599,15 +601,15 @@ const ProcessInspectionPage: React.FC = () => {
       {/* 批量导入 */}
       <UniImport
         visible={importVisible}
-        onClose={() => setImportVisible(false)}
-        onImport={handleImport}
-        columns={[
-          { title: '工单编码', dataIndex: 'work_order_code', required: true },
-          { title: '工序编码', dataIndex: 'operation_code', required: true },
-          { title: '检验数量', dataIndex: 'inspection_quantity', required: true },
-          { title: '合格数量', dataIndex: 'qualified_quantity' },
-          { title: '不合格数量', dataIndex: 'unqualified_quantity' },
-          { title: '备注', dataIndex: 'notes' },
+        onCancel={() => setImportVisible(false)}
+        onConfirm={handleImport}
+        headers={[
+          '工单编码',
+          '工序编码',
+          '检验数量',
+          '合格数量',
+          '不合格数量',
+          '备注',
         ]}
       />
 
@@ -728,7 +730,7 @@ const ProcessInspectionPage: React.FC = () => {
           defectFormRef.current?.resetFields();
         }}
         onFinish={handleCreateDefectSubmit}
-        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={defectFormRef}
       >
         {currentDefectInspection && (
@@ -755,8 +757,8 @@ const ProcessInspectionPage: React.FC = () => {
           rules={[
             { required: true, message: '请输入不合格品数量' },
             { type: 'number', min: 0, message: '不合格品数量不能小于0' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
+            () => ({
+              validator(_: any, value: any) {
                 if (!currentDefectInspection) return Promise.resolve();
                 if (value > (currentDefectInspection.unqualified_quantity || 0)) {
                   return Promise.reject('不合格品数量不能超过检验单的不合格数量');

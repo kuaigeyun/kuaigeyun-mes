@@ -9,7 +9,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, message } from 'antd';
+import { App, Tag, Button, Space } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, CloseCircleOutlined, UserAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -237,7 +237,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="交期延期异常处理"
+        headerTitle="延期异常"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -296,29 +296,29 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
               <p><strong>预警级别：</strong>
                 <Tag color={
                   currentRecord.alert_level === 'critical' ? 'red' :
-                  currentRecord.alert_level === 'high' ? 'orange' :
-                  currentRecord.alert_level === 'medium' ? 'gold' : 'default'
+                    currentRecord.alert_level === 'high' ? 'orange' :
+                      currentRecord.alert_level === 'medium' ? 'gold' : 'default'
                 }>
                   {currentRecord.alert_level === 'critical' ? '紧急' :
-                   currentRecord.alert_level === 'high' ? '高' :
-                   currentRecord.alert_level === 'medium' ? '中' : '低'}
+                    currentRecord.alert_level === 'high' ? '高' :
+                      currentRecord.alert_level === 'medium' ? '中' : '低'}
                 </Tag>
               </p>
               <p><strong>状态：</strong>
                 <Tag color={
                   currentRecord.status === 'resolved' ? 'success' :
-                  currentRecord.status === 'processing' ? 'processing' :
-                  currentRecord.status === 'cancelled' ? 'error' : 'default'
+                    currentRecord.status === 'processing' ? 'processing' :
+                      currentRecord.status === 'cancelled' ? 'error' : 'default'
                 }>
                   {currentRecord.status === 'resolved' ? '已解决' :
-                   currentRecord.status === 'processing' ? '处理中' :
-                   currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
+                    currentRecord.status === 'processing' ? '处理中' :
+                      currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
                 </Tag>
               </p>
               <p><strong>建议操作：</strong>
                 {currentRecord.suggested_action === 'adjust_plan' ? '调整计划' :
-                 currentRecord.suggested_action === 'increase_resources' ? '增加资源' :
-                 currentRecord.suggested_action === 'expedite' ? '加急处理' : '-'}
+                  currentRecord.suggested_action === 'increase_resources' ? '增加资源' :
+                    currentRecord.suggested_action === 'expedite' ? '加急处理' : '-'}
               </p>
               {currentRecord.handled_by_name && (
                 <>
@@ -338,11 +338,11 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
       <FormModalTemplate
         title={
           currentAction === 'adjust_plan' ? '处理延期异常 - 调整计划' :
-          currentAction === 'increase_resources' ? '处理延期异常 - 增加资源' :
-          currentAction === 'expedite' ? '处理延期异常 - 加急处理' :
-          currentAction === 'resolve' ? '处理延期异常 - 已解决' :
-          currentAction === 'cancel' ? '处理延期异常 - 取消' :
-          '处理延期异常'
+            currentAction === 'increase_resources' ? '处理延期异常 - 增加资源' :
+              currentAction === 'expedite' ? '处理延期异常 - 加急处理' :
+                currentAction === 'resolve' ? '处理延期异常 - 已解决' :
+                  currentAction === 'cancel' ? '处理延期异常 - 取消' :
+                    '处理延期异常'
         }
         open={handleModalVisible}
         onClose={() => {
@@ -352,7 +352,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
           handleFormRef.current?.resetFields();
         }}
         onFinish={handleException}
-        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={handleFormRef}
       >
         {currentRecord && (

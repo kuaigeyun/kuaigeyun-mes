@@ -65,10 +65,10 @@ const SchedulingPage: React.FC = () => {
    */
   const handleRunMRP = () => {
     Modal.confirm({
-      title: '运行MRP运算',
-      content: '确定要运行MRP物料需求计算吗？这将基于销售预测重新计算所有物料需求。',
+      title: '运行需求计算',
+      content: '确定要运行物料需求计算吗？这将基于销售预测重新计算所有物料需求。',
       onOk: async () => {
-        messageApi.success('MRP运算已启动，请稍后查看结果');
+        messageApi.success('需求计算已启动，请稍后查看结果');
         actionRef.current?.reload();
       },
     });
@@ -80,7 +80,7 @@ const SchedulingPage: React.FC = () => {
   const handleGenerateWorkOrders = () => {
     Modal.confirm({
       title: '生成工单',
-      content: '确定要基于MRP结果生成工单吗？',
+      content: '确定要基于需求计算结果生成工单吗？',
       onOk: async () => {
         messageApi.success('工单生成成功');
         actionRef.current?.reload();
@@ -374,7 +374,7 @@ const SchedulingPage: React.FC = () => {
   const tabs = [
     {
       key: 'mrp',
-      label: 'MRP运算结果 (MTS)',
+      label: '按预测运算结果',
       children: (
         <>
           <UniTable
@@ -438,7 +438,7 @@ const SchedulingPage: React.FC = () => {
                 icon={<CalculatorOutlined />}
                 onClick={handleRunMRP}
               >
-                运行MRP
+                运行需求计算
               </Button>,
               <Button
                 key="generate-orders"
@@ -454,7 +454,7 @@ const SchedulingPage: React.FC = () => {
     },
     {
       key: 'lrp',
-      label: 'LRP运算结果 (MTO)',
+      label: '按订单运算结果',
       children: (
         <>
           <UniTable
@@ -582,9 +582,9 @@ const SchedulingPage: React.FC = () => {
                 key="run-lrp"
                 type="primary"
                 icon={<CalculatorOutlined />}
-                onClick={() => messageApi.info('运行LRP运算功能开发中')}
+                onClick={() => messageApi.info('运行按订单运算功能开发中')}
               >
-                运行LRP运算
+                运行按订单运算
               </Button>,
               <Button
                 key="create-work-orders"

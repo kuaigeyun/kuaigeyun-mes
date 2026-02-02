@@ -49,6 +49,21 @@ class Warehouse(BaseModel):
     name = fields.CharField(max_length=200, description="仓库名称")
     description = fields.TextField(null=True, description="描述")
     
+    # 仓库类型（支持线边仓管理）
+    warehouse_type = fields.CharField(
+        max_length=20,
+        default="normal",
+        description="仓库类型（normal=普通仓库, line_side=线边仓, wip=在制品仓）"
+    )
+    
+    # 关联车间（线边仓专用）
+    workshop_id = fields.IntField(null=True, description="关联车间ID（线边仓时必填）")
+    workshop_name = fields.CharField(max_length=100, null=True, description="关联车间名称")
+    
+    # 关联工作中心（可选，更精确的线边仓关联）
+    work_center_id = fields.IntField(null=True, description="关联工作中心ID")
+    work_center_name = fields.CharField(max_length=100, null=True, description="关联工作中心名称")
+    
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
     

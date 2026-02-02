@@ -395,8 +395,8 @@ const DemandManagementPage: React.FC = () => {
       dataIndex: 'business_mode',
       width: 100,
       valueEnum: {
-        'MTS': { text: 'MTS', status: 'Processing' },
-        'MTO': { text: 'MTO', status: 'Success' },
+        'MTS': { text: '按库存生产', status: 'Processing' },
+        'MTO': { text: '按订单生产', status: 'Success' },
       },
     },
     {
@@ -542,6 +542,7 @@ const DemandManagementPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Demand>
+          headerTitle="需求管理"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -854,7 +855,7 @@ const DemandManagementPage: React.FC = () => {
               <ProDescriptions.Item label="需求名称" dataIndex="demand_name" />
               <ProDescriptions.Item label="业务模式" dataIndex="business_mode">
                 <Tag color={currentDemand.business_mode === 'MTS' ? 'processing' : 'success'}>
-                  {currentDemand.business_mode}
+                  {currentDemand.business_mode === 'MTS' ? '按库存生产' : '按订单生产'}
                 </Tag>
               </ProDescriptions.Item>
               <ProDescriptions.Item label="开始日期" dataIndex="start_date" valueType="date" />

@@ -220,6 +220,26 @@ class ReportingService(AppBaseService[ReportingRecord]):
             
             await work_order.save()
 
+            # 报工确认后触发物料倒冲（从线边仓按BOM自动扣减）
+            try:
+                from apps.kuaizhizao.services.backflush_service import BackflushService
+                backflush_svc = BackflushService()
+                await backflush_svc.backflush_materials(
+                    tenant_id=tenant_id,
+                    work_order_id=work_order.id,
+                    report_id=reporting_record.id,
+                    report_quantity=float(reporting_data.reported_quantity),
+                    operation_id=reporting_data.operation_id,
+                    operation_code=reporting_data.operation_code,
+                    processed_by=reported_by,
+                )
+            except Exception as backflush_err:
+                # 倒冲失败不影响报工成功，仅记录日志
+                logger.warning(
+                    f"报工成功但物料倒冲失败：工单 {work_order.code}，报工ID {reporting_record.id}，"
+                    f"错误: {backflush_err}"
+                )
+
             logger.info(f"报工成功：工单 {work_order.code}，工序 {work_order_operation.operation_name}，数量 {reporting_data.reported_quantity}")
 
             return ReportingRecordResponse.model_validate(reporting_record)

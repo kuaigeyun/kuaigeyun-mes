@@ -41,9 +41,12 @@ from .purchase_receipt_item import PurchaseReceiptItem
 from .purchase_return import PurchaseReturn
 from .purchase_return_item import PurchaseReturnItem
 from .replenishment_suggestion import ReplenishmentSuggestion
+from .line_side_inventory import LineSideInventory
+from .backflush_record import BackflushRecord
 
 # 采购管理模块
 from .purchase_order import PurchaseOrder, PurchaseOrderItem
+from .purchase_requisition import PurchaseRequisition, PurchaseRequisitionItem
 
 # 质量管理模块
 from .incoming_inspection import IncomingInspection
@@ -55,6 +58,7 @@ from .quality_standard import QualityStandard
 from .payable import Payable
 from .purchase_invoice import PurchaseInvoice
 from .receivable import Receivable
+from .invoice import Invoice, InvoiceItem
 
 # 销售管理模块
 from .sales_forecast import SalesForecast
@@ -76,12 +80,13 @@ from .production_plan_item import ProductionPlanItem
 # from .lrp_result import LRPResult
 
 # 设备模具管理模块
-from .equipment import Equipment
+from .equipment import Equipment, EquipmentCalibration
 from .maintenance_plan import MaintenancePlan, MaintenanceExecution
 from .equipment_fault import EquipmentFault, EquipmentRepair
-from .mold import Mold, MoldUsage
+from .mold import Mold, MoldUsage, MoldCalibration
 from .equipment_status_monitor import EquipmentStatusMonitor, EquipmentStatusHistory
 from .maintenance_reminder import MaintenanceReminder
+from .tool import Tool, ToolUsage, ToolMaintenance, ToolCalibration
 
 __all__ = [
     # 生产执行模块
@@ -128,6 +133,8 @@ __all__ = [
     'PurchaseReturn',
     'PurchaseReturnItem',
     'ReplenishmentSuggestion',
+    'LineSideInventory',
+    'BackflushRecord',
 
     # 采购管理模块
     'PurchaseOrder',
@@ -175,4 +182,12 @@ __all__ = [
     'EquipmentStatusMonitor',
     'EquipmentStatusHistory',
     'MaintenanceReminder',
+    'Tool',
+    'ToolUsage',
+    'ToolMaintenance',
+    'ToolCalibration',
+    'MoldCalibration',
+    'EquipmentCalibration',
+    'Invoice',
+    'InvoiceItem',
 ]

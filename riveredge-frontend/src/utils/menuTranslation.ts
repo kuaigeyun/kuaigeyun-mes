@@ -164,7 +164,7 @@ export function translateAppMenuItemName(
   // 对于没有path的分组菜单，尝试从子菜单的path中提取应用code
   let appCode: string | null = null;
   let relativePath: string | null = null;
-  
+
   if (path) {
     // 有path的情况：从路径提取应用 code 和菜单路径
     appCode = extractAppCodeFromPath(path);
@@ -183,13 +183,18 @@ export function translateAppMenuItemName(
         const childRelativePath = firstChildPath.replace(`/apps/${appCode}/`, '');
         const pathSegments = childRelativePath.split('/');
         if (pathSegments.length > 0) {
-          // 使用子菜单路径的第一段作为分组名称（例如：sales-management/sales-orders -> sales-management）
-          relativePath = pathSegments[0];
+          // 使用子菜单路径的第一段作为分组名称
+          // 如果路径较深（长度 > 1），则尝试使用倒数第二段，这通常是更具体的分组标识
+          if (pathSegments.length > 1) {
+            relativePath = pathSegments[pathSegments.length - 2];
+          } else {
+            relativePath = pathSegments[0];
+          }
         }
       }
     }
   }
-  
+
   if (!appCode) {
     // 如果无法提取应用code，返回原始名称
     return name;
@@ -205,6 +210,10 @@ export function translateAppMenuItemName(
 
     // 如果翻译成功，返回翻译结果
     if (translated !== menuItemKey) {
+      // 关键修复：对于分组菜单（!path），如果翻译回来的结果包含在提供的 name 中（或者是父级标题），
+      // 而我们的 name 是硬编码的中文字符串，则优先使用我们的 name。
+      // 但在这里，我们已经使用了 defaultValue: name，所以如果 translated !== name，
+      // 说明它找到了一个针对该路径的专门翻译。
       return translated;
     }
 
@@ -217,7 +226,7 @@ export function translateAppMenuItemName(
       if (firstSegmentTranslated !== firstSegmentKey) {
         return firstSegmentTranslated;
       }
-      
+
       // 尝试最后一段（用于子菜单）
       const lastSegment = pathSegments[pathSegments.length - 1];
       const lastSegmentKey = `app.${appCode}.menu.${lastSegment}`;
@@ -368,9 +377,9 @@ export function findMenuTitleWithTranslation(
 
       // 路径匹配：支持精确匹配和忽略尾部斜杠
       const pathMatch = itemPath === path ||
-                       itemPath === `${path}/` ||
-                       `${itemPath}/` === path ||
-                       (itemPath && path && itemPath.replace(/\/$/, '') === path.replace(/\/$/, ''));
+        itemPath === `${path}/` ||
+        `${itemPath}/` === path ||
+        (itemPath && path && itemPath.replace(/\/$/, '') === path.replace(/\/$/, ''));
 
       if (pathMatch && menuName) {
         // 检查是否是应用菜单（通过路径判断）

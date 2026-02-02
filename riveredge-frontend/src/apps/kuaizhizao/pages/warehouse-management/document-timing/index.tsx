@@ -8,14 +8,12 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptions } from '@ant-design/pro-components';
 import { App, Card, Tag, Table } from 'antd';
-import { ProDescriptions } from '@ant-design/pro-components';
 import { EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
-import { warehouseApi } from '../../../services/production';
 
 /**
  * 单据耗时统计接口定义
@@ -90,13 +88,13 @@ const DocumentTimingPage: React.FC = () => {
       dataIndex: 'total_duration_hours',
       width: 120,
       align: 'right',
-      render: (_, record) => record.total_duration_hours?.toFixed(2) || '-',
+      render: (_, record: any) => record.total_duration_hours?.toFixed(2) || '-',
     },
     {
       title: '操作',
       width: 100,
       fixed: 'right',
-      render: (_, record) => (
+      render: (_, record: any) => (
         <a onClick={() => handleDetail(record)}>
           <EyeOutlined /> 查看
         </a>
@@ -145,11 +143,11 @@ const DocumentTimingPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="单据耗时统计"
+        headerTitle="单据节点耗时"
         actionRef={actionRef}
-        rowKey={(record) => `${record.document_type}-${record.document_id}`}
+        rowKey="document_code"
         columns={columns}
-        request={async (params) => {
+        request={async (params: any) => {
           try {
             const result = await apiRequest('/apps/kuaizhizao/documents/timing', {
               method: 'GET',
@@ -193,10 +191,10 @@ const DocumentTimingPage: React.FC = () => {
                     document_type: (
                       <Tag color={
                         currentTiming.document_type === 'work_order' ? 'processing' :
-                        currentTiming.document_type === 'purchase_order' ? 'default' : 'success'
+                          currentTiming.document_type === 'purchase_order' ? 'default' : 'success'
                       }>
                         {currentTiming.document_type === 'work_order' ? '工单' :
-                         currentTiming.document_type === 'purchase_order' ? '采购订单' : '销售订单'}
+                          currentTiming.document_type === 'purchase_order' ? '采购订单' : '销售订单'}
                       </Tag>
                     ),
                     document_code: currentTiming.document_code,

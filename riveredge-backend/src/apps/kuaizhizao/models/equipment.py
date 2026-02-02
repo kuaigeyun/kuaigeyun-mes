@@ -101,8 +101,17 @@ class Equipment(BaseModel):
     work_center_name = fields.CharField(max_length=200, null=True, description="工作中心名称")
     
     # 状态信息
-    status = fields.CharField(max_length=50, default="正常", description="设备状态（正常、维修中、停用、报废）")
+    status = fields.CharField(max_length=50, default="正常", description="设备状态（正常、维修中、停用、校验中、报废）")
     is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 运行及校验扩展
+    total_running_hours = fields.IntField(default=0, description="累计运行小时数")
+    total_cycle_count = fields.IntField(default=0, description="累计循环次数/冲压次数")
+    needs_calibration = fields.BooleanField(default=False, description="是否需要校验")
+    calibration_period = fields.IntField(null=True, description="校验周期（天）")
+    last_calibration_date = fields.DateField(null=True, description="上次校验日期")
+    next_calibration_date = fields.DateField(null=True, description="下次校验日期")
+    
     description = fields.TextField(null=True, description="描述")
     
     # 软删除字段
@@ -111,4 +120,24 @@ class Equipment(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.name}"
+
+
+class EquipmentCalibration(BaseModel):
+    """
+    设备校验/计量记录
+    """
+    class Meta:
+        table = "core_equipment_calibrations"
+        indexes = [("tenant_id",), ("equipment_id",), ("calibration_date",)]
+
+    id = fields.IntField(pk=True)
+    equipment_id = fields.IntField()
+    equipment_uuid = fields.CharField(max_length=36)
+    calibration_date = fields.DateField(description="校验日期")
+    result = fields.CharField(max_length=50, description="校验结果（合格、不合格、限制使用）")
+    certificate_no = fields.CharField(max_length=100, null=True, description="证书编号")
+    expiry_date = fields.DateField(null=True, description="有效期至")
+    attachment_uuid = fields.CharField(max_length=36, null=True, description="报告附件ID")
+    remark = fields.TextField(null=True)
+    deleted_at = fields.DatetimeField(null=True)
 

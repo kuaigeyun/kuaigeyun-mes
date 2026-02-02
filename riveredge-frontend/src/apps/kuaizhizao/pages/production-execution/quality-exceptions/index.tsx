@@ -9,12 +9,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, message, Divider } from 'antd';
+import { App, Tag, Button, Space, Divider } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
-import dayjs from 'dayjs';
 
 /**
  * 质量异常接口定义
@@ -283,7 +282,7 @@ const QualityExceptionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="质量异常处理"
+        headerTitle="质量异常"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -331,8 +330,8 @@ const QualityExceptionsPage: React.FC = () => {
             <div style={{ padding: '16px 0' }}>
               <p><strong>异常类型：</strong>
                 {currentRecord.exception_type === 'inspection_failure' ? '检验不合格' :
-                 currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
-                 currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
+                  currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
+                    currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
               </p>
               <p><strong>工单编码：</strong>{currentRecord.work_order_code || '-'}</p>
               <p><strong>物料编码：</strong>{currentRecord.material_code || '-'}</p>
@@ -344,22 +343,22 @@ const QualityExceptionsPage: React.FC = () => {
               <p><strong>严重程度：</strong>
                 <Tag color={
                   currentRecord.severity === 'critical' ? 'red' :
-                  currentRecord.severity === 'major' ? 'orange' : 'default'
+                    currentRecord.severity === 'major' ? 'orange' : 'default'
                 }>
                   {currentRecord.severity === 'critical' ? '紧急' :
-                   currentRecord.severity === 'major' ? '严重' : '轻微'}
+                    currentRecord.severity === 'major' ? '严重' : '轻微'}
                 </Tag>
               </p>
               <p><strong>状态：</strong>
                 <Tag color={
                   currentRecord.status === 'closed' ? 'success' :
-                  currentRecord.status === 'correcting' || currentRecord.status === 'investigating' ? 'processing' :
-                  currentRecord.status === 'cancelled' ? 'error' : 'default'
+                    currentRecord.status === 'correcting' || currentRecord.status === 'investigating' ? 'processing' :
+                      currentRecord.status === 'cancelled' ? 'error' : 'default'
                 }>
                   {currentRecord.status === 'closed' ? '已关闭' :
-                   currentRecord.status === 'correcting' ? '纠正中' :
-                   currentRecord.status === 'investigating' ? '调查中' :
-                   currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
+                    currentRecord.status === 'correcting' ? '纠正中' :
+                      currentRecord.status === 'investigating' ? '调查中' :
+                        currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
                 </Tag>
               </p>
               {currentRecord.root_cause && (
@@ -401,10 +400,10 @@ const QualityExceptionsPage: React.FC = () => {
       <FormModalTemplate
         title={
           currentAction === 'investigate' ? '处理质量异常 - 调查' :
-          currentAction === 'correct' ? '处理质量异常 - 纠正' :
-          currentAction === 'close' ? '处理质量异常 - 关闭' :
-          currentAction === 'cancel' ? '处理质量异常 - 取消' :
-          '处理质量异常'
+            currentAction === 'correct' ? '处理质量异常 - 纠正' :
+              currentAction === 'close' ? '处理质量异常 - 关闭' :
+                currentAction === 'cancel' ? '处理质量异常 - 取消' :
+                  '处理质量异常'
         }
         open={handleModalVisible}
         onClose={() => {
@@ -422,8 +421,8 @@ const QualityExceptionsPage: React.FC = () => {
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
               <p><strong>异常类型：</strong>
                 {currentRecord.exception_type === 'inspection_failure' ? '检验不合格' :
-                 currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
-                 currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
+                  currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
+                    currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
               </p>
               <p><strong>工单编码：</strong>{currentRecord.work_order_code || '-'}</p>
               <p><strong>物料名称：</strong>{currentRecord.material_name || '-'}</p>

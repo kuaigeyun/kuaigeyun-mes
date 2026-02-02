@@ -188,6 +188,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.purchase_return",  # 采购退货模型
                 "apps.kuaizhizao.models.purchase_return_item",  # 采购退货明细模型
                 "apps.kuaizhizao.models.purchase_order",  # 采购订单模型
+                "apps.kuaizhizao.models.purchase_requisition",  # 采购申请模型
                 "apps.kuaizhizao.models.incoming_inspection",  # 来料检验模型
                 "apps.kuaizhizao.models.process_inspection",  # 过程检验模型
                 "apps.kuaizhizao.models.finished_goods_inspection",  # 成品检验模型

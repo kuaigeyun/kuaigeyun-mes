@@ -8,11 +8,9 @@
  * Date: 2025-12-26
  */
 
-import React, { ReactNode } from 'react';
-import { Row, Col, Card, Statistic, theme } from 'antd';
+import { Row, Col, Card, Statistic } from 'antd';
 import { STAT_CARD_CONFIG, PAGE_SPACING } from './constants';
 
-const { useToken } = theme;
 
 /**
  * 统计卡片数据
@@ -28,6 +26,8 @@ export interface StatCard {
   suffix?: string;
   /** 数值样式颜色 */
   valueStyle?: React.CSSProperties;
+  /** 精度 */
+  precision?: number;
   /** 卡片点击事件 */
   onClick?: () => void;
 }
@@ -71,7 +71,6 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
   className,
   style,
 }) => {
-  const { token } = useToken();
 
   return (
     <div
@@ -113,6 +112,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     value={card.value}
                     prefix={card.prefix}
                     suffix={card.suffix}
+                    precision={card.precision}
                     styles={{
                       content: {
                         fontSize: '24px',

@@ -23,7 +23,7 @@ class PushDocumentRequest(BaseModel):
     """下推单据请求"""
     source_type: str = Field(..., description="源单据类型（如：demand、demand_computation）")
     source_id: int = Field(..., description="源单据ID")
-    target_type: str = Field(..., description="目标单据类型（如：demand_computation、work_order、purchase_order）")
+    target_type: str = Field(..., description="目标单据类型（如：demand_computation、work_order、purchase_order、production_plan）")
     push_params: Optional[Dict[str, Any]] = Field(None, description="下推参数（可选）")
 
 
@@ -50,6 +50,7 @@ async def push_document(
     - demand -> demand_computation: 从需求下推到需求计算
     - demand_computation -> work_order: 从需求计算下推到工单
     - demand_computation -> purchase_order: 从需求计算下推到采购单
+    - demand_computation -> production_plan: 从需求计算下推到生产计划
     """
     try:
         service = DocumentPushPullService()

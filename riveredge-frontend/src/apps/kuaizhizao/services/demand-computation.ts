@@ -18,6 +18,7 @@ export interface DemandComputation {
   tenant_id?: number;
   computation_code?: string;
   demand_id?: number;
+  demand_ids?: number[];  // 多需求合并支持
   demand_code?: string;
   demand_type?: 'sales_forecast' | 'sales_order';
   business_mode?: 'MTS' | 'MTO';
@@ -181,11 +182,34 @@ export interface GenerateOrdersResponse {
 }
 
 /**
- * 一键生成工单和采购单
+ * 下推到生产计划
  */
-export async function generateOrdersFromComputation(id: number): Promise<GenerateOrdersResponse> {
+export async function pushToProductionPlan(id: number): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-to-production-plan`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 下推到采购申请（仅采购件）
+ */
+export async function pushToPurchaseRequisition(id: number): Promise<{ success: boolean; message: string; target_document?: { id: number; code: string } }> {
+  return apiRequest(`/apps/kuaizhizao/demand-computations/${id}/push-to-purchase-requisition`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 一键生成工单和采购单
+ * @param generateMode 生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购
+ */
+export async function generateOrdersFromComputation(
+  id: number,
+  generateMode: 'all' | 'work_order_only' | 'purchase_only' = 'all'
+): Promise<GenerateOrdersResponse> {
   return apiRequest<GenerateOrdersResponse>(`/apps/kuaizhizao/demand-computations/${id}/generate-orders`, {
     method: 'POST',
+    params: { generate_mode: generateMode },
   });
 }
 

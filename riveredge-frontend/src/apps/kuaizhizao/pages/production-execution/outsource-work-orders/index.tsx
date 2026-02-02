@@ -58,7 +58,7 @@ interface OutsourceWorkOrder {
   updatedAt?: string;
 }
 
-const OutsourceWorkOrdersPage: React.FC = () => {
+export const OutsourceWorkOrdersTable: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -109,7 +109,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         // 加载产品列表（只显示委外件）
         const products = await materialApi.list({ isActive: true });
         // 过滤出委外件（sourceType === 'Outsource'）
-        const outsourceProducts = products.filter((p: any) => 
+        const outsourceProducts = products.filter((p: any) =>
           (p.sourceType === 'Outsource' || p.source_type === 'Outsource')
         );
         setProductList(outsourceProducts);
@@ -733,66 +733,64 @@ const OutsourceWorkOrdersPage: React.FC = () => {
 
   return (
     <>
-      <ListPageTemplate>
-        <UniTable<OutsourceWorkOrder>
-          headerTitle="工单委外管理"
-          actionRef={actionRef}
-          rowKey="id"
-          columns={columns}
-          showAdvancedSearch={true}
-          request={async (params) => {
-            try {
-              const response = await outsourceWorkOrderApi.list({
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...params,
-              });
-              
-              if (Array.isArray(response)) {
-                return {
-                  data: response,
-                  success: true,
-                  total: response.length,
-                };
-              } else if (response && typeof response === 'object') {
-                return {
-                  data: response.data || response.items || [],
-                  success: response.success !== false,
-                  total: response.total || (response.data || response.items || []).length,
-                };
-              }
-              
+      <UniTable<OutsourceWorkOrder>
+        headerTitle="工单委外管理"
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        showAdvancedSearch={true}
+        request={async (params) => {
+          try {
+            const response = await outsourceWorkOrderApi.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              ...params,
+            });
+
+            if (Array.isArray(response)) {
               return {
-                data: [],
-                success: false,
-                total: 0,
+                data: response,
+                success: true,
+                total: response.length,
               };
-            } catch (error) {
-              console.error('获取工单委外列表失败:', error);
-              messageApi.error('获取工单委外列表失败');
+            } else if (response && typeof response === 'object') {
               return {
-                data: [],
-                success: false,
-                total: 0,
+                data: response.data || response.items || [],
+                success: response.success !== false,
+                total: response.total || (response.data || response.items || []).length,
               };
             }
-          }}
-          toolBarRender={() => [
-            <Button
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新建工单委外
-            </Button>,
-          ]}
-          onDelete={handleDelete}
-        />
-      </ListPageTemplate>
+
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          } catch (error) {
+            console.error('获取工单委外列表失败:', error);
+            messageApi.error('获取工单委外列表失败');
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        toolBarRender={() => [
+          <Button
+            key="create"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            新建工单委外
+          </Button>,
+        ]}
+        onDelete={handleDelete}
+      />
 
       {/* 创建/编辑工单委外 Modal */}
-        <FormModalTemplate
+      < FormModalTemplate
         title={isEdit ? '编辑工单委外' : '新建工单委外'}
         open={modalVisible}
         onClose={() => {
@@ -807,7 +805,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
         formRef={formRef}
       >
         {/* 基本信息组 */}
-        <Divider>基本信息</Divider>
+        < Divider > 基本信息</Divider >
         <ProFormText
           name="name"
           label="工单委外名称"
@@ -837,7 +835,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
                     const materialDetail = await materialApi.get(selectedMaterial.uuid);
                     const sourceType = materialDetail.sourceType || materialDetail.source_type;
                     const sourceConfig = materialDetail.sourceConfig || materialDetail.source_config || {};
-                    
+
                     const sourceTypeNames: Record<string, string> = {
                       'Make': '自制件',
                       'Buy': '采购件',
@@ -845,7 +843,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
                       'Outsource': '委外件',
                       'Configure': '配置件',
                     };
-                    
+
                     if (sourceType === 'Outsource') {
                       // 委外件，获取委外配置
                       const supplierId = sourceConfig.outsource_supplier_id;
@@ -853,7 +851,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
                       const supplierName = sourceConfig.outsource_supplier_name;
                       const outsourceOperation = sourceConfig.outsource_operation;
                       const unitPrice = sourceConfig.outsource_price;
-                      
+
                       setSelectedMaterialSourceInfo({
                         sourceType,
                         sourceTypeName: sourceTypeNames[sourceType] || sourceType,
@@ -864,7 +862,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
                         unitPrice,
                         canCreateWorkOrder: true,
                       });
-                      
+
                       // 自动填充表单
                       if (supplierId) {
                         formRef.current?.setFieldsValue({
@@ -896,50 +894,52 @@ const OutsourceWorkOrdersPage: React.FC = () => {
           colProps={{ span: 12 }}
         />
         {/* 物料来源信息显示 */}
-        {selectedMaterialSourceInfo && (
-          <div style={{ marginTop: -16, marginBottom: 16, padding: '12px', background: '#f5f5f5', borderRadius: 4, gridColumn: 'span 24' }}>
-            <div style={{ marginBottom: 8 }}>
-              <span style={{ fontWeight: 'bold' }}>物料来源类型：</span>
-              <Tag color="cyan">
-                {selectedMaterialSourceInfo.sourceTypeName || selectedMaterialSourceInfo.sourceType || '未配置'}
-              </Tag>
+        {
+          selectedMaterialSourceInfo && (
+            <div style={{ marginTop: -16, marginBottom: 16, padding: '12px', background: '#f5f5f5', borderRadius: 4, gridColumn: 'span 24' }}>
+              <div style={{ marginBottom: 8 }}>
+                <span style={{ fontWeight: 'bold' }}>物料来源类型：</span>
+                <Tag color="cyan">
+                  {selectedMaterialSourceInfo.sourceTypeName || selectedMaterialSourceInfo.sourceType || '未配置'}
+                </Tag>
+              </div>
+              {selectedMaterialSourceInfo.validationErrors && selectedMaterialSourceInfo.validationErrors.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  {selectedMaterialSourceInfo.validationErrors.map((error, index) => (
+                    <div key={index} style={{ color: '#ff4d4f', marginBottom: 4 }}>
+                      ❌ {error}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
+                <div style={{ marginTop: 8, color: '#ff4d4f', fontWeight: 'bold' }}>
+                  该物料来源类型不允许创建工单委外，请选择委外件物料
+                </div>
+              )}
+              {selectedMaterialSourceInfo.canCreateWorkOrder && (
+                <div style={{ marginTop: 8, color: '#52c41a' }}>
+                  ✓ 物料来源验证通过，可以创建工单委外
+                  {selectedMaterialSourceInfo.supplierName && (
+                    <span style={{ marginLeft: 16 }}>
+                      默认供应商：{selectedMaterialSourceInfo.supplierName}
+                    </span>
+                  )}
+                  {selectedMaterialSourceInfo.outsourceOperation && (
+                    <span style={{ marginLeft: 16 }}>
+                      委外工序：{selectedMaterialSourceInfo.outsourceOperation}
+                    </span>
+                  )}
+                  {selectedMaterialSourceInfo.unitPrice && (
+                    <span style={{ marginLeft: 16 }}>
+                      委外单价：¥{selectedMaterialSourceInfo.unitPrice.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-            {selectedMaterialSourceInfo.validationErrors && selectedMaterialSourceInfo.validationErrors.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                {selectedMaterialSourceInfo.validationErrors.map((error, index) => (
-                  <div key={index} style={{ color: '#ff4d4f', marginBottom: 4 }}>
-                    ❌ {error}
-                  </div>
-                ))}
-              </div>
-            )}
-            {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
-              <div style={{ marginTop: 8, color: '#ff4d4f', fontWeight: 'bold' }}>
-                该物料来源类型不允许创建工单委外，请选择委外件物料
-              </div>
-            )}
-            {selectedMaterialSourceInfo.canCreateWorkOrder && (
-              <div style={{ marginTop: 8, color: '#52c41a' }}>
-                ✓ 物料来源验证通过，可以创建工单委外
-                {selectedMaterialSourceInfo.supplierName && (
-                  <span style={{ marginLeft: 16 }}>
-                    默认供应商：{selectedMaterialSourceInfo.supplierName}
-                  </span>
-                )}
-                {selectedMaterialSourceInfo.outsourceOperation && (
-                  <span style={{ marginLeft: 16 }}>
-                    委外工序：{selectedMaterialSourceInfo.outsourceOperation}
-                  </span>
-                )}
-                {selectedMaterialSourceInfo.unitPrice && (
-                  <span style={{ marginLeft: 16 }}>
-                    委外单价：¥{selectedMaterialSourceInfo.unitPrice.toFixed(2)}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+          )
+        }
         <ProFormDigit
           name="quantity"
           label="计划委外数量"
@@ -1056,10 +1056,10 @@ const OutsourceWorkOrdersPage: React.FC = () => {
           }}
           colProps={{ span: 24 }}
         />
-      </FormModalTemplate>
+      </FormModalTemplate >
 
       {/* 工单委外详情 Drawer */}
-      <DetailDrawerTemplate<OutsourceWorkOrder>
+      < DetailDrawerTemplate<OutsourceWorkOrder>
         title={`工单委外详情 - ${workOrderDetail?.code || ''}`}
         open={drawerVisible}
         onClose={() => {
@@ -1072,7 +1072,7 @@ const OutsourceWorkOrdersPage: React.FC = () => {
       />
 
       {/* 委外发料 Modal */}
-      <FormModalTemplate
+      < FormModalTemplate
         title="委外发料"
         open={issueModalVisible}
         onClose={() => {
@@ -1205,10 +1205,10 @@ const OutsourceWorkOrdersPage: React.FC = () => {
             />
           </>
         )}
-      </FormModalTemplate>
+      </FormModalTemplate >
 
       {/* 委外收货 Modal */}
-      <FormModalTemplate
+      < FormModalTemplate
         title="委外收货"
         open={receiptModalVisible}
         onClose={() => {
@@ -1313,8 +1313,16 @@ const OutsourceWorkOrdersPage: React.FC = () => {
             />
           </>
         )}
-      </FormModalTemplate>
+      </FormModalTemplate >
     </>
+  );
+};
+
+const OutsourceWorkOrdersPage: React.FC = () => {
+  return (
+    <ListPageTemplate>
+      <OutsourceWorkOrdersTable />
+    </ListPageTemplate>
   );
 };
 

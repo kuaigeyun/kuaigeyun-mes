@@ -817,9 +817,10 @@ const SalesOrdersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<SalesOrder>
+          headerTitle="销售订单"
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params: any, sort: any, _filter: any, searchFormValues: any) => {
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
@@ -1051,7 +1052,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '物料',
                       dataIndex: 'material_id',
                       width: 200,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'material_id']} rules={[{ required: true, message: '请选择物料' }]} style={{ margin: 0 }}>
                           <Select
                             placeholder="请选择物料"
@@ -1071,7 +1072,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '规格',
                       dataIndex: 'material_spec',
                       width: 120,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
                           <Input placeholder="规格" size="small" />
                         </AntForm.Item>
@@ -1081,7 +1082,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '单位',
                       dataIndex: 'material_unit',
                       width: 80,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
                           <Input placeholder="单位" size="small" />
                         </AntForm.Item>
@@ -1092,7 +1093,7 @@ const SalesOrdersPage: React.FC = () => {
                       dataIndex: 'required_quantity',
                       width: 100,
                       align: 'right' as const,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
                           <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
                         </AntForm.Item>
@@ -1103,7 +1104,7 @@ const SalesOrdersPage: React.FC = () => {
                       dataIndex: 'unit_price',
                       width: 100,
                       align: 'right' as const,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
                           <InputNumber placeholder="单价" min={0} precision={2} prefix="¥" style={{ width: '100%' }} size="small" />
                         </AntForm.Item>
@@ -1113,13 +1114,13 @@ const SalesOrdersPage: React.FC = () => {
                       title: '金额',
                       width: 110,
                       align: 'right' as const,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                           {({ getFieldValue }: any) => {
                             const items = getFieldValue('items') ?? [];
                             const row = items[index];
                             const amt = (Number(row?.required_quantity) || 0) * (Number(row?.unit_price) || 0);
-                            return <span>{amt ? `¥${amt.toLocaleString()}` : '-'}</span>;
+                            return <span>{amt != null ? `¥${amt.toLocaleString()}` : '-'}</span>;
                           }}
                         </AntForm.Item>
                       ),
@@ -1128,7 +1129,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '交货日期',
                       dataIndex: 'delivery_date',
                       width: 120,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <AntForm.Item name={[index, 'delivery_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
                           <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
                         </AntForm.Item>
@@ -1138,7 +1139,7 @@ const SalesOrdersPage: React.FC = () => {
                       title: '操作',
                       width: 70,
                       fixed: 'right' as const,
-                      render: (_, __, index) => (
+                      render: (_: any, __: any, index: number) => (
                         <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)}>
                           删除
                         </Button>

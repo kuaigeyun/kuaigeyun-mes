@@ -8,9 +8,9 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table } from 'antd';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
@@ -114,7 +114,7 @@ const SalesReturnsPage: React.FC = () => {
       title: '退货状态',
       dataIndex: 'status',
       width: 100,
-      render: (status) => {
+      render: (status: any) => {
         const statusMap = {
           '待退货': { text: '待退货', color: 'default' },
           '已退货': { text: '已退货', color: 'success' },
@@ -128,7 +128,7 @@ const SalesReturnsPage: React.FC = () => {
       title: '审核状态',
       dataIndex: 'review_status',
       width: 100,
-      render: (status) => {
+      render: (status: any) => {
         const statusMap = {
           '待审核': { text: '待审核', color: 'default' },
           '审核通过': { text: '审核通过', color: 'success' },
@@ -149,7 +149,7 @@ const SalesReturnsPage: React.FC = () => {
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
-      render: (text) => `¥${text?.toLocaleString() || 0}`,
+      render: (text: any) => `¥${text?.toLocaleString() || 0}`,
     },
     {
       title: '退货时间',
@@ -198,7 +198,7 @@ const SalesReturnsPage: React.FC = () => {
     try {
       const detail = await warehouseApi.salesReturn.get(record.id!.toString());
       setReturnDetail(detail as SalesReturnDetail);
-      
+
       // 获取单据关联关系
       try {
         const relations = await getDocumentRelations('sales_return', record.id!);
@@ -207,7 +207,7 @@ const SalesReturnsPage: React.FC = () => {
         console.error('获取单据关联关系失败:', error);
         setDocumentRelations(null);
       }
-      
+
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取销售退货单详情失败');
@@ -231,8 +231,8 @@ const SalesReturnsPage: React.FC = () => {
     });
   };
 
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemType<SalesReturnDetail>[] = [
+  // 详情列 definition
+  const detailColumns: ProDescriptionsItemProps<SalesReturnDetail>[] = [
     {
       title: '退货单编号',
       dataIndex: 'return_code',
@@ -262,7 +262,7 @@ const SalesReturnsPage: React.FC = () => {
           '已退货': { text: '已退货', color: 'success' },
           '已取消': { text: '已取消', color: 'error' },
         };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        const config = statusMap[(status as any) || ''] || { text: (status as any) || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -296,7 +296,7 @@ const SalesReturnsPage: React.FC = () => {
       title: '备注',
       dataIndex: 'notes',
       span: 2,
-      render: (text) => text || '-',
+      render: (text: any) => text || '-',
     },
   ];
 
@@ -325,7 +325,7 @@ const SalesReturnsPage: React.FC = () => {
         ]}
       >
         <UniTable
-          headerTitle="销售退货单"
+          headerTitle="销售退货"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -372,7 +372,7 @@ const SalesReturnsPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.LARGE_WIDTH}
         columns={detailColumns}
-        dataSource={returnDetail}
+        dataSource={returnDetail || undefined}
         customContent={
           returnDetail ? (
             <div style={{ padding: '16px 0' }}>
@@ -412,9 +412,9 @@ const SalesReturnsPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },
@@ -437,9 +437,9 @@ const SalesReturnsPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },

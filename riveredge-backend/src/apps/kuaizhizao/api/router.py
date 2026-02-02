@@ -12,6 +12,7 @@ from fastapi import APIRouter
 # 导入子路由
 from .production import router as production_router
 from .purchase import router as purchase_router
+from .purchase_requisition import router as purchase_requisition_router
 
 from .demand import router as demand_router
 from .demand_computation import router as demand_computation_router
@@ -28,6 +29,7 @@ from .equipment.equipment import router as equipment_router
 from .maintenance_plans.maintenance_plans import router as maintenance_plans_router
 from .equipment_faults.equipment_faults import router as equipment_faults_router
 from .molds.molds import router as molds_router
+from .tools.tools import router as tools_router
 from .equipment_status.equipment_status import router as equipment_status_router
 from .maintenance_reminders.maintenance_reminders import router as maintenance_reminders_router
 
@@ -42,8 +44,15 @@ from .cost.cost_comparison import router as cost_comparison_router
 from .cost.cost_optimization import router as cost_optimization_router
 from .cost.cost_report import router as cost_report_router
 
+# 导入财务管理路由
+from .finance.payables import router as payables_router
+from .finance.receivables import router as receivables_router
+from .finance.invoices import router as invoices_router
+
 # 导入期初数据导入路由
 from .initial_data import router as initial_data_router
+# 导入线边仓与倒冲记录路由
+from .line_side_warehouse import router as line_side_warehouse_router, backflush_router
 
 # 创建主路由
 router = APIRouter(tags=["Kuaige Zhizao MES"])
@@ -55,6 +64,7 @@ router = APIRouter(tags=["Kuaige Zhizao MES"])
 router.include_router(sales_order_router)  # 销售订单管理（独立API）- 优先匹配
 router.include_router(production_router)
 router.include_router(purchase_router)
+router.include_router(purchase_requisition_router)
 
 router.include_router(demand_router)  # 统一需求管理（新设计）
 router.include_router(demand_computation_router)  # 统一需求计算（新设计）
@@ -70,6 +80,7 @@ router.include_router(equipment_router)
 router.include_router(maintenance_plans_router)
 router.include_router(equipment_faults_router)
 router.include_router(molds_router)
+router.include_router(tools_router)
 router.include_router(equipment_status_router)
 router.include_router(maintenance_reminders_router)
 
@@ -84,8 +95,17 @@ router.include_router(cost_comparison_router)
 router.include_router(cost_optimization_router)
 router.include_router(cost_report_router)
 
+# 注册财务管理路由
+router.include_router(payables_router)
+router.include_router(receivables_router)
+router.include_router(invoices_router)
+
 # 注册期初数据导入路由
 router.include_router(initial_data_router)
+
+# 注册线边仓与倒冲记录路由
+router.include_router(line_side_warehouse_router)
+router.include_router(backflush_router)
 
 @router.get("/health")
 async def health_check():

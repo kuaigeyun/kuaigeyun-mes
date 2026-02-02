@@ -493,6 +493,29 @@ export const warehouseApi = {
     },
   },
 
+  // 线边仓管理
+  lineSideWarehouse: {
+    listWarehouses: async () => {
+      return apiRequest('/apps/kuaizhizao/line-side-warehouse/warehouses', { method: 'GET' });
+    },
+    listInventory: async (params?: { warehouse_id?: number; material_code?: string; material_name?: string; skip?: number; limit?: number }) => {
+      return apiRequest<{ items: any[]; total: number }>('/apps/kuaizhizao/line-side-warehouse/inventory', { method: 'GET', params });
+    },
+  },
+
+  // 倒冲记录
+  backflushRecords: {
+    list: async (params?: { work_order_code?: string; material_code?: string; status?: string; skip?: number; limit?: number }) => {
+      return apiRequest<{ items: any[]; total: number }>('/apps/kuaizhizao/backflush-records', { method: 'GET', params });
+    },
+    get: async (id: string) => {
+      return apiRequest(`/apps/kuaizhizao/backflush-records/${id}`, { method: 'GET' });
+    },
+    retry: async (id: string) => {
+      return apiRequest<{ message: string; success: boolean }>(`/apps/kuaizhizao/backflush-records/${id}/retry`, { method: 'POST' });
+    },
+  },
+
   // 采购入库单
   purchaseReceipt: {
     list: async (params?: any) => {
@@ -870,6 +893,9 @@ export const planningApi = {
     },
     execute: async (id: string) => {
       return apiRequest(`/apps/kuaizhizao/production-plans/${id}/execute`, { method: 'POST' });
+    },
+    pushToWorkOrders: async (id: number) => {
+      return apiRequest(`/apps/kuaizhizao/production-plans/${id}/push-to-work-orders`, { method: 'POST' });
     },
   },
 };

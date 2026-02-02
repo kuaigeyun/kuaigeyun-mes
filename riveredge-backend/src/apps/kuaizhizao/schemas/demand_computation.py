@@ -10,7 +10,7 @@ Date: 2025-01-14
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DemandComputationItemBase(BaseModel):
@@ -63,7 +63,8 @@ class DemandComputationItemBase(BaseModel):
 
 class DemandComputationBase(BaseModel):
     """需求计算基础Schema"""
-    demand_id: int = Field(..., description="需求ID")
+    demand_id: Optional[int] = Field(None, description="需求ID（单需求时使用）")
+    demand_ids: Optional[List[int]] = Field(None, description="需求ID列表（多需求合并时使用，与 demand_id 二选一）")
     computation_type: str = Field(..., max_length=20, description="计算类型（MRP/LRP）")
     computation_params: Dict[str, Any] = Field(..., description="计算参数（JSON格式）")
     notes: Optional[str] = Field(None, description="备注")
@@ -74,6 +75,23 @@ class DemandComputationBase(BaseModel):
         if v not in ["MRP", "LRP"]:
             raise ValueError("计算类型必须是MRP或LRP")
         return v
+
+    @field_validator("demand_ids")
+    @classmethod
+    def validate_demand_ids(cls, v):
+        """demand_ids 不能为空列表"""
+        if v is not None and len(v) == 0:
+            raise ValueError("demand_ids 不能为空列表")
+        return v
+
+    @model_validator(mode="after")
+    def validate_demand_source(self):
+        """demand_id 与 demand_ids 二选一，至少提供一个"""
+        if self.demand_id is None and (self.demand_ids is None or len(self.demand_ids) == 0):
+            raise ValueError("必须提供 demand_id 或 demand_ids")
+        if self.demand_id is not None and self.demand_ids is not None:
+            raise ValueError("demand_id 与 demand_ids 二选一，不能同时提供")
+        return self
 
 
 class DemandComputationCreate(DemandComputationBase):

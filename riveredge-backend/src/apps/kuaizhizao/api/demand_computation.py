@@ -218,19 +218,21 @@ async def update_computation(
 @router.post("/{computation_id}/generate-orders", summary="一键生成工单和采购单")
 async def generate_orders(
     computation_id: int = Path(..., description="计算ID"),
+    generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     从需求计算结果一键生成工单和采购单
     
-    根据计算结果明细中的建议工单数量和采购订单数量，自动生成工单和采购单。
+    generate_mode: all=全部，work_order_only=仅工单，purchase_only=仅采购
     """
     try:
         result = await computation_service.generate_work_orders_and_purchase_orders(
             tenant_id=tenant_id,
             computation_id=computation_id,
-            created_by=current_user.id
+            created_by=current_user.id,
+            generate_mode=generate_mode
         )
         return result
     except NotFoundError as e:
@@ -243,6 +245,62 @@ async def generate_orders(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"生成工单和采购单失败: {str(e)}",
         )
+
+
+@router.post("/{computation_id}/push-to-purchase-requisition", summary="下推到采购申请")
+async def push_to_purchase_requisition(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从需求计算下推到采购申请（仅采购件）"""
+    try:
+        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+        service = DocumentPushPullService()
+        result = await service.push_document(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+            target_type="purchase_requisition",
+            push_params=None,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("下推到采购申请失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推到采购申请失败")
+
+
+@router.post("/{computation_id}/push-to-production-plan", summary="下推到生产计划")
+async def push_to_production_plan(
+    computation_id: int = Path(..., description="计算ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从需求计算下推到生产计划"""
+    try:
+        from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+        service = DocumentPushPullService()
+        result = await service.push_document(
+            tenant_id=tenant_id,
+            source_type="demand_computation",
+            source_id=computation_id,
+            target_type="production_plan",
+            push_params=None,
+            created_by=current_user.id,
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("下推到生产计划失败")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="下推到生产计划失败")
 
 
 @router.get("/history", summary="查询需求计算历史记录")

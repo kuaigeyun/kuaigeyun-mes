@@ -84,9 +84,17 @@ class Mold(BaseModel):
     technical_parameters = fields.JSONField(null=True, description="技术参数（JSON格式）")
     
     # 状态信息
-    status = fields.CharField(max_length=50, default="正常", description="模具状态（正常、维修中、停用、报废）")
+    status = fields.CharField(max_length=50, default="正常", description="模具状态（正常、维修中、停用、校验中、报废）")
     total_usage_count = fields.IntField(default=0, description="累计使用次数")
     is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 维保及校验扩展
+    maintenance_interval = fields.IntField(null=True, description="保养间隔（使用次数）")
+    needs_calibration = fields.BooleanField(default=False, description="是否需要校验")
+    calibration_period = fields.IntField(null=True, description="校验周期（天）")
+    last_calibration_date = fields.DateField(null=True, description="上次校验日期")
+    next_calibration_date = fields.DateField(null=True, description="下次校验日期")
+    
     description = fields.TextField(null=True, description="描述")
     
     # 软删除字段
@@ -179,4 +187,24 @@ class MoldUsage(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.usage_no} - {self.mold_name}"
+
+
+class MoldCalibration(BaseModel):
+    """
+    模具校验记录
+    """
+    class Meta:
+        table = "core_mold_calibrations"
+        indexes = [("tenant_id",), ("mold_id",), ("calibration_date",)]
+
+    id = fields.IntField(pk=True)
+    mold_id = fields.IntField()
+    mold_uuid = fields.CharField(max_length=36)
+    calibration_date = fields.DateField(description="校验日期")
+    result = fields.CharField(max_length=50, description="校验结果（合格、不合格、准用）")
+    certificate_no = fields.CharField(max_length=100, null=True, description="证书编号")
+    expiry_date = fields.DateField(null=True, description="有效期至")
+    attachment_uuid = fields.CharField(max_length=36, null=True, description="附件ID")
+    remark = fields.TextField(null=True)
+    deleted_at = fields.DatetimeField(null=True)
 

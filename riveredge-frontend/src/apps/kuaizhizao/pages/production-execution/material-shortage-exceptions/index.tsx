@@ -9,7 +9,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Modal, message } from 'antd';
+import { App, Tag, Button, Space } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, ShoppingOutlined, SwapOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -263,7 +263,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="缺料异常处理"
+        headerTitle="缺料异常"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -321,23 +321,23 @@ const MaterialShortageExceptionsPage: React.FC = () => {
               <p><strong>预警级别：</strong>
                 <Tag color={
                   currentRecord.alert_level === 'critical' ? 'red' :
-                  currentRecord.alert_level === 'high' ? 'orange' :
-                  currentRecord.alert_level === 'medium' ? 'gold' : 'default'
+                    currentRecord.alert_level === 'high' ? 'orange' :
+                      currentRecord.alert_level === 'medium' ? 'gold' : 'default'
                 }>
                   {currentRecord.alert_level === 'critical' ? '紧急' :
-                   currentRecord.alert_level === 'high' ? '高' :
-                   currentRecord.alert_level === 'medium' ? '中' : '低'}
+                    currentRecord.alert_level === 'high' ? '高' :
+                      currentRecord.alert_level === 'medium' ? '中' : '低'}
                 </Tag>
               </p>
               <p><strong>状态：</strong>
                 <Tag color={
                   currentRecord.status === 'resolved' ? 'success' :
-                  currentRecord.status === 'processing' ? 'processing' :
-                  currentRecord.status === 'cancelled' ? 'error' : 'default'
+                    currentRecord.status === 'processing' ? 'processing' :
+                      currentRecord.status === 'cancelled' ? 'error' : 'default'
                 }>
                   {currentRecord.status === 'resolved' ? '已解决' :
-                   currentRecord.status === 'processing' ? '处理中' :
-                   currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
+                    currentRecord.status === 'processing' ? '处理中' :
+                      currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
                 </Tag>
               </p>
               <p><strong>建议操作：</strong>{currentRecord.suggested_action || '-'}</p>
@@ -359,10 +359,10 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       <FormModalTemplate
         title={
           currentAction === 'purchase' ? '处理缺料异常 - 采购' :
-          currentAction === 'substitute' ? '处理缺料异常 - 替代物料' :
-          currentAction === 'resolve' ? '处理缺料异常 - 已解决' :
-          currentAction === 'cancel' ? '处理缺料异常 - 取消' :
-          '处理缺料异常'
+            currentAction === 'substitute' ? '处理缺料异常 - 替代物料' :
+              currentAction === 'resolve' ? '处理缺料异常 - 已解决' :
+                currentAction === 'cancel' ? '处理缺料异常 - 取消' :
+                  '处理缺料异常'
         }
         open={handleModalVisible}
         onClose={() => {
@@ -372,7 +372,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
           handleFormRef.current?.resetFields();
         }}
         onFinish={handleException}
-        width={MODAL_CONFIG.MEDIUM_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={handleFormRef}
       >
         {currentRecord && (

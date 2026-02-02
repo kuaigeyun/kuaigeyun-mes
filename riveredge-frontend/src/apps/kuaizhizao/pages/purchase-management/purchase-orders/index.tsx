@@ -7,62 +7,20 @@
  * @date 2025-12-30
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProDescriptionsItemType, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Row, Col, message, Table, Steps, Empty, Timeline, Divider } from 'antd';
+import React, { useRef, useState } from 'react';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Row, Col, Table, Empty, Timeline, Divider } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined } from '@ant-design/icons';
+import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
-import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, confirmPurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
+import { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, approvePurchaseOrder, submitPurchaseOrder, pushPurchaseOrderToReceipt, getPurchaseOrderApprovalStatus, getPurchaseOrderApprovalRecords, PurchaseOrder, ApprovalStatus, ApprovalRecord } from '../../../services/purchase';
 import { getDocumentRelations, DocumentRelation } from '../../../services/sales-forecast';
 
-// 采购订单接口定义
-interface PurchaseOrder {
-  id?: number;
-  tenant_id?: number;
-  order_code?: string;
-  supplier_name?: string;
-  order_date?: string;
-  delivery_date?: string;
-  status?: string;
-  total_amount?: number;
-  total_quantity?: number;
-  review_status?: string;
-  items_count?: number;
-  created_at?: string;
-}
-
-interface PurchaseOrderDetail extends PurchaseOrder {
-  supplier_contact?: string;
-  supplier_phone?: string;
-  order_type?: string;
-  tax_rate?: number;
-  tax_amount?: number;
-  net_amount?: number;
-  currency?: string;
-  reviewer_name?: string;
-  review_time?: string;
-  review_remarks?: string;
-  notes?: string;
-  items?: PurchaseOrderItem[];
-}
-
-interface PurchaseOrderItem {
-  id?: number;
-  material_code?: string;
-  material_name?: string;
-  ordered_quantity?: number;
-  unit?: string;
-  unit_price?: number;
-  total_price?: number;
-  received_quantity?: number;
-  outstanding_quantity?: number;
-  required_date?: string;
-  actual_delivery_date?: string;
-  quality_requirements?: string;
-  inspection_required?: boolean;
-}
+// 使用从服务文件导入的接口
+type PurchaseOrderDetail = PurchaseOrder;
+// PurchaseOrderItem 已在导入中定义
 
 const PurchaseOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -79,7 +37,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
   const [documentRelations, setDocumentRelations] = useState<DocumentRelation | null>(null);
-  
+
   // 审批流程相关状态
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null);
   const [approvalRecords, setApprovalRecords] = useState<ApprovalRecord[]>([]);
@@ -243,7 +201,7 @@ const PurchaseOrdersPage: React.FC = () => {
     try {
       const detail = await getPurchaseOrder(record.id!);
       setOrderDetail(detail as PurchaseOrderDetail);
-      
+
       // 获取单据关联关系
       try {
         const relations = await getDocumentRelations('purchase_order', record.id!);
@@ -252,10 +210,10 @@ const PurchaseOrdersPage: React.FC = () => {
         console.error('获取单据关联关系失败:', error);
         setDocumentRelations(null);
       }
-      
+
       // 获取审批流程状态和记录（采购审批流程增强）
       await loadApprovalData(record.id!);
-      
+
       setDetailDrawerVisible(true);
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
@@ -269,7 +227,7 @@ const PurchaseOrdersPage: React.FC = () => {
       // 获取审批流程状态
       const status = await getPurchaseOrderApprovalStatus(orderId);
       setApprovalStatus(status);
-      
+
       // 如果启动了审批流程，获取审批记录
       if (status.has_flow) {
         const recordsResult = await getPurchaseOrderApprovalRecords(orderId);
@@ -421,7 +379,7 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   // 详情列定义
-  const detailColumns: ProDescriptionsItemType<PurchaseOrderDetail>[] = [
+  const detailColumns: ProDescriptionsItemProps<PurchaseOrderDetail>[] = [
     {
       title: '订单编号',
       dataIndex: 'order_code',
@@ -455,7 +413,7 @@ const PurchaseOrdersPage: React.FC = () => {
           '已完成': { text: '已完成', color: 'success' },
           '已取消': { text: '已取消', color: 'error' },
         };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        const config = statusMap[String(status || '')] || { text: String(status || '-'), color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -468,7 +426,7 @@ const PurchaseOrdersPage: React.FC = () => {
           '审核通过': { text: '审核通过', color: 'success' },
           '审核驳回': { text: '审核驳回', color: 'error' },
         };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
+        const config = statusMap[String(status || '')] || { text: String(status || '-'), color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
@@ -545,7 +503,7 @@ const PurchaseOrdersPage: React.FC = () => {
         ]}
       >
         <UniTable<PurchaseOrder>
-          headerTitle="采购订单管理"
+          headerTitle="采购订单"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -788,8 +746,8 @@ const PurchaseOrdersPage: React.FC = () => {
 
               {/* 审批流程（采购审批流程增强） */}
               {approvalStatus && approvalStatus.has_flow && (
-                <Card 
-                  title="审批流程" 
+                <Card
+                  title="审批流程"
                   style={{ marginBottom: 16 }}
                   loading={approvalLoading}
                   extra={
@@ -814,7 +772,7 @@ const PurchaseOrdersPage: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* 审批记录时间线 */}
                   {approvalRecords.length > 0 && (
                     <div>
@@ -823,7 +781,7 @@ const PurchaseOrdersPage: React.FC = () => {
                         items={approvalRecords.map((record) => {
                           const isPassed = record.approval_result === '通过';
                           const isRejected = record.approval_result === '驳回';
-                          
+
                           return {
                             dot: isPassed ? (
                               <CheckCircleTwoTone twoToneColor="#52c41a" />
@@ -837,7 +795,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               <div>
                                 <div style={{ marginBottom: 4 }}>
                                   <strong>{record.step_name || `第${record.step_order}步`}</strong>
-                                  <Tag 
+                                  <Tag
                                     color={isPassed ? 'success' : isRejected ? 'error' : 'processing'}
                                     style={{ marginLeft: 8 }}
                                   >
@@ -860,9 +818,9 @@ const PurchaseOrdersPage: React.FC = () => {
                       />
                     </div>
                   )}
-                  
+
                   {approvalRecords.length === 0 && (
-                    <Empty 
+                    <Empty
                       description="暂无审批记录"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                       style={{ margin: '20px 0' }}
@@ -885,9 +843,9 @@ const PurchaseOrdersPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },
@@ -910,9 +868,9 @@ const PurchaseOrdersPage: React.FC = () => {
                           { title: '单据类型', dataIndex: 'document_type', width: 120 },
                           { title: '单据编号', dataIndex: 'document_code', width: 150 },
                           { title: '单据名称', dataIndex: 'document_name', width: 150 },
-                          { 
-                            title: '状态', 
-                            dataIndex: 'status', 
+                          {
+                            title: '状态',
+                            dataIndex: 'status',
                             width: 100,
                             render: (status: string) => <Tag>{status}</Tag>
                           },

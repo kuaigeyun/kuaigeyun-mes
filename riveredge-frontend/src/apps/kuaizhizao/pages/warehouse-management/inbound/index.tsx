@@ -370,6 +370,18 @@ const InboundPage: React.FC = () => {
           label="关联工单"
           placeholder="选择工单"
         />
+        <ProFormText
+          name="batch_number"
+          label="批号"
+          placeholder="请输入批号（批号管理物料必填）"
+          tooltip="如果所选物料启用了批号管理，此字段为必填"
+        />
+        <ProFormDatePicker
+          name="expiry_date"
+          label="有效期"
+          placeholder="请选择有效期"
+          tooltip="有保质期要求的物料需要填写有效期"
+        />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -393,8 +405,8 @@ const InboundPage: React.FC = () => {
                 <p><strong>状态：</strong>
                   <Tag color={
                     currentOrder.status === '已完成' ? 'success' :
-                    currentOrder.status === '已确认' ? 'processing' :
-                    currentOrder.status === '已取消' ? 'error' : 'default'
+                      currentOrder.status === '已确认' ? 'processing' :
+                        currentOrder.status === '已取消' ? 'error' : 'default'
                   }>
                     {currentOrder.status}
                   </Tag>

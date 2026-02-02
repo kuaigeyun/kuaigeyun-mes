@@ -67,6 +67,12 @@ class BusinessConfigService:
             "sales": {
                 "audit_enabled": False,
             },
+            "procurement": {
+                "require_purchase_requisition": False,
+            },
+            "planning": {
+                "require_production_plan": False,
+            },
         },
     }
     
@@ -109,6 +115,12 @@ class BusinessConfigService:
             },
             "sales": {
                 "audit_enabled": True,
+            },
+            "procurement": {
+                "require_purchase_requisition": False,
+            },
+            "planning": {
+                "require_production_plan": False,
             },
         },
     }

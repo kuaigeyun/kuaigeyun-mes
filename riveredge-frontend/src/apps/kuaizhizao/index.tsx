@@ -24,17 +24,19 @@ import SOPViewerKioskPage from './pages/production-execution/sop-viewer/kiosk';
 import DrawingViewerKioskPage from './pages/production-execution/drawing-viewer/kiosk';
 import ProgramViewerKioskPage from './pages/production-execution/program-viewer/kiosk';
 import ReworkOrdersPage from './pages/production-execution/rework-orders';
-import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
-import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work-orders';
+// import OutsourceOrdersPage from './pages/production-execution/outsource-orders';
+// import OutsourceWorkOrdersPage from './pages/production-execution/outsource-work-orders';
+import OutsourceManagementPage from './pages/production-execution/outsource-management';
 
 // 采购管理页面
 import PurchaseOrdersPage from './pages/purchase-management/purchase-orders';
+import PurchaseRequisitionsPage from './pages/purchase-management/purchase-requisitions';
 import PurchaseReceiptsPage from './pages/purchase-management/purchase-receipts';
 import PurchaseReturnsPage from './pages/purchase-management/purchase-returns';
 
 // 销售管理页面
 // TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理
-// import SalesForecastsPage from './pages/sales-management/sales-forecasts';
+import SalesForecastsPage from './pages/sales-management/sales-forecasts';
 import SalesOrdersPage from './pages/sales-management/sales-orders';
 import SalesDeliveriesPage from './pages/sales-management/sales-deliveries';
 import SalesReturnsPage from './pages/sales-management/sales-returns';
@@ -47,11 +49,7 @@ import FinishedGoodsInspectionPage from './pages/quality-management/finished-goo
 // 成本管理页面
 import CostRulesPage from './pages/cost-management/cost-rules';
 import CostCalculationsPage from './pages/cost-management/cost-calculations';
-import CostCalculationTabsPage from './pages/cost-management/cost-calculation-tabs';
-import ProductionCostPage from './pages/cost-management/production-cost';
-import OutsourceCostPage from './pages/cost-management/outsource-cost';
-import PurchaseCostPage from './pages/cost-management/purchase-cost';
-import QualityCostPage from './pages/cost-management/quality-cost';
+import CostDetailsPage from './pages/cost-management/cost-details';
 import CostComparisonPage from './pages/cost-management/cost-comparison';
 import CostOptimizationPage from './pages/cost-management/cost-optimization';
 import CostReportPage from './pages/cost-management/cost-report';
@@ -65,8 +63,12 @@ import EquipmentStatusPage from './pages/equipment-management/equipment-status';
 import MaintenanceRemindersPage from './pages/equipment-management/maintenance-reminders';
 
 // 财务管理页面
-import AccountsPayablePage from './pages/finance-management/accounts-payable';
-import AccountsReceivablePage from './pages/finance-management/accounts-receivable';
+import InvoiceListPage from './pages/finance-management/invoices';
+import InvoiceDetailPage from './pages/finance-management/invoices/detail';
+import PayableListPage from './pages/finance-management/payables';
+import PayableDetailPage from './pages/finance-management/payables/detail';
+import ReceivableListPage from './pages/finance-management/receivables';
+import ReceivableDetailPage from './pages/finance-management/receivables/detail';
 
 // 报表分析页面
 import InventoryReportPage from './pages/reports/inventory-report';
@@ -90,6 +92,9 @@ import QualityExceptionsPage from './pages/production-execution/quality-exceptio
 import ExceptionStatisticsPage from './pages/production-execution/exception-statistics';
 import ExceptionProcessPage from './pages/production-execution/exception-process';
 import ReplenishmentSuggestionsPage from './pages/warehouse-management/replenishment-suggestions';
+import BatchInventoryQueryPage from './pages/warehouse-management/batch-inventory-query';
+import LineSideWarehousePage from './pages/warehouse-management/line-side-warehouse';
+import BackflushRecordsPage from './pages/warehouse-management/backflush-records';
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -105,6 +110,7 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 采购管理路由 */}
       <Route path="purchase-management/purchase-orders" element={<PurchaseOrdersPage />} />
+      <Route path="purchase-management/purchase-requisitions" element={<PurchaseRequisitionsPage />} />
       <Route path="purchase-management/purchase-receipts" element={<PurchaseReceiptsPage />} />
       <Route path="purchase-management/purchase-returns" element={<PurchaseReturnsPage />} />
 
@@ -118,8 +124,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/drawing-viewer/kiosk" element={<DrawingViewerKioskPage />} />
       <Route path="production-execution/program-viewer/kiosk" element={<ProgramViewerKioskPage />} />
       <Route path="production-execution/rework-orders" element={<ReworkOrdersPage />} />
-      <Route path="production-execution/outsource-orders" element={<OutsourceOrdersPage />} />
-      <Route path="production-execution/outsource-work-orders" element={<OutsourceWorkOrdersPage />} />
+      {/* 合并后的委外管理页面 */}
+      <Route path="production-execution/outsource-management" element={<OutsourceManagementPage />} />
       <Route path="production-execution/material-shortage-exceptions" element={<MaterialShortageExceptionsPage />} />
       <Route path="production-execution/delivery-delay-exceptions" element={<DeliveryDelayExceptionsPage />} />
       <Route path="production-execution/quality-exceptions" element={<QualityExceptionsPage />} />
@@ -128,7 +134,7 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 销售管理路由 */}
       {/* TODO: 销售预测已合并为统一需求管理，但销售订单需要独立管理 */}
-      {/* <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} /> */}
+      <Route path="sales-management/sales-forecasts" element={<SalesForecastsPage />} />
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
       <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
       <Route path="sales-management/sales-returns" element={<SalesReturnsPage />} />
@@ -141,13 +147,7 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 成本管理路由 */}
       <Route path="cost-management/cost-rules" element={<CostRulesPage />} />
       <Route path="cost-management/cost-calculations" element={<CostCalculationsPage />} />
-      {/* 统一的成本核算页面（使用Tabs） */}
-      <Route path="cost-management/cost-calculation-tabs" element={<CostCalculationTabsPage />} />
-      {/* 保留原有路由以兼容旧链接，但重定向到统一页面 */}
-      <Route path="cost-management/production-cost" element={<CostCalculationTabsPage />} />
-      <Route path="cost-management/outsource-cost" element={<CostCalculationTabsPage />} />
-      <Route path="cost-management/purchase-cost" element={<CostCalculationTabsPage />} />
-      <Route path="cost-management/quality-cost" element={<CostCalculationTabsPage />} />
+      <Route path="cost-management/cost-details" element={<CostDetailsPage />} />
       <Route path="cost-management/cost-comparison" element={<CostComparisonPage />} />
       <Route path="cost-management/cost-optimization" element={<CostOptimizationPage />} />
       <Route path="cost-management/cost-report" element={<CostReportPage />} />
@@ -161,8 +161,18 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/maintenance-reminders" element={<MaintenanceRemindersPage />} />
 
       {/* 财务管理路由 */}
-      <Route path="finance-management/accounts-payable" element={<AccountsPayablePage />} />
-      <Route path="finance-management/accounts-receivable" element={<AccountsReceivablePage />} />
+      <Route path="finance-management/invoices" element={<InvoiceListPage />} />
+      <Route path="finance-management/invoices/:code" element={<InvoiceDetailPage />} />
+      <Route path="finance-management/sales-invoices" element={<InvoiceListPage />} /> {/* Alias or same component with filter handled in URL/State */}
+      <Route path="finance-management/purchase-invoices" element={<InvoiceListPage />} />
+
+      <Route path="finance-management/payables" element={<PayableListPage />} />
+      <Route path="finance-management/payables/:id" element={<PayableDetailPage />} />
+      <Route path="finance-management/payments" element={<PayableListPage />} /> {/* Shortcut to payment records if needed, for now reuse list */}
+
+      <Route path="finance-management/receivables" element={<ReceivableListPage />} />
+      <Route path="finance-management/receivables/:id" element={<ReceivableDetailPage />} />
+      <Route path="finance-management/receipts" element={<ReceivableListPage />} />
 
       {/* 报表分析路由 */}
       <Route path="reports/inventory-report" element={<InventoryReportPage />} />
@@ -181,6 +191,9 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/document-efficiency" element={<DocumentEfficiencyPage />} />
       <Route path="warehouse-management/initial-data" element={<InitialDataImportPage />} />
       <Route path="warehouse-management/replenishment-suggestions" element={<ReplenishmentSuggestionsPage />} />
+      <Route path="warehouse-management/batch-inventory-query" element={<BatchInventoryQueryPage />} />
+      <Route path="warehouse-management/line-side-warehouse" element={<LineSideWarehousePage />} />
+      <Route path="warehouse-management/backflush-records" element={<BackflushRecordsPage />} />
 
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={
