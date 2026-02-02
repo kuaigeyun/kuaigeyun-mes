@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { ProTable } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Card, Tag, message, Space, Button } from 'antd';
+import { Tag, message, Space, Button } from 'antd';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { WarningOutlined, ExportOutlined } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 
@@ -23,7 +23,6 @@ interface BatchInventoryItem {
 }
 
 const BatchInventoryQuery: React.FC = () => {
-    const { t } = useTranslation();
     const [includeExpired, setIncludeExpired] = useState(false);
 
     const columns: ProColumns<BatchInventoryItem>[] = [
@@ -143,8 +142,8 @@ const BatchInventoryQuery: React.FC = () => {
     };
 
     return (
-        <Card>
-            <ProTable<BatchInventoryItem>
+        <ListPageTemplate>
+            <UniTable<BatchInventoryItem>
                 columns={columns}
                 request={fetchBatchInventory}
                 rowKey="id"
@@ -175,7 +174,7 @@ const BatchInventoryQuery: React.FC = () => {
                 params={{ includeExpired }}
                 headerTitle="批次库存查询"
             />
-        </Card>
+        </ListPageTemplate>
     );
 };
 

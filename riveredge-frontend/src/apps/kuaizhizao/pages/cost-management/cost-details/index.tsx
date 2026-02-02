@@ -8,8 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { PageContainer } from '@ant-design/pro-components';
-import { Tabs } from 'antd';
+import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useLocation } from 'react-router-dom';
 import ProductionCostPage from '../production-cost';
 import OutsourceCostPage from '../outsource-cost';
@@ -40,9 +39,6 @@ const CostDetailsPage: React.FC = () => {
     // Tab切换处理
     const handleTabChange = (key: string) => {
         setActiveTab(key);
-        // 更新URL但不刷新页面，保持在 cost-details 下
-        // 我们可以通过不同的路径映射到同一个组件，或者仅仅是切换内部状态
-        // 如果我们想让面包屑和左侧菜单保持在“成本明细”，我们应该停留在 /cost-details 路径
     };
 
     const tabItems = [
@@ -69,15 +65,11 @@ const CostDetailsPage: React.FC = () => {
     ];
 
     return (
-        <PageContainer title="成本明细">
-            <Tabs
-                activeKey={activeTab}
-                onChange={handleTabChange}
-                items={tabItems}
-                type="card"
-                size="large"
-            />
-        </PageContainer>
+        <MultiTabListPageTemplate
+            activeTabKey={activeTab}
+            onTabChange={handleTabChange}
+            tabs={tabItems}
+        />
     );
 };
 

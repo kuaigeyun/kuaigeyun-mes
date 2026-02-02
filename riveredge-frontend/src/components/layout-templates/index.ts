@@ -23,6 +23,10 @@
 export { ListPageTemplate } from './ListPageTemplate';
 export type { ListPageTemplateProps, StatCard } from './ListPageTemplate';
 
+// 多标签页列表页面模板
+export { MultiTabListPageTemplate } from './MultiTabListPageTemplate';
+export type { MultiTabListPageTemplateProps, TabItem } from './MultiTabListPageTemplate';
+
 // 表单 Modal 模板
 export { FormModalTemplate } from './FormModalTemplate';
 export type { FormModalTemplateProps } from './FormModalTemplate';

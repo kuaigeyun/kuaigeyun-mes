@@ -100,13 +100,25 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         }
 
     async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:
-        """更新销售预测"""
+        """更新销售预测；若提供 items 则先删后增，覆盖全部明细"""
         async with in_transaction():
-            forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-            update_data = forecast_data.model_dump(exclude_unset=True, exclude={'updated_by'})
+            await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+            dumped = forecast_data.model_dump(exclude_unset=True, exclude={'updated_by'})
+            items_data = dumped.pop('items', None)
+            update_data = {k: v for k, v in dumped.items() if k != 'items'}
             update_data['updated_by'] = updated_by
 
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(**update_data)
+
+            if items_data is not None:
+                await SalesForecastItem.filter(tenant_id=tenant_id, forecast_id=forecast_id).delete()
+                for item_data in items_data:
+                    await SalesForecastItem.create(
+                        tenant_id=tenant_id,
+                        forecast_id=forecast_id,
+                        **item_data
+                    )
+
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast
 

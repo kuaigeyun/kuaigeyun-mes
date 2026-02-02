@@ -1,11 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { PageContainer, ProTable, ProColumns, ActionType } from '@ant-design/pro-components';
-import { Button, Tag, Space, message, Popconfirm } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { Button, message, Popconfirm, Space } from 'antd';
+import { PlusOutlined, FileTextOutlined, AccountBookOutlined, PayCircleOutlined } from '@ant-design/icons';
 import { invoiceService } from '../../../services/finance/invoice';
-import { Invoice, InvoiceListParams } from '../../../types/finance/invoice';
+import { Invoice } from '../../../types/finance/invoice';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -98,13 +100,38 @@ const InvoiceList: React.FC = () => {
   ];
 
   return (
-    <PageContainer
-      header={{
-        title: '发票台账',
-        breadcrumb: {},
-      }}
+    <ListPageTemplate
+      statCards={[
+        {
+          title: '总发票数',
+          value: 125,
+          prefix: <FileTextOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+        {
+          title: '进项金额',
+          value: 45678.90,
+          prefix: <AccountBookOutlined />,
+          valueStyle: { color: '#52c41a' },
+          precision: 2,
+        },
+        {
+          title: '销项金额',
+          value: 89012.34,
+          prefix: <AccountBookOutlined />,
+          valueStyle: { color: '#faad14' },
+          precision: 2,
+        },
+        {
+          title: '待认证',
+          value: 8,
+          prefix: <PayCircleOutlined />,
+          suffix: '张',
+          valueStyle: { color: '#f5222d' },
+        },
+      ]}
     >
-      <ProTable<Invoice, InvoiceListParams>
+      <UniTable<Invoice>
         headerTitle="发票列表"
         actionRef={actionRef}
         rowKey="id"
@@ -153,7 +180,7 @@ const InvoiceList: React.FC = () => {
           },
         }}
       />
-    </PageContainer>
+    </ListPageTemplate>
   );
 };
 

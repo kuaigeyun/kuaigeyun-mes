@@ -1,10 +1,12 @@
 import React, { useRef } from 'react';
-import { PageContainer, ProTable, ProColumns, ActionType } from '@ant-design/pro-components';
-import { Space, Tag, Button } from 'antd';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { Space } from 'antd';
 import { payableService } from '../../../services/finance/payable';
-import { Payable, PayableListParams } from '../../../types/finance/payable';
+import { Payable } from '../../../types/finance/payable';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
@@ -93,13 +95,8 @@ const PayableList: React.FC = () => {
     ];
 
     return (
-        <PageContainer
-            header={{
-                title: '应付对账',
-                breadcrumb: {},
-            }}
-        >
-            <ProTable<Payable, PayableListParams>
+        <ListPageTemplate>
+            <UniTable<Payable>
                 headerTitle="应付单列表"
                 actionRef={actionRef}
                 rowKey="id"
@@ -121,7 +118,7 @@ const PayableList: React.FC = () => {
                 }}
                 columns={columns}
             />
-        </PageContainer>
+        </ListPageTemplate>
     );
 };
 

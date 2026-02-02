@@ -13,7 +13,7 @@ import { Card, Tabs, theme, Collapse, Typography, Tag, Space } from 'antd';
 import { PAGE_SPACING, ANT_DESIGN_TOKENS } from './constants';
 
 const { useToken } = theme;
-const { Text, Paragraph } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
 
 /**
@@ -95,7 +95,7 @@ export const CalculationResultTemplate: React.FC<CalculationResultTemplateProps>
     <div
       className={className}
       style={{
-        padding: `${PAGE_SPACING.PADDING}px`,
+        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
         ...style,
       }}
     >

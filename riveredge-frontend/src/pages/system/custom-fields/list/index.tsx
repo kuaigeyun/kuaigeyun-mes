@@ -87,12 +87,12 @@ const CustomFieldListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  
+
   // 功能页面选择状态（左右结构）
   const [selectedPageCode, setSelectedPageCode] = useState<string | null>(null);
   const [pageSearchValue, setPageSearchValue] = useState<string>('');
   const [pageFieldCounts, setPageFieldCounts] = useState<Record<string, number>>({});
-  
+
   // Modal 相关状态（创建/编辑字段）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -100,16 +100,16 @@ const CustomFieldListPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [fieldType, setFieldType] = useState<'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json'>('text');
   const [configForm, setConfigForm] = useState<Record<string, any>>({});
-  
+
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<CustomField | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  
+
   // 页面配置状态
   const [pageConfigs, setPageConfigs] = useState<CustomFieldPageConfig[]>([]);
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
-  
+
   /**
    * 加载页面配置列表
    */
@@ -120,7 +120,7 @@ const CustomFieldListPage: React.FC = () => {
       const pages = await getCustomFieldPages();
       console.log(`✅ 成功加载 ${pages.length} 个页面配置:`, pages.map(p => p.pageCode));
       setPageConfigs(pages);
-      
+
       // 默认选中第一个页面（仅当没有选中页面时）
       if (pages.length > 0 && !selectedPageCode) {
         setSelectedPageCode(pages[0].pageCode);
@@ -138,12 +138,12 @@ const CustomFieldListPage: React.FC = () => {
       setPageConfigsLoading(false);
     }
   };
-  
+
   // 初始化加载页面配置
   useEffect(() => {
     loadPageConfigs();
   }, []);
-  
+
   /**
    * 获取过滤后的功能页面列表
    */
@@ -159,7 +159,7 @@ const CustomFieldListPage: React.FC = () => {
         page.tableName.toLowerCase().includes(searchLower)
     );
   };
-  
+
   /**
    * 获取选中的页面配置
    */
@@ -167,7 +167,7 @@ const CustomFieldListPage: React.FC = () => {
     if (!selectedPageCode) return null;
     return pageConfigs.find(page => page.pageCode === selectedPageCode) || null;
   };
-  
+
   /**
    * 处理选择功能页面
    */
@@ -178,7 +178,7 @@ const CustomFieldListPage: React.FC = () => {
     // 更新字段数量
     await updatePageFieldCounts();
   };
-  
+
   /**
    * 更新各页面的字段数量
    */
@@ -202,7 +202,7 @@ const CustomFieldListPage: React.FC = () => {
       console.error('更新字段数量失败:', error);
     }
   };
-  
+
   // 初始化时加载字段数量
   useEffect(() => {
     updatePageFieldCounts();
@@ -240,7 +240,7 @@ const CustomFieldListPage: React.FC = () => {
       setFieldType(record.field_type);
       setConfigForm(record.config || {});
       setModalVisible(true);
-      
+
       // 获取字段详情
       const detail = await getCustomFieldByUuid(record.uuid);
       formRef.current?.setFieldsValue({
@@ -364,21 +364,21 @@ const CustomFieldListPage: React.FC = () => {
   const handleSubmit = async (values: any): Promise<void> => {
     try {
       setFormLoading(true);
-      
+
       // 确保表名正确（新建时使用选中页面的表名）
       if (!isEdit && selectedPage) {
         values.table_name = selectedPage.tableName;
       }
-      
+
       // 验证表名是否存在
       if (!values.table_name) {
         messageApi.error('关联表名不能为空，请先选择一个功能页面');
         return;
       }
-      
+
       // 根据字段类型构建配置对象
       const config: Record<string, any> = {};
-      
+
       if (fieldType === 'text') {
         if (values.default_value) config.default = values.default_value;
         if (values.max_length) config.maxLength = parseInt(values.max_length);
@@ -443,19 +443,19 @@ const CustomFieldListPage: React.FC = () => {
           }
         }
       }
-      
+
       // 移除配置相关字段
-      const { 
-        default_value, max_length, min_value, max_value, 
-        date_format, time_format, datetime_format, 
+      const {
+        default_value, max_length, min_value, max_value,
+        date_format, time_format, datetime_format,
         textarea_rows, select_options,
         image_max_size, image_allowed_types,
         file_max_size, file_allowed_types,
         associated_table, associated_field,
         formula_expression,
-        ...fieldData 
+        ...fieldData
       } = values;
-      
+
       if (isEdit && currentFieldUuid) {
         await updateCustomField(currentFieldUuid, {
           ...fieldData,
@@ -469,7 +469,7 @@ const CustomFieldListPage: React.FC = () => {
         } as CreateCustomFieldData);
         messageApi.success('创建成功');
       }
-      
+
       setModalVisible(false);
       actionRef.current?.reload();
       // 更新字段数量
@@ -609,7 +609,7 @@ const CustomFieldListPage: React.FC = () => {
                   <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                     格式示例：
                     <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
-{`[
+                      {`[
   {"label": "选项1", "value": "1"},
   {"label": "选项2", "value": "2"}
 ]`}
@@ -633,7 +633,7 @@ const CustomFieldListPage: React.FC = () => {
                   <div style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
                     格式示例：
                     <pre style={{ margin: '4px 0', padding: '4px', backgroundColor: '#f5f5f5', borderRadius: '2px', fontSize: '11px' }}>
-{`[
+                      {`[
   {"label": "选项1", "value": "1"},
   {"label": "选项2", "value": "2"}
 ]`}
@@ -996,8 +996,8 @@ const CustomFieldListPage: React.FC = () => {
         className="custom-field-management-page"
         style={{
           display: 'flex',
-          height: 'calc(100vh - 96px)',
-          padding: `${PAGE_SPACING.PADDING}px`,
+          height: '100%',
+          padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
           margin: 0,
           boxSizing: 'border-box',
           borderRadius: token.borderRadiusLG || token.borderRadius,
@@ -1074,51 +1074,51 @@ const CustomFieldListPage: React.FC = () => {
                         {module}
                       </div>
                       {modulePages.map(page => {
-                      const isSelected = selectedPageCode === page.pageCode;
-                      const fieldCount = pageFieldCounts[page.pageCode] || 0;
-                      return (
-                        <div
-                          key={page.pageCode}
-                          onClick={() => handleSelectPage(page.pageCode)}
-                          style={{
-                            padding: '12px',
-                            marginBottom: '4px',
-                            cursor: 'pointer',
-                            borderRadius: token.borderRadius,
-                            backgroundColor: isSelected ? token.colorPrimaryBg : 'transparent',
-                            border: isSelected ? `1px solid ${token.colorPrimary}` : `1px solid transparent`,
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.backgroundColor = token.colorFillSecondary;
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }
-                          }}
-                        >
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: isSelected ? 500 : 400, marginBottom: '4px' }}>
-                              {page.pageName}
+                        const isSelected = selectedPageCode === page.pageCode;
+                        const fieldCount = pageFieldCounts[page.pageCode] || 0;
+                        return (
+                          <div
+                            key={page.pageCode}
+                            onClick={() => handleSelectPage(page.pageCode)}
+                            style={{
+                              padding: '12px',
+                              marginBottom: '4px',
+                              cursor: 'pointer',
+                              borderRadius: token.borderRadius,
+                              backgroundColor: isSelected ? token.colorPrimaryBg : 'transparent',
+                              border: isSelected ? `1px solid ${token.colorPrimary}` : `1px solid transparent`,
+                              transition: 'all 0.2s',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.backgroundColor = token.colorFillSecondary;
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: isSelected ? 500 : 400, marginBottom: '4px' }}>
+                                {page.pageName}
+                              </div>
+                              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
+                                {page.tableNameLabel}
+                              </div>
                             </div>
-                            <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
-                              {page.tableNameLabel}
-                            </div>
+                            {fieldCount > 0 && (
+                              <Tag color="blue" size="small" style={{ marginLeft: '8px' }}>
+                                {fieldCount}
+                              </Tag>
+                            )}
                           </div>
-                          {fieldCount > 0 && (
-                            <Tag color="blue" size="small" style={{ marginLeft: '8px' }}>
-                              {fieldCount}
-                            </Tag>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                     </div>
                   );
                 })
@@ -1189,17 +1189,17 @@ const CustomFieldListPage: React.FC = () => {
                         page_size: params.pageSize || 20,
                         table_name: selectedPage.tableName, // 只查询当前页面的字段
                       };
-                      
+
                       // 状态筛选
                       if (params.is_active !== undefined && params.is_active !== '' && params.is_active !== null) {
                         apiParams.is_active = params.is_active;
                       }
-                      
+
                       // 类型筛选
                       if (params.field_type) {
                         apiParams.field_type = params.field_type;
                       }
-                      
+
                       // 搜索条件处理：name 和 code 使用模糊搜索
                       if (params.name) {
                         apiParams.name = params.name as string;
@@ -1207,7 +1207,7 @@ const CustomFieldListPage: React.FC = () => {
                       if (params.code) {
                         apiParams.code = params.code as string;
                       }
-                      
+
                       try {
                         const response = await getCustomFieldList(apiParams);
                         return {
@@ -1344,9 +1344,9 @@ const CustomFieldListPage: React.FC = () => {
             placeholder="请输入占位符"
             colProps={{ span: 12 }}
           />
-          <div style={{ 
-            padding: '16px', 
-            backgroundColor: '#fafafa', 
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#fafafa',
             borderRadius: '4px',
             border: '1px solid #d9d9d9',
             marginBottom: 16,

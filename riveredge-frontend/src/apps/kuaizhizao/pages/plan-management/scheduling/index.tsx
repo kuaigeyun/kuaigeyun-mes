@@ -6,10 +6,10 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Card, message, Modal } from 'antd';
+import { App, Button, Tag, Space, Card, Modal } from 'antd';
 import { ReloadOutlined, CalculatorOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../../components/layout-templates/ListPageTemplate';
+import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 
 interface MRPSuggestion {
   id: number;
@@ -36,17 +36,6 @@ interface WorkOrderSchedule {
   priority: number;
 }
 
-interface GanttTask {
-  id: string;
-  name: string;
-  start: Date;
-  end: Date;
-  progress: number;
-  dependencies?: string[];
-  workCenter: string;
-  priority: number;
-  status: 'pending' | 'in_progress' | 'completed';
-}
 
 const SchedulingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -57,7 +46,6 @@ const SchedulingPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'mrp' | 'lrp' | 'schedule' | 'gantt'>('mrp');
 
   // 甘特图数据状态
-  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>([]);
   const [ganttViewMode, setGanttViewMode] = useState<'day' | 'week' | 'month'>('week');
 
   /**
@@ -107,13 +95,13 @@ const SchedulingPage: React.FC = () => {
               optimize_objective: 'min_makespan',
             },
           });
-          
+
           if (result.statistics.scheduled_count > 0) {
             messageApi.success(`智能排产完成：成功排产 ${result.statistics.scheduled_count} 个工单，排产成功率 ${(result.statistics.scheduling_rate * 100).toFixed(1)}%`);
           } else {
             messageApi.warning('智能排产完成，但没有工单可以排产');
           }
-          
+
           if (result.unscheduled_orders.length > 0) {
             Modal.warning({
               title: '部分工单无法排产',
@@ -134,27 +122,13 @@ const SchedulingPage: React.FC = () => {
               ),
             });
           }
-          
+
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error?.message || '智能排产失败');
         }
       },
     });
-  };
-
-  /**
-   * 处理甘特图任务拖拽
-   */
-  const handleTaskDrag = (taskId: string, newStart: Date, newEnd: Date) => {
-    setGanttTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId
-          ? { ...task, start: newStart, end: newEnd }
-          : task
-      )
-    );
-    messageApi.success('工单排程已更新');
   };
 
   /**
@@ -169,40 +143,40 @@ const SchedulingPage: React.FC = () => {
    */
   const loadGanttData = () => {
     // 模拟甘特图数据
-    const mockTasks: GanttTask[] = [
-      {
-        id: 'task-1',
-        name: 'WO20241201001 - 产品A生产',
-        start: new Date('2024-12-02'),
-        end: new Date('2024-12-04'),
-        progress: 30,
-        workCenter: '组装线1',
-        priority: 8,
-        status: 'in_progress',
-      },
-      {
-        id: 'task-2',
-        name: 'WO20241201002 - 产品B生产',
-        start: new Date('2024-12-03'),
-        end: new Date('2024-12-05'),
-        progress: 0,
-        workCenter: '组装线2',
-        priority: 6,
-        status: 'pending',
-        dependencies: ['task-1'],
-      },
-      {
-        id: 'task-3',
-        name: 'WO20241201003 - 产品C生产',
-        start: new Date('2024-12-04'),
-        end: new Date('2024-12-06'),
-        progress: 100,
-        workCenter: '组装线1',
-        priority: 5,
-        status: 'completed',
-      },
-    ];
-    setGanttTasks(mockTasks);
+    // const mockTasks: GanttTask[] = [
+    //   {
+    //     id: 'task-1',
+    //     name: 'WO20241201001 - 产品A生产',
+    //     start: new Date('2024-12-02'),
+    //     end: new Date('2024-12-04'),
+    //     progress: 30,
+    //     workCenter: '组装线1',
+    //     priority: 8,
+    //     status: 'in_progress',
+    //   },
+    //   {
+    //     id: 'task-2',
+    //     name: 'WO20241201002 - 产品B生产',
+    //     start: new Date('2024-12-03'),
+    //     end: new Date('2024-12-05'),
+    //     progress: 0,
+    //     workCenter: '组装线2',
+    //     priority: 6,
+    //     status: 'pending',
+    //     dependencies: ['task-1'],
+    //   },
+    //   {
+    //     id: 'task-3',
+    //     name: 'WO20241201003 - 产品C生产',
+    //     start: new Date('2024-12-04'),
+    //     end: new Date('2024-12-06'),
+    //     progress: 100,
+    //     workCenter: '组装线1',
+    //     priority: 5,
+    //     status: 'completed',
+    //   },
+    // ];
+    // setGanttTasks(mockTasks);
   };
 
   // 初始化甘特图数据
@@ -246,11 +220,14 @@ const SchedulingPage: React.FC = () => {
       dataIndex: 'shortageQuantity',
       width: 100,
       align: 'right',
-      render: (text) => (
-        <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>
-          {text > 0 ? `-${text}` : text}
-        </span>
-      ),
+      render: (text: any) => {
+        const val = Number(text);
+        return (
+          <span style={{ color: val > 0 ? '#f5222d' : '#52c41a' }}>
+            {val > 0 ? `-${val}` : val}
+          </span>
+        );
+      },
     },
     {
       title: '建议工单数',
@@ -350,14 +327,17 @@ const SchedulingPage: React.FC = () => {
       dataIndex: 'priority',
       width: 80,
       align: 'center',
-      render: (priority) => (
-        <Tag color={
-          priority >= 8 ? 'red' :
-          priority >= 5 ? 'orange' : 'green'
-        }>
-          {priority}
-        </Tag>
-      ),
+      render: (priority: any) => {
+        const val = Number(priority);
+        return (
+          <Tag color={
+            val >= 8 ? 'red' :
+              val >= 5 ? 'orange' : 'green'
+          }>
+            {val}
+          </Tag>
+        );
+      },
     },
     {
       title: '状态',
@@ -383,7 +363,7 @@ const SchedulingPage: React.FC = () => {
             rowKey="id"
             columns={mrpColumns}
             showAdvancedSearch={true}
-            request={async (params) => {
+            request={async () => {
               // 模拟MRP结果数据
               const mockData: MRPSuggestion[] = [
                 {
@@ -496,11 +476,14 @@ const SchedulingPage: React.FC = () => {
                 dataIndex: 'shortageQuantity',
                 width: 100,
                 align: 'right',
-                render: (text) => (
-                  <span style={{ color: text > 0 ? '#f5222d' : '#52c41a' }}>
-                    {text > 0 ? `-${text}` : text}
-                  </span>
-                ),
+                render: (text: any) => {
+                  const val = Number(text);
+                  return (
+                    <span style={{ color: val > 0 ? '#f5222d' : '#52c41a' }}>
+                      {val > 0 ? `-${val}` : val}
+                    </span>
+                  );
+                },
               },
               {
                 title: '建议工单数',
@@ -536,7 +519,7 @@ const SchedulingPage: React.FC = () => {
               },
             ]}
             showAdvancedSearch={true}
-            request={async (params) => {
+            request={async () => {
               // 模拟MTO LRP结果数据
               const mockData = [
                 {
@@ -609,7 +592,7 @@ const SchedulingPage: React.FC = () => {
             rowKey="id"
             columns={scheduleColumns}
             showAdvancedSearch={true}
-            request={async (params) => {
+            request={async () => {
               // 模拟工单排程数据
               const mockData: WorkOrderSchedule[] = [
                 {
@@ -734,16 +717,11 @@ const SchedulingPage: React.FC = () => {
   ];
 
   return (
-    <ListPageTemplate>
-      <Card
-        tabList={tabs.map(tab => ({ key: tab.key, label: tab.label }))}
-        activeTabKey={activeTab}
-        onTabChange={(key) => setActiveTab(key as 'mrp' | 'lrp' | 'schedule')}
-        bodyStyle={{ padding: '0' }}
-      >
-        {tabs.find(tab => tab.key === activeTab)?.children}
-      </Card>
-    </ListPageTemplate>
+    <MultiTabListPageTemplate
+      activeTabKey={activeTab}
+      onTabChange={(key) => setActiveTab(key as any)}
+      tabs={tabs}
+    />
   );
 };
 

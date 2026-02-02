@@ -475,6 +475,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 }: UniTableProps<T>) {
   const { message } = App.useApp();
   const { token } = theme.useToken();
+
+  // 视图类型状态
+  const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats' | 'touch'>(defaultViewType);
+  // 表格数据状态（用于其他视图）
+  const [tableData, setTableData] = useState<T[]>([]);
+  // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
+  const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch();
+  // 模糊搜索关键词状态
+  const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('');
+  // 防抖定时器引用
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const internalActionRef = useRef<ActionType>();
+  const internalFormRef = useRef<ProFormInstance>();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonContainerRef = useRef<HTMLDivElement>(null);
+
+  // 使用外部传入的 ref 或内部创建的 ref（优先使用外部传入的）
+  const actionRef = (externalActionRef || hookActionRef || internalActionRef) as React.MutableRefObject<ActionType | undefined>;
+  const formRef = (externalFormRef || hookFormRef || internalFormRef) as React.MutableRefObject<ProFormInstance | undefined>;
+
   // 导入弹窗状态
   const [importModalVisible, setImportModalVisible] = useState(false);
 
@@ -552,7 +573,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         fixedHeight += pagination.clientHeight;
         // 获取实际的 margin-top
         const marginTop = parseInt(paginationStyle.marginTop) || 0;
-        fixedHeight += marginTop;
+        const marginBottom = parseInt(paginationStyle.marginBottom) || 0;
+        fixedHeight += marginTop + marginBottom;
+      } else {
+        // 如果分页器尚未加载，预留 64px 高度
+        fixedHeight += 64;
       }
 
       // ProCard 的 padding（上下各 24px，但可能被覆盖）
@@ -587,6 +612,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         if (pagination) {
           const paginationRect = pagination.getBoundingClientRect();
           bottomOffset = containerBottom - paginationRect.bottom;
+        } else {
+          // 如果分页器尚未加载，预留空间以免遮挡
+          bottomOffset = 64;
         }
 
         // 计算表格主体可用高度
@@ -619,7 +647,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     return () => {
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [tableData.length]); // 当数据加载后重新计算
 
   // 预加载拼音库（组件挂载时）
   useEffect(() => {
@@ -660,29 +688,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       );
     });
   }, [columns]);
-
-  // 视图类型状态
-  const [currentViewType, setCurrentViewType] = useState<'table' | 'card' | 'kanban' | 'stats' | 'touch'>(defaultViewType);
-  // 表格数据状态（用于其他视图）
-  const [tableData, setTableData] = useState<T[]>([]);
-  // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
-  const { searchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } = useProTableSearch();
-  // 模糊搜索关键词状态
-  const [fuzzySearchKeyword, setFuzzySearchKeyword] = useState<string>('');
-  // 防抖定时器引用
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const internalActionRef = useRef<ActionType>();
-  const internalFormRef = useRef<ProFormInstance>();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonContainerRef = useRef<HTMLDivElement>(null);
-
-
-
-  // 使用外部传入的 ref 或内部创建的 ref（优先使用外部传入的）
-  const actionRef = (externalActionRef || hookActionRef || internalActionRef) as React.MutableRefObject<ActionType | undefined>;
-  const formRef = (externalFormRef || hookFormRef || internalFormRef) as React.MutableRefObject<ProFormInstance | undefined>;
-
 
   /**
    * 将按钮容器移动到 ant-pro-table 内部
@@ -1154,6 +1159,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
         }
+        .uni-table-pro-table .ant-pro-card .ant-pro-card-body {
+          padding-left: 16px !important;
+          padding-right: 16px !important;
+        }
         .uni-table-pro-table .ant-pro-table-list-toolbar {
           padding: 16px 0 !important;
           margin: 0 !important;
@@ -1192,104 +1201,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           overflow-x: auto !important;
           /* overflow-y由scroll.y属性控制，不在这里强制设置 */
         }
-        /* 两栏布局中的表格需要垂直滚动 */
-        .two-column-layout-content .uni-table-pro-table .ant-table-body {
-          overflow-y: auto !important;
-          /* 确保滚动条可见 */
-          scrollbar-width: thin !important;
-          -ms-overflow-style: auto !important;
-        }
-        
-        /* 两栏布局中的表格滚动条样式 - 覆盖全局隐藏样式 */
-        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar {
-          display: block !important;
-          width: 8px !important;
-          height: 8px !important;
-          background: transparent !important;
-          -webkit-appearance: auto !important;
-          appearance: auto !important;
-        }
-        
-        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-button {
-          display: none !important;
-        }
-        
-        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-track {
-          display: block !important;
-          background: #f5f5f5 !important;
-          border-radius: 4px !important;
-          width: 8px !important;
-          height: 8px !important;
-        }
-        
-        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb {
-          display: block !important;
-          background: #bfbfbf !important;
-          border-radius: 4px !important;
-          width: 8px !important;
-          height: 8px !important;
-        }
-        
-        .two-column-layout-content .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb:hover {
-          background: #999 !important;
-        }
         /* 当表格内容没有超出容器高度时，隐藏垂直滚动条（非两栏布局） */
         .uni-table-pro-table .ant-table-body:not(:has(.ant-table-tbody > tr:last-child)):not(.two-column-layout-content .ant-table-body) {
           overflow-y: hidden !important;
-        }
-        /* 当表格为空时，隐藏垂直滚动条 */
-        /* 使用更精确的选择器，确保覆盖所有可能的空状态 */
-        .uni-table-pro-table .ant-table-empty .ant-table-body,
-        .uni-table-pro-table .ant-table-placeholder .ant-table-body,
-        .uni-table-pro-table .ant-table-empty .ant-table-container,
-        .uni-table-pro-table .ant-table-placeholder .ant-table-container,
-        .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-body,
-        .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-body,
-        .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-container,
-        .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-container {
-          overflow-y: hidden !important;
-          overflow-x: hidden !important;
-        }
-        /* 两栏布局中的空表格也隐藏滚动条 */
-        .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-body,
-        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-body,
-        .two-column-layout-content .uni-table-pro-table .ant-table-empty .ant-table-container,
-        .two-column-layout-content .uni-table-pro-table .ant-table-placeholder .ant-table-container,
-        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-body,
-        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-body,
-        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty .ant-table-container,
-        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder .ant-table-container {
-          overflow-y: hidden !important;
-          overflow-x: hidden !important;
-        }
-        /* 当表格为空时，隐藏整个表格容器的滚动条 */
-        .uni-table-pro-table .ant-table-wrapper.ant-table-empty,
-        .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder {
-          overflow-y: hidden !important;
-        }
-        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-empty,
-        .two-column-layout-content .uni-table-pro-table .ant-table-wrapper.ant-table-placeholder {
-          overflow-y: hidden !important;
-        }
-        /* 当表格tbody为空时（没有数据行），也隐藏滚动条 */
-        .uni-table-pro-table .ant-table-tbody:empty ~ .ant-table-body,
-        .uni-table-pro-table .ant-table-tbody:has(tr.ant-table-placeholder) ~ .ant-table-body {
-          overflow-y: hidden !important;
-        }
-        /* 优化滚动条显示：只在内容超出时显示 */
-        .uni-table-pro-table .ant-table-body {
-          scrollbar-width: thin;
-        }
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb {
-          background-color: rgba(0, 0, 0, 0.2);
-          border-radius: 4px;
-        }
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb:hover {
-          background-color: rgba(0, 0, 0, 0.3);
         }
         .uni-table-pro-table .ant-pro-table-list-toolbar-container {
           padding-bottom: 0px !important;
@@ -1403,6 +1317,30 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
           border-radius: ${token.borderRadius}px !important;
         }
+        /* 确保滚动条在隐藏时不占位 */
+        .uni-table-container, .uni-table-root {
+          scrollbar-gutter: auto !important;
+        }
+        /* 滚动条美化：隐藏滚动槽，只保留滚动条 */
+        .uni-table-container *::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        .uni-table-container *::-webkit-scrollbar-track {
+          background: transparent !important;
+        }
+        .uni-table-container *::-webkit-scrollbar-thumb {
+          background: rgba(128, 128, 128, 0.3) !important;
+          border-radius: 10px !important;
+        }
+        .uni-table-container *::-webkit-scrollbar-thumb:hover {
+          background: rgba(128, 128, 128, 0.5) !important;
+        }
+        /* Firefox 适配 */
+        .uni-table-container * {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(128, 128, 128, 0.3) transparent;
+        }
       `}</style>
       <div
         ref={containerRef}
@@ -1412,9 +1350,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           padding: 0,
           margin: 0,
           width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
         }}
       >
-        <div ref={tableContainerRef} style={{ width: '100%', height: '100%' }}>
+        <div ref={tableContainerRef} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {/* 按钮容器（会被移动到 ant-pro-table 内部） */}
           {/* 模糊搜索框始终显示，其他按钮根据条件显示 */}
           <div
@@ -1452,7 +1394,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           </div>
 
           {/* ProTable 始终渲染（用于数据加载），但根据视图类型决定是否显示 */}
-          <div style={{ display: currentViewType === 'table' ? 'block' : 'none' }}>
+          <div style={{
+            display: currentViewType === 'table' ? 'flex' : 'none',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden'
+          }}>
             <ProTable<T>
               headerTitle={buildHeaderActions() || headerTitle || undefined}
               actionRef={actionRef}

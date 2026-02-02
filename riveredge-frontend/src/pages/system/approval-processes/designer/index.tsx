@@ -101,15 +101,15 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const processUuid = searchParams.get('uuid');
-  
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [processData, setProcessData] = useState<ApprovalProcess | null>(null);
-  
+
   // ProFlow 数据
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  
+
   // 节点配置 Drawer
   const [nodeConfigVisible, setNodeConfigVisible] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -132,17 +132,17 @@ const ApprovalProcessDesignerPage: React.FC = () => {
    */
   const loadProcessData = async () => {
     if (!processUuid) return;
-    
+
     try {
       setLoading(true);
       const data = await getApprovalProcessByUuid(processUuid);
       setProcessData(data);
-      
+
       // 解析节点和边
       if (data.nodes && typeof data.nodes === 'object') {
         const nodesData = data.nodes.nodes || data.nodes;
         const edgesData = data.nodes.edges || [];
-        
+
         if (Array.isArray(nodesData)) {
           setNodes(nodesData as Node[]);
         } else if (nodesData && typeof nodesData === 'object') {
@@ -165,7 +165,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
             },
           ]);
         }
-        
+
         if (Array.isArray(edgesData)) {
           setEdges(edgesData as Edge[]);
         }
@@ -264,22 +264,22 @@ const ApprovalProcessDesignerPage: React.FC = () => {
    */
   const handleSave = async () => {
     if (!processUuid || !processData) return;
-    
+
     try {
       setSaving(true);
-      
+
       // 构建节点配置
       const nodesConfig = {
         nodes,
         edges,
       };
-      
+
       // 更新流程
       await updateApprovalProcess(processUuid, {
         nodes: nodesConfig,
         config: processData.config,
       });
-      
+
       messageApi.success('流程设计已保存');
     } catch (error: any) {
       messageApi.error(error.message || '保存失败');
@@ -313,7 +313,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 96px)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0 16px 16px 16px' }}>
       {/* 工具栏 */}
       <Card
         size="small"
@@ -346,7 +346,7 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       </Card>
 
       {/* ProFlow 画布 */}
-      <Card 
+      <Card
         style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
         styles={{ body: { padding: 0, height: '100%', display: 'flex', flexDirection: 'column' } }}
       >

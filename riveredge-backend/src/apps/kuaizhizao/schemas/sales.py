@@ -42,6 +42,7 @@ class SalesForecastCreate(SalesForecastBase):
 class SalesForecastUpdate(SalesForecastBase):
     """销售预测更新schema"""
     forecast_code: Optional[str] = Field(None, max_length=50, description="预测编码")
+    items: Optional[List[SalesForecastItemCreate]] = Field(None, description="预测明细列表（提供则覆盖全部明细）")
 
 
 class SalesForecastResponse(SalesForecastBase):
@@ -58,6 +59,13 @@ class SalesForecastResponse(SalesForecastBase):
 class SalesForecastListResponse(SalesForecastResponse):
     """销售预测列表响应schema（简化版）"""
     pass
+
+
+class SalesForecastListResult(BaseSchema):
+    """销售预测列表分页结果"""
+    data: List[SalesForecastListResponse] = Field(default_factory=list, description="列表数据")
+    total: int = Field(0, description="总条数")
+    success: bool = Field(True, description="是否成功")
 
 
 # === 销售预测明细 ===

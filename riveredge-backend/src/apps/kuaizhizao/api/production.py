@@ -330,6 +330,7 @@ from apps.kuaizhizao.schemas.sales import (
     SalesForecastUpdate,
     SalesForecastResponse,
     SalesForecastListResponse,
+    SalesForecastListResult,
     SalesForecastItemCreate,
     SalesForecastItemUpdate,
     SalesForecastItemResponse,
@@ -4769,7 +4770,7 @@ async def create_sales_forecast(
     )
 
 
-@router.get("/sales-forecasts", response_model=List[SalesForecastListResponse], summary="获取销售预测列表")
+@router.get("/sales-forecasts", response_model=SalesForecastListResult, summary="获取销售预测列表")
 async def list_sales_forecasts(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -4777,20 +4778,22 @@ async def list_sales_forecasts(
     forecast_period: Optional[str] = Query(None, description="预测周期"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[SalesForecastListResponse]:
+) -> SalesForecastListResult:
     """
     获取销售预测列表
 
     支持多种筛选条件的高级搜索。
+    返回格式：{ data: [...], total: number, success: true }
     """
     service = SalesForecastService()
-    return await service.list_sales_forecasts(
+    result = await service.list_sales_forecasts(
         tenant_id=tenant_id,
         skip=skip,
         limit=limit,
         status=status,
         forecast_period=forecast_period,
     )
+    return SalesForecastListResult(**result)
 
 
 @router.get("/sales-forecasts/{forecast_id}", response_model=SalesForecastResponse, summary="获取销售预测详情")
