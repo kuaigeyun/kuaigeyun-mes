@@ -78,6 +78,7 @@ const useSafeTranslation = () => {
   }
 };
 import TenantSelector from '../components/tenant-selector';
+import TopBarSearch from '../components/TopBarSearch';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import ThemeEditor from '../components/theme-editor';
@@ -1364,13 +1365,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   /**
    * 处理搜索
    */
-  const handleSearch = (value: string) => {
-    const trimmedValue = value.trim();
-    if (trimmedValue) {
-      // TODO: 实现搜索功能
-      message.info(`搜索: ${trimmedValue}（功能开发中）`);
-    }
-  };
+
 
   /**
    * 键盘快捷键：Ctrl+K / Cmd+K 聚焦搜索框
@@ -4022,22 +4017,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           // 搜索框（始终展开）
           actions.push(
-            <Input
+            <TopBarSearch
               key="search"
-              placeholder="搜索菜单、功能..."
-              prefix={<SearchOutlined style={{ fontSize: 16 }} />}
-              size="small"
-              onPressEnter={(e) => {
-                const value = (e.target as HTMLInputElement).value;
-                handleSearch(value);
-              }}
-              style={{
-                width: 280,
-                height: 32,
-                borderRadius: '16px',
-                backgroundColor: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
-              }}
-              allowClear
+              menuData={filteredMenuData}
+              isLightModeLightBg={isLightModeLightBg}
+              token={token}
+              placeholder={t('common.searchPlaceholder', '搜索菜单、功能...')}
             />
           );
 
@@ -4569,12 +4554,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         >
           {children}
         </UniTabs>
-      </ProLayout>
+      </ProLayout >
 
       {/* 技术栈信息弹窗 */}
-      <TechStackModal
+      < TechStackModal
         open={techStackModalOpen}
-        onCancel={() => setTechStackModalOpen(false)}
+        onCancel={() => setTechStackModalOpen(false)
+        }
       />
 
       {/* 主题编辑面板 */}

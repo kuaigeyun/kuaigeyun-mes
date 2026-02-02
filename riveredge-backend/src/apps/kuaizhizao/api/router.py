@@ -107,6 +107,10 @@ router.include_router(initial_data_router)
 router.include_router(line_side_warehouse_router)
 router.include_router(backflush_router)
 
+# 注册追溯管理路由
+from .traceability import router as traceability_router
+router.include_router(traceability_router, prefix="/traceability")
+
 @router.get("/health")
 async def health_check():
     """
