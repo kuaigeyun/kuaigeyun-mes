@@ -75,10 +75,10 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
     <div
       className={className}
       style={{
-        padding,
+        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 96px)',
+        height: '100%',
         overflow: 'hidden',
         ...style,
       }}

@@ -65,7 +65,7 @@ class WarehouseResponse(WarehouseBase):
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    tenant_id: Optional[int] = Field(None, alias="tenantId", description="租户ID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")

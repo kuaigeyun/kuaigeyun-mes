@@ -61,7 +61,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [tabsPersistence, setTabsPersistence] = useState<boolean>(false); // 标签栏持久化配置
   const [isInitialized, setIsInitialized] = useState<boolean>(false); // 是否已初始化（避免重复恢复）
-  
+
   // 标签栏背景色状态（用于响应主题更新，支持透明度）
   const [tabsBgColorState, setTabsBgColorState] = useState<string | undefined>(() => {
     return (window as any).__RIVEREDGE_TABS_BG_COLOR__;
@@ -122,7 +122,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           const workplaceTab = prevTabs.find((tab) => tab.key === '/system/dashboard/workplace');
           const pinnedTabs = prevTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
           const unpinnedTabs = prevTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
-          
+
           if (workplaceTab) {
             // 有工作台：工作台 -> 固定标签 -> 新标签 -> 其他标签
             newTabs = [workplaceTab, ...pinnedTabs, newTab, ...unpinnedTabs];
@@ -177,20 +177,20 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         return tab;
       });
-      
+
       // 排序：固定标签在前，然后是按顺序排列的其他标签
       // 工作台始终在第一个位置（如果存在）
       const workplaceTab = newTabs.find((tab) => tab.key === '/system/dashboard/workplace');
       const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
       const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== '/system/dashboard/workplace');
-      
+
       const sortedTabs: TabItem[] = [];
       if (workplaceTab) {
         sortedTabs.push(workplaceTab);
       }
       sortedTabs.push(...pinnedTabs);
       sortedTabs.push(...unpinnedTabs);
-      
+
       return sortedTabs;
     });
   }, []);
@@ -244,9 +244,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
       }
     };
-    
+
     loadTabsPersistence();
-    
+
     // 监听用户偏好更新事件
     const handleUserPreferenceUpdated = (event: CustomEvent) => {
       console.log('UniTabs收到用户偏好更新事件:', event.detail);
@@ -259,9 +259,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         console.log('UniTabs配置更新完成，已标记为已初始化');
       }
     };
-    
+
     window.addEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
-    
+
     return () => {
       window.removeEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
     };
@@ -276,28 +276,28 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (isInitialized) {
       return;
     }
-    
+
     // 如果 tabsPersistence 还没有加载完成（还是默认值 false），等待加载完成
     // 通过检查 localStorage 来判断是否已经加载完成
     const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
     const userPreferenceTabsPersistence = tabsPersistence;
-    
+
     // 如果既没有从用户偏好设置读取到，也没有从本地存储读取到，说明还在加载中，等待
     if (!userPreferenceTabsPersistence && localTabsPersistence === null) {
       // 还在加载中，等待
       return;
     }
-    
+
     // 确定最终的持久化配置值
     const finalTabsPersistence = userPreferenceTabsPersistence || (localTabsPersistence === 'true');
-    
+
     // 如果未启用持久化，直接标记为已初始化，不恢复任何标签
     // 只保留工作台标签（会在路由监听中自动添加）
     if (!finalTabsPersistence) {
       setIsInitialized(true);
       return;
     }
-    
+
     // 清理可能存在的应用页面标签，避免应用页面成为默认首页
     try {
       const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
@@ -446,7 +446,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     } catch (error) {
       // 恢复失败，使用默认行为
     }
-    
+
     // 如果没有保存的标签，标记为已初始化，使用默认行为
     setIsInitialized(true);
   }, [tabsPersistence, isInitialized, getTabTitle, navigate]);
@@ -459,7 +459,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (!tabsPersistence || !isInitialized || tabs.length === 0) {
       return;
     }
-    
+
     try {
       // 保存标签列表
       localStorage.setItem('riveredge_saved_tabs', JSON.stringify(tabs));
@@ -481,7 +481,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       // 如果还没有初始化，等待恢复标签完成
       return;
     }
-    
+
     if (location.pathname) {
       // 确保工作台标签始终存在（固定第一个）
       addTab('/system/dashboard/workplace');
@@ -565,13 +565,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (targetIndex === -1) return;
 
     // 保留目标标签及其左侧的所有标签，以及所有固定标签
-    const targetTab = tabs[targetIndex];
     const leftTabs = tabs.slice(0, targetIndex + 1);
     const rightTabs = tabs.slice(targetIndex + 1);
     // 保留右侧的固定标签
     const rightPinnedTabs = rightTabs.filter((tab) => tab.pinned || tab.key === '/system/dashboard/workplace');
     const newTabs = [...leftTabs, ...rightPinnedTabs];
-    
+
     // 重新排序：工作台 -> 固定标签 -> 其他标签
     const workplaceTab = newTabs.find((tab) => tab.key === '/system/dashboard/workplace');
     const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== '/system/dashboard/workplace');
@@ -582,7 +581,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     }
     sortedTabs.push(...pinnedTabs);
     sortedTabs.push(...unpinnedTabs);
-    
+
     setTabs(sortedTabs);
 
     // 如果当前激活的标签被关闭，切换到目标标签
@@ -755,21 +754,21 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   const checkScrollability = useCallback(() => {
     if (!tabsNavRef.current) return;
-    
+
     // Ant Design Tabs 的滚动容器是 .ant-tabs-nav-wrap，而不是 .ant-tabs-nav-list
     const navWrapElement = tabsNavRef.current.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
     if (!navWrapElement) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = navWrapElement;
-    
+
     // 允许1px的误差，避免浮点数精度问题
     // 可以向左滚动：当前滚动位置大于0
     const canScrollLeftValue = scrollLeft > 1;
-    
+
     // 可以向右滚动：内容宽度大于容器宽度，且当前滚动位置未到达最右边
     // 当标签占满时，scrollWidth <= clientWidth，此时 canScrollRight 为 false
     const canScrollRightValue = scrollWidth > clientWidth + 1 && (scrollLeft + clientWidth) < scrollWidth - 1;
-    
+
     setCanScrollLeft(canScrollLeftValue);
     setCanScrollRight(canScrollRightValue);
   }, []);
@@ -779,21 +778,21 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   const scrollTabs = useCallback((direction: 'left' | 'right') => {
     if (!tabsNavRef.current) return;
-    
+
     // Ant Design Tabs 的滚动容器是 .ant-tabs-nav-wrap
     const navWrapElement = tabsNavRef.current.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
     if (!navWrapElement) return;
 
     const scrollAmount = 200; // 每次滚动200px
-    const newScrollLeft = direction === 'left' 
+    const newScrollLeft = direction === 'left'
       ? navWrapElement.scrollLeft - scrollAmount
       : navWrapElement.scrollLeft + scrollAmount;
-    
+
     navWrapElement.scrollTo({
       left: newScrollLeft,
       behavior: 'smooth',
     });
-    
+
     // 滚动后重新检查状态
     setTimeout(() => {
       checkScrollability();
@@ -809,13 +808,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const timer1 = setTimeout(checkScrollability, 50);
     const timer2 = setTimeout(checkScrollability, 100);
     const timer3 = setTimeout(checkScrollability, 200);
-    
+
     const handleResize = () => {
       checkScrollability();
     };
-    
+
     window.addEventListener('resize', handleResize);
-    
+
     // 监听滚动事件 - 使用 .ant-tabs-nav-wrap 作为滚动容器
     const navWrapElement = tabsNavRef.current?.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
     if (navWrapElement) {
@@ -856,12 +855,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   const calculateColorBrightness = (color: string): number => {
     if (!color || typeof color !== 'string') return 255; // 默认返回浅色
-    
+
     // 处理十六进制颜色
     if (color.startsWith('#')) {
       const hex = color.slice(1);
       // 处理 3 位十六进制（如 #fff）
-      const fullHex = hex.length === 3 
+      const fullHex = hex.length === 3
         ? hex.split('').map(c => c + c).join('')
         : hex;
       const r = parseInt(fullHex.slice(0, 2), 16);
@@ -870,7 +869,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       // 计算亮度 (使用相对亮度公式)
       return (r * 299 + g * 587 + b * 114) / 1000;
     }
-    
+
     // 处理 rgb/rgba 格式
     if (color.startsWith('rgb')) {
       const match = color.match(/\d+/g);
@@ -881,7 +880,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         return (r * 299 + g * 587 + b * 114) / 1000;
       }
     }
-    
+
     return 255; // 默认返回浅色
   };
 
@@ -912,10 +911,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (isDarkMode) {
       return 'var(--ant-colorText)';
     }
-    
+
     // 浅色模式下，检查是否有自定义背景色
     const customBgColor = tabsBgColorState || (window as any).__RIVEREDGE_TABS_BG_COLOR__;
-    
+
     if (customBgColor) {
       // 如果有自定义背景色，根据背景色亮度计算文字颜色
       const brightness = calculateColorBrightness(customBgColor);
@@ -1185,7 +1184,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           background: ${tabsBgColor} !important;
           flex-shrink: 0;
           padding-bottom: 0;
-          margin-bottom: 0;
+          margin-bottom: 0px; /* 移除底部间距，由内容区控制 */
           position: sticky;
           top: 56px; /* ProLayout 顶栏高度 */
           z-index: 10;
@@ -1227,11 +1226,27 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         .uni-tabs-content {
           flex: 1;
-          overflow: auto;
+          overflow-y: auto;
+          overflow-x: hidden;
           position: relative;
           background: var(--ant-colorBgLayout);
-          margin-top: 0 !important;
+          margin-top: 16px !important; /* 将间距移到这里 */
           padding-top: 0 !important;
+          /* 限高优化：高度 = 浏览器高度 - 顶栏高度(56px) - unitabs高度(56px) - 间距(16px) */
+          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px); 
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px);
+          /* 彻底隐藏滚动条且不占用空间 */
+          scrollbar-width: none !important; /* Firefox */
+          -ms-overflow-style: none !important; /* IE/Edge */
+        }
+        .uni-tabs-content::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        /* 确保所有元素在滚动条隐藏时不占位 */
+        * {
+          scrollbar-gutter: auto !important;
         }
         /* 标签栏头部包装器 - 包含滚动按钮 */
         .uni-tabs-header-wrapper {
@@ -1513,15 +1528,22 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-container {
           flex: 1;
           overflow-x: hidden;
-          overflow-y: visible;
+          overflow-y: hidden;
           position: relative;
           z-index: 1;
         }
+        /* 强制隐藏 tabs nav 的滚动条 */
+        .uni-tabs-container .ant-tabs-nav::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
         .uni-tabs-container .ant-tabs-nav {
           overflow-x: auto;
-          overflow-y: visible;
+          overflow-y: hidden; /* 关键：防止垂直滚动条出现 */
           padding-bottom: 0 !important;
           margin-bottom: 0 !important;
+          scrollbar-width: none !important; /* Firefox */
         }
         .uni-tabs-container .ant-tabs-nav-list {
           overflow: visible !important;
@@ -1558,10 +1580,18 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-container .ant-tabs-nav-list::after {
           display: none !important;
         }
+        /* 彻底隐藏所有相关容器的滚动条 */
+        .uni-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar,
+        .uni-tabs-container .ant-tabs-nav-scroll::-webkit-scrollbar,
+        .uni-tabs-container .ant-tabs-nav-list::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
       `}</style>
       <div className="uni-tabs-wrapper">
         <div className="uni-tabs-header">
-          <div 
+          <div
             className={`uni-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
             ref={tabsNavRef}
           >
@@ -1608,13 +1638,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                     >
                       {tab.label}
                       {tab.pinned && (
-                        <PushpinOutlined 
-                          style={{ 
-                            fontSize: 12, 
+                        <PushpinOutlined
+                          style={{
+                            fontSize: 12,
                             color: 'var(--ant-colorPrimary)',
                             transform: 'rotate(-45deg)',
                             flexShrink: 0,
-                          }} 
+                          }}
                         />
                       )}
                     </span>

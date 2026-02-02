@@ -19,8 +19,8 @@ from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
-from apps.master_data.models.sales_order import SalesOrder
-from apps.master_data.models.sales_forecast import SalesForecast
+from apps.kuaizhizao.models.sales_order import SalesOrder
+from apps.kuaizhizao.models.sales_forecast import SalesForecast
 from infra.exceptions.exceptions import NotFoundError
 
 

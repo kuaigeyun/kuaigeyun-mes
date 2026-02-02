@@ -17,6 +17,8 @@ export interface SalesForecast {
   tenant_id?: number;
   forecast_code?: string;
   forecast_name?: string;
+  forecast_type?: string;
+  forecast_period?: string;
   start_date?: string;
   end_date?: string;
   status?: string;
@@ -29,6 +31,24 @@ export interface SalesForecast {
   created_at?: string;
   updated_at?: string;
   forecast_items?: SalesForecastItem[];
+  /** 创建时可选；更新时提供则覆盖全部明细 */
+  items?: SalesForecastItemCreatePayload[];
+}
+
+/** 销售预测明细创建/更新单条 payload（与后端 SalesForecastItemCreate 一致） */
+export interface SalesForecastItemCreatePayload {
+  material_id: number;
+  material_code: string;
+  material_name: string;
+  material_spec?: string;
+  material_unit: string;
+  forecast_quantity: number;
+  forecast_date: string;
+  historical_sales?: number;
+  historical_period?: string;
+  confidence_level?: number;
+  forecast_method?: string;
+  notes?: string;
 }
 
 export interface SalesForecastItem {
@@ -36,15 +56,23 @@ export interface SalesForecastItem {
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
   component_type?: string;
   forecast_date?: string;
   forecast_quantity?: number;
+  historical_sales?: number;
+  historical_period?: string;
+  confidence_level?: number;
+  forecast_method?: string;
+  notes?: string;
 }
 
 export interface SalesForecastListParams {
   skip?: number;
   limit?: number;
   status?: string;
+  forecast_period?: string;
   start_date?: string;
   end_date?: string;
   keyword?: string;
@@ -60,63 +88,47 @@ export interface SalesForecastListResponse {
  * 获取销售预测列表
  */
 export async function listSalesForecasts(params: SalesForecastListParams = {}): Promise<SalesForecastListResponse> {
-  return apiRequest<SalesForecastListResponse>({
-    url: '/apps/kuaizhizao/sales-forecasts',
-    method: 'GET',
-    params,
-  });
+  return apiRequest<SalesForecastListResponse>('/apps/kuaizhizao/sales-forecasts', { method: 'GET', params });
 }
 
 /**
  * 创建销售预测
  */
 export async function createSalesForecast(data: SalesForecast): Promise<SalesForecast> {
-  return apiRequest<SalesForecast>({
-    url: '/apps/kuaizhizao/sales-forecasts',
-    method: 'POST',
-    data,
-  });
+  return apiRequest<SalesForecast>('/apps/kuaizhizao/sales-forecasts', { method: 'POST', data });
 }
 
 /**
  * 获取销售预测详情
  */
 export async function getSalesForecast(id: number): Promise<SalesForecast> {
-  return apiRequest<SalesForecast>({
-    url: `/apps/kuaizhizao/sales-forecasts/${id}`,
-    method: 'GET',
-  });
+  return apiRequest<SalesForecast>(`/apps/kuaizhizao/sales-forecasts/${id}`, { method: 'GET' });
 }
 
 /**
- * 更新销售预测
+ * 更新销售预测（可带 items，提供则覆盖全部明细）
  */
-export async function updateSalesForecast(id: number, data: Partial<SalesForecast>): Promise<SalesForecast> {
-  return apiRequest<SalesForecast>({
-    url: `/apps/kuaizhizao/sales-forecasts/${id}`,
-    method: 'PUT',
-    data,
-  });
+export async function updateSalesForecast(
+  id: number,
+  data: Partial<SalesForecast> & { items?: SalesForecastItemCreatePayload[] }
+): Promise<SalesForecast> {
+  return apiRequest<SalesForecast>(`/apps/kuaizhizao/sales-forecasts/${id}`, { method: 'PUT', data });
 }
 
 /**
  * 删除销售预测
  */
 export async function deleteSalesForecast(id: number): Promise<void> {
-  return apiRequest<void>({
-    url: `/apps/kuaizhizao/sales-forecasts/${id}`,
-    method: 'DELETE',
-  });
+  return apiRequest<void>(`/apps/kuaizhizao/sales-forecasts/${id}`, { method: 'DELETE' });
 }
 
 /**
- * 审核销售预测
+ * 审核销售预测（不传 rejection_reason 则通过，传则驳回）
  */
 export async function approveSalesForecast(id: number, rejection_reason?: string): Promise<SalesForecast> {
-  return apiRequest<SalesForecast>({
-    url: `/apps/kuaizhizao/sales-forecasts/${id}/approve`,
+  return apiRequest<SalesForecast>(`/apps/kuaizhizao/sales-forecasts/${id}/approve`, {
     method: 'POST',
-    data: { rejection_reason },
+    params: rejection_reason != null ? { rejection_reason } : undefined,
   });
 }
 
@@ -124,19 +136,27 @@ export async function approveSalesForecast(id: number, rejection_reason?: string
  * 获取销售预测明细
  */
 export async function getSalesForecastItems(id: number): Promise<SalesForecastItem[]> {
-  return apiRequest<SalesForecastItem[]>({
-    url: `/apps/kuaizhizao/sales-forecasts/${id}/items`,
-    method: 'GET',
-  });
+  return apiRequest<SalesForecastItem[]>(`/apps/kuaizhizao/sales-forecasts/${id}/items`, { method: 'GET' });
 }
 
 /**
  * 提交销售预测
  */
 export async function submitSalesForecast(id: number): Promise<SalesForecast> {
-  return apiRequest<SalesForecast>({
-    url: `/apps/kuaizhizao/sales-forecasts/${id}/submit`,
+  return apiRequest<SalesForecast>(`/apps/kuaizhizao/sales-forecasts/${id}/submit`, { method: 'POST' });
+}
+
+/**
+ * 下推到MRP运算
+ */
+export async function pushSalesForecastToMrp(
+  id: number,
+  planning_horizon: number = 12,
+  time_bucket: string = 'week'
+): Promise<any> {
+  return apiRequest<any>(`/apps/kuaizhizao/sales-forecasts/${id}/push-to-mrp`, {
     method: 'POST',
+    params: { planning_horizon, time_bucket },
   });
 }
 
@@ -151,19 +171,14 @@ export async function importSalesForecasts(data: any[][]): Promise<{
   failure_count: number;
   errors: Array<{ row: number; error: string }>;
 }> {
-  return apiRequest({
-    url: '/apps/kuaizhizao/sales-forecasts/import',
-    method: 'POST',
-    data: { data },
-  });
+  return apiRequest('/apps/kuaizhizao/sales-forecasts/import', { method: 'POST', data: { data } });
 }
 
 /**
  * 批量导出销售预测
  */
 export async function exportSalesForecasts(params?: SalesForecastListParams): Promise<Blob> {
-  return apiRequest<Blob>({
-    url: '/apps/kuaizhizao/sales-forecasts/export',
+  return apiRequest<Blob>('/apps/kuaizhizao/sales-forecasts/export', {
     method: 'GET',
     params,
     responseType: 'blob',
@@ -200,9 +215,9 @@ export async function getDocumentRelations(
   documentType: string,
   documentId: number
 ): Promise<DocumentRelation> {
-  return apiRequest<DocumentRelation>({
-    url: `/apps/kuaizhizao/production/documents/${documentType}/${documentId}/relations`,
-    method: 'GET',
-  });
+  return apiRequest<DocumentRelation>(
+    `/apps/kuaizhizao/production/documents/${documentType}/${documentId}/relations`,
+    { method: 'GET' }
+  );
 }
 

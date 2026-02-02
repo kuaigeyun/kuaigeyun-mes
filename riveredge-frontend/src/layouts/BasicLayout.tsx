@@ -3078,31 +3078,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-sider .ant-pro-sider-footer > div .ant-btn:active svg {
           color: ${siderTextColor} !important;
         }
-        /* ==================== 全局滚动条样式 ==================== */
-        /* 隐藏整个页面的滚动条，只保留UniTable的滚动条 */
-        html::-webkit-scrollbar,
-        body::-webkit-scrollbar,
-        .ant-pro-layout::-webkit-scrollbar,
-        .ant-pro-layout-container::-webkit-scrollbar,
-        .ant-pro-page-container::-webkit-scrollbar,
-        .ant-pro-layout-content::-webkit-scrollbar,
-        .ant-layout::-webkit-scrollbar,
-        .ant-layout-content::-webkit-scrollbar {
-          width: 0 !important;
-          height: 0 !important;
-          display: none !important;
-        }
-        html,
-        body,
-        .ant-pro-layout,
-        .ant-pro-layout-container,
-        .ant-pro-page-container,
-        .ant-pro-layout-content,
-        .ant-layout,
-        .ant-layout-content {
-          scrollbar-width: none !important;
-          -ms-overflow-style: none !important;
-        }
         /* ==================== 左侧菜单栏滚动条样式 ==================== */
         /* 完全隐藏左侧菜单栏滚动条，不占用任何宽度 */
         .ant-pro-layout .ant-pro-sider-menu::-webkit-scrollbar {
@@ -3119,33 +3094,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* Firefox 左侧菜单栏滚动条样式 */
         .ant-pro-layout .ant-pro-sider-menu {
           scrollbar-width: none !important;
-        }
-        /* ==================== UniTable 滚动条样式 ==================== */
-        /* UniTable 组件滚动条样式 */
-        .uni-table-pro-table .ant-table-container::-webkit-scrollbar,
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .uni-table-pro-table .ant-table-container::-webkit-scrollbar-track,
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-track {
-          background: ${token.colorFillTertiary};
-          border-radius: 4px;
-        }
-        .uni-table-pro-table .ant-table-container::-webkit-scrollbar-thumb,
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb {
-          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
-          border-radius: 4px;
-        }
-        .uni-table-pro-table .ant-table-container::-webkit-scrollbar-thumb:hover,
-        .uni-table-pro-table .ant-table-body::-webkit-scrollbar-thumb:hover {
-          background: ${isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'};
-        }
-        /* Firefox UniTable 滚动条样式 */
-        .uni-table-pro-table .ant-table-container,
-        .uni-table-pro-table .ant-table-body {
-          scrollbar-width: thin;
-          scrollbar-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.3) ' + token.colorFillTertiary : 'rgba(0, 0, 0, 0.3) ' + token.colorFillTertiary};
         }
         /* 统一顶部、标签栏和菜单栏的背景色 - 使用 token 值并同步到 CSS 变量 */
         :root {

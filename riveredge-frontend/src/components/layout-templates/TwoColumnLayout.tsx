@@ -230,8 +230,8 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       className={className}
       style={{
         display: 'flex',
-        height: 'calc(100vh - 96px)',
-        padding: `${PAGE_SPACING.PADDING}px`,
+        height: '100%',
+        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
         margin: 0,
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,
@@ -354,7 +354,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           style={{
             flex: 1,
             overflowX: 'hidden',
-            overflowY: 'auto',
+            overflowY: 'hidden',
             padding: '16px',
             backgroundColor: contentBackgroundColor,
             display: 'flex',

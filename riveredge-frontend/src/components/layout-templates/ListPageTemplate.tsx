@@ -8,6 +8,7 @@
  * Date: 2025-12-26
  */
 
+import React, { ReactNode } from 'react';
 import { Row, Col, Card, Statistic } from 'antd';
 import { STAT_CARD_CONFIG, PAGE_SPACING } from './constants';
 
@@ -76,23 +77,19 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
     <div
       className={className}
       style={{
-        padding: `${PAGE_SPACING.PADDING}px`,
+        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
         ...style,
       }}
     >
-      {/* 统计卡片区域 */}
-      {statCards && statCards.length > 0 && (
-        <div style={{ marginBottom: PAGE_SPACING.BLOCK_GAP }}>
-          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
+      {/* 统计卡片区域 - 只有在数量足够（>3）时才显示，且始终占满一行 */}
+      {statCards && statCards.length > 3 && (
+        <div style={{ marginBottom: 16 }}>
+          <Row gutter={STAT_CARD_CONFIG.GUTTER} wrap={false}>
             {statCards.map((card, index) => (
               <Col
                 key={index}
-                xs={24 / STAT_CARD_CONFIG.COLUMNS.xs}
-                sm={24 / STAT_CARD_CONFIG.COLUMNS.sm}
-                md={24 / STAT_CARD_CONFIG.COLUMNS.md}
-                lg={24 / STAT_CARD_CONFIG.COLUMNS.lg}
-                xl={24 / STAT_CARD_CONFIG.COLUMNS.xl}
-                xxl={24 / STAT_CARD_CONFIG.COLUMNS.xxl}
+                flex={1}
+                style={{ minWidth: 0 }} // 防止 flex 子项溢出
               >
                 <Card
                   hoverable={!!card.onClick}
@@ -113,13 +110,12 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
                     prefix={card.prefix}
                     suffix={card.suffix}
                     precision={card.precision}
-                    styles={{
-                      content: {
-                        fontSize: '24px',
-                        fontWeight: 600,
-                        ...card.valueStyle,
-                      },
+                    valueStyle={{
+                      fontSize: '24px',
+                      fontWeight: 600,
+                      ...card.valueStyle,
                     }}
+                    style={{ marginBottom: 0 }} // 确保 Statistic 自身没有额外下边距
                   />
                 </Card>
               </Col>

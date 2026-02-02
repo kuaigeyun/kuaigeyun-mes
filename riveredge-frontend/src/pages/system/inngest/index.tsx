@@ -12,9 +12,9 @@ const InngestDashboard: React.FC = () => {
   return (
     <div
       style={{
-        height: 'calc(100vh - 96px)',
+        height: '100%',
         width: '100%',
-        padding: '16px',
+        padding: '0 16px 16px 16px',
         margin: 0,
         display: 'flex',
         flexDirection: 'column',

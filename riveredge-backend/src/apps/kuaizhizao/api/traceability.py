@@ -1,19 +1,19 @@
-from typing import Dict, Literal
-from ninja import Router, Schema
+from typing import Dict, Literal, List
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel
 from apps.kuaizhizao.services.traceability import TraceabilityService
 
-router = Router(tags=["Traceability"])
+router = APIRouter(tags=["追溯管理"])
 service = TraceabilityService()
 
-class TraceGraphResponse(Schema):
-    nodes: list[dict]
-    edges: list[dict]
+class TraceGraphResponse(BaseModel):
+    nodes: List[Dict]
+    edges: List[Dict]
 
-@router.get("/graph", response=TraceGraphResponse, summary="获取追溯图谱")
+@router.get("/graph", response_model=TraceGraphResponse, summary="获取追溯图谱")
 async def get_trace_graph(
-    request, 
-    batch_no: str, 
-    direction: Literal["forward", "backward", "both"] = "both"
+    batch_no: str = Query(..., description="批次号/条码"), 
+    direction: Literal["forward", "backward", "both"] = Query("both", description="追溯方向 (forward: 原料->成品, backward: 成品->原料, both: 双向)")
 ):
     """
     获取指定批次号的正向或反向追溯图谱。

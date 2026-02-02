@@ -135,7 +135,7 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
     <div
       className={className}
       style={{
-        padding: `${PAGE_SPACING.PADDING}px`,
+        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
         backgroundColor: token.colorBgLayout,
         minHeight: '100%',
         ...style,

@@ -110,8 +110,8 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
                 // Close if user clicks outside
                 if (!visible) setOpen(false);
             }}
-            overlayStyle={{ width: 280 }}
-            destroyPopupOnHide
+            styles={{ root: { width: 280 } }}
+            destroyOnHidden
         >
             <Input
                 prefix={<SearchOutlined style={{ fontSize: 16 }} />}

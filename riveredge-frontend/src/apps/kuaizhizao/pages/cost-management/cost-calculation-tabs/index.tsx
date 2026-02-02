@@ -8,8 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { PageContainer } from '@ant-design/pro-components';
-import { Tabs } from 'antd';
+import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProductionCostPage from '../production-cost';
 import OutsourceCostPage from '../outsource-cost';
@@ -19,7 +18,7 @@ import QualityCostPage from '../quality-cost';
 const CostCalculationTabsPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // 根据路由路径确定默认Tab
   const getDefaultTab = () => {
     const path = location.pathname;
@@ -78,15 +77,11 @@ const CostCalculationTabsPage: React.FC = () => {
   ];
 
   return (
-    <PageContainer title="成本核算">
-      <Tabs
-        activeKey={activeTab}
-        onChange={handleTabChange}
-        items={tabItems}
-        type="card"
-        size="large"
-      />
-    </PageContainer>
+    <MultiTabListPageTemplate
+      activeTabKey={activeTab}
+      onTabChange={handleTabChange}
+      tabs={tabItems}
+    />
   );
 };
 

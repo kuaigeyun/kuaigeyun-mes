@@ -9,13 +9,13 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Button, 
-  Space, 
-  Tag, 
-  Tree, 
-  message, 
-  Modal, 
+import {
+  Button,
+  Space,
+  Tag,
+  Tree,
+  message,
+  Modal,
   Popconfirm,
   Input,
   Empty,
@@ -51,6 +51,7 @@ import {
   UpdateRoleData,
   Permission,
 } from '../../../services/role';
+import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 
 /**
  * 角色权限管理合并页面组件
@@ -60,7 +61,7 @@ const RolesPermissionsPage: React.FC = () => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
   const formRef = useRef<ProFormInstance>();
-  
+
   // 角色列表相关状态
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
@@ -69,18 +70,18 @@ const RolesPermissionsPage: React.FC = () => {
   const [filteredRoleTreeData, setFilteredRoleTreeData] = useState<DataNode[]>([]);
   const [expandedRoleKeys, setExpandedRoleKeys] = useState<React.Key[]>([]);
   const [selectedRoleKeys, setSelectedRoleKeys] = useState<React.Key[]>([]);
-  
+
   // 选中角色相关状态
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedRoleLoading, setSelectedRoleLoading] = useState(false);
-  
+
   // 权限相关状态
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [permissionTreeData, setPermissionTreeData] = useState<any[]>([]);
   const [checkedKeys, setCheckedKeys] = useState<React.Key[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
-  
+
   // 角色编辑 Modal 相关状态
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [isEditRole, setIsEditRole] = useState(false);
@@ -110,10 +111,10 @@ const RolesPermissionsPage: React.FC = () => {
       setIsEditRole(true);
       setCurrentEditRole(role);
       setRoleModalVisible(true);
-      
+
       // 获取角色详情
       const detail = await getRoleByUuid(role.uuid);
-      
+
       // 等待 Modal 打开后再设置表单值
       setTimeout(() => {
         formRef.current?.setFieldsValue({
@@ -135,7 +136,7 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       await deleteRole(role.uuid);
       messageApi.success('删除成功');
-      
+
       // 如果删除的是当前选中的角色，清空选择
       setSelectedRole((prev) => {
         if (prev?.uuid === role.uuid) {
@@ -145,7 +146,7 @@ const RolesPermissionsPage: React.FC = () => {
         }
         return prev;
       });
-      
+
       // 重新加载角色列表
       setRolesLoading(true);
       try {
@@ -197,8 +198,8 @@ const RolesPermissionsPage: React.FC = () => {
               }}
             />
             <span style={{ display: 'flex', alignItems: 'center', lineHeight: '1.5' }}>{role.name}</span>
-            {role.is_system && <Tag color="default" size="small">系统</Tag>}
-            {!role.is_active && <Tag color="default" size="small">禁用</Tag>}
+            {role.is_system && <Tag color="default">系统</Tag>}
+            {!role.is_active && <Tag color="default">禁用</Tag>}
           </Space>
           <Space size="small" onClick={(e) => e.stopPropagation()}>
             <Tooltip title="编辑">
@@ -238,7 +239,7 @@ const RolesPermissionsPage: React.FC = () => {
       key: role.uuid,
       isLeaf: true,
     }));
-    
+
     setRoleTreeData(treeNodes);
     if (!roleSearchKeyword.trim()) {
       setFilteredRoleTreeData(treeNodes);
@@ -262,7 +263,7 @@ const RolesPermissionsPage: React.FC = () => {
     });
 
     setFilteredRoleTreeData(filtered);
-    
+
     // 如果有搜索结果，自动展开所有节点
     if (filtered.length > 0) {
       setExpandedRoleKeys(filtered.map(node => node.key));
@@ -279,11 +280,11 @@ const RolesPermissionsPage: React.FC = () => {
       let allItems: Permission[] = [];
       let page = 1;
       let hasMore = true;
-      
+
       while (hasMore) {
         const response = await getAllPermissions({ page, page_size: 100 });
         allItems = [...allItems, ...response.items];
-        
+
         // 如果返回的数据少于 page_size，说明已经是最后一页
         if (response.items.length < 100 || allItems.length >= response.total) {
           hasMore = false;
@@ -291,9 +292,9 @@ const RolesPermissionsPage: React.FC = () => {
           page++;
         }
       }
-      
+
       setAllPermissions(allItems);
-      
+
       // 构建树形数据（按资源分组）
       const resourceMap: Record<string, Permission[]> = {};
       allItems.forEach(permission => {
@@ -302,17 +303,17 @@ const RolesPermissionsPage: React.FC = () => {
         }
         resourceMap[permission.resource].push(permission);
       });
-      
+
       // 获取资源名称的中文翻译
       const getResourceName = (resource: string): string => {
         const translationKey = `permission.resource.${resource}`;
         const translated = t(translationKey);
         // 如果翻译不存在，返回原始资源名称（首字母大写）
-        return translated !== translationKey 
-          ? translated 
+        return translated !== translationKey
+          ? translated
           : resource.charAt(0).toUpperCase() + resource.slice(1).replace(/_/g, ' ');
       };
-      
+
       const treeData = Object.keys(resourceMap).map(resource => ({
         title: (
           <span>
@@ -333,10 +334,10 @@ const RolesPermissionsPage: React.FC = () => {
               </Tag>
             </span>
           ),
-          key: permission.uuid,
+          key: permission.id,
         })),
       }));
-      
+
       setPermissionTreeData(treeData);
     } catch (error: any) {
       messageApi.error(error.message || '加载权限列表失败');
@@ -366,10 +367,10 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setSelectedRoleLoading(true);
       setSelectedRole(role);
-      
+
       // 加载角色的权限
       const rolePermissions = await getRolePermissions(role.uuid);
-      const rolePermissionUuids = rolePermissions.map(p => p.uuid);
+      const rolePermissionUuids = rolePermissions.map(p => p.id);
       setCheckedKeys(rolePermissionUuids);
     } catch (error: any) {
       messageApi.error(error.message || '加载角色权限失败');
@@ -386,16 +387,16 @@ const RolesPermissionsPage: React.FC = () => {
       messageApi.warning('请先选择一个角色');
       return;
     }
-    
+
     try {
       setSavingPermissions(true);
       const permissionUuids = checkedKeys.filter(
         key => typeof key === 'string' && !key.startsWith('resource-')
       ) as string[];
-      
+
       await assignPermissions(selectedRole.uuid, permissionUuids);
       messageApi.success('权限分配成功');
-      
+
       // 重新加载角色列表（更新权限数）
       await loadRoles();
     } catch (error: any) {
@@ -422,7 +423,7 @@ const RolesPermissionsPage: React.FC = () => {
     try {
       setRoleFormLoading(true);
       const values = await formRef.current?.validateFields();
-      
+
       if (isEditRole && currentEditRole) {
         await updateRole(currentEditRole.uuid, values as UpdateRoleData);
         messageApi.success('更新成功');
@@ -430,11 +431,11 @@ const RolesPermissionsPage: React.FC = () => {
         await createRole(values as CreateRoleData);
         messageApi.success('创建成功');
       }
-      
+
       setRoleModalVisible(false);
       setCurrentEditRole(null);
       await loadRoles();
-      
+
       // 如果是编辑当前选中的角色，重新加载
       if (isEditRole && currentEditRole && selectedRole?.uuid === currentEditRole.uuid) {
         await handleSelectRole(currentEditRole);
@@ -453,13 +454,13 @@ const RolesPermissionsPage: React.FC = () => {
   }, []);
 
   return (
-    <div 
-      className="roles-permissions-page" 
-      style={{ 
-        display: 'flex', 
-        height: 'calc(100vh - 96px)', 
-        padding: '16px', 
-        margin: 0, 
+    <div
+      className="roles-permissions-page"
+      style={{
+        display: 'flex',
+        height: '100%',
+        padding: `0 ${PAGE_SPACING?.PADDING || 16}px ${PAGE_SPACING?.PADDING || 16}px ${PAGE_SPACING?.PADDING || 16}px`,
+        margin: 0,
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,
         overflow: 'hidden',
@@ -489,7 +490,7 @@ const RolesPermissionsPage: React.FC = () => {
           padding: 0 !important;
         }
       `}</style>
-      
+
       {/* 左侧角色树 */}
       <div
         style={{
@@ -517,7 +518,7 @@ const RolesPermissionsPage: React.FC = () => {
             size="middle"
           />
         </div>
-        
+
         {/* 新建按钮 */}
         <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
           <Button
@@ -529,7 +530,7 @@ const RolesPermissionsPage: React.FC = () => {
             新建角色
           </Button>
         </div>
-        
+
         {/* 角色树 */}
         <div className="left-panel-scroll-container" style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
           <Spin spinning={rolesLoading}>
@@ -547,10 +548,10 @@ const RolesPermissionsPage: React.FC = () => {
       </div>
 
       {/* 右侧主内容区 */}
-      <div style={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column', 
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor: token.colorBgContainer,
         border: `1px solid ${token.colorBorder}`,
         borderLeft: 'none',
@@ -568,8 +569,8 @@ const RolesPermissionsPage: React.FC = () => {
           }}
         >
           <Space>
-            <Button 
-              icon={<ReloadOutlined />} 
+            <Button
+              icon={<ReloadOutlined />}
               onClick={() => {
                 loadRoles();
                 loadAllPermissions();
@@ -581,7 +582,7 @@ const RolesPermissionsPage: React.FC = () => {
               刷新
             </Button>
           </Space>
-          
+
           {/* 角色信息 */}
           <div style={{ flex: 1 }}>
             {selectedRole ? (
@@ -595,7 +596,7 @@ const RolesPermissionsPage: React.FC = () => {
               <span style={{ color: token.colorTextSecondary }}>请从左侧选择一个角色</span>
             )}
           </div>
-          
+
           {selectedRole && (
             <>
               <Button
@@ -679,7 +680,7 @@ const RolesPermissionsPage: React.FC = () => {
         onCancel={() => setRoleModalVisible(false)}
         onOk={handleSubmitRole}
         confirmLoading={roleFormLoading}
-        size={600}
+        width={600}
       >
         <ProForm
           formRef={formRef}

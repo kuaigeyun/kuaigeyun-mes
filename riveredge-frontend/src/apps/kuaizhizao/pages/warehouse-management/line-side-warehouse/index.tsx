@@ -5,10 +5,11 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ProTable } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
-import { Card, Tag, message, Select } from 'antd';
+import { Tag, message, Select } from 'antd';
 import { warehouseApi } from '../../../services/production';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
 
 interface LineSideWarehouse {
   id: number;
@@ -150,23 +151,9 @@ const LineSideWarehousePage: React.FC = () => {
   };
 
   return (
-    <Card
-      title="线边仓管理"
-      extra={
-        <Select
-          placeholder="筛选线边仓"
-          allowClear
-          style={{ width: 200 }}
-          options={warehouses.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
-          value={selectedWarehouseId}
-          onChange={(v) => {
-            setSelectedWarehouseId(v);
-            actionRef.current?.reload();
-          }}
-        />
-      }
-    >
-      <ProTable<LineSideInventoryItem>
+    <ListPageTemplate>
+      <UniTable<LineSideInventoryItem>
+        headerTitle="线边仓库存"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}
@@ -175,9 +162,23 @@ const LineSideWarehousePage: React.FC = () => {
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         params={{ warehouse_id: selectedWarehouseId }}
         scroll={{ x: 1100 }}
-        headerTitle="线边仓库存"
+        toolBarRender={() => [
+          <Select
+            key="warehouse-select"
+            placeholder="筛选线边仓"
+            allowClear
+            style={{ width: 200 }}
+            options={warehouses.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
+            value={selectedWarehouseId}
+            onChange={(v) => {
+              setSelectedWarehouseId(v);
+              // reset to first page is handled by UniTable/ProTable when params change usually, 
+              // but explicit reload is good. params prop change triggers reload.
+            }}
+          />
+        ]}
       />
-    </Card>
+    </ListPageTemplate>
   );
 };
 

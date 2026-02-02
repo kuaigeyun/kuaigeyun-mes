@@ -131,7 +131,7 @@ export const WizardTemplate: React.FC<WizardTemplateProps> = ({
     <div
       className={className}
       style={{
-        padding: `${PAGE_SPACING.PADDING}px`,
+        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
         ...style,
       }}
     >

@@ -59,7 +59,15 @@ async def list_warehouses(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **is_active**: 是否启用（可选）
     """
-    return await WarehouseService.list_warehouses(tenant_id, skip, limit, is_active)
+    try:
+        return await WarehouseService.list_warehouses(tenant_id, skip, limit, is_active)
+    except Exception as e:
+        from loguru import logger
+        logger.exception(f"获取仓库列表失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取仓库列表失败: {str(e)}"
+        )
 
 
 @router.get("/warehouses/{warehouse_uuid}", response_model=WarehouseResponse, summary="获取仓库详情")
