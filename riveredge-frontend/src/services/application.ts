@@ -22,6 +22,8 @@ export interface Application {
   is_system: boolean;
   is_active: boolean;
   is_installed: boolean;
+  is_custom_name: boolean;
+  is_custom_sort: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -39,6 +41,8 @@ export interface ApplicationCreate {
   permission_code?: string;
   is_system?: boolean;
   is_active?: boolean;
+  is_custom_name?: boolean;
+  is_custom_sort?: boolean;
   sort_order?: number;
 }
 
@@ -52,6 +56,8 @@ export interface ApplicationUpdate {
   menu_config?: Record<string, any>;
   permission_code?: string;
   is_active?: boolean;
+  is_custom_name?: boolean;
+  is_custom_sort?: boolean;
   sort_order?: number;
 }
 

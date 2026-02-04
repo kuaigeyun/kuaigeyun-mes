@@ -81,6 +81,7 @@ import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
+import { MobileQRCode } from '../components/mobile-preview';
 import ThemeEditor from '../components/theme-editor';
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
@@ -1972,8 +1973,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       // 收集所有应用菜单项（分组标题 + 子菜单）
       const appMenuItems: MenuDataItem[] = [];
 
+      // 使用后端返回的原始顺序（后端已根据 Application.sort_order 排序）
+      const sortedApplicationMenus = applicationMenus;
+
       // 遍历每个应用，将应用的子菜单提升到主菜单级别
-      applicationMenus.forEach(appMenu => {
+      sortedApplicationMenus.forEach(appMenu => {
         if (appMenu.children && appMenu.children.length > 0) {
           // 1. 先添加应用名称作为分组标题（仅在菜单展开时显示）
           // 使用 Ant Design 原生的 type: 'group' 来创建分组标题（与系统级菜单保持一致）
@@ -4151,6 +4155,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               </Badge>
             </Dropdown>
           );
+
+          // 手机端扫码按钮
+          actions.push(<MobileQRCode key="mobile-qr" />);
 
           // 语言切换下拉菜单
           actions.push(

@@ -31,7 +31,7 @@ export const MobileQRCode: React.FC = () => {
 
     const getMobileUrl = () => {
         const protocol = window.location.protocol;
-        const port = '8081'; // Expo default port
+        const port = '8101'; // RiverEdge Mobile port
         // Use user configured IP or fallback to window.location.hostname
         const targetIp = ip || window.location.hostname;
         return `${protocol}//${targetIp}:${port}`;

@@ -7,16 +7,18 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/master-data/index.tsx",
     "route_path": "/apps/master-data",
-    "sort_order": 990,
+    "sort_order": 10,
     "menu_config": {
         "title": "基础数据管理",
         "icon": "database",
         "path": "/apps/master-data",
-        "children": [{
+        "children": [
+            {
                 "title": "工厂数据",
                 "icon": "factory",
                 "sort_order": 1,
-                "children": [{
+                "children": [
+                    {
                         "title": "厂区管理",
                         "path": "/apps/master-data/factory/plants",
                         "permission": "master-data:factory:plant:view",
@@ -46,7 +48,8 @@
                 "title": "仓库数据",
                 "icon": "archive",
                 "sort_order": 2,
-                "children": [{
+                "children": [
+                    {
                         "title": "仓库管理",
                         "path": "/apps/master-data/warehouse/warehouses",
                         "permission": "master-data:warehouse:warehouse:view",
@@ -70,7 +73,8 @@
                 "title": "物料数据",
                 "icon": "package",
                 "sort_order": 3,
-                "children": [{
+                "children": [
+                    {
                         "title": "变体属性",
                         "path": "/apps/master-data/materials/variant-attributes",
                         "permission": "master-data:material:variant-attribute:view",
@@ -100,7 +104,8 @@
                 "title": "工艺数据",
                 "icon": "workflow",
                 "sort_order": 4,
-                "children": [{
+                "children": [
+                    {
                         "title": "不良品类型",
                         "path": "/apps/master-data/process/defect-types",
                         "permission": "master-data:process:defect-type:view",
@@ -136,7 +141,8 @@
                 "title": "供应链数据",
                 "icon": "truck",
                 "sort_order": 5,
-                "children": [{
+                "children": [
+                    {
                         "title": "客户",
                         "path": "/apps/master-data/supply-chain/customers",
                         "permission": "master-data:supply-chain:customer:view",
@@ -154,7 +160,8 @@
                 "title": "绩效数据",
                 "icon": "analytics",
                 "sort_order": 6,
-                "children": [{
+                "children": [
+                    {
                         "title": "假期设置",
                         "path": "/apps/master-data/performance/holidays",
                         "permission": "master-data:performance:holiday:view",
@@ -252,7 +259,8 @@
         "riveredge-backend": ">=1.0.0",
         "riveredge-frontend": ">=1.0.0"
     },
-    "code_rule_pages": [{
+    "code_rule_pages": [
+        {
             "page_code": "master-data-factory-plant",
             "page_name": "厂区管理",
             "page_path": "/apps/master-data/factory/plants",
@@ -342,7 +350,8 @@
             "module_icon": "database",
             "auto_generate": true,
             "rule_code": "MATERIAL_CODE",
-            "available_fields": [{
+            "available_fields": [
+                {
                     "field_name": "group_code",
                     "field_label": "物料分组编码",
                     "field_type": "string",
@@ -431,7 +440,8 @@
             "auto_generate": false
         }
     ],
-    "custom_field_pages": [{
+    "custom_field_pages": [
+        {
             "page_code": "master-data-factory-workshop",
             "page_name": "车间管理",
             "page_path": "/apps/master-data/factory/workshops",

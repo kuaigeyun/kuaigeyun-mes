@@ -55,30 +55,17 @@ export default defineConfig({
           });
         },
       } as ProxyOptions,
+      // 积木报表代理，使其感觉上是“融合”在同一个域名下
+      '/jeecg-boot': {
+        target: 'http://localhost:8080', // 假设积木报表服务运行在 8080
+        changeOrigin: true,
+        secure: false,
+      } as ProxyOptions,
     },
     hmr: {
-      overlay: true, // 允许错误覆盖层，但设置为不阻塞
-      // 启用 HMR，使用 WebSocket
-      protocol: 'ws',
-      host: process.env.VITE_HMR_HOST || 'localhost', // 从环境变量读取 HMR 主机
-      // 不指定固定端口，让 Vite 自动选择（避免端口冲突）
-      clientPort: undefined,
+      overlay: true,
       // ⚠️ 稳定性优化：增加 HMR 超时时间
       timeout: 30000, // 增加超时时间到 30 秒
-      // ⚠️ 优化 HMR：允许错误覆盖层但不阻塞开发
-      client: {
-        overlay: {
-          errors: true,
-          warnings: false, // 只显示错误，不显示警告
-        },
-        // 优化重连逻辑
-        reconnectInterval: 3000,
-        reconnectDelay: 1000,
-        // 禁用 HMR 连接日志（减少控制台输出）
-        logging: 'none', // 'none' | 'error' | 'warn' | 'info'
-      },
-      // ⚠️ 增强：优化 HMR 更新策略，减少不必要的全量重载
-      fullReload: false, // 禁用全量重载，只使用 HMR
     },
     watch: {
       // 优化文件监听，确保 HMR 正常工作，避免频繁重启
@@ -154,10 +141,6 @@ export default defineConfig({
       interval: platform() === 'win32' ? 2000 : 500, // Windows 增加到 2 秒，其他平台 0.5 秒
       // 优化文件监听性能
       binaryInterval: platform() === 'win32' ? 3000 : 1000, // Windows 增加到 3 秒
-      // 减少监听的文件类型，只监听源码文件
-      include: [
-        '**/*.{js,jsx,ts,tsx,json,css,less,scss,html}',
-      ],
       // 使用原子写入检测，减少不必要的重载
       atomic: true,
     },
@@ -254,8 +237,6 @@ export default defineConfig({
   plugins: [
     // React 插件 - 优化 Fast Refresh 和 HMR
     react({
-      // 启用 Fast Refresh
-      fastRefresh: true,
       // 包含所有 React 文件进行 HMR
       include: '**/*.{jsx,tsx}',
       exclude: [
@@ -268,13 +249,6 @@ export default defineConfig({
       // ⚠️ 优化：移除不必要的babel配置，让React插件自动处理
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
-      // 添加Fast Refresh选项
-      fastRefreshOptions: {
-        // 强制启用Fast Refresh
-        force: true,
-        // 优化：只对组件文件启用 Fast Refresh，减少不必要的重载
-        strict: false, // 允许在非组件文件中使用 Fast Refresh
-      },
     }),
   ],
   resolve: {
@@ -301,6 +275,7 @@ export default defineConfig({
       'zustand',
       'dayjs',
       'lodash-es',
+      '@jiaminghi/data-view-react',
     ],
     // ⚠️ 关键修复：强制重新构建依赖，避免缓存问题
     force: false, // 开发环境不强制重建，提高启动速度

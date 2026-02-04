@@ -4,7 +4,6 @@
 
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import ReportDesigner from './pages/ReportDesigner';
 import JimuReportDesigner from './pages/JimuReportDesigner';
 import DashboardDesigner from './pages/DashboardDesigner';
 import ReportList from './pages/ReportList';
@@ -16,7 +15,7 @@ const KuaireportApp: React.FC = () => {
     return (
         <Routes>
             <Route path="reports" element={<ReportList />} />
-            <Route path="report-designer" element={<ReportDesigner />} />
+            <Route path="report-designer" element={<Navigate to="jimu-designer" replace />} />
             <Route path="jimu-designer" element={<JimuReportDesigner />} />
             <Route path="report-grid" element={<ReportGridViewer />} />
             <Route path="dashboards" element={<DashboardList />} />

@@ -29,11 +29,11 @@ export async function updateReport(id: string | number, data: any) {
         data,
     });
 }
-
-return apiRequest(`/apps/kuaireport/reports/${id}/query`, {
-    method: 'POST',
-    data: filters,
-});
+export async function queryReportData(id: string | number, filters: any = {}) {
+    return apiRequest(`/apps/kuaireport/reports/${id}/query`, {
+        method: 'POST',
+        data: filters,
+    });
 }
 
 export async function previewReportData(datasource: any, filters: any = {}) {

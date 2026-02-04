@@ -171,7 +171,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       console.warn('⚠️ TOKEN 已过期，清除认证信息并跳转到登录页');
       clearAuth();
       setCurrentUser(undefined);
-      
+
       // 跳转到登录页
       if (location.pathname.startsWith('/infra')) {
         window.location.href = '/infra/login';
@@ -194,7 +194,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         clearAuth();
         setCurrentUser(undefined);
         clearInterval(checkInterval);
-        
+
         // 跳转到登录页
         if (location.pathname.startsWith('/infra')) {
           window.location.href = '/infra/login';
@@ -226,10 +226,10 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
-    if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return '/system/dashboard';
-    }
+      // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
+      if (location.pathname === '/login' && !currentUser.is_infra_admin) {
+        return '/system/dashboard';
+      }
     }
 
     // ⚠️ 核心逻辑：只有没有 token 时才跳转到登录页
@@ -322,17 +322,17 @@ export default function App() {
       // 从服务器加载主题配置
       const siteSetting = await getSiteSetting();
       const themeConfig = siteSetting?.settings?.theme_config || {};
-      
+
       // 如果服务器有配置，使用服务器配置；否则使用缓存配置
       const finalConfig = Object.keys(themeConfig).length > 0 ? themeConfig : (cachedThemeConfig ? JSON.parse(cachedThemeConfig) : {});
-      
+
       setSiteThemeConfig(finalConfig);
-      
+
       // 保存到本地存储（临时方案）
       if (Object.keys(finalConfig).length > 0) {
         localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(finalConfig));
       }
-      
+
       return finalConfig;
     } catch (error) {
       console.warn('Failed to load site theme:', error);
@@ -360,7 +360,7 @@ export default function App() {
   ) => {
     // 确定基础算法（用户偏好）
     let baseAlgorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm = theme.defaultAlgorithm;
-    
+
     if (userThemePreference === 'dark') {
       baseAlgorithm = theme.darkAlgorithm;
     } else if (userThemePreference === 'auto') {
@@ -369,12 +369,12 @@ export default function App() {
     } else {
       baseAlgorithm = theme.defaultAlgorithm;
     }
-    
+
     // 如果站点设置了紧凑模式，组合紧凑算法
-    const algorithm = siteTheme?.compact 
-      ? [baseAlgorithm, theme.compactAlgorithm] 
+    const algorithm = siteTheme?.compact
+      ? [baseAlgorithm, theme.compactAlgorithm]
       : baseAlgorithm;
-    
+
     // 构建 token（优先使用站点设置，否则使用默认值）
     const token: {
       colorPrimary?: string;
@@ -385,10 +385,15 @@ export default function App() {
       borderRadius: siteTheme?.borderRadius || 6,
       fontSize: siteTheme?.fontSize || 14,
     };
-    
+
     // 立即应用主题配置，不使用过渡动画
     setThemeConfig({ algorithm, token });
-    
+
+    // ⚠️ 关键修复：强制设置文档的 color-scheme，确保滚动条等原生控件颜色正确
+    // 解决“明亮模式不受系统暗黑模式影响”以及“暗黑模式下滚动条不白”的问题
+    const isDark = baseAlgorithm === theme.darkAlgorithm || (Array.isArray(algorithm) && algorithm.includes(theme.darkAlgorithm));
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+
     // 设置左侧菜单栏背景色（仅浅色模式支持自定义背景色，支持透明度）
     // 将自定义背景色存储到全局变量，供 BasicLayout 使用
     if (userThemePreference === 'light' && siteTheme?.siderBgColor !== undefined) {
@@ -429,7 +434,7 @@ export default function App() {
     } else {
       delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
     }
-    
+
     // 强制立即更新 DOM，清除可能的缓存
     requestAnimationFrame(() => {
       // 清除可能的 CSS 变量缓存
@@ -463,10 +468,10 @@ export default function App() {
         if (preference) {
           setUserPreference(preference);
         }
-        
+
         // 判断是否有用户偏好设置（检查 theme 是否存在）
         const hasUserPreference = preference?.preferences?.theme !== undefined && preference?.preferences?.theme !== null;
-        
+
         if (hasUserPreference) {
           // 非首次登录：优先使用保存的偏好设置
           const userTheme = preference.preferences.theme;
@@ -500,7 +505,7 @@ export default function App() {
             applyThemeConfig('light', null);
           }
         }
-        
+
         // 加载用户选择的语言（异步，不阻塞主题加载）
         loadUserLanguage().catch((err) => {
           console.warn('Failed to load user language during app init:', err);
@@ -549,7 +554,7 @@ export default function App() {
           return currentSiteTheme;
         });
       };
-      
+
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
@@ -562,7 +567,7 @@ export default function App() {
       try {
         const preference = await getUserPreference();
         setUserPreference(preference);
-        
+
         // 应用新的主题偏好（使用最新的 siteThemeConfig）
         const userTheme = preference?.preferences?.theme || 'light';
         // 使用函数式更新，确保获取最新的 siteThemeConfig
@@ -574,7 +579,7 @@ export default function App() {
         console.warn('Failed to reload user preference:', error);
       }
     };
-    
+
     // 监听站点主题更新事件
     const handleSiteThemeUpdate = async (event: CustomEvent) => {
       const newThemeConfig = (event as CustomEvent).detail?.themeConfig;
@@ -601,7 +606,7 @@ export default function App() {
         }
       }
     };
-    
+
     window.addEventListener('userPreferenceUpdated', handlePreferenceUpdate as EventListener);
     window.addEventListener('siteThemeUpdated', handleSiteThemeUpdate as EventListener);
     return () => {
@@ -621,7 +626,7 @@ export default function App() {
   const AppContent: React.FC = () => {
     const { message } = AntdApp.useApp();
     const touchScreen = useTouchScreen();
-    
+
     // 将 message 实例设置到全局，供工具函数使用
     React.useEffect(() => {
       if (typeof window !== 'undefined') {
@@ -639,20 +644,20 @@ export default function App() {
       }
     }, [touchScreen.isTouchScreenMode]);
 
-  return (
-              <ErrorBoundary>
-                <AuthGuard>
-                  <MainRoutes />
-                </AuthGuard>
-              </ErrorBoundary>
+    return (
+      <ErrorBoundary>
+        <AuthGuard>
+          <MainRoutes />
+        </AuthGuard>
+      </ErrorBoundary>
     );
   };
 
   return (
     <ConfigProvider theme={finalThemeConfig}>
-            <AntdApp>
-              <AppContent />
-            </AntdApp>
+      <AntdApp>
+        <AppContent />
+      </AntdApp>
     </ConfigProvider>
   );
 }
