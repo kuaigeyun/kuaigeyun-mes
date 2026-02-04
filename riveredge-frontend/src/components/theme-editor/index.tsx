@@ -188,28 +188,22 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     return normalized || '';
   }, [siderBgColorValue]);
 
-  // 规范化顶栏和标签栏背景色（支持 rgba 格式的透明度）
+  // 规范化顶栏和标签栏背景色（统一使用 hex，含透明度时为 8 位 hex #RRGGBBAA）
   const normalizeBackgroundColor = (color: any, defaultValue: string = ''): string => {
     if (!color) return defaultValue;
-    if (typeof color === 'string') {
-      // 如果是 rgba 格式，直接返回；如果是 hex 格式，也直接返回
-      return color;
-    }
-    // 处理颜色对象
-    if (color && typeof color.toRgbString === 'function') {
-      try {
-        // 使用 toRgbString 方法获取 rgba 格式（支持透明度）
-        return color.toRgbString();
-      } catch (e) {
-        console.warn('Color toRgbString failed:', e);
-      }
-    }
+    if (typeof color === 'string') return color;
     if (color && typeof color.toHexString === 'function') {
       try {
-        // 如果没有透明度，使用 toHexString
         return color.toHexString();
       } catch (e) {
         console.warn('Color toHexString failed:', e);
+      }
+    }
+    if (color && typeof color.toRgbString === 'function') {
+      try {
+        return color.toRgbString();
+      } catch (e) {
+        console.warn('Color toRgbString failed:', e);
       }
     }
     return defaultValue;
@@ -749,6 +743,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
   return (
     <Drawer
+      className="theme-editor-drawer"
       title={
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>个性化主题</div>
@@ -779,6 +774,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         </Space>
       }
     >
+      <style>{`
+        .theme-editor-drawer .ant-card {
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+      `}</style>
       {open && form && (
         <>
           <Form
@@ -1170,7 +1170,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 title={
                   <TitleWithHint
                     title="顶栏背景色"
-                    hint="自定义顶栏的背景颜色，支持透明度设置（支持 rgba 格式，如：rgba(255, 255, 255, 0.8)）"
+                    hint="自定义顶栏的背景颜色，使用 hex 格式（如：#ffffff，带透明度为 8 位 #rrggbbaa）"
                   />
                 }
                 style={{ marginBottom: 16 }}
@@ -1242,15 +1242,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   getValueFromEvent={(color) => {
                     if (!color) return '';
                     if (typeof color === 'string') return color;
-                    // 处理颜色对象：优先使用 toRgbString 方法（支持透明度）
-                    if (color && typeof color.toRgbString === 'function') {
-                      try {
-                        return color.toRgbString();
-                      } catch (e) {
-                        console.warn('Color toRgbString failed:', e);
-                      }
-                    }
-                    // 如果没有透明度，使用 toHexString
                     if (color && typeof color.toHexString === 'function') {
                       try {
                         return color.toHexString();
@@ -1263,10 +1254,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 >
                   <ColorPicker
                     showText
-                    format="rgb"
+                    format="hex"
                     value={normalizedHeaderBgColor || undefined}
                     onChange={(color) => {
-                      // 处理清除按钮点击（color 为 null 或 undefined）
                       if (!color || color === null) {
                         form.setFieldValue('headerBgColor', '');
                         return;
@@ -1287,7 +1277,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 title={
                   <TitleWithHint
                     title="标签栏背景色"
-                    hint="自定义标签栏的背景颜色，支持透明度设置（支持 rgba 格式，如：rgba(255, 255, 255, 0.8)）"
+                    hint="自定义标签栏的背景颜色，使用 hex 格式（如：#ffffff，带透明度为 8 位 #rrggbbaa）"
                   />
                 }
                 style={{ marginBottom: 16 }}
@@ -1359,15 +1349,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   getValueFromEvent={(color) => {
                     if (!color) return '';
                     if (typeof color === 'string') return color;
-                    // 处理颜色对象：优先使用 toRgbString 方法（支持透明度）
-                    if (color && typeof color.toRgbString === 'function') {
-                      try {
-                        return color.toRgbString();
-                      } catch (e) {
-                        console.warn('Color toRgbString failed:', e);
-                      }
-                    }
-                    // 如果没有透明度，使用 toHexString
                     if (color && typeof color.toHexString === 'function') {
                       try {
                         return color.toHexString();
@@ -1380,10 +1361,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 >
                   <ColorPicker
                     showText
-                    format="rgb"
+                    format="hex"
                     value={normalizedTabsBgColor || undefined}
                     onChange={(color) => {
-                      // 处理清除按钮点击（color 为 null 或 undefined）
                       if (!color || color === null) {
                         form.setFieldValue('tabsBgColor', '');
                         return;

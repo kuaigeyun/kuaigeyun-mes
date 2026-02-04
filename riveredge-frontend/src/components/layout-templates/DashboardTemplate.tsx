@@ -136,8 +136,12 @@ export const DashboardTemplate: React.FC<DashboardTemplateProps> = ({
       className={className}
       style={{
         padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
-        backgroundColor: token.colorBgLayout,
+        height: '100%',
         minHeight: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: token.colorBgLayout,
+        boxSizing: 'border-box',
         ...style,
       }}
     >
