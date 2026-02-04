@@ -277,14 +277,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       return;
     }
 
-    // 如果 tabsPersistence 还没有加载完成（还是默认值 false），等待加载完成
-    // 通过检查 localStorage 来判断是否已经加载完成
+    // 优先用 localStorage 判断持久化，避免等 getUserPreference 接口导致标签栏延迟
     const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
     const userPreferenceTabsPersistence = tabsPersistence;
 
-    // 如果既没有从用户偏好设置读取到，也没有从本地存储读取到，说明还在加载中，等待
+    // 用户偏好未返回且本地从未存过：不阻塞，先按「不持久化」展示当前页标签，避免刷新时 unitabs 延迟
     if (!userPreferenceTabsPersistence && localTabsPersistence === null) {
-      // 还在加载中，等待
+      setIsInitialized(true);
+      setTabsPersistence(false);
       return;
     }
 
@@ -1239,6 +1239,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           scrollbar-width: none !important; /* Firefox */
           -ms-overflow-style: none !important; /* IE/Edge */
         }
+        /* 工作台：不滚动，边距由内部 DashboardTemplate 控制避免加载抖动 */
+        .uni-tabs-content.uni-tabs-content-dashboard {
+          overflow: hidden !important;
+        }
         .uni-tabs-content::-webkit-scrollbar {
           display: none !important;
           width: 0 !important;
@@ -1684,7 +1688,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             )}
           </div>
         </div>
-        <div className="uni-tabs-content" key={`content-${activeKey}-${refreshKey}`}>
+        <div
+          className={`uni-tabs-content${activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?')) ? ' uni-tabs-content-dashboard' : ''}`}
+          key={`content-${activeKey}-${refreshKey}`}
+        >
           {children}
         </div>
       </div>

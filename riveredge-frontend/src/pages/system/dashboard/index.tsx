@@ -25,13 +25,11 @@ import {
   Modal,
   Tree,
   Tabs,
-  Progress,
   Dropdown,
   message as antdMessage,
   theme,
   Segmented,
   DatePicker,
-  Checkbox,
 } from 'antd';
 import {
   UserOutlined,
@@ -52,7 +50,6 @@ import {
   ShoppingOutlined,
   MoreOutlined,
   ArrowUpOutlined,
-  ArrowDownOutlined,
   AppstoreOutlined,
   BulbOutlined,
 } from '@ant-design/icons';
@@ -69,12 +66,10 @@ import {
   handleTodo, 
   getUserMessages,
   markMessagesRead,
-  getProcessProgress,
   getProductionBroadcast,
   type TodoItem, 
   type StatisticsResponse,
   type NotificationItem,
-  type ProcessProgressItem,
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
@@ -399,16 +394,6 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000, // 5分钟缓存
   });
 
-  // 工序执行进展筛选状态
-  const [includeUnstarted, setIncludeUnstarted] = useState(false);
-  
-  // 获取工序执行进展
-  const { data: processProgress, isLoading: processProgressLoading } = useQuery({
-    queryKey: ['dashboard-process-progress', includeUnstarted],
-    queryFn: () => getProcessProgress(includeUnstarted),
-    refetchInterval: 60000, // 每60秒自动刷新
-  });
-
   // 获取生产实时播报
   const { data: productionBroadcast, isLoading: productionBroadcastLoading } = useQuery({
     queryKey: ['dashboard-production-broadcast'],
@@ -578,13 +563,17 @@ export default function DashboardPage() {
         quickActions={[]}
         showConfigButton={false}
       >
+      {/* 欢迎条+指标条+4卡 占满 uni-tabs-content 高度，不滚动，布局固定 */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* 欢迎区域 - 增强设计 */}
       <Card
         style={{
           marginTop: 0,
           marginBottom: 24,
+          flexShrink: 0,
           background: `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary}dd 100%)`,
           border: 'none',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         }}
         styles={{ body: { padding: '32px 24px' } }}
         className="welcome-banner-card"
@@ -703,7 +692,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* 生产指标 - 参考设计 */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, flexShrink: 0 }}>
         {/* 左侧 TIPS + 右侧时间范围筛选器 */}
         <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
           <Col flex="1" style={{ minWidth: 0 }}>
@@ -977,15 +966,22 @@ export default function DashboardPage() {
         </Row>
       </div>
 
-      {/* 快捷入口、生产实时播报、待办事项、消息通知 - 四列，各占25% */}
+      {/* 快捷入口、生产实时播报、待办事项、消息通知 - calc 高度正好适配视口，无滚动 */}
       <Row 
         gutter={[16, 16]} 
+        className="dashboard-four-cards-row"
         style={{ 
-          marginBottom: 24,
+          height: 'calc(100vh - 56px - 30px - 192px - 198px)',
+          minHeight: 0,
           display: 'flex',
           alignItems: 'stretch',
         }}
       >
+        <style>{`
+          .dashboard-four-cards-row .ant-col { display: flex; height: 100%; }
+          .dashboard-four-cards-row .ant-card { height: 100%; display: flex; flex-direction: column; }
+          .dashboard-four-cards-row .ant-card .ant-card-body { flex: 1; overflow: auto; min-height: 0; }
+        `}</style>
         {/* 快捷入口 - iOS风格（占25%） */}
         <Col xs={24} sm={12} md={6} lg={6} style={{ display: 'flex' }}>
           <QuickEntryGrid
@@ -1074,19 +1070,8 @@ export default function DashboardPage() {
                 查看更多 <RightOutlined />
               </Button>
             }
-            style={{ 
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '400px',
-            }}
-            styles={{ 
-              body: {
-                flex: 1,
-                overflow: 'auto',
-                maxHeight: '400px',
-              }
-            }}
+            style={{ width: '100%' }}
+            styles={{ body: { flex: 1, overflow: 'auto', minHeight: 0 } }}
           >
             {productionBroadcast && productionBroadcast.length > 0 ? (
               <div>
@@ -1165,12 +1150,7 @@ export default function DashboardPage() {
                 查看全部 <RightOutlined />
               </Button>
             }
-            style={{ 
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '400px',
-            }}
+            style={{ width: '100%' }}
             styles={{ 
               body: {
                 flex: 1,
@@ -1178,6 +1158,7 @@ export default function DashboardPage() {
                 flexDirection: 'column',
                 overflow: 'hidden',
                 padding: '0 24px 24px 24px',
+                minHeight: 0,
               }
             }}
           >
@@ -1338,18 +1319,8 @@ export default function DashboardPage() {
                 查看全部 <RightOutlined />
               </Button>
             }
-            style={{ 
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: '400px',
-            }}
-            styles={{ 
-              body: {
-                flex: 1,
-                overflow: 'auto',
-              }
-            }}
+            style={{ width: '100%' }}
+            styles={{ body: { flex: 1, overflow: 'auto', minHeight: 0 } }}
           >
             {notifications && notifications.length > 0 ? (
               <div>
@@ -1395,126 +1366,7 @@ export default function DashboardPage() {
           </Card>
         </Col>
       </Row>
-
-      {/* 在制工序执行进展 - 参考设计 */}
-      <Card
-        title="在制工序执行进展"
-        loading={processProgressLoading}
-        extra={
-          <Checkbox
-            checked={includeUnstarted}
-            onChange={(e) => setIncludeUnstarted(e.target.checked)}
-          >
-            包含未开始生产任务
-          </Checkbox>
-        }
-        style={{ marginBottom: 24 }}
-      >
-        {processProgress && processProgress.length > 0 ? (
-          <>
-            <Row gutter={[16, 16]}>
-              {processProgress.map((item, index) => {
-                // 根据索引分配不同颜色（参考设计中的颜色方案）
-                const colorPalette = [
-                  '#1890ff',    // 蓝色（出库）
-                  '#b37feb',    // 浅紫色（总装）
-                  '#fa8c16',    // 橙色（数控冲床）
-                  '#52c41a',    // 绿色（冷镦）
-                  '#13c2c2',    // 浅蓝色（外圆磨）
-                  '#ff4d4f',    // 红色（冲压）
-                  '#faad14',    // 金色/黄色（去毛刺）
-                  '#95de64',    // 浅绿色（全检）
-                ];
-                const progressColor = colorPalette[index % colorPalette.length];
-
-                return (
-                  <Col xs={24} sm={12} md={6} lg={6} key={item.process_id || index}>
-                    <Card
-                      hoverable
-                      style={{
-                        borderRadius: 8,
-                        border: '1px solid #f0f0f0',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-                        height: '100%',
-                      }}
-                      styles={{ body: { padding: '16px' } }}
-                      onClick={() => navigate(`/apps/kuaizhizao/production-execution/work-orders?operation=${encodeURIComponent(item.process_name)}`)}
-                    >
-                      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-                        {/* 工序名称 */}
-                        <Text strong style={{ fontSize: 15, display: 'block' }}>
-                          {item.process_name}
-                        </Text>
-                        
-                        {/* 当前进度 */}
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <Text type="secondary" style={{ fontSize: 13 }}>当前进度</Text>
-                            <Text strong style={{ fontSize: 15, color: progressColor }}>
-                              {item.current_progress.toFixed(1)}%
-                            </Text>
-                          </div>
-                          <Progress
-                            percent={item.current_progress}
-                            strokeColor={progressColor}
-                            showInfo={false}
-                            size="default"
-                            style={{ marginBottom: 0 }}
-                          />
-                        </div>
-                        
-                        {/* 生产任务数 */}
-                        <div>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            生产任务数：<Text style={{ color: '#000000' }}>{item.task_count}</Text>
-                          </Text>
-                        </div>
-                        
-                        {/* 计划数、合格数、不合格数 */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                            <Text type="secondary">计划数</Text>
-                            <Text style={{ color: '#000000', fontWeight: 500 }}>
-                              {item.planned_quantity.toFixed(0)}
-                            </Text>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                            <Text type="secondary">合格数</Text>
-                            <Text type="success" style={{ fontWeight: 500 }}>
-                              {item.qualified_quantity.toFixed(0)}
-                            </Text>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                            <Text type="secondary">不合格数</Text>
-                            <Text type="danger" style={{ fontWeight: 500 }}>
-                              {item.unqualified_quantity.toFixed(0)}
-                            </Text>
-                          </div>
-                        </div>
-                      </Space>
-                    </Card>
-                  </Col>
-                );
-              })}
-            </Row>
-            
-            {/* 全部工序链接 */}
-            {processProgress.length > 8 && (
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <Button
-                  type="link"
-                  icon={<ArrowDownOutlined />}
-                  onClick={() => navigate('/apps/kuaizhizao/production-execution/work-orders')}
-                >
-                  全部工序
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <Empty description="暂无在制工序" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        )}
-      </Card>
+      </div>
 
       </DashboardTemplate>
 

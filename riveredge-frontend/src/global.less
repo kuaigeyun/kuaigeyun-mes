@@ -37,6 +37,17 @@
   scrollbar-color: var(--ant-colorFillSecondary) transparent;
 }
 
+/* ant-pro-layout-container：隐藏滚动条且不占宽度 */
+.ant-pro-layout-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ant-pro-layout-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 html,
 body {
   margin: 0;

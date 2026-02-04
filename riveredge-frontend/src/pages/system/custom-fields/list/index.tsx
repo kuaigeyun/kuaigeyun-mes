@@ -1015,10 +1015,12 @@ const CustomFieldListPage: React.FC = () => {
             border: `1px solid ${token.colorBorder}`,
           }}
         >
-          {/* 左侧功能页面列表 */}
+          {/* 左侧功能页面列表：固定宽度不参与收缩，由右侧区域伸缩（与编码规则页一致） */}
           <div
             style={{
               width: '300px',
+              minWidth: '300px',
+              flexShrink: 0,
               borderRight: `1px solid ${token.colorBorder}`,
               backgroundColor: token.colorFillAlter || '#fafafa',
               display: 'flex',
@@ -1126,10 +1128,11 @@ const CustomFieldListPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 右侧配置区域 */}
+          {/* 右侧配置区域：占据剩余空间，不足时可收缩并滚动（与编码规则页一致） */}
           <div
             style={{
               flex: 1,
+              minWidth: 0,
               display: 'flex',
               flexDirection: 'column',
               backgroundColor: token.colorBgContainer,
