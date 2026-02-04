@@ -26,6 +26,8 @@ class ApplicationBase(BaseModel):
     permission_code: Optional[str] = Field(None, max_length=100, description="权限代码")
     is_system: bool = Field(default=False, description="是否系统应用")
     is_active: bool = Field(default=True, description="是否启用")
+    is_custom_name: bool = Field(default=False, description="是否自定义名称")
+    is_custom_sort: bool = Field(default=False, description="是否自定义排序")
     sort_order: int = Field(default=0, description="排序顺序")
 
 
@@ -53,6 +55,8 @@ class ApplicationUpdate(BaseModel):
     menu_config: Optional[Dict[str, Any]] = Field(None, description="菜单配置（JSON）")
     permission_code: Optional[str] = Field(None, max_length=100, description="权限代码")
     is_active: Optional[bool] = Field(None, description="是否启用")
+    is_custom_name: Optional[bool] = Field(None, description="是否自定义名称")
+    is_custom_sort: Optional[bool] = Field(None, description="是否自定义排序")
     sort_order: Optional[int] = Field(None, description="排序顺序")
 
 

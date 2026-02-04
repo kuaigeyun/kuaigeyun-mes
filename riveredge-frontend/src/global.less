@@ -8,6 +8,35 @@
   box-sizing: border-box;
 }
 
+/* 全局滚动条样式优化，支持暗黑模式自动适配 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--ant-colorFillSecondary);
+  border-radius: 10px;
+  /* 使用透明边框和 background-clip 实现薄形滚动条效果 */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ant-colorFill);
+  border: 2px solid transparent;
+}
+
+/* Firefox 滚动条适配 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ant-colorFillSecondary) transparent;
+}
+
 html,
 body {
   margin: 0;
@@ -447,11 +476,13 @@ code {
 }
 
 .ant-drawer-body {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .ant-modal-body {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 全局：Modal 内表单标题为粗体 */

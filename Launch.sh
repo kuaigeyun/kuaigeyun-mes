@@ -5,6 +5,7 @@
 #
 # 快速启动选项:
 #   ./Launch.sh fast    - 最快启动，强制静默
+#   ./Launch.sh mobile  - 手机端启动（前端监听 0.0.0.0，同网段手机可访问）
 #   QUIET=true ./Launch.sh  - 静默启动
 #   ./fast-start.sh        - 快速启动脚本别名
 
@@ -16,7 +17,8 @@ set -e  # 遇到错误立即退出
 
 # 服务端口配置（避免系统保留端口和主流项目常用端口）
 BACKEND_PORT="${BACKEND_PORT:-8200}"   # 后端服务端口（避免与主流项目常用端口冲突）
-FRONTEND_PORT="${FRONTEND_PORT:-8100}" # 前端服务端口（避免与主流项目常用端口冲突）
+FRONTEND_PORT="${FRONTEND_PORT:-8100}" # 前端服务端口（Web 端，默认 8100）
+MOBILE_FRONTEND_PORT="${MOBILE_FRONTEND_PORT:-8101}" # 手机端前端端口（与 Web 分开，默认 8101）
 KKFILEVIEW_PORT="${KKFILEVIEW_PORT:-8400}" # kkFileView 服务端口
 INNGEST_PORT="${INNGEST_PORT:-8288}"  # Inngest Dev Server 端口（可通过环境变量INNGEST_PORT覆盖，默认8288为Inngest官方默认端口）
 
@@ -50,6 +52,9 @@ DEBUG="${DEBUG:-false}"
 
 # 静默模式 - 减少输出，只显示关键信息
 QUIET="${QUIET:-false}"
+
+# 手机端启动 - 前端绑定 0.0.0.0，便于同网段手机通过本机 IP 访问
+LAUNCH_MOBILE="${LAUNCH_MOBILE:-true}" # 默认启动手机端
 
 # UV 链接模式配置（避免硬链接警告，Windows 环境下硬链接可能不支持）
 export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
@@ -1300,10 +1305,9 @@ start_frontend() {
 
     # 启动前端服务（从 riveredge-frontend 目录）
     # ⚠️ 修复：直接使用 npx vite 命令，指定 src 作为根目录
-    # Windows 兼容性：在 Windows 上使用 127.0.0.1 而不是 0.0.0.0 或 localhost，避免 IPv6 权限问题
-    # localhost 在 Windows 上可能解析为 IPv6 的 ::1，导致 EACCES 权限错误
+    # Windows 兼容性：默认在 Windows 上使用 127.0.0.1；手机端启动时强制 0.0.0.0 以便同网段手机访问
     local host_bind="0.0.0.0"
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
+    if [[ "$LAUNCH_MOBILE" != "true" ]] && [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" || "$OSTYPE" == "cygwin" ]]; then
         host_bind="127.0.0.1"  # 强制使用 IPv4，避免 localhost 解析为 IPv6
     fi
     # 使用 npx vite 直接启动（vite.config.ts 已设置 root，不需要额外指定目录）
@@ -1323,6 +1327,53 @@ start_frontend() {
             rm -f "$project_root/.logs/frontend.pid"
         fi
         exit 1
+    fi
+}
+
+# 启动手机端前端服务 (Expo Web)
+start_mobile_frontend() {
+    local port=$1
+    local backend_port=$2
+    log_info "启动手机端前端服务 (端口: $port, 后端: $backend_port)..."
+    
+    # 清理策略：只有在端口被占用时才执行彻底清理
+    if check_port $port; then
+        terminate_process_on_port $port || true
+        sleep 1
+    fi
+
+    local project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # 检查手机端目录
+    if [ ! -d "$project_root/riveredge-mobile" ]; then
+        log_warn "未找到 riveredge-mobile 目录，跳过手机端启动"
+        return 1
+    fi
+
+    cd "$project_root/riveredge-mobile"
+    
+    # 检查依赖
+    if [ ! -d "node_modules" ]; then
+        log_info "安装手机端依赖..."
+        npm install --legacy-peer-deps --silent > /dev/null 2>&1 || {
+            log_error "手机端依赖安装失败"
+            cd "$project_root"
+            return 1
+        }
+    fi
+
+    # 启动 Expo Web 服务
+    # 使用 npx expo start --web 启动，指定端口
+    nohup npx expo start --web --port $port --non-interactive > "$project_root/.logs/mobile.log" 2>&1 &
+    local mobile_pid=$!
+    echo $mobile_pid > "$project_root/.logs/mobile.pid"
+
+    cd "$project_root"
+    log_success "手机端前端服务启动中 (PID: $mobile_pid, 端口: $port)"
+    
+    # 等待端口监听
+    if ! wait_for_frontend $port "手机端前端" 20; then
+        log_warn "手机端前端启动验证未完全通过，请检查 .logs/mobile.log"
     fi
 }
 
@@ -1395,6 +1446,21 @@ stop_all() {
         rm -f .logs/frontend.pid
     fi
 
+    # 停止手机端（通过PID文件）
+    if [ -f ".logs/mobile.pid" ]; then
+        local mobile_pid=$(cat .logs/mobile.pid 2>/dev/null)
+        if [ ! -z "$mobile_pid" ] && [ "$mobile_pid" != "0" ]; then
+            if kill -0 $mobile_pid 2>/dev/null; then
+                log_info "停止手机端前端服务 (PID: $mobile_pid)"
+                kill -TERM $mobile_pid 2>/dev/null || true
+                if command -v taskkill &> /dev/null; then
+                    taskkill /PID $mobile_pid /F >> "$log_dir/taskkill.log" 2>&1 || true
+                fi
+            fi
+        fi
+        rm -f .logs/mobile.pid
+    fi
+
     # 停止 Inngest（通过PID文件）
     if [ -f ".logs/inngest.pid" ]; then
         local inngest_pid=$(cat .logs/inngest.pid 2>/dev/null)
@@ -1438,7 +1504,7 @@ stop_all() {
     fi
     
     # 只清理关键端口，避免遍历所有端口导致卡住
-    for port in $FRONTEND_PORT $BACKEND_PORT; do
+    for port in $FRONTEND_PORT $MOBILE_FRONTEND_PORT $BACKEND_PORT; do
         if check_port $port; then
             local pid=$(get_pid_by_port $port)
             if [ ! -z "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "-" ]; then
@@ -1507,6 +1573,17 @@ show_status() {
         log_warn "前端服务未运行"
     fi
 
+    if [ -f ".logs/mobile.pid" ]; then
+        local mobile_pid=$(cat .logs/mobile.pid)
+        if kill -0 $mobile_pid 2>/dev/null; then
+            log_success "手机端前端运行中 (PID: $mobile_pid)"
+        else
+            log_warn "手机端前端PID文件存在但进程未运行"
+        fi
+    else
+        log_warn "手机端前端未运行"
+    fi
+
     if [ -f ".logs/inngest.pid" ]; then
         local inngest_pid=$(cat .logs/inngest.pid)
         if kill -0 $inngest_pid 2>/dev/null; then
@@ -1534,6 +1611,12 @@ show_status() {
         log_success "后端端口 $BACKEND_PORT 可用"
     fi
     
+    if check_port $MOBILE_FRONTEND_PORT; then
+        log_warn "手机端端口 $MOBILE_FRONTEND_PORT 被占用"
+    else
+        log_success "手机端端口 $MOBILE_FRONTEND_PORT 可用"
+    fi
+
     # Inngest端口检查（Windows可能被系统保留，不强制）
     if check_port $INNGEST_PORT; then
         log_warn "Inngest 端口 $INNGEST_PORT 被占用（Windows可能被系统保留）"
@@ -1574,10 +1657,13 @@ main() {
     # 执行日志管理
     manage_logs ".logs"
 
-    # 显示配置摘要
+    # 显示配置摘要（main 内 frontend_port 稍后按 LAUNCH_MOBILE 设置，这里先显示默认）
     log_info "启动配置:"
     log_info "   后端端口: $BACKEND_PORT"
-    log_info "   前端端口: $FRONTEND_PORT"
+    log_info "   Web 前端端口: $FRONTEND_PORT"
+    if [ "$LAUNCH_MOBILE" = "true" ]; then
+        log_info "   手机端前端端口: $MOBILE_FRONTEND_PORT"
+    fi
     log_info "   Inngest端口: $INNGEST_PORT"
     log_info "   调试模式: $DEBUG"
     echo
@@ -1655,8 +1741,13 @@ main() {
     # 清理策略：只有在端口被占用时才执行彻底清理
     local need_cleanup=false
     
+    # 默认同时启动 Web 和 手机端
+    local web_port="$FRONTEND_PORT"
+    local mobile_port="$MOBILE_FRONTEND_PORT"
+    log_info "启动配置：Web 端口 $web_port, 手机端端口 $mobile_port"
+
     # 检查端口占用情况
-    if check_port "$FRONTEND_PORT" || check_port "$BACKEND_PORT"; then
+    if check_port "$web_port" || check_port "$mobile_port" || check_port "$BACKEND_PORT"; then
         need_cleanup=true
         log_warn "检测到端口被占用，执行全局清理：终止所有可能阻碍启动的进程..."
         cleanup_all_processes
@@ -1665,46 +1756,17 @@ main() {
         log_info "端口未被占用，跳过全局清理，直接启动"
     fi
 
-    # 清理指定端口，直到成功（如果被占用）
-    log_info "检查并清理端口 $FRONTEND_PORT (前端)、$BACKEND_PORT (后端)..."
-
-    # 清理前端端口（如果被占用）
-    if check_port "$FRONTEND_PORT"; then
-        if ! clear_port "$FRONTEND_PORT"; then
-            log_error "前端端口 $FRONTEND_PORT 清理失败，请手动检查并清理占用进程"
-            log_error ""
-            log_error "手动清理步骤："
-            log_error "1. 检查占用端口的进程: netstat -ano | findstr :$FRONTEND_PORT"
-            log_error "2. 终止进程: taskkill /PID <PID> /F /T"
-            log_error "3. 或者终止所有 node 进程: taskkill /IM node.exe /F /T"
-            log_error "4. 或者终止所有 vite 进程: wmic process where \"CommandLine like '%%vite%%'\" delete"
-            log_error ""
-            exit 1
+    # 清理端口（如果被占用）
+    for p in "$web_port" "$mobile_port" "$BACKEND_PORT"; do
+        if check_port "$p"; then
+            if ! clear_port "$p"; then
+                log_warn "端口 $p 清理失败，尝试继续启动..."
+            fi
         fi
-    else
-        log_info "前端端口 $FRONTEND_PORT 未被占用，跳过清理"
-    fi
+    done
 
-    # 清理后端端口（如果被占用）
-    if check_port "$BACKEND_PORT"; then
-        if ! clear_port "$BACKEND_PORT"; then
-            log_error "后端端口 $BACKEND_PORT 清理失败，请手动检查并清理占用进程"
-            log_error ""
-            log_error "手动清理步骤："
-            log_error "1. 检查占用端口的进程: netstat -ano | findstr :$BACKEND_PORT"
-            log_error "2. 终止进程: taskkill /PID <PID> /F /T"
-            log_error "3. 或者终止所有 python 进程: taskkill /IM python.exe /F /T"
-            log_error "4. 或者终止所有 uvicorn 进程: wmic process where \"CommandLine like '%%uvicorn%%'\" delete"
-            log_error ""
-            exit 1
-        fi
-    else
-        log_info "后端端口 $BACKEND_PORT 未被占用，跳过清理"
-    fi
-
-    
     local backend_port="$BACKEND_PORT"
-    local frontend_port="$FRONTEND_PORT"
+    local frontend_port="$web_port"
 
     log_success "端口清理完成 - 后端: $backend_port, 前端: $frontend_port"
 
@@ -1714,13 +1776,17 @@ main() {
         log_error "后端启动失败，退出"
         exit 1
     fi
-
-    # 启动前端
+    # 启动前端 (Web)
     start_frontend "$frontend_port" "$backend_port"
     if [ $? -ne 0 ]; then
-        log_error "前端启动失败，正在停止后端..."
+        log_error "Web 前端启动失败，正在停止服务..."
         stop_all
         exit 1
+    fi
+
+    # 启动手机端 (App)
+    if [ "$LAUNCH_MOBILE" = "true" ]; then
+        start_mobile_frontend "$mobile_port" "$backend_port"
     fi
 
     # 启动 Inngest（在后端启动之后，因为Inngest需要连接后端）
@@ -1748,10 +1814,28 @@ main() {
         echo "=================================================================================="
         echo
         echo "服务访问地址:"
-        echo "  前端界面:    http://localhost:$FRONTEND_PORT"
-        echo "  平台登录:    http://localhost:$FRONTEND_PORT/infra"
+        echo "  Web 前端:    http://localhost:$frontend_port"
+        echo "  手机端 Web:   http://localhost:$mobile_port"
+        echo "  平台登录:    http://localhost:$frontend_port/infra"
         echo "  后端 API:    http://localhost:$BACKEND_PORT"
         echo "  API 文档:    http://localhost:$BACKEND_PORT/docs"
+        
+        # 获取局域网 IP
+        local lan_ip=""
+        if command -v ip &>/dev/null; then
+            lan_ip=$(ip route get 1 2>/dev/null | awk '{print $7; exit}' || true)
+        fi
+        if [ -z "$lan_ip" ] && command -v hostname &>/dev/null; then
+            lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+        fi
+        if [ -z "$lan_ip" ] && command -v ipconfig &>/dev/null; then
+            lan_ip=$(ipconfig 2>/dev/null | grep -E "IPv4|^\s*[0-9]" | grep -oE "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 || true)
+        fi
+
+        if [ -n "$lan_ip" ]; then
+            echo "  手机访问(Web): http://$lan_ip:$frontend_port"
+            echo "  手机访问(App): http://$lan_ip:$mobile_port"
+        fi
         if [ -f ".logs/inngest.pid" ]; then
             echo "  Inngest Dashboard: http://localhost:$INNGEST_PORT/_dashboard"
         fi
@@ -1777,10 +1861,15 @@ main() {
         echo
         echo "=================================================================================="
     else
-        if [ -f ".logs/inngest.pid" ]; then
-            log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT Inngest: http://localhost:$INNGEST_PORT/_dashboard"
+        local lan_ip=""
+        command -v ip &>/dev/null && lan_ip=$(ip route get 1 2>/dev/null | awk '{print $7; exit}' || true)
+        [ -z "$lan_ip" ] && command -v hostname &>/dev/null && lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+        [ -z "$lan_ip" ] && command -v ipconfig &>/dev/null && lan_ip=$(ipconfig 2>/dev/null | grep -oE "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -1 || true)
+        
+        if [ -n "$lan_ip" ]; then
+            log_key "启动完成 - Web: http://localhost:$frontend_port 手机端: http://$lan_ip:$mobile_port"
         else
-            log_key "启动完成 - 前端: http://localhost:$FRONTEND_PORT 后端: http://localhost:$BACKEND_PORT"
+            log_key "启动完成 - Web: http://localhost:$frontend_port 手机端: http://localhost:$mobile_port"
         fi
     fi
     echo
@@ -1794,7 +1883,7 @@ main() {
     fi
 
     # 检查前端是否可以访问（异步检查）
-    (sleep 2 && curl -s --max-time 3 "http://localhost:$FRONTEND_PORT" >/dev/null 2>&1 && log_success "前端服务验证通过" || log_warn "前端服务验证失败，可能仍在编译中") &
+    (sleep 2 && curl -s --max-time 3 "http://localhost:$frontend_port" >/dev/null 2>&1 && log_success "前端服务验证通过" || log_warn "前端服务验证失败，可能仍在编译中") &
 
     log_success "RiverEdge SaaS 框架启动完成！开始您的开发之旅吧！"
 }
@@ -1808,6 +1897,7 @@ RiverEdge SaaS 框架一键启动脚本
 
 命令:
     start     启动所有服务 (默认)
+    mobile    手机端启动 (前端监听 0.0.0.0，同网段手机可访问)
     stop      停止所有服务
     restart   重启所有服务 (静默模式)
     fast      快速启动 (强制静默，最快速度)
@@ -1816,12 +1906,14 @@ RiverEdge SaaS 框架一键启动脚本
 
 环境变量配置:
     BACKEND_PORT=$BACKEND_PORT          后端服务端口
-    FRONTEND_PORT=$FRONTEND_PORT        前端服务端口
+    FRONTEND_PORT=$FRONTEND_PORT        Web 前端端口 (默认 8100)
+    MOBILE_FRONTEND_PORT=$MOBILE_FRONTEND_PORT  手机端前端端口 (默认 8101)
     DEBUG=$DEBUG                       调试模式
     QUIET=$QUIET                       静默模式 (减少输出)
 
 示例:
     $0                            # 启动服务
+    $0 mobile                     # 手机端启动（同网段手机可访问前端）
     $0 stop                       # 停止服务
     $0 restart                    # 重启服务 (静默模式)
     $0 fast                       # 快速启动 (最快速度，强制静默)
@@ -1856,6 +1948,10 @@ case "$1" in
     fast|quick)
         # 快速启动模式：强制静默，跳过所有不必要的检查
         QUIET=true DEBUG=false main
+        ;;
+    mobile|phone)
+        # 手机端启动：前端绑定 0.0.0.0，同网段手机可通过本机 IP 访问
+        LAUNCH_MOBILE=true main
         ;;
     help|--help|-h)
         show_help

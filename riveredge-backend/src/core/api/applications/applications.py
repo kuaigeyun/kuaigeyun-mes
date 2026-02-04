@@ -519,17 +519,22 @@ async def sync_application_manifest(
         # 更新应用配置
         menu_config = manifest.get('menu_config')
         version = manifest.get('version', app.get('version', '1.0.0'))
-
-        if not menu_config:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="manifest.json缺少menu_config配置"
-            )
+        
+        # 决定是否同步名称和排序
+        app_name = app.get('name')
+        if not app.get('is_custom_name'):
+            app_name = manifest.get('name', app_name)
+            
+        app_sort_order = app.get('sort_order', 0)
+        if not app.get('is_custom_sort'):
+            app_sort_order = manifest.get('sort_order', app_sort_order)
 
         # 更新数据库中的应用配置
         update_data = ApplicationUpdate(
+            name=app_name,
             menu_config=menu_config,
-            version=version
+            version=version,
+            sort_order=app_sort_order
         )
 
         updated_app = await ApplicationService.update_application(

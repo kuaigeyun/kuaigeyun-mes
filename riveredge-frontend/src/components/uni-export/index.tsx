@@ -17,7 +17,10 @@ import '@univerjs/ui/lib/index.css';
 import '@univerjs/sheets-ui/lib/index.css';
 import '@univerjs/presets/lib/styles/preset-sheets-core.css';
 
-// 引入 Univer 预设（简化初始化）
+// 引入手动依赖注册所需模块
+// (已移除手动插件引用，因为改用 Preset 管理)
+
+// 引入 Univer 预设（与 Git 旧版一致：仅 Sheets）
 import { createUniver, defaultTheme, LocaleType, merge } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/presets/preset-sheets-core';
 import UniverPresetSheetsCoreZhCN from '@univerjs/presets/preset-sheets-core/locales/zh-CN';
@@ -112,21 +115,21 @@ export const UniExport: React.FC<UniExportProps> = ({
         if (!containerRef.current) {
           return;
         }
-        
+
         try {
           setLoading(true);
-          
+
           // 创建容器 ID（确保唯一）
           const containerId = `univer-sheet-export-${Date.now()}`;
           containerIdRef.current = containerId;
           containerRef.current.id = containerId;
-          
+
           // 清空容器内容
           containerRef.current.innerHTML = '';
-          
+
           // 等待 DOM 更新完成
           await new Promise(resolve => setTimeout(resolve, 100));
-          
+
           // 使用预设方式创建 Univer 实例
           const { univer, univerAPI } = createUniver({
             locale: LocaleType.ZH_CN,
@@ -137,17 +140,18 @@ export const UniExport: React.FC<UniExportProps> = ({
             presets: [
               UniverSheetsCorePreset({
                 container: containerId,
+                formulaBar: false, // 导出场景不需要公式栏，禁用可避免 redi 依赖报错
               }),
             ],
           });
-          
+
           // 保存实例引用
           univerInstanceRef.current = { univer, univerAPI };
-          
+
           // 准备单元格数据
           const cellData: Record<string, Record<string, { v: any; m?: string; s?: any }>> = {};
           const styles: Record<string, any> = {};
-          
+
           // 表头样式（浅蓝色背景，加粗字体）
           const headerStyleId = 'headerStyle';
           styles[headerStyleId] = {
@@ -160,24 +164,24 @@ export const UniExport: React.FC<UniExportProps> = ({
             bd: 1,
             cl: { rgb: '000000' },
           };
-          
+
           // 准备数据
           let rowCount = 0;
           let columnCount = 0;
-          
+
           // 如果有初始数据，使用初始数据
           if (data && data.length > 0) {
             rowCount = data.length;
             columnCount = Math.max(...data.map(row => row.length));
-            
+
             data.forEach((row, rowIndex) => {
               const rowKey = String(rowIndex);
               cellData[rowKey] = {};
-              
+
               row.forEach((cell, colIndex) => {
                 const colKey = String(colIndex);
                 const cellValue = cell !== null && cell !== undefined ? String(cell) : '';
-                
+
                 cellData[rowKey][colKey] = {
                   v: cellValue,
                   m: cellValue,
@@ -189,7 +193,7 @@ export const UniExport: React.FC<UniExportProps> = ({
             // 如果有表头，填充表头
             rowCount = 1;
             columnCount = headers.length;
-            
+
             headers.forEach((header, colIndex) => {
               const colKey = String(colIndex);
               cellData['0'] = cellData['0'] || {};
@@ -204,7 +208,7 @@ export const UniExport: React.FC<UniExportProps> = ({
             rowCount = 100;
             columnCount = 20;
           }
-          
+
           // 设置工作表数据
           const worksheet = univerAPI.getActiveWorkbook().getActiveSheet();
           if (worksheet) {
@@ -218,13 +222,13 @@ export const UniExport: React.FC<UniExportProps> = ({
                 }
               });
             });
-            
+
             // 设置列宽
             for (let i = 0; i < columnCount; i++) {
               worksheet.setColumnWidth(i, 100);
             }
           }
-          
+
           setLoading(false);
         } catch (error) {
           console.error('初始化 Univer Sheet 失败:', error);
@@ -261,7 +265,7 @@ export const UniExport: React.FC<UniExportProps> = ({
 
       const univerAPI = univerInstanceRef.current.univerAPI;
       const worksheet = univerAPI.getActiveWorkbook().getActiveSheet();
-      
+
       if (!worksheet) {
         message.warning('无法获取工作表');
         return;

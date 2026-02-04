@@ -7,7 +7,7 @@
     "author": "RiverEdge Team",
     "entry_point": "../apps/kuaizhizao/index.tsx",
     "route_path": "/apps/kuaizhizao",
-    "sort_order": 980,
+    "sort_order": 20,
     "menu_config": {
         "title": "快格轻制造",
         "icon": "production",

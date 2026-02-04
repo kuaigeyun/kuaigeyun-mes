@@ -659,6 +659,11 @@ class MenuService:
             deleted_at__isnull=True
         ).all()
         
+        # 获取应用信息，以确定是否需要使用应用名称作为根菜单名称
+        from core.models.application import Application
+        app = await Application.filter(uuid=application_uuid, tenant_id=tenant_id).first()
+        app_name = app.name if app else None
+
         existing_menu_map = {menu.uuid: menu for menu in existing_menus}
         
         # 递归创建或更新菜单
@@ -685,6 +690,11 @@ class MenuService:
             menu_uuid = menu_item.get("uuid")  # 如果配置中有UUID，使用它
             # 兼容 title 和 name 字段（manifest.json 使用 title，优先使用 title）
             menu_name = menu_item.get("title") or menu_item.get("name", "")
+            
+            # 如果是根菜单（没有父菜单），且应用有自定义名称，则使用应用名称作为菜单名称
+            if parent_id is None and app_name:
+                menu_name = app_name
+
             menu_path = menu_item.get("path")
             menu_icon = menu_item.get("icon")
             menu_component = menu_item.get("component")

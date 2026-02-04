@@ -31,6 +31,7 @@
         "@formily/antd-v5": "^1.2.4",
         "@formily/core": "^2.3.7",
         "@formily/react": "^2.3.7",
+        "@jiaminghi/data-view-react": "^1.2.5",
         "@tanstack/react-query": "^5.51.1",
         "@univerjs/core": "^0.12.3",
         "@univerjs/design": "^0.12.3",

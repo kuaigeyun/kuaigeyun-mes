@@ -36,6 +36,7 @@ import {
   uninstallApplication,
   enableApplication,
   disableApplication,
+  updateApplication,
   syncApplicationManifest,
   Application,
 } from '../../../../services/application';
@@ -52,13 +53,13 @@ const getApplicationIcon = (code: string, icon?: string | null) => {
   if (icon && (icon.startsWith('/') || icon.startsWith('http'))) {
     return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
   }
-  
+
   // 如果 icon 是 lucide 图标名称，使用 ManufacturingIcons
   if (icon && ManufacturingIcons[icon as keyof typeof ManufacturingIcons]) {
     const IconComponent = ManufacturingIcons[icon as keyof typeof ManufacturingIcons];
     return React.createElement(IconComponent, { size: 72 });
   }
-  
+
   // 根据应用代码返回默认图标
   const iconMap: Record<string, React.ReactNode> = {
     kuaimes: React.createElement(ManufacturingIcons.production, { size: 72 }), // 快格轻MES
@@ -89,6 +90,10 @@ const ApplicationListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<Application | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  // 编辑状态
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingApp, setEditingApp] = useState<Application | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
 
   /**
@@ -173,10 +178,32 @@ const ApplicationListPage: React.FC = () => {
       window.dispatchEvent(new CustomEvent('application-status-changed', {
         detail: { application: record, isActive: checked }
       }));
-
-      console.log(`📢 已触发应用状态变更事件: ${record.name} ${checked ? '启用' : '禁用'}`);
     } catch (error: any) {
       messageApi.error(error.message || '操作失败');
+    }
+  };
+
+  /**
+   * 处理更新应用配置（名称、排序等）
+   */
+  const handleUpdateAppConfig = async (record: Application, updateData: Partial<Application>) => {
+    try {
+      setSubmitting(true);
+      await updateApplication(record.uuid, updateData);
+      messageApi.success('应用配置更新成功');
+      setEditModalVisible(false);
+      actionRef.current?.reload();
+      // 使应用菜单缓存失效，自动更新菜单
+      queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+
+      // 触发自定义事件，通知菜单立即刷新
+      window.dispatchEvent(new CustomEvent('application-status-changed', {
+        detail: { application: { ...record, ...updateData } }
+      }));
+    } catch (error: any) {
+      messageApi.error(error.message || '操作失败');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -204,6 +231,12 @@ const ApplicationListPage: React.FC = () => {
       width: 250,
       ellipsis: true,
       hideInSearch: true,
+    },
+    {
+      title: '排序顺序',
+      dataIndex: 'sort_order',
+      width: 100,
+      sorter: (a, b) => (a.sort_order || 0) - (b.sort_order || 0),
     },
     {
       title: '系统应用',
@@ -308,7 +341,7 @@ const ApplicationListPage: React.FC = () => {
                     });
 
                     // 刷新应用列表
-                    loadApplications();
+                    actionRef.current?.reload();
 
                     // 触发菜单刷新事件
                     window.dispatchEvent(new CustomEvent('application-status-changed', {
@@ -334,31 +367,40 @@ const ApplicationListPage: React.FC = () => {
       {
         type: 'divider' as const,
       },
+      {
+        key: 'edit-app',
+        label: '应用设置',
+        icon: <MoreOutlined />,
+        onClick: () => {
+          setEditingApp(application);
+          setEditModalVisible(true);
+        },
+      },
       !application.is_installed
         ? {
-            key: 'install',
-            label: '安装',
-            icon: <DownloadOutlined />,
-            onClick: () => {
-              Modal.confirm({
-                title: '确定要安装这个应用吗？',
-                onOk: () => handleInstall(application),
-              });
-            },
-          }
-        : {
-            key: 'uninstall',
-            label: '卸载',
-            icon: <StopOutlined />,
-            disabled: application.is_system,
-            onClick: () => {
-              if (application.is_system) return;
-              Modal.confirm({
-                title: '确定要卸载这个应用吗？',
-                onOk: () => handleUninstall(application),
-              });
-            },
+          key: 'install',
+          label: '安装',
+          icon: <DownloadOutlined />,
+          onClick: () => {
+            Modal.confirm({
+              title: '确定要安装这个应用吗？',
+              onOk: () => handleInstall(application),
+            });
           },
+        }
+        : {
+          key: 'uninstall',
+          label: '卸载',
+          icon: <StopOutlined />,
+          disabled: application.is_system,
+          onClick: () => {
+            if (application.is_system) return;
+            Modal.confirm({
+              title: '确定要卸载这个应用吗？',
+              onOk: () => handleUninstall(application),
+            });
+          },
+        },
     ];
 
     return (
@@ -427,6 +469,11 @@ const ApplicationListPage: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: 16, color: '#262626' }}>
                   {application.name}
+                  {application.is_custom_name && (
+                    <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 'normal', color: '#faad14' }} title="已自定义名称">
+                      (已修改)
+                    </span>
+                  )}
                 </span>
                 <Space size={4}>
                   {application.is_system && (
@@ -504,10 +551,10 @@ const ApplicationListPage: React.FC = () => {
       title: '菜单配置',
       dataIndex: 'menu_config',
       render: (value: any) => value ? (
-        <pre style={{ 
-          margin: 0, 
-          fontSize: 12, 
-          maxWidth: 600, 
+        <pre style={{
+          margin: 0,
+          fontSize: 12,
+          maxWidth: 600,
           overflow: 'auto',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
@@ -620,18 +667,141 @@ const ApplicationListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-    {/* 查看详情 Drawer */}
-    <DetailDrawerTemplate<Application>
-      title="应用详情"
-      open={drawerVisible}
-      onClose={() => setDrawerVisible(false)}
-      loading={detailLoading}
-      width={DRAWER_CONFIG.STANDARD_WIDTH}
-      dataSource={detailData || {}}
-      columns={detailColumns}
-      column={1}
-    />
-  </>
+      {/* 查看详情 Drawer */}
+      <DetailDrawerTemplate<Application>
+        title="应用详情"
+        open={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        loading={detailLoading}
+        width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || undefined}
+        columns={detailColumns}
+        column={1}
+      />
+
+      {/* 编辑应用 Modal */}
+      <Modal
+        title={`应用设置 - ${editingApp?.name}`}
+        open={editModalVisible}
+        onOk={() => {
+          const form = document.getElementById('edit-app-form') as HTMLFormElement;
+          const formData = new FormData(form);
+          const name = formData.get('name') as string;
+          const sortOrder = parseInt(formData.get('sort_order') as string, 10);
+
+          if (editingApp) {
+            const isCustomName = name !== editingApp.name || editingApp.is_custom_name;
+            const isCustomSort = sortOrder !== (editingApp.sort_order || 0) || editingApp.is_custom_sort;
+            handleUpdateAppConfig(editingApp, {
+              name,
+              sort_order: sortOrder,
+              is_custom_name: isCustomName,
+              is_custom_sort: isCustomSort
+            });
+          }
+        }}
+        onCancel={() => setEditModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setEditModalVisible(false)}>
+            取消
+          </Button>,
+          <Button
+            key="restore"
+            danger
+            onClick={async () => {
+              if (editingApp) {
+                Modal.confirm({
+                  title: '恢复默认设置',
+                  content: '确定要恢复应用的默认名称和配置吗？这将从manifest.json重新同步。',
+                  onOk: async () => {
+                    setSubmitting(true);
+                    try {
+                      // 1. 先把自定义名称和排序标志位设为 false
+                      await updateApplication(editingApp.uuid, {
+                        is_custom_name: false,
+                        is_custom_sort: false
+                      });
+                      // 2. 触发同步
+                      await syncApplicationManifest(editingApp.code);
+                      messageApi.success('已恢复默认设置');
+                      setEditModalVisible(false);
+                      actionRef.current?.reload();
+                    } catch (error: any) {
+                      messageApi.error(error.message || '恢复失败');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }
+                });
+              }
+            }}
+          >
+            恢复默认
+          </Button>,
+          <Button key="submit" type="primary" loading={submitting} onClick={() => {
+            const form = document.getElementById('edit-app-form') as HTMLFormElement;
+            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+          }}>
+            保存
+          </Button>
+        ]}
+        destroyOnClose
+      >
+        <form
+          id="edit-app-form"
+          style={{ padding: '20px 0' }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const name = formData.get('name') as string;
+            const sortOrder = parseInt(formData.get('sort_order') as string, 10);
+            if (editingApp) {
+              // 如果名称或排序变了，设为自定义标志
+              const isCustomName = name !== editingApp.name || editingApp.is_custom_name;
+              const isCustomSort = sortOrder !== (editingApp.sort_order || 0) || editingApp.is_custom_sort;
+              handleUpdateAppConfig(editingApp, {
+                name,
+                sort_order: sortOrder,
+                is_custom_name: isCustomName,
+                is_custom_sort: isCustomSort
+              });
+            }
+          }}
+        >
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>应用名称:</label>
+            <input
+              type="text"
+              name="name"
+              defaultValue={editingApp?.name}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #d9d9d9'
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 8 }}>排序顺序 (越小越靠前):</label>
+            <input
+              type="number"
+              name="sort_order"
+              defaultValue={editingApp?.sort_order || 0}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #d9d9d9'
+              }}
+            />
+          </div>
+          <div style={{ color: '#8c8c8c', fontSize: 12 }}>
+            提示：您可以自定义应用显示的名称。点击“恢复默认”将重新应用来自 manifest.json 的原始名称。
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 };
 

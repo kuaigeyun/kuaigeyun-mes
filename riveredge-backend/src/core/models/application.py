@@ -59,6 +59,9 @@ class Application(BaseModel):
     is_active = fields.BooleanField(default=True, description="是否启用")
     is_installed = fields.BooleanField(default=False, description="是否已安装")
     
+    is_custom_name = fields.BooleanField(default=False, description="是否自定义名称")
+    is_custom_sort = fields.BooleanField(default=False, description="是否自定义排序")
+    
     sort_order = fields.IntField(default=0, description="排序顺序")
     
     # 软删除字段

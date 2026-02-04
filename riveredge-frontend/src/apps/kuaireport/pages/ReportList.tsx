@@ -35,8 +35,6 @@ const ReportList: React.FC = () => {
             title: '引擎类型', dataIndex: 'report_type', key: 'report_type', render: (type: string) => {
                 const config = {
                     jimu: { color: 'blue', text: '专业报表 (Jimu)' },
-                    grid: { color: 'purple', text: '动态网格 (Grid)' },
-                    univer: { color: 'cyan', text: '协同表格 (Univer)' }
                 }[type] || { color: 'default', text: type };
                 return <Tag color={config.color}>{config.text}</Tag>;
             }
@@ -50,21 +48,11 @@ const ReportList: React.FC = () => {
         {
             title: '操作', key: 'action', render: (_: any, record: any) => (
                 <Space size="middle">
-                    {record.report_type === 'grid' && (
-                        <Button
-                            type="link"
-                            size="small"
-                            onClick={() => navigate(`../report-grid?id=${record.id}`)}
-                        >
-                            查看
-                        </Button>
-                    )}
                     <Button
                         icon={<EditOutlined />}
                         size="small"
                         onClick={() => {
-                            const path = record.report_type === 'jimu' ? '../jimu-designer' : '../report-designer';
-                            navigate(`${path}?id=${record.id}`);
+                            navigate(`../jimu-designer?id=${record.id}`);
                         }}
                     >
                         设计
@@ -80,9 +68,7 @@ const ReportList: React.FC = () => {
             title="报表管理"
             extra={[
                 <Space key="extra">
-                    <Button icon={<PlusOutlined />} onClick={() => navigate('../report-designer')}>新建协同表格</Button>
                     <Button icon={<PlusOutlined />} onClick={() => navigate('../jimu-designer')}>新建专业报表</Button>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => message.info('网格报表设计器开发中')}>新建动态网格</Button>
                 </Space>
             ]}
         >

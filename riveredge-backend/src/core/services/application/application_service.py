@@ -294,18 +294,38 @@ class ApplicationService:
                 if result != "UPDATE 1":
                     raise NotFoundError(f"应用 {uuid} 更新失败")
 
-            # 如果菜单配置变更或应用状态变更，自动同步菜单
+            # 如果名称变更、菜单配置变更或应用状态变更，自动同步菜单
+            name_changed = 'name' in update_data
             menu_config_changed = 'menu_config' in update_data
             is_active_changed = 'is_active' in update_data
 
-            if menu_config_changed or is_active_changed:
+            if name_changed or menu_config_changed or is_active_changed:
                 from core.services.system.menu_service import MenuService
+                from core.models.menu import Menu
 
                 # 重新获取更新后的应用信息
                 updated_app = await ApplicationService.get_application_by_uuid(tenant_id, uuid)
 
+                # 如果名称变更且未提供新的菜单配置，尝试更新根菜单名称
+                if name_changed and not menu_config_changed:
+                    # 查找该应用的根菜单（parent_id 为空）
+                    root_menu = await Menu.filter(
+                        tenant_id=tenant_id,
+                        application_uuid=uuid,
+                        parent_id__isnull=True,
+                        deleted_at__isnull=True
+                    ).first()
+                    
+                    if root_menu:
+                        root_menu.name = updated_app['name']
+                        await root_menu.save()
+                        # 清除缓存
+                        await MenuService._clear_menu_cache(tenant_id)
+
                 # 如果菜单配置变更，重新同步所有菜单
                 if menu_config_changed and updated_app.get('menu_config'):
+                    # 同步菜单时，如果应用有自定义名称，同步逻辑应该优先考虑它吗？
+                    # 这里的 sync_menus_from_application_config 内部目前使用的是 menu_config 里的 title
                     await MenuService.sync_menus_from_application_config(
                         tenant_id=tenant_id,
                         application_uuid=uuid,
@@ -314,7 +334,6 @@ class ApplicationService:
                     )
                 elif is_active_changed:
                     # 如果只是应用状态变更，只更新菜单的启用状态
-                    from core.models.menu import Menu
                     await Menu.filter(
                         tenant_id=tenant_id,
                         application_uuid=uuid,
@@ -745,8 +764,18 @@ class ApplicationService:
                     if should_auto_install and not is_installed:
                         is_installed = True
                     
+                    # 决定是否更新名称：如果用户自定义了名称，扫描不应覆盖它
+                    app_name = existing_app.get('name')
+                    if not existing_app.get('is_custom_name'):
+                        app_name = app_data.name
+
+                    # 决定是否更新排序：如果用户自定义了排序，扫描不应覆盖它
+                    app_sort_order = existing_app.get('sort_order', 0)
+                    if not existing_app.get('is_custom_sort'):
+                        app_sort_order = app_data.sort_order
+
                     update_data = ApplicationUpdate(
-                        name=app_data.name,
+                        name=app_name,
                         description=app_data.description,
                         icon=app_data.icon,
                         version=app_data.version,
@@ -754,7 +783,7 @@ class ApplicationService:
                         entry_point=app_data.entry_point,
                         menu_config=app_data.menu_config,
                         permission_code=app_data.permission_code,
-                        sort_order=app_data.sort_order,
+                        sort_order=app_sort_order,
                     )
                     application = await ApplicationService.update_application(
                         tenant_id=tenant_id,
