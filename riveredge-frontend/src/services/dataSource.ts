@@ -1,8 +1,8 @@
 /**
  * 数据源管理服务
- * 
- * 提供数据源的 CRUD 操作和连接测试功能。
- * 注意：所有 API 自动过滤当前组织的数据源
+ *
+ * 后端已统一：数据源由「数据连接」IntegrationConfig 承载，仅 type 为 postgresql/mysql/mongodb/api 的配置。
+ * 本服务请求兼容层 /core/data-sources（底层读写 IntegrationConfig），自动过滤当前组织。
  */
 
 import { apiRequest } from './api';

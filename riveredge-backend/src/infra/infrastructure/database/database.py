@@ -136,7 +136,6 @@ TORTOISE_ORM = {
                 "core.models.integration_config",
                 "core.models.file",
                 "core.models.api",
-                "core.models.data_source",
                 "core.models.dataset",
                 "core.models.message_config",
                 "core.models.message_template",

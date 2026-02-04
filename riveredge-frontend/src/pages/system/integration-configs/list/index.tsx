@@ -1,15 +1,15 @@
 /**
- * 集成设置列表页面
- * 
- * 用于系统管理员查看和管理组织内的集成配置。
- * 支持集成配置的 CRUD 操作和连接测试功能。
+ * 数据连接列表页面
+ *
+ * 配置外部 API 或数据库连接，用于与 MES、计划、仓储等模块数据对齐。
+ * 支持连接配置的 CRUD 操作和连接测试功能。
  */
 
 import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Tooltip, Card } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, ApiOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -23,6 +23,7 @@ import {
   IntegrationConfigCreate,
   IntegrationConfigUpdate,
 } from '../../../../services/integrationConfig';
+import ConnectionWizard from '../ConnectionWizard';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -104,6 +105,8 @@ const IntegrationConfigListPage: React.FC = () => {
   
   // 测试连接状态
   const [testingUuid, setTestingUuid] = useState<string | null>(null);
+  // 连接向导
+  const [wizardVisible, setWizardVisible] = useState(false);
 
   /**
    * 处理新建集成配置
@@ -629,7 +632,11 @@ const IntegrationConfigListPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate statCards={statCards}>
-        <UniTable<IntegrationConfig>
+        <>
+          <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            配置外部 API 或数据库连接，用于与 MES、计划、仓储等模块数据对齐。支持 API、数据库、OAuth、Webhook 等类型。
+          </Paragraph>
+          <UniTable<IntegrationConfig>
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -684,7 +691,14 @@ const IntegrationConfigListPage: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleCreate}
             >
-              新建集成配置
+              新建连接
+            </Button>,
+            <Button
+              key="wizard"
+              icon={<ThunderboltOutlined />}
+              onClick={() => setWizardVisible(true)}
+            >
+              通过向导创建
             </Button>,
             <Button
               key="batch-delete"
@@ -706,6 +720,7 @@ const IntegrationConfigListPage: React.FC = () => {
             renderCard,
           }}
         />
+        </>
       </ListPageTemplate>
 
       {/* 创建/编辑集成配置 Modal */}
@@ -804,6 +819,15 @@ const IntegrationConfigListPage: React.FC = () => {
           label="是否启用"
         />
       </FormModalTemplate>
+
+      {/* 连接向导 */}
+      <ConnectionWizard
+        open={wizardVisible}
+        onClose={() => setWizardVisible(false)}
+        onSuccess={() => {
+          actionRef.current?.reload();
+        }}
+      />
 
       {/* 查看详情 Drawer */}
       <DetailDrawerTemplate<IntegrationConfig>

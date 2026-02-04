@@ -51,6 +51,7 @@ from apps.kuaizhizao.schemas.warehouse import (
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 class ProductionPickingService(AppBaseService[ProductionPicking]):
     """生产领料单服务"""
@@ -579,11 +580,30 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
     def __init__(self):
         super().__init__(SalesDelivery)
+        self.business_config_service = BusinessConfigService()
 
     async def create_sales_delivery(self, tenant_id: int, delivery_data: SalesDeliveryCreate, created_by: int) -> SalesDeliveryResponse:
         """创建销售出库单"""
+        # 1. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_delivery")
+        if not is_enabled:
+            raise BusinessLogicError("销售发货模块未启用，无法创建出库单")
+
         async with in_transaction():
             user_info = await self.get_user_info(created_by)
+            
+            # 2. 检查是否需要审核
+            audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_delivery")
+            
+            # 确定初始状态
+            initial_status = delivery_data.status
+            initial_review_status = delivery_data.review_status
+            
+            if not audit_required and initial_status in [None, "待审核", "草稿"]:
+                # 如果不需要审核，且未指定状态或指定为草稿/待审核，则直接设为待出库（即已通过审核，等待执行）
+                initial_status = "待出库"
+                initial_review_status = "已通过"
+            
             # 如果未提供delivery_code，则自动生成
             if delivery_data.delivery_code:
                 code = delivery_data.delivery_code
@@ -639,9 +659,9 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 reviewer_id=delivery_data.reviewer_id,
                 reviewer_name=delivery_data.reviewer_name,
                 review_time=delivery_data.review_time,
-                review_status=delivery_data.review_status,
+                review_status=initial_review_status,
                 review_remarks=delivery_data.review_remarks,
-                status=delivery_data.status,
+                status=initial_status,
                 total_quantity=total_quantity,
                 total_amount=total_amount,
                 shipping_method=delivery_data.shipping_method,

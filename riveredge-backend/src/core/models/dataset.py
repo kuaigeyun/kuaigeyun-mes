@@ -2,11 +2,15 @@
 数据集模型模块
 
 定义数据集数据模型，用于数据集管理。
+统一后关联 IntegrationConfig（数据连接/数据源）。
 """
 
 from tortoise import fields
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from .base import BaseModel
+
+if TYPE_CHECKING:
+    from .integration_config import IntegrationConfig
 
 
 class Dataset(BaseModel):
@@ -15,20 +19,19 @@ class Dataset(BaseModel):
     
     用于定义和管理组织内的数据集，支持 SQL 查询和 API 查询。
     支持多组织隔离，每个组织的数据集相互独立。
-    
-    注意：继承自 BaseModel，自动包含 uuid、tenant_id、created_at、updated_at 字段。
+    统一后通过 integration_config 关联数据连接/数据源（原 DataSource 已合并入 IntegrationConfig）。
     """
     id = fields.IntField(pk=True, description="数据集ID（主键，自增ID，内部使用）")
     # uuid 字段由 BaseModel 提供
     # tenant_id 字段由 BaseModel 提供
-    
-    data_source: fields.ForeignKeyRelation["DataSource"] = fields.ForeignKeyField(
-        "models.DataSource",
+
+    integration_config: fields.ForeignKeyRelation["IntegrationConfig"] = fields.ForeignKeyField(
+        "models.IntegrationConfig",
         related_name="datasets",
-        description="关联数据源（内部使用自增ID）"
+        description="关联集成配置/数据连接（统一数据源与数据连接）",
     )
-    # data_source_id 字段由 ForeignKeyField 自动创建，无需手动定义
-    
+    # integration_config_id 由 ForeignKeyField 自动创建
+
     name = fields.CharField(max_length=100, description="数据集名称")
     code = fields.CharField(max_length=50, description="数据集代码（唯一，用于程序识别）")
     description = fields.TextField(null=True, description="数据集描述")
@@ -50,7 +53,7 @@ class Dataset(BaseModel):
         table = "core_datasets"
         indexes = [
             ("tenant_id", "code"),  # 唯一索引
-            ("data_source_id",),
+            ("integration_config_id",),
             ("uuid",),
             ("code",),
             ("created_at",),

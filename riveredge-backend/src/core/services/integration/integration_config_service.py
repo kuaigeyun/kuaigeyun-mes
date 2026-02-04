@@ -207,7 +207,7 @@ class IntegrationConfigService:
         
         try:
             # 根据集成类型测试连接
-            if integration.type == "API":
+            if integration.type in ("API", "api"):
                 result = await IntegrationConfigService._test_api_connection(integration)
             elif integration.type == "OAuth":
                 result = await IntegrationConfigService._test_oauth_connection(integration)
@@ -215,6 +215,12 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_webhook_connection(integration)
             elif integration.type == "Database":
                 result = await IntegrationConfigService._test_database_connection(integration)
+            elif integration.type == "postgresql":
+                result = await IntegrationConfigService._test_postgresql_connection(integration)
+            elif integration.type == "mysql":
+                result = await IntegrationConfigService._test_mysql_connection(integration)
+            elif integration.type == "mongodb":
+                result = await IntegrationConfigService._test_mongodb_connection(integration)
             else:
                 raise ValueError(f"不支持的集成类型: {integration.type}")
             
@@ -250,7 +256,7 @@ class IntegrationConfigService:
             Dict[str, Any]: 测试结果
         """
         config = integration.get_config()
-        url = config.get("url")
+        url = config.get("url") or config.get("base_url")
         if not url:
             raise ValueError("API URL 未配置")
         
@@ -358,3 +364,46 @@ class IntegrationConfigService:
             "message": "数据库配置验证成功（完整连接测试需要集成数据库驱动）"
         }
 
+    @staticmethod
+    async def _test_postgresql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 PostgreSQL 连接（config: host, port, database, user/username, password）"""
+        config = integration.get_config()
+        try:
+            from tortoise.backends.asyncpg import AsyncpgDBClient
+            host = config.get("host", "localhost")
+            port = config.get("port", 5432)
+            database = config.get("database", "")
+            user = config.get("user") or config.get("username", "")
+            password = config.get("password", "")
+            db_client = AsyncpgDBClient(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                database=database,
+            )
+            await db_client.create_connection()
+            await db_client.execute_query("SELECT 1")
+            await db_client.close()
+            return {"success": True, "message": "PostgreSQL 连接成功"}
+        except Exception as e:
+            return {"success": False, "message": f"PostgreSQL 连接失败: {str(e)}"}
+
+    @staticmethod
+    async def _test_mysql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 MySQL 连接（暂未实现实际连接，仅校验必要字段）"""
+        config = integration.get_config()
+        user = config.get("user") or config.get("username")
+        if not config.get("host") or not config.get("database") or not user:
+            raise ValueError("MySQL 配置缺少必要字段: host、database、user/username")
+        return {
+            "message": "MySQL 配置验证成功（完整连接测试需要安装 aiomysql 等驱动）",
+        }    @staticmethod
+    async def _test_mongodb_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 MongoDB 连接（暂未实现实际连接）"""
+        config = integration.get_config()
+        if not config.get("host") and not config.get("uri"):
+            raise ValueError("MongoDB 配置缺少 host 或 uri")
+        return {
+            "message": "MongoDB 配置验证成功（完整连接测试需要安装 motor 等驱动）",
+        }

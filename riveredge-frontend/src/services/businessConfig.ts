@@ -14,7 +14,10 @@ import { apiRequest } from './api';
  */
 export interface BusinessConfig {
   running_mode: 'simple' | 'full';
+  industry?: 'general' | 'machinery' | 'electronics' | 'machining';
+  scale?: 'small' | 'medium' | 'large';
   modules: Record<string, boolean>;
+  nodes?: Record<string, { enabled: boolean; auditRequired: boolean }>;
   parameters: Record<string, Record<string, any>>;
   mode_switched_at?: string;
 }
@@ -49,6 +52,15 @@ export interface ProcessParameterUpdateRequest {
  */
 export interface BatchProcessParameterUpdateRequest {
   parameters: Record<string, Record<string, any>>;
+}
+
+/**
+ * 节点配置更新请求接口
+ */
+export interface NodesUpdateRequest {
+  nodes: Record<string, { enabled: boolean; auditRequired: boolean }>;
+  industry?: string;
+  scale?: string;
 }
 
 /**
@@ -117,6 +129,21 @@ export async function batchUpdateProcessParameters(
   request: BatchProcessParameterUpdateRequest
 ): Promise<{ success: boolean; message: string; updated_count: number }> {
   return apiRequest('/infra/business-config/parameters/batch-update', {
+    method: 'POST',
+    data: request,
+  });
+}
+
+/**
+ * 更新节点配置
+ * 
+ * @param request - 节点配置更新请求
+ * @returns 更新结果
+ */
+export async function updateNodesConfig(
+  request: NodesUpdateRequest
+): Promise<{ success: boolean; message: string; nodes: any }> {
+  return apiRequest('/infra/business-config/nodes/update', {
     method: 'POST',
     data: request,
   });

@@ -28,7 +28,9 @@ from apps.kuaizhizao.schemas.stocktaking import (
 )
 
 from apps.base_service import AppBaseService
+from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class StocktakingService(AppBaseService[Stocktaking]):
@@ -40,6 +42,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
     def __init__(self):
         super().__init__(Stocktaking)
+        self.business_config_service = BusinessConfigService()
 
     async def create_stocktaking(
         self,
@@ -61,6 +64,11 @@ class StocktakingService(AppBaseService[Stocktaking]):
         Raises:
             ValidationError: 数据验证失败
         """
+        # 0. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inventory_check")
+        if not is_enabled:
+            raise BusinessLogicError("库存盘点模块未启用，无法创建盘点单")
+
         async with in_transaction():
             # 生成盘点单号
             today = datetime.now().strftime("%Y%m%d")
@@ -217,6 +225,11 @@ class StocktakingService(AppBaseService[Stocktaking]):
             NotFoundError: 盘点单不存在
             ValidationError: 数据验证失败
         """
+        # 0. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "inventory_check")
+        if not is_enabled:
+            raise BusinessLogicError("库存盘点模块未启用，无法开始盘点")
+
         async with in_transaction():
             # 获取盘点单
             stocktaking = await Stocktaking.get_or_none(

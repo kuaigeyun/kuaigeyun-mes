@@ -29,55 +29,98 @@ class BusinessConfigService:
     
     # 极简模式默认配置
     SIMPLE_MODE_CONFIG = {
+        "industry": "general",
+        "scale": "small",
+        "nodes": {
+            "sales_order": {"enabled": True, "auditRequired": False},
+            "sales_delivery": {"enabled": True, "auditRequired": False},
+            "inventory_check": {"enabled": False, "auditRequired": False},
+            "production_plan": {"enabled": False, "auditRequired": False},
+            "purchase_request": {"enabled": True, "auditRequired": False},
+        },
         "modules": {
             "production": True,      # 生产管理（核心模块，不可关闭）
             "warehouse": True,       # 仓储管理（核心模块，不可关闭）
-            "demand": False,         # 需求管理
-            "purchase": False,      # 采购管理
-            "sales": False,          # 销售管理
-            "quality": False,        # 质量管理
-            "finance": False,        # 财务管理
+            "demand": True,          # 需求管理（支持直接创建生产计划）
+            "purchase": True,        # 采购管理
+            "sales": True,           # 销售管理
+            "quality": False,        # 质量管理（默认关闭）
+            "finance": False,        # 财务管理（默认关闭）
         },
         "parameters": {
             "work_order": {
-                "auto_generate": False,
-                "priority": False,
-                "split": False,
-                "merge": False,
+                "auto_generate": True,   # 允许自动生成
+                "priority": False,       # 简化优先级管理
+                "split": False,          # 关闭拆单
+                "merge": False,          # 关闭合单
             },
             "reporting": {
-                "quick_reporting": True,
-                "parameter_reporting": False,
-                "auto_fill": True,
-                "data_correction": False,
+                "quick_reporting": True,     # 开启快捷报工
+                "parameter_reporting": False, # 关闭参数报工
+                "auto_fill": True,           # 开启自动填充
+                "data_correction": False,    # 关闭数据修正
             },
             "warehouse": {
-                "batch_management": False,
-                "serial_management": False,
-                "multi_unit": False,
-                "fifo": False,
-                "lifo": False,
+                "batch_management": False,   # 关闭批次管理
+                "location_management": False,# 关闭库位管理
+                "fifo": False,               # 关闭先进先出强制
+                "auto_outbound": True,       # 开启自动出库
             },
-            "quality": {
-                "incoming_inspection": False,
-                "process_inspection": False,
-                "finished_inspection": False,
-                "defect_handling": False,
-            },
-            "sales": {
-                "audit_enabled": False,
-            },
-            "procurement": {
-                "require_purchase_requisition": False,
-            },
-            "planning": {
-                "require_production_plan": False,
-            },
-        },
+            "purchase": {
+                "auto_approval": True,       # 开启采购自动审批
+                "price_control": False,      # 关闭价格控制
+                "supplier_evaluation": False,# 关闭供应商评估
+            }
+        }
     }
+    
+    MAX_RECURSION_DEPTH = 3  # 防止无限递归
+
+    async def check_node_enabled(self, tenant_id: int, node_key: str) -> bool:
+        """
+        检查业务节点是否启用
+        """
+        config = await self.get_business_config(tenant_id)
+        nodes = config.get("nodes", {})
+        node_config = nodes.get(node_key)
+        
+        # 如果节点配置不存在，默认启用（向后兼容）
+        if not node_config:
+            return True
+            
+        return node_config.get("enabled", True)
+
+    async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
+        """
+        检查业务节点是否需要审核
+        """
+        config = await self.get_business_config(tenant_id)
+        nodes = config.get("nodes", {})
+        node_config = nodes.get(node_key)
+        
+        # 如果节点配置不存在，默认需要审核（向后兼容，或者根据模式决定，这里简便起见默认True或根据simple模式? 
+        # 为了安全起见，如果不配置，默认False可能更符合"极简"体验，但默认True符合"严谨"体验。
+        # 参考 get_business_config 中的默认值补全逻辑，如果拿到 config，应该已经补全了默认值。
+        
+        if not node_config:
+            # Fallback based on running mode logic if needed, but get_business_config should handle defaults.
+            # If still missing, assume specific defaults logic or False
+            return False
+            
+        return node_config.get("auditRequired", False)
+
     
     # 全流程模式默认配置
     FULL_MODE_CONFIG = {
+        "industry": "general",
+        "scale": "medium",
+        "nodes": {
+            "sales_order": {"enabled": True, "auditRequired": True},
+            "sales_delivery": {"enabled": True, "auditRequired": True},
+            "inventory_check": {"enabled": True, "auditRequired": True},
+            "production_plan": {"enabled": True, "auditRequired": True},
+            "purchase_request": {"enabled": True, "auditRequired": True},
+        },
         "modules": {
             "production": True,      # 生产管理（核心模块，不可关闭）
             "warehouse": True,       # 仓储管理（核心模块，不可关闭）
@@ -183,10 +226,17 @@ class BusinessConfigService:
             # 确保必需字段存在（处理旧数据或不完整数据）
             if "running_mode" not in business_config:
                 business_config["running_mode"] = self.RUNNING_MODE_SIMPLE
+            
+            # Ensure industry and scale (defaults)
+            if "industry" not in business_config:
+                business_config["industry"] = "general"
+            if "scale" not in business_config:
+                business_config["scale"] = "medium"
                 
             # 确保 default modules 和 parameters 存在
             # 使用 setdefault 确保一级 key 存在
             business_config.setdefault("modules", {})
+            business_config.setdefault("nodes", {})
             business_config.setdefault("parameters", {})
             
             # 递归合并缺少的配置项（例如 sales.audit_enabled）
@@ -198,6 +248,16 @@ class BusinessConfigService:
             for mod, enabled in default_config["modules"].items():
                 if mod not in business_config["modules"]:
                     business_config["modules"][mod] = enabled
+            
+            # Populate nodes if empty (using default nodes from config)
+            if not business_config["nodes"]:
+                 business_config["nodes"] = default_config["nodes"]
+            else:
+                 # Check for missing nodes keys? Assuming overwrite or merge?
+                 # For now, merge missing keys
+                 for key, val in default_config["nodes"].items():
+                     if key not in business_config["nodes"]:
+                         business_config["nodes"][key] = val
             
             # 补全缺失的 parameters
             for cat, params in default_config["parameters"].items():
@@ -407,6 +467,50 @@ class BusinessConfigService:
             "success": True,
             "message": "流程参数已批量更新",
             "updated_count": sum(len(params) for params in parameters.values()),
+            "updated_count": sum(len(params) for params in parameters.values()),
+        }
+
+    async def update_nodes_config(
+        self,
+        tenant_id: int,
+        nodes: Dict[str, Dict[str, Any]],
+        industry: Optional[str] = None,
+        scale: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        更新节点配置
+        """
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise NotFoundError(f"组织不存在: {tenant_id}")
+        
+        settings = tenant.settings or {}
+        business_config = settings.get("business_config", {})
+        
+        # Ensure nodes exists
+        if "nodes" not in business_config:
+            business_config["nodes"] = {}
+
+        # Update nodes
+        business_config["nodes"].update(nodes)
+        
+        # Update industry/scale if provided
+        if industry:
+            business_config["industry"] = industry
+        if scale:
+            business_config["scale"] = scale
+            
+        settings["business_config"] = business_config
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+        
+        logger.info(f"组织 {tenant_id} 更新节点配置")
+        
+        return {
+            "success": True,
+            "message": "节点配置已更新",
+            "nodes": business_config["nodes"],
+            "industry": business_config.get("industry"),
+            "scale": business_config.get("scale")
         }
     
     async def check_pro_feature_access(

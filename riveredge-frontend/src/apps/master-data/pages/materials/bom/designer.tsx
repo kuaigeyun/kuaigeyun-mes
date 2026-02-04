@@ -34,6 +34,12 @@ import { CanvasPageTemplate, PAGE_SPACING } from '../../../../../components/layo
 
 const { TextArea } = Input;
 
+const GRID_STYLE: React.CSSProperties = {
+  backgroundImage: 'radial-gradient(#e0e0e0 1px, transparent 1px)',
+  backgroundSize: '12px 12px',
+  backgroundColor: '#fafafa',
+};
+
 /** 画布内的 MindMap：仅当 config 引用变化时重渲染，避免选中节点触发整图 setOptions+render */
 const MemoizedMindMap = memo((props: { config: Record<string, unknown> | null }) => {
   const { config } = props;
@@ -66,24 +72,24 @@ const BOMDesignerPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const materialId = searchParams.get('materialId');
   const version = searchParams.get('version');
-  
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rootMaterial, setRootMaterial] = useState<Material | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
-  
+
   // MindMap 数据
   const [mindMapData, setMindMapData] = useState<MindMapData | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeConfigForm] = Form.useForm();
-  
+
   // 使用ref保存数据，用于操作
   const mindMapDataRef = useRef<MindMapData | null>(null);
   const mindMapInstanceRef = useRef<any>(null);
-  const handleNodeSelectRef = useRef<(id: string) => void>(() => {});
+  const handleNodeSelectRef = useRef<(id: string) => void>(() => { });
   const selectedIdInGraphRef = useRef<string | null>(null); // 与图内选中状态同步，用于 setElementState 时清除上一节点
-  
+
   useEffect(() => {
     mindMapDataRef.current = mindMapData;
   }, [mindMapData]);
@@ -103,7 +109,7 @@ const BOMDesignerPage: React.FC = () => {
         name: item.componentName,
       };
       const pathKey = path.join('-');
-      
+
       const node: MindMapNode = {
         id: `material_${item.componentId}_${pathKey}`,
         value: `${material.code} - ${material.name}`,
@@ -114,23 +120,23 @@ const BOMDesignerPage: React.FC = () => {
         isRequired: item.isRequired,
         componentId: item.componentId,
       };
-      
+
       if (item.children && item.children.length > 0) {
         node.children = item.children.map((child, index) =>
           convertItem(child, [...path, index])
         );
       }
-      
+
       return node;
     };
-    
+
     const rootNode: MindMapNode = {
       id: 'root',
       value: `${rootMaterial.code} - ${rootMaterial.name}`,
       material: rootMaterial,
       children: items.map((item, index) => convertItem(item, [index])),
     };
-    
+
     return rootNode;
   }, [materials]);
 
@@ -157,35 +163,35 @@ const BOMDesignerPage: React.FC = () => {
    */
   const loadBOMData = async () => {
     if (!materialId) return;
-    
+
     try {
       setLoading(true);
-      
+
       // 通过物料列表查找主物料（materialId是数字ID）
       const materialIdNum = parseInt(materialId);
       let material = materials.find(m => m.id === materialIdNum);
-      
+
       // 如果物料列表中找不到，尝试通过API获取
       if (!material) {
         const allMaterials = await materialApi.list({ limit: 10000, isActive: true });
         material = allMaterials.find(m => m.id === materialIdNum);
       }
-      
+
       if (!material) {
         messageApi.error('找不到指定的物料');
         navigate('/apps/master-data/process/engineering-bom', { state: { closeTab: location.pathname + (location.search || '') } });
         return;
       }
-      
+
       setRootMaterial(material);
-      
+
       // 获取BOM层级结构
       const hierarchy = await bomApi.getHierarchy(materialIdNum, version || undefined);
-      
+
       // 转换为 MindMap 数据
       const data = convertToMindMapData(material, hierarchy.items || []);
       setMindMapData(data);
-      
+
       console.log('BOM设计器 - 加载完成:', {
         rootMaterial: material,
         hierarchyItems: hierarchy.items?.length || 0,
@@ -290,7 +296,7 @@ const BOMDesignerPage: React.FC = () => {
    */
   const handleAddChildNode = useCallback((parentNodeId: string) => {
     if (!mindMapDataRef.current) return;
-    
+
     const newNode: MindMapNode = {
       id: `material_new_${Date.now()}`,
       value: '未选择物料',
@@ -299,14 +305,14 @@ const BOMDesignerPage: React.FC = () => {
       wasteRate: 0,
       isRequired: true,
     };
-    
+
     const updated = updateNode(mindMapDataRef.current, parentNodeId, (node) => {
       return {
         ...node,
         children: [...(node.children || []), newNode],
       };
     });
-    
+
     if (updated) {
       setMindMapData(updated);
       setSelectedNodeId(parentNodeId); // 保持父节点选中，方便连续「添加子节点」时都挂在同一父下，而不都连到刚加的那一个
@@ -324,7 +330,7 @@ const BOMDesignerPage: React.FC = () => {
    */
   const handleAddSiblingNode = useCallback((siblingNodeId: string) => {
     if (!mindMapDataRef.current || !selectedNodeId) return;
-    
+
     // 找到父节点
     const findParent = (data: MindMapData, targetId: string): MindMapData | null => {
       if (data.children) {
@@ -338,14 +344,14 @@ const BOMDesignerPage: React.FC = () => {
       }
       return null;
     };
-    
+
     const parent = findParent(mindMapDataRef.current, siblingNodeId);
     if (!parent) {
       // 如果没有父节点，添加到根节点
       handleAddChildNode('root');
       return;
     }
-    
+
     const newNode: MindMapNode = {
       id: `material_new_${Date.now()}`,
       value: '未选择物料',
@@ -354,14 +360,14 @@ const BOMDesignerPage: React.FC = () => {
       wasteRate: 0,
       isRequired: true,
     };
-    
+
     const updated = updateNode(mindMapDataRef.current, parent.id, (node) => {
       return {
         ...node,
         children: [...(node.children || []), newNode],
       };
     });
-    
+
     if (updated) {
       setMindMapData(updated);
       setSelectedNodeId(parent.id); // 保持父节点选中，连续添加时都在同一父下增加兄弟
@@ -382,9 +388,9 @@ const BOMDesignerPage: React.FC = () => {
       messageApi.warning('不能删除根节点（主物料）');
       return;
     }
-    
+
     if (!mindMapDataRef.current) return;
-    
+
     const updated = removeNode(mindMapDataRef.current, nodeId);
     if (updated) {
       setMindMapData(updated);
@@ -421,10 +427,10 @@ const BOMDesignerPage: React.FC = () => {
    */
   const handleSaveNodeConfig = () => {
     if (!selectedNodeId || !mindMapDataRef.current) return;
-    
+
     nodeConfigForm.validateFields().then((values) => {
       const material = materials.find(m => m.id === values.materialId);
-      
+
       const updated = updateNode(mindMapDataRef.current!, selectedNodeId, (node) => {
         return {
           ...node,
@@ -437,7 +443,7 @@ const BOMDesignerPage: React.FC = () => {
           componentId: values.materialId,
         };
       });
-      
+
       if (updated) {
         setMindMapData(updated);
         messageApi.success('节点配置已保存');
@@ -450,7 +456,7 @@ const BOMDesignerPage: React.FC = () => {
    */
   const convertMindMapToBOMItems = useCallback((data: MindMapData, parentMaterial: Material): any[] => {
     const items: any[] = [];
-    
+
     if (data.children) {
       data.children.forEach((child) => {
         if (child.material && child.componentId) {
@@ -462,7 +468,7 @@ const BOMDesignerPage: React.FC = () => {
             wasteRate: child.wasteRate || undefined,
             isRequired: child.isRequired !== false,
           });
-          
+
           // 递归处理子节点
           if (child.children && child.children.length > 0) {
             items.push(...convertMindMapToBOMItems(child, child.material!));
@@ -470,7 +476,7 @@ const BOMDesignerPage: React.FC = () => {
         }
       });
     }
-    
+
     return items;
   }, []);
 
@@ -479,24 +485,24 @@ const BOMDesignerPage: React.FC = () => {
    */
   const handleSave = async () => {
     if (!materialId || !rootMaterial || !mindMapData) return;
-    
+
     try {
       setSaving(true);
-      
+
       // 转换为批量导入数据
       const items = convertMindMapToBOMItems(mindMapData, rootMaterial);
-      
+
       if (items.length === 0) {
         messageApi.warning('请至少添加一个子物料');
         return;
       }
-      
+
       // 调用批量导入API
       await bomApi.batchImport({
         items,
         version: version || '1.0',
       });
-      
+
       messageApi.success('BOM设计已保存');
       // 重新加载数据
       await loadBOMData();
@@ -625,8 +631,8 @@ const BOMDesignerPage: React.FC = () => {
               ...(depth === 0
                 ? { type: 'filled' as const, color: '#f1f4f5', style: { color: '#252525' } }
                 : depth === 1
-                ? { type: 'filled' as const }
-                : { type: 'outlined' as const }),
+                  ? { type: 'filled' as const }
+                  : { type: 'outlined' as const }),
             };
             return React.createElement(TextNode, props);
           },
@@ -687,6 +693,7 @@ const BOMDesignerPage: React.FC = () => {
 
   return (
     <CanvasPageTemplate
+      style={{ height: 'calc(100vh - 110px)' }}
       toolbar={
         <Space>
           <Button
@@ -728,7 +735,7 @@ const BOMDesignerPage: React.FC = () => {
         </Space>
       }
       canvas={
-        <>
+        <div style={{ width: '100%', height: '100%', position: 'relative', ...GRID_STYLE }}>
           {/* 画板左上角：常用键盘快捷键 */}
           <div
             style={{
@@ -771,7 +778,7 @@ const BOMDesignerPage: React.FC = () => {
               </Button>
             </div>
           )}
-        </>
+        </div>
       }
       rightPanel={{
         title: selectedNode ? (selectedNode.id === 'root' ? '主物料信息' : '物料节点配置') : '节点配置',

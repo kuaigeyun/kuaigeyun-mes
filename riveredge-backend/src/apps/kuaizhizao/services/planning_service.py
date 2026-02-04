@@ -51,6 +51,8 @@ from apps.kuaizhizao.schemas.purchase import (
 
 from core.services.base import BaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 from infra.services.user_service import UserService
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 
@@ -61,12 +63,18 @@ class ProductionPlanningService(BaseService):
     def __init__(self):
         super().__init__(ProductionPlan)
         self.purchase_service = PurchaseService()
+        self.business_config_service = BusinessConfigService()
 
     # ⚠️ 已废弃：此方法已废弃，应使用统一的需求计算接口
     # 根据《☆ 用户使用全场景推演.md》的设计理念，MRP和LRP已合并为统一的需求计算
     # TODO: 将在统一需求计算服务中重新实现，相关API路由已注释
     async def run_mrp_computation(self, tenant_id: int, request, user_id: int):
         """执行MRP运算（已废弃）"""
+        # 0. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "production_plan")
+        if not is_enabled:
+            raise BusinessLogicError("生产计划模块未启用，无法进行MRP运算")
+            
         async with in_transaction():
             # 获取销售预测
             forecast = await SalesForecast.get_or_none(
@@ -80,6 +88,10 @@ class ProductionPlanningService(BaseService):
             logger.info(f"开始MRP运算，预测ID: {request.forecast_id}")
 
             # 创建生产计划
+            # 检查是否需要审核
+            audit_required = await self.business_config_service.check_audit_required(tenant_id, "production_plan")
+            initial_status = "已审核" if not audit_required else "草稿" # 假设默认为草稿
+            
             plan_code = await self._generate_plan_code(tenant_id, "MRP")
             plan = await ProductionPlan.create(
                 tenant_id=tenant_id,
@@ -91,7 +103,8 @@ class ProductionPlanningService(BaseService):
                 source_code=forecast.forecast_code,
                 plan_start_date=forecast.start_date,
                 plan_end_date=forecast.end_date,
-                created_by=user_id
+                created_by=user_id,
+                status=initial_status,
             )
 
             # 获取预测明细
@@ -181,6 +194,11 @@ class ProductionPlanningService(BaseService):
     # TODO: 将在统一需求计算服务中重新实现，相关API路由已注释
     async def run_lrp_computation(self, tenant_id: int, request, user_id: int):
         """执行LRP运算（已废弃）"""
+        # 0. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "production_plan")
+        if not is_enabled:
+            raise BusinessLogicError("生产计划模块未启用，无法进行LRP运算")
+
         async with in_transaction():
             # 获取销售订单
             sales_order = await SalesOrder.get_or_none(
@@ -194,6 +212,10 @@ class ProductionPlanningService(BaseService):
             logger.info(f"开始LRP运算，订单ID: {request.sales_order_id}")
 
             # 创建生产计划
+            # 检查是否需要审核
+            audit_required = await self.business_config_service.check_audit_required(tenant_id, "production_plan")
+            initial_status = "已审核" if not audit_required else "草稿"
+
             plan_code = await self._generate_plan_code(tenant_id, "LRP")
             plan = await ProductionPlan.create(
                 tenant_id=tenant_id,
@@ -205,7 +227,8 @@ class ProductionPlanningService(BaseService):
                 source_code=sales_order.order_code,
                 plan_start_date=date.today(),
                 plan_end_date=sales_order.delivery_date,
-                created_by=user_id
+                created_by=user_id,
+                status=initial_status,
             )
 
             # 获取订单明细

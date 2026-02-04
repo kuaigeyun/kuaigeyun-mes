@@ -25,7 +25,7 @@ export default {
   'menu.system.system-parameters': '参数设置',
   'menu.system.data-dictionaries': '数据字典',
   'menu.system.code-rules': '编码规则',
-  'menu.system.integration-configs': '集成设置',
+  'menu.system.integration-configs': '数据连接',
   'menu.system.languages': '语言管理',
   'menu.system.custom-fields': '自定义字段',
   'menu.system.files': '文件管理',

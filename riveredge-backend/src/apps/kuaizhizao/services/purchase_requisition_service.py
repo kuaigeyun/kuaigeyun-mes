@@ -15,6 +15,7 @@ from tortoise.transactions import in_transaction
 
 from apps.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 from loguru import logger
 
 from apps.kuaizhizao.models import PurchaseRequisition, PurchaseRequisitionItem, PurchaseOrder, PurchaseOrderItem
@@ -35,6 +36,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
     def __init__(self):
         super().__init__(PurchaseRequisition)
         self.purchase_service = PurchaseService()
+        self.business_config_service = BusinessConfigService()
 
     async def _generate_requisition_code(self, tenant_id: int) -> str:
         """生成采购申请编码"""
@@ -51,6 +53,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         created_by: int,
     ) -> PurchaseRequisitionResponse:
         """创建采购申请"""
+        # 0. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "purchase_request")
+        if not is_enabled:
+            raise BusinessLogicError("采购申请模块未启用，无法创建")
+
         async with in_transaction():
             if not data.requisition_code:
                 data.requisition_code = await self._generate_requisition_code(tenant_id)
@@ -196,9 +203,17 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if req.status != "草稿":
             raise BusinessLogicError("只有草稿状态可提交")
 
-        # TODO: 若配置了审批流程，启动审批；否则直接设为已通过
-        req.status = "已通过"
-        req.review_status = "已通过"
+        # 检查是否需要审核
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
+        
+        if audit_required:
+            req.status = "待审核"
+            req.review_status = "待审核"
+            # TODO: 接入真正的工作流引擎
+        else:
+            req.status = "已通过"
+            req.review_status = "已通过"
+            
         req.updated_by = submitted_by
         await req.save()
 

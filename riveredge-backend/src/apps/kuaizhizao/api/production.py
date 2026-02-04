@@ -109,6 +109,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderSplitResponse,
     WorkOrderOperationResponse,
     WorkOrderOperationsUpdateRequest,
+    WorkOrderOperationDispatch,
 )
 from apps.kuaizhizao.schemas.rework_order import (
     ReworkOrderCreate,
@@ -536,6 +537,32 @@ async def update_work_order_operations(
         work_order_id=work_order_id,
         operations_data=operations_data,
         updated_by=current_user.id
+    )
+
+
+@router.post("/work-orders/{work_order_id}/operations/{operation_id}/dispatch", response_model=WorkOrderOperationResponse, summary="派工工单工序")
+async def dispatch_work_order_operation(
+    work_order_id: int,
+    operation_id: int,
+    dispatch_data: WorkOrderOperationDispatch,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderOperationResponse:
+    """
+    派工工单工序
+
+    分配工序给具体的人员或设备。
+
+    - **work_order_id**: 工单ID
+    - **operation_id**: 工序ID
+    - **dispatch_data**: 派工数据（worker_id, equipment_id等）
+    """
+    return await WorkOrderService().dispatch_work_order_operation(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        dispatch_data=dispatch_data,
+        dispatched_by=current_user.id
     )
 
 

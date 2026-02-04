@@ -95,7 +95,6 @@ class DynamicDatabaseConfigService:
             "core.models.integration_config",
             "core.models.file",
             "core.models.api",
-            "core.models.data_source",
             "core.models.dataset",
             "core.models.message_config",
             "core.models.message_template",
@@ -284,6 +283,8 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.backflush_record",  # 物料倒冲记录
                 # 上线倒计时模块
                 f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
+                f"apps.{module_code}.models.report",  # 报表模型
+                f"apps.{module_code}.models.dashboard",  # 大屏模型
             ]
 
             # 只添加存在的模块
@@ -467,6 +468,8 @@ class DynamicDatabaseConfigService:
                 f"apps.{module_code}.models.backflush_record",  # 物料倒冲记录
                 # 上线倒计时模块
                 f"apps.{module_code}.models.launch_countdown",  # 上线倒计时
+                f"apps.{module_code}.models.report",  # 报表模型
+                f"apps.{module_code}.models.dashboard",  # 大屏模型
             ]
 
             # 只添加存在的模块
