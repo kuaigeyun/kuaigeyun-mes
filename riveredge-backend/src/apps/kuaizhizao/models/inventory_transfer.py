@@ -46,6 +46,7 @@ class InventoryTransfer(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_inventory_transfers"
+        table_description = "快格轻制造 - 库存调拨单"
         app = "models"  # 指定 Tortoise ORM app 名称
         indexes = [
             ("tenant_id",),
@@ -130,6 +131,7 @@ class InventoryTransferItem(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_inventory_transfer_items"
+        table_description = "快格轻制造 - 库存调拨单明细"
         app = "models"  # 指定 Tortoise ORM app 名称
         indexes = [
             ("tenant_id",),

@@ -39,6 +39,7 @@ class MaterialBatch(BaseModel):
         模型元数据
         """
         table = "apps_master_data_material_batches"
+        table_description = "基础数据管理 - 物料批次"
         indexes = [
             ("tenant_id",),
             ("material_id",),

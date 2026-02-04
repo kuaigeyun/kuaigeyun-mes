@@ -35,6 +35,7 @@ class MaterialGroup(BaseModel):
         模型元数据
         """
         table = "apps_master_data_material_groups"
+        table_description = "基础数据管理 - 物料组"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -114,6 +115,7 @@ class Material(BaseModel):
         模型元数据
         """
         table = "apps_master_data_materials"
+        table_description = "基础数据管理 - 物料"
         indexes = [
             ("tenant_id",),
             ("main_code",),
@@ -241,6 +243,7 @@ class BOM(BaseModel):
         模型元数据
         """
         table = "apps_master_data_bom"
+        table_description = "基础数据管理 - BOM"
         indexes = [
             ("tenant_id",),
             ("material_id",),

@@ -41,6 +41,7 @@ class ProcessRouteChange(BaseModel):
         模型元数据
         """
         table = "apps_master_data_process_route_changes"
+        table_description = "基础数据管理 - 工艺路线变更"
         indexes = [
             ("tenant_id",),
             ("process_route_id",),

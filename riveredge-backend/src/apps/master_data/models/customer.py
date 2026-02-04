@@ -37,6 +37,7 @@ class Customer(BaseModel):
         模型元数据
         """
         table = "apps_master_data_customers"
+        table_description = "基础数据管理 - 客户"
         indexes = [
             ("tenant_id",),
             ("code",),

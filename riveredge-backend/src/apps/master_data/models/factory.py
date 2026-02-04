@@ -33,6 +33,7 @@ class Plant(BaseModel):
         模型元数据
         """
         table = "apps_master_data_plants"
+        table_description = "基础数据管理 - 厂区"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -86,6 +87,7 @@ class Workshop(BaseModel):
         模型元数据
         """
         table = "apps_master_data_workshops"
+        table_description = "基础数据管理 - 车间"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -148,6 +150,7 @@ class ProductionLine(BaseModel):
         模型元数据
         """
         table = "apps_master_data_production_lines"
+        table_description = "基础数据管理 - 产线"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -209,6 +212,7 @@ class Workstation(BaseModel):
         模型元数据
         """
         table = "apps_master_data_workstations"
+        table_description = "基础数据管理 - 工位"
         indexes = [
             ("tenant_id",),
             ("code",),

@@ -48,6 +48,7 @@ class MaintenanceReminder(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_maintenance_reminders"
+        table_description = "快格轻制造 - 保养提醒"
         indexes = [
             ("tenant_id",),
             ("maintenance_plan_id",),

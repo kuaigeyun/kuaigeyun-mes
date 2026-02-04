@@ -33,6 +33,7 @@ class Holiday(BaseModel):
         模型元数据
         """
         table = "apps_master_data_holidays"
+        table_description = "基础数据管理 - 节假日"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -85,6 +86,7 @@ class Skill(BaseModel):
         模型元数据
         """
         table = "apps_master_data_skills"
+        table_description = "基础数据管理 - 技能"
         indexes = [
             ("tenant_id",),
             ("code",),

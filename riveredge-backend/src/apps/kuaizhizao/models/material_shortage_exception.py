@@ -48,6 +48,7 @@ class MaterialShortageException(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_material_shortage_exceptions"
+        table_description = "快格轻制造 - 缺料异常"
         indexes = [
             ("tenant_id",),
             ("work_order_id",),

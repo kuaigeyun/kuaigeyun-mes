@@ -46,6 +46,7 @@ class QualityStandard(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_quality_standards"
+        table_description = "快格轻制造 - 质量检验标准"
         indexes = [
             ("tenant_id",),
             ("standard_code",),

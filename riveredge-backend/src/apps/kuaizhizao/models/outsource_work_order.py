@@ -62,6 +62,7 @@ class OutsourceWorkOrder(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_outsource_work_orders"
+        table_description = "快格轻制造 - 委外工单"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -183,6 +184,7 @@ class OutsourceMaterialIssue(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_outsource_material_issues"
+        table_description = "快格轻制造 - 委外发料单"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -285,6 +287,7 @@ class OutsourceMaterialReceipt(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_outsource_material_receipts"
+        table_description = "快格轻制造 - 委外收料单"
         indexes = [
             ("tenant_id",),
             ("code",),

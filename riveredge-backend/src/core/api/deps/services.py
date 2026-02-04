@@ -18,7 +18,7 @@ from core.services.interfaces.service_interface import (
     UserActivityServiceInterface,
     AuditLogServiceInterface,
 )
-from core.services.service_factory import (
+from core.services.interfaces.service_factory import (
     get_service_or_fallback,
     get_user_service as _get_user_service,
     get_role_service as _get_role_service,

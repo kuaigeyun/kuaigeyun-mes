@@ -42,6 +42,7 @@ class ExceptionProcessRecord(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_exception_process_records"
+        table_description = "快格轻制造 - 异常处理记录"
         indexes = [
             ("tenant_id",),
             ("exception_type",),
@@ -116,6 +117,7 @@ class ExceptionProcessHistory(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_exception_process_histories"
+        table_description = "快格轻制造 - 异常处理历史"
         indexes = [
             ("tenant_id",),
             ("process_record_id",),

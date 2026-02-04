@@ -71,6 +71,15 @@ from .integration.integration_config_service import IntegrationConfigService
 # 帮助系统服务
 from .help.help_document_service import HelpDocumentService
 
+# 上线向导服务
+from .onboarding.onboarding_service import OnboardingService
+
+# 报表模板服务
+from .report_template.report_template_service import ReportTemplateService
+
+# 角色场景服务
+from .role_scenario.role_scenario_service import RoleScenarioService
+
 # 邀请管理服务
 from .invitation.invitation_code_service import InvitationCodeService
 
@@ -146,6 +155,15 @@ __all__ = [
 
     # 帮助系统
     "HelpDocumentService",
+
+    # 上线向导
+    "OnboardingService",
+
+    # 报表模板
+    "ReportTemplateService",
+
+    # 角色场景
+    "RoleScenarioService",
 
     # 邀请管理
     "InvitationCodeService",

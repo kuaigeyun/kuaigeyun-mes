@@ -48,6 +48,7 @@ class ReportingRecord(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_reporting_records"
+        table_description = "快格轻制造 - 报工记录"
         indexes = [
             ("tenant_id",),
             ("work_order_id",),

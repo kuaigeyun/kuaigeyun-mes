@@ -53,6 +53,7 @@ class ReworkOrder(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_rework_orders"
+        table_description = "快格轻制造 - 返工工单"
         indexes = [
             ("tenant_id",),
             ("code",),

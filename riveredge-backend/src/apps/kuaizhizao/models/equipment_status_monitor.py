@@ -45,6 +45,7 @@ class EquipmentStatusMonitor(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_equipment_status_monitors"
+        table_description = "快格轻制造 - 设备状态监控"
         indexes = [
             ("tenant_id",),
             ("equipment_id",),
@@ -121,6 +122,7 @@ class EquipmentStatusHistory(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_equipment_status_histories"
+        table_description = "快格轻制造 - 设备状态历史"
         indexes = [
             ("tenant_id",),
             ("equipment_id",),

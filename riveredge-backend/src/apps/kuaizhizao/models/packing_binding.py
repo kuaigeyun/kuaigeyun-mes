@@ -46,6 +46,7 @@ class PackingBinding(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_packing_bindings"
+        table_description = "快格轻制造 - 装箱打包绑定记录"
         indexes = [
             ("tenant_id",),
             ("finished_goods_receipt_id",),

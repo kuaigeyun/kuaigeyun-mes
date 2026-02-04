@@ -1049,7 +1049,7 @@
             "page_code": "kuaizhizao-equipment",
             "page_name": "设备台账",
             "page_path": "/apps/kuaizhizao/equipment-management/equipment",
-            "table_name": "core_equipment",
+            "table_name": "apps_kuaizhizao_equipment",
             "table_name_label": "设备表",
             "module": "快格轻制造",
             "module_icon": "tool"
@@ -1058,7 +1058,7 @@
             "page_code": "kuaizhizao-mold",
             "page_name": "模具台账",
             "page_path": "/apps/kuaizhizao/equipment-management/molds",
-            "table_name": "core_molds",
+            "table_name": "apps_kuaizhizao_molds",
             "table_name_label": "模具表",
             "module": "快格轻制造",
             "module_icon": "tool"
