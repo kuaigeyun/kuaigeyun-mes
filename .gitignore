@@ -1,258 +1,131 @@
 # ============================================
-# RiverEdge SaaS 多租户框架 - Git 忽略文件
-# ============================================
-#
-# 原则：只保留最小必要的源代码文件
-# 设计类、工具类、文档类文件不推送到远程仓库
-#
-# 文档管理策略：
-# - 本地保存：全部保存（包括开发计划、优化报告、测试报告等）
-# - 远程仓库：只保留必要的文档（技术栈、开发规范、测试指南）
-#
+# RiverEdge - 最小必要忽略规则
+# 文档/脚本类产出与工具目录均忽略
 # ============================================
 
-# ============================================
-# Python 相关
-# ============================================
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 
-# ============================================
 # 虚拟环境
-# ============================================
 venv/
 venv*/
+.venv
 env/
 ENV/
-.venv
 
-# ============================================
-# IDE 和编辑器文件
-# ============================================
+# IDE
 .vscode/*
-!.vscode/settings.json      # 允许提交项目级配置
-!.vscode/extensions.json    # 允许提交推荐扩展
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
-.cursorrules
 *.swp
 *.swo
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 *~
 
-# ============================================
-# 环境变量和敏感信息
-# ============================================
+# 敏感与环境
 .env
 .env.local
 .env.*.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.example
 
-# ============================================
-# 日志文件和进程文件
-# ============================================
+# 日志与进程
 logs/
 *.log
 *.pid
 
-# ============================================
-# 数据库文件
-# ============================================
+# 本地数据库
 *.db
 *.sqlite
 *.sqlite3
 
-# ============================================
-# 测试覆盖率和缓存
-# ============================================
+# 测试与覆盖率
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
-coverage/
 
-# ============================================
-# 临时文件
-# ============================================
+# 临时与系统
 *.tmp
 *.temp
 *.bak
-*.cache
-Thumbs.db
 .DS_Store
+Thumbs.db
 
-# ============================================
-# 上传文件目录
-# ============================================
+# 上传目录
 **/uploads/
 
-# ============================================
-# 文档管理（只保留必要的文档到远程仓库）
-# ============================================
-# 原则：只保留开发规范、技术栈说明、测试指南等必要文档
-# 开发计划、优化报告、测试报告等过程文档不推送到远程
-# 注意：本地保存时全部保存，但推送到远程时只保留必要文档
-
-# 忽略开发计划和优化文档（过程文档，不推送）
-docs/3.build/               # 开发计划文档（不推送）
-docs/4.optimise/            # 优化文档（不推送）
-
-# 忽略测试报告（保留测试指南和方案）
-docs/5.testing/*报告*.md
-docs/5.testing/*总结*.md
-docs/5.testing/*结果*.md
-docs/5.testing/*分析*.md
-docs/5.testing/测试环境修复报告.md
-docs/5.testing/前端测试覆盖分析.md
-docs/5.testing/最终测试报告.md
-docs/5.testing/测试运行总结.md
-docs/5.testing/测试运行结果.md
-docs/5.testing/测试运行报告.md
-
-# 忽略其他文档目录（如果存在）
-docs/6.*/
-docs/7.*/
-docs/8.*/
-docs/9.*/
-
-# 忽略归档文档
-archive/                    # 归档文件（不推送到远程）
-
-# 忽略计划文档
-plans/                      # 开发计划和设计规范（不推送）
-
-# 注意：docs/1.stack/、docs/2.rules/、docs/5.testing/（部分文件）会被保留
-
-# ============================================
-# 工具类脚本和二进制文件（不推送到远程）
-# ============================================
-tools/                      # 开发工具和脚本（不推送）
-bin/                        # 二进制文件和第三方工具（不推送）
-# bin/inngest/ 中的 README 可以保留
-!bin/inngest/*.md
-
-# ============================================
-# 前后端本地脚本（不推送到远程）
-# ============================================
-riveredge-backend/scripts/  # 后端本地脚本（不推送）
-riveredge-frontend/scripts/ # 前端本地脚本（不推送）
-
-# ============================================
-# 测试结果和报告文件（不推送到远程）
-# ============================================
-# 测试结果 JSON 文件
-*-test-results.json
-*test-results.json
-api-routes-test-results.json
-module-test-results.json
-sales-order-test-results.json
-project_health_report.json
-project_health_report.txt
-
-# 测试报告文档
-**/tests/**/*报告*.md
-**/tests/**/*总结*.md
-**/tests/**/*结果*.md
-**/tests/**/*分析*.md
-**/tests/e2e/问题修复*.md
-**/tests/e2e/测试优化*.md
-**/tests/e2e/测试审核*.md
-**/tests/e2e/业务逻辑*.md
-**/tests/e2e/数据验证*.md
-**/tests/e2e/认证逻辑*.md
-**/tests/e2e/路由注册*.md
-**/tests/e2e/端到端测试*.md
-**/tests/e2e/测试问题*.md
-**/tests/e2e/测试配置*.md
-**/tests/e2e/测试数据*.md
-**/tests/e2e/测试验证*.md
-**/tests/e2e/测试运行*.md
-# 但保留测试说明文档
-!**/tests/**/README*.md
-!**/tests/e2e/README*.md
-
-# ============================================
-# Node.js 前端相关
-# ============================================
+# Node / 前端
 node_modules/
 .pnp
 .pnp.js
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-lerna-debug.log*
+*-debug.log*
+*.tsbuildinfo
 
-# ============================================
-# 构建输出目录
-# ============================================
+# 构建输出
 dist/
 build/
 .next/
 out/
 .vite/
 
-# ============================================
-# TypeScript 构建信息
-# ============================================
-*.tsbuildinfo
-
-# ============================================
-# 压缩包文件
-# ============================================
+# 压缩包
 *.zip
 *.tar.gz
 *.7z
 *.rar
 
-# ============================================
-# 迁移相关临时文件（不推送到远程）
-# ============================================
-# 迁移检查和执行脚本（临时工具）
+# ----------------------------------------
+# 文档：开发计划、优化报告、归档
+# ----------------------------------------
+docs/3.build/
+docs/4.optimise/
+docs/5.testing/*报告*
+docs/5.testing/*总结*
+docs/5.testing/*结果*
+docs/5.testing/*分析*
+docs/6.*/
+docs/7.*/
+docs/8.*/
+docs/9.*/
+archive/
+plans/
+
+# ----------------------------------------
+# 脚本与工具：本地工具、二进制、脚本产出
+# ----------------------------------------
+tools/
+bin/
+riveredge-backend/scripts/
+riveredge-frontend/scripts/
+!bin/inngest/*.md
+
+# 脚本/测试产出
+*-test-results.json
+*test-results.json
+project_health_report.json
+project_health_report.txt
+**/tests/**/*报告*
+**/tests/**/*总结*
+**/tests/**/*结果*
+**/tests/**/*分析*
+!**/tests/**/README*.md
+
+# 迁移临时（保留 migrations/models 与 README）
 riveredge-backend/migrations/check_*.py
 riveredge-backend/migrations/execute_*.py
 riveredge-backend/migrations/*.sql
 !riveredge-backend/migrations/models/
 !riveredge-backend/migrations/README*.md
 
-# ============================================
-# 临时 SQL 修复脚本（不推送到远程）
-# ============================================
+# 根目录散落 SQL（保留 scripts/sql）
 *.sql
-!riveredge-backend/migrations/models/*.sql
 !scripts/sql/*.sql
-
-# ============================================
-# 根目录脚本文件（已整理到 scripts/ 目录）
-# ============================================
-# 以下文件已移动到 scripts/ 目录，保留规则以防遗漏
-# check_apps.py -> scripts/tools/
-# check_apps_db.py -> scripts/tools/
-# init_apps.py -> scripts/init/
-# init_apps.sql -> scripts/sql/
-# test-all-api-routes.py -> scripts/tests/
-# init_apps_simple.py -> archive/scripts/（已过期）
