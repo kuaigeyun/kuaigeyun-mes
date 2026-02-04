@@ -6,7 +6,7 @@
  */
 
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Modal, Button, Space, App } from 'antd';
+import { Modal, Button, Space, App, theme } from 'antd';
 import { CheckOutlined, CloseOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 
 // 引入 Univer Sheet 样式
@@ -93,11 +93,16 @@ export const UniImport: React.FC<UniImportProps> = ({
   exampleRow,
 }) => {
   const { message } = App.useApp();
+  const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false); // 全屏状态
   const univerInstanceRef = useRef<ReturnType<typeof createUniver> | null>(null);
   const containerIdRef = useRef<string>('');
+  // 与 app 主题一致：以 document.colorScheme 为准（主题编辑选择），未设置时才用系统偏好
+  const colorScheme = document.documentElement.style.colorScheme;
+  const isDark = colorScheme === 'dark'
+    || (colorScheme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   // 切换全屏状态
   const toggleFullscreen = () => {
@@ -136,13 +141,14 @@ export const UniImport: React.FC<UniImportProps> = ({
           // 等待 DOM 更新完成
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          // 使用预设方式创建 Univer 实例
+          // 使用预设方式创建 Univer 实例（isDark 随主题编辑切换，见 useLayoutEffect 依赖）
           const { univer, univerAPI } = createUniver({
             locale: LocaleType.ZH_CN,
             locales: {
               [LocaleType.ZH_CN]: merge({}, UniverPresetSheetsCoreZhCN),
             },
             theme: defaultTheme,
+            darkMode: isDark,
             presets: [
               UniverSheetsCorePreset({
                 container: containerId,
@@ -359,26 +365,26 @@ export const UniImport: React.FC<UniImportProps> = ({
       };
 
       initUniver();
-    } else if (!visible && univerInstanceRef.current) {
-      // 关闭弹窗时清理
+    }
+
+    // 主题切换或弹窗关闭时销毁实例，以便下次打开或主题切回时用新主题重新创建
+    const cleanup = () => {
       try {
         if (univerInstanceRef.current) {
-          // 移除键盘事件监听器
           const keyDownHandler = (univerInstanceRef.current as any)._keyDownHandler;
           if (keyDownHandler) {
             document.removeEventListener('keydown', keyDownHandler, true);
             delete (univerInstanceRef.current as any)._keyDownHandler;
           }
-
-          // 销毁 Univer 实例
           univerInstanceRef.current.univer.dispose();
           univerInstanceRef.current = null;
         }
-      } catch (error) {
+      } catch {
         // 忽略清理错误
       }
-    }
-  }, [visible, message]);
+    };
+    return cleanup;
+  }, [visible, isDark, message]);
 
   /**
    * 处理确认导入
@@ -795,7 +801,6 @@ export const UniImport: React.FC<UniImportProps> = ({
           #${containerIdRef.current} {
             width: 100%;
             height: 100%;
-            border: 1px solid #e8e8e8;
             border-radius: 0px;
           }
         `}</style>
@@ -858,6 +863,9 @@ export const UniImport: React.FC<UniImportProps> = ({
           paddingBottom: 0,
         } : {}}
         styles={{
+          content: {
+            boxShadow: `0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)`,
+          },
           body: {
             padding: '16px',
             height: isFullscreen ? 'calc(100vh - 130px)' : `${height}px`,
@@ -871,6 +879,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             width: '100%',
             height: '100%',
             minHeight: isFullscreen ? 'calc(100vh - 162px)' : `${height - 32}px`,
+            border: `1px solid ${token.colorBorder}`,
           }}
         />
         {loading && (

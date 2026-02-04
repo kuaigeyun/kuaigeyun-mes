@@ -102,6 +102,10 @@ export const UniExport: React.FC<UniExportProps> = ({
   const [loading, setLoading] = useState(false);
   const univerInstanceRef = useRef<ReturnType<typeof createUniver> | null>(null);
   const containerIdRef = useRef<string>('');
+  // 与 app 主题一致：以 document.colorScheme 为准（主题编辑选择），未设置时才用系统偏好
+  const colorScheme = document.documentElement.style.colorScheme;
+  const isDark = colorScheme === 'dark'
+    || (colorScheme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   /**
    * 初始化 Univer Sheet
@@ -130,17 +134,17 @@ export const UniExport: React.FC<UniExportProps> = ({
           // 等待 DOM 更新完成
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          // 使用预设方式创建 Univer 实例
+          // 使用预设方式创建 Univer 实例（isDark 随主题编辑切换，见 useLayoutEffect 依赖）
           const { univer, univerAPI } = createUniver({
             locale: LocaleType.ZH_CN,
             locales: {
               [LocaleType.ZH_CN]: merge({}, UniverPresetSheetsCoreZhCN),
             },
             theme: defaultTheme,
+            darkMode: isDark,
             presets: [
               UniverSheetsCorePreset({
                 container: containerId,
-                formulaBar: false, // 导出场景不需要公式栏，禁用可避免 redi 依赖报错
               }),
             ],
           });
@@ -251,7 +255,7 @@ export const UniExport: React.FC<UniExportProps> = ({
         univerInstanceRef.current = null;
       }
     };
-  }, [visible, data, headers]);
+  }, [visible, isDark, data, headers]);
 
   /**
    * 处理确认导出
