@@ -1,0 +1,74 @@
+{
+  // ==================== 终端配置 ====================
+  // 配置 VS Code/Cursor 集成终端使用 Git Bash（Windows）
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  
+  // 配置终端配置文件（确保 Git Bash 可用）
+  // 注意：全程严禁使用PowerShell，只使用Git Bash
+  "terminal.integrated.profiles.windows": {
+    "Git Bash": {
+      "path": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "args": [],
+      "icon": "terminal-bash"
+    },
+    "Command Prompt": {
+      "path": [
+        "${env:windir}\\Sysnative\\cmd.exe",
+        "${env:windir}\\System32\\cmd.exe"
+      ],
+      "args": [],
+      "icon": "terminal-cmd"
+    }
+  },
+  
+  // 配置终端编码为 UTF-8
+  "terminal.integrated.encoding": "utf8",
+  
+  // 配置终端自动输出（确保输出可见）
+  "terminal.integrated.showExitAlert": false,
+  "terminal.integrated.enablePersistentSessions": true,
+  
+  // ==================== Git 配置 ====================
+  // 配置 Git 提交使用编辑器
+  "git.useEditorAsCommitInput": true,
+  
+  // 配置 Git 自动获取
+  "git.autofetch": true,
+  
+  // 配置 Git 确认同步
+  "git.confirmSync": false,
+  
+  // 配置 Git 终端集成
+  "git.terminalAuthentication": false,
+  
+  // ==================== GitLens 配置 ====================
+  // 启用图形化视图（公开仓库可以使用）
+  "gitlens.views.enabled": true,
+  "gitlens.graph.view.enabled": true,
+  "gitlens.graph.scrollMarkers.enabled": true,
+  
+  // 启用本地仓库功能
+  "gitlens.statusBar.enabled": true,
+  "gitlens.currentLine.enabled": true,
+  "gitlens.codeLens.enabled": true,
+  "gitlens.hovers.enabled": true,
+  
+  // 图形化视图位置（在源代码管理面板中显示）
+  "gitlens.views.repositories.location": "scm",
+  "gitlens.views.fileHistory.location": "scm",
+  "gitlens.views.lineHistory.location": "scm",
+  "gitlens.views.compare.location": "scm",
+  "gitlens.views.search.location": "scm",
+  
+  // 启用提交图（Commit Graph）
+  "gitlens.graph.repository.enabled": true,
+  
+  // ==================== Python 配置 ====================
+  // Python 相关配置
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv311/Scripts/python.exe",
+  
+  // ==================== 文件编码 ====================
+  // 文件编码
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": true
+}
