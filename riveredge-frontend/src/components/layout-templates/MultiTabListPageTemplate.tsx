@@ -16,7 +16,7 @@ export interface TabItem {
     /** 标签唯一标识 */
     key: string;
     /** 标签标题 */
-    label: string;
+    label: ReactNode;
     /** 标签页内容 */
     children: ReactNode;
 }
@@ -36,6 +36,8 @@ export interface MultiTabListPageTemplateProps {
     style?: React.CSSProperties;
     /** 卡片主体内边距，默认为 16 */
     padding?: number | string;
+    /** 页面头部内容（如图标、标题、操作按钮等），显示在卡片上方 */
+    header?: ReactNode;
 }
 
 /**
@@ -49,6 +51,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
     className,
     style,
     padding = 16,
+    header,
 }) => {
     const currentTab = tabs.find(tab => tab.key === activeTabKey);
 
@@ -58,6 +61,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
             className={className}
             style={style}
         >
+            {header && <div style={{ marginBottom: 16 }}>{header}</div>}
             <Card
                 tabList={tabs.map(tab => ({ key: tab.key, tab: tab.label }))}
                 activeTabKey={activeTabKey}

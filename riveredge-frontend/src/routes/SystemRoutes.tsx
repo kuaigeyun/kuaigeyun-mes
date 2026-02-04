@@ -98,11 +98,11 @@ const SystemRoutes: React.FC = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/infra/login" element={<InfraLoginPage />} />
       <Route path="/lock-screen" element={<LockScreenPage />} />
-      
+
       {/* 初始化向导页面（不需要布局） */}
       <Route path="/init/wizard" element={<InitWizardPage />} />
       <Route path="/init/template-select" element={<TemplateSelectPage />} />
-      
+
       {/* 二维码扫描页面（不需要布局） */}
       <Route path="/qrcode/scan" element={<QRCodeScanPage />} />
 

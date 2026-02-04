@@ -37,6 +37,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderBatchPriorityRequest,
     WorkOrderMergeRequest,
     WorkOrderMergeResponse,
+    WorkOrderOperationDispatch,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
@@ -1467,6 +1468,62 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 返回更新后的工序列表
             return await self.get_work_order_operations(tenant_id, work_order_id)
+
+    async def dispatch_work_order_operation(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operation_id: int,
+        dispatch_data: WorkOrderOperationDispatch,
+        dispatched_by: int
+    ) -> WorkOrderOperationResponse:
+        """
+        派工工单工序
+
+        分配工序给具体的人员或设备。
+
+        Args:
+            tenant_id: 组织ID
+            work_order_id: 工单ID
+            operation_id: 工单工序ID
+            dispatch_data: 派工数据
+            dispatched_by: 派工人ID
+
+        Returns:
+            WorkOrderOperationResponse: 更新后的工单工序
+        """
+        async with in_transaction():
+            # 获取工单工序
+            work_order_operation = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                id=operation_id,
+                deleted_at__isnull=True
+            )
+
+            if not work_order_operation:
+                raise NotFoundError(f"工单工序不存在: 工单ID={work_order_id}, 工序ID={operation_id}")
+
+            # 获取派工人信息
+            user_info = await self.get_user_info(dispatched_by)
+
+            # 更新派工信息
+            work_order_operation.assigned_worker_id = dispatch_data.assigned_worker_id
+            work_order_operation.assigned_worker_name = dispatch_data.assigned_worker_name
+            work_order_operation.assigned_equipment_id = dispatch_data.assigned_equipment_id
+            work_order_operation.assigned_equipment_name = dispatch_data.assigned_equipment_name
+            work_order_operation.assigned_at = datetime.now()
+            work_order_operation.assigned_by = dispatched_by
+            work_order_operation.assigned_by_name = user_info["name"]
+            
+            if dispatch_data.remarks:
+                work_order_operation.remarks = dispatch_data.remarks
+
+            await work_order_operation.save()
+
+            logger.info(f"工单 {work_order_operation.work_order_code} 的工序 {work_order_operation.operation_name} 已派工")
+
+            return WorkOrderOperationResponse.model_validate(work_order_operation)
 
     async def start_work_order_operation(
         self,

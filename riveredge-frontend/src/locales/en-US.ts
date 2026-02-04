@@ -24,7 +24,7 @@ export default {
   'menu.system.system-parameters': 'System Parameters',
   'menu.system.data-dictionaries': 'Data Dictionary',
   'menu.system.code-rules': 'Code Rules',
-  'menu.system.integration-configs': 'Integration Settings',
+  'menu.system.integration-configs': 'Data Connections',
   'menu.system.languages': 'Language Management',
   'menu.system.custom-fields': 'Custom Fields',
   'menu.system.files': 'File Management',

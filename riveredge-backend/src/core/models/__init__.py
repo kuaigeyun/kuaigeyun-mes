@@ -69,8 +69,7 @@ from .file import File
 # 接口管理模型
 from .api import API
 
-# 数据源管理模型
-from .data_source import DataSource
+# 数据源已统一至 IntegrationConfig，见 integration_config 模型
 
 # 数据集管理模型
 from .dataset import Dataset
@@ -159,8 +158,6 @@ __all__ = [
     "File",
     # 接口管理模型
     "API",
-    # 数据源管理模型
-    "DataSource",
     # 数据集管理模型
     "Dataset",
     # 消息管理模型

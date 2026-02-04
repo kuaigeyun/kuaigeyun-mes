@@ -14,7 +14,10 @@ from pydantic import BaseModel, Field
 class BusinessConfigResponse(BaseModel):
     """业务配置响应"""
     running_mode: str = Field(..., description="运行模式（simple/full）")
+    industry: str = Field('general', description="所属行业（general/machinery/electronics/machining）")
+    scale: str = Field('medium', description="企业规模（small/medium/large）")
     modules: Dict[str, bool] = Field(default_factory=dict, description="模块开关配置")
+    nodes: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="节点详细配置")
     parameters: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="流程参数配置")
     mode_switched_at: Optional[str] = Field(None, description="模式切换时间")
 
@@ -52,3 +55,10 @@ class ConfigTemplateSaveRequest(BaseModel):
 class ConfigTemplateApplyRequest(BaseModel):
     """配置模板应用请求"""
     template_id: int = Field(..., description="模板ID")
+
+
+class NodesUpdateRequest(BaseModel):
+    """节点配置更新请求"""
+    nodes: Dict[str, Dict[str, Any]] = Field(..., description="节点配置 map")
+    industry: Optional[str] = Field(None, description="行业")
+    scale: Optional[str] = Field(None, description="规模")

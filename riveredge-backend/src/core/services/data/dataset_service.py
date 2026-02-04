@@ -13,7 +13,7 @@ from datetime import datetime
 from tortoise.exceptions import IntegrityError
 
 from core.models.dataset import Dataset
-from core.models.data_source import DataSource
+from core.models.integration_config import IntegrationConfig
 from core.models.api import API
 from core.schemas.dataset import DatasetCreate, DatasetUpdate, ExecuteQueryRequest, ExecuteQueryResponse
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -54,15 +54,15 @@ class DatasetService:
         if existing_dataset:
             raise ValidationError(f"数据集代码 '{dataset_data.code}' 已存在")
         
-        # 获取数据源
-        data_source = await DataSource.filter(
+        # 获取数据连接/数据源（统一为 IntegrationConfig）
+        integration_config = await IntegrationConfig.filter(
             tenant_id=tenant_id,
-            uuid=dataset_data.data_source_uuid,
+            uuid=str(dataset_data.data_source_uuid),
             deleted_at__isnull=True,
         ).first()
         
-        if not data_source:
-            raise ValidationError(f"数据源不存在: {dataset_data.data_source_uuid}")
+        if not integration_config:
+            raise ValidationError(f"数据连接/数据源不存在: {dataset_data.data_source_uuid}")
         
         # 如果查询类型为 'api'，验证接口管理中的 API 是否存在
         if dataset_data.query_type == 'api':
@@ -94,7 +94,7 @@ class DatasetService:
         # 创建数据集
         dataset = await Dataset.create(
             tenant_id=tenant_id,
-            data_source_id=data_source.id,
+            integration_config_id=integration_config.id,
             **dataset_data.model_dump(exclude={'data_source_uuid'}),
         )
         
@@ -122,7 +122,7 @@ class DatasetService:
             tenant_id=tenant_id,
             uuid=dataset_uuid,
             deleted_at__isnull=True,
-        ).prefetch_related('data_source').first()
+        ).prefetch_related('integration_config').first()
         
         if not dataset:
             raise NotFoundError(f"数据集不存在: {dataset_uuid}")
@@ -171,15 +171,15 @@ class DatasetService:
         if query_type:
             query = query.filter(query_type=query_type)
         
-        # 数据源筛选
+        # 数据连接/数据源筛选
         if data_source_uuid:
-            data_source = await DataSource.filter(
+            integration_config = await IntegrationConfig.filter(
                 tenant_id=tenant_id,
-                uuid=data_source_uuid,
+                uuid=str(data_source_uuid),
                 deleted_at__isnull=True,
             ).first()
-            if data_source:
-                query = query.filter(data_source_id=data_source.id)
+            if integration_config:
+                query = query.filter(integration_config_id=integration_config.id)
         
         # 启用状态筛选
         if is_active is not None:
@@ -194,7 +194,7 @@ class DatasetService:
         
         # 分页查询（使用索引字段排序，预加载关联数据）
         offset = (page - 1) * page_size
-        datasets = await query.prefetch_related('data_source').order_by("-created_at").offset(offset).limit(page_size).all()
+        datasets = await query.prefetch_related('integration_config').order_by("-created_at").offset(offset).limit(page_size).all()
         
         return datasets, total
     
@@ -345,11 +345,11 @@ class DatasetService:
         # 获取数据集
         dataset = await self.get_dataset_by_uuid(tenant_id, dataset_uuid)
         
-        # 获取数据源
-        await dataset.fetch_related('data_source')
-        data_source = dataset.data_source
-        
-        if not data_source.is_connected:
+        # 获取数据连接/数据源
+        await dataset.fetch_related('integration_config')
+        integration_config = dataset.integration_config
+
+        if not integration_config.is_connected:
             return ExecuteQueryResponse(
                 success=False,
                 data=[],
@@ -365,7 +365,7 @@ class DatasetService:
             # 根据查询类型执行查询
             if dataset.query_type == 'sql':
                 result = await self._execute_sql_query(
-                    data_source=data_source,
+                    integration_config=integration_config,
                     query_config=dataset.query_config,
                     parameters=execute_request.parameters,
                     limit=execute_request.limit,
@@ -374,7 +374,7 @@ class DatasetService:
             elif dataset.query_type == 'api':
                 result = await self._execute_api_query(
                     tenant_id=tenant_id,
-                    data_source=data_source,
+                    integration_config=integration_config,
                     query_config=dataset.query_config,
                     parameters=execute_request.parameters,
                     limit=execute_request.limit,
@@ -426,7 +426,7 @@ class DatasetService:
     
     async def _execute_sql_query(
         self,
-        data_source: DataSource,
+        integration_config: IntegrationConfig,
         query_config: Dict[str, Any],
         parameters: Optional[Dict[str, Any]] = None,
         limit: int = 100,
@@ -434,28 +434,28 @@ class DatasetService:
     ) -> Dict[str, Any]:
         """
         执行 SQL 查询
-        
+
         Args:
-            data_source: 数据源对象
+            integration_config: 数据连接/数据源（IntegrationConfig）
             query_config: 查询配置
             parameters: 查询参数
             limit: 限制返回行数
             offset: 偏移量
-            
+
         Returns:
             Dict[str, Any]: 查询结果
         """
         try:
             # 仅支持 PostgreSQL（使用 Tortoise ORM）
-            if data_source.type != 'postgresql':
+            if integration_config.type != 'postgresql':
                 return {
                     'success': False,
                     'data': [],
                     'total': None,
                     'columns': None,
-                    'error': f'SQL 查询暂仅支持 PostgreSQL，当前数据源类型: {data_source.type}',
+                    'error': f'SQL 查询暂仅支持 PostgreSQL，当前类型: {integration_config.type}',
                 }
-            
+
             # 获取 SQL 语句
             sql = query_config.get('sql', '')
             if not sql:
@@ -466,7 +466,7 @@ class DatasetService:
                     'columns': None,
                     'error': 'SQL 语句不能为空',
                 }
-            
+
             # 验证 SQL 语句（仅允许 SELECT）
             sql_upper = sql.strip().upper()
             if not sql_upper.startswith('SELECT'):
@@ -477,26 +477,24 @@ class DatasetService:
                     'columns': None,
                     'error': '仅支持 SELECT 查询，禁止执行 DDL、DML 语句',
                 }
-            
+
             # 合并查询参数
             query_params = query_config.get('parameters', {})
             if parameters:
                 query_params.update(parameters)
-            
+
             # 添加 LIMIT 和 OFFSET
             if 'LIMIT' not in sql_upper:
                 sql = f"{sql} LIMIT {limit} OFFSET {offset}"
-            
+
             # 执行查询（使用 Tortoise ORM 的原始 SQL 查询）
-            from tortoise import connections
             from tortoise.backends.asyncpg.client import AsyncpgDBClient
-            
-            # 构建连接配置
-            config = data_source.config
+
+            config = integration_config.get_config()
             host = config.get('host', 'localhost')
             port = config.get('port', 5432)
             database = config.get('database', '')
-            user = config.get('username', '')
+            user = config.get('user') or config.get('username', '')
             password = config.get('password', '')
             
             # 创建临时连接
@@ -539,7 +537,7 @@ class DatasetService:
     async def _execute_api_query(
         self,
         tenant_id: int,
-        data_source: DataSource,
+        integration_config: IntegrationConfig,
         query_config: Dict[str, Any],
         parameters: Optional[Dict[str, Any]] = None,
         limit: int = 100,
@@ -547,19 +545,19 @@ class DatasetService:
     ) -> Dict[str, Any]:
         """
         执行 API 查询
-        
+
         支持两种方式：
         1. 从接口管理获取 API 配置（如果 query_config 中包含 api_uuid 或 api_code）
-        2. 从数据源获取 API 配置（传统方式）
-        
+        2. 从数据连接/数据源（IntegrationConfig）获取 API 配置
+
         Args:
             tenant_id: 组织ID
-            data_source: 数据源对象
+            integration_config: 数据连接/数据源对象
             query_config: 查询配置
             parameters: 查询参数
             limit: 限制返回行数
             offset: 偏移量
-            
+
         Returns:
             Dict[str, Any]: 查询结果
         """
@@ -634,37 +632,35 @@ class DatasetService:
                 params['offset'] = offset
                 
             else:
-                # 传统方式：从数据源获取 API 配置
-                if data_source.type != 'api':
+                # 从数据连接/数据源获取 API 配置
+                if integration_config.type not in ('api', 'API'):
                     return {
                         'success': False,
                         'data': [],
                         'total': None,
                         'columns': None,
-                        'error': f'API 查询需要 API 类型数据源，当前数据源类型: {data_source.type}',
+                        'error': f'API 查询需要 API 类型数据连接，当前类型: {integration_config.type}',
                     }
-                
-                # 获取 API 配置
-                base_url = data_source.config.get('base_url', '')
+
+                cfg = integration_config.get_config()
+                base_url = cfg.get('base_url') or cfg.get('url', '')
                 endpoint = query_config.get('endpoint', '')
                 method = query_config.get('method', 'GET').upper()
-                
+
                 if not base_url or not endpoint:
                     return {
                         'success': False,
                         'data': [],
                         'total': None,
                         'columns': None,
-                        'error': 'API base_url 和 endpoint 不能为空',
+                        'error': 'API base_url/url 和 endpoint 不能为空',
                     }
-                
-                # 构建完整 URL
-                url = f"{base_url}{endpoint}"
-                
-                # 构建请求头
-                headers = data_source.config.get('headers', {})
-                if data_source.config.get('auth_type') == 'bearer' and data_source.config.get('token'):
-                    headers['Authorization'] = f"Bearer {data_source.config['token']}"
+
+                url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}" if endpoint else base_url
+
+                headers = cfg.get('headers', {})
+                if cfg.get('auth_type') == 'bearer' and cfg.get('token'):
+                    headers['Authorization'] = f"Bearer {cfg['token']}"
                 
                 # 合并查询参数
                 params = query_config.get('params', {})
@@ -839,46 +835,37 @@ class DatasetService:
         config_changed: bool = False
     ) -> None:
         """
-        通知数据集管理数据源变更（预留接口）
-        
-        此方法用于在数据源变更或删除时，触发后续的业务逻辑，
-        例如更新关联数据集的连接状态、重新验证查询配置等。
-        目前仅为预留接口，不执行任何实际操作。
+        通知数据集管理数据连接/数据源变更（预留接口）
+
+        统一后使用 IntegrationConfig；数据连接变更时更新关联数据集。
         """
         import logging
         logger = logging.getLogger(__name__)
-        
+
         logger.info(
-            f"Data source '{data_source_code}' in tenant {tenant_id} changed. "
+            f"Data connection '{data_source_code}' in tenant {tenant_id} changed. "
             f"Active: {is_active}, Deleted: {is_deleted}, Config changed: {config_changed}"
         )
-        
-        # 如果数据源被删除或禁用，可以更新关联数据集的错误信息
+
         if is_deleted or not is_active:
-            # 查找所有关联的数据集
-            data_source = await DataSource.filter(
+            ic = await IntegrationConfig.filter(
                 tenant_id=tenant_id,
                 code=data_source_code,
                 deleted_at__isnull=True,
             ).first()
-            
-            if data_source:
-                # 更新关联数据集的错误信息
+
+            if ic:
                 await Dataset.filter(
                     tenant_id=tenant_id,
-                    data_source_id=data_source.id,
+                    integration_config_id=ic.id,
                     deleted_at__isnull=True,
                 ).update(
-                    last_error=f"数据源已{'删除' if is_deleted else '禁用'}，无法执行查询"
+                    last_error=f"数据连接已{'删除' if is_deleted else '禁用'}，无法执行查询"
                 )
                 logger.info(
-                    f"Updated {await Dataset.filter(tenant_id=tenant_id, data_source_id=data_source.id, deleted_at__isnull=True).count()} "
-                    f"datasets associated with data source '{data_source_code}'"
+                    f"Updated {await Dataset.filter(tenant_id=tenant_id, integration_config_id=ic.id, deleted_at__isnull=True).count()} "
+                    f"datasets for connection '{data_source_code}'"
                 )
-        
-        # TODO: 在此处实现更新关联数据集的逻辑，例如：
-        # - 如果数据源配置变更，可以重新验证数据集的查询配置
-        # - 如果数据源连接状态变更，可以更新数据集的执行状态
         pass
     
     async def test_data_source_for_dataset(
@@ -907,21 +894,20 @@ class DatasetService:
         # 获取数据集
         dataset = await self.get_dataset_by_uuid(tenant_id, dataset_uuid)
         
-        # 获取数据源
-        await dataset.fetch_related('data_source')
-        data_source = dataset.data_source
-        
-        # 调用数据源管理的测试功能
-        from core.services.data.data_source_service import DataSourceService
-        test_result = await DataSourceService().test_connection(
+        # 获取数据连接
+        await dataset.fetch_related('integration_config')
+        integration_config = dataset.integration_config
+
+        from core.services.integration.integration_config_service import IntegrationConfigService
+        test_result = await IntegrationConfigService.test_connection(
             tenant_id=tenant_id,
-            data_source_uuid=data_source.uuid,
+            uuid=str(integration_config.uuid),
         )
-        
+
         return {
-            "success": test_result.success,
-            "message": test_result.message,
-            "elapsed_time": test_result.elapsed_time,
+            "success": test_result.get("success", False),
+            "message": test_result.get("message", ""),
+            "elapsed_time": test_result.get("data", {}).get("elapsed_time", 0) if isinstance(test_result.get("data"), dict) else 0,
         }
     
     @staticmethod
@@ -956,8 +942,8 @@ class DatasetService:
             code=dataset_code,
             deleted_at__isnull=True,
             is_active=True,
-        ).prefetch_related('data_source').first()
-        
+        ).prefetch_related('integration_config').first()
+
         if not dataset:
             raise NotFoundError(f"数据集不存在或未启用: {dataset_code}")
         

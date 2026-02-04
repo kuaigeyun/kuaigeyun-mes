@@ -1,7 +1,7 @@
 """
-数据源管理 API 路由
+数据源管理 API 路由（兼容层）
 
-提供数据源的 CRUD 操作和连接测试功能。
+统一后委托 IntegrationConfig 实现，仅处理 type 为 postgresql、mysql、mongodb、api 的记录。
 """
 
 from typing import Optional
@@ -14,13 +14,35 @@ from core.schemas.data_source import (
     DataSourceResponse,
     TestConnectionResponse,
 )
-from core.services.data.data_source_service import DataSourceService
+from core.services.integration.integration_config_service import IntegrationConfigService
+from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/data-sources", tags=["DataSources"])
+
+DATA_SOURCE_TYPES = ("postgresql", "mysql", "mongodb", "api")
+
+
+def _ic_to_ds_response(ic) -> DataSourceResponse:
+    """IntegrationConfig -> DataSourceResponse（兼容）"""
+    return DataSourceResponse(
+        uuid=UUID(str(ic.uuid)),
+        tenant_id=ic.tenant_id,
+        name=ic.name,
+        code=ic.code,
+        description=ic.description,
+        type=ic.type,
+        config=ic.config or {},
+        is_active=ic.is_active,
+        is_connected=ic.is_connected,
+        last_connected_at=ic.last_connected_at,
+        last_error=ic.last_error,
+        created_at=ic.created_at,
+        updated_at=ic.updated_at,
+    )
 
 
 @router.post("", response_model=DataSourceResponse, status_code=status.HTTP_201_CREATED)
@@ -29,38 +51,29 @@ async def create_data_source(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    创建数据源
-    
-    创建新的数据源定义。
-    
-    Args:
-        data: 数据源创建数据
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        DataSourceResponse: 创建的数据源信息
-        
-    Raises:
-        HTTPException: 当创建失败时抛出
-    """
-    try:
-        data_source = await DataSourceService().create_data_source(
-            tenant_id=tenant_id,
-            data_source_data=data,
-        )
-        
-        return DataSourceResponse.model_validate(data_source)
-    except ValidationError as e:
+    """创建数据源（写入 IntegrationConfig，仅允许数据源类型）"""
+    if data.type not in DATA_SOURCE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+            detail=f"数据源类型必须是 {list(DATA_SOURCE_TYPES)} 之一",
         )
+    try:
+        create_data = IntegrationConfigCreate(
+            name=data.name,
+            code=data.code,
+            type=data.type,
+            description=data.description,
+            config=data.config,
+            is_active=data.is_active,
+        )
+        ic = await IntegrationConfigService.create_integration(tenant_id=tenant_id, data=create_data)
+        return _ic_to_ds_response(ic)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"创建数据源失败: {str(e)}"
+            detail=f"创建数据源失败: {str(e)}",
         )
 
 
@@ -74,41 +87,33 @@ async def list_data_sources(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    获取数据源列表
-    
-    支持分页、搜索和筛选。
-    
-    Args:
-        page: 页码
-        page_size: 每页数量
-        search: 搜索关键词（名称、代码）
-        type: 数据源类型筛选
-        is_active: 是否启用筛选
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        dict: 数据源列表响应数据
-        {
-            "items": [...],
-            "total": 100,
-            "page": 1,
-            "page_size": 20
-        }
-    """
+    """列表仅返回 type 为数据源类型的 IntegrationConfig"""
     try:
-        data_sources, total = await DataSourceService().list_data_sources(
+        if type is not None and type not in DATA_SOURCE_TYPES:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        skip = (page - 1) * page_size
+        items = await IntegrationConfigService.list_integrations(
             tenant_id=tenant_id,
-            page=page,
-            page_size=page_size,
-            search=search,
+            skip=skip,
+            limit=page_size,
             type=type,
             is_active=is_active,
         )
-        
+        items = [i for i in items if i.type in DATA_SOURCE_TYPES]
+        if search:
+            search_lower = search.lower()
+            items = [i for i in items if (search_lower in (i.name or "").lower() or search_lower in (i.code or "").lower())]
+        total = len(items)
+        if not search and (type is None or type in DATA_SOURCE_TYPES):
+            all_list = await IntegrationConfigService.list_integrations(
+                tenant_id=tenant_id, skip=0, limit=10000, type=type, is_active=is_active
+            )
+            total = sum(1 for i in all_list if i.type in DATA_SOURCE_TYPES)
+            if search:
+                search_lower = search.lower()
+                total = sum(1 for i in all_list if i.type in DATA_SOURCE_TYPES and (search_lower in (i.name or "").lower() or search_lower in (i.code or "").lower()))
         return {
-            "items": [DataSourceResponse.model_validate(ds) for ds in data_sources],
+            "items": [_ic_to_ds_response(i) for i in items],
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -116,7 +121,7 @@ async def list_data_sources(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取数据源列表失败: {str(e)}"
+            detail=f"获取数据源列表失败: {str(e)}",
         )
 
 
@@ -126,38 +131,18 @@ async def get_data_source(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    获取数据源详情
-    
-    根据数据源UUID获取数据源详细信息。
-    
-    Args:
-        data_source_uuid: 数据源UUID
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        DataSourceResponse: 数据源详情响应数据
-        
-    Raises:
-        HTTPException: 当数据源不存在时抛出
-    """
+    """获取详情（仅数据源类型）"""
     try:
-        data_source = await DataSourceService().get_data_source_by_uuid(
-            tenant_id=tenant_id,
-            data_source_uuid=data_source_uuid,
-        )
-        
-        return DataSourceResponse.model_validate(data_source)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        ic = await IntegrationConfigService.get_integration_by_uuid(tenant_id=tenant_id, uuid=str(data_source_uuid))
+        if ic.type not in DATA_SOURCE_TYPES:
+            raise NotFoundError("数据源不存在")
+        return _ic_to_ds_response(ic)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="数据源不存在")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"获取数据源详情失败: {str(e)}"
+            detail=f"获取数据源详情失败: {str(e)}",
         )
 
 
@@ -168,45 +153,29 @@ async def update_data_source(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    更新数据源
-    
-    更新数据源定义。
-    
-    Args:
-        data_source_uuid: 数据源UUID
-        data: 数据源更新数据
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        DataSourceResponse: 更新后的数据源信息
-        
-    Raises:
-        HTTPException: 当更新失败时抛出
-    """
+    """更新数据源"""
     try:
-        data_source = await DataSourceService().update_data_source(
-            tenant_id=tenant_id,
-            data_source_uuid=data_source_uuid,
-            data_source_data=data,
+        ic = await IntegrationConfigService.get_integration_by_uuid(tenant_id=tenant_id, uuid=str(data_source_uuid))
+        if ic.type not in DATA_SOURCE_TYPES:
+            raise NotFoundError("数据源不存在")
+        update_data = IntegrationConfigUpdate(
+            name=data.name,
+            description=data.description,
+            config=data.config,
+            is_active=data.is_active,
         )
-        
-        return DataSourceResponse.model_validate(data_source)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+        updated = await IntegrationConfigService.update_integration(
+            tenant_id=tenant_id, uuid=str(data_source_uuid), data=update_data
         )
+        return _ic_to_ds_response(updated)
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="数据源不存在")
     except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"更新数据源失败: {str(e)}"
+            detail=f"更新数据源失败: {str(e)}",
         )
 
 
@@ -216,33 +185,18 @@ async def delete_data_source(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    删除数据源（软删除）
-    
-    删除数据源定义。
-    
-    Args:
-        data_source_uuid: 数据源UUID
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Raises:
-        HTTPException: 当删除失败时抛出
-    """
+    """删除数据源（软删除）"""
     try:
-        await DataSourceService().delete_data_source(
-            tenant_id=tenant_id,
-            data_source_uuid=data_source_uuid,
-        )
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+        ic = await IntegrationConfigService.get_integration_by_uuid(tenant_id=tenant_id, uuid=str(data_source_uuid))
+        if ic.type not in DATA_SOURCE_TYPES:
+            raise NotFoundError("数据源不存在")
+        await IntegrationConfigService.delete_integration(tenant_id=tenant_id, uuid=str(data_source_uuid))
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="数据源不存在")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"删除数据源失败: {str(e)}"
+            detail=f"删除数据源失败: {str(e)}",
         )
 
 
@@ -252,42 +206,22 @@ async def test_data_source_connection(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """
-    测试数据源连接
-    
-    测试数据源连接并返回测试结果。
-    
-    Args:
-        data_source_uuid: 数据源UUID
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        TestConnectionResponse: 测试结果
-        {
-            "success": true,
-            "message": "连接成功",
-            "elapsed_time": 0.123
-        }
-        
-    Raises:
-        HTTPException: 当测试失败时抛出
-    """
+    """测试数据源连接"""
     try:
-        result = await DataSourceService().test_connection(
-            tenant_id=tenant_id,
-            data_source_uuid=data_source_uuid,
+        ic = await IntegrationConfigService.get_integration_by_uuid(tenant_id=tenant_id, uuid=str(data_source_uuid))
+        if ic.type not in DATA_SOURCE_TYPES:
+            raise NotFoundError("数据源不存在")
+        result = await IntegrationConfigService.test_connection(tenant_id=tenant_id, uuid=str(data_source_uuid))
+        data = result.get("data") or {}
+        return TestConnectionResponse(
+            success=result.get("success", False),
+            message=result.get("message", ""),
+            elapsed_time=data.get("elapsed_time", 0.0),
         )
-        
-        return result
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="数据源不存在")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"测试数据源连接失败: {str(e)}"
+            detail=f"测试数据源连接失败: {str(e)}",
         )
-

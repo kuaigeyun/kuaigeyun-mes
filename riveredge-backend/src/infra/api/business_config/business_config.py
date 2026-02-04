@@ -18,6 +18,7 @@ from infra.schemas.business_config import (
     BatchProcessParameterUpdateRequest,
     ConfigTemplateSaveRequest,
     ConfigTemplateApplyRequest,
+    NodesUpdateRequest
 )
 from infra.services.business_config_service import BusinessConfigService
 from infra.api.deps.deps import get_current_user
@@ -101,6 +102,32 @@ async def update_module_switch(
     except Exception as e:
         logger.error(f"更新模块开关失败: {e}")
         raise HTTPException(status_code=500, detail=f"更新模块开关失败: {str(e)}")
+
+
+@router.post("/nodes/update", summary="更新节点配置")
+async def update_nodes_config(
+    request: NodesUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    更新节点配置
+    
+    更新业务流程节点的启用状态及审核要求，可同时更新行业和规模属性。
+    """
+    try:
+        result = await BusinessConfigService().update_nodes_config(
+            tenant_id=tenant_id,
+            nodes=request.nodes,
+            industry=request.industry,
+            scale=request.scale
+        )
+        return result
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"更新节点配置失败: {e}")
+        raise HTTPException(status_code=500, detail=f"更新节点配置失败: {str(e)}")
 
 
 @router.post("/parameters/update", summary="更新流程参数")

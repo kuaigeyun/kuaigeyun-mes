@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from core.models.report_template import ReportTemplate
-from core.models.data_source import DataSource
+from core.models.integration_config import IntegrationConfig
 from core.schemas.report import (
     ReportTemplateCreate,
     ReportTemplateUpdate,
@@ -337,23 +337,23 @@ class ReportTemplateService(BaseService):
                 else:
                     result[ds_id] = []
             elif ds_type == "datasource":
-                # 数据源配置
+                # 数据连接/数据源配置（统一为 IntegrationConfig）
                 data_source_code = ds_config.get("code", "")
                 if data_source_code:
                     try:
-                        data_source = await DataSource.get_or_none(
+                        integration_config = await IntegrationConfig.get_or_none(
                             tenant_id=tenant_id,
                             code=data_source_code,
                             is_active=True,
+                            deleted_at__isnull=True,
                         )
-                        if data_source:
-                            # TODO: 根据数据源类型执行查询
-                            # 当前简化实现
+                        if integration_config:
+                            # TODO: 根据类型执行查询
                             result[ds_id] = []
                         else:
                             result[ds_id] = []
                     except Exception as e:
-                        logger.error(f"获取数据源失败: {e}")
+                        logger.error(f"获取数据连接失败: {e}")
                         result[ds_id] = []
                 else:
                     result[ds_id] = []

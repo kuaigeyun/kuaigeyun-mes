@@ -25,8 +25,11 @@ class IntegrationConfigBase(BaseModel):
     @field_validator('type')
     @classmethod
     def validate_type(cls, v: str) -> str:
-        """验证集成类型"""
-        allowed_types = ['OAuth', 'API', 'Webhook', 'Database']
+        """验证集成类型（含数据源类型：postgresql、mysql、mongodb、api）"""
+        allowed_types = [
+            'OAuth', 'API', 'Webhook', 'Database',
+            'postgresql', 'mysql', 'mongodb', 'api',
+        ]
         if v not in allowed_types:
             raise ValueError(f"集成类型必须是以下之一: {', '.join(allowed_types)}")
         return v

@@ -82,10 +82,8 @@ async def create_dataset(
             dataset_data=data,
         )
         
-        # 获取数据源UUID
-        await dataset.fetch_related('data_source')
-        data_source_uuid = dataset.data_source.uuid
-        
+        await dataset.fetch_related('integration_config')
+        data_source_uuid = UUID(str(dataset.integration_config.uuid))
         return model_to_response(dataset, data_source_uuid)
     except ValidationError as e:
         raise HTTPException(
@@ -148,8 +146,8 @@ async def list_datasets(
         # 转换为响应对象
         items = []
         for dataset in datasets:
-            await dataset.fetch_related('data_source')
-            items.append(model_to_response(dataset, dataset.data_source.uuid))
+            await dataset.fetch_related('integration_config')
+            items.append(model_to_response(dataset, UUID(str(dataset.integration_config.uuid))))
         
         return {
             "items": items,
@@ -192,9 +190,8 @@ async def get_dataset(
             dataset_uuid=dataset_uuid,
         )
         
-        await dataset.fetch_related('data_source')
-        data_source_uuid = dataset.data_source.uuid
-        
+        await dataset.fetch_related('integration_config')
+        data_source_uuid = UUID(str(dataset.integration_config.uuid))
         return model_to_response(dataset, data_source_uuid)
     except NotFoundError as e:
         raise HTTPException(
@@ -239,9 +236,8 @@ async def update_dataset(
             dataset_data=data,
         )
         
-        await dataset.fetch_related('data_source')
-        data_source_uuid = dataset.data_source.uuid
-        
+        await dataset.fetch_related('integration_config')
+        data_source_uuid = UUID(str(dataset.integration_config.uuid))
         return model_to_response(dataset, data_source_uuid)
     except NotFoundError as e:
         raise HTTPException(

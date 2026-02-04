@@ -23,6 +23,7 @@ from apps.kuaizhizao.schemas.sales_order import (
 )
 from apps.kuaizhizao.constants import DemandStatus
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
 
 
 class SalesOrderService:
@@ -34,6 +35,7 @@ class SalesOrderService:
 
     def __init__(self):
         self.demand_service = DemandService()
+        self.business_config_service = BusinessConfigService()
 
     def _convert_sales_order_to_demand(self, sales_order_data: SalesOrderCreate) -> DemandCreate:
         """将销售订单数据转换为需求数据"""
@@ -166,6 +168,11 @@ class SalesOrderService:
         Returns:
             SalesOrderResponse: 创建的销售订单响应
         """
+        # 1. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_order")
+        if not is_enabled:
+            raise BusinessLogicError("销售管理模块未启用，无法创建销售订单")
+
         # 如果没有提供订单编码，按编码规则或回退逻辑自动生成
         if not sales_order_data.order_code:
             from core.config.code_rule_pages import CODE_RULE_PAGES
@@ -394,6 +401,19 @@ class SalesOrderService:
             demand_id=sales_order_id,
             submitted_by=submitted_by
         )
+        
+        # 2. 检查是否需要审核
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
+        if not audit_required:
+            logger.info(f"销售订单 {sales_order_id} 无需审核，自动通过")
+            # 自动审核通过（以提交人作为审核人）
+            demand = await self.demand_service.approve_demand(
+                tenant_id=tenant_id,
+                demand_id=sales_order_id,
+                approved_by=submitted_by,
+                rejection_reason=None
+            )
+            
         return self._convert_demand_to_sales_order(demand)
 
     async def approve_sales_order(

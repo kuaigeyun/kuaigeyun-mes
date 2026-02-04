@@ -304,7 +304,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/system/system-parameters': ManufacturingIcons.mdConfiguration, // 系统参数 - 使用配置图标
       '/system/data-dictionaries': ManufacturingIcons.bookOpen, // 数据字典 - 使用打开的书本图标
       '/system/code-rules': ManufacturingIcons.code, // 编码规则 - 使用代码图标
-      '/system/integration-configs': ManufacturingIcons.network, // 集成配置 - 使用网络图标
+      '/system/integration-configs': ManufacturingIcons.network, // 数据连接 - 使用网络图标
       '/system/languages': ManufacturingIcons.languages, // 语言管理 - 使用语言图标
       '/system/custom-fields': ManufacturingIcons.toolbox, // 自定义字段 - 使用工具箱图标
       '/system/files': ManufacturingIcons.folder, // 文件管理 - 使用文件夹图标

@@ -66,6 +66,11 @@ export const workOrderApi = {
     return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' });
   },
 
+  // 派工工单工序
+  dispatchOperation: async (workOrderId: string, operationId: number, data: any) => {
+    return apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/dispatch`, { method: 'POST', data });
+  },
+
   // 冻结工单
   freeze: async (id: string, data: { freeze_reason: string }) => {
     return apiRequest(`/apps/kuaizhizao/work-orders/${id}/freeze`, { method: 'POST', data });
@@ -97,7 +102,7 @@ export const workOrderApi = {
     return qrcodeApi.generateWorkOrder({
       work_order_uuid: workOrderId,
       work_order_code: workOrderCode,
-      work_order_name: workOrderName,
+      material_code: workOrderName, // Note: Schema says material_code, but using workOrderName as fallback if needed, or check if it should be name
     });
   },
 };
@@ -413,23 +418,20 @@ export const warehouseApi = {
       return apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/confirm`, { method: 'POST' });
     },
     import: async (data: any[][]) => {
-      return apiRequest<{ success: boolean; message: string; data?: any }>({
-        url: '/apps/kuaizhizao/sales-deliveries/import',
+      return apiRequest('/apps/kuaizhizao/sales-deliveries/import', {
         method: 'POST',
         data: { data },
       });
     },
     export: async (params?: any) => {
-      return apiRequest<Blob>({
-        url: '/apps/kuaizhizao/sales-deliveries/export',
+      return apiRequest('/apps/kuaizhizao/sales-deliveries/export', {
         method: 'GET',
         params,
         responseType: 'blob',
       });
     },
     print: async (id: string, templateUuid?: string) => {
-      return apiRequest<{ success: boolean; content?: string; data?: any; message?: string }>({
-        url: `/apps/kuaizhizao/sales-deliveries/${id}/print`,
+      return apiRequest(`/apps/kuaizhizao/sales-deliveries/${id}/print`, {
         method: 'GET',
         params: templateUuid ? { template_uuid: templateUuid } : undefined,
       });
@@ -537,15 +539,13 @@ export const warehouseApi = {
       return apiRequest(`/apps/kuaizhizao/purchase-receipts/${id}/confirm`, { method: 'POST' });
     },
     import: async (data: any[][]) => {
-      return apiRequest<{ success: boolean; message: string; data?: any }>({
-        url: '/apps/kuaizhizao/purchase-receipts/import',
+      return apiRequest('/apps/kuaizhizao/purchase-receipts/import', {
         method: 'POST',
         data: { data },
       });
     },
     export: async (params?: any) => {
-      return apiRequest<Blob>({
-        url: '/apps/kuaizhizao/purchase-receipts/export',
+      return apiRequest('/apps/kuaizhizao/purchase-receipts/export', {
         method: 'GET',
         params,
         responseType: 'blob',
@@ -666,15 +666,13 @@ export const qualityApi = {
       return apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect`, { method: 'POST', data });
     },
     import: async (data: any[][]) => {
-      return apiRequest<{ success: boolean; message: string; data?: any }>({
-        url: '/apps/kuaizhizao/incoming-inspections/import',
+      return apiRequest('/apps/kuaizhizao/incoming-inspections/import', {
         method: 'POST',
         data: { data },
       });
     },
     export: async (params?: any) => {
-      return apiRequest<Blob>({
-        url: '/apps/kuaizhizao/incoming-inspections/export',
+      return apiRequest('/apps/kuaizhizao/incoming-inspections/export', {
         method: 'GET',
         params,
         responseType: 'blob',
@@ -712,15 +710,13 @@ export const qualityApi = {
       return apiRequest(`/apps/kuaizhizao/process-inspections/${inspectionId}/create-defect`, { method: 'POST', data });
     },
     import: async (data: any[][]) => {
-      return apiRequest<{ success: boolean; message: string; data?: any }>({
-        url: '/apps/kuaizhizao/process-inspections/import',
+      return apiRequest('/apps/kuaizhizao/process-inspections/import', {
         method: 'POST',
         data: { data },
       });
     },
     export: async (params?: any) => {
-      return apiRequest<Blob>({
-        url: '/apps/kuaizhizao/process-inspections/export',
+      return apiRequest('/apps/kuaizhizao/process-inspections/export', {
         method: 'GET',
         params,
         responseType: 'blob',
@@ -761,15 +757,13 @@ export const qualityApi = {
       return apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${inspectionId}/create-defect`, { method: 'POST', data });
     },
     import: async (data: any[][]) => {
-      return apiRequest<{ success: boolean; message: string; data?: any }>({
-        url: '/apps/kuaizhizao/finished-goods-inspections/import',
+      return apiRequest('/apps/kuaizhizao/finished-goods-inspections/import', {
         method: 'POST',
         data: { data },
       });
     },
     export: async (params?: any) => {
-      return apiRequest<Blob>({
-        url: '/apps/kuaizhizao/finished-goods-inspections/export',
+      return apiRequest('/apps/kuaizhizao/finished-goods-inspections/export', {
         method: 'GET',
         params,
         responseType: 'blob',

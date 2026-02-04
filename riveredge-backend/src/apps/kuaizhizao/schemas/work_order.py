@@ -211,7 +211,24 @@ class WorkOrderOperationBase(BaseModel):
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     standard_time: Optional[Decimal] = Field(None, description="标准工时（小时/件）")
     setup_time: Optional[Decimal] = Field(None, description="准备时间（小时）")
+    
+    # 派工信息
+    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID")
+    assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
+    assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID")
+    assigned_equipment_name: Optional[str] = Field(None, description="分配的设备姓名")
+    assigned_at: Optional[datetime] = Field(None, description="分配时间")
+    
     remarks: Optional[str] = Field(None, description="备注")
+
+
+class WorkOrderOperationDispatch(BaseModel):
+    """工单工序派工请求Schema"""
+    assigned_worker_id: Optional[int] = Field(None, description="分配的员工ID")
+    assigned_worker_name: Optional[str] = Field(None, description="分配的员工姓名")
+    assigned_equipment_id: Optional[int] = Field(None, description="分配的设备ID")
+    assigned_equipment_name: Optional[str] = Field(None, description="分配的设备姓名")
+    remarks: Optional[str] = Field(None, description="派工备注")
 
 
 class WorkOrderOperationCreate(WorkOrderOperationBase):
@@ -248,6 +265,11 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
     qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
     unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
     status: str = Field(..., max_length=20, description="工序状态")
+    
+    # 派工审计信息
+    assigned_by: Optional[int] = Field(None, description="分配人ID")
+    assigned_by_name: Optional[str] = Field(None, description="分配人姓名")
+    
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

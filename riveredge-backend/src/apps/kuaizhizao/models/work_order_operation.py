@@ -41,6 +41,13 @@ class WorkOrderOperation(BaseModel):
         qualified_quantity: 合格数量
         unqualified_quantity: 不合格数量
         status: 工序状态（pending/in_progress/completed/cancelled）
+        assigned_worker_id: 分配的员工ID
+        assigned_worker_name: 分配的员工姓名
+        assigned_equipment_id: 分配的设备ID
+        assigned_equipment_name: 分配的设备姓名
+        assigned_at: 分配时间
+        assigned_by: 分配人ID
+        assigned_by_name: 分配人姓名
         remarks: 备注
         created_at: 创建时间（继承自BaseModel）
         updated_at: 更新时间（继承自BaseModel）
@@ -100,6 +107,15 @@ class WorkOrderOperation(BaseModel):
 
     # 状态信息
     status = fields.CharField(max_length=20, default="pending", description="工序状态（pending/in_progress/completed/cancelled）")
+    
+    # 派工信息
+    assigned_worker_id = fields.IntField(null=True, description="分配的员工ID")
+    assigned_worker_name = fields.CharField(max_length=100, null=True, description="分配的员工姓名")
+    assigned_equipment_id = fields.IntField(null=True, description="分配的设备ID")
+    assigned_equipment_name = fields.CharField(max_length=100, null=True, description="分配的设备姓名")
+    assigned_at = fields.DatetimeField(null=True, description="分配时间")
+    assigned_by = fields.IntField(null=True, description="分配人ID")
+    assigned_by_name = fields.CharField(max_length=100, null=True, description="分配人姓名")
 
     # 报工类型和跳转规则（从工艺路线中继承）
     reporting_type = fields.CharField(

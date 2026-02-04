@@ -53,7 +53,7 @@ export default defineConfig({
             // 设置更长的超时时间
             proxyReq.setTimeout(30000);
           });
-      },
+        },
       } as ProxyOptions,
     },
     hmr: {

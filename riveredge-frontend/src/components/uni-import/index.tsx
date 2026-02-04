@@ -7,7 +7,7 @@
 
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Modal, Button, Space, App } from 'antd';
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
 
 // 引入 Univer Sheet 样式
 import '@univerjs/design/lib/index.css';
@@ -95,8 +95,14 @@ export const UniImport: React.FC<UniImportProps> = ({
   const { message } = App.useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false); // 全屏状态
   const univerInstanceRef = useRef<ReturnType<typeof createUniver> | null>(null);
   const containerIdRef = useRef<string>('');
+
+  // 切换全屏状态
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
 
   /**
    * 初始化 Univer Sheet
@@ -106,30 +112,30 @@ export const UniImport: React.FC<UniImportProps> = ({
       const initUniver = async () => {
         // 等待 DOM 更新
         await new Promise(resolve => setTimeout(resolve, 50));
-        
+
         if (!containerRef.current) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        
+
         if (!containerRef.current) {
           message.error('容器元素不存在，请刷新页面重试');
           return;
         }
-        
+
         try {
           setLoading(true);
-          
+
           // 创建容器 ID（确保唯一）
           const containerId = `univer-sheet-import-${Date.now()}`;
           containerIdRef.current = containerId;
           containerRef.current.id = containerId;
-          
+
           // 清空容器内容
           containerRef.current.innerHTML = '';
-          
+
           // 等待 DOM 更新完成
           await new Promise(resolve => setTimeout(resolve, 100));
-          
+
           // 使用预设方式创建 Univer 实例
           const { univer, univerAPI } = createUniver({
             locale: LocaleType.ZH_CN,
@@ -143,15 +149,15 @@ export const UniImport: React.FC<UniImportProps> = ({
               }),
             ],
           });
-          
+
           // 准备单元格数据（如果有表头，填充第一行；如果有示例数据，填充第二行）
           const cellData: Record<string, Record<string, { v: any; m?: string; s?: any }>> = {};
           const columnCount = headers ? headers.length : 20;
           const dataRowCount = 100; // 数据区域行数
-          
+
           // 准备样式对象
           const styles: Record<string, any> = {};
-          
+
           // 表头样式（浅蓝色背景，加粗字体）
           const headerStyleId = 'headerStyle';
           styles[headerStyleId] = {
@@ -166,7 +172,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               r: { s: 1, cl: { rgb: 'BBDEFB' } }, // 右边框
             },
           };
-          
+
           // 示例数据样式（浅灰色背景）
           const exampleStyleId = 'exampleStyle';
           styles[exampleStyleId] = {
@@ -180,7 +186,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               r: { s: 1, cl: { rgb: 'E0E0E0' } },
             },
           };
-          
+
           // 数据区域边框样式
           const dataBorderStyleId = 'dataBorderStyle';
           styles[dataBorderStyleId] = {
@@ -191,7 +197,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               r: { s: 1, cl: { rgb: 'D0D0D0' } },
             },
           };
-          
+
           if (headers && headers.length > 0) {
             const headerRow: Record<string, { v: any; m?: string; s?: any }> = {};
             headers.forEach((header, colIndex) => {
@@ -205,7 +211,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             });
             cellData['0'] = headerRow; // 第一行（索引从 0 开始）
           }
-          
+
           // 如果有示例数据，填充第二行
           if (exampleRow && exampleRow.length > 0) {
             const exampleDataRow: Record<string, { v: any; m?: string; s?: any }> = {};
@@ -220,7 +226,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             });
             cellData['1'] = exampleDataRow; // 第二行（索引从 1 开始）
           }
-          
+
           // 为数据区域（第3行到第100行）的所有单元格设置边框
           for (let r = 2; r < dataRowCount; r++) {
             const dataRow: Record<string, { v: any; s?: any }> = {};
@@ -232,7 +238,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             }
             cellData[r.toString()] = dataRow;
           }
-          
+
           // 创建工作簿（如果提供了表头，自动填充第一行）
           univerAPI.createWorkbook({
             name: '导入数据',
@@ -244,26 +250,67 @@ export const UniImport: React.FC<UniImportProps> = ({
                 styles: styles, // 添加样式对象
                 rowCount: dataRowCount,
                 columnCount: columnCount,
+                defaultColumnWidth: 120, // 设置默认列宽为 120 像素
               } as any, // 使用类型断言绕过类型检查
             },
           });
-          
+
           // 保存实例引用
           univerInstanceRef.current = { univer, univerAPI };
-          
+
+          // 等待工作簿创建完成后，自动调整列宽以适应内容
+          await new Promise(resolve => setTimeout(resolve, 200));
+
+          try {
+            // 获取活动工作表
+            const workbook = univerAPI.getActiveWorkbook();
+            if (workbook) {
+              const worksheet = workbook.getActiveSheet();
+              if (worksheet) {
+                // 自动调整所有列的宽度以适应内容
+                // 根据 Univer 文档，autoResizeColumns 方法在 worksheet 对象上
+                // @ts-ignore - Univer API 类型定义可能不完整
+                if (typeof worksheet.autoResizeColumns === 'function') {
+                  // @ts-ignore
+                  worksheet.autoResizeColumns(0, columnCount);
+                  console.log(`✓ 列宽已自动调整（共 ${columnCount} 列）`);
+                }
+                // 如果 worksheet 上没有，尝试通过 workbook 调用
+                // @ts-ignore
+                else if (typeof workbook.autoResizeColumns === 'function') {
+                  // @ts-ignore
+                  workbook.autoResizeColumns(0, columnCount);
+                  console.log(`✓ 列宽已自动调整（通过 workbook，共 ${columnCount} 列）`);
+                }
+                // 最后尝试通过 univerAPI 调用
+                // @ts-ignore
+                else if (typeof univerAPI.autoResizeColumns === 'function') {
+                  // @ts-ignore
+                  univerAPI.autoResizeColumns(0, columnCount);
+                  console.log(`✓ 列宽已自动调整（通过 univerAPI，共 ${columnCount} 列）`);
+                } else {
+                  console.warn('⚠ autoResizeColumns 方法不可用，列宽将使用默认值 120px');
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('⚠ 自动调整列宽失败：', error);
+            // 不影响主流程，继续执行
+          }
+
           // 添加键盘事件监听器，确保 Univer Sheet 的快捷键优先级高于浏览器默认快捷键
           const handleKeyDown = (e: KeyboardEvent) => {
             // 检查是否在 Univer 容器内
             const container = containerRef.current;
             if (!container) return;
-            
+
             // 检查焦点是否在容器内或其子元素内
             const activeElement = document.activeElement;
-            const isInContainer = container.contains(activeElement) || 
-                                  container === activeElement;
-            
+            const isInContainer = container.contains(activeElement) ||
+              container === activeElement;
+
             if (!isInContainer) return;
-            
+
             // 处理 Ctrl+D（或 Cmd+D on Mac）
             // Ctrl+D 在浏览器中是"添加书签"的快捷键
             // 如果 Univer Sheet 支持 Ctrl+D（通常用于向下复制单元格内容），需要阻止浏览器默认行为
@@ -274,7 +321,7 @@ export const UniImport: React.FC<UniImportProps> = ({
               // 让 Univer Sheet 自己处理这个快捷键（如果它支持的话）
               // 如果 Univer 不支持，这个事件会被忽略，不会造成问题
             }
-            
+
             // 可以在这里添加其他需要优先处理的快捷键
             // 例如：Ctrl+S（保存）、Ctrl+Z（撤销）、Ctrl+Y（重做）等
             // 这些快捷键在浏览器中也有默认行为，但在表格编辑器中应该优先处理
@@ -285,16 +332,16 @@ export const UniImport: React.FC<UniImportProps> = ({
               }
             }
           };
-          
+
           // 添加事件监听器（使用 capture 阶段，确保优先捕获）
           document.addEventListener('keydown', handleKeyDown, true);
-          
+
           // 保存事件处理器引用，以便清理时移除
           (univerInstanceRef.current as any)._keyDownHandler = handleKeyDown;
-          
+
           // 等待渲染完成
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           setLoading(false);
           if (headers && headers.length > 0) {
             if (exampleRow && exampleRow.length > 0) {
@@ -322,7 +369,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             document.removeEventListener('keydown', keyDownHandler, true);
             delete (univerInstanceRef.current as any)._keyDownHandler;
           }
-          
+
           // 销毁 Univer 实例
           univerInstanceRef.current.univer.dispose();
           univerInstanceRef.current = null;
@@ -339,7 +386,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   const handleConfirm = () => {
     try {
       const instance = univerInstanceRef.current;
-      
+
       if (!instance) {
         message.error('表格未加载完成，请稍候再试');
         return;
@@ -349,7 +396,7 @@ export const UniImport: React.FC<UniImportProps> = ({
 
       // 使用 Univer Sheet 的正确方式获取数据
       let data: any[][] = [];
-      
+
       try {
         // 方法1：通过 univerAPI 获取工作簿和工作表
         let worksheet: any = null;
@@ -381,7 +428,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                 data = rangeValues;
               }
             }
-            
+
             // 方法2：尝试使用 getCellMatrix 获取数据
             if (data.length === 0) {
               // @ts-ignore
@@ -394,7 +441,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                 }
               }
             }
-            
+
             // 方法3：尝试使用 getCellData 获取数据
             if (data.length === 0) {
               // @ts-ignore
@@ -406,12 +453,12 @@ export const UniImport: React.FC<UniImportProps> = ({
                 }
               }
             }
-            
+
             // 方法4：尝试直接访问 cellData 属性
             if (data.length === 0 && worksheet.cellData) {
               data = convertCellDataToArray(worksheet.cellData);
             }
-            
+
             // 方法5：尝试使用 getRange 方法获取数据
             if (data.length === 0) {
               // @ts-ignore
@@ -431,7 +478,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                 }
               }
             }
-            
+
             // 方法6：尝试通过遍历单元格获取数据（最后的手段）
             if (data.length === 0) {
               try {
@@ -439,24 +486,24 @@ export const UniImport: React.FC<UniImportProps> = ({
                 let maxRow = -1;
                 let maxCol = -1;
                 let hasData = false;
-                
+
                 // 尝试获取行数和列数
                 // @ts-ignore
                 const rowCount = worksheet.getRowCount?.() || worksheet.rowCount || 100;
                 // @ts-ignore
                 const columnCount = worksheet.getColumnCount?.() || worksheet.columnCount || 100;
-                
+
                 // 遍历单元格获取数据（最多1000行，100列）
                 const maxRows = Math.min(rowCount, 1000);
                 const maxCols = Math.min(columnCount, 100);
-                
+
                 for (let r = 0; r < maxRows; r++) {
                   const rowData: any[] = [];
                   let rowHasData = false;
-                  
+
                   for (let c = 0; c < maxCols; c++) {
                     let value = '';
-                    
+
                     // 尝试多种方式获取单元格值
                     try {
                       // @ts-ignore
@@ -512,7 +559,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                       // 单个单元格获取失败，继续下一个
                       value = '';
                     }
-                    
+
                     rowData.push(value);
                     if (value !== '' && value !== null && value !== undefined) {
                       rowHasData = true;
@@ -521,7 +568,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                       if (c > maxCol) maxCol = c;
                     }
                   }
-                  
+
                   // 如果这一行有数据，或者在前10行，都保留
                   if (rowHasData || r < 10) {
                     result.push(rowData);
@@ -530,7 +577,7 @@ export const UniImport: React.FC<UniImportProps> = ({
                     break;
                   }
                 }
-                
+
                 if (hasData && result.length > 0) {
                   // 移除末尾的空行
                   while (result.length > 0) {
@@ -550,7 +597,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             console.warn('从 worksheet 获取数据失败：', e);
           }
         }
-        
+
         // 如果仍然没有数据，尝试通过 univerAPI 的其他方法获取
         if (data.length === 0 && univerAPI) {
           try {
@@ -566,7 +613,7 @@ export const UniImport: React.FC<UniImportProps> = ({
             console.warn('通过 univerAPI.getRangeData 获取数据失败：', e);
           }
         }
-        
+
         // 如果仍然没有数据，显示错误信息
         if (data.length === 0) {
           message.warning('无法获取表格数据。请确保表格中有数据，或刷新页面重试');
@@ -579,13 +626,13 @@ export const UniImport: React.FC<UniImportProps> = ({
         console.error('获取表格数据错误详情：', error);
         return;
       }
-      
+
       // 辅助函数：将 cellMatrix 转换为二维数组
       function convertCellMatrixToArray(cellMatrix: any): any[][] {
         const result: any[][] = [];
         let maxRow = -1;
         let maxCol = -1;
-        
+
         // 找到最大行和列
         if (cellMatrix && typeof cellMatrix.forEach === 'function') {
           cellMatrix.forEach((row: any, r: number) => {
@@ -609,19 +656,19 @@ export const UniImport: React.FC<UniImportProps> = ({
             }
           });
         }
-        
+
         if (maxRow === -1 || maxCol === -1) {
           return [];
         }
-        
+
         // 创建二维数组
         for (let r = 0; r <= maxRow; r++) {
           const rowData: any[] = [];
           let hasData = false;
-          
+
           for (let c = 0; c <= maxCol; c++) {
             let value = '';
-            
+
             if (cellMatrix && cellMatrix.getValue) {
               const row = cellMatrix.getValue(r);
               if (row) {
@@ -631,38 +678,38 @@ export const UniImport: React.FC<UniImportProps> = ({
                 }
               }
             }
-            
+
             rowData.push(value);
             if (value !== '' && value !== null && value !== undefined) {
               hasData = true;
             }
           }
-          
+
           if (hasData) {
             result.push(rowData);
           }
         }
-        
+
         return result;
       }
-      
+
       // 辅助函数：将 cellData 对象转换为二维数组
       function convertCellDataToArray(cellData: any): any[][] {
         const result: any[][] = [];
-        
+
         if (!cellData || typeof cellData !== 'object') {
           return [];
         }
-        
+
         // 如果是对象格式 { '0': { '0': {...}, '1': {...} } }
         const rowKeys = Object.keys(cellData).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
         if (rowKeys.length === 0) {
           return [];
         }
-        
+
         const maxRow = Math.max(...rowKeys);
         let maxCol = -1;
-        
+
         rowKeys.forEach(r => {
           const row = cellData[r.toString()];
           if (row && typeof row === 'object') {
@@ -673,16 +720,16 @@ export const UniImport: React.FC<UniImportProps> = ({
             }
           }
         });
-        
+
         if (maxCol === -1) {
           return [];
         }
-        
+
         // 创建二维数组
         for (let r = 0; r <= maxRow; r++) {
           const rowData: any[] = [];
           let hasData = false;
-          
+
           for (let c = 0; c <= maxCol; c++) {
             let value = '';
             const row = cellData[r.toString()];
@@ -692,18 +739,18 @@ export const UniImport: React.FC<UniImportProps> = ({
                 value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
               }
             }
-            
+
             rowData.push(value);
             if (value !== '' && value !== null && value !== undefined) {
               hasData = true;
             }
           }
-          
+
           if (hasData) {
             result.push(rowData);
           }
         }
-        
+
         return result;
       }
 
@@ -729,7 +776,7 @@ export const UniImport: React.FC<UniImportProps> = ({
 
       // 调用确认回调（传递过滤后的数据）
       onConfirm(filteredData);
-      
+
       // 关闭弹窗
       onCancel();
     } catch (error: any) {
@@ -754,10 +801,35 @@ export const UniImport: React.FC<UniImportProps> = ({
         `}</style>
       )}
       <Modal
-        title={title}
+        title={
+          <div style={{
+            position: 'relative',
+            paddingRight: '100px',
+          }}>
+            <span>{title}</span>
+            <Button
+              size="small"
+              icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+              onClick={toggleFullscreen}
+              style={{
+                position: 'absolute',
+                right: 24,
+                top: 8,
+                transform: 'translateY(-50%)',
+                borderRadius: '16px', // 胶囊型圆角
+                height: '28px',
+                lineHeight: '28px',
+                padding: '0 12px',
+                fontSize: '13px',
+              }}
+            >
+              {isFullscreen ? '退出全屏' : '全屏'}
+            </Button>
+          </div>
+        }
         open={visible}
         onCancel={onCancel}
-        width={width}
+        width={isFullscreen ? '100vw' : width}
         footer={
           <Space>
             {showCancelButton && (
@@ -778,10 +850,17 @@ export const UniImport: React.FC<UniImportProps> = ({
           </Space>
         }
         destroyOnHidden={true}
+        centered={!isFullscreen}
+        style={isFullscreen ? {
+          top: 0,
+          maxWidth: '100vw',
+          margin: 0,
+          paddingBottom: 0,
+        } : {}}
         styles={{
           body: {
             padding: '16px',
-            height: `${height}px`,
+            height: isFullscreen ? 'calc(100vh - 130px)' : `${height}px`,
             overflow: 'hidden',
           },
         }}
@@ -791,7 +870,7 @@ export const UniImport: React.FC<UniImportProps> = ({
           style={{
             width: '100%',
             height: '100%',
-            minHeight: `${height - 32}px`,
+            minHeight: isFullscreen ? 'calc(100vh - 162px)' : `${height - 32}px`,
           }}
         />
         {loading && (
