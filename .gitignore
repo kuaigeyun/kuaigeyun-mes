@@ -84,20 +84,13 @@ out/
 *.rar
 
 # ----------------------------------------
-# 文档：开发计划、优化报告、归档
+# 文档、归档、计划与本地配置
 # ----------------------------------------
-docs/3.build/
-docs/4.optimise/
-docs/5.testing/*报告*
-docs/5.testing/*总结*
-docs/5.testing/*结果*
-docs/5.testing/*分析*
-docs/6.*/
-docs/7.*/
-docs/8.*/
-docs/9.*/
+docs/
 archive/
 plans/
+.cursorrules
+.gitmessage
 
 # ----------------------------------------
 # 脚本与工具：本地工具、二进制、脚本产出
