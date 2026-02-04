@@ -48,7 +48,8 @@ class MaintenancePlan(BaseModel):
         """
         模型元数据
         """
-        table = "core_maintenance_plans"
+        table = "apps_kuaizhizao_maintenance_plans"
+        table_description = "快格轻制造 - 保养计划"
         indexes = [
             ("tenant_id",),
             ("plan_no",),
@@ -140,7 +141,8 @@ class MaintenanceExecution(BaseModel):
         """
         模型元数据
         """
-        table = "core_maintenance_executions"
+        table = "apps_kuaizhizao_maintenance_executions"
+        table_description = "快格轻制造 - 保养执行记录"
         indexes = [
             ("tenant_id",),
             ("execution_no",),

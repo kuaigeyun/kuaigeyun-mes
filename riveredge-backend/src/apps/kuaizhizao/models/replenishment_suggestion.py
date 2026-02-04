@@ -53,6 +53,7 @@ class ReplenishmentSuggestion(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_replenishment_suggestions"
+        table_description = "快格轻制造 - 补货建议"
         indexes = [
             ("tenant_id",),
             ("material_id",),

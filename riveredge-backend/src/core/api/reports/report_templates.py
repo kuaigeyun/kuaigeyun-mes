@@ -19,7 +19,7 @@ from core.schemas.report import (
     ReportTemplateResponse,
     ReportTemplateListResponse,
 )
-from core.services.report_template_service import ReportTemplateService
+from core.services.report_template.report_template_service import ReportTemplateService
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

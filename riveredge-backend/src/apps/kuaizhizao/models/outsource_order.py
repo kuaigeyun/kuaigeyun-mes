@@ -60,6 +60,7 @@ class OutsourceOrder(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_outsource_orders"
+        table_description = "快格轻制造 - 委外单"
         indexes = [
             ("tenant_id",),
             ("code",),

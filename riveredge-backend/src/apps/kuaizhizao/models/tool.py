@@ -19,7 +19,8 @@ class Tool(BaseModel):
     """
     
     class Meta:
-        table = "core_tools"
+        table = "apps_kuaizhizao_tools"
+        table_description = "快格轻制造 - 工装"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -73,7 +74,8 @@ class ToolUsage(BaseModel):
     """
     
     class Meta:
-        table = "core_tool_usages"
+        table = "apps_kuaizhizao_tool_usages"
+        table_description = "快格轻制造 - 工装领用归还记录"
         indexes = [
             ("tenant_id",),
             ("tool_id",),
@@ -108,8 +110,9 @@ class ToolMaintenance(BaseModel):
     """
     
     class Meta:
-        table = "core_tool_maintenances"
-    
+        table = "apps_kuaizhizao_tool_maintenances"
+        table_description = "快格轻制造 - 工装维保记录"
+
     id = fields.IntField(pk=True)
     tool_id = fields.IntField()
     tool_uuid = fields.CharField(max_length=36)
@@ -131,8 +134,9 @@ class ToolCalibration(BaseModel):
     """
     
     class Meta:
-        table = "core_tool_calibrations"
-    
+        table = "apps_kuaizhizao_tool_calibrations"
+        table_description = "快格轻制造 - 工装校验记录"
+
     id = fields.IntField(pk=True)
     tool_id = fields.IntField()
     tool_uuid = fields.CharField(max_length=36)

@@ -53,7 +53,8 @@ class Equipment(BaseModel):
         """
         模型元数据
         """
-        table = "core_equipment"
+        table = "apps_kuaizhizao_equipment"
+        table_description = "快格轻制造 - 设备"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -127,7 +128,8 @@ class EquipmentCalibration(BaseModel):
     设备校验/计量记录
     """
     class Meta:
-        table = "core_equipment_calibrations"
+        table = "apps_kuaizhizao_equipment_calibrations"
+        table_description = "快格轻制造 - 设备校准记录"
         indexes = [("tenant_id",), ("equipment_id",), ("calibration_date",)]
 
     id = fields.IntField(pk=True)

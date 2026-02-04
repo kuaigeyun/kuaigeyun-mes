@@ -9,27 +9,26 @@ Date: 2025-01-01
 
 from fastapi import APIRouter
 
-# 导入子路由
-from .production import router as production_router
-from .purchase import router as purchase_router
-from .purchase_requisition import router as purchase_requisition_router
+# 导入子路由（按资源分目录，主文件复数与目录一致）
+from .productions.productions import router as production_router
+from .purchases.purchases import router as purchase_router
+from .purchase_requisitions.purchase_requisitions import router as purchase_requisition_router
 
-from .demand import router as demand_router
-from .demand_computation import router as demand_computation_router
-from .sales_order import router as sales_order_router
-from .approval_flow import router as approval_flow_router
-from .state_transition import router as state_transition_router
-from .document_push_pull import router as document_push_pull_router
-from .document_relation import router as document_relation_router
-from .computation_config import router as computation_config_router
-from .dashboard import router as dashboard_router
+from .demands.demands import router as demand_router
+from .demand_computations.demand_computations import router as demand_computation_router
+from .sales_orders.sales_orders import router as sales_order_router
+from .approval_flows.approval_flows import router as approval_flow_router
+from .state_transitions.state_transitions import router as state_transition_router
+from .document_push_pull.document_push_pull import router as document_push_pull_router
+from .document_relations.document_relations import router as document_relation_router
+from .computation_configs.computation_configs import router as computation_config_router
+from .dashboards.dashboards import router as dashboard_router
 
 # 导入设备管理路由
 from .equipment.equipment import router as equipment_router
 from .maintenance_plans.maintenance_plans import router as maintenance_plans_router
 from .equipment_faults.equipment_faults import router as equipment_faults_router
 from .molds.molds import router as molds_router
-from .tools.tools import router as tools_router
 from .equipment_status.equipment_status import router as equipment_status_router
 from .maintenance_reminders.maintenance_reminders import router as maintenance_reminders_router
 
@@ -50,9 +49,9 @@ from .finance.receivables import router as receivables_router
 from .finance.invoices import router as invoices_router
 
 # 导入期初数据导入路由
-from .initial_data import router as initial_data_router
+from .initial_data.initial_data import router as initial_data_router
 # 导入线边仓与倒冲记录路由
-from .line_side_warehouse import router as line_side_warehouse_router, backflush_router
+from .line_side_warehouses.line_side_warehouses import router as line_side_warehouse_router, backflush_router
 
 # 创建主路由
 router = APIRouter(tags=["Kuaige Zhizao MES"])
@@ -80,7 +79,6 @@ router.include_router(equipment_router)
 router.include_router(maintenance_plans_router)
 router.include_router(equipment_faults_router)
 router.include_router(molds_router)
-router.include_router(tools_router)
 router.include_router(equipment_status_router)
 router.include_router(maintenance_reminders_router)
 
@@ -108,7 +106,7 @@ router.include_router(line_side_warehouse_router)
 router.include_router(backflush_router)
 
 # 注册追溯管理路由
-from .traceability import router as traceability_router
+from .traceability.traceability import router as traceability_router
 router.include_router(traceability_router, prefix="/traceability")
 
 @router.get("/health")

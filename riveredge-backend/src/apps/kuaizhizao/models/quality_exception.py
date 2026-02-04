@@ -53,6 +53,7 @@ class QualityException(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_quality_exceptions"
+        table_description = "快格轻制造 - 质量异常"
         indexes = [
             ("tenant_id",),
             ("exception_type",),

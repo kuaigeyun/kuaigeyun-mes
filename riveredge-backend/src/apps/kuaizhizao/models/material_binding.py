@@ -53,6 +53,7 @@ class MaterialBinding(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_material_bindings"
+        table_description = "快格轻制造 - 物料绑定记录"
         indexes = [
             ("tenant_id",),
             ("reporting_record_id",),

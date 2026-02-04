@@ -49,7 +49,8 @@ class Mold(BaseModel):
         """
         模型元数据
         """
-        table = "core_molds"
+        table = "apps_kuaizhizao_molds"
+        table_description = "快格轻制造 - 模具"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -141,7 +142,8 @@ class MoldUsage(BaseModel):
         """
         模型元数据
         """
-        table = "core_mold_usages"
+        table = "apps_kuaizhizao_mold_usages"
+        table_description = "快格轻制造 - 模具使用记录"
         indexes = [
             ("tenant_id",),
             ("usage_no",),
@@ -194,7 +196,8 @@ class MoldCalibration(BaseModel):
     模具校验记录
     """
     class Meta:
-        table = "core_mold_calibrations"
+        table = "apps_kuaizhizao_mold_calibrations"
+        table_description = "快格轻制造 - 模具校准记录"
         indexes = [("tenant_id",), ("mold_id",), ("calibration_date",)]
 
     id = fields.IntField(pk=True)

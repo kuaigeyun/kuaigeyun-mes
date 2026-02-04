@@ -31,6 +31,7 @@ class LineSideInventory(BaseModel):
     class Meta:
         """模型元数据"""
         table = "apps_kuaizhizao_line_side_inventory"
+        table_description = "快格轻制造 - 线边仓库存"
         indexes = [
             ("tenant_id",),
             ("warehouse_id",),

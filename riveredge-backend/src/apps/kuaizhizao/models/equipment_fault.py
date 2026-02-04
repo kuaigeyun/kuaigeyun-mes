@@ -45,7 +45,8 @@ class EquipmentFault(BaseModel):
         """
         模型元数据
         """
-        table = "core_equipment_faults"
+        table = "apps_kuaizhizao_equipment_faults"
+        table_description = "快格轻制造 - 设备故障"
         indexes = [
             ("tenant_id",),
             ("fault_no",),
@@ -128,7 +129,8 @@ class EquipmentRepair(BaseModel):
         """
         模型元数据
         """
-        table = "core_equipment_repairs"
+        table = "apps_kuaizhizao_equipment_repairs"
+        table_description = "快格轻制造 - 设备维修记录"
         indexes = [
             ("tenant_id",),
             ("repair_no",),

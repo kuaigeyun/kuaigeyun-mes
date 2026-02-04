@@ -34,6 +34,7 @@ class DefectType(BaseModel):
         模型元数据
         """
         table = "apps_master_data_defect_types"
+        table_description = "基础数据管理 - 不良类型"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -77,6 +78,7 @@ class SOPExecution(BaseModel):
         模型元数据
         """
         table = "apps_master_data_sop_executions"
+        table_description = "基础数据管理 - SOP执行记录"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -168,6 +170,7 @@ class Operation(BaseModel):
         模型元数据
         """
         table = "apps_master_data_operations"
+        table_description = "基础数据管理 - 工序"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -225,6 +228,7 @@ class OperationDefectType(Model):
     """
     class Meta:
         table = "apps_master_data_operation_defect_types"
+        table_description = "基础数据管理 - 工序不良类型关联"
         unique_together = [("operation_id", "defect_type_id")]
 
     id = fields.IntField(pk=True)
@@ -247,6 +251,7 @@ class SOPExecution(BaseModel):
         模型元数据
         """
         table = "apps_master_data_sop_executions"
+        table_description = "基础数据管理 - SOP执行记录"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -339,6 +344,7 @@ class ProcessRoute(BaseModel):
         模型元数据
         """
         table = "apps_master_data_process_routes"
+        table_description = "基础数据管理 - 工艺路线"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -420,6 +426,7 @@ class ProcessRouteTemplate(BaseModel):
         模型元数据
         """
         table = "apps_master_data_process_route_templates"
+        table_description = "基础数据管理 - 工艺路线模板"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -489,6 +496,7 @@ class SOPExecution(BaseModel):
         模型元数据
         """
         table = "apps_master_data_sop_executions"
+        table_description = "基础数据管理 - SOP执行记录"
         indexes = [
             ("tenant_id",),
             ("uuid",),
@@ -583,6 +591,7 @@ class SOP(BaseModel):
         模型元数据
         """
         table = "apps_master_data_sop"
+        table_description = "基础数据管理 - SOP"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -656,6 +665,7 @@ class SOPExecution(BaseModel):
         模型元数据
         """
         table = "apps_master_data_sop_executions"
+        table_description = "基础数据管理 - SOP执行记录"
         indexes = [
             ("tenant_id",),
             ("uuid",),

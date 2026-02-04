@@ -71,7 +71,8 @@ class MaterialVariantAttributeDefinition(BaseModel):
         """
         模型元数据
         """
-        table = "core_material_variant_attribute_definitions"
+        table = "apps_master_data_material_variant_attribute_definitions"
+        table_description = "基础数据管理 - 变体属性定义"
         unique_together = [("tenant_id", "attribute_name")]
         indexes = [
             ("tenant_id",),
@@ -151,7 +152,8 @@ class MaterialVariantAttributeHistory(BaseModel):
         """
         模型元数据
         """
-        table = "core_material_variant_attribute_history"
+        table = "apps_master_data_material_variant_attribute_history"
+        table_description = "基础数据管理 - 变体属性定义历史"
         unique_together = [("attribute_definition_id", "version")]
         indexes = [
             ("tenant_id",),

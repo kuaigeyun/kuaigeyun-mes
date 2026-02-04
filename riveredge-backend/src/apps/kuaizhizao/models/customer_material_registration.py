@@ -46,6 +46,7 @@ class BarcodeMappingRule(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_barcode_mapping_rules"
+        table_description = "快格轻制造 - 条码映射规则"
         indexes = [
             ("tenant_id",),
             ("customer_id",),
@@ -130,6 +131,7 @@ class CustomerMaterialRegistration(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_customer_material_registrations"
+        table_description = "快格轻制造 - 客户来料登记"
         indexes = [
             ("tenant_id",),
             ("customer_id",),

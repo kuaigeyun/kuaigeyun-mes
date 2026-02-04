@@ -57,6 +57,7 @@ class DefectRecord(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_defect_records"
+        table_description = "快格轻制造 - 不良品记录"
         indexes = [
             ("tenant_id",),
             ("code",),

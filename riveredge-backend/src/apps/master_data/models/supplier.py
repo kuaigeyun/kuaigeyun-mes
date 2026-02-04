@@ -37,6 +37,7 @@ class Supplier(BaseModel):
         模型元数据
         """
         table = "apps_master_data_suppliers"
+        table_description = "基础数据管理 - 供应商"
         indexes = [
             ("tenant_id",),
             ("code",),

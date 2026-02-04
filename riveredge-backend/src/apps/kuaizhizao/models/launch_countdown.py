@@ -38,6 +38,7 @@ class LaunchCountdown(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_launch_countdowns"
+        table_description = "快格轻制造 - 上线倒计时"
         indexes = [
             ("tenant_id",),
             ("launch_date",),

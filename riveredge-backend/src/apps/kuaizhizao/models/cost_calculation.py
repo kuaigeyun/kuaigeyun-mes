@@ -50,6 +50,7 @@ class CostCalculation(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_cost_calculations"
+        table_description = "快格轻制造 - 成本核算"
         indexes = [
             ("tenant_id",),
             ("calculation_no",),

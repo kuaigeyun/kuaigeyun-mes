@@ -31,6 +31,7 @@ class BackflushRecord(BaseModel):
     class Meta:
         """模型元数据"""
         table = "apps_kuaizhizao_backflush_records"
+        table_description = "快格轻制造 - 物料倒冲记录"
         indexes = [
             ("tenant_id",),
             ("work_order_id",),

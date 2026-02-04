@@ -47,6 +47,7 @@ class InventoryAlertRule(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_inventory_alert_rules"
+        table_description = "快格轻制造 - 库存预警规则"
         indexes = [
             ("tenant_id",),
             ("alert_type",),
@@ -133,6 +134,7 @@ class InventoryAlert(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_inventory_alerts"
+        table_description = "快格轻制造 - 库存预警"
         indexes = [
             ("tenant_id",),
             ("alert_rule_id",),

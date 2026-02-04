@@ -65,6 +65,7 @@ class MaterialCodeMapping(BaseModel):
         模型元数据
         """
         table = "apps_master_data_material_code_mappings"
+        table_description = "基础数据管理 - 物料编码映射"
         indexes = [
             ("tenant_id",),
             ("material_id",),

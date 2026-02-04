@@ -10,7 +10,7 @@ Date: 2026-01-05
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from core.services.role_scenario_service import RoleScenarioService
+from core.services.role_scenario.role_scenario_service import RoleScenarioService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User

@@ -42,6 +42,7 @@ class DocumentNodeTiming(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_document_node_timings"
+        table_description = "快格轻制造 - 单据节点耗时"
         indexes = [
             ("tenant_id",),
             ("document_type",),

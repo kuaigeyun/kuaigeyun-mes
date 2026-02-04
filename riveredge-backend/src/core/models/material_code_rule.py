@@ -38,7 +38,8 @@ class MaterialCodeRuleMain(BaseModel):
         """
         模型元数据
         """
-        table = "core_material_code_rule_main"
+        table = "apps_master_data_material_code_rule_main"
+        table_description = "基础数据管理 - 主编码规则配置"
         indexes = [
             ("tenant_id",),
             ("is_active",),
@@ -107,7 +108,8 @@ class MaterialTypeConfig(BaseModel):
         """
         模型元数据
         """
-        table = "core_material_type_config"
+        table = "apps_master_data_material_type_config"
+        table_description = "基础数据管理 - 物料类型配置"
         indexes = [
             ("tenant_id",),
             ("rule_id",),
@@ -166,7 +168,8 @@ class MaterialCodeRuleAlias(BaseModel):
         """
         模型元数据
         """
-        table = "core_material_code_rule_alias"
+        table = "apps_master_data_material_code_rule_alias"
+        table_description = "基础数据管理 - 部门编码规则配置"
         indexes = [
             ("tenant_id",),
             ("code_type",),
@@ -232,7 +235,8 @@ class MaterialCodeRuleHistory(BaseModel):
         """
         模型元数据
         """
-        table = "core_material_code_rule_history"
+        table = "apps_master_data_material_code_rule_history"
+        table_description = "基础数据管理 - 编码规则版本历史"
         indexes = [
             ("tenant_id",),
             ("rule_type",),
@@ -289,7 +293,8 @@ class MaterialSequenceCounter(BaseModel):
         - 全局计数（type_code IS NULL）：确保每个规则只有一个全局计数器
         - 类型计数（type_code IS NOT NULL）：确保每个规则每个类型只有一个计数器
         """
-        table = "core_material_sequence_counter"
+        table = "apps_master_data_material_sequence_counter"
+        table_description = "基础数据管理 - 物料序号计数器"
         indexes = [
             ("tenant_id",),
             ("rule_id",),

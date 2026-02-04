@@ -32,6 +32,7 @@ class Warehouse(BaseModel):
         模型元数据
         """
         table = "apps_master_data_warehouses"
+        table_description = "基础数据管理 - 仓库"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -100,6 +101,7 @@ class StorageArea(BaseModel):
         模型元数据
         """
         table = "apps_master_data_storage_areas"
+        table_description = "基础数据管理 - 库区"
         indexes = [
             ("tenant_id",),
             ("code",),
@@ -161,6 +163,7 @@ class StorageLocation(BaseModel):
         模型元数据
         """
         table = "apps_master_data_storage_locations"
+        table_description = "基础数据管理 - 库位"
         indexes = [
             ("tenant_id",),
             ("code",),

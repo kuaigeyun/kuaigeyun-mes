@@ -10,7 +10,7 @@ Date: 2026-01-05
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
-from core.services.onboarding_service import OnboardingService
+from core.services.onboarding.onboarding_service import OnboardingService
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -223,7 +223,7 @@ async def get_all_onboarding_guides(
         Dict[str, Any]: 所有角色的上线准备向导信息
     """
     try:
-        from core.services.onboarding_service import ROLE_ONBOARDING_GUIDES
+        from core.services.onboarding.onboarding_service import ROLE_ONBOARDING_GUIDES
         return {
             "success": True,
             "data": {

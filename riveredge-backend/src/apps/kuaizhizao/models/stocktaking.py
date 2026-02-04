@@ -48,6 +48,7 @@ class Stocktaking(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_stocktakings"
+        table_description = "快格轻制造 - 盘点单"
         indexes = [
             ("tenant_id",),
             ("warehouse_id",),
@@ -134,6 +135,7 @@ class StocktakingItem(BaseModel):
         模型元数据
         """
         table = "apps_kuaizhizao_stocktaking_items"
+        table_description = "快格轻制造 - 盘点单明细"
         indexes = [
             ("tenant_id",),
             ("stocktaking_id",),
