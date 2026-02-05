@@ -89,7 +89,7 @@ const TemplateSelectPage: React.FC = () => {
       messageApi.success('模板应用成功！');
       setApplyVisible(false);
       // 跳转到工作台
-      navigate('/system/dashboard', { replace: true });
+      navigate('/system/dashboard/workplace', { replace: true });
     } catch (error: any) {
       console.error('应用模板失败:', error);
       messageApi.error(error.message || '应用模板失败，请重试');

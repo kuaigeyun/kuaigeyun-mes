@@ -53,16 +53,91 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const location = useLocation();
   const { token } = theme.useToken();
   const { t } = useTranslation(); // 获取翻译函数
-  const [tabs, setTabs] = useState<TabItem[]>([]);
-  const [activeKey, setActiveKey] = useState<string>('');
+  // 1. 同步初始化持久化配置
+  const [tabsPersistence, setTabsPersistence] = useState<boolean>(() => {
+    try {
+       const local = localStorage.getItem('riveredge_tabs_persistence');
+       return local === 'true';
+    } catch { return false; }
+  });
+
+  // 2. 同步初始化标签列表（直接从本地存储读取并过滤）
+  const [tabs, setTabs] = useState<TabItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    
+    // 如果未开启持久化，仅返回空（等待后续逻辑添加默认标签）或直接返回默认标签
+    const localPersistence = localStorage.getItem('riveredge_tabs_persistence') === 'true';
+    if (!localPersistence) return [];
+
+    try {
+      const savedTabs = localStorage.getItem('riveredge_saved_tabs');
+      if (savedTabs) {
+        const parsedTabs: TabItem[] = JSON.parse(savedTabs);
+        if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
+           const isInfraPage = location.pathname.startsWith('/infra');
+           
+           // 根据当前页面类型过滤标签
+           const validTabs = parsedTabs.filter((tab) => {
+             if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
+             if (isInfraPage) return tab.path.startsWith('/infra');
+             return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
+           });
+
+           // 确保默认标签存在
+           if (validTabs.length > 0) {
+              if (isInfraPage) {
+                 const hasOperation = validTabs.some((tab) => tab.key === '/infra/operation');
+                 if (!hasOperation) {
+                    const opPath = '/infra/operation';
+                    // 同步获取标题
+                    const opTitle = findMenuTitleWithTranslation(opPath, menuConfig, t);
+                    validTabs.unshift({
+                        key: opPath,
+                        path: opPath,
+                        label: opTitle,
+                        closable: false,
+                        pinned: false
+                    });
+                 }
+              } else {
+                 const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
+                 if (!hasWorkplace) {
+                     const wpPath = '/system/dashboard/workplace';
+                     const wpTitle = findMenuTitleWithTranslation(wpPath, menuConfig, t);
+                     validTabs.unshift({
+                        key: wpPath,
+                        path: wpPath,
+                        label: wpTitle,
+                        closable: false,
+                        pinned: false
+                    });
+                 }
+              }
+              return validTabs;
+           }
+        }
+      }
+    } catch (e) { console.warn('Failed to load tabs from cache', e); }
+    return [];
+  });
+
+  // 3. 同步初始化 activeKey
+  const [activeKey, setActiveKey] = useState<string>(() => {
+     // 优先使用当前 URL（这最准确）
+     // 如果当前 URL 是根路径或重定向路径，才考虑恢复上次的
+     // 但实际上 BasicLayout 会处理重定向，这里 location.pathname 已经是准确的
+     return location.pathname + location.search;
+  });
+
+  // 不再需要 isInitialized，因为初始状态就是 initialized
+  // const [isInitialized, setIsInitialized] = useState<boolean>(true);
+
   const tabsNavRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [refreshKey, setRefreshKey] = useState<number>(0);
-  const [tabsPersistence, setTabsPersistence] = useState<boolean>(false); // 标签栏持久化配置
-  const [isInitialized, setIsInitialized] = useState<boolean>(false); // 是否已初始化（避免重复恢复）
 
-  // 标签栏背景色状态（用于响应主题更新，支持透明度）
+  // 标签栏背景色状态
   const [tabsBgColorState, setTabsBgColorState] = useState<string | undefined>(() => {
     return (window as any).__RIVEREDGE_TABS_BG_COLOR__;
   });
@@ -196,291 +271,69 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, []);
 
   /**
-   * 读取标签栏持久化配置
+   * 同步用户偏好设置（异步更新，不阻塞 UI）
    */
   useEffect(() => {
-    const loadTabsPersistence = async () => {
+    const syncUserPreference = async () => {
       try {
-        // 优先从用户偏好设置读取
         const userPreference = await getUserPreference().catch(() => null);
-
         if (userPreference?.preferences?.tabs_persistence !== undefined) {
           const persistence = userPreference.preferences.tabs_persistence;
-          setTabsPersistence(persistence);
-          // 如果未启用持久化，立即标记为已初始化
-          if (!persistence) {
-            setIsInitialized(true);
-          }
-        } else {
-          // 其次从本地存储读取
-          const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
-          if (localTabsPersistence !== null) {
-            const persistence = localTabsPersistence === 'true';
-            setTabsPersistence(persistence);
-            // 如果未启用持久化，立即标记为已初始化
-            if (!persistence) {
-              setIsInitialized(true);
-            }
-          } else {
-            // 默认关闭，立即标记为已初始化
-            setTabsPersistence(false);
-            setIsInitialized(true);
-          }
+          // 仅当配置不同才更新，避免不必要的重新渲染
+          setTabsPersistence(prev => {
+             if (prev !== persistence) {
+                localStorage.setItem('riveredge_tabs_persistence', String(persistence));
+                return persistence;
+             }
+             return prev;
+          });
         }
       } catch (error) {
-        // 如果获取失败，从本地存储读取
-        const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
-        if (localTabsPersistence !== null) {
-          const persistence = localTabsPersistence === 'true';
-          setTabsPersistence(persistence);
-          // 如果未启用持久化，立即标记为已初始化
-          if (!persistence) {
-            setIsInitialized(true);
-          }
-        } else {
-          // 默认关闭，立即标记为已初始化
-          setTabsPersistence(false);
-          setIsInitialized(true);
-        }
+        // 忽略错误
       }
     };
+    
+    syncUserPreference();
 
-    loadTabsPersistence();
-
-    // 监听用户偏好更新事件
     const handleUserPreferenceUpdated = (event: CustomEvent) => {
-      console.log('UniTabs收到用户偏好更新事件:', event.detail);
       if (event.detail?.preferences?.tabs_persistence !== undefined) {
-        const persistence = event.detail.preferences.tabs_persistence;
-        console.log('UniTabs更新标签栏持久化配置:', persistence);
-        setTabsPersistence(persistence);
-        // 配置更新后，立即标记为已初始化（无论开启还是关闭）
-        setIsInitialized(true);
-        console.log('UniTabs配置更新完成，已标记为已初始化');
+        setTabsPersistence(event.detail.preferences.tabs_persistence);
       }
     };
 
     window.addEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
-
     return () => {
       window.removeEventListener('userPreferenceUpdated', handleUserPreferenceUpdated as EventListener);
     };
   }, []);
 
-  /**
-   * 恢复持久化的标签（仅在启用持久化且未初始化时执行一次）
-   * 刷新页面时恢复之前打开的标签
-   */
-  useEffect(() => {
-    // 如果已经初始化或有标签了，不再恢复
-    if (isInitialized) {
-      return;
-    }
+  // 移除旧的异步恢复逻辑，初始化已由 useState 同步完成
 
-    // 优先用 localStorage 判断持久化，避免等 getUserPreference 接口导致标签栏延迟
-    const localTabsPersistence = localStorage.getItem('riveredge_tabs_persistence');
-    const userPreferenceTabsPersistence = tabsPersistence;
-
-    // 用户偏好未返回且本地从未存过：不阻塞，先按「不持久化」展示当前页标签，避免刷新时 unitabs 延迟
-    if (!userPreferenceTabsPersistence && localTabsPersistence === null) {
-      setIsInitialized(true);
-      setTabsPersistence(false);
-      return;
-    }
-
-    // 确定最终的持久化配置值
-    const finalTabsPersistence = userPreferenceTabsPersistence || (localTabsPersistence === 'true');
-
-    // 如果未启用持久化，直接标记为已初始化，不恢复任何标签
-    // 只保留工作台标签（会在路由监听中自动添加）
-    if (!finalTabsPersistence) {
-      setIsInitialized(true);
-      return;
-    }
-
-    // 清理可能存在的应用页面标签，避免应用页面成为默认首页
-    try {
-      const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
-      if (savedActiveKey && savedActiveKey.startsWith('/apps/')) {
-        console.warn('清理旧的应用页面标签:', savedActiveKey);
-        localStorage.removeItem('riveredge_saved_active_key');
-      }
-    } catch (error) {
-      // 清理失败，静默处理
-    }
-
-    // 启用持久化时，尝试从 localStorage 恢复标签
-    try {
-      const savedTabs = localStorage.getItem('riveredge_saved_tabs');
-
-      if (savedTabs) {
-        const parsedTabs: TabItem[] = JSON.parse(savedTabs);
-
-        if (Array.isArray(parsedTabs) && parsedTabs.length > 0) {
-          // 检查当前是否在平台级页面
-          const isInfraPage = location.pathname.startsWith('/infra');
-
-          // 根据当前页面类型过滤标签
-          const validTabs = parsedTabs.filter((tab) => {
-            // 验证标签格式
-            if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) {
-              return false;
-            }
-
-            // 如果在平台级页面，只恢复平台级标签；如果在系统级页面，只恢复系统级标签
-            if (isInfraPage) {
-              return tab.path.startsWith('/infra');
-            } else {
-              return !tab.path.startsWith('/infra') || tab.path.startsWith('/system');
-            }
-          });
-
-          if (validTabs.length > 0) {
-            // 根据当前页面级别确保默认标签存在
-            if (isInfraPage) {
-              // 平台级页面：确保运营中心标签存在
-              const hasOperation = validTabs.some((tab) => tab.key === '/infra/operation');
-              if (!hasOperation) {
-                const operationTab: TabItem = {
-                  key: '/infra/operation',
-                  path: '/infra/operation',
-                  label: getTabTitle('/infra/operation'),
-                  closable: false,
-                  pinned: false,
-                };
-                validTabs.unshift(operationTab);
-              }
-            } else {
-              // 系统级页面：确保工作台标签存在
-              const hasWorkplace = validTabs.some((tab) => tab.key === '/system/dashboard/workplace');
-              if (!hasWorkplace) {
-                const workplaceTab: TabItem = {
-                  key: '/system/dashboard/workplace',
-                  path: '/system/dashboard/workplace',
-                  label: getTabTitle('/system/dashboard/workplace'),
-                  closable: false,
-                  pinned: false,
-                };
-                validTabs.unshift(workplaceTab);
-              }
-            }
-
-            setTabs(validTabs);
-          } else {
-            // 如果没有有效的标签页，根据当前页面级别创建默认标签
-            const defaultTabs: TabItem[] = [];
-            let defaultActiveKey: string;
-
-            if (isInfraPage) {
-              defaultActiveKey = '/infra/operation';
-              defaultTabs.push({
-                key: defaultActiveKey,
-                path: defaultActiveKey,
-                label: getTabTitle(defaultActiveKey),
-                closable: false,
-                pinned: false,
-              });
-            } else {
-              defaultActiveKey = '/system/dashboard/workplace';
-              defaultTabs.push({
-                key: defaultActiveKey,
-                path: defaultActiveKey,
-                label: getTabTitle(defaultActiveKey),
-                closable: false,
-                pinned: false,
-              });
-            }
-            setTabs(defaultTabs);
-            setActiveKey(defaultActiveKey);
-            // 临时禁用自动导航，避免调试页面被跳转
-            // setTimeout(() => {
-            //   navigate(defaultActiveKey);
-            // }, 0);
-          }
-
-          // 对于有有效标签的情况，设置活动标签并导航
-          if (validTabs.length > 0) {
-            // 设置活动标签并导航的函数
-            const setActiveKeyAndNavigate = (tabs: TabItem[], savedActiveKey: string | null, isInfraPage: boolean) => {
-              // 如果当前路径是调试页面或应用页面，不进行自动导航
-              const currentPath = window.location.pathname;
-              if (currentPath.startsWith('/debug/') || currentPath.startsWith('/apps/')) {
-                setActiveKey(currentPath);
-                return;
-              }
-
-              if (savedActiveKey && tabs.some((tab) => tab.key === savedActiveKey)) {
-                // 检查保存的活动标签是否与当前页面级别匹配
-                // 排除应用页面，避免应用页面成为默认活动标签
-                if (savedActiveKey.startsWith('/apps/')) {
-                  // 如果保存的是应用页面标签，跳过恢复
-                  console.warn('跳过恢复应用页面标签:', savedActiveKey);
-                } else {
-                  const isSavedInfraTab = savedActiveKey.startsWith('/infra');
-                  if ((isInfraPage && isSavedInfraTab) || (!isInfraPage && !isSavedInfraTab)) {
-                    setActiveKey(savedActiveKey);
-                    setTimeout(() => {
-                      navigate(savedActiveKey);
-                    }, 0);
-                    return;
-                  }
-                }
-              }
-
-              // 默认激活第一个标签
-              setActiveKey(tabs[0].key);
-              setTimeout(() => {
-                navigate(tabs[0].key);
-              }, 0);
-            };
-
-            // 恢复当前激活的标签（如果存在且匹配当前页面级别）
-            const savedActiveKey = localStorage.getItem('riveredge_saved_active_key');
-            setActiveKeyAndNavigate(validTabs, savedActiveKey, isInfraPage);
-          }
-
-          setIsInitialized(true);
-          return;
-        }
-      }
-    } catch (error) {
-      // 恢复失败，使用默认行为
-    }
-
-    // 如果没有保存的标签，标记为已初始化，使用默认行为
-    setIsInitialized(true);
-  }, [tabsPersistence, isInitialized, getTabTitle, navigate]);
 
   /**
    * 保存标签到本地存储（当启用持久化且标签变化时）
    * 每次标签变化时自动保存，刷新页面时就能恢复
    */
   useEffect(() => {
-    if (!tabsPersistence || !isInitialized || tabs.length === 0) {
-      return;
-    }
+    // 简化：只要有标签就保存（如果启用了持久化）
+    if (!tabsPersistence) return;
 
     try {
-      // 保存标签列表
       localStorage.setItem('riveredge_saved_tabs', JSON.stringify(tabs));
-      // 保存当前激活的标签（排除应用页面，避免应用页面成为默认首页）
       if (activeKey && !activeKey.startsWith('/apps/')) {
         localStorage.setItem('riveredge_saved_active_key', activeKey);
       }
     } catch (error) {
-      // 保存失败，静默处理
     }
-  }, [tabs, activeKey, tabsPersistence, isInitialized]);
+  }, [tabs, activeKey, tabsPersistence]);
 
   /**
    * 监听路由变化，自动添加标签
    * 注意：如果启用了持久化且正在恢复标签，不要立即添加标签，避免覆盖恢复的标签
    */
   useEffect(() => {
-    if (!isInitialized) {
-      // 如果还没有初始化，等待恢复标签完成
-      return;
-    }
+    // 移除 isInitialized 检查
+    // if (!isInitialized) return;
 
     if (location.pathname) {
       // 确保工作台标签始终存在（固定第一个）
@@ -494,7 +347,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       addTab(tabKey);
       setActiveKey(tabKey);
     }
-  }, [location.pathname, location.search, addTab, isInitialized]);
+  }, [location.pathname, location.search, addTab]);
 
   /**
    * 返回时关闭当前标签：当通过 state.closeTab 指定要关闭的标签时，移除该标签并清除 state
@@ -926,6 +779,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     }
   }, [tabsBgColorState, isDarkMode]);
 
+  /** 当前是否为 HMI/生产终端类页面（需使用专用内容容器：左右 16px padding + 系统圆角） */
+  const isHMIPage = useMemo(() => {
+    const key = activeKey || '';
+    return key.includes('production-execution/terminal') || key.includes('/kiosk');
+  }, [activeKey]);
+
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
     return <>{children}</>;
@@ -1247,6 +1106,33 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           display: none !important;
           width: 0 !important;
           height: 0 !important;
+        }
+        /* HMI 外层：与内容区四边等距 16px */
+        .uni-tabs-content-hmi-container {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          height: 100%;
+          min-height: calc( 100vh - ${isFullscreen ? '0px' : '56px'} - 56px - 16px);
+          box-sizing: border-box;
+          padding: 0 16px;
+        }
+        /* HMI 内层：带圆角的框，裁剪内部 HMI，工业风边框与阴影 */
+        .uni-tabs-content-hmi-inner {
+          flex: 1;
+          min-height: 0;
+          border-radius: ${typeof token.borderRadius === 'number' ? token.borderRadius : 8}px !important;
+          overflow: hidden !important;
+          isolation: isolate;
+          contain: layout paint;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+        }
+        /* 内层直接子元素（HMI 根）适配圆角与宽度 */
+        .uni-tabs-content-hmi-inner > * {
+          border-radius: inherit;
+          max-width: 100%;
+          box-sizing: border-box;
         }
         /* 确保所有元素在滚动条隐藏时不占位 */
         * {
@@ -1692,7 +1578,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           className={`uni-tabs-content${activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?')) ? ' uni-tabs-content-dashboard' : ''}`}
           key={`content-${activeKey}-${refreshKey}`}
         >
-          {children}
+          {isHMIPage ? (
+            <div className="uni-tabs-content-hmi-container">
+              <div className="uni-tabs-content-hmi-inner">
+                {children}
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </div>
       </div>
     </>

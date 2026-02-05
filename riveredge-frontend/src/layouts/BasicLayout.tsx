@@ -255,9 +255,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isInfraLoginPage && currentUser.is_infra_admin) {
       return <Navigate to="/infra/operation" replace />;
     }
-    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
+    // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台
     if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return <Navigate to="/system/dashboard" replace />;
+      return <Navigate to="/system/dashboard/workplace" replace />;
     }
   }
 
@@ -807,14 +807,46 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
   });
 
+
+
+
   const queryClient = useQueryClient();
 
   // 获取站点设置
+  // 获取站点设置
+  // 优化：使用 localStorage 缓存，实现同步初始化，避免 LOGO 闪烁
   const { data: siteSetting } = useQuery({
     queryKey: ['siteSetting'],
-    queryFn: () => getSiteSetting(),
+    queryFn: async () => {
+      const data = await getSiteSetting();
+      // 缓存到 localStorage
+      try {
+        localStorage.setItem('siteSettingCache', JSON.stringify({
+          data,
+          timestamp: Date.now(),
+        }));
+      } catch (e) {
+        console.warn('Failed to cache site settings', e);
+      }
+      return data;
+    },
     staleTime: 5 * 60 * 1000, // 5 分钟缓存
     enabled: !!currentUser, // 只在用户登录后获取
+    placeholderData: () => {
+      // 尝试从缓存读取，实现同步渲染
+      try {
+        const cachedStr = localStorage.getItem('siteSettingCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          // 检查有效期（例如 24 小时，或者更短，视需求而定，这里主要为了首屏不闪烁，数据新鲜度由 useQuery 保证）
+          // 这里不做严格过期检查，优先展示缓存，useQuery 会在后台更新
+          return cached.data;
+        }
+      } catch (e) {
+        // ignore
+      }
+      return undefined;
+    }
   });
 
   // 消息下拉菜单状态
@@ -850,9 +882,52 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const siteName = (siteSetting?.settings?.site_name?.trim() || '') || 'RiverEdge SaaS';
 
   // 获取站点LOGO（支持UUID和URL格式）
-  const [siteLogoUrl, setSiteLogoUrl] = useState<string>('/img/logo.png');
+  // 获取站点LOGO（支持UUID和URL格式）
+  // 优化：同步初始化 LOGO URL
+  const [siteLogoUrl, setSiteLogoUrl] = useState<string>(() => {
+    // 1. 尝试从站点设置缓存中获取 logo 配置
+    let logoValue = '';
+    try {
+      // 优先看当前内存中的 siteSetting (如果已经被 placeholderData 同步初始化)
+      // 如果 siteSetting 还没来得及初始化（极少情况），尝试直接读 localStorage
+      if (siteSetting?.settings?.site_logo) {
+        logoValue = siteSetting.settings.site_logo.trim();
+      } else {
+        const cachedStr = localStorage.getItem('siteSettingCache');
+        if (cachedStr) {
+          const cached = JSON.parse(cachedStr);
+          if (cached.data?.settings?.site_logo) {
+            logoValue = cached.data.settings.site_logo.trim();
+          }
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 2. 如果有 logo 配置
+    if (logoValue) {
+      // 如果是 UUID，尝试从专门的 logo URL 缓存中读取
+      if (isUUID(logoValue)) {
+        try {
+          const cachedLogoUrl = localStorage.getItem(`siteLogoUrlCache_${logoValue}`);
+          if (cachedLogoUrl) {
+            return cachedLogoUrl;
+          }
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        // 如果是 URL，直接返回
+        return logoValue;
+      }
+    }
+
+    return '/img/logo.png';
+  });
   const siteLogoValue = siteSetting?.settings?.site_logo?.trim() || '';
 
+  // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
   // 处理LOGO URL（如果是UUID格式，需要通过getFilePreview获取URL）
   useEffect(() => {
     const loadSiteLogo = async () => {
@@ -863,12 +938,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
       // 如果是UUID格式，获取文件预览URL
       if (isUUID(siteLogoValue)) {
+        // 先检查缓存，避免重复请求导致的闪烁
+        const cacheKey = `siteLogoUrlCache_${siteLogoValue}`;
+        const cachedUrl = localStorage.getItem(cacheKey);
+
+        // 如果当前显示的已经是缓存的 URL，且没有强制刷新，可以暂不更新
+        // 但为了确保 URL 有效性（例如签名过期），还是建议请求，但不要先重置为默认 logo
+        
         try {
           const previewInfo = await getFilePreview(siteLogoValue);
-          setSiteLogoUrl(previewInfo.preview_url);
+          const newUrl = previewInfo.preview_url;
+          setSiteLogoUrl(newUrl);
+          // 缓存解析后的 URL
+          localStorage.setItem(cacheKey, newUrl);
         } catch (error) {
           console.error('获取站点LOGO预览URL失败:', error);
-          setSiteLogoUrl('/img/logo.png');
+          // 只有在没有缓存的情况下降级，避免将正确的缓存覆盖为默认图
+          if (!cachedUrl) {
+            setSiteLogoUrl('/img/logo.png');
+          }
         }
       } else {
         // 如果是URL格式，直接使用
@@ -921,21 +1009,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     enabled: !!currentUser, // 只在用户登录后加载
     staleTime: process.env.NODE_ENV === 'development' ? 30 * 1000 : 5 * 60 * 1000, // 开发环境30秒缓存，生产环境5分钟缓存
     gcTime: 10 * 60 * 1000, // 缓存保留时间10分钟
-    refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
-    refetchOnWindowFocus: false, // 窗口聚焦时不自动刷新（避免频繁刷新）
-    refetchOnMount: (query) => {
-      // 智能刷新策略：
-      // 1. 如果查询从未执行过（首次启用），总是刷新
-      // 2. 如果数据过期，刷新
-      if (!query.state.data || query.isStale()) {
-        return true;
-      }
-
-      // 如果有缓存数据且未过期，不刷新
-      // 租户ID匹配检查在 useEffect 中处理，避免闭包问题
-      return false;
-    },
-    refetchOnReconnect: true, // 网络重连时刷新
     placeholderData: () => {
       // 使用缓存数据作为占位符，避免闪烁
       try {
@@ -951,12 +1024,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             return cached.data;
           }
         }
-      } catch (error) {
-        // 忽略解析错误
+      } catch (e) {
+        // ignore
       }
-      return undefined;
+      return []; // Return empty array instead of undefined to match expected type
     },
+    refetchInterval: false, // 不自动轮询刷新，避免菜单逐个出现
+    refetchOnWindowFocus: false, // 窗口聚焦时不自动刷新（避免频繁刷新）
+    refetchOnMount: (query) => {
+      // 智能刷新策略：
+      // 1. 如果查询从未执行过（首次启用），总是刷新
+      // 2. 如果数据过期，刷新
+      if (!query.state.data || query.isStale()) {
+        return true;
+      }
+
+      // 如果有缓存数据且未过期，不刷新
+      // 租户ID匹配检查在 useEffect 中处理，避免闭包问题
+      return false;
+    },
+    refetchOnReconnect: true, // 网络重连时刷新
   });
+
 
   // 监听用户登录事件，清除菜单缓存并触发菜单查询（确保重新登录时获取最新菜单）
   useEffect(() => {

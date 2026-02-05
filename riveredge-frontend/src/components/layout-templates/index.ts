@@ -20,83 +20,73 @@
  */
 
 // 列表页面模板
-export { ListPageTemplate } from './ListPageTemplate';
-export type { ListPageTemplateProps, StatCard } from './ListPageTemplate';
+export { ListPageTemplate } from './ListPageTemplate'
+export type { ListPageTemplateProps, StatCard } from './ListPageTemplate'
 
 // 多标签页列表页面模板
-export { MultiTabListPageTemplate } from './MultiTabListPageTemplate';
-export type { MultiTabListPageTemplateProps, TabItem } from './MultiTabListPageTemplate';
+export { MultiTabListPageTemplate } from './MultiTabListPageTemplate'
+export type { MultiTabListPageTemplateProps, TabItem } from './MultiTabListPageTemplate'
 
 // 表单 Modal 模板
-export { FormModalTemplate } from './FormModalTemplate';
-export type { FormModalTemplateProps } from './FormModalTemplate';
+export { FormModalTemplate } from './FormModalTemplate'
+export type { FormModalTemplateProps } from './FormModalTemplate'
 
 // 详情 Drawer 模板
-export { DetailDrawerTemplate } from './DetailDrawerTemplate';
-export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate';
+export { DetailDrawerTemplate } from './DetailDrawerTemplate'
+export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'
 
 // 两栏布局模板
-export { TwoColumnLayout } from './TwoColumnLayout';
-export type {
-  TwoColumnLayoutProps,
-  LeftPanelConfig,
-  RightPanelConfig,
-} from './TwoColumnLayout';
+export { TwoColumnLayout } from './TwoColumnLayout'
+export type { TwoColumnLayoutProps, LeftPanelConfig, RightPanelConfig } from './TwoColumnLayout'
 
 // 工作台布局模板
-export { DashboardTemplate } from './DashboardTemplate';
+export { DashboardTemplate } from './DashboardTemplate'
 export type {
   DashboardTemplateProps,
   QuickAction,
   TodoItem,
   DashboardStat,
   QuickEntry,
-} from './DashboardTemplate';
+} from './DashboardTemplate'
 
 // 向导布局模板
-export { WizardTemplate } from './WizardTemplate';
-export type { WizardTemplateProps, WizardStep } from './WizardTemplate';
+export { WizardTemplate } from './WizardTemplate'
+export type { WizardTemplateProps, WizardStep } from './WizardTemplate'
 
 // 看板视图布局模板
-export { KanbanViewTemplate } from './KanbanViewTemplate';
-export type { KanbanViewTemplateProps, KanbanColumn } from './KanbanViewTemplate';
+export { KanbanViewTemplate } from './KanbanViewTemplate'
+export type { KanbanViewTemplateProps, KanbanColumn } from './KanbanViewTemplate'
 
 // 工位机触屏模式布局模板
-export { TouchScreenTemplate } from './TouchScreenTemplate';
-export type {
-  TouchScreenTemplateProps,
-  TouchScreenButton,
-} from './TouchScreenTemplate';
+export { TouchScreenTemplate } from './TouchScreenTemplate'
+export type { TouchScreenTemplateProps, TouchScreenButton } from './TouchScreenTemplate'
 
 // 对比视图布局模板
-export { CompareViewTemplate } from './CompareViewTemplate';
-export type {
-  CompareViewTemplateProps,
-  CompareItem,
-} from './CompareViewTemplate';
+export { CompareViewTemplate } from './CompareViewTemplate'
+export type { CompareViewTemplateProps, CompareItem } from './CompareViewTemplate'
 
 // 参数配置布局模板
-export { ParameterConfigTemplate } from './ParameterConfigTemplate';
+export { ParameterConfigTemplate } from './ParameterConfigTemplate'
 export type {
   ParameterConfigTemplateProps,
   ParameterGroup,
   ParameterItem,
-} from './ParameterConfigTemplate';
+} from './ParameterConfigTemplate'
 
 // 计算结果显示布局模板
-export { CalculationResultTemplate } from './CalculationResultTemplate';
+export { CalculationResultTemplate } from './CalculationResultTemplate'
 export type {
   CalculationResultTemplateProps,
   CalculationExplanation,
-} from './CalculationResultTemplate';
+} from './CalculationResultTemplate'
 
 // 画板页布局模板
-export { CanvasPageTemplate } from './CanvasPageTemplate';
-export type {
-  CanvasPageTemplateProps,
-  CanvasPageRightPanelConfig,
-} from './CanvasPageTemplate';
+export { CanvasPageTemplate } from './CanvasPageTemplate'
+export type { CanvasPageTemplateProps, CanvasPageRightPanelConfig } from './CanvasPageTemplate'
+
+// 高级生产终端布局模板
+export { default as PremiumTerminalTemplate } from './PremiumTerminalTemplate'
+export type { PremiumTerminalTemplateProps } from './PremiumTerminalTemplate'
 
 // 布局常量配置
-export * from './constants';
-
+export * from './constants'

@@ -21,12 +21,12 @@ const InitWizardPage: React.FC = () => {
 
   const handleComplete = () => {
     // 初始化完成后跳转到工作台
-    navigate('/system/dashboard', { replace: true });
+    navigate('/system/dashboard/workplace', { replace: true });
   };
 
   const handleCancel = () => {
     // 取消初始化，也跳转到工作台（用户可以稍后手动进行初始化）
-    navigate('/system/dashboard', { replace: true });
+    navigate('/system/dashboard/workplace', { replace: true });
   };
 
   if (!tenantId) {

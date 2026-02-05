@@ -17,7 +17,7 @@ export default function IndexPage() {
   useEffect(() => {
     // 如果已登录，跳转到仪表盘；否则跳转到登录页
     if (getToken()) {
-      navigate('/system/dashboard');
+      navigate('/system/dashboard/workplace');
     } else {
       navigate('/login');
     }
