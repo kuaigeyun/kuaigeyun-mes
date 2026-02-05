@@ -12,13 +12,11 @@
         "title": "快格轻制造",
         "icon": "production",
         "path": "/apps/kuaizhizao",
-        "children": [
-            {
+        "children": [{
                 "title": "销售管理",
                 "icon": "chartLine",
                 "sort_order": 1,
-                "children": [
-                    {
+                "children": [{
                         "title": "销售预测",
                         "path": "/apps/kuaizhizao/sales-management/sales-forecasts",
                         "permission": "kuaizhizao:sales-forecast:view",
@@ -48,8 +46,7 @@
                 "title": "计划管理",
                 "icon": "planning",
                 "sort_order": 2,
-                "children": [
-                    {
+                "children": [{
                         "title": "需求管理",
                         "path": "/apps/kuaizhizao/plan-management/demand-management",
                         "permission": "kuaizhizao:demand:view",
@@ -79,8 +76,7 @@
                 "title": "采购管理",
                 "icon": "shopping",
                 "sort_order": 3,
-                "children": [
-                    {
+                "children": [{
                         "title": "采购申请",
                         "path": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
                         "permission": "kuaizhizao:purchase-requisition:view",
@@ -110,11 +106,9 @@
                 "title": "仓储管理",
                 "icon": "warehouse",
                 "sort_order": 5,
-                "children": [
-                    {
+                "children": [{
                         "title": "app.kuaizhizao.menu.warehouse-management.inbound-group",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "入库管理",
                                 "path": "/apps/kuaizhizao/warehouse-management/inbound",
                                 "permission": "kuaizhizao:inbound:view",
@@ -137,8 +131,7 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.warehouse-management.outbound-group",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "出库管理",
                                 "path": "/apps/kuaizhizao/warehouse-management/outbound",
                                 "permission": "kuaizhizao:outbound:view",
@@ -155,8 +148,7 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.warehouse-management.inventory-group",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "线边仓管理",
                                 "path": "/apps/kuaizhizao/warehouse-management/line-side-warehouse",
                                 "permission": "kuaizhizao:line-side-warehouse:view",
@@ -203,8 +195,7 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.warehouse-management.analysis-group",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "单据节点耗时",
                                 "path": "/apps/kuaizhizao/warehouse-management/document-node-timing",
                                 "permission": "kuaizhizao:document-node-timing:view",
@@ -231,8 +222,7 @@
                 "title": "质量管理",
                 "icon": "check-circle",
                 "sort_order": 6,
-                "children": [
-                    {
+                "children": [{
                         "title": "来料检验",
                         "path": "/apps/kuaizhizao/quality-management/incoming-inspection",
                         "permission": "kuaizhizao:incoming-inspection:view",
@@ -262,8 +252,7 @@
                 "title": "生产执行",
                 "icon": "activity",
                 "sort_order": 4,
-                "children": [
-                    {
+                "children": [{
                         "title": "工单管理",
                         "path": "/apps/kuaizhizao/production-execution/work-orders",
                         "permission": "kuaizhizao:work-order:view",
@@ -274,6 +263,11 @@
                         "path": "/apps/kuaizhizao/production-execution/reporting",
                         "permission": "kuaizhizao:reporting:view",
                         "sort_order": 2
+                    },
+                    {
+                        "title": "生产终端",
+                        "path": "/apps/kuaizhizao/production-execution/terminal",
+                        "sort_order": 2.5
                     },
                     {
                         "title": "报工统计",
@@ -297,8 +291,7 @@
                         "title": "app.kuaizhizao.menu.production-execution.exception-management",
                         "icon": "alert-circle",
                         "sort_order": 6,
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "缺料异常",
                                 "path": "/apps/kuaizhizao/production-execution/material-shortage-exceptions",
                                 "permission": "kuaizhizao:material-shortage-exception:view",
@@ -336,8 +329,7 @@
                 "title": "成本管理",
                 "icon": "calculator",
                 "sort_order": 7,
-                "children": [
-                    {
+                "children": [{
                         "title": "成本规则",
                         "path": "/apps/kuaizhizao/cost-management/cost-rules",
                         "permission": "kuaizhizao:cost-rule:view",
@@ -379,11 +371,9 @@
                 "title": "app.kuaizhizao.menu.equipment-management",
                 "icon": "tool",
                 "sort_order": 7.5,
-                "children": [
-                    {
+                "children": [{
                         "title": "app.kuaizhizao.menu.equipment-management.asset-ledger",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "app.kuaizhizao.menu.equipment-management.equipment",
                                 "path": "/apps/kuaizhizao/equipment-management/equipment",
                                 "permission": "kuaizhizao:equipment:view",
@@ -406,8 +396,7 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.equipment-management.ops-maintenance",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "app.kuaizhizao.menu.equipment-management.equipment-faults",
                                 "path": "/apps/kuaizhizao/equipment-management/equipment-faults",
                                 "permission": "kuaizhizao:equipment-fault:view",
@@ -442,8 +431,7 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.equipment-management.calibration-management",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "app.kuaizhizao.menu.equipment-management.equipment-calibration",
                                 "path": "/apps/kuaizhizao/equipment-management/equipment-calibration",
                                 "permission": "kuaizhizao:equipment-calibration:view",
@@ -470,11 +458,9 @@
                 "title": "app.kuaizhizao.menu.finance-management",
                 "icon": "wallet",
                 "sort_order": 8,
-                "children": [
-                    {
+                "children": [{
                         "title": "app.kuaizhizao.menu.finance-management.receivables-management",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "app.kuaizhizao.menu.finance-management.receivables",
                                 "path": "/apps/kuaizhizao/finance-management/receivables",
                                 "permission": "kuaizhizao:receivable:view",
@@ -497,8 +483,7 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.finance-management.payables-management",
-                        "children": [
-                            {
+                        "children": [{
                                 "title": "app.kuaizhizao.menu.finance-management.payables",
                                 "path": "/apps/kuaizhizao/finance-management/payables",
                                 "permission": "kuaizhizao:payable:view",
@@ -521,14 +506,12 @@
                     },
                     {
                         "title": "app.kuaizhizao.menu.finance-management.invoice-library",
-                        "children": [
-                            {
-                                "title": "app.kuaizhizao.menu.finance-management.invoice-list",
-                                "path": "/apps/kuaizhizao/finance-management/invoices",
-                                "permission": "kuaizhizao:invoice:view",
-                                "sort_order": 1
-                            }
-                        ],
+                        "children": [{
+                            "title": "app.kuaizhizao.menu.finance-management.invoice-list",
+                            "path": "/apps/kuaizhizao/finance-management/invoices",
+                            "permission": "kuaizhizao:invoice:view",
+                            "sort_order": 1
+                        }],
                         "sort_order": 3
                     }
                 ]
@@ -537,8 +520,7 @@
                 "title": "报表分析",
                 "icon": "bar-chart",
                 "sort_order": 9,
-                "children": [
-                    {
+                "children": [{
                         "title": "库存报表",
                         "path": "/apps/kuaizhizao/reports/inventory-report",
                         "permission": "kuaizhizao:inventory-report:view",
@@ -674,8 +656,7 @@
         "riveredge-backend": ">=1.0.0",
         "riveredge-frontend": ">=1.0.0"
     },
-    "code_rule_pages": [
-        {
+    "code_rule_pages": [{
             "page_code": "kuaizhizao-production-work-order",
             "page_name": "工单管理",
             "page_path": "/apps/kuaizhizao/production-execution/work-orders",
@@ -891,8 +872,7 @@
             "allow_manual_edit": true
         }
     ],
-    "custom_field_pages": [
-        {
+    "custom_field_pages": [{
             "page_code": "kuaizhizao-production-work-order",
             "page_name": "工单管理",
             "page_path": "/apps/kuaizhizao/production-execution/work-orders",

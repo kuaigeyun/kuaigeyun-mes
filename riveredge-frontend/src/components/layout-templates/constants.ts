@@ -212,6 +212,71 @@ export const ANT_DESIGN_TOKENS = {
 } as const;
 
 /**
+ * 工业 HMI 设计规范常量（ISA-101 风格）
+ * 用于生产终端、触屏工位：高对比、大触控、统一状态色
+ */
+export const HMI_DESIGN_TOKENS = {
+  /** 状态色：正常/完成 */
+  STATUS_OK: '#00C853',
+  /** 状态色：警告/进行中 */
+  STATUS_WARNING: '#FFB300',
+  /** 状态色：异常/停止/错误 */
+  STATUS_ALARM: '#D32F2F',
+  /** 状态色：信息/中性/默认 */
+  STATUS_INFO: '#1677ff',
+  /** 最小触控区域（px） */
+  TOUCH_MIN_SIZE: 48,
+  /** 正文最小字号（px） */
+  FONT_BODY_MIN: 20,
+  /** 标题最小字号（px） */
+  FONT_TITLE_MIN: 28,
+  /** 数字/指标主字号（px），与正文统一字体 */
+  FONT_FIGURE: 26,
+  /** HMI 统一字体（整站继承） */
+  FONT_FAMILY: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+  /** 深色主题：主背景 */
+  BG_PRIMARY: '#000c17',
+  /** 深色主题：卡片/面板背景 */
+  BG_CARD: 'rgba(255, 255, 255, 0.05)',
+  /** 深色主题：悬浮/强调背景 */
+  BG_ELEVATED: 'rgba(255, 255, 255, 0.08)',
+  /** 深色主题：边框 */
+  BORDER: 'rgba(255, 255, 255, 0.15)',
+  /** 深色主题：正文 */
+  TEXT_PRIMARY: '#ffffff',
+  /** 深色主题：次要文字 */
+  TEXT_SECONDARY: 'rgba(255, 255, 255, 0.65)',
+  /** 深色主题：占位/弱化 */
+  TEXT_TERTIARY: 'rgba(255, 255, 255, 0.45)',
+  /** HMI 圆角容器：圆角半径（px） */
+  CONTAINER_RADIUS: 8,
+  /** HMI 圆角容器：边框 */
+  CONTAINER_BORDER: '1px solid rgba(255, 255, 255, 0.08)',
+  /** HMI 圆角容器：外阴影 */
+  CONTAINER_SHADOW: '0 2px 12px rgba(0, 0, 0, 0.25)',
+  /** 内嵌面板圆角（px） */
+  PANEL_RADIUS: 8,
+  /** 大面板/主按钮圆角（px） */
+  PANEL_RADIUS_LG: 12,
+  /** 区块间距（px） */
+  SECTION_GAP: 24,
+  /** 主界面背景渐变 */
+  BG_GRADIENT_MAIN: 'linear-gradient(180deg, #0d2137 0%, #0a1628 50%, #000c17 100%)',
+  /** 左栏侧栏背景渐变 */
+  BG_GRADIENT_SIDEBAR: 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
+  /** 主内容面板外发光 */
+  PANEL_GLOW: '0 0 40px rgba(22,119,255,0.06), 0 4px 24px rgba(0,0,0,0.2)',
+  /** 毛玻璃背景色（配合 backdrop-filter: blur(12px)） */
+  PANEL_FROSTED: 'rgba(0,12,23,0.75)',
+  /** 指标卡/内容卡阴影 */
+  CARD_SHADOW: '0 4px 16px rgba(0,0,0,0.2)',
+  /** 主按钮阴影（蓝色系） */
+  BTN_PRIMARY_SHADOW: '0 4px 14px rgba(22,119,255,0.35)',
+  /** 完成/报工按钮阴影（绿色系） */
+  BTN_SUCCESS_SHADOW: '0 4px 14px rgba(0,200,83,0.3)',
+} as const;
+
+/**
  * 工位机触屏模式配置
  */
 export const TOUCH_SCREEN_CONFIG = {

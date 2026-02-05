@@ -226,9 +226,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-      // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘
+      // 普通用户登录后，如果访问的是登录页，重定向到系统仪表盘工作台
       if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-        return '/system/dashboard';
+        return '/system/dashboard/workplace';
       }
     }
 
@@ -281,6 +281,22 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 export default function App() {
 
   const [userPreference, setUserPreference] = useState<UserPreference | null>(null);
+  // 主题配置本地存储键名
+  const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
+
+  // 同步从本地存储加载配置
+  const loadThemeFromCache = () => {
+    try {
+      const cached = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
+      if (cached) {
+         return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.warn('Failed to parse cached theme config:', e);
+    }
+    return null;
+  };
+
   const [siteThemeConfig, setSiteThemeConfig] = useState<{
     colorPrimary?: string;
     borderRadius?: number;
@@ -289,7 +305,9 @@ export default function App() {
     siderBgColor?: string; // 左侧菜单栏背景色（仅浅色模式，支持透明度）
     headerBgColor?: string; // 顶栏背景色（支持透明度）
     tabsBgColor?: string; // 标签栏背景色（支持透明度）
-  } | null>(null);
+    theme?: string; // 保存的颜色模式
+  } | null>(() => loadThemeFromCache());
+
   const [themeConfig, setThemeConfig] = useState<{
     algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm | Array<typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm | typeof theme.compactAlgorithm>;
     token: {
@@ -297,27 +315,76 @@ export default function App() {
       borderRadius?: number;
       fontSize?: number;
     };
-  } | null>(null); // 初始为 null，等待主题配置加载完成后再应用
-
-  // 主题配置本地存储键名（临时方案，后续会做偏好设置）
-  const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
-
-  // 加载站点主题配置（优先从本地存储读取，然后从服务器加载）
-  const loadSiteTheme = async () => {
-    try {
-      // 先尝试从本地存储读取（临时方案）
-      const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
-      if (cachedThemeConfig) {
-        try {
-          const parsedConfig = JSON.parse(cachedThemeConfig);
-          if (parsedConfig && typeof parsedConfig === 'object') {
-            setSiteThemeConfig(parsedConfig);
-            // 继续从服务器加载，但先使用缓存值
-          }
-        } catch (e) {
-          console.warn('Failed to parse cached theme config:', e);
+  } | null>(() => {
+    // 初始状态立即计算，避免闪烁
+    const cachedConfig = loadThemeFromCache();
+    if (cachedConfig) {
+      const userTheme = cachedConfig.theme || 'light'; // 默认为浅色
+      
+      // 确定基础算法
+      let baseAlgorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm = theme.defaultAlgorithm;
+      if (userTheme === 'dark') {
+        baseAlgorithm = theme.darkAlgorithm;
+      } else if (userTheme === 'auto') {
+        // 同步检测系统主题
+        if (typeof window !== 'undefined' && window.matchMedia) {
+           const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+           baseAlgorithm = prefersDark ? theme.darkAlgorithm : theme.defaultAlgorithm;
         }
       }
+
+      // 紧凑模式
+      const algorithm = cachedConfig.compact
+        ? [baseAlgorithm, theme.compactAlgorithm]
+        : baseAlgorithm;
+
+      // Token
+      const token = {
+        colorPrimary: cachedConfig.colorPrimary || '#1890ff',
+        borderRadius: cachedConfig.borderRadius || 6,
+        fontSize: cachedConfig.fontSize || 14,
+      };
+
+      // 立即设置全局变量，确保子组件渲染时能获取到
+      if (typeof window !== 'undefined') {
+        const isDark = baseAlgorithm === theme.darkAlgorithm || (Array.isArray(algorithm) && algorithm.includes(theme.darkAlgorithm));
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+
+        // 只有浅色模式下才设置自定义侧边栏背景
+        if (userTheme === 'light' && cachedConfig.siderBgColor && cachedConfig.siderBgColor.trim() !== '') {
+          (window as any).__RIVEREDGE_SIDER_BG_COLOR__ = cachedConfig.siderBgColor;
+        } else {
+           // 确保清理
+           delete (window as any).__RIVEREDGE_SIDER_BG_COLOR__;
+        }
+
+        if (cachedConfig.headerBgColor && cachedConfig.headerBgColor.trim() !== '') {
+          (window as any).__RIVEREDGE_HEADER_BG_COLOR__ = cachedConfig.headerBgColor;
+        } else {
+           delete (window as any).__RIVEREDGE_HEADER_BG_COLOR__;
+        }
+
+        if (cachedConfig.tabsBgColor && cachedConfig.tabsBgColor.trim() !== '') {
+          (window as any).__RIVEREDGE_TABS_BG_COLOR__ = cachedConfig.tabsBgColor;
+        } else {
+           delete (window as any).__RIVEREDGE_TABS_BG_COLOR__;
+        }
+      }
+
+      return { algorithm, token };
+    }
+    
+    // 默认回退
+    return {
+      algorithm: theme.defaultAlgorithm,
+      token: { colorPrimary: '#1890ff' }
+    };
+  });
+
+  // 加载站点主题配置（从服务器加载，如果失败则使用缓存）
+  const loadSiteTheme = async () => {
+    try {
+      const cachedThemeConfig = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
 
       // 从服务器加载主题配置
       const siteSetting = await getSiteSetting();
@@ -540,7 +607,7 @@ export default function App() {
       // 未登录时，忽略所有缓存，强制使用默认色+浅色模式
       applyThemeConfig('light', null);
     }
-  }, []);
+  }, []); // 依赖为空，确保只在挂载时执行
 
   // 监听系统主题变化（当用户偏好为 auto 时）
   useEffect(() => {

@@ -526,6 +526,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         fontSize: values.fontSize || 14,
         compact: values.compact || false,
         layoutMode: 'mix', // 固定使用 MIX 布局模式
+        theme: values.colorMode, // 保存当前颜色模式，用于 App.tsx 同步加载
       };
 
 
@@ -744,6 +745,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   return (
     <Drawer
       className="theme-editor-drawer"
+      bodyStyle={{ overflowY: 'scroll' }}
       title={
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>个性化主题</div>

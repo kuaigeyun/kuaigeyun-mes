@@ -16,7 +16,8 @@ import SchedulingPage from './pages/plan-management/scheduling';
 
 // 生产执行页面
 import WorkOrdersPage from './pages/production-execution/work-orders';
-import WorkOrdersKioskPage from './pages/production-execution/work-orders/kiosk';
+import WorkOrdersTerminalPage from './pages/production-execution/work-orders/kiosk';
+import WorkOrderDetailKioskPage from './pages/production-execution/work-orders/detail-kiosk';
 import ReportingPage from './pages/production-execution/reporting';
 import ReportingKioskPage from './pages/production-execution/reporting/kiosk';
 import ReportingStatisticsPage from './pages/production-execution/reporting/statistics';
@@ -117,7 +118,7 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 生产执行路由 */}
       <Route path="production-execution/work-orders" element={<WorkOrdersPage />} />
-      <Route path="production-execution/work-orders/kiosk" element={<WorkOrdersKioskPage />} />
+      <Route path="production-execution/terminal" element={<WorkOrdersTerminalPage />} />
       <Route path="production-execution/reporting" element={<ReportingPage />} />
       <Route path="production-execution/reporting/kiosk" element={<ReportingKioskPage />} />
       <Route path="production-execution/reporting/statistics" element={<ReportingStatisticsPage />} />
@@ -139,6 +140,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/sales-orders" element={<SalesOrdersPage />} />
       <Route path="sales-management/sales-deliveries" element={<SalesDeliveriesPage />} />
       <Route path="sales-management/sales-returns" element={<SalesReturnsPage />} />
+      
+      <Route path="production-execution/work-orders/:id/kiosk" element={<WorkOrderDetailKioskPage />} />
 
       {/* 质量管理路由 */}
       <Route path="quality-management/incoming-inspection" element={<IncomingInspectionPage />} />

@@ -10,7 +10,7 @@
 
 import React, { ReactNode, useEffect } from 'react';
 import { Button, theme, Space } from 'antd';
-import { TOUCH_SCREEN_CONFIG, ANT_DESIGN_TOKENS } from './constants';
+import { TOUCH_SCREEN_CONFIG, ANT_DESIGN_TOKENS, HMI_DESIGN_TOKENS } from './constants';
 
 const { useToken } = theme;
 
@@ -119,7 +119,7 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
       {title && (
         <div
           style={{
-            fontSize: TOUCH_SCREEN_CONFIG.TITLE_FONT_SIZE,
+            fontSize: Math.max(TOUCH_SCREEN_CONFIG.TITLE_FONT_SIZE, HMI_DESIGN_TOKENS.FONT_TITLE_MIN),
             fontWeight: 600,
             marginBottom: ANT_DESIGN_TOKENS.SPACING.LG,
             textAlign: 'center',
@@ -162,9 +162,11 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
               block={button.block !== false}
               size="large"
               style={{
+                minHeight: `${TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT}px`,
                 height: `${TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT}px`,
-                fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE,
+                fontSize: Math.max(TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE, HMI_DESIGN_TOKENS.FONT_BODY_MIN),
                 fontWeight: 500,
+                ...(button.type === 'primary' ? { backgroundColor: HMI_DESIGN_TOKENS.STATUS_INFO, borderColor: HMI_DESIGN_TOKENS.STATUS_INFO } : {}),
               }}
             >
               {button.title}
