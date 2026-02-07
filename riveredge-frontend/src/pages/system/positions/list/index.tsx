@@ -336,6 +336,7 @@ const PositionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Position>
+          viewTypes={['table']}
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {

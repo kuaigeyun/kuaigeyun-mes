@@ -116,27 +116,28 @@ class UserService:
         
         # 加密密码
         password_hash = User.hash_password(data.password)
-        
-        # 创建用户
-        user = await User.create(
-            tenant_id=tenant_id,
-            username=data.username,
-            email=data.email,
-            password_hash=password_hash,
-            full_name=data.full_name,
-            phone=getattr(data, 'phone', None),
-            department_id=department_id,
-            position_id=position_id,
-            is_active=data.is_active if data.is_active is not None else True,
-            is_tenant_admin=data.is_tenant_admin if data.is_tenant_admin is not None else False,
-            remark=getattr(data, 'remark', None),
-        )
-        
-        # 分配角色
-        if role_ids:
-            roles = await Role.filter(id__in=role_ids).all()
-            await user.roles.add(*roles)
-        
+
+        # 创建用户与角色分配放在同一事务中，避免 core_user_roles 外键校验时看不到新用户
+        async with in_transaction():
+            user = await User.create(
+                tenant_id=tenant_id,
+                username=data.username,
+                email=data.email,
+                password_hash=password_hash,
+                full_name=data.full_name,
+                phone=getattr(data, 'phone', None),
+                department_id=department_id,
+                position_id=position_id,
+                is_active=data.is_active if data.is_active is not None else True,
+                is_tenant_admin=data.is_tenant_admin if data.is_tenant_admin is not None else False,
+                remark=getattr(data, 'remark', None),
+            )
+            if role_ids:
+                roles = await Role.filter(id__in=role_ids).all()
+                await UserRole.bulk_create([
+                    UserRole(user_id=user.id, role_id=r.id) for r in roles
+                ])
+
         return user
     
     @staticmethod
@@ -225,11 +226,10 @@ class UserService:
         if page_size > 100:
             page_size = 100
         
-        # 分页查询（使用索引字段排序）
+        # 分页查询（预加载 roles、department、position，与详情接口一致，确保列表和编辑能正确带出）
         offset = (page - 1) * page_size
-        # ⚠️ 修复：不预加载 roles，避免表不存在时出错，改为在循环中单独查询
-        users = await User.filter(query).order_by("-created_at").offset(offset).limit(page_size).all()
-        
+        users = await User.filter(query).order_by("-created_at").offset(offset).limit(page_size).prefetch_related("roles", "department", "position").all()
+
         # 构建响应数据（遵循自增ID+UUID混合方案，只对外暴露UUID）
         items = []
         for user in users:
@@ -246,83 +246,34 @@ class UserService:
                     "created_at": user.created_at,
                 }
 
-                # 添加部门信息（手动查询）
+                # 部门信息（已通过 prefetch_related 加载）
                 department_data = None
-                if user.department_id:
-                    try:
-                        from core.models.department import Department
-                        department = await Department.filter(
-                            id=user.department_id,
-                            tenant_id=tenant_id,
-                            deleted_at__isnull=True
-                        ).first()
-                        if department:
-                            department_data = {
-                                "uuid": department.uuid,
-                                "name": department.name,
-                                "code": department.code
-                            }
-                            user_dict["department_uuid"] = department.uuid
-                    except Exception as e:
-                        # 忽略部门查询错误，继续处理
-                        pass
-
+                if user.department:
+                    department_data = {
+                        "uuid": user.department.uuid,
+                        "name": user.department.name,
+                        "code": user.department.code,
+                    }
+                    user_dict["department_uuid"] = user.department.uuid
                 user_dict["department"] = department_data
 
-                # 添加职位信息（手动查询）
+                # 职位信息（已通过 prefetch_related 加载）
                 position_data = None
-                if user.position_id:
-                    try:
-                        from core.models.position import Position
-                        position = await Position.filter(
-                            id=user.position_id,
-                            tenant_id=tenant_id,
-                            deleted_at__isnull=True
-                        ).first()
-                        if position:
-                            position_data = {
-                                "uuid": position.uuid,
-                                "name": position.name,
-                                "code": position.code
-                            }
-                            user_dict["position_uuid"] = position.uuid
-                    except Exception as e:
-                        # 忽略职位查询错误，继续处理
-                        pass
-
+                if user.position:
+                    position_data = {
+                        "uuid": user.position.uuid,
+                        "name": user.position.name,
+                        "code": user.position.code,
+                    }
+                    user_dict["position_uuid"] = user.position.uuid
                 user_dict["position"] = position_data
 
-                # 添加角色信息
-                roles_data = []
-                try:
-                    # ⚠️ 修复：使用 try-except 捕获所有可能的错误（包括表不存在）
-                    from tortoise.exceptions import OperationalError, DoesNotExist
-                    try:
-                        roles = await user.roles.all()
-                        roles_data = [
-                            {
-                                "uuid": role.uuid,
-                                "name": role.name,
-                                "code": role.code
-                            }
-                            for role in roles
-                        ]
-                    except (OperationalError, DoesNotExist, AttributeError) as e:
-                        # 忽略角色查询错误（表不存在、关系不存在等），继续处理
-                        from loguru import logger
-                        logger.warning(f"⚠️ 查询用户角色失败（用户ID: {user.id}）: {e}")
-                        roles_data = []
-                    except Exception as e:
-                        # 捕获其他所有异常
-                        from loguru import logger
-                        logger.warning(f"⚠️ 查询用户角色时发生未知错误（用户ID: {user.id}）: {e}")
-                        roles_data = []
-                except Exception as e:
-                    # 外层异常捕获，确保不会影响整个流程
-                    from loguru import logger
-                    logger.warning(f"⚠️ 处理用户角色时发生错误（用户ID: {user.id}）: {e}")
-                    roles_data = []
-
+                # 角色信息（已通过 prefetch_related 加载，.all() 使用缓存不重复查库）
+                roles_list = await user.roles.all()
+                roles_data = [
+                    {"uuid": r.uuid, "name": r.name, "code": r.code}
+                    for r in roles_list
+                ]
                 user_dict["roles"] = roles_data
 
                 items.append(user_dict)

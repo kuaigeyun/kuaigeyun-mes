@@ -7,7 +7,7 @@
  * Date: 2026-01-27
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Space, message, Spin } from 'antd';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import { qrcodeApi, type QRCodeGenerateRequest, type QRCodeGenerateResponse } from '../../services/qrcode';
@@ -46,6 +46,14 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [qrcodeResponse, setQrcodeResponse] = useState<QRCodeGenerateResponse | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   /**
    * 生成二维码
@@ -61,13 +69,15 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
         error_correction: errorCorrection,
       };
       const response = await qrcodeApi.generate(request);
+      if (!isMountedRef.current) return;
       setQrcodeResponse(response);
       onGenerateSuccess?.(response);
       message.success('二维码生成成功');
     } catch (error: any) {
+      if (!isMountedRef.current) return;
       message.error(`生成二维码失败: ${error.message || '未知错误'}`);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 

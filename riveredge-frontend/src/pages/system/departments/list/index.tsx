@@ -370,7 +370,11 @@ const DepartmentListPage: React.FC = () => {
       render: (_, record) => (
           <Space>
               <span style={{ fontWeight: 500 }}>{record.name}</span>
-              {(record.children_count || 0) > 0 && <Tag>{record.children_count} 子部门</Tag>}
+              {(record.children_count || 0) > 0 && (
+                <Tag color="blue" style={{ marginLeft: 4 }}>
+                  {record.children_count} 子部门
+                </Tag>
+              )}
           </Space>
       )
     },
@@ -515,6 +519,7 @@ const DepartmentListPage: React.FC = () => {
       ]}
     >
       <UniTable<Department>
+        viewTypes={['table']}
         actionRef={actionRef}
         headerTitle="部门列表"
         rowKey="uuid"
