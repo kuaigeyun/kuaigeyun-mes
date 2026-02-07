@@ -85,8 +85,10 @@ class UserResponse(SoilUserResponse):
         roles: 角色列表（如果关联）
     """
     department_id: Optional[int] = Field(None, description="所属部门ID（内部使用）")
+    department_uuid: Optional[str] = Field(None, description="所属部门UUID（前端表单回填）")
     department: Optional[dict] = Field(None, description="部门信息（如果关联）")
     position_id: Optional[int] = Field(None, description="所属职位ID（内部使用）")
+    position_uuid: Optional[str] = Field(None, description="所属职位UUID（前端表单回填）")
     position: Optional[dict] = Field(None, description="职位信息（如果关联）")
     roles: Optional[List[dict]] = Field(None, description="角色列表（如果关联）")
     

@@ -60,22 +60,27 @@ async def _user_to_response(user) -> UserResponse:
     """
     将 User 模型转为 UserResponse，预加载并序列化 department、position、roles。
     避免直接把 Tortoise 关联对象传给 Pydantic 导致的 ValidationError。
+    同时写入 department_uuid、position_uuid 供前端编辑表单回填。
     """
     await user.fetch_related("roles", "department", "position")
     department_data = None
+    department_uuid = None
     if user.department:
         department_data = {
             "uuid": user.department.uuid,
             "name": user.department.name,
             "code": user.department.code,
         }
+        department_uuid = user.department.uuid
     position_data = None
+    position_uuid = None
     if user.position:
         position_data = {
             "uuid": user.position.uuid,
             "name": user.position.name,
             "code": user.position.code,
         }
+        position_uuid = user.position.uuid
     roles_data = []
     if user.roles:
         roles_data = [
@@ -86,7 +91,9 @@ async def _user_to_response(user) -> UserResponse:
         user,
         UserResponse,
         department=department_data,
+        department_uuid=department_uuid,
         position=position_data,
+        position_uuid=position_uuid,
         roles=roles_data,
     )
 

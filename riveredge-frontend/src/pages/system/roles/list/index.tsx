@@ -408,6 +408,7 @@ const RoleListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Role>
+          viewTypes={['table']}
           actionRef={actionRef}
           columns={columns}
           request={async (params, _, __, searchFormValues) => {

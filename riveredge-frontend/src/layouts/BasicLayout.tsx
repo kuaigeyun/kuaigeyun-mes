@@ -455,37 +455,6 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
     name: t('menu.system'),
     icon: getMenuIcon(t('menu.system'), '/system'),
     children: [
-      // 用户管理分组标题（使用 Ant Design Menu 的 type: 'group'）
-      {
-        key: 'user-management-group',
-        type: 'group',
-        name: t('menu.group.user-management'),  // ProLayout 使用 name，但 type: 'group' 会传递给 Ant Design Menu 作为 label
-        label: t('menu.group.user-management'),  // 同时提供 label 以确保 Ant Design Menu 能正确显示
-        className: 'riveredge-menu-group-title',  // 自定义 className，用于专门设置样式
-        children: [
-          // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
-          {
-            path: '/system/departments',
-            name: t('menu.system.departments'),
-            icon: getMenuIcon(t('menu.system.departments'), '/system/departments'),
-          },
-          {
-            path: '/system/positions',
-            name: t('menu.system.positions'),
-            icon: getMenuIcon(t('menu.system.positions'), '/system/positions'),
-          },
-          {
-            path: '/system/roles',
-            name: t('menu.system.roles-permissions'),
-            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
-          },
-          {
-            path: '/system/users',
-            name: t('menu.system.users'),
-            icon: getMenuIcon(t('menu.system.users'), '/system/users'),
-          },
-        ],
-      },
       // 核心配置分组标题
       {
         key: 'core-config-group',
@@ -530,11 +499,6 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'),
           },
           {
-            path: '/system/integration-configs',
-            name: t('menu.system.integration-configs'),
-            icon: getMenuIcon(t('menu.system.integration-configs'), '/system/integration-configs'),
-          },
-          {
             path: '/system/languages',
             name: t('menu.system.languages'),
             icon: getMenuIcon(t('menu.system.languages'), '/system/languages'),
@@ -543,6 +507,36 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/custom-fields',
             name: t('menu.system.custom-fields'),
             icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'),
+          },
+        ],
+      },
+      // 用户管理分组标题（使用 Ant Design Menu 的 type: 'group'）
+      {
+        key: 'user-management-group',
+        type: 'group',
+        name: t('menu.group.user-management'),
+        label: t('menu.group.user-management'),
+        className: 'riveredge-menu-group-title',
+        children: [
+          {
+            path: '/system/departments',
+            name: t('menu.system.departments'),
+            icon: getMenuIcon(t('menu.system.departments'), '/system/departments'),
+          },
+          {
+            path: '/system/positions',
+            name: t('menu.system.positions'),
+            icon: getMenuIcon(t('menu.system.positions'), '/system/positions'),
+          },
+          {
+            path: '/system/roles',
+            name: t('menu.system.roles-permissions'),
+            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
+          },
+          {
+            path: '/system/users',
+            name: t('menu.system.users'),
+            icon: getMenuIcon(t('menu.system.users'), '/system/users'),
           },
         ],
       },
@@ -558,6 +552,11 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/files',
             name: t('menu.system.files'),
             icon: getMenuIcon(t('menu.system.files'), '/system/files'),
+          },
+          {
+            path: '/system/integration-configs',
+            name: t('menu.system.integration-configs'),
+            icon: getMenuIcon(t('menu.system.integration-configs'), '/system/integration-configs'),
           },
           {
             path: '/system/apis',
