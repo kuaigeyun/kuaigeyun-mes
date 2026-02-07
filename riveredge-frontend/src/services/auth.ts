@@ -62,6 +62,7 @@ export interface CurrentUser {
   username: string;
   email?: string;
   full_name?: string;
+  avatar?: string;
   is_infra_admin?: boolean;
   is_tenant_admin?: boolean;
   tenant_id?: number;

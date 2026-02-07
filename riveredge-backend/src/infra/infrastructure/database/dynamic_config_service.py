@@ -291,9 +291,7 @@ class DynamicDatabaseConfigService:
             for module_path in potential_modules:
                 if DynamicDatabaseConfigService._module_exists(module_path):
                     active_app_models.append(module_path)
-                    logger.info(f"✅ 发现应用模型模块: {module_path}")
-                else:
-                    logger.debug(f"❌ 应用模型模块不存在: {module_path}")
+                    logger.debug(f"✅ 发现应用模型模块: {module_path}")
 
         logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
 
@@ -301,14 +299,8 @@ class DynamicDatabaseConfigService:
         all_models = validated_base_models + active_app_models
         logger.info(f"📋 合并后总共 {len(all_models)} 个模型模块 (基础: {len(validated_base_models)}, 应用: {len(active_app_models)})")
 
-        # 最终验证所有模型模块是否存在
-        final_models = []
-        for model_path in all_models:
-            if DynamicDatabaseConfigService._module_exists(model_path):
-                final_models.append(model_path)
-            else:
-                logger.warning(f"❌ 模型模块不存在: {model_path}")
-
+        # 已在 validated_base_models 和 active_app_models 构建时验证，无需重复检查
+        final_models = all_models
         logger.info(f"📝 最终加载 {len(final_models)} 个验证通过的模型模块")
         logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(final_models)} 个模型 ===")
         return final_models
@@ -476,9 +468,7 @@ class DynamicDatabaseConfigService:
             for module_path in potential_modules:
                 if DynamicDatabaseConfigService._module_exists(module_path):
                     active_app_models.append(module_path)
-                    logger.info(f"✅ 发现应用模型模块: {module_path}")
-                else:
-                    logger.debug(f"❌ 应用模型模块不存在: {module_path}")
+                    logger.debug(f"✅ 发现应用模型模块: {module_path}")
 
         logger.info(f"📋 发现的总应用模型模块: {len(active_app_models)} 个")
 
@@ -495,10 +485,16 @@ class DynamicDatabaseConfigService:
         logger.info(f"📋 === 获取活跃应用模型列表结束，返回 {len(validated_models)} 个模型 ===")
         return validated_models
 
+    # 模块存在性缓存，避免重复 import 或 find_spec 调用
+    _module_exists_cache: Dict[str, bool] = {}
+
     @staticmethod
     def _module_exists(module_path: str) -> bool:
         """
-        检查Python模块是否存在
+        检查Python模块是否存在。
+
+        使用 find_spec 代替 import_module，仅解析模块路径不执行模块体，显著加快应用级模型的发现。
+        结果缓存避免重复检查。
 
         Args:
             module_path: 模块路径
@@ -506,15 +502,19 @@ class DynamicDatabaseConfigService:
         Returns:
             bool: 模块是否存在
         """
+        cache = DynamicDatabaseConfigService._module_exists_cache
+        if module_path in cache:
+            return cache[module_path]
         try:
-            import importlib
-            importlib.import_module(module_path)
-            return True
-        except ImportError:
-            return False
+            import importlib.util
+            spec = importlib.util.find_spec(module_path)
+            result = spec is not None
+        except (ImportError, ValueError, AttributeError):
+            result = False
         except Exception:
-            # 其他导入错误也视为模块不存在
-            return False
+            result = False
+        cache[module_path] = result
+        return result
 
     @staticmethod
     async def validate_app_models(app_code: str) -> Dict[str, Any]:

@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Layout, Card, Button, Space, message, Tabs } from 'antd';
+import { Layout, Card, Button, Space, message, Tabs, Divider } from 'antd';
 import { SaveOutlined, EyeOutlined, UndoOutlined, RedoOutlined } from '@ant-design/icons';
 import { DndContext, DragOverlay, DragEndEvent, DragStartEvent, DragOverEvent, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
@@ -17,14 +17,14 @@ import DraggableComponent from './DraggableComponent';
 import DraggableItem from './DraggableItem';
 import Canvas from './Canvas';
 import Preview from './preview';
-import { TableComponent, ChartComponent, TextComponent, ImageComponent } from './components';
+import { TableComponent, ChartComponent, TextComponent, ImageComponent, SystemConfigComponent, CoreConfigComponent, BusinessConfigComponent } from './components';
 
 const { Sider, Content } = Layout;
 
 /**
  * 报表组件类型
  */
-export type ComponentType = 'table' | 'chart' | 'text' | 'image' | 'group';
+export type ComponentType = 'table' | 'chart' | 'text' | 'image' | 'group' | 'system-config' | 'core-config' | 'business-config';
 
 /**
  * 报表组件接口
@@ -118,13 +118,29 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
     // 如果从组件库拖拽到画布，添加新组件
     if (over.id === 'canvas' && active.id.toString().startsWith('component-')) {
       const componentType = active.id.toString().replace('component-', '') as ComponentType;
+      
+      // Determine default dimensions based on component type
+      let defaultWidth = 200;
+      let defaultHeight = 50;
+      
+      if (['system-config', 'core-config', 'business-config'].includes(componentType)) {
+        defaultWidth = 800;
+        defaultHeight = 600;
+      } else if (componentType === 'table') {
+        defaultWidth = 600;
+        defaultHeight = 300;
+      } else if (componentType === 'chart') {
+        defaultWidth = 400;
+        defaultHeight = 300;
+      }
+
       const newComponent: ReportComponent = {
         id: `comp-${Date.now()}`,
         type: componentType,
         x: 100,
         y: 100,
-        width: componentType === 'table' ? 600 : componentType === 'chart' ? 400 : 200,
-        height: componentType === 'table' ? 300 : componentType === 'chart' ? 300 : 50,
+        width: defaultWidth,
+        height: defaultHeight,
         ...(componentType === 'text' && { content: '文本内容', textType: 'paragraph' }),
         ...(componentType === 'image' && { src: '', alt: '' }),
         ...(componentType === 'chart' && { chartType: 'column' }),
@@ -210,11 +226,19 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
         <Sider width={200} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
           <Card title="组件库" size="small" style={{ height: '100%' }}>
             <Space orientation="vertical" style={{ width: '100%' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>基础组件</div>
               <DraggableItem id="component-table" label="表格" />
               <DraggableItem id="component-chart" label="图表" />
               <DraggableItem id="component-text" label="文本" />
               <DraggableItem id="component-image" label="图片" />
               <DraggableItem id="component-group" label="分组" />
+
+              <Divider style={{ margin: '12px 0' }} />
+              
+              <div style={{ fontWeight: 'bold', marginBottom: 8 }}>系统配置</div>
+              <DraggableItem id="component-system-config" label="系统参数配置" />
+              <DraggableItem id="component-core-config" label="核心配置(站点)" />
+              <DraggableItem id="component-business-config" label="业务规则配置" />
             </Space>
           </Card>
         </Sider>
@@ -256,6 +280,12 @@ const ReportDesigner: React.FC<ReportDesignerProps> = ({
                         return <TextComponent component={comp} />;
                       case 'image':
                         return <ImageComponent component={comp} />;
+                      case 'system-config':
+                        return <SystemConfigComponent component={comp} />;
+                      case 'core-config':
+                        return <CoreConfigComponent component={comp} />;
+                      case 'business-config':
+                        return <BusinessConfigComponent component={comp} />;
                       default:
                         return <div>{comp.type}</div>;
                     }

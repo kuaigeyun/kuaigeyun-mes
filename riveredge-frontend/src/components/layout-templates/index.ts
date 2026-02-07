@@ -6,6 +6,7 @@
  *
  * 包含以下布局模板：
  * - ListPageTemplate: 列表页面模板（支持统计卡片）
+ * - MultiTabListPageTemplate: 多标签页列表页面模板
  * - FormModalTemplate: 表单 Modal 模板
  * - DetailDrawerTemplate: 详情 Drawer 模板
  * - TwoColumnLayout: 两栏布局模板（左侧树形结构，右侧内容区）
@@ -14,6 +15,7 @@
  * - KanbanViewTemplate: 看板视图布局模板（工单看板、任务看板）
  * - TouchScreenTemplate: 工位机触屏模式布局模板（大按钮、大字体、全屏）
  * - CanvasPageTemplate: 画板页布局模板（操作条 + 画板 + 右侧面板，流程设计、BOM 设计等）
+ * - IframePageTemplate: Iframe 页面布局模板（嵌入外部页面，自动适应容器）
  *
  * Author: Luigi Lu
  * Date: 2025-12-26
@@ -87,6 +89,10 @@ export type { CanvasPageTemplateProps, CanvasPageRightPanelConfig } from './Canv
 // 高级生产终端布局模板
 export { default as PremiumTerminalTemplate } from './PremiumTerminalTemplate'
 export type { PremiumTerminalTemplateProps } from './PremiumTerminalTemplate'
+
+// Iframe 页面布局模板
+export { IframePageTemplate } from './IframePageTemplate'
+export type { IframePageTemplateProps } from './IframePageTemplate'
 
 // 布局常量配置
 export * from './constants'

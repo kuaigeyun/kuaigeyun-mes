@@ -77,7 +77,7 @@ export const ListPageTemplate: React.FC<ListPageTemplateProps> = ({
     <div
       className={className}
       style={{
-        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
+        padding: 0,
         ...style,
       }}
     >

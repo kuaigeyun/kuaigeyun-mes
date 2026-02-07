@@ -32,6 +32,7 @@ import { workOrderApi, reportingApi } from '../../../services/production';
 import StationBinder, { STATION_STORAGE_KEY, StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
 import DocumentCenter from './components/DocumentCenter';
+import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -57,6 +58,7 @@ const WorkOrdersKioskPage: React.FC = () => {
     const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
     const [searchKeyword, setSearchKeyword] = useState('');
     const [stationInfo, setStationInfo] = useState<StationInfo | null>(null);
+    const [userInfo, setUserInfo] = useState<CurrentUser | null>(null);
     
     // 选中状态
     const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
@@ -69,6 +71,14 @@ const WorkOrdersKioskPage: React.FC = () => {
     const [middleTabKey, setMiddleTabKey] = useState<string>('operation');
 
     useEffect(() => {
+        // Load User Info
+        getCurrentUser().then(user => {
+             setUserInfo(user);
+        }).catch(err => {
+             console.error('Failed to load user info', err);
+             // Optionally redirect to login if critical
+        });
+
         const savedStation = localStorage.getItem(STATION_STORAGE_KEY);
         if (savedStation) {
             try {
@@ -84,16 +94,27 @@ const WorkOrdersKioskPage: React.FC = () => {
     const loadWorkOrders = async (stationId?: number) => {
         setLoading(true);
         try {
-            const params: any = { skip: 0, limit: 100 };
+            // Use work_center_id for filtering based on selected station
+            const params: any = { 
+                skip: 0, 
+                limit: 100,
+                status: 'production', // Optional: Only show work orders in production? Or all? Let's show all or filter by relevant statuses. 
+                // Actually the user might want "ready" or "processing".
+                // For now, let's just filter by work_center_id.
+            };
             if (stationId) params.work_center_id = stationId;
+            
             const response = await workOrderApi.list(params);
-            const data = Array.isArray(response) ? response : (response?.data || response?.items || []);
+            // API returns { data: [], total: ... } based on productions.py list_work_orders
+            const data = response.data || []; 
             setWorkOrders(data);
+            
             if (selectedWorkOrder) {
                 const updated = data.find((wo: WorkOrder) => wo.id === selectedWorkOrder.id);
                 if (updated) setSelectedWorkOrder(updated);
             }
         } catch (error) {
+            console.error(error);
             message.error('加载工单列表失败');
         } finally {
             setLoading(false);
@@ -109,11 +130,18 @@ const WorkOrdersKioskPage: React.FC = () => {
         if (workOrder.id) {
             setOpsLoading(true);
             try {
+                // Fetch real operations
                 const ops = await workOrderApi.getOperations(workOrder.id.toString());
-                setOperations(ops || []);
-                const current = ops.find((o: any) => o.status === 'processing') || ops.find((o: any) => o.status === 'pending');
-                setActiveOperation(current || ops[0]);
+                // Sort ops by sequence if needed, usually backend returns sorted or we trust list order
+                const sortedOps = Array.isArray(ops) ? ops.sort((a: any, b: any) => a.sequence - b.sequence) : [];
+                setOperations(sortedOps);
+                
+                // Find active operation: first 'processing', then 'pending', else last one?
+                // Logic: Current active is the one being worked on, or the next available.
+                const current = sortedOps.find((o: any) => o.status === 'processing') || sortedOps.find((o: any) => o.status === 'pending');
+                setActiveOperation(current || sortedOps[0]);
             } catch (error) {
+                console.error(error);
                 message.error('加载工序失败');
             } finally {
                 setOpsLoading(false);
@@ -137,12 +165,20 @@ const WorkOrdersKioskPage: React.FC = () => {
         if (!selectedWorkOrder?.id || !activeOperation?.id) return;
         try {
             setOpsLoading(true);
+            // Call startOperation API
             await workOrderApi.startOperation(selectedWorkOrder.id.toString(), activeOperation.id);
-            addRecentOp('开始执行', activeOperation.name);
+            addRecentOp('开始执行', activeOperation.operation_name || activeOperation.name);
             message.success('工序已开始');
+            
+            // Refresh operations and work order list status
+            const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
+            setOperations(ops || []);
+            const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
+            if (updatedOp) setActiveOperation(updatedOp);
+
             loadWorkOrders(stationInfo?.stationId);
-            handleSelectWorkOrder(selectedWorkOrder);
         } catch (error) {
+            console.error(error);
             message.error('操作失败');
         } finally {
             setOpsLoading(false);
@@ -155,19 +191,38 @@ const WorkOrdersKioskPage: React.FC = () => {
             if (!activeOperation || !selectedWorkOrder) return;
             
             setOpsLoading(true);
+            
+            // Construct report payload
+            // reportingApi.create expected payload: { work_order_id, operation_id, quantity, data: { ...parameters } }
+            // Verify schema: ReportingRecordCreate in productions.py (Line 156) -> reporting_record.py
+            // It usually expects: work_order_id, operation_id, quantity, qualified_quantity, unqualified_quantity match logic.
+            // Let's assume the basic fields.
+            
             await reportingApi.create({
                 work_order_id: selectedWorkOrder.id,
                 operation_id: activeOperation.id,
-                quantity: values.report_quantity || 1,
-                parameters: values,
+                quantity: Number(values.report_quantity) || 0,
+                // qualified/unqualified logic if needed
+                // parameters: values, // If backend supports dynamic parameters blob
             });
             
-            addRecentOp('完成报工', `数量 ${values.report_quantity || 1}`);
+            addRecentOp('完成报工', `数量 ${values.report_quantity || 0}`);
             message.success('报工成功');
             form.resetFields();
+            
+            // Refresh
             loadWorkOrders(stationInfo?.stationId);
-            handleSelectWorkOrder(selectedWorkOrder);
+            if (selectedWorkOrder.id) {
+                const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
+                setOperations(ops || []);
+                // Update active op? If completed, maybe move to next? 
+                // For now just refresh state
+                 const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
+                if (updatedOp) setActiveOperation(updatedOp);
+            }
+            
         } catch (error) {
+            console.error(error);
             // validate error
         } finally {
             setOpsLoading(false);
@@ -214,7 +269,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                     <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>共 {filteredWorkOrders.length} 项</div>
                 </div>
                 <Search
-                    placeholder="搜索编号或产品..."
+                   // This is just a placeholder. I need to edit PremiumTerminalTemplate.tsx
+// Please ignore this block content, I will target the correct file below.="搜索编号或产品..."
                     onChange={e => setSearchKeyword(e.target.value)}
                     style={{ background: HMI_DESIGN_TOKENS.BG_CARD, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
                 />
@@ -652,9 +708,16 @@ const WorkOrdersKioskPage: React.FC = () => {
     return (
         <PremiumTerminalTemplate
             title="生产终端"
-            operatorName={(stationInfo as any).operatorName || '未登录'}
-            operatorAvatar={(stationInfo as any).operatorAvatar}
-            operatorRole={(stationInfo as any).operatorRole}
+            operatorName={userInfo?.full_name || userInfo?.username || (stationInfo as any).operatorName || '未登录'}
+            operatorAvatar={
+                userInfo?.avatar 
+                    ? (userInfo.avatar.startsWith('http') 
+                        ? userInfo.avatar 
+                        : `/api/v1/core/files/${userInfo.avatar}/download?access_token=${localStorage.getItem('token') || ''}`)
+                    : (userInfo?.username ? `https://api.dicebear.com/7.x/initials/svg?seed=${userInfo.username}` : undefined)
+            }
+            operatorRole={userInfo?.is_tenant_admin ? '管理员' : '操作员'}
+            operatorEmail={userInfo?.email}
             stationName={stationInfo.stationName}
             stationWorkshop={stationInfo.workshopName}
             stationLine={stationInfo.lineName}

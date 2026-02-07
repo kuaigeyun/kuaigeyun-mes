@@ -23,6 +23,7 @@ export interface PlatformSettings {
   login_title?: string;
   login_content?: string;
   icp_license?: string;
+  theme_color?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -37,6 +38,7 @@ export interface PlatformSettingsUpdateRequest {
   login_title?: string;
   login_content?: string;
   icp_license?: string;
+  theme_color?: string;
 }
 
 /**

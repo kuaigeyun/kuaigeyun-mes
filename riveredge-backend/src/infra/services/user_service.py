@@ -358,6 +358,7 @@ class UserService:
             "username": user.username,
             "email": user.email,
             "full_name": user.full_name,
+            "avatar": user.avatar,
             "tenant_id": user.tenant_id,
             "tenant_name": tenant_name,
             "is_active": user.is_active,

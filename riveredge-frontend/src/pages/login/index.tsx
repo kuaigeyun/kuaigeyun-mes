@@ -588,8 +588,8 @@ export default function LoginPage() {
     }
   };
 
-  // 固定主题颜色（不受全局主题影响）
-  const fixedThemeColor = '#1890ff';
+  // 平台主题颜色（与 infra 登录页一致，从平台设置读取）
+  const themeColor = platformSettings?.theme_color || '#1890ff';
 
   /**
    * 处理登录成功后的逻辑
@@ -1212,14 +1212,14 @@ export default function LoginPage() {
       theme={{
         algorithm: theme.defaultAlgorithm, // 强制使用浅色模式，不受全局深色模式影响
         token: {
-          colorPrimary: fixedThemeColor, // 固定主题色，不受全局主题影响
+          colorPrimary: themeColor, // 固定主题色，不受全局主题影响
         },
       }}
     >
       <div 
         className="login-container"
         style={{
-          background: fixedThemeColor, // 固定背景色，不受全局主题影响
+          background: themeColor, // 固定背景色，不受全局主题影响
         }}
       >
       {/* 右上角工具栏（语言切换） */}
@@ -1249,8 +1249,8 @@ export default function LoginPage() {
             }}
             style={{
               backgroundColor: '#fff',
-              color: fixedThemeColor,
-              borderColor: fixedThemeColor,
+              color: themeColor,
+              borderColor: themeColor,
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
               minWidth: '40px',
               height: '40px',
@@ -1266,7 +1266,7 @@ export default function LoginPage() {
       <div 
         className="logo-header"
         style={{
-          background: fixedThemeColor,
+          background: themeColor,
           opacity: isLoadingPlatformSettings && !cachedPlatformName && !platformSettings ? 0 : 1,
           transition: 'opacity 0.3s ease-in-out',
         }}
@@ -1297,7 +1297,7 @@ export default function LoginPage() {
                     justifyContent: 'center',
                     fontSize: '20px',
                     fontWeight: 'bold',
-                    color: fixedThemeColor,
+                    color: themeColor,
                   },
                   textContent: (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')?.substring(0, 2).toUpperCase() || 'RE',
                 })
@@ -1317,7 +1317,7 @@ export default function LoginPage() {
       <div 
         className="login-left"
         style={{
-          background: fixedThemeColor,
+          background: themeColor,
         }}
       >
         {/* LOGO 和框架名称放在左上角（桌面端） */}
@@ -1351,7 +1351,7 @@ export default function LoginPage() {
                       justifyContent: 'center',
                       fontSize: '18px',
                       fontWeight: 'bold',
-                      color: fixedThemeColor,
+                      color: themeColor,
                       marginRight: '16px',
                     },
                     textContent: (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')?.substring(0, 2).toUpperCase() || 'RE',
@@ -1435,8 +1435,8 @@ export default function LoginPage() {
                 style: {
                   width: '100%',
                   height: '40px',
-                  backgroundColor: fixedThemeColor,
-                  borderColor: fixedThemeColor,
+                  backgroundColor: themeColor,
+                  borderColor: themeColor,
                 },
               },
             }}
@@ -1725,21 +1725,21 @@ export default function LoginPage() {
                 onClick={handleGuestLogin}
                 style={{
                   height: '40px',
-                  borderColor: fixedThemeColor,
-                  color: fixedThemeColor,
+                  borderColor: themeColor,
+                  color: themeColor,
                 }}
               >
-                体验登录
+                免注册体验登录
               </Button>
             </div>
 
             <Text 
               className="register-link"
               style={{
-                color: fixedThemeColor,
+                color: themeColor,
               }}
             >
-              还没有账号？<Button type="link" style={{ padding: 0, color: fixedThemeColor }} onClick={() => {
+              还没有账号？<Button type="link" style={{ padding: 0, color: themeColor }} onClick={() => {
                 setRegisterDrawerVisible(true);
                 setRegisterType('select');
               }}>立即注册</Button>
@@ -1757,7 +1757,7 @@ export default function LoginPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ padding: 0, fontSize: '12px', height: 'auto', color: fixedThemeColor }}
+                style={{ padding: 0, fontSize: '12px', height: 'auto', color: themeColor }}
                 onClick={() => {
                   setTermsModalType('user');
                   setTermsModalVisible(true);
@@ -1768,7 +1768,7 @@ export default function LoginPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ padding: 0, fontSize: '12px', height: 'auto', color: fixedThemeColor }}
+                style={{ padding: 0, fontSize: '12px', height: 'auto', color: themeColor }}
                 onClick={() => {
                   setTermsModalType('privacy');
                   setTermsModalVisible(true);
@@ -1894,7 +1894,7 @@ export default function LoginPage() {
                 style={{
                   width: '100%',
                   textAlign: 'center',
-                  border: `2px solid ${fixedThemeColor}`,
+                  border: `2px solid ${themeColor}`,
                   borderRadius: token.borderRadiusLG,
                   cursor: 'pointer',
                   overflow: 'hidden',
@@ -1922,22 +1922,22 @@ export default function LoginPage() {
                     width: 72,
                     height: 72,
                     borderRadius: '50%',
-                    backgroundColor: `${fixedThemeColor}15`,
+                    backgroundColor: `${themeColor}15`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginBottom: 20,
                     position: 'relative',
                     zIndex: 1,
-                    border: `2px solid ${fixedThemeColor}30`,
+                    border: `2px solid ${themeColor}30`,
                   }}
                 >
-                  <UserAddOutlined style={{ fontSize: 36, color: fixedThemeColor }} />
+                  <UserAddOutlined style={{ fontSize: 36, color: themeColor }} />
                 </div>
                 
                 {/* 内容区域 */}
                 <div style={{ position: 'relative', zIndex: 1, width: '100%' }}>
-                  <Title level={4} style={{ margin: '0 0 12px 0', color: fixedThemeColor, fontWeight: 600 }}>
+                  <Title level={4} style={{ margin: '0 0 12px 0', color: themeColor, fontWeight: 600 }}>
                     个人注册
                   </Title>
                   <Text type="secondary" style={{ fontSize: 14, lineHeight: '24px', display: 'block' }}>

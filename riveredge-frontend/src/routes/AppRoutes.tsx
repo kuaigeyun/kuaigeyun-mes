@@ -3,10 +3,12 @@
  *
  * 负责异步加载业务应用路由，与系统核心路由完全隔离
  * 应用加载失败不会影响系统核心功能的正常使用
- * 
+ *
+ * 性能优化：按需加载
+ * - 骨架屏仅在获取应用列表（getInstalledApplicationList）时显示
+ * - 各应用插件在用户访问对应路由时才加载（React.lazy），与系统级页面体验一致
+ *
  * ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
- * 应用路由直接返回应用组件，与系统级路由共享同一个 BasicLayout 实例
- * 这样可以避免从系统级路由切换到应用级路由时整个页面重新挂载的问题
  */
 
 import React, { useEffect, useState, Suspense } from 'react';
@@ -15,8 +17,14 @@ import { Alert, Button } from 'antd';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
-// ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再导入
 import PageSkeleton from '../components/page-skeleton';
+
+/** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */
+function createLazyApp(app: Application) {
+  return React.lazy(() =>
+    loadPlugin(app).then((routes) => ({ default: routes[0]?.component ?? (() => null) }))
+  );
+}
 
 // 应用组件错误边界
 const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }> = ({ children, appName }) => {
@@ -163,80 +171,31 @@ const AppRoutes: React.FC = () => {
         }
       }
 
-      // 异步加载所有应用路由
+      // 按需加载：仅根据应用列表创建路由，各应用在首次访问时才加载 chunk
       const routes: React.ReactNode[] = [];
-      const loadPromises = applications.map(async (app: Application) => {
-        if (app.entry_point && app.route_path) {
-          try {
-            // console.log(`🔄 [AppRoutes] 开始加载应用: ${app.code}`, { entry_point: app.entry_point, route_path: app.route_path });
-            const pluginRouteConfigs = await loadPlugin(app);
-            // console.log(`✅ [AppRoutes] 应用 ${app.code} 加载成功，路由配置:`, pluginRouteConfigs);
-
-            // 为每个路由配置创建Route组件
-            for (const routeConfig of pluginRouteConfigs) {
-              // ⚠️ 重要：由于 AppRoutes 已经被 /apps/* 匹配，这里需要使用相对路径
-              // routeConfig.path 是 /apps/master-data，需要去掉 /apps/ 前缀
-              const relativePath = routeConfig.path.startsWith('/apps/') 
-                ? routeConfig.path.replace('/apps/', '') 
-                : routeConfig.path;
-              
-              routes.push(
-                <Route
-                  key={`app-${app.code}-${relativePath}`}
-                  path={`${relativePath}/*`}
-                  element={
-                    // ⚠️ 注意：BasicLayout 已提升到 MainRoutes 层级，这里不再包裹 BasicLayout
-                    // 直接返回应用组件，与系统级路由共享同一个 BasicLayout 实例
-                    <Suspense fallback={
-                      <div style={{ padding: '20px', background: '#fff3cd', border: '1px solid #ffeaa7', margin: '10px' }}>
-                        <h3>🔄 正在加载应用: {app.name}</h3>
-                        <p>路由: {routeConfig.path}</p>
-                        <p>时间: {new Date().toLocaleTimeString()}</p>
-                      </div>
-                    }>
-                      <AppErrorBoundary appName={app.name}>
-                        {(() => {
-
-                          // 尝试直接渲染组件，看是否能触发错误
-                          try {
-                            return React.createElement(routeConfig.component);
-                          } catch (renderError) {
-                            console.error(`❌ 组件渲染失败:`, renderError);
-                            throw renderError;
-                          }
-                        })()}
-                      </AppErrorBoundary>
-                    </Suspense>
-                  }
-                />
-              );
-            }
-
-          } catch (appError) {
-            console.error(`❌ [AppRoutes] 应用 ${app.code} 加载失败:`, appError);
-            console.error(`❌ [AppRoutes] 错误详情:`, {
-              code: app.code,
-              name: app.name,
-              entry_point: app.entry_point,
-              route_path: app.route_path,
-              error: appError instanceof Error ? appError.message : String(appError),
-              stack: appError instanceof Error ? appError.stack : undefined,
-            });
-            // 单个应用加载失败不影响其他应用
-            // 可以在这里添加错误统计或上报逻辑
-          }
-        } else {
-          console.warn(`⚠️ [AppRoutes] 应用 ${app.code} 缺少 entry_point 或 route_path`, {
-            entry_point: app.entry_point,
-            route_path: app.route_path,
-          });
+      for (const app of applications) {
+        if (!app.entry_point || !app.route_path) {
+          console.warn(`⚠️ [AppRoutes] 应用 ${app.code} 缺少 entry_point 或 route_path`);
+          continue;
         }
-      });
-
-      // 等待所有应用加载完成
-      await Promise.all(loadPromises);
-
-      // console.log(`🎉 [AppRoutes] 应用加载完成，共加载 ${routes.length} 个路由`);
+        const relativePath = app.route_path.startsWith('/apps/')
+          ? app.route_path.replace('/apps/', '')
+          : app.route_path;
+        const LazyApp = createLazyApp(app);
+        routes.push(
+          <Route
+            key={`app-${app.code}-${relativePath}`}
+            path={`${relativePath}/*`}
+            element={
+              <Suspense fallback={<PageSkeleton />}>
+                <AppErrorBoundary appName={app.name}>
+                  <LazyApp />
+                </AppErrorBoundary>
+              </Suspense>
+            }
+          />
+        );
+      }
       setAppRoutes(routes);
       setLoading(false);
 

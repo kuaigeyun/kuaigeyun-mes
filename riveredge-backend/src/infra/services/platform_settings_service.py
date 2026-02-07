@@ -99,6 +99,7 @@ class PlatformSettingsService:
         
         if not settings:
             # 如果不存在，创建新设置
+            # 如果不存在，创建新设置
             create_data = PlatformSettingsCreate(
                 platform_name=data.platform_name or "RiverEdge SaaS Framework",
                 platform_logo=data.platform_logo,
@@ -106,6 +107,10 @@ class PlatformSettingsService:
                 platform_contact_email=data.platform_contact_email,
                 platform_contact_phone=data.platform_contact_phone,
                 platform_website=data.platform_website,
+                login_title=data.login_title,
+                login_content=data.login_content,
+                icp_license=data.icp_license,
+                theme_color=data.theme_color,
             )
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
         else:

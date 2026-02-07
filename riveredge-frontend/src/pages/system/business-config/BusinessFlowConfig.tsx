@@ -53,6 +53,13 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
 
     // Initial Mock Data Structure for Graph (will be updated or merged)
     const initialNodes = [
+        // 销售管理
+        {
+            id: 'customer',
+            data: { label: '客户管理', title: '客户管理', enabled: true, auditRequired: false, icon: <ShopOutlined style={{ color: '#fa8c16' }} />, type: 'master' },
+            position: { x: 100, y: 50 },
+            style: getNodeStyle(true, false),
+        },
         {
             id: 'sales_order',
             data: { label: '销售订单', title: '销售订单', enabled: true, auditRequired: true, icon: <ShopOutlined style={{ color: '#1890ff' }} />, type: 'business' },
@@ -65,11 +72,12 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             position: { x: 350, y: 200 },
             style: getNodeStyle(true, false),
         },
+        // 生产管理
         {
-            id: 'inventory_check',
-            data: { label: '库存校验', title: '库存校验', enabled: true, auditRequired: false, icon: <CodeSandboxOutlined style={{ color: '#52c41a' }} />, type: 'core' },
-            position: { x: 350, y: 100 },
-            style: getNodeStyle(true, false),
+            id: 'bom',
+            data: { label: '物料BOM', title: '物料清单(BOM)', enabled: true, auditRequired: true, icon: <CodeSandboxOutlined style={{ color: '#eb2f96' }} />, type: 'master' },
+            position: { x: 600, y: 50 },
+            style: getNodeStyle(true, true),
         },
         {
             id: 'production_plan',
@@ -78,18 +86,56 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
             style: getNodeStyle(true, true),
         },
         {
+            id: 'work_order',
+            data: { label: '生产工单', title: '生产工单', enabled: true, auditRequired: false, icon: <CodeSandboxOutlined style={{ color: '#722ed1' }} />, type: 'business' },
+            position: { x: 850, y: 200 },
+            style: getNodeStyle(true, false),
+        },
+        // 采购与库存
+        {
             id: 'purchase_request',
             data: { label: '采购申请', title: '采购申请', enabled: false, auditRequired: true, icon: <ShoppingCartOutlined />, type: 'business' },
             position: { x: 600, y: 350 },
             style: getNodeStyle(false, true),
         },
+        {
+            id: 'purchase_order',
+            data: { label: '采购订单', title: '采购订单', enabled: false, auditRequired: true, icon: <ShoppingCartOutlined />, type: 'business' },
+            position: { x: 850, y: 350 },
+            style: getNodeStyle(false, true),
+        },
+        {
+            id: 'inbound_delivery',
+            data: { label: '采购入库', title: '采购入库', enabled: false, auditRequired: false, icon: <CloudUploadOutlined />, type: 'business' },
+            position: { x: 1100, y: 350 },
+            style: getNodeStyle(false, false),
+        },
+        // 质量与库存
+        {
+            id: 'inventory_check',
+            data: { label: '库存校验', title: '库存校验', enabled: true, auditRequired: false, icon: <CodeSandboxOutlined style={{ color: '#52c41a' }} />, type: 'core' },
+            position: { x: 350, y: 100 },
+            style: getNodeStyle(true, false),
+        },
+        {
+            id: 'quality_inspection',
+            data: { label: '质量检验', title: '质量检验', enabled: true, auditRequired: true, icon: <CodeSandboxOutlined style={{ color: '#faad14' }} />, type: 'business' },
+            position: { x: 850, y: 100 },
+            style: getNodeStyle(true, true),
+        },
     ];
 
     const initialEdges = [
+        { id: 'e_cust_so', source: 'customer', target: 'sales_order', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
         { id: 'e1', source: 'sales_order', target: 'sales_delivery', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
         { id: 'e2', source: 'sales_order', target: 'inventory_check', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
         { id: 'e3', source: 'sales_order', target: 'production_plan', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_bom_pp', source: 'bom', target: 'production_plan', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_pp_wo', source: 'production_plan', target: 'work_order', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_wo_qi', source: 'work_order', target: 'quality_inspection', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
         { id: 'e4', source: 'production_plan', target: 'purchase_request', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_pr_po', source: 'purchase_request', target: 'purchase_order', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
+        { id: 'e_po_id', source: 'purchase_order', target: 'inbound_delivery', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
     ];
 
     const [nodes, setNodes] = useState(initialNodes);

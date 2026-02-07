@@ -10,7 +10,7 @@ import { App, Button, Space, Modal, Tabs } from 'antd';
 import { LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ListPageTemplate } from '../../../components/layout-templates';
+import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import { 
   getInfraSuperAdmin, 
   updateInfraSuperAdmin,
@@ -31,6 +31,7 @@ export default function InfraSuperAdminPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setCurrentUser } = useGlobalStore();
+  const [activeTabKey, setActiveTabKey] = useState('admin');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editFormData, setEditFormData] = useState<InfraSuperAdminUpdateRequest | null>(null);
 
@@ -181,9 +182,11 @@ export default function InfraSuperAdminPage() {
   ];
 
   return (
-    <ListPageTemplate>
-      <Tabs defaultActiveKey="admin" items={tabItems} />
-    </ListPageTemplate>
+    <MultiTabListPageTemplate
+      activeTabKey={activeTabKey}
+      onTabChange={setActiveTabKey}
+      tabs={tabItems}
+    />
   );
 }
 
