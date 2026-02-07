@@ -5,7 +5,6 @@
  * 参考 Ant Design Pro 分析页最佳实践
  */
 
-import { PageContainer } from '@ant-design/pro-components';
 import {
   Card,
   Row,
@@ -17,7 +16,6 @@ import {
   Space,
   Tag,
   Button,
-  Empty,
   App
 } from 'antd';
 import {
@@ -45,7 +43,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import dayjs from 'dayjs';
+import { DashboardTemplate } from '../../../components/layout-templates';
 import {
   Area,
   AreaChart,
@@ -133,19 +131,26 @@ export default function AnalysisPage() {
   });
 
   return (
-    <PageContainer
-      title="分析页"
-      extra={
-        <Space>
-          <Button type="primary" icon={<BarChartOutlined />}>
-            导出报表
-          </Button>
-          <Button icon={<SettingOutlined />}>
-            配置
-          </Button>
-        </Space>
-      }
-    >
+    <DashboardTemplate>
+      {/* 页面标题与操作区 */}
+      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+        <Col>
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            分析页
+          </Typography.Title>
+        </Col>
+        <Col>
+          <Space>
+            <Button type="primary" icon={<BarChartOutlined />}>
+              导出报表
+            </Button>
+            <Button icon={<SettingOutlined />}>
+              配置
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+
       {/* 关键指标 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} lg={6}>
@@ -380,6 +385,6 @@ export default function AnalysisPage() {
           </Card>
         </Col>
       </Row>
-    </PageContainer>
+    </DashboardTemplate>
   );
 }

@@ -267,10 +267,11 @@ async def download_file(
     uuid: str,
     request: Request,
     token: Optional[str] = Query(None, description="预览token（用于权限验证）"),
+    access_token: Optional[str] = Query(None, description="标准访问令牌（Bearer Token），用于鉴权"),
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
 ):
     from loguru import logger
-    logger.info(f"🔍 download_file 请求: uuid={uuid}, token={token[:50] if token else 'None'}..., x_tenant_id={x_tenant_id}")
+    logger.info(f"🔍 download_file 请求: uuid={uuid}, token={token[:50] if token else 'None'}..., access_token={access_token[:50] if access_token else 'None'}..., x_tenant_id={x_tenant_id}")
     """
     下载文件
     
@@ -280,6 +281,7 @@ async def download_file(
     Args:
         uuid: 文件UUID
         token: 预览token（用于权限验证，可选）
+        access_token: 标准访问令牌（Bearer Token，用于鉴权，可选）
         request: FastAPI Request 对象
         x_tenant_id: 从请求头获取的组织ID（可选）
         
@@ -293,9 +295,21 @@ async def download_file(
         # ⚠️ 关键修复：如果提供了token，从token中提取tenant_id
         tenant_id = None
         from loguru import logger
-        logger.debug(f"🔍 download_file 调试: token={token[:50] if token else None}..., x_tenant_id={x_tenant_id}, uuid={uuid}")
+        logger.debug(f"🔍 download_file 调试: token={token[:50] if token else None}..., access_token={access_token[:50] if access_token else None}..., x_tenant_id={x_tenant_id}, uuid={uuid}")
 
-        if token:
+        # 1. 尝试验证标准 access_token
+        if access_token:
+            from infra.domain.security.security import verify_token
+            try:
+                payload = verify_token(access_token)
+                if payload:
+                    tenant_id = payload.get("tenant_id")
+                    logger.debug(f"✅ 从 access_token 提取 tenant_id: {tenant_id}")
+            except Exception as e:
+                logger.error(f"❌ Access Token 验证失败: {e}")
+
+        # 2. 如果没有获取到 tenant_id，尝试验证预览 token
+        if tenant_id is None and token:
             try:
                 payload = FilePreviewService.verify_preview_token(token)
                 logger.debug(f"✅ Token 验证成功: payload={payload}")

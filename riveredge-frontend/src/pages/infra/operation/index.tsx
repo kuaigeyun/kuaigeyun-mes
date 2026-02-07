@@ -24,12 +24,12 @@ import {
   Tooltip,
   App
 } from 'antd';
-import { ListPageTemplate } from '../../../components/layout-templates';
+import { ListPageTemplate, STAT_CARD_CONFIG } from '../../../components/layout-templates';
 import {
   ApartmentOutlined,
-  UserOutlined,
-  DatabaseOutlined,
-  CloudServerOutlined,
+  // UserOutlined,
+  // DatabaseOutlined,
+  // CloudServerOutlined,
   RiseOutlined,
   FallOutlined,
   ReloadOutlined,
@@ -42,7 +42,7 @@ import dayjs from 'dayjs';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, CartesianGrid } from 'recharts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTenantStatistics } from '../../../services/superadmin';
-import type { TenantStatistics } from '../../../services/superadmin';
+// import type { TenantStatistics } from '../../../services/superadmin';
 import { getToken, getUserInfo } from '../../../utils/auth';
 import { useTranslation } from 'react-i18next';
 import 'dayjs/locale/zh-cn';
@@ -139,7 +139,7 @@ export default function OperationsDashboard() {
   } = useQuery({
     queryKey: ['tenantStatistics', timeRangeType, customDateRange],
     queryFn: async () => {
-      const dateRange = getDateRange();
+      // const dateRange = getDateRange();
       // 注意：当前后端 API 不支持时间范围参数，这里先预留接口
       // 后续后端支持时，可以传递 dateRange 参数
       const data = await getTenantStatistics();
@@ -329,38 +329,7 @@ export default function OperationsDashboard() {
   }, [displayStatistics, timeRangeType, customDateRange, statusChartData, planChartData, hasCachedData, dataUpdatedAt, messageApi]);
 
   return (
-    <ListPageTemplate
-      statCards={
-        displayStatistics && hasToken && isInfraSuperAdmin
-          ? [
-              {
-                title: '总组织数',
-                value: displayStatistics.total || 0,
-                prefix: <ApartmentOutlined />,
-                valueStyle: { color: '#1890ff' },
-              },
-              {
-                title: '激活组织',
-                value: displayStatistics.by_status?.active || 0,
-                prefix: <RiseOutlined />,
-                valueStyle: { color: '#52c41a' },
-              },
-              {
-                title: '未激活组织',
-                value: displayStatistics.by_status?.inactive || 0,
-                prefix: <FallOutlined />,
-                valueStyle: { color: '#faad14' },
-              },
-              {
-                title: '已暂停组织',
-                value: displayStatistics.by_status?.suspended || 0,
-                prefix: <ApartmentOutlined />,
-                valueStyle: { color: '#ff4d4f' },
-              },
-            ]
-          : undefined
-      }
-    >
+    <ListPageTemplate>
       {/* 页面头部工具栏 */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -379,7 +348,6 @@ export default function OperationsDashboard() {
                   setCustomDateRange(null);
                 }
               }}
-              size="small"
             >
               <Radio.Button value="today">今日</Radio.Button>
               <Radio.Button value="week">本周</Radio.Button>
@@ -390,7 +358,6 @@ export default function OperationsDashboard() {
               <RangePicker
                 value={customDateRange}
                 onChange={(dates) => setCustomDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
-                size="small"
                 style={{ width: 240 }}
               />
             )}
@@ -403,7 +370,6 @@ export default function OperationsDashboard() {
                 type={autoRefresh ? 'primary' : 'default'}
                 icon={<ReloadOutlined spin={autoRefresh} />}
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                size="small"
               >
                 {autoRefresh ? '自动刷新中' : '自动刷新'}
               </Button>
@@ -412,20 +378,66 @@ export default function OperationsDashboard() {
               icon={<ReloadOutlined />}
               onClick={handleRefresh}
               loading={loading}
-              size="small"
             >
               刷新
             </Button>
             <Button
               icon={<DownloadOutlined />}
               onClick={handleExport}
-              size="small"
             >
               导出
             </Button>
           </Space>
         </Space>
       </div>
+
+      {/* 统计卡片区域 - 手动渲染以确保在标题下方 */}
+      {displayStatistics && hasToken && isInfraSuperAdmin && (
+        <div style={{ marginBottom: 24 }}>
+          <Row gutter={STAT_CARD_CONFIG.GUTTER}>
+            <Col span={6}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title="总组织数"
+                  value={displayStatistics.total || 0}
+                  prefix={<ApartmentOutlined />}
+                  valueStyle={{ color: '#1890ff' }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title="激活组织"
+                  value={displayStatistics.by_status?.active || 0}
+                  prefix={<RiseOutlined />}
+                  valueStyle={{ color: '#52c41a' }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title="未激活组织"
+                  value={displayStatistics.by_status?.inactive || 0}
+                  prefix={<FallOutlined />}
+                  valueStyle={{ color: '#faad14' }}
+                />
+              </Card>
+            </Col>
+            <Col span={6}>
+              <Card styles={{ body: { padding: '20px 24px 8px 24px' } }}>
+                <Statistic
+                  title="已暂停组织"
+                  value={displayStatistics.by_status?.suspended || 0}
+                  prefix={<ApartmentOutlined />}
+                  valueStyle={{ color: '#ff4d4f' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      )}
       {/* 未登录或权限不足提示 */}
       {(!hasToken || !isInfraSuperAdmin) && (
         <Card style={{ marginBottom: 24 }}>
@@ -517,7 +529,7 @@ export default function OperationsDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"

@@ -12,7 +12,7 @@
 
 import React, { ReactNode, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Layout, Button, Typography, Divider, theme, ConfigProvider } from 'antd';
+import { Layout, Button, Typography, Divider, theme, ConfigProvider, Tag } from 'antd';
 import { FullscreenOutlined, FullscreenExitOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import Lottie from 'lottie-react';
@@ -31,6 +31,8 @@ export interface PremiumTerminalTemplateProps {
   operatorAvatar?: string;
   /** 员工角色（可选） */
   operatorRole?: string;
+  /** 员工邮箱（可选） */
+  operatorEmail?: string;
   /** 工位名称 */
   stationName?: string;
   /** 厂区名称（可选） */
@@ -52,11 +54,11 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
   operatorName = '未登录',
   operatorAvatar,
   operatorRole,
+  operatorEmail,
   stationName = '未绑定',
   stationArea,
   stationWorkshop,
   stationLine,
-  deviceName = '未连接',
   children,
   headerExtra,
 }) => {
@@ -233,8 +235,27 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
                 )}
               </span>
               <div className="header-operator-info">
-                <span className="header-operator-name">{operatorName}</span>
-                {operatorRole && <span className="header-operator-role">{operatorRole}</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="header-operator-name">{operatorName}</span>
+                    {operatorRole && (
+                        <Tag 
+                            bordered={false} 
+                            style={{ 
+                                margin: 0, 
+                                background: operatorRole === '管理员' ? 'linear-gradient(135deg, #FF9000 0%, #F56A00 100%)' : 'rgba(255,255,255,0.15)',
+                                color: '#fff',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                fontSize: 10,
+                                lineHeight: '18px',
+                                padding: '0 6px',
+                                borderRadius: 4,
+                            }}
+                        >
+                            {operatorRole}
+                        </Tag>
+                    )}
+                </div>
+                {operatorEmail && <span className="header-operator-email">{operatorEmail}</span>}
               </div>
             </div>
           </div>
@@ -390,7 +411,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               align-items: center !important;
               flex-shrink: 0 !important;
               gap: 0 !important;
-              min-width: 640px !important;
+              min-width: 800px !important;
             }
             #premium-terminal-layout .header-title-row {
               display: inline-flex !important;
@@ -513,7 +534,8 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
               display: flex !important;
               flex-direction: column !important;
               align-items: flex-start !important;
-              gap: 0 !important;
+              justify-content: center !important;
+              gap: 2px !important;
             }
             #premium-terminal-layout .header-operator-name {
               font-size: 14px !important;

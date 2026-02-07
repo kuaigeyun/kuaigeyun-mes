@@ -1478,8 +1478,40 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           width: 0 !important;
           height: 0 !important;
         }
+        
+        /* 统一内容容器样式 */
+        .uni-tabs-wrapper {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          overflow: hidden;
+        }
+
+        .uni-tabs-content {
+          flex: 1;
+          overflow: auto; /* 允许滚动，所有页面滚动都在这个容器上 */
+          position: relative;
+        }
+
+        /* 普通页面统一添加 16px 内边距（顶部由 margin-top 控制，所以顶部内边距为 0） */
+        /* 使用 !important 确保在全屏模式下 padding 不会被 ProLayout 或其他样式覆盖 */
+        .uni-tabs-content-padded {
+          /* 使用 margin 代替 padding，避免在全屏模式下 padding 失效的问题 */
+          /* 此时滚动条会位于内容区域的边缘（margin 内部），而不是窗口边缘 */
+          margin: 16px !important;
+          padding: 0 !important;
+          box-sizing: border-box;
+          width: calc(100% - 32px) !important;
+        }
       `}</style>
-      <div className="uni-tabs-wrapper">
+      <div 
+        className="uni-tabs-wrapper"
+        style={{
+          '--header-height': isFullscreen ? '0px' : '56px',
+          '--tabs-height': '56px',
+          '--content-margin': '16px',
+        } as React.CSSProperties}
+      >
         <div className="uni-tabs-header">
           <div
             className={`uni-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
@@ -1575,7 +1607,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           </div>
         </div>
         <div
-          className={`uni-tabs-content${activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?')) ? ' uni-tabs-content-dashboard' : ''}`}
+          className={`uni-tabs-content${(activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?'))) ? ' uni-tabs-content-dashboard' : ''}`}
           key={`content-${activeKey}-${refreshKey}`}
         >
           {isHMIPage ? (
@@ -1585,7 +1617,16 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
               </div>
             </div>
           ) : (
-            children
+            <div style={{
+              padding: (activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?')) || activeKey === '/system/dashboard/analysis' || (activeKey && activeKey.startsWith('/system/dashboard/analysis?'))) ? 0 : '0 16px 16px 16px',
+              width: '100%',
+              minHeight: '100%',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              {children}
+            </div>
           )}
         </div>
       </div>

@@ -91,6 +91,12 @@ class PlatformSettings(Model):
         null=True,
         description="ICP备案信息"
     )
+    theme_color = fields.CharField(
+        max_length=20,
+        null=True,
+        default="#1890ff",
+        description="主题颜色"
+    )
     
     # 时间字段
     created_at = fields.DatetimeField(

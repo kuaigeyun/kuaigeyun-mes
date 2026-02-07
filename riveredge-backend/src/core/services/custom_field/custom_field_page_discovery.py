@@ -7,10 +7,15 @@
 
 import json
 import logging
+import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# 页面发现结果缓存：manifest 在运行期极少变更，缓存 5 分钟以减少文件扫描
+_PAGES_CACHE: Optional[Tuple[List[Dict[str, Any]], float]] = None
+_PAGES_CACHE_TTL = 300  # 秒
 
 
 class CustomFieldPageDiscoveryService:
@@ -142,15 +147,23 @@ class CustomFieldPageDiscoveryService:
         获取所有自定义字段页面配置（包含服务发现和硬编码回退）
         
         优先使用服务发现，如果服务发现失败或返回空列表，则回退到硬编码配置。
+        结果缓存 5 分钟，减少重复文件扫描。
         
         Returns:
             List[Dict[str, Any]]: 页面配置列表
         """
+        global _PAGES_CACHE
+        now = time.time()
+        if _PAGES_CACHE is not None:
+            cached_pages, cached_at = _PAGES_CACHE
+            if now - cached_at < _PAGES_CACHE_TTL:
+                return cached_pages
         try:
             # 尝试从服务发现获取页面配置
             discovered_pages = CustomFieldPageDiscoveryService.discover_pages()
             
             if discovered_pages:
+                _PAGES_CACHE = (discovered_pages, now)
                 logger.info(f"✅ 通过服务发现获取到 {len(discovered_pages)} 个自定义字段页面配置")
                 return discovered_pages
             else:

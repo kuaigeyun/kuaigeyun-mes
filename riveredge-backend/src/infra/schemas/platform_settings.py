@@ -24,6 +24,7 @@ class PlatformSettingsBase(BaseSchema):
     login_title: Optional[str] = Field(None, max_length=200, description="登录页标题")
     login_content: Optional[str] = Field(None, description="登录页内容描述")
     icp_license: Optional[str] = Field(None, max_length=100, description="ICP备案信息")
+    theme_color: Optional[str] = Field("#1890ff", max_length=20, description="主题颜色")
 
 
 class PlatformSettingsCreate(PlatformSettingsBase):
@@ -42,6 +43,7 @@ class PlatformSettingsUpdate(BaseSchema):
     login_title: Optional[str] = Field(None, max_length=200, description="登录页标题")
     login_content: Optional[str] = Field(None, description="登录页内容描述")
     icp_license: Optional[str] = Field(None, max_length=100, description="ICP备案信息")
+    theme_color: Optional[str] = Field(None, max_length=20, description="主题颜色")
 
 
 class PlatformSettingsResponse(PlatformSettingsBase):

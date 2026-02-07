@@ -297,6 +297,7 @@ class CurrentUserResponse(BaseModel):
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="用户邮箱（可选）")
     full_name: Optional[str] = Field(None, description="用户全名")
+    avatar: Optional[str] = Field(None, description="用户头像")
     tenant_id: Optional[int] = Field(None, description="组织 ID（平台管理可能没有组织）")
     tenant_name: Optional[str] = Field(None, description="组织名称（可选，如果用户有组织则返回）")
     is_active: bool = Field(..., description="是否激活")

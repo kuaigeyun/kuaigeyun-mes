@@ -231,7 +231,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
       style={{
         display: 'flex',
         height: '100%',
-        padding: `0 ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px ${PAGE_SPACING.PADDING}px`,
+        padding: 0,
         margin: 0,
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,

@@ -9,7 +9,7 @@
  */
 
 import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Card, Button, Space, Upload, message } from 'antd';
+import { App, Card, Button, Space, Upload, message, Form, ColorPicker } from 'antd';
 import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -116,6 +116,7 @@ export default function PlatformSettingsPage() {
         login_title: settings.login_title,
         login_content: settings.login_content,
         icp_license: settings.icp_license,
+        theme_color: settings.theme_color || '#1890ff',
       });
       
       // 加载LOGO预览
@@ -385,6 +386,36 @@ export default function PlatformSettingsPage() {
                 maxLength: 1000,
               }}
             />
+
+            <Form.Item
+              name="theme_color"
+              label="主题颜色"
+              tooltip="设置登录页和平台的默认主题色（默认：#1890ff）"
+            >
+              <ColorPicker
+                showText
+                format="hex"
+                presets={[
+                  {
+                    label: '推荐颜色',
+                    colors: [
+                      '#1890ff', // 科技蓝（默认）
+                      '#F5222D', // 薄暮
+                      '#FA541C', // 火山
+                      '#FAAD14', // 金盏花
+                      '#13C2C2', // 明青
+                      '#52C41A', // 极光绿
+                      '#2F54EB', // 极客蓝
+                      '#722ED1', // 酱紫
+                    ],
+                  },
+                ]}
+                onChange={(value) => {
+                  const hexColor = value.toHexString();
+                  form.setFieldValue('theme_color', hexColor);
+                }}
+              />
+            </Form.Item>
           </Card>
 
           <ProFormText
