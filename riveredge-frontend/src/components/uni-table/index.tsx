@@ -25,8 +25,7 @@ const useProTableSearch = () => {
 };
 import { UniImport } from '../uni-import';
 
-/** Ant Design 表格默认行高（px），用于预估内容高度，仅当超出可用高度时启用 scroll.y */
-const TABLE_ROW_HEIGHT = 55;
+
 
 /**
  * 从 columns 自动生成导入配置
@@ -504,7 +503,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // 检测是否在两栏布局中，并计算表格高度
-  useEffect(() => {
+  // 使用 useLayoutEffect 确保在渲染前计算高度，避免视觉跳动
+  useLayoutEffect(() => {
     if (!tableContainerRef.current) return;
 
     // 检查是否在两栏布局中
@@ -523,8 +523,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (!container) return;
 
       // 方法1：直接使用容器高度减去固定元素高度
-      // 获取容器高度（clientHeight 已经减去了 padding 和 border）
+      // 获取容器高度（clientHeight 包含 padding）
       const containerHeight = container.clientHeight;
+      
+      // 获取容器的 padding
+      const containerStyle = window.getComputedStyle(container);
+      const containerPaddingTop = parseFloat(containerStyle.paddingTop) || 0;
+      const containerPaddingBottom = parseFloat(containerStyle.paddingBottom) || 0;
+      
+      // 计算实际可用高度（减去 padding）
+      const effectiveContainerHeight = containerHeight - containerPaddingTop - containerPaddingBottom;
 
       // 查找表格相关的固定高度元素
       const proTable = tableContainerRef.current.querySelector('.ant-pro-table');
@@ -545,6 +553,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       // 查找 ProCard 的 padding（如果有）
       const proCard = proTable.closest('.ant-pro-card');
       const proCardBody = proCard?.querySelector('.ant-pro-card-body');
+
+      // 查找表头
+      const tableHeader = proTable.querySelector('.ant-table-thead');
 
       let fixedHeight = 0;
 
@@ -567,6 +578,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         fixedHeight += headerTitle.clientHeight;
       }
 
+      // 表头高度
+      // 注意：如果有固定列，可能会有多个 thead，取第一个即可
+      if (tableHeader) {
+        fixedHeight += tableHeader.clientHeight;
+      }
+
       // 分页器高度
       if (pagination) {
         const paginationStyle = window.getComputedStyle(pagination);
@@ -581,6 +598,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
 
       // ProCard 的 padding（上下各 24px，但可能被覆盖）
+      // 只有当不在 ProCard 内部或者 ProCard 没有 padding 时才不需要计算
+      // 这里简单处理：如果有 padding，就加上
       if (proCardBody) {
         const cardBodyStyle = window.getComputedStyle(proCardBody);
         const paddingTop = parseInt(cardBodyStyle.paddingTop) || 0;
@@ -588,41 +607,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         fixedHeight += paddingTop + paddingBottom;
       }
 
-      // 方法2：直接测量表格容器到分页器之间的高度（更准确）
-      // 查找表格容器（.ant-table-wrapper）
-      const tableWrapper = proTable.querySelector('.ant-table-wrapper');
-      let measuredHeight = 0;
+      // 额外预留一些空间（如边框、微小的 margin 等），防止正好卡住出现双滚动条
+      fixedHeight += 2; 
 
-      if (tableWrapper) {
-        // 获取表格容器的实际可用高度
-        const tableWrapperRect = tableWrapper.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-
-        // 计算表格容器在内容区内的实际高度
-        // 需要考虑表格容器上方和下方的元素
-        const tableTop = tableWrapperRect.top;
-        const containerTop = containerRect.top;
-        const containerBottom = containerRect.bottom;
-
-        // 表格容器上方的高度（按钮容器、工具栏等）
-        const topOffset = tableTop - containerTop;
-
-        // 表格容器下方的高度（分页器等）
-        let bottomOffset = 0;
-        if (pagination) {
-          const paginationRect = pagination.getBoundingClientRect();
-          bottomOffset = containerBottom - paginationRect.bottom;
-        } else {
-          // 如果分页器尚未加载，预留空间以免遮挡
-          bottomOffset = 64;
-        }
-
-        // 计算表格主体可用高度
-        measuredHeight = containerHeight - topOffset - bottomOffset;
-      }
-
-      // 使用两种方法中更准确的一个（优先使用方法2，如果不可用则使用方法1）
-      const availableHeight = measuredHeight > 0 ? measuredHeight : (containerHeight - fixedHeight);
+      // 计算可用高度
+      const availableHeight = effectiveContainerHeight - fixedHeight;
 
       if (availableHeight > 100) {
         setTableScrollY(availableHeight);
@@ -631,12 +620,13 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
     };
 
-    // 初始计算（延迟一下，确保 DOM 已渲染）
-    setTimeout(calculateHeight, 100);
+    // 立即计算
+    calculateHeight();
 
     // 使用 ResizeObserver 监听容器大小变化
     const resizeObserver = new ResizeObserver(() => {
-      calculateHeight();
+      // 使用 requestAnimationFrame 避免在 resize 过程中频繁计算
+      requestAnimationFrame(calculateHeight);
     });
 
     const container = tableContainerRef.current.closest('.two-column-layout-content');
@@ -1486,9 +1476,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     scrollConfig.x = 'max-content';
                   }
 
-                  // 在两栏布局中且预估内容超出可用高度时，才设置 scroll.y，避免内容未溢出时出现垂直滚动条
-                  const estimatedHeight = tableData.length * TABLE_ROW_HEIGHT;
-                  if (tableScrollY !== undefined && tableData.length > 0 && estimatedHeight > tableScrollY) {
+                  // 在两栏布局中，始终应用计算出的高度，确保表头固定且表体自适应容器
+                  // 之前尝试通过 estimatedHeight 判断是否需要滚动，但这会导致：
+                  // 1. 估算不准时（如换行），内容被容器截断
+                  // 2. 数据量少时，无法撑开到容器底部（虽然这对显示影响不大，但统一行为更好）
+                  // 因此，只要算出了 tableScrollY，就应用它
+                  if (tableScrollY !== undefined) {
                     scrollConfig.y = tableScrollY;
                   }
 
