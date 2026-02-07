@@ -98,76 +98,150 @@ class DepartmentService:
     @staticmethod
     async def get_department_tree(
         tenant_id: int,
-        parent_id: Optional[int] = None
+        parent_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        is_active: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """
-        获取部门树（递归）
+        获取部门树（支持搜索和筛选）
         
         Args:
             tenant_id: 组织ID
-            parent_id: 父部门ID（None 表示根部门）
+            parent_id: 开始父部门ID（通常为 None 表示从根开始）
+            keyword: 关键词搜索（名称、代码）
+            is_active: 是否启用筛选
             
         Returns:
             List[Dict]: 部门树列表
         """
-        # 获取直接子部门
+        # 1. 构建基础查询条件
+        query = Q(tenant_id=tenant_id)
+        # deleted_at__isnull=True  # 暂时移除，数据库表结构不一致
+        
+        # 2. 如果不带搜索/筛选，使用原有的递归加载方式（性能较好，且支持大数量）
+        if not keyword and is_active is None:
+            return await DepartmentService._get_recursive_tree(tenant_id, parent_id)
+            
+        # 3. 如果带搜索/筛选，采用全部加载并过滤的方式保持树形结构
+        # 获取所有部门
+        all_departments = await Department.filter(query).order_by("sort_order", "id").all()
+        if not all_departments:
+            return []
+            
+        # 匹配搜索条件的部门 ID 集合
+        matched_ids = set()
+        for dept in all_departments:
+            matches = True
+            if keyword:
+                kw = keyword.lower()
+                matches = kw in (dept.name or "").lower() or kw in (dept.code or "").lower()
+            
+            if matches and is_active is not None:
+                matches = dept.is_active == is_active
+                
+            if matches:
+                matched_ids.add(dept.id)
+        
+        if not matched_ids:
+            return []
+            
+        # 扩展 matched_ids 以包含所有祖先节点，确保能构建出完整的整路径
+        id_to_dept = {dept.id: dept for dept in all_departments}
+        result_ids = set(matched_ids)
+        for dept_id in matched_ids:
+            curr = id_to_dept.get(dept_id)
+            while curr and curr.parent_id:
+                if curr.parent_id in result_ids:
+                    break
+                result_ids.add(curr.parent_id)
+                curr = id_to_dept.get(curr.parent_id)
+        
+        # 4. 构建树形结构
+        # 过滤出最终需要的部门列表
+        filtered_depts = [dept for dept in all_departments if dept.id in result_ids]
+        
+        # 转换为带统计信息的字典，并按层级分组
+        from infra.models.user import User
+        
+        async def enrich_dept(dept):
+            children_count = await Department.filter(tenant_id=tenant_id, parent_id=dept.id).count()
+            user_count = await User.filter(tenant_id=tenant_id, department_id=dept.id).count()
+            
+            # 获取父部门的UUID
+            parent_uuid = None
+            if dept.parent_id:
+                parent_dept = id_to_dept.get(dept.parent_id)
+                parent_uuid = parent_dept.uuid if parent_dept else None
+                
+            return {
+                "id": dept.id,
+                "uuid": dept.uuid,
+                "name": dept.name,
+                "code": dept.code,
+                "description": dept.description,
+                "parent_id": dept.parent_id,
+                "parent_uuid": parent_uuid,
+                "manager_id": dept.manager_id,
+                "manager_uuid": None,
+                "sort_order": dept.sort_order,
+                "is_active": dept.is_active,
+                "children_count": children_count,
+                "user_count": user_count,
+                "children": []
+            }
+
+        # 构建 ID 到处理后字典的映射
+        enriched_items = {}
+        for dept in filtered_depts:
+            enriched_items[dept.id] = await enrich_dept(dept)
+            
+        root_nodes = []
+        for dept_id, item in enriched_items.items():
+            if item["parent_id"] is None or item["parent_id"] not in enriched_items:
+                root_nodes.append(item)
+            else:
+                parent = enriched_items[item["parent_id"]]
+                parent["children"].append(item)
+                
+        return root_nodes
+
+    @staticmethod
+    async def _get_recursive_tree(tenant_id: int, parent_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """原有递归加载树的辅助函数"""
         departments = await Department.filter(
             tenant_id=tenant_id,
-            parent_id=parent_id,  # 使用parent_id字段（ForeignKeyField的数据库字段名）
-            # deleted_at__isnull=True  # 暂时移除，数据库表结构不一致
+            parent_id=parent_id,
         ).order_by("sort_order", "id").all()
         
         result = []
         for dept in departments:
-            # 获取子部门数量
-            children_count = await Department.filter(
-                tenant_id=tenant_id,
-                parent_id=dept.id,  # 使用parent_id字段
-                # deleted_at__isnull=True  # 暂时移除，数据库表结构不一致
-            ).count()
+            children_count = await Department.filter(tenant_id=tenant_id, parent_id=dept.id).count()
+            from infra.models.user import User
+            user_count = await User.filter(tenant_id=tenant_id, department_id=dept.id).count()
             
-            # 获取用户数量（假设 User 模型有 department_id 字段）
-            user_count = await User.filter(
-                tenant_id=tenant_id,
-                department_id=dept.id,
-                # deleted_at__isnull=True  # 暂时移除，数据库表结构不一致
-            ).count()
+            children = await DepartmentService._get_recursive_tree(tenant_id, dept.id)
             
-            # 递归获取子部门
-            children = await DepartmentService.get_department_tree(
-                tenant_id=tenant_id,
-                parent_id=dept.id
-            )
-            
-            # 获取父部门的UUID（如果有的话）
             parent_uuid = None
             if dept.parent_id:
                 parent_dept = await Department.get_or_none(id=dept.parent_id)
                 parent_uuid = parent_dept.uuid if parent_dept else None
 
             result.append({
-                "id": dept.id,  # ⚠️ 修复：添加 id 字段，供 API 层使用
+                "id": dept.id,
                 "uuid": dept.uuid,
                 "name": dept.name,
                 "code": dept.code,
                 "description": dept.description,
-                "parent_id": dept.parent_id,  # ⚠️ 修复：添加 parent_id 字段
+                "parent_id": dept.parent_id,
                 "parent_uuid": parent_uuid,
-                "manager_id": dept.manager_id,  # ⚠️ 修复：添加 manager_id 字段
-                # 获取管理者UUID（如果有的话）
-                "manager_uuid": None,  # 暂时设为None，避免复杂查询
-                # manager_uuid = None
-                # if dept.manager_id:
-                #     from infra.models.user import User
-                #     manager_user = await User.get_or_none(id=dept.manager_id)
-                #     manager_uuid = manager_user.uuid if manager_user else None
+                "manager_id": dept.manager_id,
+                "manager_uuid": None,
                 "sort_order": dept.sort_order,
                 "is_active": dept.is_active,
                 "children_count": children_count,
                 "user_count": user_count,
                 "children": children,
             })
-        
         return result
     
     @staticmethod

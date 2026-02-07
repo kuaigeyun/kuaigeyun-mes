@@ -52,8 +52,8 @@ class BaseModel(Model):
     
     tenant_id = fields.IntField(null=True, db_index=True, description="组织 ID（用于多组织数据隔离）")
     # 使用原生datetime.now()，避免Tortoise ORM时区处理的复杂性
-    created_at = fields.DatetimeField(default=datetime.utcnow, description="创建时间（UTC）")
-    updated_at = fields.DatetimeField(default=datetime.utcnow, description="更新时间（UTC）")
+    created_at = fields.DatetimeField(auto_now_add=True, description="创建时间")
+    updated_at = fields.DatetimeField(auto_now=True, description="更新时间")
 
     class Meta:
         """

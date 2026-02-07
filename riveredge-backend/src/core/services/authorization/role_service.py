@@ -76,6 +76,8 @@ class RoleService:
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
         is_active: Optional[bool] = None,
         is_system: Optional[bool] = None,
     ) -> dict:
@@ -101,6 +103,12 @@ class RoleService:
             exact_filters['is_active'] = is_active
         if is_system is not None:
             exact_filters['is_system'] = is_system
+        
+        # 字段搜索（用于高级搜索）
+        if name:
+            exact_filters['name__icontains'] = name
+        if code:
+            exact_filters['code__icontains'] = code
         
         # 使用通用搜索工具（自动支持拼音首字母搜索）
         search_result = await list_with_search(

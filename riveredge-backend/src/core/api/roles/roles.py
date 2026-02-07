@@ -104,6 +104,8 @@ async def get_role_list(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    name: Optional[str] = Query(None, description="角色名称筛选"),
+    code: Optional[str] = Query(None, description="角色代码筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     is_system: Optional[bool] = Query(None, description="是否系统角色筛选"),
     current_user: User = Depends(soil_get_current_user),
@@ -131,6 +133,8 @@ async def get_role_list(
         page=page,
         page_size=page_size,
         keyword=keyword,
+        name=name,
+        code=code,
         is_active=is_active,
         is_system=is_system,
     )

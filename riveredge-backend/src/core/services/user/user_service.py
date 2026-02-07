@@ -9,6 +9,7 @@ import tempfile
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 from passlib.context import CryptContext
 
 from infra.models.user import User
@@ -144,6 +145,10 @@ class UserService:
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        full_name: Optional[str] = None,
+        phone: Optional[str] = None,
         department_uuid: Optional[str] = None,
         position_uuid: Optional[str] = None,
         is_active: Optional[bool] = None,
@@ -175,6 +180,16 @@ class UserService:
             query &= (Q(username__icontains=keyword) | 
                      Q(email__icontains=keyword) | 
                      Q(full_name__icontains=keyword))
+        
+        # 精确/模糊字段搜索（用于高级搜索）
+        if username:
+            query &= Q(username__icontains=username)
+        if email:
+            query &= Q(email__icontains=email)
+        if full_name:
+            query &= Q(full_name__icontains=full_name)
+        if phone:
+            query &= Q(phone__icontains=phone)
         
         # 部门筛选
         if department_uuid:
@@ -430,25 +445,22 @@ class UserService:
             if hasattr(user, key):
                 setattr(user, key, value)
         
-        await user.save()
-        
-        # 更新角色（如果提供）
-        if data.role_uuids is not None:
-            # 清除现有角色
-            await user.roles.clear()
-            
-            # 添加新角色
-            if data.role_uuids:
-                roles = await Role.filter(
-                    uuid__in=data.role_uuids,
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True
-                ).all()
-                
-                if len(roles) != len(data.role_uuids):
-                    raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
-
-                await user.roles.add(*roles)
+        # 用户保存与角色更新放在同一事务中，避免 core_user_roles 外键校验时看不到已保存的用户
+        async with in_transaction():
+            await user.save()
+            if data.role_uuids is not None:
+                await UserRole.filter(user_id=user.id).delete()
+                if data.role_uuids:
+                    roles = await Role.filter(
+                        uuid__in=data.role_uuids,
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True
+                    ).all()
+                    if len(roles) != len(data.role_uuids):
+                        raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
+                    await UserRole.bulk_create([
+                        UserRole(user_id=user.id, role_id=r.id) for r in roles
+                    ])
         
         # 重新加载关联数据
         await user.fetch_related('roles', 'department', 'position')

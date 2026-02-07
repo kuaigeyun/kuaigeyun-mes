@@ -8,14 +8,14 @@ import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, for
 import type { ActionType, ProFormInstance, ProColumns } from '@ant-design/pro-components';
 import SafeProFormSelect from '../safe-pro-form-select';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormDateRangePicker } from '@ant-design/pro-components';
-import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, MenuProps, theme, Tabs, Tag, Divider } from 'antd';
+import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, theme, Tabs, Tag, Divider } from 'antd';
 import { SaveOutlined, DeleteOutlined, DownOutlined, EditOutlined, PushpinOutlined, PushpinFilled, MoreOutlined, ReloadOutlined, SearchOutlined, ShareAltOutlined, HolderOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { AutoCompleteProps } from 'antd';
 import { filterByPinyinInitials } from '../../utils/pinyin';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSavedSearchList, createSavedSearch, deleteSavedSearchByUuid, updateSavedSearchByUuid, SavedSearch } from '../../services/savedSearch';
-import { getToken, getUserInfo } from '../../utils/auth';
+import { getToken } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
 import { QuickFilters } from './QuickFilters';
 import { AdvancedFilters } from './AdvancedFilters';
@@ -431,7 +431,6 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
   actionRef,
   visible,
   onClose,
-  style,
   searchParamsRef,
 }) => {
   const searchFormRef = useRef<ProFormInstance>();
@@ -660,8 +659,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
     });
   };
 
-  /**
-   * 根据列类型渲染表单项
+  /**   * 根据列类型渲染表单项
    */
   const renderFormItem = (column: ProColumns<any>) => {
     const { dataIndex, title, valueType, valueEnum, fieldProps } = column;
@@ -707,7 +705,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           name={dataIndex as string}
           label={title as string}
           placeholder={`请输入${title as string}`}
-          fieldProps={fieldProps}
+          fieldProps={fieldProps as any}
         />
       );
     }
@@ -721,7 +719,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           label={title as string}
           placeholder={`请选择${title as string}`}
           valueEnum={valueEnum}
-          fieldProps={fieldProps}
+          fieldProps={fieldProps as any}
         />
       );
     }
@@ -734,7 +732,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           name={dataIndex as string}
           label={title as string}
           placeholder={`请选择${title as string}`}
-          fieldProps={fieldProps}
+          fieldProps={fieldProps as any}
         />
       );
     }
@@ -747,7 +745,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           name={dataIndex as string}
           label={title as string}
           placeholder={[`开始${title as string}`, `结束${title as string}`]}
-          fieldProps={fieldProps}
+          fieldProps={fieldProps as any}
         />
       );
     }
@@ -778,7 +776,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
         name={dataIndex as string}
         label={title as string}
         placeholder={`请输入${title as string}`}
-        fieldProps={fieldProps}
+        fieldProps={fieldProps as any}
       />
     );
   };
@@ -1385,7 +1383,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
           )}
           
           {/* 搜索和筛选标签页 */}
-          <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
             <Tabs
               activeKey={activeTab}
               onChange={(key) => setActiveTab(key as 'search' | 'filter')}
@@ -1397,6 +1395,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
                   <ProForm
                     formRef={searchFormRef}
                     submitter={false}
+                    style={{ padding: '0 8px' }}
                   >
                     <Row gutter={16}>
                       {searchableColumns.map((column, index) => {
@@ -1903,7 +1902,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             我知道了
           </Button>
         ]}
-        size={700}
+        width={700}
       >
         <div style={{ lineHeight: 1.8, color: token.colorText }}>
           {/* 快速筛选说明 */}
@@ -2178,7 +2177,7 @@ export const QuerySearchModal: React.FC<QuerySearchModalProps> = ({
             </div>
           </div>
           
-          <Divider orientation="left" style={{ margin: '24px 0' }}>
+          <Divider orientation={"left" as any} style={{ margin: '24px 0' }}>
             <Typography.Text strong>实际使用示例</Typography.Text>
           </Divider>
           
@@ -2572,48 +2571,9 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
   const MAX_VISIBLE_PINNED = 5; // 最多显示 5 个钉住的条件
   const visiblePinnedSearches = pinnedSearches.slice(0, MAX_VISIBLE_PINNED);
   const morePinnedSearches = pinnedSearches.slice(MAX_VISIBLE_PINNED);
-
   /**
-   * 判断搜索条件是否匹配（用于显示激活状态）
-   * ⚠️ 修复：直接比较当前搜索参数，避免依赖变化导致的无限循环
+   * 修复：创建稳定的激活状态计算函数，避免无限循环
    */
-  const isSearchActive = useCallback((savedSearch: SavedSearch): boolean => {
-    const currentParams = searchParamsRef?.current;
-    if (!currentParams) {
-      return false;
-    }
-    const savedParams = savedSearch.search_params || {};
-
-    // 比较所有搜索参数
-    const savedKeys = Object.keys(savedParams);
-    if (savedKeys.length === 0) {
-      return false;
-    }
-
-    // 检查所有保存的参数是否都在当前搜索参数中，且值匹配
-    for (const key of savedKeys) {
-      const savedValue = savedParams[key];
-      const currentValue = currentParams[key];
-
-      // 处理数组类型的值（如多选）
-      if (Array.isArray(savedValue) && Array.isArray(currentValue)) {
-        if (savedValue.length !== currentValue.length) {
-          return false;
-        }
-        const sortedSaved = [...savedValue].sort();
-        const sortedCurrent = [...currentValue].sort();
-        if (JSON.stringify(sortedSaved) !== JSON.stringify(sortedCurrent)) {
-          return false;
-        }
-      } else if (savedValue !== currentValue) {
-        return false;
-      }
-    }
-
-    return true;
-  }, []); // ⚠️ 修复：移除依赖项，通过 useMemo 在外部控制重新计算
-
-  // ⚠️ 修复：创建稳定的激活状态计算函数，避免无限循环
   const getSearchActiveState = useCallback((search: SavedSearch): boolean => {
     const currentParams = searchParamsRef?.current;
     if (!currentParams) {

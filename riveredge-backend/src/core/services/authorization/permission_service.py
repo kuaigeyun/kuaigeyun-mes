@@ -25,6 +25,8 @@ class PermissionService:
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
         resource: Optional[str] = None,
         permission_type: Optional[str] = None,
     ) -> dict:
@@ -59,6 +61,12 @@ class PermissionService:
         
         if permission_type:
             query = query.filter(permission_type=permission_type)
+
+        if name:
+            query = query.filter(name__icontains=name)
+        
+        if code:
+            query = query.filter(code__icontains=code)
         
         # 分页
         total = await query.count()

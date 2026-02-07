@@ -1,0 +1,44 @@
+{
+    "name": "报表与看板",
+    "code": "kuaireport",
+    "version": "1.0.0",
+    "description": "专业的报表与大屏设计工具",
+    "icon": "bar-chart",
+    "author": "RiverEdge Team",
+    "entry_point": "../apps/kuaireport/index.tsx",
+    "route_path": "/apps/kuaireport",
+    "sort_order": 30,
+    "menu_config": {
+        "title": "报表与看板",
+        "icon": "bar-chart",
+        "path": "/apps/kuaireport",
+        "children": [
+            {
+                "title": "报表中心",
+                "path": "/apps/kuaireport/reports",
+                "permission": "kuaireport:report:view",
+                "sort_order": 1
+            },
+            {
+                "title": "大屏中心",
+                "path": "/apps/kuaireport/dashboards",
+                "permission": "kuaireport:dashboard:view",
+                "sort_order": 2
+            }
+        ]
+    },
+    "permissions": [
+        "kuaireport:report:view",
+        "kuaireport:report:create",
+        "kuaireport:report:update",
+        "kuaireport:report:delete",
+        "kuaireport:dashboard:view",
+        "kuaireport:dashboard:create",
+        "kuaireport:dashboard:update",
+        "kuaireport:dashboard:delete"
+    ],
+    "dependencies": {
+        "riveredge-backend": ">=1.0.0",
+        "riveredge-frontend": ">=1.0.0"
+    }
+}

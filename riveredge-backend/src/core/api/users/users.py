@@ -42,6 +42,9 @@ def model_to_response(model_obj, response_class, **extra_fields):
     # 移除内部ID字段，只保留UUID
     if 'id' in obj_dict:
         del obj_dict['id']
+    # 移除将由 extra_fields 传入的键，避免把 Tortoise 关联对象传入 Pydantic
+    for key in extra_fields:
+        obj_dict.pop(key, None)
 
     # 创建响应对象
     response = response_class(**obj_dict)
@@ -51,6 +54,41 @@ def model_to_response(model_obj, response_class, **extra_fields):
         setattr(response, key, value)
 
     return response
+
+
+async def _user_to_response(user) -> UserResponse:
+    """
+    将 User 模型转为 UserResponse，预加载并序列化 department、position、roles。
+    避免直接把 Tortoise 关联对象传给 Pydantic 导致的 ValidationError。
+    """
+    await user.fetch_related("roles", "department", "position")
+    department_data = None
+    if user.department:
+        department_data = {
+            "uuid": user.department.uuid,
+            "name": user.department.name,
+            "code": user.department.code,
+        }
+    position_data = None
+    if user.position:
+        position_data = {
+            "uuid": user.position.uuid,
+            "name": user.position.name,
+            "code": user.position.code,
+        }
+    roles_data = []
+    if user.roles:
+        roles_data = [
+            {"uuid": r.uuid, "name": r.name, "code": r.code}
+            for r in user.roles
+        ]
+    return model_to_response(
+        user,
+        UserResponse,
+        department=department_data,
+        position=position_data,
+        roles=roles_data,
+    )
 
 router = APIRouter(prefix="/users", tags=["Core Users"])
 
@@ -167,6 +205,10 @@ async def get_user_list(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    username: Optional[str] = Query(None, description="用户名筛选"),
+    email: Optional[str] = Query(None, description="邮箱筛选"),
+    full_name: Optional[str] = Query(None, description="姓名筛选"),
+    phone: Optional[str] = Query(None, description="手机号筛选"),
     department_uuid: Optional[str] = Query(None, description="部门UUID筛选"),
     position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
@@ -230,6 +272,10 @@ async def get_user_list(
         page=page,
         page_size=page_size,
         keyword=keyword,
+        username=username,
+        email=email,
+        full_name=full_name,
+        phone=phone,
         department_uuid=department_uuid,
         position_uuid=position_uuid,
         is_active=is_active,
@@ -277,8 +323,7 @@ async def get_user_detail(
             user_uuid=user_uuid,
             current_user_id=current_user.id
         )
-        
-        return UserResponse.model_validate(user)
+        return await _user_to_response(user)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -317,8 +362,7 @@ async def update_user(
             data=data,
             current_user_id=current_user.id
         )
-        
-        return UserResponse.model_validate(user)
+        return await _user_to_response(user)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -101,7 +101,9 @@ class User(BaseModel):
     roles = fields.ManyToManyField(
         "models.Role",  # Tortoise ORM 会自动解析为 core.models.Role
         related_name="users",
-        through="core.models.UserRole",  # 明确指定core应用中的UserRole模型
+        through="core_user_roles",  # 中间表表名，见 UserRole.Meta.table
+        forward_key="user_id",   # 中间表指向本表(User)的列名
+        backward_key="role_id",  # 中间表指向关联表(Role)的列名
         description="用户角色（多对多关系）"
     )
     

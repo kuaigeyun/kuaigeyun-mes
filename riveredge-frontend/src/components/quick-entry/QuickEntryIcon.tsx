@@ -40,9 +40,8 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
 }) => {
   const { token } = useToken();
 
-  // 默认渐变色（根据功能类型生成，颜色稍微淡一点）
-  // 通过降低透明度和添加白色叠加层来让颜色更淡
-  const defaultGradient = gradient || `linear-gradient(135deg, ${token.colorPrimary}aa 0%, ${token.colorPrimary}88 100%)`;
+  // 液态玻璃背景：主题色原色（无透明）+ 毛玻璃高光
+  const glassBackground = gradient || `linear-gradient(135deg, ${token.colorPrimary} 0%, ${token.colorPrimary} 100%)`;
 
   return (
     <div
@@ -57,20 +56,20 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
       }}
       onClick={onClick}
     >
-      {/* iOS毛玻璃效果图标容器（类似手机App图标） */}
+      {/* 液态玻璃效果图标容器（frosted glass + 高光） */}
       <div
         style={{
           width: '64px',
           height: '64px',
           borderRadius: '16px',
-          background: defaultGradient,
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
+          background: glassBackground,
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          border: '1px solid rgba(255, 255, 255, 0.5)',
           boxShadow: `
-            0 8px 32px 0 rgba(0, 0, 0, 0.1),
-            inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
-            inset 0 -1px 0 0 rgba(0, 0, 0, 0.1)
+            0 8px 32px 0 rgba(0, 0, 0, 0.08),
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+            inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)
           `,
           display: 'flex',
           alignItems: 'center',
@@ -84,37 +83,22 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
           if (onClick) {
             e.currentTarget.style.transform = 'scale(1.05) translateY(-2px)';
             e.currentTarget.style.boxShadow = `
-              0 12px 40px 0 rgba(0, 0, 0, 0.15),
-              inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
-              inset 0 -1px 0 0 rgba(0, 0, 0, 0.1)
+              0 12px 40px 0 rgba(0, 0, 0, 0.12),
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+              inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)
             `;
           }
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'scale(1) translateY(0)';
           e.currentTarget.style.boxShadow = `
-            0 8px 32px 0 rgba(0, 0, 0, 0.1),
-            inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
-            inset 0 -1px 0 0 rgba(0, 0, 0, 0.1)
+            0 8px 32px 0 rgba(0, 0, 0, 0.08),
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+            inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)
           `;
         }}
       >
-        {/* 半透明白色叠加层，让背景色更淡 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(255, 255, 255, 0.15)',
-            borderRadius: '16px',
-            pointerEvents: 'none',
-            zIndex: 0,
-          }}
-        />
-        
-        {/* 高光效果 */}
+        {/* 液态玻璃高光效果 */}
         <div
           style={{
             position: 'absolute',
@@ -122,19 +106,19 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
             left: 0,
             right: 0,
             height: '50%',
-            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%)',
+            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, transparent 100%)',
             borderRadius: '16px 16px 0 0',
             pointerEvents: 'none',
             zIndex: 0,
           }}
         />
 
-        {/* 图标 */}
+        {/* 图标 - 白色原色，无透明 */}
         <div
           style={{
             fontSize: '24px',
             color: '#ffffff',
-            filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))',
+            filter: 'none',
             zIndex: 2,
             display: 'flex',
             alignItems: 'center',

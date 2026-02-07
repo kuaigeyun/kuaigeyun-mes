@@ -162,6 +162,8 @@ const PermissionListPage: React.FC = () => {
               page: params.current || 1,
               page_size: params.pageSize || 20,
               keyword: searchFormValues?.keyword,
+              name: searchFormValues?.name,
+              code: searchFormValues?.code,
               resource: searchFormValues?.resource,
               permission_type: searchFormValues?.permission_type,
             });

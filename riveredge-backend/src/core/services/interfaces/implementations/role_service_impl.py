@@ -65,6 +65,8 @@ class RoleServiceImpl(RoleServiceInterface):
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
         current_user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """获取角色列表"""
@@ -73,6 +75,8 @@ class RoleServiceImpl(RoleServiceInterface):
             page=page,
             page_size=page_size,
             keyword=keyword,
+            name=name,
+            code=code,
             current_user_id=current_user_id
         )
 

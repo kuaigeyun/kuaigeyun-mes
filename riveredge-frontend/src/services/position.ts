@@ -36,6 +36,8 @@ export interface PositionListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  name?: string;
+  code?: string;
   department_uuid?: string;
   is_active?: boolean;
 }

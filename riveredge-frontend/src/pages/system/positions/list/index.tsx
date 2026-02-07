@@ -6,8 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../components/safe-pro-form-select';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormTreeSelect } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -31,7 +30,7 @@ const PositionListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [deptTreeData, setDeptTreeData] = useState<DepartmentTreeItem[]>([]);
   
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -46,27 +45,13 @@ const PositionListPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
 
   /**
-   * 加载部门选项
+   * 加载部门数据（用于树形选择）
    */
   useEffect(() => {
     const loadDepartments = async () => {
       try {
         const response = await getDepartmentTree();
-        const buildOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
-          const options: Array<{ label: string; value: string }> = [];
-          items.forEach(item => {
-            const prefix = '  '.repeat(level);
-            options.push({
-              label: `${prefix}${item.name}`,
-              value: item.uuid,
-            });
-            if (item.children && item.children.length > 0) {
-              options.push(...buildOptions(item.children, level + 1));
-            }
-          });
-          return options;
-        };
-        setDepartmentOptions(buildOptions(response.items));
+        setDeptTreeData(response.items);
       } catch (error) {
         console.error('加载部门列表失败:', error);
       }
@@ -89,7 +74,7 @@ const PositionListPage: React.FC = () => {
 
   // 导入处理函数
   const handleImport = async (data: any[][]) => {
-    message.info('导入功能开发中...');
+    messageApi.info('导入功能开发中...');
     console.log('导入数据:', data);
   };
 
@@ -99,7 +84,7 @@ const PositionListPage: React.FC = () => {
     selectedRowKeys?: React.Key[],
     currentPageData?: Position[]
   ) => {
-    message.info('导出功能开发中...');
+    messageApi.info('导出功能开发中...');
     console.log('导出类型:', type, '选中行:', selectedRowKeys, '当前页数据:', currentPageData);
   };
 
@@ -236,16 +221,23 @@ const PositionListPage: React.FC = () => {
       dataIndex: 'name',
       width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: '职位代码',
       dataIndex: 'code',
       width: 150,
+      copyable: true,
     },
     {
       title: '所属部门',
-      dataIndex: 'department',
+      dataIndex: 'department_uuid',
       width: 200,
+      valueType: 'treeSelect',
+      fieldProps: {
+        treeData: deptTreeData,
+        fieldNames: { label: 'name', value: 'uuid' },
+      },
       render: (_, record) => record.department?.name || '-',
     },
     {
@@ -253,6 +245,20 @@ const PositionListPage: React.FC = () => {
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
+    },
+    {
+      title: '用户数',
+      dataIndex: 'user_count',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '排序',
+      dataIndex: 'sort_order',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: '状态',
@@ -270,21 +276,16 @@ const PositionListPage: React.FC = () => {
       ),
     },
     {
-      title: '用户数',
-      dataIndex: 'user_count',
-      width: 100,
-      hideInSearch: true,
-    },
-    {
-      title: '排序',
-      dataIndex: 'sort_order',
-      width: 100,
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
+      title: '更新时间',
+      dataIndex: 'updated_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
@@ -296,7 +297,7 @@ const PositionListPage: React.FC = () => {
       width: 200,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
+        <Space size="small">
           <Button
             type="link"
             size="small"
@@ -337,11 +338,13 @@ const PositionListPage: React.FC = () => {
         <UniTable<Position>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const response = await getPositionList({
               page: params.current || 1,
               page_size: params.pageSize || 20,
               keyword: searchFormValues?.keyword,
+              name: searchFormValues?.name,
+              code: searchFormValues?.code,
               department_uuid: searchFormValues?.department_uuid,
               is_active: searchFormValues?.is_active,
             });
@@ -403,34 +406,52 @@ const PositionListPage: React.FC = () => {
           label="职位名称"
           rules={[{ required: true, message: '请输入职位名称' }]}
           placeholder="请输入职位名称"
+          colProps={{ span: 12 }}
         />
         <ProFormText
           name="code"
           label="职位代码"
-          placeholder="请输入职位代码（可选）"
+          rules={[{ required: true, message: '请输入职位代码' }]}
+          placeholder="请输入职位代码"
+          colProps={{ span: 12 }}
+        />
+        <ProFormTreeSelect
+          name="department_uuid"
+          label="所属部门"
+          placeholder="请选择所属部门（可选）"
+          allowClear
+          fieldProps={{
+            showSearch: true,
+            filterTreeNode: true,
+            treeNodeFilterProp: 'name',
+            fieldNames: {
+              label: 'name',
+              value: 'uuid',
+              children: 'children',
+            },
+            treeData: deptTreeData,
+            treeDefaultExpandAll: true,
+          }}
+          colProps={{ span: 24 }}
         />
         <ProFormTextArea
           name="description"
           label="描述"
           placeholder="请输入职位描述"
-        />
-        <SafeProFormSelect
-          name="department_uuid"
-          label="所属部门"
-          placeholder="请选择所属部门（可选）"
-          options={departmentOptions}
-          allowClear
+          colProps={{ span: 24 }}
         />
         <ProFormText
           name="sort_order"
           label="排序"
-          initialValue={0}
+          placeholder="数字越小越靠前"
           fieldProps={{ type: 'number' }}
+          colProps={{ span: 12 }}
         />
         <ProFormSwitch
           name="is_active"
           label="是否启用"
           initialValue={true}
+          colProps={{ span: 12 }}
         />
       </FormModalTemplate>
 
@@ -441,12 +462,12 @@ const PositionListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
+        dataSource={detailData as any}
         columns={[
           { title: '职位名称', dataIndex: 'name' },
           { title: '职位代码', dataIndex: 'code' },
           { title: '描述', dataIndex: 'description', span: 2 },
-          { title: '所属部门', dataIndex: ['department', 'name'], render: (_, record: any) => record.department?.name || '-' },
+          { title: '所属部门', dataIndex: ['department', 'name'], render: (_: any, record: any) => record.department?.name || '-' },
           {
             title: '状态',
             dataIndex: 'is_active',
