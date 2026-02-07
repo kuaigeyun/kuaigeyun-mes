@@ -333,6 +333,10 @@ class UserServiceInterface(ServiceInterface):
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        full_name: Optional[str] = None,
+        phone: Optional[str] = None,
         department_uuid: Optional[str] = None,
         position_uuid: Optional[str] = None,
         is_active: Optional[bool] = None,
@@ -414,6 +418,8 @@ class RoleServiceInterface(ServiceInterface):
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
         current_user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """

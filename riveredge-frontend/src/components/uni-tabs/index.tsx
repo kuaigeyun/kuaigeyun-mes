@@ -785,6 +785,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return key.includes('production-execution/terminal') || key.includes('/kiosk');
   }, [activeKey]);
 
+  /** 是否为工作台/分析页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁） */
+  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/workplace' || location.pathname === '/system/dashboard/analysis';
+
   // 如果没有标签，直接渲染子组件
   if (tabs.length === 0) {
     return <>{children}</>;
@@ -1085,6 +1088,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         .uni-tabs-content {
           flex: 1;
+          display: flex;
+          flex-direction: column;
           overflow-y: auto;
           overflow-x: hidden;
           position: relative;
@@ -1607,7 +1612,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           </div>
         </div>
         <div
-          className={`uni-tabs-content${(activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?'))) ? ' uni-tabs-content-dashboard' : ''}`}
+          className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}`}
           key={`content-${activeKey}-${refreshKey}`}
         >
           {isHMIPage ? (
@@ -1618,14 +1623,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             </div>
           ) : (
             <div style={{
-              padding: (activeKey === '/system/dashboard/workplace' || (activeKey && activeKey.startsWith('/system/dashboard/workplace?')) || activeKey === '/system/dashboard/analysis' || (activeKey && activeKey.startsWith('/system/dashboard/analysis?'))) ? 0 : '0 16px 16px 16px',
+              padding: isDashboardOrAnalysisPage ? 0 : '0 16px 0 16px',
               width: '100%',
-              minHeight: '100%',
+              flex: 1,
+              minHeight: 0,
               boxSizing: 'border-box',
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
             }}>
-              {children}
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {children}
+              </div>
             </div>
           )}
         </div>

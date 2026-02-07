@@ -410,9 +410,9 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
  * 【第二组】应用菜单（插件式加载）- 根据用户权限和已安装插件动态加载
  * 【第三组】系统配置 - 平台级、系统级、应用级可见
  *   └─ 用户管理（分组标题，不可点击）
- *      ├─ 角色权限管理（第1优先级，包含角色和权限管理）
- *      ├─ 部门管理（第2优先级）
- *      ├─ 职位管理（第3优先级）
+ *      ├─ 部门管理（第1优先级）
+ *      ├─ 职位管理（第2优先级）
+ *      ├─ 角色权限管理（第3优先级，包含角色和权限管理）
  *      └─ 账户管理（第4优先级）
  * 【第四组】运营中心 - 仅平台级管理员可见
  * 
@@ -465,11 +465,6 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
         children: [
           // 按照系统级功能建设计划第一阶段顺序排序的用户管理功能
           {
-            path: '/system/roles',
-            name: t('menu.system.roles-permissions'),
-            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
-          },
-          {
             path: '/system/departments',
             name: t('menu.system.departments'),
             icon: getMenuIcon(t('menu.system.departments'), '/system/departments'),
@@ -478,6 +473,11 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             path: '/system/positions',
             name: t('menu.system.positions'),
             icon: getMenuIcon(t('menu.system.positions'), '/system/positions'),
+          },
+          {
+            path: '/system/roles',
+            name: t('menu.system.roles-permissions'),
+            icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'),
           },
           {
             path: '/system/users',
@@ -3263,11 +3263,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout-bg-list {
           background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
         }
-        /* 确保 ProLayout 内容区域背景色与激活标签一致 */
+        /* 确保 ProLayout 内容区域背景色与激活标签一致；强制 padding 为 0，避免首次加载 32px→16px 布局闪烁 */
         .ant-pro-layout-content,
         .ant-pro-layout-content .ant-pro-page-container,
         .ant-pro-layout-content .ant-pro-page-container-children-content {
           background: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')} !important;
+          padding: 0 !important;
+          padding-inline: 0 !important;
         }
         /* 左侧菜单区背景色 - 与顶栏和标签栏保持一致 */
         /* 浅色模式下，如果设置了自定义背景色，则使用自定义背景色；否则使用默认背景色（与顶栏一致） */

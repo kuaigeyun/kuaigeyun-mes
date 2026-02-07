@@ -438,7 +438,7 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
 
 
     const renderToolbox = () => (
-        <Card title="组件库" bordered={false} bodyStyle={{ padding: 10 }}>
+        <Card title="组件库" bordered={false} styles={{ body: { padding: 10 } }}>
             <List
                 grid={{ gutter: 16, column: 1 }}
                 dataSource={nodes} // Currently showing active nodes, usually this is a static list of ALL available types

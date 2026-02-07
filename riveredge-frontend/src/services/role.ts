@@ -14,7 +14,7 @@ import { apiRequest } from './api';
  * 权限信息接口
  */
 export interface Permission {
-  id: number;
+  uuid: string;
   name: string;
   code: string;
   description?: string;
@@ -51,6 +51,8 @@ export interface RoleListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  name?: string;
+  code?: string;
   is_active?: boolean;
   is_system?: boolean;
 }

@@ -94,6 +94,8 @@ export const TWO_COLUMN_LAYOUT = {
   LEFT_PANEL_MIN_WIDTH: 200,
   /** 左侧面板最大宽度 */
   LEFT_PANEL_MAX_WIDTH: 400,
+  /** 两栏布局最小高度（确保初次渲染时容器有固定高度，避免表格一行一行加载） */
+  MIN_HEIGHT: 500,
 } as const;
 
 /**

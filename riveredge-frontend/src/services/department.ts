@@ -22,6 +22,7 @@ export interface Department {
   tenant_id: number;
   children_count?: number;
   user_count?: number;
+  position_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -70,12 +71,18 @@ export interface UpdateDepartmentData {
 /**
  * 获取部门树形结构
  * 
- * 返回完整的部门树形结构，包含所有子部门。
+ * 返回完整的部门树形结构，包含所有子部门。支持关键词搜索。
  * 
+ * @param params - 搜索参数
  * @returns 部门树形响应数据
  */
-export async function getDepartmentTree(): Promise<DepartmentTreeResponse> {
-  return apiRequest<DepartmentTreeResponse>('/core/departments/tree');
+export async function getDepartmentTree(params?: {
+  keyword?: string;
+  is_active?: boolean;
+}): Promise<DepartmentTreeResponse> {
+  return apiRequest<DepartmentTreeResponse>('/core/departments/tree', {
+    params,
+  });
 }
 
 /**

@@ -6,7 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Tree, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -277,11 +277,13 @@ const RoleListPage: React.FC = () => {
       dataIndex: 'name',
       width: 150,
       fixed: 'left',
+      sorter: true,
     },
     {
       title: '角色代码',
       dataIndex: 'code',
       width: 150,
+      copyable: true,
     },
     {
       title: '描述',
@@ -306,6 +308,20 @@ const RoleListPage: React.FC = () => {
       ),
     },
     {
+      title: '权限数',
+      dataIndex: 'permission_count',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '用户数',
+      dataIndex: 'user_count',
+      width: 100,
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
       title: '状态',
       dataIndex: 'is_active',
       width: 100,
@@ -321,20 +337,6 @@ const RoleListPage: React.FC = () => {
       ),
     },
     {
-      title: '权限数',
-      dataIndex: 'permission_count',
-      width: 100,
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
-      title: '用户数',
-      dataIndex: 'user_count',
-      width: 100,
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
       title: '创建时间',
       dataIndex: 'created_at',
       width: 180,
@@ -343,12 +345,20 @@ const RoleListPage: React.FC = () => {
       sorter: true,
     },
     {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
       title: '操作',
       valueType: 'option',
-      width: 200,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
+        <Space size="small">
           <Button
             type="link"
             size="small"
@@ -400,7 +410,7 @@ const RoleListPage: React.FC = () => {
         <UniTable<Role>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, filter, searchFormValues) => {
+          request={async (params, _, __, searchFormValues) => {
             // ⚠️ 修复：正确处理高级搜索参数
             // 1. name 字段转换为 keyword（后端使用 keyword 搜索名称）
             // 2. is_system 字段直接传递（后端支持 is_system 筛选）
@@ -410,11 +420,17 @@ const RoleListPage: React.FC = () => {
               page_size: params.pageSize || 20,
             };
             
-            // 处理 keyword（优先使用 searchFormValues.keyword，如果没有则使用 name）
+            // 处理 keyword（Fuzzy 搜索）
             if (searchFormValues?.keyword) {
               apiParams.keyword = searchFormValues.keyword;
-            } else if (searchFormValues?.name) {
-              apiParams.keyword = searchFormValues.name;
+            }
+            
+            // 处理各别字段（Advanced 搜索）
+            if (searchFormValues?.name) {
+              apiParams.name = searchFormValues.name;
+            }
+            if (searchFormValues?.code) {
+              apiParams.code = searchFormValues.code;
             }
             
             // 处理 is_system（需要转换为 boolean）
@@ -516,7 +532,7 @@ const RoleListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        dataSource={detailData}
+        dataSource={detailData || undefined}
         columns={[
           { title: '角色名称', dataIndex: 'name' },
           { title: '角色代码', dataIndex: 'code' },
@@ -545,7 +561,7 @@ const RoleListPage: React.FC = () => {
         onCancel={() => setPermissionModalVisible(false)}
         onOk={handleSubmitPermissions}
         confirmLoading={permissionLoading}
-        size={600}
+        width={600}
       >
         <Tree
           checkable

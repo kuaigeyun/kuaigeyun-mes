@@ -13,11 +13,12 @@ import { Skeleton } from 'antd';
 /**
  * 页面骨架屏组件
  *
- * 提供统一的页面加载占位效果
+ * 提供统一的页面加载占位效果。
+ * 边距为 0，与 uni-tabs 内容区保持一致（uni-tabs 已提供 0 16px 16px 16px 的 padding）。
  */
 const PageSkeleton: React.FC = () => {
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: 0 }}>
       {/* 页面标题骨架 */}
       <Skeleton.Input
         active

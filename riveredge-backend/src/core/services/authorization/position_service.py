@@ -80,6 +80,8 @@ class PositionService:
         page: int = 1,
         page_size: int = 20,
         keyword: Optional[str] = None,
+        name: Optional[str] = None,
+        code: Optional[str] = None,
         department_uuid: Optional[str] = None,
         is_active: Optional[bool] = None,
     ) -> dict:
@@ -99,10 +101,16 @@ class PositionService:
         """
         from core.utils.search_utils import list_with_search
         
-        # 构建精确匹配条件
+        # 构建查询条件
         exact_filters = {'deleted_at__isnull': True}
         if is_active is not None:
             exact_filters['is_active'] = is_active
+        
+        # 字段搜索（用于高级搜索）
+        if name:
+            exact_filters['name__icontains'] = name
+        if code:
+            exact_filters['code__icontains'] = code
         
         # 处理部门筛选
         if department_uuid:

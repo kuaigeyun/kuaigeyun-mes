@@ -810,6 +810,7 @@ const MaterialsManagementPage: React.FC = () => {
           // header removed as per request to only show material list
           content: (
             <UniTable<Material>
+              size="small"
               actionRef={actionRef}
               columns={columns}
               headerActions={

@@ -46,7 +46,7 @@ import React, { ReactNode } from 'react';
 import { Input, Space, Spin, Tree, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
-import { TWO_COLUMN_LAYOUT, PAGE_SPACING } from './constants';
+import { TWO_COLUMN_LAYOUT } from './constants';
 
 const { useToken } = theme;
 
@@ -227,15 +227,18 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
 
   return (
     <div
-      className={className}
+      className={`two-column-layout ${className || ''}`.trim()}
       style={{
         display: 'flex',
+        flex: 1,
+        minHeight: TWO_COLUMN_LAYOUT.MIN_HEIGHT,
         height: '100%',
         padding: 0,
         margin: 0,
         boxSizing: 'border-box',
         borderRadius: token.borderRadiusLG || token.borderRadius,
         overflow: 'hidden',
+        alignSelf: 'stretch',
         ...style,
       }}
     >
@@ -248,7 +251,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           borderTop: `1px solid ${token.colorBorder}`,
           borderBottom: `1px solid ${token.colorBorder}`,
           borderLeft: `1px solid ${token.colorBorder}`,
-          borderRight: 'none',
+          borderRight: `1px solid ${token.colorBorder}`,
           backgroundColor: token.colorFillAlter || '#fafafa',
           display: 'flex',
           flexDirection: 'column',
@@ -348,18 +351,18 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           </div>
         )}
 
-        {/* 内容区：overflow-y auto 以便 UniTable 不设 scroll.y 时（行少未溢出）无竖直滚动条，行多时由外层滚动 */}
+        {/* 内容区：flex: 1 minHeight: 0 确保固定高度，overflow 由 UniTable scroll.y 控制 */}
         <div
           className="two-column-layout-content"
           style={{
             flex: 1,
+            minHeight: 0,
             overflowX: 'hidden',
             overflowY: 'hidden',
             padding: '16px',
             backgroundColor: contentBackgroundColor,
             display: 'flex',
             flexDirection: 'column',
-            minHeight: 0,
           }}
         >
           {content}

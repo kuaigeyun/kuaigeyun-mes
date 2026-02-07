@@ -50,6 +50,10 @@ export interface UserListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  username?: string;
+  email?: string;
+  full_name?: string;
+  phone?: string;
   department_uuid?: string;
   position_uuid?: string;
   is_active?: boolean;

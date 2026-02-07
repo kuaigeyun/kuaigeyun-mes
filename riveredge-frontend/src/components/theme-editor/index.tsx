@@ -609,23 +609,29 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         }));
       }
 
+      // 无论登录与否，都保存到本地存储作为兜底方案
+      // 重要：这确保了即使 API 失败（如平台管理员无租户上下文），主题也能在本地生效
+      const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
+      localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(themeConfig));
+      localStorage.setItem('riveredge_tabs_persistence', String(tabsPersistenceValue));
+
       // 保存站点主题配置
       const settings: Record<string, any> = {
         theme_config: themeConfig,
       };
 
-      await updateSiteSetting({ settings });
+      try {
+        await updateSiteSetting({ settings });
+      } catch (error) {
+        // 站点设置保存失败（如无权限或无租户上下文），仅记录日志，不阻断流程
+        console.warn('Failed to save site theme settings:', error);
+      }
 
-      // 临时方案：同时保存到本地存储（后续会做偏好设置）
-      const THEME_CONFIG_STORAGE_KEY = 'riveredge_theme_config';
-      localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify(themeConfig));
-
-
-      message.success('主题配置保存成功');
+      message.success('主题配置已应用');
 
       // 先触发站点主题更新事件，传递用户最终选择的配置（优先应用）
       window.dispatchEvent(new CustomEvent('siteThemeUpdated', {
-        detail: { themeConfig }
+        detail: { themeConfig } // 传递完整配置
       }));
 
       // 调用回调
@@ -636,6 +642,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       // 关闭面板
       onClose();
     } catch (error: any) {
+      console.error('Theme save error:', error);
       message.error(error?.message || '保存失败');
     } finally {
       setSaving(false);

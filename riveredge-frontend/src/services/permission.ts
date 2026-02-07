@@ -31,6 +31,8 @@ export interface PermissionListParams {
   page?: number;
   page_size?: number;
   keyword?: string;
+  name?: string;
+  code?: string;
   resource?: string;
   permission_type?: string;
 }

@@ -27,6 +27,8 @@ async def get_permission_list(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    name: Optional[str] = Query(None, description="权限名称筛选"),
+    code: Optional[str] = Query(None, description="权限代码筛选"),
     resource: Optional[str] = Query(None, description="资源筛选"),
     permission_type: Optional[str] = Query(None, description="权限类型筛选"),
     current_user: User = Depends(soil_get_current_user),
@@ -54,6 +56,8 @@ async def get_permission_list(
         page=page,
         page_size=page_size,
         keyword=keyword,
+        name=name,
+        code=code,
         resource=resource,
         permission_type=permission_type,
     )

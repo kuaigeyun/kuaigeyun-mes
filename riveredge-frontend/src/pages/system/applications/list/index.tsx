@@ -17,6 +17,7 @@ import {
   DownloadOutlined,
   StopOutlined,
   MoreOutlined,
+  SettingOutlined,
   AppstoreOutlined,
   UserOutlined,
   ShopOutlined,
@@ -322,21 +323,21 @@ const ApplicationListPage: React.FC = () => {
       },
       {
         key: 'sync-manifest',
-        label: '同步清单配置',
+        label: '菜单同步',
         icon: <AppstoreOutlined />,
         onClick: async () => {
           try {
             Modal.confirm({
-              title: '同步清单配置',
-              content: `确定要从manifest.json同步应用配置吗？这将更新菜单和其他配置信息。`,
+              title: '菜单同步',
+              content: `确定要从 manifest.json 同步应用菜单配置吗？`,
               onOk: async () => {
-                messageApi.loading({ content: '正在同步配置...', key: 'sync-manifest' });
+                messageApi.loading({ content: '正在同步菜单...', key: 'sync-manifest' });
                 try {
                   const result = await syncApplicationManifest(application.code);
 
                   if (result.success) {
                     messageApi.success({
-                      content: result.message || '配置同步成功',
+                      content: result.message || '菜单同步成功',
                       key: 'sync-manifest'
                     });
 
@@ -365,16 +366,16 @@ const ApplicationListPage: React.FC = () => {
         },
       },
       {
-        type: 'divider' as const,
-      },
-      {
         key: 'edit-app',
         label: '应用设置',
-        icon: <MoreOutlined />,
+        icon: <SettingOutlined />,
         onClick: () => {
           setEditingApp(application);
           setEditModalVisible(true);
         },
+      },
+      {
+        type: 'divider' as const,
       },
       !application.is_installed
         ? {
@@ -392,6 +393,7 @@ const ApplicationListPage: React.FC = () => {
           key: 'uninstall',
           label: '卸载',
           icon: <StopOutlined />,
+          danger: true,
           disabled: application.is_system,
           onClick: () => {
             if (application.is_system) return;
@@ -425,24 +427,38 @@ const ApplicationListPage: React.FC = () => {
               borderBottom: '1px solid #f0f0f0',
             }}
           >
-            {(() => {
-              const iconElement = getApplicationIcon(application.code, application.icon);
-              // 如果是图片，直接返回
-              if (React.isValidElement(iconElement) && iconElement.type === 'img') {
-                return iconElement;
-              }
-              // 如果是图标组件，应用样式
-              return React.cloneElement(iconElement as React.ReactElement, {
-                style: {
-                  fontSize: 72,
-                  color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
-                },
-              });
-            })()}
+            <div
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: application.is_active && application.is_installed ? '#fff' : '#f5f5f5',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
+                overflow: 'hidden',
+              }}
+            >
+              {(() => {
+                const iconElement = getApplicationIcon(application.code, application.icon);
+                if (React.isValidElement(iconElement) && iconElement.type === 'img') {
+                  return React.cloneElement(iconElement as React.ReactElement, {
+                    style: { width: '100%', height: '100%', objectFit: 'cover' },
+                  });
+                }
+                return React.cloneElement(iconElement as React.ReactElement, {
+                  style: {
+                    fontSize: 48,
+                    color: application.is_active && application.is_installed ? '#1890ff' : '#d9d9d9',
+                  },
+                });
+              })()}
+            </div>
           </div>
         }
         actions={[
-          <div key="active" style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <div key="active" style={{ padding: '0 12px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: '#666' }}>启用状态</span>
             <Switch
               checked={application.is_active}
@@ -452,15 +468,13 @@ const ApplicationListPage: React.FC = () => {
               unCheckedChildren="禁用"
             />
           </div>,
-          <Dropdown
-            key="more"
-            menu={{ items: menuItems }}
-            trigger={['click']}
-          >
-            <Button type="text" icon={<MoreOutlined />} style={{ width: '100%' }}>
-              更多操作
-            </Button>
-          </Dropdown>,
+          <div key="more" style={{ padding: '0 12px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+              <Button type="text" icon={<MoreOutlined />} style={{ width: '100%' }}>
+                更多操作
+              </Button>
+            </Dropdown>
+          </div>,
         ]}
       >
         <Card.Meta
@@ -538,34 +552,10 @@ const ApplicationListPage: React.FC = () => {
     { title: '应用名称', dataIndex: 'name' },
     { title: '应用代码', dataIndex: 'code' },
     { title: '应用描述', dataIndex: 'description' },
-    {
-      title: '应用图标',
-      dataIndex: 'icon',
-      render: (value: string) => value ? <img src={value} alt="图标" style={{ maxWidth: 100, maxHeight: 100 }} /> : '-',
-    },
     { title: '应用版本', dataIndex: 'version' },
     { title: '路由路径', dataIndex: 'route_path' },
     { title: '入口点', dataIndex: 'entry_point' },
     { title: '权限代码', dataIndex: 'permission_code' },
-    {
-      title: '菜单配置',
-      dataIndex: 'menu_config',
-      render: (value: any) => value ? (
-        <pre style={{
-          margin: 0,
-          fontSize: 12,
-          maxWidth: 600,
-          overflow: 'auto',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          padding: '8px',
-          background: '#f5f5f5',
-          borderRadius: '4px'
-        }}>
-          {JSON.stringify(value, null, 2)}
-        </pre>
-      ) : '-',
-    },
     {
       title: '系统应用',
       dataIndex: 'is_system',

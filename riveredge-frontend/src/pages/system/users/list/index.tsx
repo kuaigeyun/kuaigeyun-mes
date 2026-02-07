@@ -7,9 +7,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, AutoComplete, Select, Card } from 'antd';
+import { ActionType, ProColumns, ProDescriptions, ProFormText, ProFormSelect, ProFormSwitch, ProFormTreeSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Popconfirm, Button, Tag, Space, Modal, Card, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -22,9 +21,7 @@ import {
   importUsers,
   exportUsers,
   resetUserPassword,
-  batchUpdateUsersStatus,
   batchDeleteUsers,
-  generateUserQRCode,
   User,
   CreateUserData,
   UpdateUserData,
@@ -41,156 +38,13 @@ import { getRoleList } from '../../../../services/role';
 const UserListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const formRef = useRef<ProFormInstance>();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [deptTreeData, setDeptTreeData] = useState<DepartmentTreeItem[]>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
 
-  // 自定义AutoComplete选择器组件（单选）
-  const AutoCompleteSelect: React.FC<{
-    value?: string;
-    onChange?: (value: string) => void;
-    options: Array<{ label: string; value: string; key?: string }>;
-    placeholder?: string;
-    disabled?: boolean;
-    style?: React.CSSProperties;
-  }> = ({ value, onChange, options, placeholder, disabled, style }) => {
-    const [inputValue, setInputValue] = useState('');
-
-    // 过滤选项
-    const filteredOptions = options.filter(option =>
-      option.label.toLowerCase().includes(inputValue.toLowerCase())
-    );
-
-    // 处理选择
-    const handleSelect = (selectedValue: string) => {
-      const selectedOption = options.find(opt => opt.value === selectedValue);
-      if (selectedOption) {
-        setInputValue(selectedOption.label);
-        onChange?.(selectedValue);
-      }
-    };
-
-    // 处理输入变化
-    const handleInputChange = (input: string) => {
-      setInputValue(input);
-    };
-
-    // 当value变化时，更新显示的文本
-    useEffect(() => {
-      if (value) {
-        const selectedOption = options.find(opt => opt.value === value);
-        if (selectedOption) {
-          setInputValue(selectedOption.label);
-        }
-      } else {
-        setInputValue('');
-      }
-    }, [value, options]);
-
-    return (
-      <AutoComplete
-        value={inputValue}
-        onChange={handleInputChange}
-        onSelect={handleSelect}
-        placeholder={placeholder}
-        disabled={disabled}
-        style={style}
-        options={filteredOptions.map(option => ({
-          value: option.value,
-          label: option.label,
-        }))}
-        filterOption={false} // 禁用默认过滤，我们使用自定义过滤
-      />
-    );
-  };
-
-  // 自定义多选AutoComplete组件
-  const AutoCompleteMultiSelect: React.FC<{
-    value?: string[];
-    onChange?: (value: string[]) => void;
-    options: Array<{ label: string; value: string; key?: string }>;
-    placeholder?: string;
-    disabled?: boolean;
-    style?: React.CSSProperties;
-  }> = ({ value = [], onChange, options, placeholder, disabled, style }) => {
-    const [inputValue, setInputValue] = useState('');
-
-    // 获取已选中的选项标签
-    const selectedLabels = value.map(val => {
-      const option = options.find(opt => opt.value === val);
-      return option?.label || val;
-    }).join(', ');
-
-    // 显示值（已选中的标签或输入的值）
-    const displayValue = selectedLabels || inputValue;
-
-    // 过滤选项（排除已选中的）
-    const filteredOptions = options.filter(option =>
-      !value.includes(option.value) &&
-      option.label.toLowerCase().includes(inputValue.toLowerCase())
-    );
-
-    // 处理选择
-    const handleSelect = (selectedValue: string) => {
-      const newValue = [...value, selectedValue];
-      onChange?.(newValue);
-      setInputValue(''); // 清空输入
-    };
-
-    // 处理输入变化
-    const handleInputChange = (input: string) => {
-      setInputValue(input);
-    };
-
-    // 处理删除标签
-    const handleTagClose = (removedValue: string) => {
-      const newValue = value.filter(val => val !== removedValue);
-      onChange?.(newValue);
-    };
-
-    return (
-      <div style={{ position: 'relative', ...style }}>
-        {/* 显示已选中的标签 */}
-        {value.length > 0 && (
-          <div style={{ marginBottom: '8px' }}>
-            <Space size={[0, 8]} wrap>
-              {value.map(val => {
-                const option = options.find(opt => opt.value === val);
-                return (
-                  <Tag
-                    key={val}
-                    closable
-                    onClose={() => handleTagClose(val)}
-                    style={{ margin: 0 }}
-                  >
-                    {option?.label || val}
-                  </Tag>
-                );
-              })}
-            </Space>
-          </div>
-        )}
-
-        {/* AutoComplete输入框 */}
-        <AutoComplete
-          value={inputValue}
-          onChange={handleInputChange}
-          onSelect={handleSelect}
-          placeholder={value.length === 0 ? placeholder : '继续添加...'}
-          disabled={disabled}
-          style={{ width: '100%' }}
-          options={filteredOptions.map(option => ({
-            value: option.value,
-            label: option.label,
-          }))}
-          filterOption={false}
-        />
-      </div>
-    );
-  };
 
   // Modal 相关状态（创建/编辑）
   const [modalVisible, setModalVisible] = useState(false);
@@ -274,6 +128,9 @@ const UserListPage: React.FC = () => {
       try {
         // 加载部门选项
         const deptResponse = await getDepartmentTree();
+        // 缓存树数据用于选择
+        setDeptTreeData(deptResponse.items);
+        
         const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
           const options: Array<{ label: string; value: string }> = [];
           items.forEach(item => {
@@ -288,7 +145,7 @@ const UserListPage: React.FC = () => {
           });
           return options;
         };
-        setDepartmentOptions(buildDeptOptions(deptResponse.items));
+        // setDepartmentOptions(buildDeptOptions(deptResponse.items));
 
         // 加载职位选项
         const posResponse = await getPositionList({ page_size: 100 });
@@ -316,12 +173,11 @@ const UserListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentUserUuid(null);
-    setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       is_active: true,
       is_tenant_admin: false,
     });
+    setModalVisible(true);
   };
 
   /**
@@ -331,10 +187,9 @@ const UserListPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentUserUuid(record.uuid);
-      setModalVisible(true);
       
       const detail = await getUserByUuid(record.uuid);
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
         username: detail.username,
         email: detail.email,
         full_name: detail.full_name,
@@ -345,6 +200,7 @@ const UserListPage: React.FC = () => {
         is_active: detail.is_active,
         is_tenant_admin: detail.is_tenant_admin,
       });
+      setModalVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取用户详情失败');
     }
@@ -380,6 +236,33 @@ const UserListPage: React.FC = () => {
   };
 
   /**
+   * 处理批量删除用户
+   */
+  const handleBatchDelete = async (uuids: React.Key[]) => {
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${uuids.length} 个用户吗？`,
+      okText: '确定',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const result = await batchDeleteUsers(uuids as string[]);
+          if (result.failure_count > 0) {
+            messageApi.warning(`删除完成：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`);
+          } else {
+            messageApi.success(`成功删除 ${result.success_count} 条记录`);
+          }
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '批量删除失败');
+        }
+      },
+    });
+  };
+
+  /**
    * 处理重置密码
    */
   const handleResetPassword = async (record: User) => {
@@ -400,10 +283,9 @@ const UserListPage: React.FC = () => {
   /**
    * 处理提交表单（创建/更新）
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      const values = await formRef.current?.validateFields();
 
       // 移除确认密码字段，后端不需要这个字段
       const submitData = { ...values };
@@ -422,6 +304,7 @@ const UserListPage: React.FC = () => {
       }
 
       setModalVisible(false);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (error: any) {
       // 解析具体的错误信息，提供更友好的提示
@@ -561,12 +444,7 @@ const UserListPage: React.FC = () => {
       dataIndex: 'username',
       width: 150,
       fixed: 'left',
-    },
-    {
-      title: '邮箱',
-      dataIndex: 'email',
-      width: 180,
-      ellipsis: true,
+      sorter: true,
     },
     {
       title: '姓名',
@@ -575,24 +453,26 @@ const UserListPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '手机号',
-      dataIndex: 'phone',
-      width: 130,
-      hideInSearch: true,
-      ellipsis: true,
-    },
-    {
       title: '部门',
-      dataIndex: 'department',
-      width: 120,
+      dataIndex: 'department_uuid',
+      width: 150,
       ellipsis: true,
+      valueType: 'treeSelect',
+      fieldProps: {
+        treeData: deptTreeData,
+        fieldNames: { label: 'name', value: 'uuid' },
+      },
       render: (_, record) => record.department?.name || '-',
     },
     {
       title: '职位',
-      dataIndex: 'position',
+      dataIndex: 'position_uuid',
       width: 120,
       ellipsis: true,
+      valueType: 'select',
+      fieldProps: {
+        options: positionOptions,
+      },
       render: (_, record) => record.position?.name || '-',
     },
     {
@@ -602,11 +482,40 @@ const UserListPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => (
-        <Space>
+        <Space size={4} wrap>
           {record.roles?.map(role => (
-            <Tag key={role.uuid}>{role.name}</Tag>
+            <Tag key={role.uuid} color="blue">{role.name}</Tag>
           ))}
         </Space>
+      ),
+    },
+    {
+      title: '手机号',
+      dataIndex: 'phone',
+      width: 130,
+      ellipsis: true,
+    },
+    {
+      title: '邮箱',
+      dataIndex: 'email',
+      width: 180,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: '组织管理员',
+      dataIndex: 'is_tenant_admin',
+      width: 120,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: '是', status: 'Warning' },
+        false: { text: '否', status: 'Default' },
+      },
+      hideInTable: true,
+      render: (_, record) => (
+        <Tag color={record.is_tenant_admin ? 'gold' : 'default'}>
+          {record.is_tenant_admin ? '是' : '否'}
+        </Tag>
       ),
     },
     {
@@ -625,15 +534,20 @@ const UserListPage: React.FC = () => {
       ),
     },
     {
-      title: '组织管理员',
-      dataIndex: 'is_tenant_admin',
-      width: 120,
-      hideInTable: true, // 默认不显示
-      render: (_, record) => (
-        <Tag color={record.is_tenant_admin ? 'gold' : 'default'}>
-          {record.is_tenant_admin ? '是' : '否'}
-        </Tag>
-      ),
+      title: '创建时间',
+      dataIndex: 'created_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      width: 180,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
     },
     {
       title: '最后登录',
@@ -643,20 +557,12 @@ const UserListPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: true,
-    },
-    {
       title: '操作',
       valueType: 'option',
       width: 250,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
+        <Space size="small">
           <Button
             type="link"
             size="small"
@@ -679,7 +585,7 @@ const UserListPage: React.FC = () => {
             icon={<ReloadOutlined />}
             onClick={() => handleResetPassword(record)}
           >
-            重置密码
+            重置
           </Button>
           <Popconfirm
             title="确定要删除这个用户吗？"
@@ -702,7 +608,7 @@ const UserListPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<User>[] = [
     { title: '用户名', dataIndex: 'username' },
     { title: '邮箱', dataIndex: 'email' },
     { title: '姓名', dataIndex: 'full_name' },
@@ -732,12 +638,12 @@ const UserListPage: React.FC = () => {
     {
       title: '状态',
       dataIndex: 'is_active',
-      render: (value: boolean) => (value ? '启用' : '禁用'),
+      render: (_: any, record: User) => (record.is_active ? '启用' : '禁用'),
     },
     {
       title: '组织管理员',
       dataIndex: 'is_tenant_admin',
-      render: (value: boolean) => (value ? '是' : '否'),
+      render: (_: any, record: User) => (record.is_tenant_admin ? '是' : '否'),
     },
     { title: '最后登录', dataIndex: 'last_login', valueType: 'dateTime' },
     { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
@@ -750,16 +656,20 @@ const UserListPage: React.FC = () => {
         <UniTable<User>
         actionRef={actionRef}
         columns={columns}
-        request={async (params, sort, filter, searchFormValues) => {
-          const response = await getUserList({
-            page: params.current || 1,
-            page_size: params.pageSize || 20,
-            keyword: searchFormValues?.keyword,
-            department_uuid: searchFormValues?.department_uuid,
-            position_uuid: searchFormValues?.position_uuid,
-            is_active: searchFormValues?.is_active,
-            is_tenant_admin: searchFormValues?.is_tenant_admin,
-          });
+        request={async (params, _, __, searchFormValues) => {
+            const response = await getUserList({
+              page: params.current || 1,
+              page_size: params.pageSize || 20,
+              keyword: searchFormValues?.keyword,
+              username: searchFormValues?.username,
+              email: searchFormValues?.email,
+              full_name: searchFormValues?.full_name,
+              phone: searchFormValues?.phone,
+              department_uuid: searchFormValues?.department_uuid,
+              position_uuid: searchFormValues?.position_uuid,
+              is_active: searchFormValues?.is_active,
+              is_tenant_admin: searchFormValues?.is_tenant_admin,
+            });
           return {
             data: response.items,
             success: true,
@@ -793,7 +703,11 @@ const UserListPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showCreateButton
+        createButtonText="新建用户"
         onCreate={handleCreate}
+        showDeleteButton={true}
+        deleteButtonText="批量删除"
+        onDelete={handleBatchDelete}
         />
       </ListPageTemplate>
 
@@ -801,160 +715,150 @@ const UserListPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑用户' : '新建用户'}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        initialValues={formInitialValues}
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
-        <ProForm
-          formRef={formRef}
-          submitter={false}
-          layout="vertical"
-        >
-          {/* 第一行：基本信息 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <ProFormText
-              name="username"
-              label="用户名"
-              rules={[
-                { required: true, message: '请输入用户名' },
-                { min: 3, message: '用户名长度不能少于3个字符' },
-                { max: 50, message: '用户名长度不能超过50个字符' },
-                { pattern: /^[a-zA-Z0-9_-]+$/, message: '用户名只能包含字母、数字、下划线和连字符' }
-              ]}
-              placeholder="请输入用户名（3-50个字符）"
-              disabled={isEdit}
-              fieldProps={{
-                autoComplete: 'off'
-              }}
-            />
-            <ProFormText
-              name="full_name"
-              label="姓名"
-              rules={[
-                { max: 100, message: '姓名长度不能超过100个字符' }
-              ]}
-              placeholder="请输入姓名"
-            />
-          </div>
-
-          {/* 第二行：联系方式 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <ProFormText
-              name="phone"
-              label="手机号"
-              rules={[
-                { required: true, message: '请输入手机号' },
-                { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的11位中国大陆手机号（以1开头）' }
-              ]}
-              placeholder="请输入手机号"
-            />
-            <ProFormText
-              name="email"
-              label="邮箱"
-              rules={[
-                { type: 'email', message: '请输入正确的邮箱地址' }
-              ]}
-              placeholder="请输入邮箱（可选）"
-            />
-          </div>
-
-          {/* 第三行：密码 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <ProFormText
-              name="password"
-              label="密码"
-              rules={isEdit ? [] : [
-                { required: true, message: '请输入密码' },
-                { min: 8, message: '密码长度不能少于8个字符' },
-                { max: 128, message: '密码长度不能超过128个字符' }
-              ]}
-              placeholder={isEdit ? '留空则不修改密码' : '请输入密码（8-128个字符）'}
-              fieldProps={{
-                type: 'password',
-                autoComplete: 'new-password'
-              }}
-            />
-            <ProFormText
-              name="confirmPassword"
-              label="确认密码"
-              rules={isEdit ? [] : [
-                { required: true, message: '请再次输入密码' },
-                { min: 8, message: '密码长度不能少于8个字符' },
-                { max: 128, message: '密码长度不能超过128个字符' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('password') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('两次输入的密码不一致'));
-                  },
-                }),
-              ]}
-              placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码（8-128个字符）'}
-              fieldProps={{
-                type: 'password',
-                autoComplete: 'new-password'
-              }}
-            />
-          </div>
-
-          {/* 第四行：组织架构 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <ProForm.Item
-              name="department_uuid"
-              label="部门"
-              rules={[]}
-            >
-              <AutoCompleteSelect
-                placeholder="请输入部门名称搜索"
-                options={departmentOptions}
-                style={{ width: '100%' }}
-              />
-            </ProForm.Item>
-            <ProForm.Item
-              name="position_uuid"
-              label="职位"
-              rules={[]}
-            >
-              <AutoCompleteSelect
-                placeholder="请输入职位名称搜索"
-                options={positionOptions}
-                style={{ width: '100%' }}
-              />
-            </ProForm.Item>
-          </div>
-
-          {/* 第五行：角色和权限 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
-            <ProForm.Item
-              name="role_uuids"
-              label="角色"
-              rules={[]}
-            >
-              <AutoCompleteMultiSelect
-                placeholder="请输入角色名称搜索并选择"
-                options={roleOptions}
-                style={{ width: '100%' }}
-              />
-            </ProForm.Item>
-          </div>
-
-          {/* 第六行：状态设置 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <ProFormSwitch
-              name="is_active"
-              label="是否启用"
-              initialValue={true}
-            />
-            <ProFormSwitch
-              name="is_tenant_admin"
-              label="是否组织管理员"
-              initialValue={false}
-            />
-          </div>
-        </ProForm>
+        <ProFormText
+          name="username"
+          label="用户名"
+          rules={[
+            { required: true, message: '请输入用户名' },
+            { min: 3, message: '用户名长度不能少于3个字符' },
+            { max: 50, message: '用户名长度不能超过50个字符' },
+            { pattern: /^[a-zA-Z0-9_-]+$/, message: '用户名只能包含字母、数字、下划线和连字符' }
+          ]}
+          placeholder="请输入用户名（3-50个字符）"
+          disabled={isEdit}
+          fieldProps={{
+            autoComplete: 'off'
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="full_name"
+          label="姓名"
+          rules={[
+            { max: 100, message: '姓名长度不能超过100个字符' }
+          ]}
+          placeholder="请输入姓名"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="phone"
+          label="手机号"
+          rules={[
+            { required: true, message: '请输入手机号' },
+            { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的11位中国大陆手机号（以1开头）' }
+          ]}
+          placeholder="请输入手机号"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="email"
+          label="邮箱"
+          rules={[
+            { type: 'email', message: '请输入正确的邮箱地址' }
+          ]}
+          placeholder="请输入邮箱（可选）"
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="password"
+          label="密码"
+          rules={isEdit ? [] : [
+            { required: true, message: '请输入密码' },
+            { min: 8, message: '密码长度不能少于8个字符' },
+            { max: 128, message: '密码长度不能超过128个字符' }
+          ]}
+          placeholder={isEdit ? '留空则不修改密码' : '请输入密码（8-128个字符）'}
+          fieldProps={{
+            type: 'password',
+            autoComplete: 'new-password'
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="confirmPassword"
+          label="确认密码"
+          rules={isEdit ? [] : [
+            { required: true, message: '请再次输入密码' },
+            { min: 8, message: '密码长度不能少于8个字符' },
+            { max: 128, message: '密码长度不能超过128个字符' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!value || getFieldValue('password') === value) {
+                  return Promise.resolve();
+                }
+                return Promise.reject(new Error('两次输入的密码不一致'));
+              },
+            }),
+          ]}
+          placeholder={isEdit ? '留空则不修改密码' : '请再次输入密码（8-128个字符）'}
+          fieldProps={{
+            type: 'password',
+            autoComplete: 'new-password'
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTreeSelect
+          name="department_uuid"
+          label="部门"
+          placeholder="请选择部门"
+          allowClear
+          fieldProps={{
+            showSearch: true,
+            filterTreeNode: true,
+            treeNodeFilterProp: 'name',
+            fieldNames: {
+              label: 'name',
+              value: 'uuid',
+              children: 'children',
+            },
+            treeData: deptTreeData,
+            treeDefaultExpandAll: true,
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="position_uuid"
+          label="职位"
+          placeholder="请选择职位"
+          options={positionOptions}
+          fieldProps={{
+            showSearch: true,
+          }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="role_uuids"
+          label="角色"
+          placeholder="请选择角色"
+          options={roleOptions}
+          fieldProps={{
+            mode: 'multiple',
+            showSearch: true,
+          }}
+          colProps={{ span: 24 }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label="是否启用"
+          initialValue={true}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSwitch
+          name="is_tenant_admin"
+          label="是否组织管理员"
+          initialValue={false}
+          colProps={{ span: 12 }}
+        />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
@@ -964,6 +868,8 @@ const UserListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
+        dataSource={detailData || undefined}
+        columns={detailColumns}
         customContent={
           <>
             <ProDescriptions<User>
@@ -971,8 +877,6 @@ const UserListPage: React.FC = () => {
               column={2}
               columns={detailColumns}
             />
-            
-            {/* 人员二维码 */}
             {detailData && (
               <div style={{ marginTop: 24 }}>
                 <Card title="人员二维码">

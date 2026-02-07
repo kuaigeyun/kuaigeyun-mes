@@ -69,12 +69,19 @@ async def create_department(
             deleted_at__isnull=True
         ).count()
         
-        # 转换为响应格式
-        response = DepartmentResponse.model_validate(department)
-        response.children_count = children_count
-        response.user_count = user_count
+        # ⚠️ 修复：在验证前将统计数据和关联字段赋值给模型实例
+        department.children_count = children_count
+        department.user_count = user_count
+        department.manager_uuid = None
         
-        return response
+        # 获取父部门 UUID (用于响应码)
+        department.parent_uuid = None
+        if department.parent_id:
+            parent_dept = await Department.get_or_none(id=department.parent_id)
+            if parent_dept:
+                department.parent_uuid = parent_dept.uuid
+            
+        return DepartmentResponse.model_validate(department)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -89,15 +96,19 @@ async def create_department(
 
 @router.get("/tree", response_model=DepartmentTreeResponse)
 async def get_department_tree(
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     获取部门树形结构
     
-    返回完整的部门树形结构，包含所有子部门。
+    返回完整的部门树形结构，包含所有子部门。支持关键词搜索。
     
     Args:
+        keyword: 关键词搜索
+        is_active: 是否启用筛选
         current_user: 当前用户（依赖注入）
         tenant_id: 当前组织ID（依赖注入）
         
@@ -106,7 +117,9 @@ async def get_department_tree(
     """
     tree_data = await DepartmentService.get_department_tree(
         tenant_id=tenant_id,
-        parent_id=None
+        parent_id=None,
+        keyword=keyword,
+        is_active=is_active,
     )
     
     # 转换为树形响应格式
@@ -174,12 +187,19 @@ async def get_department(
             deleted_at__isnull=True
         ).count()
         
-        # 转换为响应格式
-        response = DepartmentResponse.model_validate(department)
-        response.children_count = children_count
-        response.user_count = user_count
+        # ⚠️ 修复：在验证前将统计数据和关联字段赋值给模型实例
+        department.children_count = children_count
+        department.user_count = user_count
+        department.manager_uuid = None
         
-        return response
+        # 获取父部门 UUID (用于响应码)
+        department.parent_uuid = None
+        if department.parent_id:
+            parent_dept = await Department.get_or_none(id=department.parent_id)
+            if parent_dept:
+                department.parent_uuid = parent_dept.uuid
+            
+        return DepartmentResponse.model_validate(department)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -233,12 +253,19 @@ async def update_department(
             deleted_at__isnull=True
         ).count()
         
-        # 转换为响应格式
-        response = DepartmentResponse.model_validate(department)
-        response.children_count = children_count
-        response.user_count = user_count
+        # ⚠️ 修复：在验证前将统计数据和关联字段赋值给模型实例
+        department.children_count = children_count
+        department.user_count = user_count
+        department.manager_uuid = None
         
-        return response
+        # 获取父部门 UUID (用于响应码)
+        department.parent_uuid = None
+        if department.parent_id:
+            parent_dept = await Department.get_or_none(id=department.parent_id)
+            if parent_dept:
+                department.parent_uuid = parent_dept.uuid
+            
+        return DepartmentResponse.model_validate(department)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

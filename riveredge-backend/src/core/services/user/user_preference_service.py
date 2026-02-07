@@ -7,7 +7,7 @@
 from typing import Optional, Dict, Any
 from uuid import UUID
 
-from tortoise.exceptions import DoesNotExist
+from tortoise.exceptions import DoesNotExist, IntegrityError
 
 from core.models.user_preference import UserPreference
 from core.schemas.user_preference import UserPreferenceUpdate, UserPreferenceResponse
@@ -70,11 +70,15 @@ class UserPreferenceService:
             )
         except DoesNotExist:
             # 如果不存在，创建默认偏好设置
-            user_preference = await UserPreference.create(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                preferences={}
-            )
+            try:
+                user_preference = await UserPreference.create(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    preferences={}
+                )
+            except IntegrityError:
+                # 可能是平台超级管理员等不在 core_users 表中的用户
+                raise NotFoundError("当前用户无法创建偏好设置（可能非租户用户）")
         
         result = UserPreferenceResponse.model_validate(user_preference)
         
@@ -116,11 +120,14 @@ class UserPreferenceService:
             )
         except DoesNotExist:
             # 如果不存在，创建新的偏好设置
-            user_preference = await UserPreference.create(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                preferences=data.preferences or {}
-            )
+            try:
+                user_preference = await UserPreference.create(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    preferences=data.preferences or {}
+                )
+            except IntegrityError:
+                raise NotFoundError("当前用户无法创建偏好设置（可能非租户用户）")
         else:
             # 更新偏好设置（合并）
             if data.preferences:
