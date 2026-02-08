@@ -752,7 +752,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   return (
     <Drawer
       className="theme-editor-drawer"
-      bodyStyle={{ overflowY: 'scroll' }}
+      styles={{ body: { overflowY: 'scroll' } }}
       title={
         <div>
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>个性化主题</div>
@@ -807,7 +807,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
             <Card
               size="small"
               style={{ marginBottom: 16 }}
-              bodyStyle={{ padding: '16px' }}
+              styles={{ body: { padding: '16px' } }}
             >
               <Form.Item
                 name="colorMode"
@@ -950,7 +950,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 />
               }
               style={{ marginBottom: 16 }}
-              bodyStyle={{ padding: '16px' }}
+              styles={{ body: { padding: '16px' } }}
             >
               {/* 预设颜色 */}
               <div style={{ marginBottom: 16 }}>
@@ -1028,7 +1028,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   />
                 }
                 style={{ marginBottom: 16 }}
-                bodyStyle={{ padding: '16px' }}
+                styles={{ body: { padding: '16px' } }}
               >
                 {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
                 <div style={{
@@ -1183,7 +1183,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   />
                 }
                 style={{ marginBottom: 16 }}
-                bodyStyle={{ padding: '16px' }}
+                styles={{ body: { padding: '16px' } }}
               >
                 {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
                 <div style={{
@@ -1290,7 +1290,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   />
                 }
                 style={{ marginBottom: 16 }}
-                bodyStyle={{ padding: '16px' }}
+                styles={{ body: { padding: '16px' } }}
               >
                 {/* 重要提示：仅在浅色模式下生效 - 直接展示 */}
                 <div style={{
@@ -1396,7 +1396,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 />
               }
               style={{ marginBottom: 16 }}
-              bodyStyle={{ padding: '16px' }}
+              styles={{ body: { padding: '16px' } }}
             >
               <Form.Item
                 name="borderRadius"
@@ -1432,7 +1432,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 />
               }
               style={{ marginBottom: 16 }}
-              bodyStyle={{ padding: '16px' }}
+              styles={{ body: { padding: '16px' } }}
             >
               <Form.Item
                 name="fontSize"
@@ -1469,7 +1469,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 />
               }
               style={{ marginBottom: 16 }}
-              bodyStyle={{ padding: '16px' }}
+              styles={{ body: { padding: '16px' } }}
             >
               <Form.Item
                 name="compact"
@@ -1513,7 +1513,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           <ConfigProvider theme={previewTheme || undefined}>
             <Card
               size="small"
-              bodyStyle={{ padding: '20px' }}
+              styles={{ body: { padding: '20px' } }}
             >
               <div style={{ marginBottom: 20 }}>
                 <Text strong style={{ fontSize: 13, marginBottom: 12, display: 'block' }}>

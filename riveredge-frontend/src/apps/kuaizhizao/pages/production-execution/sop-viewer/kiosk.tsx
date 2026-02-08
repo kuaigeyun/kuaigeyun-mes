@@ -315,7 +315,7 @@ const SOPViewerKioskPage: React.FC = () => {
                   </Space>
                 }
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 24 }}
-                bodyStyle={{ flex: 1, overflow: 'auto' }}
+                styles={{ body: { flex: 1, overflow: 'auto' } }}
               >
                 <Space direction="vertical" size="large" style={{ width: '100%' }}>
                   {/* 步骤标题 */}

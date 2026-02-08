@@ -44,9 +44,11 @@ class BaseModel(Model):
     # 使用混合策略：内部查询使用自增ID（性能好），对外API使用UUID（安全性好）
     # 数据库迁移已完成，uuid 字段已添加到所有表中
     # 注意：unique 和 db_index 在迁移文件中通过 SQL 添加，避免 Tortoise ORM 模型检查问题
+    # default 确保 create() 时未显式传入 uuid 时自动生成，避免 ValidationError
     uuid = fields.CharField(
         max_length=36,
-        description="业务ID（UUID，对外暴露，安全且唯一）"
+        description="业务ID（UUID，对外暴露，安全且唯一）",
+        default=_generate_uuid,
     )
     
     tenant_id = fields.IntField(null=True, db_index=True, description="组织 ID（用于多组织数据隔离）")

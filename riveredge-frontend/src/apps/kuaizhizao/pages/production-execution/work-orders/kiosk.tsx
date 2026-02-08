@@ -382,7 +382,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                             borderLeft: `4px solid ${jobCardAccent}`,
                             borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
                         }}
-                        bodyStyle={{ padding: 20 }}
+                        styles={{ body: { padding: 20 } }}
                     >
                         <Row gutter={24} align="middle">
                             <Col flex="1">
@@ -454,7 +454,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                             </div>
                         }
                         style={{ flex: 1, minHeight: 0, background: 'rgba(255,255,255,0.04)', border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
-                        bodyStyle={{ padding: 24, overflowY: 'auto' }}
+                        styles={{ body: { padding: 24, overflowY: 'auto' } }}
                     >
                         {activeOperation ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP }}>

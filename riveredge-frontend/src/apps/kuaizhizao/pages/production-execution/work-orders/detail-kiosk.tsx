@@ -141,7 +141,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
         >
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* 顶部信息栏 */}
-                <Card bodyStyle={{ padding: '16px' }}>
+                <Card styles={{ body: { padding: '16px' } }}>
                     <Row gutter={[16, 16]}>
                         <Col span={8}>
                             <Statistic title="产品" value={workOrder.product_name} valueStyle={{ fontSize: `${HMI_DESIGN_TOKENS.FONT_BODY_MIN}px`, fontWeight: 'bold' }} />

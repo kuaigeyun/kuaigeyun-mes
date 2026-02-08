@@ -105,7 +105,7 @@ export const MobileQRCode: React.FC = () => {
                 title={null}
                 trigger="click"
                 placement="bottomRight"
-                overlayInnerStyle={{ padding: 16 }}
+                styles={{ body: { padding: 16 } }}
             >
                 <Tooltip title={t('common.mobileExperience', '移动端体验')}>
                     <Button

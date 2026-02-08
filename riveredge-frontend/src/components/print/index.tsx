@@ -156,7 +156,7 @@ export const Print: React.FC<PrintProps> = ({
         cancelText="取消"
         width={800}
         style={{ top: 20 }}
-        bodyStyle={{ maxHeight: '80vh', overflow: 'auto' }}
+        styles={{ body: { maxHeight: '80vh', overflow: 'auto' } }}
       >
         <Spin spinning={loading}>
           <div

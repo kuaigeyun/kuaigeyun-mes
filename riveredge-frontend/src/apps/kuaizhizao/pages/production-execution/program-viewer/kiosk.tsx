@@ -349,7 +349,7 @@ const ProgramViewerKioskPage: React.FC = () => {
             <Card
               title="程序代码"
               style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 24 }}
-              bodyStyle={{ flex: 1, overflow: 'auto', padding: 0 }}
+              styles={{ body: { flex: 1, overflow: 'auto', padding: 0 } }}
             >
               <div
                 ref={codeRef}
