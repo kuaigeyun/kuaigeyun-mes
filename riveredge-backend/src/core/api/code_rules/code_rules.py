@@ -144,20 +144,22 @@ async def get_page_config(
             detail=f"页面配置不存在: {page_code}"
         )
     
-    # 如果配置了编码规则，获取规则详情（包括 allow_manual_edit）
-    if page_config.get("rule_code"):
+    # 获取规则代码：优先使用配置的 rule_code，否则由 page_code 派生（如 master-data-factory-workshop -> MASTER_DATA_FACTORY_WORKSHOP）
+    rule_code = page_config.get("rule_code") or page_code.upper().replace("-", "_")
+    
+    # 如果配置了编码规则或可派生，尝试从数据库获取规则详情
+    if rule_code:
         try:
-            rule = await CodeRuleService.get_rule_by_code(tenant_id, page_config["rule_code"])
+            rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
             if rule:
-                # 使用规则中的 allow_manual_edit 覆盖页面配置
+                page_config["rule_code"] = rule_code
                 page_config["allow_manual_edit"] = rule.allow_manual_edit
                 page_config["auto_generate"] = rule.is_active  # 规则启用时自动生成
-            else:
-                # 规则不存在或未启用，保持页面配置的默认值（auto_generate 可能为 True）
-                # 这样前端可以尝试生成编码，如果规则不存在，后端会返回空编码
+            elif not page_config.get("rule_code"):
+                # 规则不存在且配置中无 rule_code，不添加（保持原样）
                 pass
         except Exception:
-            # 如果获取规则时出错，使用页面配置的默认值
+            # 如果获取规则时出错，保持页面配置的默认值
             pass
     
     return CodeRulePageConfigResponse(**page_config)

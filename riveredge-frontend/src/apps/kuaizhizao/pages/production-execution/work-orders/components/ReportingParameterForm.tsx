@@ -47,7 +47,7 @@ const ReportingParameterForm: React.FC<ReportingParameterFormProps> = ({
         border: '1px solid rgba(255, 255, 255, 0.1)',
         marginBottom: 16 
       }}
-      bodyStyle={{ padding: '12px 24px' }}
+      styles={{ body: { padding: '12px 24px' } }}
     >
       <Form
         form={form}

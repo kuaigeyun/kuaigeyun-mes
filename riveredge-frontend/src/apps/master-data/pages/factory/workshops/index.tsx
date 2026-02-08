@@ -24,7 +24,7 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { workshopApi, plantApi } from '../../../services/factory';
 import type { Workshop, WorkshopCreate, WorkshopUpdate, Plant } from '../../../types/factory';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues, CustomField } from '../../../../../services/customField';
 
@@ -58,6 +58,8 @@ const WorkshopsPage: React.FC = () => {
     
     // 保存预览编码，用于在提交时判断是否需要正式生成
     const [previewCode, setPreviewCode] = useState<string | null>(null);
+    // 当前创建流程有效的规则代码（来自后端或本地配置），用于提交时正式生成
+    const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
 
   /**
    * 加载自定义字段
@@ -118,27 +120,33 @@ const WorkshopsPage: React.FC = () => {
     setCustomFieldValues({});
     formRef.current?.resetFields();
     
+    // 优先从后端获取页面配置（含数据库中的规则关联），否则使用本地配置
+    let ruleCode = getPageRuleCode('master-data-factory-workshop');
+    let autoGenerate = isAutoGenerateEnabled('master-data-factory-workshop');
+    try {
+      const pageConfig = await getCodeRulePageConfig('master-data-factory-workshop');
+      if (pageConfig?.ruleCode) {
+        ruleCode = pageConfig.ruleCode;
+        autoGenerate = !!pageConfig.autoGenerate;
+      }
+    } catch {
+      // 忽略接口错误，使用本地配置
+    }
+
     // 检查是否启用自动编码
-    if (isAutoGenerateEnabled('master-data-factory-workshop')) {
-      const ruleCode = getPageRuleCode('master-data-factory-workshop');
-      if (ruleCode) {
-        try {
-          // 使用测试生成（不更新序号），仅用于预览
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const previewCodeValue = codeResponse.code;
-          setPreviewCode(previewCodeValue);
-          formRef.current?.setFieldsValue({
-            code: previewCodeValue,
-            isActive: true,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          setPreviewCode(null);
-          formRef.current?.setFieldsValue({
-            isActive: true,
-          });
-        }
-      } else {
+    if (autoGenerate && ruleCode) {
+      setEffectiveRuleCode(ruleCode);
+      try {
+        // 使用测试生成（不更新序号），仅用于预览
+        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+        const previewCodeValue = codeResponse.code;
+        setPreviewCode(previewCodeValue);
+        formRef.current?.setFieldsValue({
+          code: previewCodeValue,
+          isActive: true,
+        });
+      } catch (error: any) {
+        console.warn('自动生成编码失败:', error);
         setPreviewCode(null);
         formRef.current?.setFieldsValue({
           isActive: true,
@@ -146,6 +154,7 @@ const WorkshopsPage: React.FC = () => {
       }
     } else {
       setPreviewCode(null);
+      setEffectiveRuleCode(null);
       formRef.current?.setFieldsValue({
         isActive: true,
       });
@@ -294,14 +303,14 @@ const WorkshopsPage: React.FC = () => {
       } else {
         // 创建车间
         // 如果是新建且编码与预览编码匹配，需要正式生成编码（更新序号）
-        if (!isEdit && isAutoGenerateEnabled('master-data-factory-workshop')) {
-          const ruleCode = getPageRuleCode('master-data-factory-workshop');
+        const ruleCodeToUse = effectiveRuleCode || getPageRuleCode('master-data-factory-workshop');
+        if (!isEdit && ruleCodeToUse && (isAutoGenerateEnabled('master-data-factory-workshop') || effectiveRuleCode)) {
           const currentCode = standardValues.code;
           
           // 如果编码与预览编码匹配，或者编码为空，则正式生成编码
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+          if (currentCode === previewCode || !currentCode) {
             try {
-              const codeResponse = await generateCode({ rule_code: ruleCode });
+              const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
               standardValues.code = codeResponse.code;
             } catch (error: any) {
               console.warn('正式生成编码失败，使用预览编码:', error);
@@ -341,6 +350,7 @@ const WorkshopsPage: React.FC = () => {
       
       setModalVisible(false);
       setPreviewCode(null);
+      setEffectiveRuleCode(null);
       formRef.current?.resetFields();
       setCustomFieldValues({});
       actionRef.current?.reload();
@@ -462,6 +472,7 @@ const WorkshopsPage: React.FC = () => {
   const handleCloseModal = () => {
     setModalVisible(false);
     setPreviewCode(null);
+    setEffectiveRuleCode(null);
     formRef.current?.resetFields();
   };
 

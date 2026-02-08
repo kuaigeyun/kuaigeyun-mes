@@ -71,7 +71,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
               key={d.id}
               hoverable
               cover={<Image alt={d.name} src={d.url} fallback="data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' fill='%23222'/%3E%3Ctext x='50%25' y='50%25' fill='%23666' dy='.3em' text-anchor='middle'%3EDrawing Preview%3C/text%3E%3C/svg%3E" />}
-              bodyStyle={{ padding: 12, background: HMI_DESIGN_TOKENS.BG_CARD }}
+              styles={{ body: { padding: 12, background: HMI_DESIGN_TOKENS.BG_CARD } }}
             >
               <Card.Meta title={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{d.name}</Text>} />
             </Card>

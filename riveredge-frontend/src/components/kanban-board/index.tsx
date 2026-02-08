@@ -142,7 +142,7 @@ const DraggableCard: React.FC<{
           ...(isDragging ? { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' } : {}),
         }}
         onClick={() => cardProps.onCardClick?.(data)}
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '12px' } }}
       >
         <div
           {...attributes}
@@ -188,11 +188,13 @@ const KanbanColumn: React.FC<{
           display: 'flex',
           flexDirection: 'column',
         }}
-        bodyStyle={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '12px',
+        styles={{
+          body: {
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '12px',
+          },
         }}
       >
         {/* 列标题 */}
@@ -352,7 +354,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
               width: 280,
               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             }}
-            bodyStyle={{ padding: '12px' }}
+            styles={{ body: { padding: '12px' } }}
           >
             <div
               style={{

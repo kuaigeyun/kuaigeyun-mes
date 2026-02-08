@@ -100,11 +100,13 @@ export const KanbanViewTemplate: React.FC<KanbanViewTemplateProps> = ({
               height: '100%',
               backgroundColor: column.backgroundColor || token.colorBgContainer,
             }}
-            bodyStyle={{
-              padding: ANT_DESIGN_TOKENS.SPACING.MD,
-              flex: 1,
-              overflowY: 'auto',
-              minHeight: '400px',
+            styles={{
+              body: {
+                padding: ANT_DESIGN_TOKENS.SPACING.MD,
+                flex: 1,
+                overflowY: 'auto',
+                minHeight: '400px',
+              },
             }}
           >
             {column.cards.length > 0 ? (

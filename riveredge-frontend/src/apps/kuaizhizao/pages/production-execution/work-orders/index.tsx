@@ -1597,9 +1597,7 @@ const WorkOrdersPage: React.FC = () => {
           marginBottom: TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP,
           fontSize: TOUCH_SCREEN_CONFIG.FONT_MIN_SIZE,
         }}
-        bodyStyle={{
-          padding: `${TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP}px`,
-        }}
+        styles={{ body: { padding: `${TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP}px` } }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: TOUCH_SCREEN_CONFIG.ELEMENT_MIN_GAP }}>
           {/* 工单编号和状态 */}

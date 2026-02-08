@@ -172,9 +172,11 @@ class CodeGenerationService:
         if counter_config:
             seq_start = counter_config.get("initial_value", 1)
             seq_step = 1  # 组件格式中步长固定为1
+            seq_reset_rule = counter_config.get("reset_cycle", "never")
         else:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
+            seq_reset_rule = rule.seq_reset_rule or "never"
         
         # 获取当前序号（不更新）
         sequence = await CodeSequence.get_or_none(
@@ -183,11 +185,24 @@ class CodeGenerationService:
             deleted_at__isnull=True
         )
         
-        # 如果没有序号记录，使用起始值
-        current_seq = sequence.current_seq if sequence else seq_start
-        
-        # 生成编码（使用当前序号 + 步长，但不保存）
-        test_seq = current_seq + seq_step
+        # 计算预览序号，必须与正式生成逻辑完全一致
+        if not sequence:
+            test_seq = seq_start  # 正式生成会创建 seq_start-step 后自增得到 seq_start
+        else:
+            base_seq = sequence.current_seq
+            # 与 generate_code 相同的重置检查（不写库）
+            if seq_reset_rule and seq_reset_rule != "never":
+                now = date.today()
+                if sequence.reset_date != now:
+                    if seq_reset_rule == "daily":
+                        base_seq = seq_start - seq_step
+                    elif seq_reset_rule == "monthly":
+                        if not sequence.reset_date or sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
+                            base_seq = seq_start - seq_step
+                    elif seq_reset_rule == "yearly":
+                        if not sequence.reset_date or sequence.reset_date.year != now.year:
+                            base_seq = seq_start - seq_step
+            test_seq = base_seq + seq_step
         if components:
             # 使用新格式（组件）
             test_code = CodeRuleComponentService.render_components(

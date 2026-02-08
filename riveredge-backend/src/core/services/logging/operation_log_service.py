@@ -6,6 +6,7 @@
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+import uuid
 
 from tortoise.expressions import Q
 
@@ -60,6 +61,7 @@ class OperationLogService:
             OperationLog: 创建的操作日志对象
         """
         operation_log = await OperationLog.create(
+            uuid=str(uuid.uuid4()),
             tenant_id=tenant_id,
             user_id=user_id,
             operation_type=operation_type,
