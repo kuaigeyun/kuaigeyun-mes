@@ -21,6 +21,7 @@ import {
   UpdateCodeRuleData,
   CodeRulePageConfig,
 } from '../../../../services/codeRule';
+import { PAGE_CODE_TO_FIXED_TEXT_PRESET } from '../../../../config/codeRulePages';
 import { apiRequest } from '../../../../services/api';
 import CodeRuleComponentBuilder from '../../../../components/code-rule-component-builder';
 import {
@@ -397,12 +398,8 @@ const CodeRuleListPage: React.FC = () => {
                 createDefaultAutoCounterComponent(1, 4, 'daily'),
               ];
             } else {
-              // 基础数据：功能缩写+流水号
-              // 从页面代码提取缩写
-              const parts = pageCode.split('-');
-              const abbreviation = parts.length >= 2
-                ? parts.slice(-2).map(p => p[0].toUpperCase()).join('').substring(0, 4)
-                : 'DEF';
+              // 基础数据：汉语拼音缩写+流水号
+              const abbreviation = PAGE_CODE_TO_FIXED_TEXT_PRESET[pageCode] ?? 'ZM';
               defaultComponents = [
                 {
                   type: 'fixed_text',

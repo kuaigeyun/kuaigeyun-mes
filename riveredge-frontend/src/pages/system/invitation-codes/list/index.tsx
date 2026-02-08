@@ -21,6 +21,7 @@ import {
   CreateInvitationCodeData,
   UpdateInvitationCodeData,
 } from '../../../../services/invitationCode';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 /**
  * 邀请码管理列表页面组件
@@ -215,7 +216,7 @@ const InvitationCodeListPage: React.FC = () => {
       fixed: 'left',
       render: (_, record) => (
         <Space>
-          <span style={{ fontFamily: 'monospace', fontSize: '14px' }}>{record.code}</span>
+          <span style={{ fontFamily: CODE_FONT_FAMILY, fontSize: '14px' }}>{record.code}</span>
           <Button
             type="link"
             size="small"
@@ -444,7 +445,7 @@ const InvitationCodeListPage: React.FC = () => {
             dataIndex: 'code',
             render: (value: string) => (
               <Space>
-                <span style={{ fontFamily: 'monospace', fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
+                <span style={{ fontFamily: CODE_FONT_FAMILY, fontSize: '16px', fontWeight: 'bold' }}>{value}</span>
                 <Button
                   type="link"
                   size="small"

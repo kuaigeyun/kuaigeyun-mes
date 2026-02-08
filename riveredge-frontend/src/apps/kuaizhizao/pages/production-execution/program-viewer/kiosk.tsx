@@ -12,6 +12,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Button, Space, message, Spin, Empty, Input, Tag } from 'antd';
 import { SearchOutlined, ReloadOutlined, DownloadOutlined, FullscreenOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { CODE_FONT_FAMILY } from '../../../../../constants/fonts';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import { App } from 'antd';
 
@@ -185,7 +186,7 @@ const ProgramViewerKioskPage: React.FC = () => {
             minHeight: '40px',
             lineHeight: '40px',
             fontSize: '24px',
-            fontFamily: 'monospace',
+            fontFamily: CODE_FONT_FAMILY,
             backgroundColor: isCurrentSearch ? '#fff3cd' : isSearchMatch ? '#f0f0f0' : 'transparent',
             padding: '4px 8px',
             borderLeft: isCurrentSearch ? '4px solid #ffc107' : '4px solid transparent',
@@ -357,7 +358,7 @@ const ProgramViewerKioskPage: React.FC = () => {
                   height: '100%',
                   overflow: 'auto',
                   backgroundColor: '#fafafa',
-                  fontFamily: 'monospace',
+                  fontFamily: CODE_FONT_FAMILY,
                   fontSize: '24px',
                   lineHeight: '40px',
                 }}

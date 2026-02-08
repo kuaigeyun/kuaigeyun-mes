@@ -19,6 +19,7 @@ import {
   PrintTemplateRenderResponse,
 } from '../../../services/printTemplate';
 import { handleError, handleSuccess } from '../../../utils/errorHandler';
+import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -655,7 +656,7 @@ const CardView: React.FC = () => {
                       rows={20}
                       value={currentTemplate.content}
                       readOnly
-                      style={{ fontFamily: 'monospace', fontSize: 14 }}
+                      style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 14 }}
                     />
                     <div style={{ marginTop: 16 }}>
                       <Alert
@@ -818,7 +819,7 @@ const CardView: React.FC = () => {
                 value={renderFormData}
                 onChange={(e) => setRenderFormData(e.target.value)}
                 placeholder='{"variable_name": "value"}'
-                style={{ marginTop: 8, fontFamily: 'monospace' }}
+                style={{ marginTop: 8, fontFamily: CODE_FONT_FAMILY }}
               />
             </div>
             {renderResult && (

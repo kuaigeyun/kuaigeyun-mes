@@ -46,7 +46,6 @@ class BaseModel(Model):
     # 注意：unique 和 db_index 在迁移文件中通过 SQL 添加，避免 Tortoise ORM 模型检查问题
     uuid = fields.CharField(
         max_length=36,
-        default=_generate_uuid,
         description="业务ID（UUID，对外暴露，安全且唯一）"
     )
     

@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -58,6 +58,16 @@ class LanguageResponse(LanguageBase):
     updated_at: datetime = Field(..., description="更新时间")
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class LanguageListResponse(BaseModel):
+    """
+    语言列表响应 Schema
+
+    用于返回语言列表（分页）。
+    """
+    items: List[LanguageResponse] = Field(..., description="语言列表")
+    total: int = Field(..., ge=0, description="总数")
 
 
 class TranslationUpdateRequest(BaseModel):

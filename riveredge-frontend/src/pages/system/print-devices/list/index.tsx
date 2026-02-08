@@ -27,6 +27,7 @@ import {
   PrintDevicePrintData,
   PrintDevicePrintResponse,
 } from '../../../../services/printDevice';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -807,7 +808,7 @@ const PrintDeviceListPage: React.FC = () => {
             value={configJson}
             onChange={(e) => setConfigJson(e.target.value)}
             placeholder='{"host": "192.168.1.100", "port": 9100, "protocol": "raw"}'
-            style={{ fontFamily: 'monospace' }}
+            style={{ fontFamily: CODE_FONT_FAMILY }}
           />
         </ProForm.Item>
         {isEdit && (
@@ -879,7 +880,7 @@ const PrintDeviceListPage: React.FC = () => {
             rules={[{ required: true, message: '请输入打印数据' }]}
             fieldProps={{
               rows: 6,
-              style: { fontFamily: 'monospace' },
+              style: { fontFamily: CODE_FONT_FAMILY },
               placeholder: '{"title": "标题", "content": "内容"}',
             }}
             tooltip="打印数据，JSON 格式，用于替换模板中的变量"

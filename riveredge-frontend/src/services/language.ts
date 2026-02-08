@@ -166,6 +166,29 @@ export async function getTranslations(code: string): Promise<TranslationGetRespo
 }
 
 /**
+ * 初始化系统语言响应
+ */
+export interface InitializeSystemLanguagesResponse {
+  tenant_id: number;
+  languages: Array<{ code: string; name: string; uuid: string }>;
+  languages_created_count: number;
+  languages_skipped_count: number;
+}
+
+/**
+ * 初始化系统语言
+ *
+ * 为当前租户加载默认系统语言（简体中文、English）。
+ *
+ * @returns 初始化结果
+ */
+export async function initializeSystemLanguages(): Promise<InitializeSystemLanguagesResponse> {
+  return apiRequest<InitializeSystemLanguagesResponse>('/core/languages/initialize-system', {
+    method: 'POST',
+  });
+}
+
+/**
  * 更新翻译内容
  * 
  * @param languageUuid - 语言 UUID

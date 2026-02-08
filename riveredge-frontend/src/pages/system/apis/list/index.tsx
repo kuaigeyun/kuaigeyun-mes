@@ -25,6 +25,7 @@ import {
   APITestRequest,
   APITestResponse,
 } from '../../../../services/apiManagement';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
@@ -544,7 +545,7 @@ const APIListPage: React.FC = () => {
               onChange={(e) => setRequestHeadersJson(e.target.value)}
               rows={4}
               placeholder='请输入请求头（JSON 格式），例如：{"Authorization": "Bearer token", "Content-Type": "application/json"}'
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
             />
           </div>
           <div>
@@ -556,7 +557,7 @@ const APIListPage: React.FC = () => {
               onChange={(e) => setRequestParamsJson(e.target.value)}
               rows={4}
               placeholder='请输入请求参数（JSON 格式），例如：{"page": 1, "page_size": 20}'
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
             />
           </div>
           <div>
@@ -568,7 +569,7 @@ const APIListPage: React.FC = () => {
               onChange={(e) => setRequestBodyJson(e.target.value)}
               rows={4}
               placeholder='请输入请求体（JSON 格式），例如：{"name": "test", "email": "test@example.com"}'
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
             />
           </div>
           <div>
@@ -580,7 +581,7 @@ const APIListPage: React.FC = () => {
               onChange={(e) => setResponseFormatJson(e.target.value)}
               rows={4}
               placeholder='请输入响应格式（JSON 格式），例如：{"code": 200, "message": "success", "data": {}}'
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
             />
           </div>
           <div>
@@ -592,7 +593,7 @@ const APIListPage: React.FC = () => {
               onChange={(e) => setResponseExampleJson(e.target.value)}
               rows={4}
               placeholder='请输入响应示例（JSON 格式），例如：{"code": 200, "message": "success", "data": {"id": 1, "name": "test"}}'
-              style={{ fontFamily: 'monospace', fontSize: 12 }}
+              style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
             />
           </div>
           <ProFormSwitch
@@ -784,7 +785,7 @@ const APIListPage: React.FC = () => {
                 onChange={(e) => setTestRequestJson(e.target.value)}
                 rows={8}
                 placeholder='请输入测试请求（JSON 格式），例如：{"headers": {"Authorization": "Bearer token"}, "params": {"page": 1}, "body": {"name": "test"}}'
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
+                style={{ fontFamily: CODE_FONT_FAMILY, fontSize: 12 }}
               />
             </div>
             

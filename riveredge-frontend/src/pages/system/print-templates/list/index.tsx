@@ -25,6 +25,7 @@ import {
   RenderPrintTemplateData,
   PrintTemplateRenderResponse,
 } from '../../../../services/printTemplate';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -736,7 +737,7 @@ const PrintTemplateListPage: React.FC = () => {
           rules={[{ required: true, message: '请输入模板内容' }]}
           fieldProps={{
             rows: 12,
-            style: { fontFamily: 'monospace' },
+            style: { fontFamily: CODE_FONT_FAMILY },
           }}
           tooltip="支持变量替换，使用 {{variable_name}} 格式"
         />
@@ -750,7 +751,7 @@ const PrintTemplateListPage: React.FC = () => {
             value={configJson}
             onChange={(e) => setConfigJson(e.target.value)}
             placeholder='{"page_size": "A4", "margin": {"top": 10, "bottom": 10, "left": 10, "right": 10}}'
-            style={{ fontFamily: 'monospace' }}
+            style={{ fontFamily: CODE_FONT_FAMILY }}
           />
         </ProForm.Item>
         {isEdit && (
@@ -791,7 +792,7 @@ const PrintTemplateListPage: React.FC = () => {
             rules={[{ required: true, message: '请输入模板数据' }]}
             fieldProps={{
               rows: 6,
-              style: { fontFamily: 'monospace' },
+              style: { fontFamily: CODE_FONT_FAMILY },
               placeholder: '{"title": "标题", "content": "内容"}',
             }}
             tooltip="模板数据，JSON 格式，用于替换模板中的变量"

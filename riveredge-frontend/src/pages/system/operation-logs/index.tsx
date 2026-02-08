@@ -23,6 +23,7 @@ import {
   OperationLogStats,
 } from '../../../services/operationLog';
 import { useGlobalStore } from '../../../stores';
+import { CODE_FONT_FAMILY } from '../../../constants/fonts';
 import dayjs from 'dayjs';
 
 /**
@@ -188,7 +189,7 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'request_path',
       span: 2,
       render: (value: string) => (
-        <div style={{ wordBreak: 'break-word', fontFamily: 'monospace', fontSize: '12px' }}>
+        <div style={{ wordBreak: 'break-word', fontFamily: CODE_FONT_FAMILY, fontSize: '12px' }}>
           {value || '-'}
         </div>
       ),

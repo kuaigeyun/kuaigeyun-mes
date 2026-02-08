@@ -38,6 +38,21 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
     const [industry, setIndustry] = useState<'general' | 'electronics' | 'machinery' | 'machining'>('general');
     const [loading, setLoading] = useState(false);
 
+    /**
+     * 限制右键菜单仅在画板区域（.react-flow__pane）内触发
+     * 使用 capture 阶段拦截，避免在侧边栏、工具栏等区域右击时弹出菜单
+     */
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('.react-flow__pane')) {
+                e.stopImmediatePropagation();
+            }
+        };
+        document.addEventListener('contextmenu', handler, true);
+        return () => document.removeEventListener('contextmenu', handler, true);
+    }, []);
+
     // Node Style Helper
     const getNodeStyle = (enabled: boolean, auditRequired: boolean) => ({
         background: enabled ? '#fff' : '#fafafa',
@@ -609,7 +624,8 @@ const BusinessFlowConfig: React.FC<BusinessFlowConfigProps> = ({ onSaveAsTemplat
                             nodes,
                             edges,
                             onNodeClick: handleNodeClick,
-                            fitView: true,
+                            fitView: false,
+                            defaultViewport: { x: 0, y: 0, zoom: 1 },
                         }}
                         miniMap={true}
                         devtools={false}
