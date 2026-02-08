@@ -4,13 +4,14 @@
 提供语言的 CRUD 操作和翻译管理。
 """
 
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from core.schemas.language import (
     LanguageCreate,
     LanguageUpdate,
     LanguageResponse,
+    LanguageListResponse,
     TranslationUpdateRequest,
     TranslationGetResponse,
 )
@@ -54,34 +55,95 @@ async def create_language(
         )
 
 
-@router.get("", response_model=List[LanguageResponse])
+@router.post("/initialize-system", status_code=status.HTTP_200_OK)
+async def initialize_system_languages(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    初始化系统语言
+
+    为当前租户加载默认系统语言（简体中文、English）。
+    如果语言已存在则跳过；若不存在则创建。
+    """
+    try:
+        result = await LanguageService.initialize_system_languages(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"初始化系统语言失败: {str(e)}"
+        )
+
+
+@router.get("", response_model=LanguageListResponse)
 async def list_languages(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    code: Optional[str] = Query(None, description="语言代码（模糊搜索）"),
+    name: Optional[str] = Query(None, description="语言名称（模糊搜索）"),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     获取语言列表
-    
+
     获取当前组织的语言列表，支持分页和筛选。
-    
+
     Args:
-        skip: 跳过数量（默认 0）
-        limit: 限制数量（默认 100，最大 1000）
+        page: 页码（默认 1）
+        page_size: 每页数量（默认 20，最大 1000）
         is_active: 是否启用（可选）
+        code: 语言代码模糊搜索（可选）
+        name: 语言名称模糊搜索（可选）
         tenant_id: 当前组织ID（依赖注入）
-        
+
     Returns:
-        List[LanguageResponse]: 语言列表
+        LanguageListResponse: 语言列表（分页）
     """
-    languages = await LanguageService.list_languages(
+    languages, total = await LanguageService.list_languages(
         tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        is_active=is_active
+        page=page,
+        page_size=page_size,
+        is_active=is_active,
+        code=code,
+        name=name,
     )
-    return [LanguageResponse.model_validate(l) for l in languages]
+    return LanguageListResponse(
+        items=[LanguageResponse.model_validate(l) for l in languages],
+        total=total,
+    )
+
+
+@router.get("/code/{code}/translations", response_model=TranslationGetResponse)
+async def get_translations(
+    code: str,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    根据语言代码获取翻译内容
+
+    如果语言不存在，返回默认语言的翻译。
+    """
+    translations = await LanguageService.get_translations(tenant_id, code)
+    language = await LanguageService.get_language_by_code(tenant_id, code)
+    if not language:
+        default_language = await LanguageService.get_default_language(tenant_id)
+        if default_language:
+            return TranslationGetResponse(
+                translations=translations,
+                language_code=default_language.code,
+                language_name=default_language.name
+            )
+        return TranslationGetResponse(
+            translations=translations,
+            language_code=code,
+            language_name=code
+        )
+    return TranslationGetResponse(
+        translations=translations,
+        language_code=language.code,
+        language_name=language.name
+    )
 
 
 @router.get("/{uuid}", response_model=LanguageResponse)
@@ -186,49 +248,6 @@ async def delete_language(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e)
         )
-
-
-@router.get("/code/{code}/translations", response_model=TranslationGetResponse)
-async def get_translations(
-    code: str,
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取翻译内容
-    
-    根据语言代码获取翻译内容。
-    如果语言不存在，返回默认语言的翻译。
-    
-    Args:
-        code: 语言代码
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        TranslationGetResponse: 翻译内容
-    """
-    translations = await LanguageService.get_translations(tenant_id, code)
-    
-    # 获取语言信息
-    language = await LanguageService.get_language_by_code(tenant_id, code)
-    if not language:
-        default_language = await LanguageService.get_default_language(tenant_id)
-        if default_language:
-            return TranslationGetResponse(
-                translations=translations,
-                language_code=default_language.code,
-                language_name=default_language.name
-            )
-        return TranslationGetResponse(
-            translations=translations,
-            language_code=code,
-            language_name=code
-        )
-    
-    return TranslationGetResponse(
-        translations=translations,
-        language_code=language.code,
-        language_name=language.name
-    )
 
 
 @router.put("/{uuid}/translations", response_model=LanguageResponse)

@@ -577,14 +577,6 @@ const DataDictionaryListPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button
-            key="initialize"
-            icon={<SettingOutlined />}
-            onClick={handleInitializeSystemDictionaries}
-            loading={initializing}
-          >
-            加载系统字典
-          </Button>,
-          <Button
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -600,6 +592,14 @@ const DataDictionaryListPage: React.FC = () => {
             onClick={handleBatchDelete}
           >
             批量删除
+          </Button>,
+          <Button
+            key="initialize"
+            icon={<SettingOutlined />}
+            onClick={handleInitializeSystemDictionaries}
+            loading={initializing}
+          >
+            加载系统字典
           </Button>,
         ]}
         rowSelection={{

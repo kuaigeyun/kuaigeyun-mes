@@ -500,6 +500,29 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
 ];
 
 /**
+ * 页面代码 -> 固定字符预设（汉语拼音缩写）
+ * 用于编码规则默认前缀，避免英文缩写
+ */
+export const PAGE_CODE_TO_FIXED_TEXT_PRESET: Record<string, string> = {
+  'master-data-factory-plant': 'CQ',           // 厂区
+  'master-data-factory-workshop': 'CJ',        // 车间
+  'master-data-factory-production-line': 'CX', // 产线
+  'master-data-factory-workstation': 'GW',     // 工位
+  'master-data-warehouse-warehouse': 'CK',     // 仓库
+  'master-data-warehouse-storage-area': 'KQ',  // 库区
+  'master-data-warehouse-storage-location': 'KW', // 库位
+  'master-data-material-group': 'FZ',          // 分组
+  'master-data-material': 'WL',                // 物料
+  'master-data-process-operation': 'GX',       // 工序
+  'master-data-process-route': 'GY',           // 工艺
+  'master-data-engineering-bom': 'GC',         // 工程
+  'master-data-defect-type': 'BL',             // 不良
+  'master-data-supply-chain-customer': 'KH',   // 客户
+  'master-data-supply-chain-supplier': 'GYS',  // 供应商
+  'master-data-performance-skill': 'JN',       // 技能
+};
+
+/**
  * 根据页面代码获取页面配置
  * 
  * @param pageCode - 页面代码

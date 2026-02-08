@@ -6,6 +6,45 @@
 
 from typing import List, Dict, Any
 
+# 页面代码 -> 固定字符预设（汉语拼音缩写）
+# 用于编码规则默认前缀和重置
+PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
+    "master-data-factory-plant": "CQ",           # 厂区
+    "master-data-factory-workshop": "CJ",        # 车间
+    "master-data-factory-production-line": "CX", # 产线
+    "master-data-factory-workstation": "GW",     # 工位
+    "master-data-warehouse-warehouse": "CK",     # 仓库
+    "master-data-warehouse-storage-area": "KQ",  # 库区
+    "master-data-warehouse-storage-location": "KW",  # 库位
+    "master-data-material-group": "FZ",          # 分组
+    "master-data-material": "WL",                # 物料
+    "master-data-process-operation": "GX",       # 工序
+    "master-data-process-route": "GY",           # 工艺
+    "master-data-engineering-bom": "GC",         # 工程
+    "master-data-defect-type": "BL",             # 不良
+    "master-data-supply-chain-customer": "KH",   # 客户
+    "master-data-supply-chain-supplier": "GYS",  # 供应商
+    "master-data-performance-skill": "JN",       # 技能
+    "kuaizhizao-production-work-order": "GD",    # 工单
+    "kuaizhizao-production-rework-order": "FGD", # 返工单
+    "kuaizhizao-production-outsource-order": "WW",   # 委外
+    "kuaizhizao-production-outsource-work-order": "WWGD",  # 委外工单
+    "kuaizhizao-purchase-order": "CG",           # 采购
+    "kuaizhizao-purchase-receipt": "CGSD",      # 采购收货
+    "kuaizhizao-purchase-return": "CGTH",       # 采购退货
+    "kuaizhizao-sales-order": "XS",             # 销售
+    "kuaizhizao-sales-delivery": "XSFH",        # 销售发货
+    "kuaizhizao-sales-forecast": "XSYC",        # 销售预测
+    "kuaizhizao-sales-return": "XSTH",          # 销售退货
+    "kuaizhizao-warehouse-inbound": "LL",       # 领料
+    "kuaizhizao-warehouse-finished-goods-inbound": "CPRK",  # 成品入库
+    "kuaizhizao-warehouse-sales-outbound": "XSCK",  # 销售出库
+    "kuaizhizao-quality-incoming-inspection": "LLJY",   # 来料检验
+    "kuaizhizao-quality-process-inspection": "GCJY",   # 过程检验
+    "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
+    "kuaizhizao-plan-production-plan": "SCJH",  # 生产计划
+}
+
 # 页面配置数据结构
 CodeRulePageConfig = Dict[str, Any]
 
@@ -465,4 +504,22 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
 ]
+
+
+def get_rule_code_to_page_code() -> Dict[str, str]:
+    """
+    规则代码 -> 页面代码映射
+    包含：1) 显式配置的 rule_code  2) 由 page_code 派生的规则代码（如 MASTER_DATA_FACTORY_PLANT）
+    用于覆盖所有可能的规则代码格式（包括自定义/未配置 rule_code 的页面）
+    """
+    mapping: Dict[str, str] = {}
+    for p in CODE_RULE_PAGES:
+        page_code = p["page_code"]
+        # 显式 rule_code
+        if p.get("rule_code"):
+            mapping[p["rule_code"]] = page_code
+        # 派生规则代码（前端无 rule_code 时使用 page_code 转大写+下划线）
+        derived = page_code.upper().replace("-", "_")
+        mapping[derived] = page_code
+    return mapping
 

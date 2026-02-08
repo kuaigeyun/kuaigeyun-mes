@@ -28,6 +28,7 @@ import {
   getDataSourceList,
   DataSource,
 } from '../../../../services/dataSource';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 const { TextArea } = Input;
 
@@ -523,7 +524,7 @@ const DatasetListPage: React.FC = () => {
               ? '请输入 SQL 查询配置（JSON 格式），例如：{"sql": "SELECT * FROM users WHERE status = :status", "parameters": {"status": "active"}}'
               : '请输入 API 查询配置（JSON 格式），例如：{"endpoint": "/api/users", "method": "GET", "params": {"status": "active"}}'
             }
-            style={{ fontFamily: 'monospace' }}
+            style={{ fontFamily: CODE_FONT_FAMILY }}
           />
         </div>
         <ProFormSwitch

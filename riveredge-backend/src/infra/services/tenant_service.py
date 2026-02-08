@@ -557,6 +557,16 @@ class TenantService:
             logger.error(f"组织 {tenant_id} 系统字典初始化失败: {e}")
             import traceback
             logger.error(traceback.format_exc())
+
+        try:
+            # 初始化系统语言
+            from core.services.system.language_service import LanguageService
+            await LanguageService.initialize_system_languages(tenant_id)
+            logger.info(f"组织 {tenant_id} 系统语言初始化完成")
+        except Exception as e:
+            logger.error(f"组织 {tenant_id} 系统语言初始化失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             
         # TODO: 后续完善
         # 1. 创建默认角色

@@ -9,7 +9,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Table, Input } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, TranslationOutlined, SettingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -19,11 +19,15 @@ import {
   updateLanguage,
   deleteLanguage,
   updateTranslations,
+  initializeSystemLanguages,
   Language,
   CreateLanguageData,
   UpdateLanguageData,
   TranslationUpdateRequest,
 } from '../../../../services/language';
+import zhCN from '../../../../locales/zh-CN';
+import enUS from '../../../../locales/en-US';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 /**
  * 语言管理列表页面组件
@@ -53,6 +57,25 @@ const LanguageListPage: React.FC = () => {
   const [translationSaving, setTranslationSaving] = useState(false);
   const [newTranslationKey, setNewTranslationKey] = useState('');
   const [newTranslationValue, setNewTranslationValue] = useState('');
+  const [initializing, setInitializing] = useState(false);
+
+  /**
+   * 处理加载系统语言
+   */
+  const handleInitializeSystemLanguages = async () => {
+    try {
+      setInitializing(true);
+      const result = await initializeSystemLanguages();
+      messageApi.success(
+        `系统语言加载完成！创建 ${result.languages_created_count} 个语言，跳过 ${result.languages_skipped_count} 个已存在`
+      );
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '加载系统语言失败');
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   /**
    * 处理新建语言
@@ -152,6 +175,36 @@ const LanguageListPage: React.FC = () => {
     const newTranslations = { ...translations };
     delete newTranslations[key];
     setTranslations(newTranslations);
+  };
+
+  /**
+   * 从本地语言包同步翻译到当前语言
+   * 将 src/locales 中的翻译内容同步到数据库
+   */
+  const handleSyncFromLocale = async () => {
+    if (!currentLanguageForTranslation) return;
+    const localeMap: Record<string, Record<string, string>> = {
+      'zh-CN': zhCN as Record<string, string>,
+      'en-US': enUS as Record<string, string>,
+    };
+    const localeContent = localeMap[currentLanguageForTranslation.code];
+    if (!localeContent) {
+      messageApi.warning(`本地暂无 ${currentLanguageForTranslation.code} 的语言包，仅支持 zh-CN、en-US`);
+      return;
+    }
+    try {
+      setTranslationSaving(true);
+      await updateTranslations(currentLanguageForTranslation.uuid, {
+        translations: localeContent,
+      } as TranslationUpdateRequest);
+      setTranslations(localeContent);
+      messageApi.success(`已从本地同步 ${Object.keys(localeContent).length} 条翻译`);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '同步失败');
+    } finally {
+      setTranslationSaving(false);
+    }
   };
 
   /**
@@ -271,7 +324,7 @@ const LanguageListPage: React.FC = () => {
       width: 120,
       fixed: 'left',
       render: (_, record) => (
-        <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{record.code}</span>
+        <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{record.code}</span>
       ),
     },
     {
@@ -397,7 +450,7 @@ const LanguageListPage: React.FC = () => {
       dataIndex: 'key',
       width: '40%',
       render: (text: string) => (
-        <span style={{ fontFamily: 'monospace' }}>{text}</span>
+        <span style={{ fontFamily: CODE_FONT_FAMILY }}>{text}</span>
       ),
     },
     {
@@ -496,6 +549,14 @@ const LanguageListPage: React.FC = () => {
             >
               批量删除
             </Button>,
+            <Button
+              key="initialize"
+              icon={<SettingOutlined />}
+              onClick={handleInitializeSystemLanguages}
+              loading={initializing}
+            >
+              加载系统语言
+            </Button>,
           ]}
           rowSelection={{
             selectedRowKeys,
@@ -569,7 +630,7 @@ const LanguageListPage: React.FC = () => {
             title: '语言代码',
             dataIndex: 'code',
             render: (value: string) => (
-              <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{value}</span>
+              <span style={{ fontFamily: CODE_FONT_FAMILY, fontWeight: 'bold' }}>{value}</span>
             ),
           },
           {
@@ -624,18 +685,35 @@ const LanguageListPage: React.FC = () => {
         }}
         size={800}
         loading={translationLoading}
-        extra={[
-          <Button
-            key="save"
-            type="primary"
-            onClick={handleSaveTranslations}
-            loading={translationSaving}
-          >
-            保存
-          </Button>,
-        ]}
+        styles={{
+          body: {
+            display: 'flex',
+            flexDirection: 'column',
+            height: 'calc(100vh - 110px)',
+            overflow: 'hidden',
+            paddingBottom: 24,
+          },
+        }}
+        extra={
+          <Space size="middle">
+            <Button
+              icon={<TranslationOutlined />}
+              onClick={handleSyncFromLocale}
+              loading={translationSaving}
+            >
+              从本地同步
+            </Button>
+            <Button
+              type="primary"
+              onClick={handleSaveTranslations}
+              loading={translationSaving}
+            >
+              保存
+            </Button>
+          </Space>
+        }
       >
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, flexShrink: 0 }}>
           <Space.Compact style={{ width: '100%' }}>
             <Input
               placeholder="翻译键"
@@ -654,13 +732,15 @@ const LanguageListPage: React.FC = () => {
             </Button>
           </Space.Compact>
         </div>
-        <Table
-          columns={translationColumns}
-          dataSource={translationTableData}
-          rowKey="key"
-          pagination={false}
-          scroll={{ y: 400 }}
-        />
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <Table
+            columns={translationColumns}
+            dataSource={translationTableData}
+            rowKey="key"
+            pagination={false}
+            scroll={{ y: 'calc(100vh - 220px)' }}
+          />
+        </div>
       </Drawer>
     </>
   );

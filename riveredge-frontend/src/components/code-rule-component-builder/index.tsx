@@ -43,6 +43,7 @@ import {
 } from '../../types/codeRuleComponent';
 import CodeRuleComponentConfigModal from './ComponentConfigModal';
 import { CodeRuleComponentService } from '../../utils/codeRuleComponent';
+import { CODE_FONT_FAMILY } from '../../constants/fonts';
 
 const { Text } = Typography;
 
@@ -390,7 +391,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
               padding: '16px',
               backgroundColor: token.colorBgContainer,
               borderRadius: token.borderRadius,
-              fontFamily: 'monospace',
+              fontFamily: CODE_FONT_FAMILY,
               fontSize: '16px',
               fontWeight: 600,
               border: `1px solid ${token.colorBorder}`,

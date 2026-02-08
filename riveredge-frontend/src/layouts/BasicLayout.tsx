@@ -494,14 +494,14 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'),
           },
           {
-            path: '/system/code-rules',
-            name: t('menu.system.code-rules'),
-            icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'),
-          },
-          {
             path: '/system/languages',
             name: t('menu.system.languages'),
             icon: getMenuIcon(t('menu.system.languages'), '/system/languages'),
+          },
+          {
+            path: '/system/code-rules',
+            name: t('menu.system.code-rules'),
+            icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'),
           },
           {
             path: '/system/custom-fields',

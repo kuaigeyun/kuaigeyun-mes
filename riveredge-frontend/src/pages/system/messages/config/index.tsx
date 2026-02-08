@@ -22,6 +22,7 @@ import {
   CreateMessageConfigData,
   UpdateMessageConfigData,
 } from '../../../../services/messageConfig';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 const { TextArea } = Input;
 
@@ -551,7 +552,7 @@ const MessageConfigListPage: React.FC = () => {
               onChange={(e) => setConfigJson(e.target.value)}
               rows={10}
               placeholder='请输入配置信息（JSON 格式），例如：{"smtp_host": "smtp.example.com", "smtp_port": 587, "smtp_username": "user@example.com", "smtp_password": "password"}'
-              style={{ fontFamily: 'monospace' }}
+              style={{ fontFamily: CODE_FONT_FAMILY }}
             />
           </div>
           <ProFormSwitch

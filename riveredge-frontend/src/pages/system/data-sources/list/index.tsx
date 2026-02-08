@@ -24,6 +24,7 @@ import {
   UpdateDataSourceData,
   TestConnectionResponse,
 } from '../../../../services/dataSource';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -754,7 +755,7 @@ const DataSourceListPage: React.FC = () => {
             onChange={(e) => setConfigJson(e.target.value)}
             rows={10}
             placeholder='请输入连接配置（JSON 格式），例如：{"host": "localhost", "port": 5432, "database": "mydb", "username": "user", "password": "password"}'
-            style={{ fontFamily: 'monospace' }}
+            style={{ fontFamily: CODE_FONT_FAMILY }}
           />
         </div>
         <ProFormSwitch

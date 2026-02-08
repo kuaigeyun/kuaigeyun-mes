@@ -30,6 +30,7 @@ import {
 
 // @ts-ignore
 import { apiRequest } from '../../../../services/api';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 /**
  * 组织状态标签映射
@@ -1259,7 +1260,7 @@ const SuperAdminTenantList: React.FC = () => {
                       margin: 0, 
                       whiteSpace: 'pre-wrap',
                       fontSize: '12px',
-                      fontFamily: 'monospace',
+                      fontFamily: CODE_FONT_FAMILY,
                       backgroundColor: '#f5f5f5',
                       padding: '8px',
                       borderRadius: '4px',

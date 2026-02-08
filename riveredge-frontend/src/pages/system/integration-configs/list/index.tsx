@@ -24,6 +24,7 @@ import {
   IntegrationConfigUpdate,
 } from '../../../../services/integrationConfig';
 import ConnectionWizard from '../ConnectionWizard';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -811,7 +812,7 @@ const IntegrationConfigListPage: React.FC = () => {
             onChange={(e) => setConfigJson(e.target.value)}
             rows={10}
             placeholder='请输入配置信息（JSON 格式），例如：{"url": "https://api.example.com", "method": "GET", "headers": {}}'
-            style={{ fontFamily: 'monospace' }}
+            style={{ fontFamily: CODE_FONT_FAMILY }}
           />
         </div>
         <ProFormSwitch

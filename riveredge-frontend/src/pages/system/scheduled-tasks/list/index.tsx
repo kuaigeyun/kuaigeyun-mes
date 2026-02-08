@@ -24,6 +24,7 @@ import {
   CreateScheduledTaskData,
   UpdateScheduledTaskData,
 } from '../../../../services/scheduledTask';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 const { TextArea } = Input;
 
@@ -602,7 +603,7 @@ const ScheduledTaskListPage: React.FC = () => {
                 ? '请输入间隔时间（秒），例如：{"seconds": 300}'
                 : '请输入执行时间，例如：{"at": "2025-01-01T00:00:00Z"}'
               }
-              style={{ fontFamily: 'monospace' }}
+              style={{ fontFamily: CODE_FONT_FAMILY }}
             />
           </div>
           <div>
@@ -614,7 +615,7 @@ const ScheduledTaskListPage: React.FC = () => {
               onChange={(e) => setTaskConfigJson(e.target.value)}
               rows={6}
               placeholder='请输入任务配置（JSON 格式），例如：{"url": "https://api.example.com/endpoint", "method": "POST", "headers": {}, "data": {}}'
-              style={{ fontFamily: 'monospace' }}
+              style={{ fontFamily: CODE_FONT_FAMILY }}
             />
           </div>
           <ProFormSwitch

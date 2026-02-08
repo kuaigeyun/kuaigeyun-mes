@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Table } from 'antd';
 import dayjs from 'dayjs';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 const { Text } = Typography;
 
@@ -39,7 +40,7 @@ const MediaWidget: React.FC<MediaWidgetProps> = ({ type, url, config = {}, data 
             return (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
                     <Text style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>{now.format('YYYY年MM月DD日 星期' + ['日', '一', '二', '三', '四', '五', '六'][now.day()])}</Text>
-                    <Text style={{ fontSize: '36px', fontWeight: 'bold', color: '#00f2ff', fontFamily: 'monospace' }}>{now.format('HH:mm:ss')}</Text>
+                    <Text style={{ fontSize: '36px', fontWeight: 'bold', color: '#00f2ff', fontFamily: CODE_FONT_FAMILY }}>{now.format('HH:mm:ss')}</Text>
                 </div>
             );
         case 'table':

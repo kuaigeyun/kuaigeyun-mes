@@ -20,6 +20,7 @@ import {
   DownloadOutlined
 } from '@ant-design/icons';
 import { HMI_DESIGN_TOKENS } from '../../../../../../components/layout-templates';
+import { CODE_FONT_FAMILY } from '../../../../../../constants/fonts';
 
 const { TabPane } = Tabs;
 const { Title, Text, Paragraph } = Typography;
@@ -91,7 +92,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
           padding: 16, 
           borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS, 
           color: HMI_DESIGN_TOKENS.STATUS_OK,
-          fontFamily: 'Consolas, Monaco, monospace',
+          fontFamily: CODE_FONT_FAMILY,
           fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
           border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
           overflowY: 'auto'

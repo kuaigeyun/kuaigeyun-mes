@@ -102,7 +102,6 @@ TORTOISE_ORM = {
         "models": {
             "models": [
                 # 平台级模型（infra）
-                "infra.models.base",
                 "infra.models.tenant",
                 "infra.models.tenant_config",
                 "infra.models.tenant_activity_log",

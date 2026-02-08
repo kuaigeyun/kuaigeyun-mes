@@ -4,6 +4,7 @@
 提供语言的 CRUD 操作和翻译管理。
 """
 
+import uuid
 from typing import Optional, List, Dict, Any
 from tortoise.exceptions import IntegrityError
 
@@ -39,6 +40,7 @@ class LanguageService:
         """
         try:
             language = Language(
+                uuid=str(uuid.uuid4()),
                 tenant_id=tenant_id,
                 **data.model_dump()
             )
@@ -49,9 +51,8 @@ class LanguageService:
                 await Language.filter(
                     tenant_id=tenant_id,
                     is_default=True,
-                    id__ne=language.id,
                     deleted_at__isnull=True
-                ).update(is_default=False)
+                ).exclude(id=language.id).update(is_default=False)
             
             return language
         except IntegrityError:
@@ -129,31 +130,54 @@ class LanguageService:
     @staticmethod
     async def list_languages(
         tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
         skip: int = 0,
         limit: int = 100,
-        is_active: Optional[bool] = None
-    ) -> List[Language]:
+        is_active: Optional[bool] = None,
+        code: Optional[str] = None,
+        name: Optional[str] = None
+    ) -> tuple[List[Language], int]:
         """
-        获取语言列表
-        
+        获取语言列表（支持分页和筛选）
+
         Args:
             tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
+            page: 页码（与 skip 二选一）
+            page_size: 每页数量（与 limit 二选一）
+            skip: 跳过数量（兼容旧参数）
+            limit: 限制数量（兼容旧参数）
             is_active: 是否启用（可选）
-            
+            code: 语言代码模糊搜索（可选）
+            name: 语言名称模糊搜索（可选）
+
         Returns:
-            List[Language]: 语言列表
+            tuple[List[Language], int]: (语言列表, 总数)
         """
         query = Language.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
-        
+
         if is_active is not None:
             query = query.filter(is_active=is_active)
-        
-        return await query.offset(skip).limit(limit).order_by("sort_order", "id")
+        if code:
+            query = query.filter(code__icontains=code)
+        if name:
+            query = query.filter(name__icontains=name)
+
+        total = await query.count()
+
+        # 优先使用 page/page_size
+        if page >= 1 and page_size >= 1:
+            skip_val = (page - 1) * page_size
+            limit_val = page_size
+        else:
+            skip_val = skip
+            limit_val = limit
+
+        items = await query.offset(skip_val).limit(limit_val).order_by("sort_order", "id")
+        return list(items), total
     
     @staticmethod
     async def update_language(
@@ -184,9 +208,8 @@ class LanguageService:
             await Language.filter(
                 tenant_id=tenant_id,
                 is_default=True,
-                id__ne=language.id,
                 deleted_at__isnull=True
-            ).update(is_default=False)
+            ).exclude(id=language.id).update(is_default=False)
         
         # 记录变更前的状态（用于通知前端）
         old_code = language.code
@@ -305,6 +328,90 @@ class LanguageService:
         
         return language
     
+    @staticmethod
+    async def initialize_system_languages(tenant_id: int) -> Dict[str, Any]:
+        """
+        初始化系统语言
+
+        为当前租户创建默认系统语言（简体中文、English）。
+        如果语言已存在则跳过；若不存在则创建。
+
+        Args:
+            tenant_id: 组织ID
+
+        Returns:
+            Dict[str, Any]: 初始化结果
+        """
+        from loguru import logger
+        from core.schemas.language import LanguageCreate
+
+        logger.info(f"开始为组织 {tenant_id} 初始化系统语言")
+
+        # 系统预设语言配置：code, name, native_name, is_default, sort_order
+        SYSTEM_LANGUAGES = [
+            {
+                "code": "zh-CN",
+                "name": "简体中文",
+                "native_name": "中文",
+                "is_default": True,
+                "sort_order": 0,
+            },
+            {
+                "code": "en-US",
+                "name": "English",
+                "native_name": "English",
+                "is_default": False,
+                "sort_order": 1,
+            },
+        ]
+
+        created_count = 0
+        skipped_count = 0
+        created_languages = []
+
+        for lang_config in SYSTEM_LANGUAGES:
+            try:
+                existing = await Language.filter(
+                    tenant_id=tenant_id,
+                    code=lang_config["code"],
+                    deleted_at__isnull=True,
+                ).first()
+
+                if existing:
+                    logger.info(f"系统语言 {lang_config['code']} 已存在，UUID: {existing.uuid}")
+                    skipped_count += 1
+                    continue
+
+                data = LanguageCreate(
+                    code=lang_config["code"],
+                    name=lang_config["name"],
+                    native_name=lang_config["native_name"],
+                    is_default=lang_config["is_default"],
+                    is_active=True,
+                    sort_order=lang_config["sort_order"],
+                    translations={},
+                )
+                language = await LanguageService.create_language(tenant_id=tenant_id, data=data)
+                created_languages.append({"code": language.code, "name": language.name, "uuid": str(language.uuid)})
+                created_count += 1
+                logger.info(f"系统语言 {lang_config['code']} 创建成功，UUID: {language.uuid}")
+
+            except Exception as e:
+                logger.error(f"初始化系统语言 {lang_config['code']} 失败: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # 将首次异常向外抛出，便于前端展示真实错误（如：表不存在、权限问题等）
+                if created_count == 0 and skipped_count == 0:
+                    raise
+
+        logger.info(f"组织 {tenant_id} 系统语言初始化完成！创建 {created_count} 个，跳过 {skipped_count} 个已存在")
+        return {
+            "tenant_id": tenant_id,
+            "languages": created_languages,
+            "languages_created_count": created_count,
+            "languages_skipped_count": skipped_count,
+        }
+
     @staticmethod
     async def _notify_frontend(
         tenant_id: int,
