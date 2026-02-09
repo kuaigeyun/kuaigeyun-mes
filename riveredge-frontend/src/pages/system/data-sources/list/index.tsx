@@ -8,8 +8,8 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Alert, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DatabaseOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, message, Input, Badge, Typography, Alert, Tooltip, Card } from 'antd';
+import { DeleteOutlined, EyeOutlined, DatabaseOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
@@ -22,7 +22,6 @@ import {
   DataSource,
   CreateDataSourceData,
   UpdateDataSourceData,
-  TestConnectionResponse,
 } from '../../../../services/dataSource';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -54,8 +53,23 @@ const getTypeInfo = (type: string): { color: string; text: string; icon: React.R
       icon: <DatabaseOutlined />,
     },
     api: { 
-      color: 'default', 
+      color: 'cyan', 
       text: 'API',
+      icon: <ThunderboltOutlined />,
+    },
+    OAuth: {
+      color: 'purple',
+      text: 'OAuth',
+      icon: <ThunderboltOutlined />,
+    },
+    Webhook: {
+      color: 'magenta',
+      text: 'Webhook',
+      icon: <ThunderboltOutlined />,
+    },
+    Database: {
+      color: 'gold',
+      text: 'Database',
       icon: <DatabaseOutlined />,
     },
   };
@@ -88,14 +102,12 @@ const DataSourceListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  
-  // Modal 相关状态（创建/编辑数据源）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentDataSourceUuid, setCurrentDataSourceUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  const [dataSourceType, setDataSourceType] = useState<'postgresql' | 'mysql' | 'mongodb' | 'api'>('postgresql');
+  const [dataSourceType, setDataSourceType] = useState<string>('postgresql');
   const [configJson, setConfigJson] = useState<string>('{}');
   
   // Drawer 相关状态（详情查看）
@@ -420,15 +432,12 @@ const DataSourceListPage: React.FC = () => {
         mysql: { text: 'MySQL', status: 'Processing' },
         mongodb: { text: 'MongoDB', status: 'Warning' },
         api: { text: 'API', status: 'Default' },
+        OAuth: { text: 'OAuth', status: 'Default' },
+        Webhook: { text: 'Webhook', status: 'Default' },
+        Database: { text: 'Database', status: 'Default' },
       },
       render: (_, record) => {
-        const typeMap: Record<string, { color: string; text: string }> = {
-          postgresql: { color: 'blue', text: 'PostgreSQL' },
-          mysql: { color: 'orange', text: 'MySQL' },
-          mongodb: { color: 'green', text: 'MongoDB' },
-          api: { color: 'default', text: 'API' },
-        };
-        const typeInfo = typeMap[record.type] || { color: 'default', text: record.type };
+        const typeInfo = getTypeInfo(record.type);
         return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
@@ -511,13 +520,8 @@ const DataSourceListPage: React.FC = () => {
       title: '数据源类型',
       dataIndex: 'type',
       render: (value: string) => {
-        const typeMap: Record<string, string> = {
-          postgresql: 'PostgreSQL',
-          mysql: 'MySQL',
-          mongodb: 'MongoDB',
-          api: 'API',
-        };
-        return typeMap[value] || value;
+        const typeInfo = getTypeInfo(value);
+        return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
       },
     },
     {
@@ -593,7 +597,7 @@ const DataSourceListPage: React.FC = () => {
         <UniTable<DataSource>
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             // 处理搜索参数
             const apiParams: any = {
               page: params.current || 1,
@@ -697,7 +701,10 @@ const DataSourceListPage: React.FC = () => {
             { label: 'PostgreSQL', value: 'postgresql' },
             { label: 'MySQL', value: 'mysql' },
             { label: 'MongoDB', value: 'mongodb' },
-            { label: 'API', value: 'api' },
+            { label: 'API (通用 REST)', value: 'api' },
+            { label: 'OAuth 认证', value: 'OAuth' },
+            { label: 'Webhook 回调', value: 'Webhook' },
+            { label: 'Database (通用)', value: 'Database' },
           ]}
           fieldProps={{
             onChange: (value) => {
@@ -735,6 +742,24 @@ const DataSourceListPage: React.FC = () => {
                     'Content-Type': 'application/json',
                   },
                 },
+                OAuth: {
+                  client_id: '',
+                  client_secret: '',
+                  authorization_url: '',
+                  token_url: '',
+                },
+                Webhook: {
+                  url: '',
+                  method: 'POST',
+                  headers: {},
+                },
+                Database: {
+                  host: '',
+                  port: 5432,
+                  database: '',
+                  user: '',
+                  password: '',
+                },
               };
               setConfigJson(JSON.stringify(defaultConfigs[value] || {}, null, 2));
             },
@@ -771,7 +796,7 @@ const DataSourceListPage: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         loading={detailLoading}
         width={DRAWER_CONFIG.LARGE_WIDTH}
-        dataSource={detailData || {}}
+        dataSource={(detailData || {}) as DataSource}
         columns={detailColumns}
       />
     </>

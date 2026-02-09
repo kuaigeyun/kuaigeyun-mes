@@ -20,8 +20,11 @@ class CustomerBase(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
-    is_active: bool = Field(True, description="是否启用")
-    
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+
+    class Config:
+        populate_by_name = True
+
     @validator("code")
     def validate_code(cls, v):
         """验证编码格式"""
@@ -53,15 +56,18 @@ class CustomerUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
-    is_active: Optional[bool] = Field(None, description="是否启用")
-    
+    is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+
+    class Config:
+        populate_by_name = True
+
     @validator("code")
     def validate_code(cls, v):
         """验证编码格式"""
         if v is not None and (not v or not v.strip()):
             raise ValueError("客户编码不能为空")
         return v.strip().upper() if v else None
-    
+
     @validator("name")
     def validate_name(cls, v):
         """验证名称格式"""
@@ -95,15 +101,18 @@ class SupplierBase(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="供应商分类")
-    is_active: bool = Field(True, description="是否启用")
-    
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+
+    class Config:
+        populate_by_name = True
+
     @validator("code")
     def validate_code(cls, v):
         """验证编码格式"""
         if not v or not v.strip():
             raise ValueError("供应商编码不能为空")
         return v.strip().upper()
-    
+
     @validator("name")
     def validate_name(cls, v):
         """验证名称格式"""
@@ -128,7 +137,10 @@ class SupplierUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100, description="邮箱")
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="供应商分类")
-    is_active: Optional[bool] = Field(None, description="是否启用")
+    is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+
+    class Config:
+        populate_by_name = True
     
     @validator("code")
     def validate_code(cls, v):

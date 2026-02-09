@@ -50,11 +50,14 @@ class SupplyChainService:
         if existing:
             raise ValidationError(f"客户编码 {data.code} 已存在")
         
-        # 创建客户
+        # 创建客户（未传 is_active 时默认为启用）
+        create_data = data.dict()
+        if create_data.get("is_active") is None:
+            create_data["is_active"] = True
         try:
             customer = await Customer.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
@@ -244,11 +247,14 @@ class SupplyChainService:
         if existing:
             raise ValidationError(f"供应商编码 {data.code} 已存在")
         
-        # 创建供应商
+        # 创建供应商（未传 is_active 时默认为启用）
+        create_data = data.dict()
+        if create_data.get("is_active") is None:
+            create_data["is_active"] = True
         try:
             supplier = await Supplier.create(
                 tenant_id=tenant_id,
-                **data.dict()
+                **create_data
             )
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示

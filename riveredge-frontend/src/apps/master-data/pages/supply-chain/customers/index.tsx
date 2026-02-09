@@ -11,6 +11,8 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { customerApi } from '../../../services/supply-chain';
+import { testGenerateCode, generateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import type { Customer, CustomerCreate, CustomerUpdate } from '../../../types/supply-chain';
 
 /**
@@ -32,18 +34,36 @@ const CustomersPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+
+  const PAGE_CODE = 'master-data-supply-chain-customer';
 
   /**
    * 处理新建客户
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentCustomerUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+    formRef.current?.setFieldsValue({ isActive: true });
+
+    if (isAutoGenerateEnabled(PAGE_CODE)) {
+      const ruleCode = getPageRuleCode(PAGE_CODE);
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          setPreviewCode(codeResponse.code);
+          formRef.current?.setFieldsValue({ code: codeResponse.code });
+        } catch (e) {
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
   /**
@@ -53,9 +73,8 @@ const CustomersPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentCustomerUuid(record.uuid);
+      setPreviewCode(null);
       setModalVisible(true);
-      
-      // 获取客户详情
       const detail = await customerApi.get(record.uuid);
       formRef.current?.setFieldsValue({
         code: detail.code,
@@ -166,18 +185,32 @@ const CustomersPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
+
       if (isEdit && currentCustomerUuid) {
-        // 更新客户
         await customerApi.update(currentCustomerUuid, values as CustomerUpdate);
         messageApi.success('更新成功');
       } else {
-        // 创建客户
+        if (isAutoGenerateEnabled(PAGE_CODE)) {
+          const ruleCode = getPageRuleCode(PAGE_CODE);
+          const currentCode = values.code;
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (e) {
+              // 继续使用表单中的编码
+            }
+          }
+        }
+        if (values.isActive === undefined) {
+          values.isActive = true;
+        }
         await customerApi.create(values as CustomerCreate);
         messageApi.success('创建成功');
       }
-      
+
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -187,11 +220,9 @@ const CustomersPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理关闭 Modal
-   */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -461,15 +492,14 @@ const CustomersPage: React.FC = () => {
           <ProFormText
             name="code"
             label="客户编码"
-            placeholder="请输入客户编码"
+            placeholder={isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入客户编码'}
             colProps={{ span: 12 }}
             rules={[
               { required: true, message: '请输入客户编码' },
               { max: 50, message: '客户编码不能超过50个字符' },
             ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
+            fieldProps={{ style: { textTransform: 'uppercase' } }}
+            extra={!isEdit && isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑。' : undefined}
           />
           <ProFormText
             name="name"
@@ -541,6 +571,7 @@ const CustomersPage: React.FC = () => {
             name="isActive"
             label="是否启用"
             colProps={{ span: 12 }}
+            initialValue={true}
           />
       </FormModalTemplate>
     </>
