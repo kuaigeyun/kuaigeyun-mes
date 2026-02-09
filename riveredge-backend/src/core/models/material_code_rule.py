@@ -308,7 +308,7 @@ class MaterialSequenceCounter(BaseModel):
     
     # 关联信息
     rule_id = fields.IntField(description="关联的规则ID（主编码规则ID）")
-    type_code = fields.CharField(max_length=20, null=True, description="物料类型代码（如果独立计数）")
+    type_code = fields.CharField(max_length=100, null=True, description="物料类型代码（如果独立计数）")
     
     # 序号信息
     current_value = fields.IntField(default=0, description="当前序号值")

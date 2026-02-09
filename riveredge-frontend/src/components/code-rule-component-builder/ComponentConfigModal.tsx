@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, InputNumber, Switch, Radio, Select, Input, Space, theme } from 'antd';
+import { Modal, Form, theme } from 'antd';
 import { ProForm, ProFormText, ProFormDigit, ProFormSwitch, ProFormSelect, ProFormRadio } from '@ant-design/pro-components';
 import {
   CodeRuleComponent,
@@ -92,6 +92,18 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
               initialValue={(component as AutoCounterComponent).initial_value}
               extra="计数的初始数值，也就是从哪一个数字开始计数"
             />
+            <ProFormSelect
+              name="scope_fields"
+              label="隔离字段 (分类计数)"
+              mode="multiple"
+              options={availableFields.map(field => ({
+                label: `${field.field_label} (${field.field_name})`,
+                value: field.field_name,
+              }))}
+              placeholder="选择按哪些字段隔离计数"
+              initialValue={(component as AutoCounterComponent).scope_fields}
+              extra="例如：如果选择“部门”字段，则不同部门的流水号相互独立（如销售部0001，市场部0001）"
+            />
           </>
         );
 
@@ -108,7 +120,7 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
               ]}
               initialValue={(component as DateComponent).format_type}
             />
-            {formValues.format_type === 'preset' || (component as DateComponent).format_type === 'preset' ? (
+            {(formValues as DateComponent).format_type === 'preset' || (component as DateComponent).format_type === 'preset' ? (
               <ProFormSelect
                 name="preset_format"
                 label="预定义格式"

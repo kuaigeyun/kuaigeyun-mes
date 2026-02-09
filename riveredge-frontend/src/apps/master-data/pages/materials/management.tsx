@@ -15,22 +15,17 @@ import {
   Drawer,
   Popconfirm,
   Tag,
-  Input,
   theme,
-  Tree,
   Menu,
-  message,
-  Spin,
-  Empty,
 } from 'antd'
 import {
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
-  SearchOutlined,
   FolderOutlined,
-  ReloadOutlined,
   QrcodeOutlined,
+  ExpandOutlined,
+  CompressOutlined,
 } from '@ant-design/icons'
 import {
   ActionType,
@@ -43,7 +38,6 @@ import {
   ProDescriptions,
 } from '@ant-design/pro-components'
 import type { DataNode, TreeProps } from 'antd/es/tree'
-import type { MenuProps } from 'antd'
 
 // 导入现有组件
 import SafeProFormSelect from '../../../../components/safe-pro-form-select'
@@ -65,6 +59,7 @@ import type {
 } from '../../types/material'
 import { isAutoGenerateEnabled } from '../../../../utils/codeRulePage'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../services/dataDictionary'
+
 
 /**
  * 物料管理合并页面组件
@@ -111,6 +106,20 @@ const MaterialsManagementPage: React.FC = () => {
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
   const [contextMenuGroup, setContextMenuGroup] = useState<MaterialGroup | null>(null)
 
+  // 点击外部关闭右键菜单
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (contextMenuVisible) {
+        setContextMenuVisible(false)
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [contextMenuVisible])
+
   // 数据字典选项状态（用于搜索下拉框）
   const [materialTypeOptions, setMaterialTypeOptions] = useState<
     Array<{ label: string; value: string }>
@@ -141,9 +150,23 @@ const MaterialsManagementPage: React.FC = () => {
         key: 'all',
         icon: <FolderOutlined />,
         isLeaf: false,
+        children: treeResponse.map(convertNode),
       },
-      ...treeResponse.map(convertNode),
     ]
+  }, [])
+
+  /**
+   * 递归收集所有节点的key
+   */
+  const collectAllKeys = useCallback((nodes: DataNode[]): React.Key[] => {
+    let keys: React.Key[] = []
+    nodes.forEach(node => {
+      keys.push(node.key)
+      if (node.children && node.children.length > 0) {
+        keys = keys.concat(collectAllKeys(node.children))
+      }
+    })
+    return keys
   }, [])
 
   /**
@@ -165,18 +188,6 @@ const MaterialsManagementPage: React.FC = () => {
       // 同时获取平级列表用于其他操作（如果需要）
       const listResult = await materialGroupApi.list({ limit: 1000 })
       setMaterialGroups(listResult)
-
-      // 递归收集所有节点的key用于展开
-      const collectAllKeys = (nodes: DataNode[]): React.Key[] => {
-        let keys: React.Key[] = []
-        nodes.forEach(node => {
-          keys.push(node.key)
-          if (node.children && node.children.length > 0) {
-            keys = keys.concat(collectAllKeys(node.children))
-          }
-        })
-        return keys
-      }
 
       const allKeys = collectAllKeys(treeData)
       setExpandedKeys(allKeys)
@@ -325,16 +336,6 @@ const MaterialsManagementPage: React.FC = () => {
       setFilteredGroupTreeData(filtered)
 
       // 自动展开所有匹配的节点
-      const collectAllKeys = (nodes: DataNode[]): React.Key[] => {
-        let keys: React.Key[] = []
-        nodes.forEach(node => {
-          keys.push(node.key)
-          if (node.children && node.children.length > 0) {
-            keys = keys.concat(collectAllKeys(node.children))
-          }
-        })
-        return keys
-      }
       const allKeys = collectAllKeys(filtered)
       setExpandedKeys(allKeys)
     }
@@ -351,6 +352,30 @@ const MaterialsManagementPage: React.FC = () => {
   /**
    * 分组相关操作
    */
+  /**
+   * 切换展开/收起所有分组
+   */
+  const handleToggleExpand = useCallback(() => {
+    // 如果当前展开的节点数量少于所有节点数量的一半，则视为折叠状态，进行展开
+    // 否则视为展开状态，进行折叠
+    // 注意：如果有搜索结果，仅针对搜索结果进行操作
+    const targetData = filteredGroupTreeData.length > 0 ? filteredGroupTreeData : groupTreeData
+    const allKeys = collectAllKeys(targetData)
+    
+    // 判断"全部展开"的标准：我们可以简单地检查 expandedKeys 的长度
+    // 但为了更好的体验，如果 expandedKeys 包含了大部分 key，我们认为是展开的，点击则是收起
+    // 这里的"大部分"我们定义为 > 1 (因为 'all' 总是存在的)
+    // 更好的逻辑：
+    // 如果 expandedKeys 只包含 'all' (或者为空)，则展开所有
+    // 否则，收起所有（只保留 'all'）
+    
+    if (expandedKeys.length <= 1) {
+       setExpandedKeys(allKeys)
+    } else {
+       setExpandedKeys(['all'])
+    }
+  }, [expandedKeys, filteredGroupTreeData, groupTreeData, collectAllKeys])
+
   const handleCreateGroup = useCallback(() => {
     setGroupIsEdit(false)
     setCurrentGroup(null)
@@ -363,15 +388,18 @@ const MaterialsManagementPage: React.FC = () => {
     setGroupModalVisible(true)
   }, [])
 
-  const handleDeleteGroup = useCallback(async (group: MaterialGroup) => {
-    try {
-      await materialGroupApi.delete(group.uuid)
-      messageApi.success('删除成功')
-      loadMaterialGroups()
-    } catch (error: any) {
-      messageApi.error(error.message || '删除失败')
-    }
-  }, [messageApi, loadMaterialGroups])
+  const handleDeleteGroup = useCallback(
+    async (group: MaterialGroup) => {
+      try {
+        await materialGroupApi.delete(group.uuid)
+        messageApi.success('删除成功')
+        loadMaterialGroups()
+      } catch (error: any) {
+        messageApi.error(error.message || '删除失败')
+      }
+    },
+    [messageApi, loadMaterialGroups]
+  )
 
   const handleGroupSubmit = async (values: any) => {
     try {
@@ -404,31 +432,37 @@ const MaterialsManagementPage: React.FC = () => {
     // 注意：编码生成逻辑已移至 MaterialForm 组件内部
   }, [])
 
-  const handleEditMaterial = useCallback(async (record: Material) => {
-    try {
-      setMaterialIsEdit(true)
-      // 获取物料详情
-      const detail = await materialApi.get(record.uuid)
-      setCurrentMaterial(detail)
-      setMaterialModalVisible(true)
-    } catch (error: any) {
-      messageApi.error(error.message || '获取物料详情失败')
-    }
-  }, [messageApi])
+  const handleEditMaterial = useCallback(
+    async (record: Material) => {
+      try {
+        setMaterialIsEdit(true)
+        // 获取物料详情
+        const detail = await materialApi.get(record.uuid)
+        setCurrentMaterial(detail)
+        setMaterialModalVisible(true)
+      } catch (error: any) {
+        messageApi.error(error.message || '获取物料详情失败')
+      }
+    },
+    [messageApi]
+  )
 
-  const handleViewMaterial = useCallback(async (record: Material) => {
-    try {
-      setMaterialDetailLoading(true)
-      // 获取物料详情
-      const detail = await materialApi.get(record.uuid)
-      setCurrentMaterial(detail)
-      setMaterialDrawerVisible(true)
-    } catch (error: any) {
-      messageApi.error(error.message || '获取物料详情失败')
-    } finally {
-      setMaterialDetailLoading(false)
-    }
-  }, [messageApi])
+  const handleViewMaterial = useCallback(
+    async (record: Material) => {
+      try {
+        setMaterialDetailLoading(true)
+        // 获取物料详情
+        const detail = await materialApi.get(record.uuid)
+        setCurrentMaterial(detail)
+        setMaterialDrawerVisible(true)
+      } catch (error: any) {
+        messageApi.error(error.message || '获取物料详情失败')
+      } finally {
+        setMaterialDetailLoading(false)
+      }
+    },
+    [messageApi]
+  )
 
   /**
    * 处理批量生成二维码
@@ -442,7 +476,7 @@ const MaterialsManagementPage: React.FC = () => {
     try {
       // 通过API获取选中的物料数据
       const materials = await Promise.all(
-        selectedRowKeys.map(async (key) => {
+        selectedRowKeys.map(async key => {
           try {
             return await materialApi.get(key as string)
           } catch (error) {
@@ -452,7 +486,7 @@ const MaterialsManagementPage: React.FC = () => {
         })
       )
 
-      const validMaterials = materials.filter((m) => m !== null) as Material[]
+      const validMaterials = materials.filter(m => m !== null) as Material[]
 
       if (validMaterials.length === 0) {
         messageApi.error('无法获取选中的物料数据')
@@ -460,7 +494,7 @@ const MaterialsManagementPage: React.FC = () => {
       }
 
       // 生成二维码
-      const qrcodePromises = validMaterials.map((material) =>
+      const qrcodePromises = validMaterials.map(material =>
         qrcodeApi.generateMaterial({
           material_uuid: material.uuid,
           material_code: material.mainCode || material.code || '',
@@ -477,15 +511,18 @@ const MaterialsManagementPage: React.FC = () => {
     }
   }, [selectedRowKeys, messageApi])
 
-  const handleDeleteMaterial = useCallback(async (record: Material) => {
-    try {
-      await materialApi.delete(record.uuid)
-      messageApi.success('删除成功')
-      actionRef.current?.reload()
-    } catch (error: any) {
-      messageApi.error(error.message || '删除失败')
-    }
-  }, [messageApi])
+  const handleDeleteMaterial = useCallback(
+    async (record: Material) => {
+      try {
+        await materialApi.delete(record.uuid)
+        messageApi.success('删除成功')
+        actionRef.current?.reload()
+      } catch (error: any) {
+        messageApi.error(error.message || '删除失败')
+      }
+    },
+    [messageApi]
+  )
 
   /**
    * 处理批量删除物料
@@ -771,15 +808,21 @@ const MaterialsManagementPage: React.FC = () => {
             allowClear: true,
           },
           actions: [
-            <Button
-              key="create-group"
-              type="primary"
-              icon={<PlusOutlined />}
-              block
-              onClick={handleCreateGroup}
-            >
-              新建分组
-            </Button>,
+            <div key="group-actions" style={{ display: 'flex', gap: 8 }}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                style={{ flex: 1 }}
+                onClick={handleCreateGroup}
+              >
+                新建分组
+              </Button>
+              <Button
+                icon={expandedKeys.length > 1 ? <CompressOutlined /> : <ExpandOutlined />}
+                onClick={handleToggleExpand}
+                title={expandedKeys.length > 1 ? "折叠全部" : "展开全部"}
+              />
+            </div>,
           ],
           tree: {
             className: 'material-group-tree',
@@ -1198,6 +1241,10 @@ const MaterialsManagementPage: React.FC = () => {
             left: contextMenuPosition.x,
             top: contextMenuPosition.y,
             zIndex: 1000,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadiusLG,
+            boxShadow: token.boxShadowSecondary,
+            overflow: 'hidden',
           }}
           onClick={() => setContextMenuVisible(false)}
         >
@@ -1237,6 +1284,7 @@ const MaterialsManagementPage: React.FC = () => {
           </Menu>
         </div>
       )}
+
     </>
   )
 }

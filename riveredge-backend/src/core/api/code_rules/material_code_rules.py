@@ -266,14 +266,18 @@ async def preview_code(
         HTTPException: 当模板无效时抛出
     """
     try:
-        preview_code = await MaterialCodeRuleService.preview_code(
+        preview_code, sequence_key = await MaterialCodeRuleService.preview_code(
             tenant_id=tenant_id,
             template=data.template,
             prefix=data.prefix,
             material_type=data.material_type,
             sample_sequence=data.sample_sequence,
+            sequence_config=data.sequence_config,
         )
-        return CodePreviewResponse(preview_code=preview_code)
+        return CodePreviewResponse(
+            preview_code=preview_code,
+            sequence_key=sequence_key,
+        )
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

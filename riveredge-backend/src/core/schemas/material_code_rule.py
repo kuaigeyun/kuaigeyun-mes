@@ -146,9 +146,11 @@ class CodePreviewRequest(BaseModel):
     prefix: Optional[str] = Field(None, max_length=50, description="前缀")
     material_type: str = Field("RAW", max_length=20, description="物料类型代码")
     sample_sequence: int = Field(1, ge=1, description="示例序号")
+    sequence_config: Optional[Dict[str, Any]] = Field(None, description="序号配置（用于预览 Scope Key）")
 
 
 class CodePreviewResponse(BaseModel):
     """编码预览响应 Schema"""
     
     preview_code: str = Field(..., description="预览的编码")
+    sequence_key: Optional[str] = Field(None, description="序号作用域 Key（用于验证隔离策略）")

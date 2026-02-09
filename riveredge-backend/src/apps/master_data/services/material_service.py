@@ -380,8 +380,11 @@ class MaterialService:
             if not group:
                 raise ValidationError(f"物料分组 {data.group_id} 不存在")
         
+        # 跟踪编码是否由用户手动输入
+        is_manual_code = bool(data.main_code and isinstance(data.main_code, str) and data.main_code.strip())
+        
         # 生成主编码（如果未提供或为空字符串）
-        if not data.main_code or (isinstance(data.main_code, str) and not data.main_code.strip()):
+        if not is_manual_code:
             # 首先尝试使用编码规则生成编码
             material_page_config = next(
                 (page for page in CODE_RULE_PAGES if page.get("page_code") == "master-data-material"),
@@ -424,6 +427,8 @@ class MaterialService:
                     tenant_id=tenant_id,
                     material_type=data.material_type
                 )
+        else:
+            logger.info(f"使用用户手动输入的物料主编码: {data.main_code}")
         
         # 变体管理相关验证
         master_material = None
@@ -496,7 +501,14 @@ class MaterialService:
                         f"如需创建变体，请设置 variant_managed=True 并提供 variant_attributes"
                     )
                 else:
-                    # 如果编码已存在，循环重新生成直到得到未占用的编码（处理并发、序号未递增等场景）
+                    # 如果是用户手动输入的编码，直接报错，不自动重新生成
+                    if is_manual_code:
+                        raise ValidationError(
+                            f"物料主编码 {data.main_code} 已存在，请使用其他编码。"
+                            f"已存在的物料: {existing.name}"
+                        )
+                    
+                    # 如果是自动生成的编码且已存在，循环重新生成直到得到未占用的编码（处理并发、序号未递增等场景）
                     logger.warning(f"主编码 {data.main_code} 已存在，自动重新生成新编码")
                     
                     # 获取物料分组信息（如果之前没有获取）

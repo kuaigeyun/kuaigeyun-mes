@@ -34,6 +34,7 @@ class CodeSequence(BaseModel):
     code_rule_id = fields.IntField(description="关联编码规则ID（内部使用自增ID）")
     current_seq = fields.IntField(default=0, description="当前序号")
     reset_date = fields.DateField(null=True, description="重置日期（用于按日/月/年重置）")
+    scope_key = fields.CharField(max_length=100, default="", description="作用域Key（用于按字段隔离计数）")
 
     # 软删除字段（虽然序号表通常不删除，但保持一致性）
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -43,7 +44,7 @@ class CodeSequence(BaseModel):
         模型元数据
         """
         table = "core_code_sequences"
-        unique_together = [("code_rule_id", "tenant_id")]
+        unique_together = [("code_rule_id", "tenant_id", "scope_key")]
         indexes = [
             ("code_rule_id",),
             ("tenant_id",),

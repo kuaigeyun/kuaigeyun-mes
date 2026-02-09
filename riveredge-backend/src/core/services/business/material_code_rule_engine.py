@@ -218,11 +218,35 @@ class MaterialCodeRuleEngine:
         
         elif placeholder_type == "SEQUENCE":
             # 获取序号
-            sequence_key = f"{rule_id}:{material_type}" if independent_by_type else str(rule_id)
+            # 计算 Scope Key
+            scope_fields = sequence_config.get("scope_fields")
+            
+            # 兼容旧逻辑：如果没有配置 scope_fields，则根据 independent_by_type 决定是否按类型隔离
+            if scope_fields is None:
+                if independent_by_type:
+                    scope_fields = ["TYPE"]
+                else:
+                    scope_fields = []
+            
+            # 构建 Scope Key
+            scope_values = []
+            for field in scope_fields:
+                val = await MaterialCodeRuleEngine._resolve_scope_value(
+                    placeholder_type=field,
+                    prefix=prefix,
+                    material_type=material_type,
+                )
+                if val:
+                    scope_values.append(str(val))
+            
+            # 如果有 Scope Fields，组合成 Key；否则 Key 为 None（全局序列）
+            # 例如：RAW:20240101
+            type_code_key = ":".join(scope_values) if scope_values else None
+            
             sequence = await MaterialCodeRuleEngine._get_next_sequence(
                 tenant_id=tenant_id,
                 rule_id=rule_id,
-                type_code=material_type if independent_by_type else None,
+                type_code=type_code_key,
                 sequence_config=sequence_config,
             )
             
@@ -253,6 +277,37 @@ class MaterialCodeRuleEngine:
         
         else:
             raise ValidationError(f"不支持的占位符类型: {placeholder_type}")
+
+    @staticmethod
+    async def _resolve_scope_value(
+        placeholder_type: str,
+        prefix: Optional[str],
+        material_type: str,
+    ) -> str:
+        """
+        解析用于 Scope 的占位符值（不含 SEQUENCE 自身，也不产生副作用）
+        """
+        if placeholder_type == "PREFIX":
+            return prefix or ""
+        elif placeholder_type == "TYPE":
+            return material_type
+        elif placeholder_type == "DATE":
+            return datetime.now().strftime("%Y%m%d")
+        elif placeholder_type == "YEAR":
+            return datetime.now().strftime("%Y")
+        elif placeholder_type == "MONTH":
+            return datetime.now().strftime("%m")
+        elif placeholder_type == "DAY":
+            return datetime.now().strftime("%d")
+        elif placeholder_type == "ORG":
+             # TODO: 获取实际组织代码，目前暂不支持或传递空
+            return ""
+        elif placeholder_type == "DEPT":
+            # TODO: 获取实际部门代码
+            return ""
+        else:
+            # 对于未知类型，暂且忽略或按需抛错，这里为了稳健返回空字符串或原值
+            return ""
     
     @staticmethod
     async def _get_next_sequence(
@@ -351,7 +406,8 @@ class MaterialCodeRuleEngine:
         prefix: Optional[str] = None,
         material_type: str = "RAW",
         sample_sequence: int = 1,
-    ) -> str:
+        sequence_config: Optional[Dict[str, Any]] = None,
+    ) -> tuple[str, Optional[str]]:
         """
         预览编码生成效果
         
@@ -365,13 +421,38 @@ class MaterialCodeRuleEngine:
             sample_sequence: 示例序号
             
         Returns:
-            str: 预览的编码
+            tuple[str, Optional[str]]: (预览的编码, 序号作用域Key)
         """
         # 验证模板
         MaterialCodeRuleEngine.validate_template(template)
         
         # 解析模板
         placeholders = MaterialCodeRuleEngine.parse_template(template)
+        
+        # 计算 Scope Key (如果提供了 sequence_config)
+        scope_key: Optional[str] = None
+        if sequence_config:
+             scope_fields = sequence_config.get("scope_fields")
+             independent_by_type = sequence_config.get("independent_by_type", True)
+             
+             # 兼容旧逻辑
+             if scope_fields is None:
+                 if independent_by_type:
+                     scope_fields = ["TYPE"]
+                 else:
+                     scope_fields = []
+            
+             scope_values = []
+             for field in scope_fields:
+                 val = await MaterialCodeRuleEngine._resolve_scope_value(
+                     placeholder_type=field,
+                     prefix=prefix,
+                     material_type=material_type,
+                 )
+                 if val:
+                     scope_values.append(str(val))
+             
+             scope_key = ":".join(scope_values) if scope_values else None
         
         # 替换占位符
         code = template
@@ -400,4 +481,4 @@ class MaterialCodeRuleEngine:
             
             code = code[:start] + value + code[end:]
         
-        return code
+        return code, scope_key
