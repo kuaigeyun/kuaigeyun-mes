@@ -26,8 +26,13 @@ export function getPageConfig(pageCode: string): CodeRulePageConfig | undefined 
       const parsed = JSON.parse(savedConfigs) as CodeRulePageConfig[];
       const savedConfig = parsed.find(p => p.pageCode === pageCode);
       if (savedConfig) {
-        // 合并默认配置和保存的配置
-        return { ...defaultConfig, ...savedConfig };
+        const merged = { ...defaultConfig, ...savedConfig };
+        // 若默认配置已支持自动编码（有 ruleCode）而保存的配置没有 ruleCode，保留默认的 ruleCode 与 autoGenerate，避免旧保存覆盖新对接的页面（如供应商）
+        if (defaultConfig.ruleCode && savedConfig.ruleCode === undefined) {
+          merged.ruleCode = defaultConfig.ruleCode;
+          merged.autoGenerate = defaultConfig.autoGenerate ?? merged.autoGenerate;
+        }
+        return merged;
       }
     }
   } catch (error) {

@@ -257,7 +257,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '客户编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'customer',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-supply-chain-supplier',
@@ -267,7 +269,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '供应商编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
+    ruleCode: 'supplier',
+    allowManualEdit: true,
   },
   // 主数据管理 - 绩效管理
   {

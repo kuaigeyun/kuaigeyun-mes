@@ -554,11 +554,6 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             icon: getMenuIcon(t('menu.system.files'), '/system/files'),
           },
           {
-            path: '/system/integration-configs',
-            name: t('menu.system.integration-configs'),
-            icon: getMenuIcon(t('menu.system.integration-configs'), '/system/integration-configs'),
-          },
-          {
             path: '/system/apis',
             name: t('menu.system.apis'),
             icon: getMenuIcon(t('menu.system.apis'), '/system/apis'),
@@ -584,21 +579,6 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
         className: 'riveredge-menu-group-title',
         children: [
           {
-            path: '/system/messages/config',
-            name: t('menu.system.messages.config'),
-            icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'),
-          },
-          {
-            path: '/system/messages/template',
-            name: t('menu.system.messages.template'),
-            icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'),
-          },
-          {
-            path: '/system/scheduled-tasks',
-            name: t('menu.system.scheduled-tasks'),
-            icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks'),
-          },
-          {
             path: '/system/approval-processes',
             name: t('menu.system.approval-processes'),
             icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'),
@@ -609,19 +589,34 @@ const getMenuConfig = (t: (key: string) => string): MenuDataItem[] => [
             icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'),
           },
           {
+            path: '/system/messages/template',
+            name: t('menu.system.messages.template'),
+            icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'),
+          },
+          {
+            path: '/system/messages/config',
+            name: t('menu.system.messages.config'),
+            icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'),
+          },
+          {
             path: '/system/scripts',
             name: t('menu.system.scripts'),
             icon: getMenuIcon(t('menu.system.scripts'), '/system/scripts'),
           },
           {
-            path: '/system/print-templates',
-            name: t('menu.system.print-templates'),
-            icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'),
+            path: '/system/scheduled-tasks',
+            name: t('menu.system.scheduled-tasks'),
+            icon: getMenuIcon(t('menu.system.scheduled-tasks'), '/system/scheduled-tasks'),
           },
           {
             path: '/system/print-devices',
             name: t('menu.system.print-devices'),
             icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'),
+          },
+          {
+            path: '/system/print-templates',
+            name: t('menu.system.print-templates'),
+            icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'),
           },
         ],
       },

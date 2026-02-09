@@ -254,7 +254,9 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_field_label": "客户编码",
         "module": "主数据管理",
         "module_icon": "database",
-        "auto_generate": False,
+        "auto_generate": True,
+        "rule_code": "customer",
+        "allow_manual_edit": True,
     },
     {
         "page_code": "master-data-supply-chain-supplier",
@@ -264,7 +266,9 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_field_label": "供应商编码",
         "module": "主数据管理",
         "module_icon": "database",
-        "auto_generate": False,
+        "auto_generate": True,
+        "rule_code": "supplier",
+        "allow_manual_edit": True,
     },
     # 主数据管理 - 绩效管理
     {

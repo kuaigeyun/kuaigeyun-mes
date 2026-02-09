@@ -1,11 +1,12 @@
 /**
  * 物料表单组件（多标签页）
  *
- * 实现物料的新建和编辑功能，包含四个标签页：
- * 1. 基本信息
+ * 实现物料的新建和编辑功能，包含标签页：
+ * 1. 基本信息（含物料来源）
  * 2. 变体管理
- * 3. 编码映射
- * 4. 默认值设置
+ * 3. 多单位管理
+ * 4. 编码映射
+ * 5. 默认值设置
  *
  * Author: Luigi Lu
  * Date: 2026-01-08
@@ -280,11 +281,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   }, [material?.uuid, messageApi]);
 
   useEffect(() => {
-    if (open && activeTab === 'source' && material?.uuid) {
+    if (open && activeTab === 'basic' && material?.uuid) {
       loadSuggestion();
       validateSourceConfig();
       checkCompleteness();
-    } else if (!open || activeTab !== 'source') {
+    } else if (!open || activeTab !== 'basic') {
       setSuggestionResult(null);
       setValidationResult(null);
       setCompletenessResult(null);
@@ -828,7 +829,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
   const showSourcePanel =
     open &&
-    activeTab === 'source' &&
+    activeTab === 'basic' &&
     !!material?.uuid &&
     (loadingSuggestion ||
       loadingValidation ||
@@ -844,19 +845,19 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       <SmartSuggestionFloatPanel
         visible={showSourcePanel || showUnitsPanel}
         loading={
-          activeTab === 'source'
+          activeTab === 'basic'
             ? loadingSuggestion || loadingValidation || loadingCompleteness
             : false
         }
         anchorSelector="[data-smart-suggestion-anchor='material-form']"
-        suggestion={activeTab === 'source' ? suggestionForPanel : null}
-        validationResult={activeTab === 'source' ? validationResult : null}
-        completenessResult={activeTab === 'source' ? completenessResult : null}
+        suggestion={activeTab === 'basic' ? suggestionForPanel : null}
+        validationResult={activeTab === 'basic' ? validationResult : null}
+        completenessResult={activeTab === 'basic' ? completenessResult : null}
         messages={activeTab === 'units' ? unitMessages : undefined}
         sourceTypeOptions={SOURCE_TYPE_OPTIONS}
-        onApply={activeTab === 'source' ? handleApplySuggestion : undefined}
-        onRevalidate={activeTab === 'source' ? validateSourceConfig : undefined}
-        loadingValidation={activeTab === 'source' ? loadingValidation : false}
+        onApply={activeTab === 'basic' ? handleApplySuggestion : undefined}
+        onRevalidate={activeTab === 'basic' ? validateSourceConfig : undefined}
+        loadingValidation={activeTab === 'basic' ? loadingValidation : false}
       />
       <style>{`
         /* ==================== MaterialForm Modal 样式 - 完全重写（按 Ant Design 最佳实践） ==================== */
@@ -983,13 +984,23 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               key: 'basic',
               label: '基本信息',
               children: (
-                <BasicInfoTab
-                  formRef={formRef}
-                  materialGroups={materialGroups}
-                  variantManaged={variantManaged}
-                  onVariantManagedChange={handleVariantManagedChange}
-                  isEdit={isEdit}
-                />
+                <>
+                  <BasicInfoTab part={1} formRef={formRef} materialGroups={materialGroups} isEdit={isEdit} />
+                  <MaterialSourceTab
+                    ref={materialSourceTabRef}
+                    formRef={formRef}
+                    material={material}
+                    suppliers={suppliers}
+                    processRoutes={processRoutes}
+                    operations={operations}
+                    suppliersLoading={suppliersLoading}
+                    processRoutesLoading={processRoutesLoading}
+                    operationsLoading={operationsLoading}
+                    onValidate={validateSourceConfig}
+                    onCheckCompleteness={checkCompleteness}
+                  />
+                  <BasicInfoTab part={2} formRef={formRef} materialGroups={[]} variantManaged={variantManaged} onVariantManagedChange={handleVariantManagedChange} isEdit={isEdit} />
+                </>
               ),
             },
             {
@@ -1041,25 +1052,6 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   suppliersLoading={suppliersLoading}
                   customersLoading={customersLoading}
                   warehousesLoading={warehousesLoading}
-                />
-              ),
-            },
-            {
-              key: 'source',
-              label: '物料来源',
-              children: (
-                <MaterialSourceTab
-                  ref={materialSourceTabRef}
-                  formRef={formRef}
-                  material={material}
-                  suppliers={suppliers}
-                  processRoutes={processRoutes}
-                  operations={operations}
-                  suppliersLoading={suppliersLoading}
-                  processRoutesLoading={processRoutesLoading}
-                  operationsLoading={operationsLoading}
-                  onValidate={validateSourceConfig}
-                  onCheckCompleteness={checkCompleteness}
                 />
               ),
             },
@@ -1480,149 +1472,132 @@ const MaterialUnitsManager: React.FC<MaterialUnitsManagerProps> = ({ formRef, on
 };
 
 /**
- * 基本信息标签页
+ * 基本信息标签页（按字段作用分两段：part1 标识与分类，part2 管理开关与描述；中间为物料来源）
  */
 interface BasicInfoTabProps {
+  part: 1 | 2;
   formRef: React.RefObject<ProFormInstance>;
   materialGroups: Array<{ id: number; code: string; name: string }>;
-  variantManaged: boolean;
-  onVariantManagedChange: (checked: boolean) => void;
+  variantManaged?: boolean;
+  onVariantManagedChange?: (checked: boolean) => void;
   isEdit: boolean;
 }
 
 const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
+  part,
   formRef,
   materialGroups,
   variantManaged,
   onVariantManagedChange,
   isEdit,
 }) => {
+  if (part === 1) {
+    return (
+      <Row gutter={16}>
+        <Col span={6}>
+          <ProFormText
+            name="mainCode"
+            label="物料主编码"
+            placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入物料主编码'}
+            rules={[
+              { required: true, message: '请输入物料主编码' },
+              { max: 50, message: '物料主编码不能超过50个字符' },
+            ]}
+            fieldProps={{ style: { textTransform: 'uppercase' } }}
+            extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '选择物料分组后会自动更新编码。' : undefined}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText
+            name="name"
+            label="物料名称"
+            placeholder="请输入物料名称"
+            rules={[
+              { required: true, message: '请输入物料名称' },
+              { max: 200, message: '物料名称不能超过200个字符' },
+            ]}
+          />
+        </Col>
+        <Col span={6}>
+          <SafeProFormSelect
+            name="groupId"
+            label="物料分组"
+            placeholder="请选择物料分组（可选）"
+            options={materialGroups.map(g => ({
+              label: `${g.code} - ${g.name}`,
+              value: g.id,
+            }))}
+            fieldProps={{ showSearch: true, allowClear: true }}
+          />
+        </Col>
+        <Col span={6}>
+          <DictionarySelect
+            dictionaryCode="MATERIAL_TYPE"
+            name="materialType"
+            label="物料类型"
+            placeholder="请选择物料类型（可选）"
+            formRef={formRef}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText
+            name="specification"
+            label="规格"
+            placeholder="请输入规格"
+            rules={[{ max: 500, message: '规格不能超过500个字符' }]}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText
+            name="model"
+            label="型号"
+            placeholder="请输入型号"
+            rules={[{ max: 100, message: '型号不能超过100个字符' }]}
+          />
+        </Col>
+        <Col span={6}>
+          <DictionarySelect
+            dictionaryCode="MATERIAL_UNIT"
+            name="baseUnit"
+            label="基础单位"
+            placeholder="请选择基础单位"
+            required
+            formRef={formRef}
+          />
+        </Col>
+        <Col span={6}>
+          <ProFormText
+            name="brand"
+            label="品牌"
+            placeholder="请输入品牌"
+            rules={[{ max: 100, message: '品牌不能超过100个字符' }]}
+          />
+        </Col>
+      </Row>
+    );
+  }
+
   return (
     <Row gutter={16}>
-      {/* 1. 物料主编码 */}
-      <Col span={12}>
-        <ProFormText
-          name="mainCode"
-          label="物料主编码"
-          placeholder={isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入物料主编码'}
-          rules={[
-            { required: true, message: '请输入物料主编码' },
-            { max: 50, message: '物料主编码不能超过50个字符' },
-          ]}
-          fieldProps={{
-            style: { textTransform: 'uppercase' },
-            // 允许手动编辑编码
-          }}
-          extra={!isEdit && isAutoGenerateEnabled('master-data-material') ? '编码已根据编码规则自动生成，也可手动编辑。选择物料分组后会自动更新编码。' : undefined}
-        />
+      <Col span={6}>
+        <ProFormSwitch name="batchManaged" label="批号管理" />
       </Col>
-      {/* 2. 物料名称 */}
-      <Col span={12}>
-        <ProFormText
-          name="name"
-          label="物料名称"
-          placeholder="请输入物料名称"
-          rules={[
-            { required: true, message: '请输入物料名称' },
-            { max: 200, message: '物料名称不能超过200个字符' },
-          ]}
-        />
-      </Col>
-      {/* 3. 物料分组 */}
-      <Col span={12}>
-        <SafeProFormSelect
-          name="groupId"
-          label="物料分组"
-          placeholder="请选择物料分组（可选）"
-          options={materialGroups.map(g => ({
-            label: `${g.code} - ${g.name}`,
-            value: g.id,
-          }))}
-          fieldProps={{
-            showSearch: true,
-            allowClear: true,
-          }}
-        />
-      </Col>
-      {/* 4. 物料类型 */}
-      <Col span={12}>
-        <DictionarySelect
-          dictionaryCode="MATERIAL_TYPE"
-          name="materialType"
-          label="物料类型"
-          placeholder="请选择物料类型（可选）"
-          formRef={formRef}
-        />
-      </Col>
-      {/* 5. 规格 */}
-      <Col span={12}>
-        <ProFormText
-          name="specification"
-          label="规格"
-          placeholder="请输入规格"
-          rules={[{ max: 500, message: '规格不能超过500个字符' }]}
-        />
-      </Col>
-      {/* 6. 型号 */}
-      <Col span={12}>
-        <ProFormText
-          name="model"
-          label="型号"
-          placeholder="请输入型号"
-          rules={[{ max: 100, message: '型号不能超过100个字符' }]}
-        />
-      </Col>
-      {/* 7. 基础单位（默认 PC 通过 ProForm initialValues 设置，避免 Field 与 Form initialValues 冲突） */}
-      <Col span={12}>
-        <DictionarySelect
-          dictionaryCode="MATERIAL_UNIT"
-          name="baseUnit"
-          label="基础单位"
-          placeholder="请选择基础单位（如：个、件、kg等）"
-          required
-          formRef={formRef}
-        />
-      </Col>
-      {/* 8. 品牌 */}
-      <Col span={12}>
-        <ProFormText
-          name="brand"
-          label="品牌"
-          placeholder="请输入品牌"
-          rules={[{ max: 100, message: '品牌不能超过100个字符' }]}
-        />
-      </Col>
-      {/* 剩余字段保持不变 */}
-      <Col span={12}>
-        <ProFormSwitch
-          name="batchManaged"
-          label="是否启用批号管理"
-        />
-      </Col>
-      <Col span={12}>
+      <Col span={6}>
         <ProFormSwitch
           name="variantManaged"
-          label="是否启用变体管理"
-          fieldProps={{
-            onChange: onVariantManagedChange,
-          }}
+          label="变体管理"
+          fieldProps={{ onChange: onVariantManagedChange }}
         />
+      </Col>
+      <Col span={6}>
+        <ProFormSwitch name="isActive" label="是否启用" />
       </Col>
       <Col span={24}>
         <ProFormTextArea
           name="description"
           label="描述"
           placeholder="请输入描述"
-          fieldProps={{
-            rows: 4,
-            maxLength: 500,
-          }}
-        />
-      </Col>
-      <Col span={12}>
-        <ProFormSwitch
-          name="isActive"
-          label="是否启用"
+          fieldProps={{ rows: 3, maxLength: 500 }}
         />
       </Col>
     </Row>
@@ -2458,7 +2433,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
         {/* 采购默认值 */}
         <Panel header="采购默认值" key="purchase">
           <Alert
-            message="采购件的主默认供应商请在【物料来源】标签页配置；此处为采购默认值列表（多选），用于扩展用途。"
+            message="采购件的主默认供应商请在【基本信息】中的物料来源区域配置；此处为采购默认值列表（多选），用于扩展用途。"
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -2593,7 +2568,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
           </Row>
         </Panel>
 
-        {/* 生产默认值：默认工艺路线仅在【物料来源】标签页（自制件时）配置，此处仅保留默认生产单位 */}
+        {/* 生产默认值：默认工艺路线仅在【基本信息】中的物料来源区域（自制件时）配置，此处仅保留默认生产单位 */}
         <Panel header="生产默认值" key="production">
           <Row gutter={16}>
             <Col span={12}>
@@ -2705,209 +2680,239 @@ const MaterialSourceTab = forwardRef<
 
   return (
     <div>
-      {/* 物料来源类型选择 */}
-      <ProFormSelect
-        name="sourceType"
-        label="物料来源类型"
-        placeholder="请选择物料来源类型"
-        options={sourceTypeOptions}
-        fieldProps={{
-          value: sourceType,
-          onChange: handleSourceTypeChange,
-        }}
-        extra="物料来源类型决定了物料的获取方式（自制/采购/委外等）"
-      />
+      <Row gutter={16} style={{ marginTop: 8 }}>
+        <Col span={12}>
+          <ProFormSelect
+            name="sourceType"
+            label="物料来源类型"
+            placeholder="请选择物料来源类型"
+            options={sourceTypeOptions}
+            fieldProps={{
+              value: sourceType,
+              onChange: handleSourceTypeChange,
+            }}
+            extra="物料来源类型决定了物料的获取方式（自制/采购/委外等）"
+          />
+        </Col>
+      </Row>
 
-      {/* 根据来源类型动态显示配置项 */}
       <ProFormDependency name={['sourceType', 'sourceConfig']}>
         {({ sourceType: currentSourceType, sourceConfig }) => {
-          const config = sourceConfig || {};
-          
           if (currentSourceType === 'Make') {
-            // 自制件配置（含制造模式：加工型/装配型）
             return (
-              <div>
-                <ProFormSelect
-                  name="sourceConfig.manufacturing_mode"
-                  label="制造模式"
-                  placeholder="请选择制造模式"
-                  options={MANUFACTURING_MODE_OPTIONS}
-                  fieldProps={{
-                    allowClear: true,
-                  }}
-                  extra="加工型：材料经工艺制成零件，工艺路线必填；装配型：原材料组装成成品/半成品，BOM必填"
-                />
-                <ProFormSelect
-                  name="defaults.defaultProcessRouteUuid"
-                  label="默认工艺路线"
-                  placeholder="请选择默认工艺路线"
-                  options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
-                  fieldProps={{
-                    loading: processRoutesLoading,
-                    showSearch: true,
-                    filterOption: (input: string, option: any) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                    allowClear: true,
-                  }}
-                />
-                <ProFormDigit
-                  name="sourceConfig.production_lead_time"
-                  label="生产提前期（天）"
-                  placeholder="请输入生产提前期"
-                  min={0}
-                />
-                <ProFormDigit
-                  name="sourceConfig.min_production_batch"
-                  label="最小生产批量"
-                  placeholder="请输入最小生产批量"
-                  min={0}
-                />
-                <ProFormDigit
-                  name="sourceConfig.production_waste_rate"
-                  label="生产损耗率（%）"
-                  placeholder="请输入生产损耗率"
-                  min={0}
-                  max={100}
-                />
-              </div>
-            );
-          } else if (currentSourceType === 'Buy') {
-            // 采购件配置
-            return (
-              <div>
-                <SafeProFormSelect
-                  name="sourceConfig.default_supplier_id"
-                  label="默认供应商"
-                  placeholder="请选择默认供应商（建议配置）"
-                  options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                  fieldProps={{
-                    loading: suppliersLoading,
-                    showSearch: true,
-                    filterOption: (input: string, option: any) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                    allowClear: true,
-                  }}
-                />
-                <ProFormDigit
-                  name="sourceConfig.purchase_lead_time"
-                  label="采购提前期（天）"
-                  placeholder="请输入采购提前期"
-                  min={0}
-                />
-                <ProFormDigit
-                  name="sourceConfig.min_purchase_batch"
-                  label="最小采购批量"
-                  placeholder="请输入最小采购批量"
-                  min={0}
-                />
-                <ProFormDigit
-                  name="sourceConfig.purchase_price"
-                  label="采购价格"
-                  placeholder="请输入采购价格"
-                  min={0}
-                  fieldProps={{
-                    precision: 2,
-                  }}
-                />
-              </div>
-            );
-          } else if (currentSourceType === 'Outsource') {
-            // 委外件配置
-            return (
-              <div>
-                <SafeProFormSelect
-                  name="sourceConfig.outsource_supplier_id"
-                  label="委外供应商"
-                  placeholder="请选择委外供应商"
-                  rules={[{ required: true, message: '请选择委外供应商' }]}
-                  options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-                  fieldProps={{
-                    loading: suppliersLoading,
-                    showSearch: true,
-                    filterOption: (input: string, option: any) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                  }}
-                />
-                <SafeProFormSelect
-                  name="sourceConfig.outsource_operation"
-                  label="委外工序"
-                  placeholder="请选择委外工序"
-                  rules={[{ required: true, message: '请选择委外工序' }]}
-                  options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
-                  fieldProps={{
-                    loading: operationsLoading,
-                    showSearch: true,
-                    filterOption: (input: string, option: any) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
-                  }}
-                />
-                <ProFormDigit
-                  name="sourceConfig.outsource_lead_time"
-                  label="委外提前期（天）"
-                  placeholder="请输入委外提前期"
-                  min={0}
-                />
-                <ProFormDigit
-                  name="sourceConfig.outsource_price"
-                  label="委外价格"
-                  placeholder="请输入委外价格"
-                  min={0}
-                  fieldProps={{
-                    precision: 2,
-                  }}
-                />
-                <ProFormSelect
-                  name="sourceConfig.material_provided_by"
-                  label="物料提供方"
-                  placeholder="请选择物料提供方"
-                  options={[
-                    { label: '企业提供', value: 'enterprise' },
-                    { label: '供应商提供', value: 'supplier' },
-                  ]}
-                  initialValue="enterprise"
-                />
-              </div>
-            );
-          } else if (currentSourceType === 'Configure') {
-            // 配置件配置
-            return (
-              <div>
-                <Alert
-                  message="配置件说明"
-                  description="配置件需要配置变体属性和BOM变体，请在'变体管理'标签页配置变体属性。"
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                />
-                <ProFormTextArea
-                  name="sourceConfig.bom_variants"
-                  label="BOM变体配置（JSON格式）"
-                  placeholder='请输入BOM变体配置，格式：{"variant1": {...}, "variant2": {...}}'
-                  fieldProps={{
-                    rows: 6,
-                  }}
-                />
-                <ProFormText
-                  name="sourceConfig.default_variant"
-                  label="默认变体"
-                  placeholder="请输入默认变体"
-                />
-              </div>
-            );
-          } else if (currentSourceType === 'Phantom') {
-            // 虚拟件配置
-            return (
-              <div>
-                <Alert
-                  message="虚拟件说明"
-                  description="虚拟件不实际存在，仅用于BOM展开。虚拟件必须配置完整的BOM结构，系统会自动跳过虚拟件，直接展开下层物料。"
-                  type="info"
-                  showIcon
-                />
-              </div>
+              <Row gutter={16} style={{ marginTop: 0 }}>
+                <Col span={6}>
+                  <ProFormSelect
+                    name="sourceConfig.manufacturing_mode"
+                    label="制造模式"
+                    placeholder="请选择制造模式"
+                    options={MANUFACTURING_MODE_OPTIONS}
+                    fieldProps={{ allowClear: true }}
+                    extra="加工型需工艺路线；装配型需BOM"
+                  />
+                </Col>
+                <Col span={12}>
+                  <ProFormSelect
+                    name="defaults.defaultProcessRouteUuid"
+                    label="默认工艺路线"
+                    placeholder="请选择默认工艺路线"
+                    options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
+                    fieldProps={{
+                      loading: processRoutesLoading,
+                      showSearch: true,
+                      filterOption: (input: string, option: any) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      allowClear: true,
+                    }}
+                  />
+                </Col>
+                <Col span={6}>
+                  <ProFormDigit
+                    name="sourceConfig.production_lead_time"
+                    label="生产提前期（天）"
+                    placeholder="提前期"
+                    min={0}
+                  />
+                </Col>
+                <Col span={6}>
+                  <ProFormDigit
+                    name="sourceConfig.min_production_batch"
+                    label="最小生产批量"
+                    placeholder="最小批量"
+                    min={0}
+                  />
+                </Col>
+                <Col span={6}>
+                  <ProFormDigit
+                    name="sourceConfig.production_waste_rate"
+                    label="生产损耗率（%）"
+                    placeholder="损耗率"
+                    min={0}
+                    max={100}
+                  />
+                </Col>
+              </Row>
             );
           }
-          
+          if (currentSourceType === 'Buy') {
+            return (
+              <Row gutter={16} style={{ marginTop: 0 }}>
+                <Col span={12}>
+                  <SafeProFormSelect
+                    name="sourceConfig.default_supplier_id"
+                    label="默认供应商"
+                    placeholder="请选择默认供应商（建议配置）"
+                    options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                    fieldProps={{
+                      loading: suppliersLoading,
+                      showSearch: true,
+                      filterOption: (input: string, option: any) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      allowClear: true,
+                    }}
+                  />
+                </Col>
+                <Col span={4}>
+                  <ProFormDigit
+                    name="sourceConfig.purchase_lead_time"
+                    label="采购提前期（天）"
+                    placeholder="提前期"
+                    min={0}
+                  />
+                </Col>
+                <Col span={4}>
+                  <ProFormDigit
+                    name="sourceConfig.min_purchase_batch"
+                    label="最小采购批量"
+                    placeholder="最小批量"
+                    min={0}
+                  />
+                </Col>
+                <Col span={4}>
+                  <ProFormDigit
+                    name="sourceConfig.purchase_price"
+                    label="采购价格"
+                    placeholder="价格"
+                    min={0}
+                    fieldProps={{ precision: 2 }}
+                  />
+                </Col>
+              </Row>
+            );
+          }
+          if (currentSourceType === 'Outsource') {
+            return (
+              <>
+                <Row gutter={16} style={{ marginTop: 0 }}>
+                  <Col span={6}>
+                    <SafeProFormSelect
+                      name="sourceConfig.outsource_supplier_id"
+                      label="委外供应商"
+                      placeholder="请选择委外供应商"
+                      rules={[{ required: true, message: '请选择委外供应商' }]}
+                      options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                      fieldProps={{
+                        loading: suppliersLoading,
+                        showSearch: true,
+                        filterOption: (input: string, option: any) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      }}
+                    />
+                  </Col>
+                  <Col span={6}>
+                    <SafeProFormSelect
+                      name="sourceConfig.outsource_operation"
+                      label="委外工序"
+                      placeholder="请选择委外工序"
+                      rules={[{ required: true, message: '请选择委外工序' }]}
+                      options={operations.map(op => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                      fieldProps={{
+                        loading: operationsLoading,
+                        showSearch: true,
+                        filterOption: (input: string, option: any) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      }}
+                    />
+                  </Col>
+                  <Col span={6}>
+                    <ProFormDigit
+                      name="sourceConfig.outsource_lead_time"
+                      label="委外提前期（天）"
+                      placeholder="提前期"
+                      min={0}
+                    />
+                  </Col>
+                  <Col span={6}>
+                    <ProFormDigit
+                      name="sourceConfig.outsource_price"
+                      label="委外价格"
+                      placeholder="价格"
+                      min={0}
+                      fieldProps={{ precision: 2 }}
+                    />
+                  </Col>
+                </Row>
+                <Row gutter={16}>
+                  <Col span={6}>
+                    <ProFormSelect
+                      name="sourceConfig.material_provided_by"
+                      label="物料提供方"
+                      placeholder="请选择"
+                      options={[
+                        { label: '企业提供', value: 'enterprise' },
+                        { label: '供应商提供', value: 'supplier' },
+                      ]}
+                      initialValue="enterprise"
+                    />
+                  </Col>
+                </Row>
+              </>
+            );
+          }
+          if (currentSourceType === 'Configure') {
+            return (
+              <Row gutter={16} style={{ marginTop: 0 }}>
+                <Col span={24}>
+                  <Alert
+                    message="配置件说明"
+                    description="配置件需要配置变体属性和BOM变体，请在「变体管理」标签页配置变体属性。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <ProFormTextArea
+                    name="sourceConfig.bom_variants"
+                    label="BOM变体配置（JSON格式）"
+                    placeholder='格式：{"variant1": {...}, "variant2": {...}}'
+                    fieldProps={{ rows: 4 }}
+                  />
+                </Col>
+                <Col span={6}>
+                  <ProFormText
+                    name="sourceConfig.default_variant"
+                    label="默认变体"
+                    placeholder="请输入默认变体"
+                  />
+                </Col>
+              </Row>
+            );
+          }
+          if (currentSourceType === 'Phantom') {
+            return (
+              <Row gutter={16} style={{ marginTop: 0 }}>
+                <Col span={24}>
+                  <Alert
+                    message="虚拟件说明"
+                    description="虚拟件不实际存在，仅用于BOM展开。须配置完整BOM结构，系统将自动跳过虚拟件展开下层物料。"
+                    type="info"
+                    showIcon
+                  />
+                </Col>
+              </Row>
+            );
+          }
           return null;
         }}
       </ProFormDependency>

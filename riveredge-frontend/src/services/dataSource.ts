@@ -13,7 +13,7 @@ export interface DataSource {
   name: string;
   code: string;
   description?: string;
-  type: 'postgresql' | 'mysql' | 'mongodb' | 'api';
+  type: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
   config: Record<string, any>;
   is_active: boolean;
   is_connected: boolean;
@@ -34,15 +34,13 @@ export interface DataSourceListParams {
 export interface DataSourceListResponse {
   items: DataSource[];
   total: number;
-  page: number;
-  page_size: number;
 }
 
 export interface CreateDataSourceData {
   name: string;
   code: string;
   description?: string;
-  type: 'postgresql' | 'mysql' | 'mongodb' | 'api';
+  type: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
   config: Record<string, any>;
   is_active?: boolean;
 }
@@ -51,7 +49,7 @@ export interface UpdateDataSourceData {
   name?: string;
   code?: string;
   description?: string;
-  type?: 'postgresql' | 'mysql' | 'mongodb' | 'api';
+  type?: 'OAuth' | 'API' | 'Webhook' | 'Database' | 'postgresql' | 'mysql' | 'mongodb';
   config?: Record<string, any>;
   is_active?: boolean;
 }
@@ -71,33 +69,36 @@ export interface TestConnectionResponse {
  * @returns 数据源列表
  */
 export async function getDataSourceList(params?: DataSourceListParams): Promise<DataSourceListResponse> {
-  return apiRequest<DataSourceListResponse>('/core/data-sources', {
-    params,
+  // 切换到全量集成配置 API
+  const items = await apiRequest<DataSource[]>('/core/integration-configs', {
+    params: {
+      skip: params?.page && params?.page_size ? (params.page - 1) * params.page_size : undefined,
+      limit: params?.page_size,
+      type: params?.type,
+      is_active: params?.is_active,
+    },
   });
+  
+  return {
+    items,
+    total: items.length, // 注意：由于后端列表 API 可能不返回 total，这里暂时取长度或者后续优化
+    page: params?.page || 1,
+    page_size: params?.page_size || 20,
+  } as DataSourceListResponse;
 }
 
 /**
  * 获取数据源详情
- * 
- * 自动验证组织权限：只能获取当前组织的数据源。
- * 
- * @param dataSourceUuid - 数据源 UUID
- * @returns 数据源信息
  */
 export async function getDataSourceByUuid(dataSourceUuid: string): Promise<DataSource> {
-  return apiRequest<DataSource>(`/core/data-sources/${dataSourceUuid}`);
+  return apiRequest<DataSource>(`/core/integration-configs/${dataSourceUuid}`);
 }
 
 /**
  * 创建数据源
- * 
- * 自动设置当前组织的 tenant_id。
- * 
- * @param data - 数据源创建数据
- * @returns 创建的数据源信息
  */
 export async function createDataSource(data: CreateDataSourceData): Promise<DataSource> {
-  return apiRequest<DataSource>('/core/data-sources', {
+  return apiRequest<DataSource>('/core/integration-configs', {
     method: 'POST',
     data,
   });
@@ -105,15 +106,9 @@ export async function createDataSource(data: CreateDataSourceData): Promise<Data
 
 /**
  * 更新数据源
- * 
- * 自动验证组织权限：只能更新当前组织的数据源。
- * 
- * @param dataSourceUuid - 数据源 UUID
- * @param data - 数据源更新数据
- * @returns 更新后的数据源信息
  */
 export async function updateDataSource(dataSourceUuid: string, data: UpdateDataSourceData): Promise<DataSource> {
-  return apiRequest<DataSource>(`/core/data-sources/${dataSourceUuid}`, {
+  return apiRequest<DataSource>(`/core/integration-configs/${dataSourceUuid}`, {
     method: 'PUT',
     data,
   });
@@ -121,28 +116,24 @@ export async function updateDataSource(dataSourceUuid: string, data: UpdateDataS
 
 /**
  * 删除数据源
- * 
- * 自动验证组织权限：只能删除当前组织的数据源。
- * 
- * @param dataSourceUuid - 数据源 UUID
  */
 export async function deleteDataSource(dataSourceUuid: string): Promise<void> {
-  return apiRequest<void>(`/core/data-sources/${dataSourceUuid}`, {
+  return apiRequest<void>(`/core/integration-configs/${dataSourceUuid}`, {
     method: 'DELETE',
   });
 }
 
 /**
  * 测试数据源连接
- * 
- * 测试数据源连接并返回测试结果。
- * 
- * @param dataSourceUuid - 数据源 UUID
- * @returns 测试结果
  */
 export async function testDataSourceConnection(dataSourceUuid: string): Promise<TestConnectionResponse> {
-  return apiRequest<TestConnectionResponse>(`/core/data-sources/${dataSourceUuid}/test`, {
+  const result = await apiRequest<any>(`/core/integration-configs/${dataSourceUuid}/test`, {
     method: 'POST',
   });
+  return {
+    success: result.success,
+    message: result.message,
+    elapsed_time: result.data?.elapsed_time || 0,
+  };
 }
 

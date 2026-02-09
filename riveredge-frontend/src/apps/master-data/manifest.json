@@ -417,7 +417,9 @@
             "code_field_label": "客户编码",
             "module": "主数据管理",
             "module_icon": "database",
-            "auto_generate": false
+            "auto_generate": true,
+            "rule_code": "customer",
+            "allow_manual_edit": true
         },
         {
             "page_code": "master-data-supply-chain-supplier",
@@ -427,7 +429,9 @@
             "code_field_label": "供应商编码",
             "module": "主数据管理",
             "module_icon": "database",
-            "auto_generate": false
+            "auto_generate": true,
+            "rule_code": "supplier",
+            "allow_manual_edit": true
         },
         {
             "page_code": "master-data-performance-skill",

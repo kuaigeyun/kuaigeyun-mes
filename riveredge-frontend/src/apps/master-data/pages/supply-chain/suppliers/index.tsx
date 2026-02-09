@@ -11,6 +11,8 @@ import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { supplierApi } from '../../../services/supply-chain';
+import { testGenerateCode, generateCode } from '../../../../../services/codeRule';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import type { Supplier, SupplierCreate, SupplierUpdate } from '../../../types/supply-chain';
 
 /**
@@ -32,18 +34,36 @@ const SuppliersPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+
+  const PAGE_CODE = 'master-data-supply-chain-supplier';
 
   /**
    * 处理新建供应商
    */
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setIsEdit(false);
     setCurrentSupplierUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      isActive: true,
-    });
+    formRef.current?.setFieldsValue({ isActive: true });
+
+    if (isAutoGenerateEnabled(PAGE_CODE)) {
+      const ruleCode = getPageRuleCode(PAGE_CODE);
+      if (ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          setPreviewCode(codeResponse.code);
+          formRef.current?.setFieldsValue({ code: codeResponse.code });
+        } catch (e) {
+          setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
+    } else {
+      setPreviewCode(null);
+    }
   };
 
   /**
@@ -53,9 +73,8 @@ const SuppliersPage: React.FC = () => {
     try {
       setIsEdit(true);
       setCurrentSupplierUuid(record.uuid);
+      setPreviewCode(null);
       setModalVisible(true);
-      
-      // 获取供应商详情
       const detail = await supplierApi.get(record.uuid);
       formRef.current?.setFieldsValue({
         code: detail.code,
@@ -160,24 +179,35 @@ const SuppliersPage: React.FC = () => {
     setSupplierDetail(null);
   };
 
-  /**
-   * 处理提交表单（创建/更新供应商）
-   */
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
+
       if (isEdit && currentSupplierUuid) {
-        // 更新供应商
         await supplierApi.update(currentSupplierUuid, values as SupplierUpdate);
         messageApi.success('更新成功');
       } else {
-        // 创建供应商
+        if (isAutoGenerateEnabled(PAGE_CODE)) {
+          const ruleCode = getPageRuleCode(PAGE_CODE);
+          const currentCode = values.code;
+          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+            try {
+              const codeResponse = await generateCode({ rule_code: ruleCode });
+              values.code = codeResponse.code;
+            } catch (e) {
+              // 继续使用表单中的编码
+            }
+          }
+        }
+        if (values.isActive === undefined) {
+          values.isActive = true;
+        }
         await supplierApi.create(values as SupplierCreate);
         messageApi.success('创建成功');
       }
-      
+
       setModalVisible(false);
+      setPreviewCode(null);
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -187,11 +217,9 @@ const SuppliersPage: React.FC = () => {
     }
   };
 
-  /**
-   * 处理关闭 Modal
-   */
   const handleCloseModal = () => {
     setModalVisible(false);
+    setPreviewCode(null);
     formRef.current?.resetFields();
   };
 
@@ -475,15 +503,14 @@ const SuppliersPage: React.FC = () => {
           <ProFormText
             name="code"
             label="供应商编码"
-            placeholder="请输入供应商编码"
+            placeholder={isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入供应商编码'}
             colProps={{ span: 12 }}
             rules={[
               { required: true, message: '请输入供应商编码' },
               { max: 50, message: '供应商编码不能超过50个字符' },
             ]}
-            fieldProps={{
-              style: { textTransform: 'uppercase' },
-            }}
+            fieldProps={{ style: { textTransform: 'uppercase' } }}
+            extra={!isEdit && isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑。' : undefined}
           />
           <ProFormText
             name="name"
@@ -555,6 +582,7 @@ const SuppliersPage: React.FC = () => {
             name="isActive"
             label="是否启用"
             colProps={{ span: 12 }}
+            initialValue={true}
           />
       </FormModalTemplate>
     </>
