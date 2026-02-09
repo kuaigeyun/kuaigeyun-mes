@@ -375,7 +375,8 @@ class MaterialCodeRuleService:
         prefix: Optional[str] = None,
         material_type: str = "RAW",
         sample_sequence: int = 1,
-    ) -> str:
+        sequence_config: Optional[Dict[str, Any]] = None,
+    ) -> tuple[str, Optional[str]]:
         """
         预览编码生成效果
         
@@ -385,9 +386,10 @@ class MaterialCodeRuleService:
             prefix: 前缀
             material_type: 物料类型代码
             sample_sequence: 示例序号
+            sequence_config: 序号配置
             
         Returns:
-            str: 预览的编码
+            tuple[str, Optional[str]]: (预览的编码, 序号作用域Key)
         """
         return await MaterialCodeRuleEngine.preview_code(
             tenant_id=tenant_id,
@@ -395,6 +397,7 @@ class MaterialCodeRuleService:
             prefix=prefix,
             material_type=material_type,
             sample_sequence=sample_sequence,
+            sequence_config=sequence_config,
         )
     
     @staticmethod

@@ -19,6 +19,19 @@ import { loadPlugin } from '../utils/pluginLoader';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
 
+/**
+ * 延迟显示的 Fallback 组件
+ * 初始 delayMs 内渲染 null，超时后才显示骨架屏，避免快速加载时的闪烁
+ */
+const DelayedFallback: React.FC<{ delayMs?: number }> = ({ delayMs = 200 }) => {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), delayMs);
+    return () => clearTimeout(t);
+  }, [delayMs]);
+  return show ? <PageSkeleton /> : null;
+};
+
 /** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */
 function createLazyApp(app: Application) {
   return React.lazy(() =>
@@ -82,8 +95,8 @@ const AppErrorBoundary: React.FC<{ children: React.ReactNode; appName: string }>
   }
 };
 
-// 加载中组件 - 使用骨架屏
-const LoadingFallback: React.FC = () => <PageSkeleton />;
+// 加载中组件 - 延迟显示骨架屏，快速加载时不闪烁
+const LoadingFallback: React.FC = () => <DelayedFallback />;
 
 // 应用加载错误组件
 const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, onRetry }) => (
@@ -187,7 +200,7 @@ const AppRoutes: React.FC = () => {
             key={`app-${app.code}-${relativePath}`}
             path={`${relativePath}/*`}
             element={
-              <Suspense fallback={<PageSkeleton />}>
+              <Suspense fallback={<DelayedFallback />}>
                 <AppErrorBoundary appName={app.name}>
                   <LazyApp />
                 </AppErrorBoundary>

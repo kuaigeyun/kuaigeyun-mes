@@ -20,6 +20,7 @@ export interface AutoCounterComponent {
   fixed_width: boolean; // 是否固定位数
   reset_cycle: 'never' | 'daily' | 'monthly' | 'yearly'; // 重置周期
   initial_value: number; // 初始值
+  scope_fields?: string[]; // 作用域字段（用于按字段隔离计数）
 }
 
 /**

@@ -62,10 +62,22 @@ class CodeGenerationService:
             )
         
         # 获取序号配置（优先从组件读取，否则使用旧字段）
+        scope_key = ""
         if counter_config:
             seq_start = counter_config.get("initial_value", 1)
             seq_step = 1  # 组件格式中步长固定为1
             seq_reset_rule = counter_config.get("reset_cycle", "never")
+            
+            # 计算 Scope Key
+            scope_fields = counter_config.get("scope_fields", [])
+            if scope_fields and context:
+                scope_values = []
+                for field in scope_fields:
+                    val = context.get(field)
+                    if val is not None:
+                        scope_values.append(str(val))
+                if scope_values:
+                    scope_key = ":".join(scope_values)
         else:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
@@ -75,28 +87,33 @@ class CodeGenerationService:
         sequence = await CodeSequence.get_or_none(
             code_rule_id=rule.id,
             tenant_id=tenant_id,
+            scope_key=scope_key,
             deleted_at__isnull=True
         )
         if not sequence:
             sequence = await CodeSequence.create(
                 code_rule_id=rule.id,
                 tenant_id=tenant_id,
+                scope_key=scope_key,
                 current_seq=seq_start - seq_step
             )
         
         # 检查是否需要重置序号
         if seq_reset_rule and seq_reset_rule != "never":
             now = date.today()
-            if sequence.reset_date != now:
+            # 如果 reset_date 为空，初始化它但不重置序号（或者是第一次创建）
+            if not sequence.reset_date:
+                sequence.reset_date = now
+            elif sequence.reset_date != now:
                 if seq_reset_rule == "daily":
                     sequence.current_seq = seq_start - seq_step
                     sequence.reset_date = now
                 elif seq_reset_rule == "monthly":
-                    if not sequence.reset_date or sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
+                    if sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
                         sequence.current_seq = seq_start - seq_step
                         sequence.reset_date = now
                 elif seq_reset_rule == "yearly":
-                    if not sequence.reset_date or sequence.reset_date.year != now.year:
+                    if sequence.reset_date.year != now.year:
                         sequence.current_seq = seq_start - seq_step
                         sequence.reset_date = now
         
@@ -169,10 +186,22 @@ class CodeGenerationService:
             return test_code
         
         # 获取序号配置（优先从组件读取，否则使用旧字段）
+        scope_key = ""
         if counter_config:
             seq_start = counter_config.get("initial_value", 1)
             seq_step = 1  # 组件格式中步长固定为1
             seq_reset_rule = counter_config.get("reset_cycle", "never")
+            
+            # 计算 Scope Key
+            scope_fields = counter_config.get("scope_fields", [])
+            if scope_fields and context:
+                scope_values = []
+                for field in scope_fields:
+                    val = context.get(field)
+                    if val is not None:
+                        scope_values.append(str(val))
+                if scope_values:
+                    scope_key = ":".join(scope_values)
         else:
             seq_start = rule.seq_start
             seq_step = rule.seq_step
@@ -182,6 +211,7 @@ class CodeGenerationService:
         sequence = await CodeSequence.get_or_none(
             code_rule_id=rule.id,
             tenant_id=tenant_id,
+            scope_key=scope_key,
             deleted_at__isnull=True
         )
         
@@ -193,15 +223,18 @@ class CodeGenerationService:
             # 与 generate_code 相同的重置检查（不写库）
             if seq_reset_rule and seq_reset_rule != "never":
                 now = date.today()
-                if sequence.reset_date != now:
+                if not sequence.reset_date:
+                     # 假设 reset_date 会被更新为 now
+                     pass
+                elif sequence.reset_date != now:
                     if seq_reset_rule == "daily":
                         base_seq = seq_start - seq_step
                     elif seq_reset_rule == "monthly":
-                        if not sequence.reset_date or sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
+                        if sequence.reset_date.month != now.month or sequence.reset_date.year != now.year:
                             base_seq = seq_start - seq_step
                     elif seq_reset_rule == "yearly":
-                        if not sequence.reset_date or sequence.reset_date.year != now.year:
-                            base_seq = seq_start - seq_step
+                        if sequence.reset_date.year != now.year:
+                             base_seq = seq_start - seq_step
             test_seq = base_seq + seq_step
         if components:
             # 使用新格式（组件）

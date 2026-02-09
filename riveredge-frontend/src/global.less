@@ -486,14 +486,29 @@ code {
   overflow: auto;
 }
 
+/* Modal/抽屉内容区：超出时滚动但不显示垂直滚动条（也不占宽度） */
 .ant-drawer-body {
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 
 .ant-modal-body {
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 
 /* 全局：Modal 内表单标题为粗体 */

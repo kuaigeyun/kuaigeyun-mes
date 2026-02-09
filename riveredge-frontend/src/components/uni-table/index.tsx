@@ -453,6 +453,12 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
      */
     columns?: number
   }
+  /**
+   * 延迟显示 loading 的时间（毫秒）
+   * 当请求在 delay 内完成时不显示 loading，避免快速请求时的闪烁
+   * 设为 0 时不延迟，使用 ProTable 默认行为
+   */
+  loadingDelay?: number
 }
 
 /**
@@ -500,6 +506,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   kanbanViewConfig,
   statsViewConfig,
   touchViewConfig,
+  loadingDelay = 0,
   actionRef: externalActionRef,
   formRef: externalFormRef,
   ...restProps
@@ -538,6 +545,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 存储选中的行键
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+
+  // 延迟 loading：仅在 loadingDelay 毫秒后才显示，避免快速请求时的闪烁
+  const [showDelayedLoading, setShowDelayedLoading] = useState(false)
+  const loadingDelayTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isLoadingRef = useRef(false)
 
   // 预加载拼音库（组件挂载时）
   useEffect(() => {
@@ -677,12 +689,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }
 
   /**
-   * 组件卸载时清除防抖定时器
+   * 组件卸载时清除防抖定时器和 loading 延迟定时器
    */
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+      }
+      if (loadingDelayTimerRef.current) {
+        clearTimeout(loadingDelayTimerRef.current)
       }
     }
   }, [])
@@ -695,6 +710,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     sort: Record<string, 'ascend' | 'descend' | null>,
     filter: Record<string, React.ReactText[] | null>
   ) => {
+    // ⭐ 延迟 loading：仅在 loadingDelay 毫秒后才显示
+    if (loadingDelay > 0) {
+      isLoadingRef.current = true
+      if (loadingDelayTimerRef.current) {
+        clearTimeout(loadingDelayTimerRef.current)
+      }
+      loadingDelayTimerRef.current = setTimeout(() => {
+        loadingDelayTimerRef.current = null
+        if (isLoadingRef.current) {
+          setShowDelayedLoading(true)
+        }
+      }, loadingDelay)
+    }
+
     // ⭐ 关键：获取搜索表单值（优先使用 searchParamsRef，避免表单值更新时机问题）
     const formValues = formRef.current?.getFieldsValue() || {}
     // ⚠️ 修复：优先使用 searchParamsRef.current，如果不存在则回退到 formValues
@@ -703,8 +732,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const searchFormValues =
       searchParamsRef.current !== undefined ? searchParamsRef.current : formValues
 
-    // 调用用户提供的 request 函数，传递搜索表单值
-    const result = await request(params, sort, filter, searchFormValues)
+    try {
+      // 调用用户提供的 request 函数，传递搜索表单值
+      const result = await request(params, sort, filter, searchFormValues)
 
     // 支持拼音搜索：如果关键词是拼音格式，在前端对返回的数据进行二次过滤
     const keyword = searchFormValues?.keyword
@@ -764,6 +794,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     return result
+    } finally {
+      if (loadingDelay > 0) {
+        isLoadingRef.current = false
+        if (loadingDelayTimerRef.current) {
+          clearTimeout(loadingDelayTimerRef.current)
+          loadingDelayTimerRef.current = null
+        }
+        setShowDelayedLoading(false)
+      }
+    }
   }
 
   /**
@@ -1294,6 +1334,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               style={{ margin: 0, padding: 0 }}
               bordered={false}
               cardBordered={true}
+              {...(loadingDelay > 0 && { loading: showDelayedLoading })}
               options={{
                 density: true,
                 setting: true,

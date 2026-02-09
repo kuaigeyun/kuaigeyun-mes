@@ -1957,6 +1957,40 @@ interface CodeMappingTabProps {
   onReloadExternalSystemCodes?: () => void;
 }
 
+/** 编码映射统一行类型（用于单表展示） */
+type CodeMappingSourceType = 'department' | 'customer' | 'supplier' | 'external';
+interface CodeMappingRow {
+  key: string;
+  sourceType: CodeMappingSourceType;
+  sourceIndex?: number;
+  externalUuid?: string;
+  /** 映射类型展示 */
+  typeLabel: string;
+  /** 编码（部门/客户/供应商为 code，外部为 externalCode） */
+  code: string;
+  /** 关联方/类型（部门为编码类型，客户为客户名，供应商为供应商名，外部为外部系统） */
+  relation: string;
+  name?: string;
+  description?: string;
+  /** 其他：部门为 department，外部为 isActive */
+  extra?: string | React.ReactNode;
+}
+
+const CODE_MAPPING_TYPE_OPTIONS: { label: string; value: CodeMappingSourceType }[] = [
+  { label: '部门编码', value: 'department' },
+  { label: '客户编码', value: 'customer' },
+  { label: '供应商编码', value: 'supplier' },
+  { label: '外部系统', value: 'external' },
+];
+
+const DEPARTMENT_CODE_TYPE_LABELS: Record<string, string> = {
+  SALE: '销售编码',
+  DES: '设计编码',
+  PUR: '采购编码',
+  WH: '仓库编码',
+  PROD: '生产编码',
+};
+
 const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   departmentCodes,
   customerCodes,
@@ -1975,19 +2009,14 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
   onReloadExternalSystemCodes,
 }) => {
   const { message: messageApi } = App.useApp();
-  const [deptForm] = Form.useForm();
-  const [customerForm] = Form.useForm();
-  const [supplierForm] = Form.useForm();
+  const [addForm] = Form.useForm();
   const [externalSystemForm] = Form.useForm();
 
-  // Modal 状态
-  const [deptModalVisible, setDeptModalVisible] = useState(false);
-  const [customerModalVisible, setCustomerModalVisible] = useState(false);
-  const [supplierModalVisible, setSupplierModalVisible] = useState(false);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [addModalType, setAddModalType] = useState<CodeMappingSourceType>('department');
   const [externalSystemModalVisible, setExternalSystemModalVisible] = useState(false);
   const [editingExternalSystemCode, setEditingExternalSystemCode] = useState<MaterialCodeMapping | null>(null);
 
-  // 部门编码类型选项
   const departmentCodeTypes = [
     { label: '销售编码', value: 'SALE' },
     { label: '设计编码', value: 'DES' },
@@ -1996,481 +2025,324 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
     { label: '生产编码', value: 'PROD' },
   ];
 
-  // 打开部门编码 Modal
-  const handleOpenDeptModal = () => {
-    setDeptModalVisible(true);
-    deptForm.resetFields();
-  };
-
-  // 添加部门编码
-  const handleAddDepartmentCode = () => {
-    deptForm.validateFields().then((validatedValues) => {
-      onDepartmentCodesChange([...departmentCodes, validatedValues]);
-      deptForm.resetFields();
-      setDeptModalVisible(false);
-    }).catch(() => {
-      // 验证失败，不做任何操作
+  // 合并为统一表格数据源
+  const codeMappingRows: CodeMappingRow[] = useMemo(() => {
+    const rows: CodeMappingRow[] = [];
+    departmentCodes.forEach((r, i) => {
+      rows.push({
+        key: `dept-${i}`,
+        sourceType: 'department',
+        sourceIndex: i,
+        typeLabel: '部门编码',
+        code: r.code,
+        relation: DEPARTMENT_CODE_TYPE_LABELS[r.code_type] ?? r.code_type,
+        name: r.name,
+        description: r.description,
+        extra: r.department,
+      });
     });
-  };
-
-  // 删除部门编码
-  const handleDeleteDepartmentCode = (index: number) => {
-    const newCodes = [...departmentCodes];
-    newCodes.splice(index, 1);
-    onDepartmentCodesChange(newCodes);
-  };
-
-  // 打开客户编码 Modal
-  const handleOpenCustomerModal = () => {
-    setCustomerModalVisible(true);
-    customerForm.resetFields();
-  };
-
-  // 添加客户编码
-  const handleAddCustomerCode = () => {
-    customerForm.validateFields().then((validatedValues) => {
-      const customer = customers.find(c => c.id === validatedValues.customerId);
-      onCustomerCodesChange([
-        ...customerCodes,
-        {
-          ...validatedValues,
-          customerName: customer?.name,
-          customerUuid: customer?.uuid,
-        },
-      ]);
-      customerForm.resetFields();
-      setCustomerModalVisible(false);
-    }).catch(() => {
-      // 验证失败，不做任何操作
+    customerCodes.forEach((r, i) => {
+      rows.push({
+        key: `cust-${i}`,
+        sourceType: 'customer',
+        sourceIndex: i,
+        typeLabel: '客户编码',
+        code: r.code,
+        relation: r.customerName ?? '',
+        name: r.name,
+        description: r.description,
+      });
     });
-  };
-
-  // 删除客户编码
-  const handleDeleteCustomerCode = (index: number) => {
-    const newCodes = [...customerCodes];
-    newCodes.splice(index, 1);
-    onCustomerCodesChange(newCodes);
-  };
-
-  // 打开供应商编码 Modal
-  const handleOpenSupplierModal = () => {
-    setSupplierModalVisible(true);
-    supplierForm.resetFields();
-  };
-
-  // 添加供应商编码
-  const handleAddSupplierCode = () => {
-    supplierForm.validateFields().then((validatedValues) => {
-      const supplier = suppliers.find(s => s.id === validatedValues.supplierId);
-      onSupplierCodesChange([
-        ...supplierCodes,
-        {
-          ...validatedValues,
-          supplierName: supplier?.name,
-          supplierUuid: supplier?.uuid,
-        },
-      ]);
-      supplierForm.resetFields();
-      setSupplierModalVisible(false);
-    }).catch(() => {
-      // 验证失败，不做任何操作
+    supplierCodes.forEach((r, i) => {
+      rows.push({
+        key: `supp-${i}`,
+        sourceType: 'supplier',
+        sourceIndex: i,
+        typeLabel: '供应商编码',
+        code: r.code,
+        relation: r.supplierName ?? '',
+        name: r.name,
+        description: r.description,
+      });
     });
+    if (materialUuid) {
+      externalSystemCodes.forEach((r) => {
+        rows.push({
+          key: `ext-${r.uuid}`,
+          sourceType: 'external',
+          externalUuid: r.uuid,
+          typeLabel: '外部系统',
+          code: r.externalCode,
+          relation: r.externalSystem,
+          name: r.internalCode,
+          description: r.description,
+          extra: (
+            <Tag color={r.isActive ? 'success' : 'default'}>{r.isActive ? '启用' : '禁用'}</Tag>
+          ),
+        });
+      });
+    }
+    return rows;
+  }, [departmentCodes, customerCodes, supplierCodes, externalSystemCodes, materialUuid]);
+
+  const handleDeleteRow = (record: CodeMappingRow) => {
+    if (record.sourceType === 'department' && record.sourceIndex !== undefined) {
+      const newCodes = [...departmentCodes];
+      newCodes.splice(record.sourceIndex, 1);
+      onDepartmentCodesChange(newCodes);
+    } else if (record.sourceType === 'customer' && record.sourceIndex !== undefined) {
+      const newCodes = [...customerCodes];
+      newCodes.splice(record.sourceIndex, 1);
+      onCustomerCodesChange(newCodes);
+    } else if (record.sourceType === 'supplier' && record.sourceIndex !== undefined) {
+      const newCodes = [...supplierCodes];
+      newCodes.splice(record.sourceIndex, 1);
+      onSupplierCodesChange(newCodes);
+    } else if (record.sourceType === 'external' && record.externalUuid) {
+      materialCodeMappingApi.delete(record.externalUuid!).then(() => {
+        messageApi.success('删除成功');
+        onReloadExternalSystemCodes?.();
+      }).catch((err: any) => {
+        messageApi.error(err.message || '删除失败');
+      });
+    }
   };
 
-  // 删除供应商编码
-  const handleDeleteSupplierCode = (index: number) => {
-    const newCodes = [...supplierCodes];
-    newCodes.splice(index, 1);
-    onSupplierCodesChange(newCodes);
+  const handleOpenAddModal = (type?: CodeMappingSourceType) => {
+    const t = type ?? 'department';
+    setAddModalType(t);
+    setAddModalVisible(true);
+    addForm.resetFields();
+  };
+
+  const handleAddSubmit = () => {
+    if (addModalType === 'department') {
+      addForm.validateFields().then((values) => {
+        onDepartmentCodesChange([...departmentCodes, values]);
+        addForm.resetFields();
+        setAddModalVisible(false);
+      }).catch(() => {});
+      return;
+    }
+    if (addModalType === 'customer') {
+      addForm.validateFields().then((values) => {
+        const customer = customers.find(c => c.id === values.customerId);
+        onCustomerCodesChange([
+          ...customerCodes,
+          {
+            ...values,
+            customerName: customer?.name,
+            customerUuid: customer?.uuid,
+          },
+        ]);
+        addForm.resetFields();
+        setAddModalVisible(false);
+      }).catch(() => {});
+      return;
+    }
+    if (addModalType === 'supplier') {
+      addForm.validateFields().then((values) => {
+        const supplier = suppliers.find(s => s.id === values.supplierId);
+        onSupplierCodesChange([
+          ...supplierCodes,
+          {
+            ...values,
+            supplierName: supplier?.name,
+            supplierUuid: supplier?.uuid,
+          },
+        ]);
+        addForm.resetFields();
+        setAddModalVisible(false);
+      }).catch(() => {});
+      return;
+    }
+    if (addModalType === 'external' && materialUuid) {
+      addForm.validateFields().then(async (values) => {
+        await materialCodeMappingApi.create({
+          materialUuid,
+          internalCode: values.internalCode || '',
+          externalCode: values.externalCode,
+          externalSystem: values.externalSystem,
+          description: values.description,
+          isActive: values.isActive !== false,
+        });
+        messageApi.success('创建成功');
+        addForm.resetFields();
+        setAddModalVisible(false);
+        onReloadExternalSystemCodes?.();
+      }).catch(() => {});
+    }
+  };
+
+  const openEditExternalModal = (record: MaterialCodeMapping) => {
+    setEditingExternalSystemCode(record);
+    externalSystemForm.setFieldsValue({
+      externalSystem: record.externalSystem,
+      externalCode: record.externalCode,
+      internalCode: record.internalCode,
+      description: record.description,
+      isActive: record.isActive,
+    });
+    setExternalSystemModalVisible(true);
   };
 
   return (
     <>
-      {/* 公司内部部门编码 */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>公司内部部门编码</div>
-        <Table
-          dataSource={departmentCodes}
-          columns={[
-            { title: '编码类型', dataIndex: 'code_type', key: 'code_type', width: 120 },
-            { title: '编码', dataIndex: 'code', key: 'code', width: 150 },
-            { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
-            { title: '部门', dataIndex: 'department', key: 'department', width: 120 },
-            { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-            {
-              title: '操作',
-              key: 'action',
-              width: 80,
-              fixed: 'right' as const,
-              render: (_, __, index) => (
+      <Table<CodeMappingRow>
+        dataSource={codeMappingRows}
+        loading={externalSystemCodesLoading}
+        columns={[
+          { title: '映射类型', dataIndex: 'typeLabel', key: 'typeLabel', width: 100 },
+          { title: '编码', dataIndex: 'code', key: 'code', width: 140 },
+          { title: '关联方/类型', dataIndex: 'relation', key: 'relation', width: 140 },
+          { title: '名称', dataIndex: 'name', key: 'name', width: 120, ellipsis: true },
+          { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+          { title: '其他', dataIndex: 'extra', key: 'extra', width: 100 },
+          {
+            title: '操作',
+            key: 'action',
+            width: 120,
+            fixed: 'right' as const,
+            render: (_, record) => (
+              <Space size="small">
+                {record.sourceType === 'external' && (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      const ext = externalSystemCodes.find(e => e.uuid === record.externalUuid);
+                      if (ext) openEditExternalModal(ext);
+                    }}
+                  >
+                    编辑
+                  </Button>
+                )}
                 <Button
                   type="link"
                   danger
+                  size="small"
                   icon={<DeleteOutlined />}
-                  onClick={() => handleDeleteDepartmentCode(index)}
+                  onClick={() => handleDeleteRow(record)}
                 >
                   删除
                 </Button>
-              ),
-            },
-          ]}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: '暂无部门编码' }}
-          footer={() => (
-            <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              onClick={handleOpenDeptModal}
-              block
-            >
-              添加部门编码
-            </Button>
-          )}
-        />
-      </div>
-
-      {/* 客户物料编码 */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>客户物料编码</div>
-        <Table
-          dataSource={customerCodes}
-          columns={[
-            { title: '客户', dataIndex: 'customerName', key: 'customerName', width: 200 },
-            { title: '客户编码', dataIndex: 'code', key: 'code', width: 150 },
-            { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
-            { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-            {
-              title: '操作',
-              key: 'action',
-              width: 80,
-              fixed: 'right' as const,
-              render: (_, __, index) => (
-                <Button
-                  type="link"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleDeleteCustomerCode(index)}
-                >
-                  删除
-                </Button>
-              ),
-            },
-          ]}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: '暂无客户编码' }}
-          footer={() => (
-            <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              onClick={handleOpenCustomerModal}
-              block
-            >
-              添加客户编码
-            </Button>
-          )}
-        />
-      </div>
-
-      {/* 供应商物料编码 */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ marginBottom: 8, fontWeight: 500 }}>供应商物料编码</div>
-        <Table
-          dataSource={supplierCodes}
-          columns={[
-            { title: '供应商', dataIndex: 'supplierName', key: 'supplierName', width: 200 },
-            { title: '供应商编码', dataIndex: 'code', key: 'code', width: 150 },
-            { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
-            { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-            {
-              title: '操作',
-              key: 'action',
-              width: 80,
-              fixed: 'right' as const,
-              render: (_, __, index) => (
-                <Button
-                  type="link"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleDeleteSupplierCode(index)}
-                >
-                  删除
-                </Button>
-              ),
-            },
-          ]}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: '暂无供应商编码' }}
-          footer={() => (
-            <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              onClick={handleOpenSupplierModal}
-              block
-            >
-              添加供应商编码
-            </Button>
-          )}
-        />
-      </div>
-
-      {/* 外部系统编码映射 */}
-      {materialUuid && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>外部系统编码映射</div>
-          <Table
-            dataSource={externalSystemCodes}
-            loading={externalSystemCodesLoading}
-            columns={[
-              { title: '外部系统', dataIndex: 'externalSystem', key: 'externalSystem', width: 120 },
-              { title: '外部编码', dataIndex: 'externalCode', key: 'externalCode', width: 150 },
-              { title: '内部编码', dataIndex: 'internalCode', key: 'internalCode', width: 150 },
-              { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-              { 
-                title: '状态', 
-                dataIndex: 'isActive', 
-                key: 'isActive', 
-                width: 80,
-                render: (value: boolean) => (
-                  <Tag color={value ? 'success' : 'default'}>
-                    {value ? '启用' : '禁用'}
-                  </Tag>
-                ),
-              },
-              {
-                title: '操作',
-                key: 'action',
-                width: 120,
-                fixed: 'right' as const,
-                render: (_: any, record: MaterialCodeMapping) => (
-                  <Space>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        setEditingExternalSystemCode(record);
-                        externalSystemForm.setFieldsValue({
-                          externalSystem: record.externalSystem,
-                          externalCode: record.externalCode,
-                          internalCode: record.internalCode,
-                          description: record.description,
-                          isActive: record.isActive,
-                        });
-                        setExternalSystemModalVisible(true);
-                      }}
-                    >
-                      编辑
-                    </Button>
-                    <Button
-                      type="link"
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      onClick={async () => {
-                        try {
-                          await materialCodeMappingApi.delete(record.uuid);
-                          messageApi.success('删除成功');
-                          if (onReloadExternalSystemCodes) {
-                            onReloadExternalSystemCodes();
-                          }
-                        } catch (error: any) {
-                          messageApi.error(error.message || '删除失败');
-                        }
-                      }}
-                    >
-                      删除
-                    </Button>
-                  </Space>
-                ),
-              },
-            ]}
-            pagination={false}
-            size="small"
-            locale={{ emptyText: '暂无外部系统编码映射' }}
-            footer={() => (
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setEditingExternalSystemCode(null);
-                  externalSystemForm.resetFields();
-                  externalSystemForm.setFieldsValue({
-                    internalCode: '', // 将在提交时自动填充物料编码
-                    isActive: true,
-                  });
-                  setExternalSystemModalVisible(true);
-                }}
-                block
-              >
-                添加外部系统编码映射
-              </Button>
-            )}
-          />
-        </div>
-      )}
-
-      {/* 部门编码 Modal */}
-      <Modal
-        title="添加部门编码"
-        open={deptModalVisible}
-        onOk={handleAddDepartmentCode}
-        onCancel={() => setDeptModalVisible(false)}
-        width={600}
-      >
-        <Form form={deptForm} layout="vertical">
-          <Form.Item name="code_type" label="编码类型" rules={[{ required: true, message: '请选择编码类型' }]}>
-            <Select placeholder="编码类型" options={departmentCodeTypes} />
-          </Form.Item>
-          <Form.Item name="code" label="编码" rules={[{ required: true, message: '请输入编码' }]}>
-            <Input placeholder="编码" />
-          </Form.Item>
-          <Form.Item name="name" label="名称（可选）">
-            <Input placeholder="名称（可选）" />
-          </Form.Item>
-          <Form.Item name="department" label="部门（可选）">
-            <Input placeholder="部门（可选）" />
-          </Form.Item>
-          <Form.Item name="description" label="描述（可选）">
-            <Input.TextArea placeholder="描述（可选）" rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 客户编码 Modal */}
-      <Modal
-        title="添加客户编码"
-        open={customerModalVisible}
-        onOk={handleAddCustomerCode}
-        onCancel={() => setCustomerModalVisible(false)}
-        width={600}
-      >
-        <Form form={customerForm} layout="vertical">
-          <Form.Item name="customerId" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
-            <Select
-              placeholder="选择客户"
-              loading={customersLoading}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
-            />
-          </Form.Item>
-          <Form.Item name="code" label="客户编码" rules={[{ required: true, message: '请输入客户编码' }]}>
-            <Input placeholder="客户编码" />
-          </Form.Item>
-          <Form.Item name="name" label="名称（可选）">
-            <Input placeholder="名称（可选）" />
-          </Form.Item>
-          <Form.Item name="description" label="描述（可选）">
-            <Input.TextArea placeholder="描述（可选）" rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 供应商编码 Modal */}
-      <Modal
-        title="添加供应商编码"
-        open={supplierModalVisible}
-        onOk={handleAddSupplierCode}
-        onCancel={() => setSupplierModalVisible(false)}
-        width={600}
-      >
-        <Form form={supplierForm} layout="vertical">
-          <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}>
-            <Select
-              placeholder="选择供应商"
-              loading={suppliersLoading}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
-            />
-          </Form.Item>
-          <Form.Item name="code" label="供应商编码" rules={[{ required: true, message: '请输入供应商编码' }]}>
-            <Input placeholder="供应商编码" />
-          </Form.Item>
-          <Form.Item name="name" label="名称（可选）">
-            <Input placeholder="名称（可选）" />
-          </Form.Item>
-          <Form.Item name="description" label="描述（可选）">
-            <Input.TextArea placeholder="描述（可选）" rows={3} />
-          </Form.Item>
-          </Form>
-        </Modal>
-
-        {/* 外部系统编码映射 Modal */}
-        {materialUuid && (
-          <Modal
-            title={editingExternalSystemCode ? '编辑外部系统编码映射' : '添加外部系统编码映射'}
-            open={externalSystemModalVisible}
-            onOk={async () => {
-              try {
-                const values = await externalSystemForm.validateFields();
-                if (editingExternalSystemCode) {
-                  // 更新
-                  await materialCodeMappingApi.update(editingExternalSystemCode.uuid, {
-                    externalSystem: values.externalSystem,
-                    externalCode: values.externalCode,
-                    internalCode: values.internalCode || undefined,
-                    description: values.description,
-                    isActive: values.isActive,
-                  });
-                  messageApi.success('更新成功');
-                } else {
-                  // 创建
-                  await materialCodeMappingApi.create({
-                    materialUuid: materialUuid,
-                    internalCode: values.internalCode || '', // 如果为空，后端会使用物料主编码
-                    externalCode: values.externalCode,
-                    externalSystem: values.externalSystem,
-                    description: values.description,
-                    isActive: values.isActive !== false,
-                  });
-                  messageApi.success('创建成功');
-                }
-                setExternalSystemModalVisible(false);
-                setEditingExternalSystemCode(null);
-                externalSystemForm.resetFields();
-                if (onReloadExternalSystemCodes) {
-                  onReloadExternalSystemCodes();
-                }
-              } catch (error: any) {
-                messageApi.error(error.message || (editingExternalSystemCode ? '更新失败' : '创建失败'));
-              }
-            }}
-            onCancel={() => {
-              setExternalSystemModalVisible(false);
-              setEditingExternalSystemCode(null);
-              externalSystemForm.resetFields();
-            }}
-            width={600}
+              </Space>
+            ),
+          },
+        ]}
+        pagination={false}
+        size="small"
+        locale={{ emptyText: '暂无编码映射' }}
+        footer={() => (
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={() => handleOpenAddModal()}
+            block
           >
-            <Form form={externalSystemForm} layout="vertical">
-              <Form.Item 
-                name="externalSystem" 
-                label="外部系统" 
-                rules={[{ required: true, message: '请输入外部系统名称' }]}
-              >
+            添加编码映射
+          </Button>
+        )}
+      />
+
+      {/* 统一添加编码映射 Modal */}
+      <Modal
+        title="添加编码映射"
+        open={addModalVisible}
+        onOk={handleAddSubmit}
+        onCancel={() => { setAddModalVisible(false); addForm.resetFields(); }}
+        width={600}
+      >
+        <Form form={addForm} layout="vertical">
+          <Form.Item label="映射类型">
+            <Select
+              value={addModalType}
+              options={CODE_MAPPING_TYPE_OPTIONS.filter(o => o.value !== 'external' || materialUuid)}
+              onChange={(v) => {
+                setAddModalType(v as CodeMappingSourceType);
+                addForm.resetFields();
+              }}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+          {addModalType === 'department' && (
+            <>
+              <Form.Item name="code_type" label="编码类型" rules={[{ required: true, message: '请选择编码类型' }]}>
+                <Select placeholder="编码类型" options={departmentCodeTypes} />
+              </Form.Item>
+              <Form.Item name="code" label="编码" rules={[{ required: true, message: '请输入编码' }]}>
+                <Input placeholder="编码" />
+              </Form.Item>
+              <Form.Item name="name" label="名称（可选）">
+                <Input placeholder="名称（可选）" />
+              </Form.Item>
+              <Form.Item name="department" label="部门（可选）">
+                <Input placeholder="部门（可选）" />
+              </Form.Item>
+              <Form.Item name="description" label="描述（可选）">
+                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              </Form.Item>
+            </>
+          )}
+          {addModalType === 'customer' && (
+            <>
+              <Form.Item name="customerId" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+                <Select
+                  placeholder="选择客户"
+                  loading={customersLoading}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
+                />
+              </Form.Item>
+              <Form.Item name="code" label="客户编码" rules={[{ required: true, message: '请输入客户编码' }]}>
+                <Input placeholder="客户编码" />
+              </Form.Item>
+              <Form.Item name="name" label="名称（可选）">
+                <Input placeholder="名称（可选）" />
+              </Form.Item>
+              <Form.Item name="description" label="描述（可选）">
+                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              </Form.Item>
+            </>
+          )}
+          {addModalType === 'supplier' && (
+            <>
+              <Form.Item name="supplierId" label="供应商" rules={[{ required: true, message: '请选择供应商' }]}>
+                <Select
+                  placeholder="选择供应商"
+                  loading={suppliersLoading}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                />
+              </Form.Item>
+              <Form.Item name="code" label="供应商编码" rules={[{ required: true, message: '请输入供应商编码' }]}>
+                <Input placeholder="供应商编码" />
+              </Form.Item>
+              <Form.Item name="name" label="名称（可选）">
+                <Input placeholder="名称（可选）" />
+              </Form.Item>
+              <Form.Item name="description" label="描述（可选）">
+                <Input.TextArea placeholder="描述（可选）" rows={3} />
+              </Form.Item>
+            </>
+          )}
+          {addModalType === 'external' && materialUuid && (
+            <>
+              <Form.Item name="externalSystem" label="外部系统" rules={[{ required: true, message: '请输入外部系统名称' }]}>
                 <Input placeholder="如：ERP、WMS、MES等" />
               </Form.Item>
-              <Form.Item 
-                name="externalCode" 
-                label="外部编码" 
-                rules={[{ required: true, message: '请输入外部编码' }]}
-              >
+              <Form.Item name="externalCode" label="外部编码" rules={[{ required: true, message: '请输入外部编码' }]}>
                 <Input placeholder="外部系统中的物料编码" />
               </Form.Item>
-              <Form.Item 
-                name="internalCode" 
-                label="内部编码（可选）"
-                tooltip="如果不填写，将使用物料主编码"
-              >
-                <Input placeholder="内部编码（可选，默认使用物料主编码）" />
+              <Form.Item name="internalCode" label="内部编码（可选）" tooltip="如果不填写，将使用物料主编码">
+                <Input placeholder="内部编码（可选）" />
               </Form.Item>
               <Form.Item name="description" label="描述（可选）">
                 <Input.TextArea placeholder="描述（可选）" rows={3} />
@@ -2478,12 +2350,66 @@ const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
               <Form.Item name="isActive" label="是否启用" valuePropName="checked" initialValue={true}>
                 <Switch />
               </Form.Item>
-            </Form>
-          </Modal>
-        )}
-      </>
-    );
-  };
+            </>
+          )}
+        </Form>
+      </Modal>
+
+      {/* 编辑外部系统编码映射 Modal */}
+      {materialUuid && (
+        <Modal
+          title="编辑外部系统编码映射"
+          open={externalSystemModalVisible}
+          onOk={async () => {
+            try {
+              const values = await externalSystemForm.validateFields();
+              if (editingExternalSystemCode) {
+                await materialCodeMappingApi.update(editingExternalSystemCode.uuid, {
+                  externalSystem: values.externalSystem,
+                  externalCode: values.externalCode,
+                  internalCode: values.internalCode || undefined,
+                  description: values.description,
+                  isActive: values.isActive,
+                });
+                messageApi.success('更新成功');
+              }
+              setExternalSystemModalVisible(false);
+              setEditingExternalSystemCode(null);
+              externalSystemForm.resetFields();
+              onReloadExternalSystemCodes?.();
+            } catch (error: any) {
+              messageApi.error(error.message || '更新失败');
+            }
+          }}
+          onCancel={() => {
+            setExternalSystemModalVisible(false);
+            setEditingExternalSystemCode(null);
+            externalSystemForm.resetFields();
+          }}
+          width={600}
+        >
+          <Form form={externalSystemForm} layout="vertical">
+            <Form.Item name="externalSystem" label="外部系统" rules={[{ required: true, message: '请输入外部系统名称' }]}>
+              <Input placeholder="如：ERP、WMS、MES等" />
+            </Form.Item>
+            <Form.Item name="externalCode" label="外部编码" rules={[{ required: true, message: '请输入外部编码' }]}>
+              <Input placeholder="外部系统中的物料编码" />
+            </Form.Item>
+            <Form.Item name="internalCode" label="内部编码（可选）" tooltip="如果不填写，将使用物料主编码">
+              <Input placeholder="内部编码（可选）" />
+            </Form.Item>
+            <Form.Item name="description" label="描述（可选）">
+              <Input.TextArea placeholder="描述（可选）" rows={3} />
+            </Form.Item>
+            <Form.Item name="isActive" label="是否启用" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Form>
+        </Modal>
+      )}
+    </>
+  );
+};
 
 /**
  * 默认值设置标签页

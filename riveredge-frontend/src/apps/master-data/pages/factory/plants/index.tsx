@@ -648,6 +648,7 @@ const PlantsPage: React.FC = () => {
           columns={columns}
           viewTypes={['table']}
           defaultViewType="table"
+          loadingDelay={200}
           request={async (params, _sort, _filter, searchFormValues) => {
             // 处理搜索参数
             const apiParams: any = {

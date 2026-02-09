@@ -93,9 +93,6 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
       width={width}
       destroyOnHidden
       className={className}
-      styles={{
-        body: { maxHeight: '70vh', overflow: 'hidden' },
-      }}
     >
       <ProForm
         formRef={formRef}
