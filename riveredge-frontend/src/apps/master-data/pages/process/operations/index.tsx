@@ -19,6 +19,7 @@ import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal } f
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import dayjs from 'dayjs';
 
 const PAGE_CODE = 'master-data-process-operation';
 
@@ -496,11 +497,16 @@ const OperationsPage: React.FC = () => {
     },
     {
       title: '创建时间',
-      dataIndex: 'createdAt',
+      dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
+      render: (_, record) => {
+        const val = (record as any).created_at ?? (record as any).createdAt;
+        if (val == null || val === '') return '-';
+        return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
+      },
     },
     {
       title: '操作',
@@ -677,8 +683,24 @@ const OperationsPage: React.FC = () => {
                     );
                   },
                 },
-                { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-                { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
+                {
+                  title: '创建时间',
+                  dataIndex: 'created_at',
+                  render: (_, record) => {
+                    const val = (record as any).created_at ?? (record as any).createdAt;
+                    if (val == null || val === '') return '-';
+                    return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
+                  },
+                },
+                {
+                  title: '更新时间',
+                  dataIndex: 'updated_at',
+                  render: (_, record) => {
+                    const val = (record as any).updated_at ?? (record as any).updatedAt;
+                    if (val == null || val === '') return '-';
+                    return dayjs(val).isValid() ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : String(val);
+                  },
+                },
               ]}
             />
             

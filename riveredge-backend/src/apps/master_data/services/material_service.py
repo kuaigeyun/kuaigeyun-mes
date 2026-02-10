@@ -2058,9 +2058,27 @@ class MaterialService:
             
             return current_level, new_path
         
+        # 步骤5.5：按「父件+版本」先软删除已有 BOM，避免重复保存时多出一套父物料
+        from tortoise import timezone
+        from datetime import datetime
+        parent_ids = set(code_to_material[item.parent_code] for item in data.items)
+        bom_code_reuse = {}  # 父件ID -> 复用已有 BOM 编码（若有）
+        for pid in parent_ids:
+            existing = await BOM.filter(
+                tenant_id=tenant_id,
+                material_id=pid,
+                version=data.version or "1.0",
+                deleted_at__isnull=True,
+            ).all()
+            if existing:
+                bom_code_reuse[pid] = existing[0].bom_code
+            for bom in existing:
+                bom.deleted_at = timezone.now()
+                await bom.save(update_fields=["deleted_at"])
+        
         # 步骤6：创建BOM数据
         bom_list = []
-        bom_code_map = {}  # 父件ID -> BOM编码的映射
+        bom_code_map = {}  # 父件ID -> BOM编码的映射（新生成或复用）
         
         for item in data.items:
             parent_id = code_to_material[item.parent_code]
@@ -2072,13 +2090,15 @@ class MaterialService:
                     f"主物料和子物料不能相同：{item.parent_code}"
                 )
             
-            # 获取或生成BOM编码
+            # 获取或生成BOM编码：优先复用该父件+版本下已软删的 BOM 编码，否则新生成
             if not data.bom_code:
                 if parent_id not in bom_code_map:
-                    parent_material = await Material.get(id=parent_id)
-                    from datetime import datetime
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                    bom_code_map[parent_id] = f"BOM-{parent_material.main_code}-{timestamp}"
+                    if parent_id in bom_code_reuse:
+                        bom_code_map[parent_id] = bom_code_reuse[parent_id]
+                    else:
+                        parent_material = await Material.get(id=parent_id)
+                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                        bom_code_map[parent_id] = f"BOM-{parent_material.main_code}-{timestamp}"
                 bom_code = bom_code_map[parent_id]
             else:
                 bom_code = data.bom_code

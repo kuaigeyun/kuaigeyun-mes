@@ -28,7 +28,8 @@ const NODE_V_GAP = 24;
 const NODE_H_GAP = 128;
 
 import { bomApi, materialApi } from '../../../services/material';
-import type { BOM, Material, BOMHierarchy, BOMHierarchyItem } from '../../../types/material';
+import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import type { BOM, Material, BOMHierarchy, BOMHierarchyItem, MaterialUnits } from '../../../types/material';
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { CanvasPageTemplate, PAGE_SPACING } from '../../../../../components/layout-templates';
 
@@ -78,6 +79,8 @@ const BOMDesignerPage: React.FC = () => {
   const [rootMaterial, setRootMaterial] = useState<Material | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
+  /** 单位字典：value(code) -> label(显示名)，用于节点配置中单位下拉显示标签 */
+  const [unitValueToLabel, setUnitValueToLabel] = useState<Record<string, string>>({});
 
   // MindMap 数据
   const [mindMapData, setMindMapData] = useState<MindMapData | null>(null);
@@ -156,6 +159,26 @@ const BOMDesignerPage: React.FC = () => {
       }
     };
     loadMaterials();
+  }, []);
+
+  /**
+   * 加载单位字典（MATERIAL_UNIT），用于节点配置中单位下拉显示标签
+   */
+  useEffect(() => {
+    const loadUnitDictionary = async () => {
+      try {
+        const dictionary = await getDataDictionaryByCode('MATERIAL_UNIT');
+        const items = await getDictionaryItemList(dictionary.uuid, true);
+        const valueToLabel: Record<string, string> = {};
+        items.forEach((item: { value: string; label: string }) => {
+          valueToLabel[item.value] = item.label;
+        });
+        setUnitValueToLabel(valueToLabel);
+      } catch (error: any) {
+        console.error('加载单位字典失败:', error);
+      }
+    };
+    loadUnitDictionary();
   }, []);
 
   /**
@@ -578,6 +601,27 @@ const BOMDesignerPage: React.FC = () => {
     return findNode(mindMapData, selectedNodeId);
   }, [selectedNodeId, mindMapData, findNode]);
 
+  // 节点配置中选中的物料 ID，用于根据物料信息生成单位选项
+  const watchedMaterialId = Form.useWatch('materialId', nodeConfigForm);
+  const selectedMaterial = useMemo(
+    () => (watchedMaterialId != null ? materials.find((m) => m.id === watchedMaterialId) : null),
+    [watchedMaterialId, materials]
+  );
+  /** 当前选中物料的单位选项：基础单位 + 辅助单位，label 使用字典标签（显示名） */
+  const unitOptionsFromMaterial = useMemo(() => {
+    if (!selectedMaterial) return [];
+    const raw = selectedMaterial as Record<string, unknown>;
+    const base = (selectedMaterial.baseUnit ?? raw.base_unit) as string ?? '';
+    const unitsData = (selectedMaterial.units ?? raw.units) as MaterialUnits | undefined;
+    const alternates = unitsData?.units?.map((u) => u.unit).filter(Boolean) ?? [];
+    const values = base ? [base, ...alternates] : alternates;
+    const unique = Array.from(new Set(values));
+    return unique.map((u) => ({
+      label: unitValueToLabel[u] ?? u,
+      value: u,
+    }));
+  }, [selectedMaterial, unitValueToLabel]);
+
   // 供 MindMap 使用的纯净树数据（id/value/children），子节点 value 含用量
   const mindMapDataSafe = useMemo(() => {
     if (!mindMapData) return null;
@@ -778,6 +822,51 @@ const BOMDesignerPage: React.FC = () => {
               </Button>
             </div>
           )}
+          {/* 画板右下角：BOM 结构预览 */}
+          {mindMapData && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 12,
+                bottom: 12,
+                zIndex: 10,
+                maxWidth: 280,
+                maxHeight: 220,
+                padding: '8px 12px',
+                background: 'rgba(255,255,255,0.92)',
+                borderRadius: 6,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                fontSize: 12,
+                color: '#666',
+                lineHeight: 1.6,
+                overflow: 'auto',
+              }}
+            >
+              <div style={{ fontWeight: 500, marginBottom: 6, color: '#333' }}>BOM 结构预览</div>
+              <div style={{ paddingLeft: 0 }}>
+                <div style={{ marginBottom: 4 }}>
+                  <span style={{ color: '#1890ff' }}>●</span> {(mindMapData as MindMapNode).value}
+                </div>
+                {(mindMapData as MindMapNode).children?.length ? (
+                  <>
+                    {(mindMapData as MindMapNode).children!.slice(0, 20).map((child: MindMapNode) => (
+                      <div key={child.id} style={{ paddingLeft: 12, marginBottom: 2 }}>
+                        <span style={{ color: '#52c41a' }}>└</span> {child.value}
+                        {typeof (child as any).quantity === 'number' && (
+                          <span style={{ color: '#999', marginLeft: 4 }}>×{(child as any).quantity}</span>
+                        )}
+                      </div>
+                    ))}
+                    {(mindMapData as MindMapNode).children!.length > 20 && (
+                      <div style={{ paddingLeft: 12, color: '#999' }}>… 共 {(mindMapData as MindMapNode).children!.length} 项</div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ paddingLeft: 12, color: '#999' }}>暂无子物料</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       }
       rightPanel={{
@@ -810,6 +899,11 @@ const BOMDesignerPage: React.FC = () => {
                     label: `${m.code} - ${m.name}`,
                     value: m.id,
                   }))}
+                  onChange={(id) => {
+                    const mat = materials.find((m) => m.id === id);
+                    const base = mat ? ((mat as Record<string, unknown>).base_unit ?? mat.baseUnit) : '';
+                    nodeConfigForm.setFieldsValue({ unit: base ?? '' });
+                  }}
                 />
               </Form.Item>
               <Form.Item
@@ -827,8 +921,13 @@ const BOMDesignerPage: React.FC = () => {
                   min={0.0001}
                 />
               </Form.Item>
-              <Form.Item name="unit" label="单位">
-                <Input placeholder="请输入单位（如：个、kg、m等）" maxLength={20} />
+              <Form.Item name="unit" label="单位" rules={[{ required: true, message: '请选择单位' }]}>
+                <Select
+                  placeholder={selectedMaterial ? '请选择单位' : '请先选择物料'}
+                  options={unitOptionsFromMaterial}
+                  disabled={!selectedMaterial}
+                  allowClear={false}
+                />
               </Form.Item>
               <Form.Item
                 name="wasteRate"

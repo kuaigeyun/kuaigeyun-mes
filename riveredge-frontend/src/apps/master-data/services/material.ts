@@ -324,11 +324,25 @@ export const bomApi = {
 
   /**
    * 批量导入BOM（支持部门编码）
-   * 
-   * 根据《工艺路线和标准作业流程优化设计规范.md》设计。
+   * 请求体转为 snake_case 以符合后端 Schema（parent_code, component_code 等）。
    */
   batchImport: async (data: BOMBatchImport): Promise<BOM[]> => {
-    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', data);
+    const body = {
+      items: data.items.map((item) => ({
+        parent_code: item.parentCode,
+        component_code: item.componentCode,
+        quantity: item.quantity,
+        unit: item.unit,
+        waste_rate: item.wasteRate,
+        is_required: item.isRequired,
+        remark: item.remark,
+      })),
+      version: data.version,
+      bom_code: data.bomCode,
+      effective_date: data.effectiveDate,
+      description: data.description,
+    };
+    const raw = await api.post<unknown[]>('/apps/master-data/materials/bom/batch-import', body);
     const arr = Array.isArray(raw) ? raw : [];
     return arr.map((item) => mapBomFromApi((item ?? {}) as Record<string, unknown>));
   },
