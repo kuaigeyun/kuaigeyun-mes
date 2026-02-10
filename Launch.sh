@@ -1885,6 +1885,17 @@ main() {
     # 检查前端是否可以访问（异步检查）
     (sleep 2 && curl -s --max-time 3 "http://localhost:$frontend_port" >/dev/null 2>&1 && log_success "前端服务验证通过" || log_warn "前端服务验证失败，可能仍在编译中") &
 
+    # 启动完成后自动打开 Web 端（默认浏览器）
+    (sleep 3 && (
+        if command -v open &>/dev/null; then
+            open "http://localhost:$frontend_port"
+        elif command -v xdg-open &>/dev/null; then
+            xdg-open "http://localhost:$frontend_port"
+        elif command -v start &>/dev/null; then
+            start "http://localhost:$frontend_port"
+        fi
+    )) &
+
     log_success "RiverEdge SaaS 框架启动完成！开始您的开发之旅吧！"
 }
 

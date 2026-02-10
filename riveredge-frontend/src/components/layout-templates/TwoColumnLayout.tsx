@@ -351,14 +351,14 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           </div>
         )}
 
-        {/* 内容区：flex: 1 minHeight: 0 确保固定高度，overflow 由 UniTable scroll.y 控制 */}
+        {/* 内容区：可滚动但不显示滚动条 */}
         <div
-          className="two-column-layout-content"
+          className="two-column-layout-content two-column-layout-right-content-scroll"
           style={{
             flex: 1,
             minHeight: 0,
             overflowX: 'hidden',
-            overflowY: 'hidden',
+            overflowY: 'auto',
             padding: '16px',
             backgroundColor: contentBackgroundColor,
             display: 'flex',
