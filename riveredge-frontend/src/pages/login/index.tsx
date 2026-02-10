@@ -17,6 +17,7 @@ import { registerPersonal, registerOrganization, checkTenantExists, searchTenant
 import { login, guestLogin, wechatLoginCallback, type LoginResponse } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo } from '../../utils/auth';
 import { useGlobalStore } from '../../stores';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { TenantSelectionModal, TermsModal, LongPressVerify } from '../../components';
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/platformSettings';
@@ -466,6 +467,7 @@ export default function LoginPage() {
             };
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
+      useUserPreferenceStore.getState().rehydrateFromStorage();
       setRegisterDrawerVisible(false);
       setRegisterType('select');
       // 延迟执行消息提示和导航，避免阻塞主线程
@@ -555,6 +557,7 @@ export default function LoginPage() {
             };
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
+      useUserPreferenceStore.getState().rehydrateFromStorage();
       setRegisterDrawerVisible(false);
       setRegisterType('select');
       // 延迟执行消息提示和导航，避免阻塞主线程
@@ -641,6 +644,7 @@ export default function LoginPage() {
       };
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
+      useUserPreferenceStore.getState().rehydrateFromStorage();
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
       window.dispatchEvent(new CustomEvent('user-logged-in'));
@@ -687,6 +691,7 @@ export default function LoginPage() {
       };
       setCurrentUser(userInfo);
       setUserInfo(userInfo);
+      useUserPreferenceStore.getState().rehydrateFromStorage();
 
       // 触发用户登录事件，通知布局组件清除菜单缓存
       window.dispatchEvent(new CustomEvent('user-logged-in'));
@@ -1089,6 +1094,7 @@ export default function LoginPage() {
           };
           setCurrentUser(userInfo);
           setUserInfo(userInfo);
+          useUserPreferenceStore.getState().rehydrateFromStorage();
 
           // 延迟执行消息提示和导航，避免阻塞主线程
           const urlParams = new URL(window.location.href).searchParams;
@@ -1172,6 +1178,7 @@ export default function LoginPage() {
         };
         setCurrentUser(userInfo);
         setUserInfo(userInfo);
+        useUserPreferenceStore.getState().rehydrateFromStorage();
         setTenantSelectionVisible(false);
         setLoginResponse(null);
         setLoginCredentials(null);

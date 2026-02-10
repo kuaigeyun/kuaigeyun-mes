@@ -6,7 +6,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProDescriptions } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate } from '../../../../../components/layout-templates';
@@ -15,6 +15,7 @@ import type { DefectType, DefectTypeCreate, DefectTypeUpdate } from '../../../ty
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+import { batchImport } from '../../../../../utils/import';
 
 /**
  * 不良品信息管理列表页面组件
@@ -166,7 +167,11 @@ const DefectTypesPage: React.FC = () => {
       setDetailLoading(true);
       
       const detail = await defectTypeApi.get(record.uuid);
-      setDefectTypeDetail(detail);
+      setDefectTypeDetail({
+        ...detail,
+        createdAt: detail.createdAt ?? (detail as any).created_at,
+        updatedAt: detail.updatedAt ?? (detail as any).updated_at,
+      });
     } catch (error: any) {
       messageApi.error(error.message || '获取不良品详情失败');
     } finally {
@@ -231,6 +236,166 @@ const DefectTypesPage: React.FC = () => {
   };
 
   /**
+   * 处理批量导入不良品
+   * 启用状态默认启用，创建时间由后端自动生成，导入模板不包含该列
+   */
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      messageApi.warning('导入数据为空');
+      return;
+    }
+
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    // 第1行表头、第2行示例，从第3行开始为数据行（导入组件已保留所有行，不过滤空行）
+    const rows = data.slice(2);
+
+    const nonEmptyRows = rows.filter((row: any[]) => {
+      if (!row || row.length === 0) return false;
+      return row.some((cell: any) => {
+        const value = cell != null ? String(cell).trim() : '';
+        return value !== '';
+      });
+    });
+
+    if (nonEmptyRows.length === 0) {
+      messageApi.warning('没有可导入的数据行（请从第3行开始填写数据，并确保至少有一行非空数据）');
+      return;
+    }
+
+    const headerMap: Record<string, string> = {
+      '不良品编码': 'code', '*不良品编码': 'code', '编码': 'code', '*编码': 'code', code: 'code',
+      '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', '*名称': 'name', name: 'name',
+      '分类': 'category', category: 'category',
+      '描述': 'description', description: 'description',
+    };
+
+    const headerIndexMap: Record<string, number> = {};
+    headers.forEach((header, index) => {
+      const normalized = String(header || '').trim();
+      const key = headerMap[normalized] ?? headerMap[normalized.replace(/^\*+/, '').trim()];
+      if (key) headerIndexMap[key] = index;
+    });
+
+    const autoCodeEnabled = isAutoGenerateEnabled('master-data-defect-type');
+    if (!autoCodeEnabled && headerIndexMap['code'] === undefined) {
+      messageApi.error(`缺少必需字段：不良品编码。当前表头：${headers.join(', ')}`);
+      return;
+    }
+    if (headerIndexMap['name'] === undefined) {
+      messageApi.error(`缺少必需字段：不良品名称。当前表头：${headers.join(', ')}`);
+      return;
+    }
+
+    const importData: DefectTypeCreate[] = [];
+    const errors: Array<{ row: number; message: string }> = [];
+
+    nonEmptyRows.forEach((row: any[], rowIndex: number) => {
+      const isEmpty = !row?.length || row.every((c: any) => (c != null ? String(c).trim() : '') === '');
+      if (isEmpty) return;
+      const actualRowIndex = rowIndex + 3; // 第1行表头、第2行示例，第3行起为数据
+
+      const code = headerIndexMap['code'] !== undefined ? row[headerIndexMap['code']] : undefined;
+      const name = row[headerIndexMap['name']];
+      const category = headerIndexMap['category'] !== undefined ? row[headerIndexMap['category']] : undefined;
+      const description = headerIndexMap['description'] !== undefined ? row[headerIndexMap['description']] : undefined;
+
+      const codeValue = code != null ? String(code).trim() : '';
+      const nameValue = name != null ? String(name).trim() : '';
+      if (!autoCodeEnabled && !codeValue) {
+        errors.push({ row: actualRowIndex, message: '不良品编码不能为空' });
+        return;
+      }
+      if (!nameValue) {
+        errors.push({ row: actualRowIndex, message: '不良品名称不能为空' });
+        return;
+      }
+
+      importData.push({
+        code: codeValue ? codeValue.toUpperCase() : '', // 为空且启用自动编码时，导入时再生成
+        name: nameValue,
+        category: category != null && String(category).trim() !== '' ? String(category).trim() : undefined,
+        description: description != null && String(description).trim() !== '' ? String(description).trim() : undefined,
+        isActive: true, // 启用状态默认启用，创建时间由后端自动获取
+      });
+    });
+
+    if (errors.length > 0) {
+      Modal.warning({
+        title: '数据验证失败',
+        width: 600,
+        content: (
+          <div>
+            <p>以下数据行存在错误，请修正后重新导入：</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">第 {item.row} 行：{item.message}</Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    if (importData.length === 0) {
+      messageApi.warning('没有可导入的数据行（所有行都为空）');
+      return;
+    }
+
+    const ruleCode = getPageRuleCode('master-data-defect-type');
+    try {
+      const result = await batchImport<DefectTypeCreate>(
+        importData.map((item, i) => ({ data: item, rowIndex: i + 3, rawRow: [] })),
+        async (item) => {
+          let data = { ...item };
+          if (!data.code && autoCodeEnabled && ruleCode) {
+            const res = await generateCode({ rule_code: ruleCode });
+            data = { ...data, code: res.code };
+          }
+          if (!data.code) {
+            throw new Error('不良品编码不能为空（未启用自动编码时请填写编码列）');
+          }
+          return defectTypeApi.create(data);
+        },
+        { title: '正在导入不良品数据' }
+      );
+
+      const successCount = result.filter((r) => r.success).length;
+      const failureCount = result.filter((r) => !r.success).length;
+
+      if (failureCount > 0) {
+        Modal.warning({
+          title: '导入完成（部分失败）',
+          width: 600,
+          content: (
+            <div>
+              <p><strong>导入结果：</strong>成功 {successCount} 条，失败 {failureCount} 条</p>
+              <List
+                size="small"
+                dataSource={result.filter((r) => !r.success)}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Typography.Text type="danger">第 {item.rowIndex} 行：{item.error?.message ?? item.message}</Typography.Text>
+                  </List.Item>
+                )}
+              />
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(`成功导入 ${successCount} 条不良品数据`);
+      }
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '导入失败');
+    }
+  };
+
+  /**
    * 表格列定义
    */
   const columns: ProColumns<DefectType>[] = [
@@ -279,6 +444,10 @@ const DefectTypesPage: React.FC = () => {
       valueType: 'dateTime',
       hideInSearch: true,
       sorter: true,
+      render: (_, record) => {
+        const val = record.createdAt ?? (record as any).created_at;
+        return val ? (typeof val === 'string' ? new Date(val).toLocaleString('zh-CN') : val) : '-';
+      },
     },
     {
       title: '操作',
@@ -344,10 +513,17 @@ const DefectTypesPage: React.FC = () => {
           
           try {
             const result = await defectTypeApi.list(apiParams);
+            const list = result?.data ?? result;
+            const data = (Array.isArray(list) ? list : []).map((r: any) => ({
+              ...r,
+              createdAt: r.createdAt ?? r.created_at,
+              updatedAt: r.updatedAt ?? r.updated_at,
+            }));
+            const total = typeof result?.total === 'number' ? result.total : data.length;
             return {
-              data: result,
+              data,
               success: true,
-              total: result.length,
+              total,
             };
           } catch (error: any) {
             console.error('获取不良品列表失败:', error);
@@ -387,6 +563,16 @@ const DefectTypesPage: React.FC = () => {
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
+        }}
+        showImportButton={true}
+        onImport={handleImport}
+        importHeaders={['*不良品编码', '*不良品名称', '分类', '描述']}
+        importExampleRow={['BL001', '尺寸不良', '外观类', '产品尺寸超差导致不合格']}
+        importFieldMap={{
+          '不良品编码': 'code', '*不良品编码': 'code', '编码': 'code', 'code': 'code',
+          '不良品名称': 'name', '*不良品名称': 'name', '名称': 'name', 'name': 'name',
+          '分类': 'category', 'category': 'category',
+          '描述': 'description', 'description': 'description',
         }}
       />
 

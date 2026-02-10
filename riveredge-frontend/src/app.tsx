@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getToken, clearAuth, getUserInfo, setUserInfo, isTokenExpired } from './utils/auth';
 import { useGlobalStore } from './stores';
-import { loadUserLanguage } from './config/i18n';
+import i18n, { loadUserLanguage } from './config/i18n';
 import { getUserPreference, UserPreference } from './services/userPreference';
 import { getSiteSetting } from './services/siteSetting';
 import { useConfigStore } from './stores/configStore';
@@ -611,11 +611,24 @@ export default function App() {
     const token = getToken();
 
     if (token) {
-      // 尽早触发 Store 的偏好拉取，避免依赖 BasicLayout 挂载导致默认偏好加载不上
+      // 1）先同步从当前账户缓存恢复偏好，首帧即生效，避免换账号后需刷新才生效
+      useUserPreferenceStore.getState().rehydrateFromStorage();
+      const cachedPrefs = useUserPreferenceStore.getState().preferences;
+      if (cachedPrefs?.theme != null || (cachedPrefs?.theme_config && Object.keys(cachedPrefs.theme_config).length > 0)) {
+        const userTheme = cachedPrefs.theme || 'light';
+        const userThemeConfig = cachedPrefs.theme_config;
+        const effectiveTheme = userThemeConfig && typeof userThemeConfig === 'object'
+          ? { ...(_siteThemeConfig || {}), ...userThemeConfig }
+          : _siteThemeConfig;
+        applyThemeConfig(userTheme, effectiveTheme);
+      }
+      if (cachedPrefs?.language) {
+        i18n.changeLanguage(cachedPrefs.language).catch(() => {});
+      }
+
+      // 2）后台拉取最新偏好与站点主题，拉取后再应用一次以与服务器一致
       useUserPreferenceStore.getState().fetchPreferences().catch(() => {});
 
-      // 并行加载用户偏好设置和站点主题配置
-      // ⚠️ 关键修复：静默处理 401 错误，避免清除有效 token
       Promise.all([
         getUserPreference().catch((error) => {
           // 如果是 401 错误，静默忽略（token 可能在其他地方被验证）

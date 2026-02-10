@@ -667,14 +667,11 @@ export const UniImport: React.FC<UniImportProps> = ({
           return [];
         }
 
-        // 创建二维数组
+        // 创建二维数组（保留所有行以维持表头/示例/数据行结构，便于业务从第3行起取数据）
         for (let r = 0; r <= maxRow; r++) {
           const rowData: any[] = [];
-          let hasData = false;
-
           for (let c = 0; c <= maxCol; c++) {
             let value = '';
-
             if (cellMatrix && cellMatrix.getValue) {
               const row = cellMatrix.getValue(r);
               if (row) {
@@ -684,18 +681,10 @@ export const UniImport: React.FC<UniImportProps> = ({
                 }
               }
             }
-
             rowData.push(value);
-            if (value !== '' && value !== null && value !== undefined) {
-              hasData = true;
-            }
           }
-
-          if (hasData) {
-            result.push(rowData);
-          }
+          result.push(rowData);
         }
-
         return result;
       }
 
@@ -731,11 +720,9 @@ export const UniImport: React.FC<UniImportProps> = ({
           return [];
         }
 
-        // 创建二维数组
+        // 创建二维数组（保留所有行以维持表头/示例/数据行结构）
         for (let r = 0; r <= maxRow; r++) {
           const rowData: any[] = [];
-          let hasData = false;
-
           for (let c = 0; c <= maxCol; c++) {
             let value = '';
             const row = cellData[r.toString()];
@@ -745,43 +732,32 @@ export const UniImport: React.FC<UniImportProps> = ({
                 value = cell.v !== undefined ? cell.v : (cell.m !== undefined ? cell.m : '');
               }
             }
-
             rowData.push(value);
-            if (value !== '' && value !== null && value !== undefined) {
-              hasData = true;
-            }
           }
-
-          if (hasData) {
-            result.push(rowData);
-          }
+          result.push(rowData);
         }
-
         return result;
       }
 
-      // 如果仍然没有数据
       if (data.length === 0) {
         message.warning('表格中没有有效数据，请先输入数据');
         return;
       }
 
-      // 过滤空行（所有单元格都为空的行）
-      const filteredData = data.filter(row => {
-        // 检查行中是否有任何非空单元格
-        return row.some(cell => {
-          const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
-          return value !== '';
-        });
-      });
-
-      if (filteredData.length === 0) {
+      // 至少有一行数据行（表头之后）包含非空内容
+      const hasDataRow = data.length > 1 && data.slice(1).some(row =>
+        row && row.some((cell: any) => {
+          const v = cell !== null && cell !== undefined ? String(cell).trim() : '';
+          return v !== '';
+        })
+      );
+      if (!hasDataRow) {
         message.warning('表格中没有有效数据（所有行都为空），请先输入数据');
         return;
       }
 
-      // 调用确认回调（传递过滤后的数据）
-      onConfirm(filteredData);
+      // 传递完整数据（含表头、示例行、数据行），由业务方按约定取 data.slice(2) 等
+      onConfirm(data);
 
       // 关闭弹窗
       onCancel();

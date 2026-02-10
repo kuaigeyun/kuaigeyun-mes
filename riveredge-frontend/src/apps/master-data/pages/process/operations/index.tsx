@@ -17,8 +17,10 @@ import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal } from '../../../types/process';
 import { MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
-import { generateCode, testGenerateCode } from '../../../../../services/codeRule';
+import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
+
+const PAGE_CODE = 'master-data-process-operation';
 
 /**
  * 工序信息管理列表页面组件
@@ -49,12 +51,13 @@ const OperationsPage: React.FC = () => {
   /** 加载不良品项、用户选项（Modal 打开时） */
   const loadFormOptions = async () => {
     try {
-      const [defects, usersRes] = await Promise.all([
+      const [defectsRes, usersRes] = await Promise.all([
         defectTypeApi.list({ limit: 500, is_active: true }),
         getUserList({ is_active: true, page_size: 100 }),
       ]);
+      const defects = Array.isArray(defectsRes) ? defectsRes : (defectsRes?.data ?? []);
       setDefectTypeOptions(
-        (defects || []).map((d) => ({ label: `${d.code} ${d.name}`, value: d.uuid }))
+        defects.map((d) => ({ label: `${d.code} ${d.name}`, value: d.uuid }))
       );
       const items = usersRes?.items || [];
       setUserOptions(
@@ -86,43 +89,50 @@ const OperationsPage: React.FC = () => {
 
   /**
    * 处理新建工序
+   * 编码规则以后端「编码规则」配置为准：从后端拉取页面配置得到 rule_code，再调用生成接口。
+   * 先加载不良品项/用户选项再打开弹窗，保证下拉列表有数据。
    */
   const handleCreate = async () => {
     setIsEdit(false);
     setCurrentOperationUuid(null);
     setModalVisible(true);
     formRef.current?.resetFields();
-    loadFormOptions();
+    await loadFormOptions();
 
-    if (isAutoGenerateEnabled('master-data-process-operation')) {
-      const ruleCode = getPageRuleCode('master-data-process-operation');
-      if (ruleCode) {
-        try {
-          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
-          const previewCodeValue = codeResponse.code;
-          setPreviewCode(previewCodeValue);
-          formRef.current?.setFieldsValue({
-            code: previewCodeValue,
-            isActive: true,
-            reportingType: 'quantity',
-            allowJump: false,
-          });
-        } catch (error: any) {
-          console.warn('自动生成编码失败:', error);
-          setPreviewCode(null);
-          formRef.current?.setFieldsValue({
-            isActive: true,
-            reportingType: 'quantity',
-            allowJump: false,
-          });
+    let ruleCode: string | undefined;
+    let autoGenerate = false;
+    try {
+      const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
+      ruleCode = pageConfig?.ruleCode;
+      autoGenerate = !!(pageConfig?.autoGenerate && ruleCode);
+    } catch {
+      ruleCode = getPageRuleCode(PAGE_CODE);
+      autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
+    }
+
+    if (autoGenerate && ruleCode) {
+      try {
+        const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+        const previewCodeValue = (codeResponse?.code ?? '').trim();
+        setPreviewCode(previewCodeValue || null);
+        formRef.current?.setFieldsValue({
+          ...(previewCodeValue ? { code: previewCodeValue } : {}),
+          isActive: true,
+          reportingType: 'quantity',
+          allowJump: false,
+        });
+        if (!previewCodeValue) {
+          messageApi.info('未获取到工序编码预览，请检查「编码规则」中是否已为当前组织配置并启用「工序管理」规则；也可直接手动输入编码。');
         }
-      } else {
+      } catch (error: any) {
+        console.warn('自动生成编码失败:', error);
         setPreviewCode(null);
         formRef.current?.setFieldsValue({
           isActive: true,
           reportingType: 'quantity',
           allowJump: false,
         });
+        messageApi.info('自动编码获取失败，请手动输入工序编码，或在「编码规则」中配置「工序管理」后重试。');
       }
     } else {
       setPreviewCode(null);
@@ -136,6 +146,7 @@ const OperationsPage: React.FC = () => {
 
   /**
    * 处理编辑工序
+   * 先加载不良品项/用户选项再请求详情并回填，保证下拉有选项时选中项能正确展示。
    */
   const handleEdit = async (record: Operation) => {
     try {
@@ -143,7 +154,7 @@ const OperationsPage: React.FC = () => {
       setCurrentOperationUuid(record.uuid);
       setPreviewCode(null);
       setModalVisible(true);
-      loadFormOptions();
+      await loadFormOptions();
 
       const detail = await operationApi.get(record.uuid);
       const dts = (detail as any).defect_types ?? (detail as any).defectTypes ?? [];
@@ -305,24 +316,55 @@ const OperationsPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
+      // ProForm 的 onFinish 会过滤掉 null/undefined，多选等字段可能缺失，必须用 getFieldsValue 取完整表单值
+      const formValues = formRef.current?.getFieldsValue?.() ?? {};
+      const defectTypeUuids = Array.isArray(formValues.defectTypeUuids) ? formValues.defectTypeUuids : (Array.isArray(values?.defectTypeUuids) ? values.defectTypeUuids : []);
+      const defaultOperatorUuids = Array.isArray(formValues.defaultOperatorUuids) ? formValues.defaultOperatorUuids : (Array.isArray(values?.defaultOperatorUuids) ? values.defaultOperatorUuids : []);
 
       if (isEdit && currentOperationUuid) {
-        await operationApi.update(currentOperationUuid, values as OperationUpdate);
+        const updatePayload: OperationUpdate = {
+          ...formValues,
+          ...values,
+          defectTypeUuids,
+          defaultOperatorUuids,
+        };
+        await operationApi.update(currentOperationUuid, updatePayload);
         messageApi.success('更新成功');
       } else {
-        if (isAutoGenerateEnabled('master-data-process-operation')) {
-          const ruleCode = getPageRuleCode('master-data-process-operation');
-          const currentCode = values.code;
-          if (ruleCode && (currentCode === previewCode || !currentCode)) {
+        let ruleCode: string | undefined;
+        let autoGenerate = false;
+        try {
+          const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
+          ruleCode = pageConfig?.ruleCode;
+          autoGenerate = !!(pageConfig?.autoGenerate && ruleCode);
+        } catch {
+          ruleCode = getPageRuleCode(PAGE_CODE);
+          autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
+        }
+        if (autoGenerate && ruleCode) {
+          const currentCode = values.code?.trim?.() ?? '';
+          const useAutoCode = !currentCode || currentCode === previewCode;
+          if (useAutoCode) {
             try {
               const codeResponse = await generateCode({ rule_code: ruleCode });
               values.code = codeResponse.code;
             } catch (error: any) {
+              if (previewCode) values.code = previewCode;
               console.warn('正式生成编码失败，使用预览编码:', error);
             }
           }
         }
-        await operationApi.create(values as OperationCreate);
+        if (!values.code?.trim?.()) {
+          messageApi.error('工序编码不能为空');
+          return;
+        }
+        const createPayload: OperationCreate = {
+          ...formValues,
+          ...values,
+          defectTypeUuids,
+          defaultOperatorUuids,
+        };
+        await operationApi.create(createPayload);
         messageApi.success('创建成功');
       }
 
@@ -425,7 +467,7 @@ const OperationsPage: React.FC = () => {
         return (
           <Space size={[0, 4]} wrap>
             {arr.slice(0, 3).map((d: DefectTypeMinimal) => (
-              <Tag key={d.uuid}>{d.code}</Tag>
+              <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
             ))}
             {arr.length > 3 && <Tag>+{arr.length - 3}</Tag>}
           </Space>
@@ -520,10 +562,12 @@ const OperationsPage: React.FC = () => {
           
           try {
             const result = await operationApi.list(apiParams);
+            // 兼容：接口可能直接返回数组或 { data: [] }，且保证每条含 defect_types
+            const listData = Array.isArray(result) ? result : (result?.data ?? []);
             return {
-              data: result,
+              data: listData,
               success: true,
-              total: result.length,
+              total: listData.length,
             };
           } catch (error: any) {
             console.error('获取工序列表失败:', error);
@@ -610,7 +654,7 @@ const OperationsPage: React.FC = () => {
                     return (
                       <Space size={[0, 4]} wrap>
                         {arr.map((d: DefectTypeMinimal) => (
-                          <Tag key={d.uuid}>{d.code} {d.name}</Tag>
+                          <Tag key={d.uuid}>{d.name ?? d.code}</Tag>
                         ))}
                       </Space>
                     );
@@ -672,7 +716,7 @@ const OperationsPage: React.FC = () => {
         <ProFormText
           name="code"
           label="工序编码"
-          placeholder={isAutoGenerateEnabled('master-data-process-operation') ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入工序编码'}
+          placeholder={isAutoGenerateEnabled(PAGE_CODE) ? '编码已根据编码规则自动生成，也可手动编辑' : '请输入工序编码'}
           colProps={{ span: 12 }}
           rules={[
             { required: true, message: '请输入工序编码' },

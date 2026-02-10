@@ -281,18 +281,7 @@ async def generate_code(
 ):
     """
     生成编码（会更新序号）
-    
-    根据编码规则生成编码，并更新序号。
-    
-    Args:
-        request: 编码生成请求数据
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        CodeGenerationResponse: 生成的编码
-        
-    Raises:
-        HTTPException: 当规则不存在或未启用时抛出
+    使用请求中的 rule_code 精确查找规则，与编码规则配置一致。
     """
     try:
         code = await CodeGenerationService.generate_code(
@@ -300,15 +289,9 @@ async def generate_code(
             rule_code=request.rule_code,
             context=request.context
         )
-        
-        # 获取规则名称
         rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
         rule_name = rule.name if rule else request.rule_code
-        
-        return CodeGenerationResponse(
-            code=code,
-            rule_name=rule_name
-        )
+        return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -322,17 +305,8 @@ async def test_generate_code(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
-    测试生成编码（不更新序号）
-    
-    根据编码规则测试生成编码，不更新序号。
-    如果规则不存在或未启用，返回空编码，不抛出错误（用于预览功能）。
-    
-    Args:
-        request: 编码生成请求数据
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        CodeGenerationResponse: 生成的编码（测试用），如果规则不存在则返回空编码
+    测试生成编码（不更新序号）。
+    使用请求中的 rule_code 精确查找规则；若规则不存在或未启用，返回空编码不抛错。
     """
     try:
         code = await CodeGenerationService.test_generate_code(
@@ -342,26 +316,13 @@ async def test_generate_code(
             check_duplicate=request.check_duplicate or False,
             entity_type=request.entity_type
         )
-        
-        # 获取规则名称
         rule = await CodeRuleService.get_rule_by_code(tenant_id, request.rule_code)
         rule_name = rule.name if rule else request.rule_code
-        
-        return CodeGenerationResponse(
-            code=code,
-            rule_name=rule_name
-        )
+        return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:
-        # 对于 test-generate，如果规则不存在或未启用，返回空编码而不是抛出错误
-        # 这样前端可以优雅地处理（规则可能还未创建）
         error_message = str(e)
         if "不存在" in error_message or "未启用" in error_message:
-            # 规则不存在或未启用，返回空编码
-            return CodeGenerationResponse(
-                code="",
-                rule_name=request.rule_code
-            )
-        # 其他验证错误，仍然抛出
+            return CodeGenerationResponse(code="", rule_name=request.rule_code)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=error_message

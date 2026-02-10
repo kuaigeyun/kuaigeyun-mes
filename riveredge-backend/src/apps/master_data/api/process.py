@@ -12,7 +12,7 @@ from infra.models.user import User
 from apps.master_data.services.process_service import ProcessService
 from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
 from apps.master_data.schemas.process_schemas import (
-    DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse,
+    DefectTypeCreate, DefectTypeUpdate, DefectTypeResponse, DefectTypeListResponse,
     OperationCreate, OperationUpdate, OperationResponse,
     ProcessRouteCreate, ProcessRouteUpdate, ProcessRouteResponse,
     ProcessRouteTreeResponse,
@@ -53,7 +53,7 @@ async def create_defect_type(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/defect-types", response_model=List[DefectTypeResponse], summary="获取不良品列表")
+@router.get("/defect-types", response_model=DefectTypeListResponse, summary="获取不良品列表")
 async def list_defect_types(
     current_user: Annotated[User, Depends(get_current_user)],
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -63,14 +63,15 @@ async def list_defect_types(
     is_active: Optional[bool] = Query(None, description="是否启用")
 ):
     """
-    获取不良品列表
+    获取不良品列表（分页，返回 data 与 total）
     
     - **skip**: 跳过数量（默认：0）
     - **limit**: 限制数量（默认：100，最大：1000）
     - **category**: 分类（可选，用于过滤）
     - **is_active**: 是否启用（可选）
     """
-    return await ProcessService.list_defect_types(tenant_id, skip, limit, category, is_active)
+    items, total = await ProcessService.list_defect_types(tenant_id, skip, limit, category, is_active)
+    return DefectTypeListResponse(data=items, total=total)
 
 
 @router.get("/defect-types/{defect_type_uuid}", response_model=DefectTypeResponse, summary="获取不良品详情")
@@ -170,7 +171,15 @@ async def list_operations(
     - **limit**: 限制数量（默认：100，最大：1000）
     - **is_active**: 是否启用（可选）
     """
-    return await ProcessService.list_operations(tenant_id, skip, limit, is_active)
+    try:
+        return await ProcessService.list_operations(tenant_id, skip, limit, is_active)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取工序列表失败: {str(e)}",
+        )
 
 
 @router.get("/operations/{operation_uuid}", response_model=OperationResponse, summary="获取工序详情")

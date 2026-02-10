@@ -179,8 +179,9 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_field_label": "工序编码",
         "module": "主数据管理",
         "module_icon": "database",
-        "auto_generate": False,
+        "auto_generate": True,
         "rule_code": "OPERATION_CODE",
+        "allow_manual_edit": True,
     },
     {
         "page_code": "master-data-process-route",
@@ -526,4 +527,20 @@ def get_rule_code_to_page_code() -> Dict[str, str]:
         derived = page_code.upper().replace("-", "_")
         mapping[derived] = page_code
     return mapping
+
+
+# 规则代码 -> 实体模型（用于序列号校准：导入数据后从库中取最大序号，使新生成的序号接着往后）
+# 格式: rule_code -> (模块路径, 模型类名, 编码字段名)
+# 仅配置支持“前缀+序号”且可查库的实体，用于 generate_code 时自动校准 current_seq
+RULE_CODE_ENTITY_FOR_SEQ_SYNC: Dict[str, tuple] = {
+    "DEFECT_TYPE_CODE": ("apps.master_data.models.process", "DefectType", "code"),
+    "master-data-defect-type": ("apps.master_data.models.process", "DefectType", "code"),
+    "OPERATION_CODE": ("apps.master_data.models.process", "Operation", "code"),
+    "master-data-process-operation": ("apps.master_data.models.process", "Operation", "code"),
+    "master-data-factory-plant": ("apps.master_data.models.factory", "Plant", "code"),
+    "master-data-factory-workshop": ("apps.master_data.models.factory", "Workshop", "code"),
+    "master-data-warehouse-warehouse": ("apps.master_data.models.warehouse", "Warehouse", "code"),
+    "master-data-supply-chain-customer": ("apps.master_data.models.customer", "Customer", "code"),
+    "master-data-supply-chain-supplier": ("apps.master_data.models.supplier", "Supplier", "code"),
+}
 

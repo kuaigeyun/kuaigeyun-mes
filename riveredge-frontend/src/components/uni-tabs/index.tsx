@@ -242,11 +242,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       const maxTabs = getPreference('ui.max_tabs', getConfig('ui.max_tabs', 20));
 
       if (newTabs.length > maxTabs) {
-          // 找到最旧的标签（除了工作台和固定标签）
+          // 超过数量时保留新的、关闭旧的：在可关闭且非固定的标签中，排除当前新加的 path，移除最旧的一个
           const closableTabs = newTabs.filter((tab) => tab.closable && !tab.pinned && tab.key !== '/system/dashboard/workplace');
-          if (closableTabs.length > 0) {
-            // 移除最旧的标签（第一个可关闭的标签）
-            const oldestTab = closableTabs[0];
+          const closableExceptNew = closableTabs.filter((tab) => tab.key !== path);
+          const oldestTab = closableExceptNew[0];
+          if (oldestTab) {
             newTabs = newTabs.filter((tab) => tab.key !== oldestTab.key);
           }
         }

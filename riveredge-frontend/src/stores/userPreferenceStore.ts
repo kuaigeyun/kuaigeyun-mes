@@ -2,20 +2,57 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getUserPreference, updateUserPreference } from '../services/userPreference';
 import { useConfigStore } from './configStore';
+import { getTenantId, getUserInfo } from '../utils/auth';
 
-const PREFERENCE_STORAGE_KEY = 'user-preference-storage';
+const PREFERENCE_STORAGE_KEY_BASE = 'user-preference-storage';
 
-/**
- * 从 localStorage 直接读取已持久化的偏好（与 zustand persist 使用相同 key）。
- * 用于 fetchPreferences 合并时避免与 persist 异步 rehydrate 的竞态，确保能拿到本地缓存。
- */
-function getPersistedPreferences(): Record<string, any> {
-  if (typeof window === 'undefined') return {};
+/** 按租户+用户生成缓存 key，未登录返回空（不读写其他用户缓存） */
+function getPreferenceStorageKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  const tenantId = getTenantId();
+  const userInfo = getUserInfo();
+  const userId = userInfo?.id ?? userInfo?.user_id ?? userInfo?.uuid;
+  if (tenantId == null || userId == null) return null;
+  return `${PREFERENCE_STORAGE_KEY_BASE}-${tenantId}-${userId}`;
+}
+
+/** 自定义 storage：按账户/租户多存一份，互不覆盖 */
+const preferenceStorage = {
+  getItem: (name: string): string | null => {
+    const key = getPreferenceStorageKey();
+    if (!key) return null;
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    const key = getPreferenceStorageKey();
+    if (!key) return;
+    try {
+      localStorage.setItem(key, value);
+    } catch (_) {}
+  },
+  removeItem: (name: string): void => {
+    const key = getPreferenceStorageKey();
+    if (!key) return;
+    try {
+      localStorage.removeItem(key);
+    } catch (_) {}
+  },
+};
+
+/** 从 localStorage 当前用户 key 同步恢复偏好，供登录后立即展示缓存、再后台拉取最新 */
+function readCachedPreferencesForCurrentUser(): Record<string, any> {
+  const key = getPreferenceStorageKey();
+  if (!key) return {};
   try {
-    const raw = localStorage.getItem(PREFERENCE_STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as { state?: { preferences?: Record<string, any> }; preferences?: Record<string, any> };
-    return parsed?.state?.preferences ?? parsed?.preferences ?? {};
+    const prefs = parsed?.state?.preferences ?? parsed?.preferences;
+    return typeof prefs === 'object' && prefs !== null ? prefs : {};
   } catch {
     return {};
   }
@@ -25,14 +62,15 @@ interface UserPreferenceState {
   preferences: Record<string, any>;
   loading: boolean;
   initialized: boolean;
-  
-  // Actions
+
   fetchPreferences: () => Promise<void>;
   updatePreferences: (newPrefs: Record<string, any>) => Promise<void>;
   getPreference: <T>(key: string, defaultValue?: T) => T;
-  
-  // Table sync helpers
   syncTablePreference: (tableId: string, state: Record<string, any>) => Promise<void>;
+  /** 登出时调用：仅清空内存状态，不删本地缓存（各账户缓存按 key 多存一份） */
+  clearForLogout: () => void;
+  /** 同步从当前账户缓存恢复偏好，用于登录后立即生效、避免等接口再刷新 */
+  rehydrateFromStorage: () => void;
 }
 
 export const useUserPreferenceStore = create<UserPreferenceState>()(
@@ -43,58 +81,39 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       initialized: false,
 
       fetchPreferences: async () => {
+        // 先按当前账户 key 恢复本地缓存，再拉接口，避免换账号后首帧读到旧数据
+        get().rehydrateFromStorage();
         set({ loading: true });
         try {
           const data = await getUserPreference();
           const backendPrefs = data.preferences || {};
-          
-          // 从 localStorage 直接读取本地缓存，避免 persist 尚未 rehydrate 时 get().preferences 为空
-          const localPrefs = getPersistedPreferences();
-          
-          // 深度合并函数
-          const deepMerge = (target: any, source: any): any => {
-            const output = { ...target };
-            if (isObject(target) && isObject(source)) {
-              Object.keys(source).forEach(key => {
-                if (isObject(source[key])) {
-                  if (!(key in target)) {
-                    Object.assign(output, { [key]: source[key] });
-                  } else {
-                    output[key] = deepMerge(target[key], source[key]);
-                  }
-                } else {
-                  Object.assign(output, { [key]: source[key] });
-                }
-              });
-            }
-            return output;
-          };
-          
-          const isObject = (item: any) => {
-            return (item && typeof item === 'object' && !Array.isArray(item));
-          };
-
-          // 合并策略：后端数据覆盖本地数据，但保留本地独有的数据（针对新用户场景）
-          // 如果 backendPrefs 为空，则完全保留 localPrefs
-          const mergedPrefs = Object.keys(backendPrefs).length === 0 
-            ? localPrefs 
-            : deepMerge(localPrefs, backendPrefs);
-
-          set({ 
-            preferences: mergedPrefs, 
-            loading: false, 
-            initialized: true 
+          // 仅使用后端数据，保证与当前账户/租户一致，不做跨账户的本地合并
+          set({
+            preferences: typeof backendPrefs === 'object' && backendPrefs !== null ? backendPrefs : {},
+            loading: false,
+            initialized: true,
           });
-          
-          // 如果后端为空但本地有值（新用户情况），则尝试同步一次到后端
-          if (Object.keys(backendPrefs).length === 0 && Object.keys(localPrefs).length > 0) {
-             updateUserPreference({ preferences: localPrefs }).catch(console.warn);
-          }
-          
         } catch (error) {
           console.warn('Failed to fetch user preferences:', error);
           set({ loading: false, initialized: true });
         }
+      },
+
+      clearForLogout: () => {
+        set({ preferences: {}, loading: false, initialized: false });
+        // 偏好缓存按 key 多存一份，不删；主题相关为全局 key，登出时清除避免下一账户沿用
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('riveredge_theme_config');
+            localStorage.removeItem('riveredge_tabs_persistence');
+          }
+        } catch (_) {}
+      },
+
+      rehydrateFromStorage: () => {
+        const cached = readCachedPreferencesForCurrentUser();
+        if (Object.keys(cached).length === 0) return;
+        set((s) => ({ ...s, preferences: cached, initialized: true }));
       },
 
       updatePreferences: async (newPrefs) => {
@@ -184,8 +203,9 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
       }
     }),
     {
-      name: PREFERENCE_STORAGE_KEY,
-      partialize: (state) => ({ preferences: state.preferences }), // 只持久化偏好数据
+      name: PREFERENCE_STORAGE_KEY_BASE,
+      storage: preferenceStorage,
+      partialize: (state) => ({ preferences: state.preferences }),
     }
   )
 );

@@ -73,14 +73,39 @@ def _defect_type_to_response_data(dt: DefectType) -> Dict[str, Any]:
     }
 
 
+async def _get_operation_defect_types_via_table(operation_id: int) -> List[Dict[str, Any]]:
+    """通过关联表原始 SQL 获取工序绑定的不良品列表，避免依赖 Tortoise 的 through 模型解析。"""
+    try:
+        from tortoise import Tortoise
+        conn = Tortoise.get_connection("default")
+        # 使用表名直接查询，不依赖 models.OperationDefectType
+        if hasattr(conn, "execute_query_dict"):
+            rows = await conn.execute_query_dict(
+                "SELECT defect_type_id FROM apps_master_data_operation_defect_types WHERE operation_id = $1",
+                [operation_id],
+            )
+            ids = [r.get("defect_type_id") for r in rows if r.get("defect_type_id") is not None]
+        else:
+            result = await conn.execute_query(
+                "SELECT defect_type_id FROM apps_master_data_operation_defect_types WHERE operation_id = $1",
+                [operation_id],
+            )
+            # Tortoise execute_query 可能返回 list 或 (raw, list)
+            raw = result[1] if isinstance(result, tuple) and len(result) > 1 else result
+            if not raw:
+                return []
+            ids = [row[0] for row in raw if row and row[0] is not None]
+        if not ids:
+            return []
+        dts = await DefectType.filter(id__in=ids, deleted_at__isnull=True).all()
+        return [{"uuid": str(dt.uuid), "code": dt.code, "name": dt.name} for dt in dts]
+    except Exception:
+        return []
+
+
 async def _operation_to_response_data(op: Operation) -> Dict[str, Any]:
     """从 Operation ORM 实例构建 OperationResponse 所需的字典，含绑定不良品项与默认生产人员。"""
-    defect_types: List[Dict[str, Any]] = []
-    try:
-        dts = await op.defect_types.all()
-        defect_types = [{"uuid": str(dt.uuid), "code": dt.code, "name": dt.name} for dt in dts]
-    except Exception:
-        pass
+    defect_types: List[Dict[str, Any]] = await _get_operation_defect_types_via_table(op.id)
     default_operator_ids: List[int] = []
     default_operator_uuids: List[str] = []
     default_operator_names: List[str] = []
@@ -251,9 +276,9 @@ class ProcessService:
         limit: int = 100,
         category: Optional[str] = None,
         is_active: Optional[bool] = None
-    ) -> List[DefectTypeResponse]:
+    ) -> tuple[List[DefectTypeResponse], int]:
         """
-        获取不良品列表
+        获取不良品列表（分页，返回列表与总数）
         
         Args:
             tenant_id: 租户ID
@@ -263,7 +288,7 @@ class ProcessService:
             is_active: 是否启用（可选）
             
         Returns:
-            List[DefectTypeResponse]: 不良品列表
+            (列表, 总条数)
         """
         query = DefectType.filter(
             tenant_id=tenant_id,
@@ -276,9 +301,10 @@ class ProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
+        total = await query.count()
         defect_types = await query.offset(skip).limit(limit).order_by("code").all()
-        
-        return [DefectTypeResponse.model_validate(_defect_type_to_response_data(dt)) for dt in defect_types]
+        items = [DefectTypeResponse.model_validate(_defect_type_to_response_data(dt)) for dt in defect_types]
+        return items, total
     
     @staticmethod
     async def update_defect_type(
@@ -544,6 +570,7 @@ class ProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
         
+        # 不使用 prefetch_related("defect_types")，避免 Tortoise 解析 through 模型失败；不良品列表在 _operation_to_response_data 中通过关联表 SQL 查询
         operations = await query.offset(skip).limit(limit).order_by("code").all()
         out = []
         for op in operations:
@@ -592,11 +619,14 @@ class ProcessService:
                 raise ValidationError(f"工序编码 {data.code} 已存在")
         
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
-        had_defect = "defect_type_uuids" in update_data
-        had_op = "default_operator_uuids" in update_data
-        defect_type_uuids = update_data.pop("defect_type_uuids", None) if had_defect else None
-        default_operator_uuids = update_data.pop("default_operator_uuids", None) if had_op else None
-        if had_op:
+        # 从 update_data 中移除关系字段，避免 setattr 到 ORM 上；并从 data 上取以保证请求里带了的都能同步
+        defect_type_uuids = update_data.pop("defect_type_uuids", None)
+        if defect_type_uuids is None:
+            defect_type_uuids = getattr(data, "defect_type_uuids", None)
+        default_operator_uuids = update_data.pop("default_operator_uuids", None)
+        if default_operator_uuids is None:
+            default_operator_uuids = getattr(data, "default_operator_uuids", None)
+        if default_operator_uuids is not None:
             oids = await _resolve_default_operator_uuids(tenant_id, default_operator_uuids or [])
             operation.default_operator_ids = oids if oids else None
         for key, value in update_data.items():
@@ -608,7 +638,7 @@ class ProcessService:
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 raise ValidationError(f"工序编码 {data.code or operation.code} 已存在（可能已被软删除，请检查）")
             raise
-        if had_defect:
+        if defect_type_uuids is not None:
             await _sync_operation_defect_types(operation.id, defect_type_uuids or [], tenant_id)
         
         return OperationResponse.model_validate(await _operation_to_response_data(operation))

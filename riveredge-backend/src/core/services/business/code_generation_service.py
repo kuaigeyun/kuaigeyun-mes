@@ -2,17 +2,21 @@
 编码生成服务模块
 
 提供根据编码规则生成编码的功能。
+支持导入数据后序列号校准：从库中取最大已用序号，使新生成的序号接着往后。
 """
 
 from typing import Optional, Dict, List, Any
 from datetime import datetime, date
 import re
-from tortoise.transactions import in_transaction
+import importlib
+
+from loguru import logger
 
 from core.models.code_rule import CodeRule
 from core.models.code_sequence import CodeSequence
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
+from core.config.code_rule_pages import RULE_CODE_ENTITY_FOR_SEQ_SYNC
 from infra.exceptions.exceptions import ValidationError
 
 
@@ -116,6 +120,17 @@ class CodeGenerationService:
                     if sequence.reset_date.year != now.year:
                         sequence.current_seq = seq_start - seq_step
                         sequence.reset_date = now
+
+        # 序列号校准：导入数据后库中可能已有更大序号，使 current_seq 不低于库中最大序号
+        await CodeGenerationService._recalibrate_sequence_from_db(
+            tenant_id=tenant_id,
+            rule=rule,
+            request_rule_code=rule_code,
+            scope_key=scope_key,
+            sequence=sequence,
+            seq_step=seq_step,
+            components=components,
+        )
         
         # 递增序号（在外部事务中保存）
         sequence.current_seq += seq_step
@@ -411,4 +426,151 @@ class CodeGenerationService:
                     code = code.replace(f"{{{key}}}", str(value))
         
         return code
+
+    @staticmethod
+    def _get_prefix_for_rule(rule: CodeRule, components: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+        """
+        从规则中解析编码前缀（序号前的固定部分），用于从库中匹配已有编码并解析最大序号。
+        组件格式：收集所有 fixed_text 按 order 排序后拼接（避免 order 相同或缺失时取不到前缀）。
+        表达式格式：取 {SEQ 前的部分。
+        """
+        if components:
+            sorted_comp = sorted(components, key=lambda x: x.get("order", 0))
+            parts = [comp.get("text", "") for comp in sorted_comp if comp.get("type") == "fixed_text"]
+            if parts:
+                return "".join(parts)
+        if rule.expression:
+            m = re.match(r"^(.+?)\{SEQ", rule.expression)
+            if m:
+                return m.group(1)
+        return None
+
+    @staticmethod
+    async def _get_max_sequence_from_db(
+        tenant_id: int,
+        rule_code: str,
+        prefix: str,
+    ) -> Optional[int]:
+        """
+        从库中查询该规则对应实体的编码字段，解析前缀后的数字部分，返回最大序号。
+        用于导入数据后校准序列号，使新生成的序号接着已有数据往后排。
+        """
+        if not prefix:
+            return None
+        entity_config = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(rule_code)
+        if not entity_config:
+            return None
+        module_path, class_name, attr_name = entity_config
+        try:
+            mod = importlib.import_module(module_path)
+            model_class = getattr(mod, class_name, None)
+            if not model_class:
+                return None
+            # 查询 tenant_id 下编码以 prefix 开头的记录（未软删）
+            filter_kw = {"tenant_id": tenant_id, f"{attr_name}__startswith": prefix}
+            if hasattr(model_class, "deleted_at"):
+                filter_kw["deleted_at__isnull"] = True
+            rows = await model_class.filter(**filter_kw).values_list(attr_name, flat=True)
+            max_seq = None
+            for code in rows:
+                if not code or not str(code).startswith(prefix):
+                    continue
+                suffix = str(code)[len(prefix):].strip()
+                if suffix.isdigit():
+                    n = int(suffix)
+                    if max_seq is None or n > max_seq:
+                        max_seq = n
+            return max_seq
+        except Exception as e:
+            logger.warning(
+                "code_sequence_max_from_db_failed rule_code={} prefix={} error={}",
+                rule_code,
+                prefix,
+                e,
+            )
+            return None
+
+    @staticmethod
+    async def _recalibrate_sequence_from_db(
+        tenant_id: int,
+        rule: CodeRule,
+        request_rule_code: str,
+        scope_key: str,
+        sequence: CodeSequence,
+        seq_step: int,
+        components: Optional[List[Dict[str, Any]]],
+    ) -> None:
+        """
+        根据库中已有编码的最大序号校准 current_seq，避免导入数据后新生成的序号与已有编码冲突。
+        若库中最大序号大于当前 current_seq，则将 current_seq 设为该最大值（下次 += step 即为 max+1）。
+        查找实体时同时尝试 rule.code 与请求的 request_rule_code，以兼容不同配置来源。
+        """
+        prefix = CodeGenerationService._get_prefix_for_rule(rule, components)
+        if not prefix:
+            logger.info(
+                "code_sequence_recalibrate_skip rule_code={} reason=no_prefix rule_has_components={}",
+                request_rule_code,
+                bool(components),
+            )
+            return
+
+        def _entity_config_for(code: Optional[str]) -> Optional[tuple]:
+            if not code:
+                return None
+            c = RULE_CODE_ENTITY_FOR_SEQ_SYNC.get(code)
+            if c:
+                return c
+            code_upper = code.upper()
+            for k, v in RULE_CODE_ENTITY_FOR_SEQ_SYNC.items():
+                if k.upper() == code_upper:
+                    return v
+            return None
+
+        entity_config = _entity_config_for(rule.code) or _entity_config_for(request_rule_code)
+        if not entity_config:
+            logger.info(
+                "code_sequence_recalibrate_skip rule_code={} rule.code={} reason=no_entity_config",
+                request_rule_code,
+                getattr(rule, "code", None),
+            )
+            return
+        rule_code_for_lookup = (
+            rule.code
+            if _entity_config_for(rule.code)
+            else request_rule_code
+        )
+        if not _entity_config_for(rule_code_for_lookup):
+            rule_code_for_lookup = next(
+                (k for k in RULE_CODE_ENTITY_FOR_SEQ_SYNC if k.upper() == (rule_code_for_lookup or "").upper()),
+                rule_code_for_lookup,
+            )
+        max_from_db = await CodeGenerationService._get_max_sequence_from_db(
+            tenant_id=tenant_id,
+            rule_code=rule_code_for_lookup,
+            prefix=prefix,
+        )
+        if max_from_db is None:
+            logger.info(
+                "code_sequence_recalibrate_skip rule_code={} prefix={} reason=max_from_db_is_none",
+                rule_code_for_lookup,
+                prefix,
+            )
+            return
+        if sequence.current_seq < max_from_db:
+            logger.info(
+                "code_sequence_recalibrate rule_code={} prefix={} max_from_db={} current_seq_before={}",
+                rule_code_for_lookup,
+                prefix,
+                max_from_db,
+                sequence.current_seq,
+            )
+            sequence.current_seq = max_from_db
+            await sequence.save()
+        else:
+            logger.debug(
+                "code_sequence_recalibrate_skip rule_code={} current_seq={} max_from_db={} reason=already_ok",
+                rule_code_for_lookup,
+                sequence.current_seq,
+                max_from_db,
+            )
 

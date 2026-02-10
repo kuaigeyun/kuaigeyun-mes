@@ -71,16 +71,22 @@ class DefectTypeUpdate(BaseModel):
 
 
 class DefectTypeResponse(DefectTypeBase):
-    """不良品响应 Schema"""
+    """不良品响应 Schema（含 alias 便于前端 camelCase 一致）"""
     
     id: int = Field(..., description="主键ID")
     uuid: str = Field(..., description="UUID")
-    tenant_id: int = Field(..., description="租户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
     
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class DefectTypeListResponse(BaseModel):
+    """不良品列表分页响应"""
+    data: List[DefectTypeResponse] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
 
 
 class DefectTypeMinimal(BaseModel):
@@ -100,23 +106,28 @@ class OperationBase(BaseModel):
     allow_jump: bool = Field(False, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
     is_active: bool = Field(True, alias="isActive", description="是否启用")
     
-    @validator("reporting_type")
-    def validate_reporting_type(cls, v):
+    @field_validator("reporting_type")
+    @classmethod
+    def validate_reporting_type(cls, v: str) -> str:
         """验证报工类型"""
+        if not v:
+            return "quantity"
         allowed_types = ["quantity", "status"]
         if v not in allowed_types:
             raise ValueError(f"报工类型必须是: {', '.join(allowed_types)}")
         return v
     
-    @validator("code")
-    def validate_code(cls, v):
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
         """验证编码格式"""
         if not v or not v.strip():
             raise ValueError("工序编码不能为空")
         return v.strip().upper()
     
-    @validator("name")
-    def validate_name(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
         """验证名称格式"""
         if not v or not v.strip():
             raise ValueError("工序名称不能为空")
@@ -143,24 +154,25 @@ class OperationUpdate(BaseModel):
     default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
     model_config = ConfigDict(populate_by_name=True)
     
-    @validator("reporting_type")
-    def validate_reporting_type(cls, v):
+    @field_validator("reporting_type")
+    @classmethod
+    def validate_reporting_type(cls, v: Optional[str]) -> Optional[str]:
         """验证报工类型"""
-        if v is not None:
-            allowed_types = ["quantity", "status"]
-            if v not in allowed_types:
-                raise ValueError(f"报工类型必须是: {', '.join(allowed_types)}")
+        if v is not None and v not in ("quantity", "status"):
+            raise ValueError("报工类型必须是: quantity, status")
         return v
     
-    @validator("code")
-    def validate_code(cls, v):
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
         """验证编码格式"""
         if v is not None and (not v or not v.strip()):
             raise ValueError("工序编码不能为空")
         return v.strip().upper() if v else None
     
-    @validator("name")
-    def validate_name(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
         """验证名称格式"""
         if v is not None and (not v or not v.strip()):
             raise ValueError("工序名称不能为空")
