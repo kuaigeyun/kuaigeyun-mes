@@ -10,6 +10,7 @@ import type {
   DefectTypeCreate,
   DefectTypeUpdate,
   DefectTypeListParams,
+  DefectTypeListResponse,
   Operation,
   OperationCreate,
   OperationUpdate,
@@ -43,7 +44,7 @@ export const defectTypeApi = {
   /**
    * 获取不良品列表
    */
-  list: async (params?: DefectTypeListParams): Promise<DefectType[]> => {
+  list: async (params?: DefectTypeListParams): Promise<DefectTypeListResponse> => {
     return api.get('/apps/master-data/process/defect-types', { params });
   },
 

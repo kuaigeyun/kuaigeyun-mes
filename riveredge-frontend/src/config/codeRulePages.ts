@@ -182,8 +182,9 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     codeFieldLabel: '工序编码',
     module: '主数据管理',
     moduleIcon: 'database',
-    autoGenerate: false,
+    autoGenerate: true,
     ruleCode: 'OPERATION_CODE',
+    allowManualEdit: true,
   },
   {
     pageCode: 'master-data-process-route',

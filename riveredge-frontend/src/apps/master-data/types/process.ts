@@ -41,6 +41,12 @@ export interface DefectTypeListParams {
   isActive?: boolean;
 }
 
+/** 不良品列表分页响应 */
+export interface DefectTypeListResponse {
+  data: DefectType[];
+  total: number;
+}
+
 /** 不良品项简要（工序绑定用） */
 export interface DefectTypeMinimal {
   uuid: string;

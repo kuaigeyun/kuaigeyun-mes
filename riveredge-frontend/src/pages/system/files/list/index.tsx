@@ -8,8 +8,8 @@
  * Date: 2025-12-30
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { App, Button, Space, Modal, Upload, Tree, Breadcrumb, Table, Menu, Input, Tooltip, Divider, theme } from 'antd';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { App, Button, Space, Modal, Upload, Tree, Breadcrumb, Table, Menu, Input, Tooltip, Divider, Select, theme } from 'antd';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { 
   EditOutlined, 
@@ -56,6 +56,16 @@ import {
 } from '../../../../services/file';
 
 /**
+ * 判断是否为图片类型（用于图标视图缩略图与预览）
+ */
+const isImageFile = (file: File): boolean => {
+  const type = (file.file_type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  const ext = (file.file_extension || file.original_name?.split('.').pop() || '').toLowerCase();
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext);
+};
+
+/**
  * 根据文件类型获取图标
  */
 const getFileIcon = (fileType?: string, size: number = 24) => {
@@ -83,6 +93,20 @@ const formatFileSize = (bytes: number): string => {
 };
 
 /**
+ * Windows 资源管理器风格：名称自然排序（如 文件2 < 文件10），不区分大小写
+ */
+const naturalCompare = (a: string, b: string): number => {
+  const sa = (a || '').toLowerCase();
+  const sb = (b || '').toLowerCase();
+  return sa.localeCompare(sb, undefined, { numeric: true });
+};
+
+/** 排序字段（与表格列 dataIndex 一致，便于表头排序联动） */
+type SortField = 'original_name' | 'file_size' | 'file_type' | 'updated_at';
+/** 排序方向：与 Ant Design Table 一致 */
+type SortOrder = 'ascend' | 'descend' | null;
+
+/**
  * 视图类型
  */
 type ViewType = 'icons' | 'list' | 'details';
@@ -95,10 +119,14 @@ const FileListPage: React.FC = () => {
   const { token } = theme.useToken(); // 获取主题 token
   
   // 视图状态
-  const [viewType, setViewType] = useState<ViewType>('details');
+  const [viewType, setViewType] = useState<ViewType>('icons');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [fileList, setFileList] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // 排序（Windows 资源管理器逻辑：默认按名称升序）
+  const [sortField, setSortField] = useState<SortField>('original_name');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('ascend');
   
   // 文件夹树状态
   const [treeData, setTreeData] = useState<DataNode[]>([]);
@@ -128,6 +156,11 @@ const FileListPage: React.FC = () => {
   // 剪贴板状态（用于复制/剪切）
   const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut' | null; files: File[] }>({ type: null, files: [] });
 
+  // 图标视图中图片的预览 URL（用于缩略图）
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<string, string>>({});
+  const [imageLoadFailed, setImageLoadFailed] = useState<Set<string>>(new Set());
+  const requestedPreviewRef = useRef<Set<string>>(new Set());
+
   /**
    * 加载文件列表
    */
@@ -149,44 +182,48 @@ const FileListPage: React.FC = () => {
   }, [messageApi]);
 
   /**
-   * 初始化文件夹树
+   * 初始化文件夹树：仅一个根节点「全部文件」，其他文件夹作为其子节点
    */
   useEffect(() => {
-    // 从文件列表中提取分类，构建文件夹树
     const categories = new Set<string>();
     fileList.forEach(file => {
       if (file.category) {
         categories.add(file.category);
       }
     });
-    
-    const treeNodes: DataNode[] = [
-      {
-        title: '全部文件',
-        key: 'all',
-        icon: <FolderOpenOutlined />,
-        isLeaf: false,
-      },
-      ...Array.from(categories).map(category => ({
-        title: category,
-        key: category,
-        icon: <FolderOutlined />,
-        isLeaf: false,
-      })),
-    ];
-    
+
+    const categoryNodes: DataNode[] = Array.from(categories).map(category => ({
+      title: category,
+      key: category,
+      icon: <FolderOutlined />,
+      isLeaf: false,
+    }));
+
+    const allFilesNode: DataNode = {
+      title: '全部文件',
+      key: 'all',
+      icon: <FolderOpenOutlined />,
+      isLeaf: categoryNodes.length === 0,
+      children: categoryNodes.length > 0 ? categoryNodes : undefined,
+    };
+
+    const treeNodes: DataNode[] = [allFilesNode];
     setTreeData(treeNodes);
-    // 初始化时，如果没有搜索关键词，显示所有节点
+
     if (!treeSearchValue.trim()) {
       setFilteredTreeData(treeNodes);
     }
     if (selectedTreeKeys.length === 0) {
       setSelectedTreeKeys(['all']);
     }
+    // 有子文件夹时默认展开「全部文件」
+    if (categoryNodes.length > 0) {
+      setExpandedKeys(prev => (prev.includes('all') ? prev : ['all', ...prev]));
+    }
   }, [fileList, treeSearchValue]);
 
   /**
-   * 过滤文件夹树（根据搜索关键词）
+   * 过滤文件夹树（根据搜索关键词）：保留「全部文件」根节点，只过滤其子文件夹
    */
   useEffect(() => {
     if (!treeSearchValue.trim()) {
@@ -195,16 +232,28 @@ const FileListPage: React.FC = () => {
     }
 
     const searchLower = treeSearchValue.toLowerCase().trim();
-    const filtered = treeData.filter(node => {
+    if (treeData.length === 0) {
+      setFilteredTreeData([]);
+      return;
+    }
+
+    const root = treeData[0];
+    const children = (root.children || []) as DataNode[];
+    const filteredChildren = children.filter(node => {
       const title = (node.title as string) || '';
       return title.toLowerCase().includes(searchLower);
     });
 
+    const filteredRoot: DataNode = {
+      ...root,
+      children: filteredChildren.length > 0 ? filteredChildren : undefined,
+    };
+    const matchesRoot = ((root.title as string) || '').toLowerCase().includes(searchLower);
+    const filtered = matchesRoot || filteredChildren.length > 0 ? [filteredRoot] : [];
+
     setFilteredTreeData(filtered);
-    
-    // 如果有搜索结果，自动展开所有节点
     if (filtered.length > 0) {
-      setExpandedKeys(filtered.map(node => node.key));
+      setExpandedKeys(prev => (prev.includes('all') ? prev : ['all', ...prev]));
     }
   }, [treeData, treeSearchValue]);
 
@@ -214,6 +263,54 @@ const FileListPage: React.FC = () => {
   useEffect(() => {
     loadFileList();
   }, [loadFileList]);
+
+  /**
+   * 图标视图下为图片文件拉取预览 URL，用于显示缩略图
+   */
+  useEffect(() => {
+    if (viewType !== 'icons') return;
+    const imageFiles = fileList.filter(isImageFile);
+    imageFiles.forEach((file) => {
+      if (requestedPreviewRef.current.has(file.uuid)) return;
+      requestedPreviewRef.current.add(file.uuid);
+      getFilePreview(file.uuid)
+        .then((res) => {
+          setImagePreviewUrls((prev) => ({ ...prev, [file.uuid]: res.preview_url }));
+        })
+        .catch(() => {});
+    });
+  }, [viewType, fileList]);
+
+  /**
+   * 排序后的文件列表（Windows 资源管理器逻辑：名称自然排序，支持按大小/类型/日期）
+   */
+  const sortedFileList = useMemo(() => {
+    const list = [...fileList];
+    const asc = sortOrder === 'ascend';
+    const cmp = (a: number, b: number) => (asc ? a - b : b - a);
+    const cmpStr = (a: string, b: string) => (asc ? naturalCompare(a, b) : naturalCompare(b, a));
+    list.sort((a, b) => {
+      switch (sortField) {
+        case 'original_name':
+          return cmpStr(a.original_name || '', b.original_name || '');
+        case 'file_size':
+          return cmp(a.file_size ?? 0, b.file_size ?? 0);
+        case 'file_type': {
+          const ta = (a.file_type || a.file_extension || '').toLowerCase();
+          const tb = (b.file_type || b.file_extension || '').toLowerCase();
+          return cmpStr(ta, tb);
+        }
+        case 'updated_at': {
+          const da = new Date(a.updated_at || 0).getTime();
+          const db = new Date(b.updated_at || 0).getTime();
+          return cmp(da, db);
+        }
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [fileList, sortField, sortOrder]);
 
   /**
    * 处理文件夹树选择
@@ -476,7 +573,7 @@ const FileListPage: React.FC = () => {
   ];
 
   /**
-   * 表格列定义（详细信息视图）
+   * 表格列定义（详细信息视图），支持点击表头排序（Windows 资源管理器风格）
    */
   const columns: ColumnsType<File> = [
     {
@@ -484,6 +581,8 @@ const FileListPage: React.FC = () => {
       dataIndex: 'original_name',
       key: 'name',
       width: '40%',
+      sorter: true,
+      sortOrder: sortField === 'original_name' ? sortOrder : null,
       render: (_, record) => (
         <Space>
           {getFileIcon(record.file_type, 20)}
@@ -496,6 +595,8 @@ const FileListPage: React.FC = () => {
       dataIndex: 'file_type',
       key: 'type',
       width: '15%',
+      sorter: true,
+      sortOrder: sortField === 'file_type' ? sortOrder : null,
       render: (_, record) => record.file_type || '未知',
     },
     {
@@ -503,6 +604,8 @@ const FileListPage: React.FC = () => {
       dataIndex: 'file_size',
       key: 'size',
       width: '15%',
+      sorter: true,
+      sortOrder: sortField === 'file_size' ? sortOrder : null,
       render: (_, record) => formatFileSize(record.file_size),
     },
     {
@@ -510,14 +613,19 @@ const FileListPage: React.FC = () => {
       dataIndex: 'updated_at',
       key: 'updated_at',
       width: '20%',
+      sorter: true,
+      sortOrder: sortField === 'updated_at' ? sortOrder : null,
       render: (_, record) => new Date(record.updated_at).toLocaleString('zh-CN'),
     },
   ];
 
   /**
-   * 渲染文件列表（图标视图）
+   * 渲染文件列表（图标视图）：图片格式显示缩略图，单击即可预览
    */
   const renderIconsView = () => {
+    const imageThumbSize = 64;
+    const thumbUrl = (file: File) => imagePreviewUrls[file.uuid];
+
     return (
       <div
         style={{
@@ -528,49 +636,67 @@ const FileListPage: React.FC = () => {
         }}
         onContextMenu={(e) => handleContextMenu(e)}
       >
-        {fileList.map(file => (
-          <div
-            key={file.uuid}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              padding: '12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              border: selectedRowKeys.includes(file.uuid) ? '2px solid #1890ff' : '2px solid transparent',
-              backgroundColor: selectedRowKeys.includes(file.uuid) ? '#e6f7ff' : 'transparent',
-            }}
-            onClick={(e) => {
-              if (e.ctrlKey || e.metaKey) {
-                // Ctrl/Cmd 多选
-                setSelectedRowKeys(prev => 
-                  prev.includes(file.uuid) 
-                    ? prev.filter(key => key !== file.uuid)
-                    : [...prev, file.uuid]
-                );
-              } else {
-                setSelectedRowKeys([file.uuid]);
-              }
-            }}
-            onDoubleClick={() => handlePreview(file)}
-            onContextMenu={(e) => handleContextMenu(e, file)}
-          >
-            {getFileIcon(file.file_type, 48)}
+        {sortedFileList.map(file => {
+          const isImage = isImageFile(file);
+          const thumbFailed = imageLoadFailed.has(file.uuid);
+          const hasThumb = isImage && thumbUrl(file) && !thumbFailed;
+          return (
             <div
+              key={file.uuid}
               style={{
-                marginTop: '8px',
-                textAlign: 'center',
-                fontSize: '12px',
-                wordBreak: 'break-word',
-                maxWidth: '100px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '12px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                border: selectedRowKeys.includes(file.uuid) ? '2px solid #1890ff' : '2px solid transparent',
+                backgroundColor: selectedRowKeys.includes(file.uuid) ? '#e6f7ff' : 'transparent',
               }}
-              title={file.original_name}
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  setSelectedRowKeys(prev =>
+                    prev.includes(file.uuid)
+                      ? prev.filter(key => key !== file.uuid)
+                      : [...prev, file.uuid]
+                  );
+                } else {
+                  setSelectedRowKeys([file.uuid]);
+                }
+              }}
+              onDoubleClick={() => handlePreview(file)}
+              onContextMenu={(e) => handleContextMenu(e, file)}
             >
-              {file.original_name}
+              {hasThumb ? (
+                <img
+                  src={thumbUrl(file)}
+                  alt={file.original_name}
+                  style={{
+                    width: imageThumbSize,
+                    height: imageThumbSize,
+                    objectFit: 'cover',
+                    borderRadius: '4px',
+                  }}
+                  onError={() => setImageLoadFailed((prev) => new Set(prev).add(file.uuid))}
+                />
+              ) : (
+                getFileIcon(file.file_type, 48)
+              )}
+              <div
+                style={{
+                  marginTop: '8px',
+                  textAlign: 'center',
+                  fontSize: '12px',
+                  wordBreak: 'break-word',
+                  maxWidth: '100px',
+                }}
+                title={file.original_name}
+              >
+                {file.original_name}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -586,7 +712,7 @@ const FileListPage: React.FC = () => {
         }}
         onContextMenu={(e) => handleContextMenu(e)}
       >
-        {fileList.map(file => (
+        {sortedFileList.map(file => (
           <div
             key={file.uuid}
             style={{
@@ -600,8 +726,8 @@ const FileListPage: React.FC = () => {
             }}
             onClick={(e) => {
               if (e.ctrlKey || e.metaKey) {
-                setSelectedRowKeys(prev => 
-                  prev.includes(file.uuid) 
+                setSelectedRowKeys(prev =>
+                  prev.includes(file.uuid)
                     ? prev.filter(key => key !== file.uuid)
                     : [...prev, file.uuid]
                 );
@@ -718,6 +844,7 @@ const FileListPage: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
+                  flexWrap: 'wrap',
                 }}
               >
                 <Button
@@ -741,6 +868,30 @@ const FileListPage: React.FC = () => {
                 >
                   删除
                 </Button>
+                <Divider type="vertical" />
+                <Space>
+                  <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>排序：</span>
+                  <Select
+                    value={`${sortField}-${sortOrder ?? 'ascend'}`}
+                    onChange={(v) => {
+                      const [f, o] = v.split('-') as [SortField, 'ascend' | 'descend'];
+                      setSortField(f);
+                      setSortOrder(o);
+                    }}
+                    options={[
+                      { value: 'original_name-ascend', label: '名称 升序' },
+                      { value: 'original_name-descend', label: '名称 降序' },
+                      { value: 'file_size-ascend', label: '大小 升序' },
+                      { value: 'file_size-descend', label: '大小 降序' },
+                      { value: 'file_type-ascend', label: '类型 升序' },
+                      { value: 'file_type-descend', label: '类型 降序' },
+                      { value: 'updated_at-descend', label: '修改时间 降序（新→旧）' },
+                      { value: 'updated_at-ascend', label: '修改时间 升序（旧→新）' },
+                    ]}
+                    style={{ width: 160 }}
+                    size="middle"
+                  />
+                </Space>
               </div>
 
               {/* 文件列表区域 */}
@@ -750,9 +901,16 @@ const FileListPage: React.FC = () => {
                 {viewType === 'details' && (
                   <Table<File>
                     columns={columns}
-                    dataSource={fileList}
+                    dataSource={sortedFileList}
                     rowKey="uuid"
                     loading={loading}
+                    onChange={(_pagination, _filters, sorter) => {
+                      const o = Array.isArray(sorter) ? sorter[0] : sorter;
+                      if (o?.field != null) {
+                        setSortField(o.field as SortField);
+                        setSortOrder((o.order as SortOrder) ?? 'ascend');
+                      }
+                    }}
                     rowSelection={{
                       selectedRowKeys,
                       onChange: setSelectedRowKeys,
